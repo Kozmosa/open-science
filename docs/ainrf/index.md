@@ -30,6 +30,8 @@ AINRF 是 `scholar-agent` 仓库里当前可见的命令入口与运行时壳层
 - 当前 backend 仍然是 `uv run ainrf serve` 启动的 API 服务。
 - 文档站点预览依然是单独的 `scripts/serve.sh` / `uv run python scripts/build_html_notes.py serve` 流程。
 
+就当前已经落地的控制面能力来说，WebUI / API 这一层主要覆盖 environment 管理、keepalive personal terminal、managed task terminal（含 observe / takeover / release / archive 生命周期）以及受管 workspace browser。
+
 这里不把历史设计文档中的更大目标、RFC 术语或运行时愿景表述成已经完成的现实能力。
 
 ## 快速开始
