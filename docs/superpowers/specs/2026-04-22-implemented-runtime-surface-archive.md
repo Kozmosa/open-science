@@ -1,10 +1,10 @@
-# 已实现 Runtime / WebUI Surface 设计归档
+# 已实现 Runtime / Infra 设计归档
 
 日期：2026-04-22
 
 ## 目的
 
-`docs/superpowers/specs/` 中有一批设计稿来自早期的 runtime / WebUI 增量实现阶段。它们在当时帮助推进实现，但现在已经出现两个问题：
+`docs/superpowers/specs/` 中有一批设计稿来自早期的 runtime / WebUI / repo infra 增量实现阶段。它们在当时帮助推进实现，但现在已经出现两个问题：
 
 - 其中多份文档继续用“当前状态”措辞描述已经被后续实现覆盖的旧现实。
 - 同一条实现线被拆成多个阶段性 design/spec 文档，容易让读者把它们误读成仍然有效的活规格。
@@ -13,10 +13,12 @@
 
 ## 当前 source of truth
 
-对于已经落地的 runtime / WebUI surface，请优先参考：
+对于已经落地的 runtime / WebUI / repo infra surface，请优先参考：
 
+- `.gitmodules`
 - `docs/ainrf/index.md`
 - `src/ainrf/README.md`
+- `docs/LLM-Working/worklog/2026-04-13.md`
 - `docs/LLM-Working/worklog/2026-04-21.md`
 - `docs/LLM-Working/worklog/2026-04-22.md`
 
@@ -26,10 +28,13 @@
 
 以下设计稿已不再单独保留在活跃 `specs/` 集合中，因为它们的有效结论已经被上面的当前事实层文档吸收，或其“当前状态”叙述已明显落后于现状实现：
 
+- `2026-04-06-ref-repos-submodules-design.md`
 - `2026-04-13-terminal-bench-mvp-design.md`
 - `2026-04-14-ainrf-usage-doc-design.md`
+- `2026-04-13-ainrf-onboard-design.md`
 - `2026-04-14-code-server-managed-embedding-design.md`
 - `2026-04-14-containers-page-design.md`
+- `2026-04-14-webui-style-loading-fix-design.md`
 - `2026-04-14-webui-collapsible-sidebar-design.md`
 - `2026-04-21-environments-containers-control-plane-design.md`
 - `2026-04-21-webterminal-session-keepalive-user-binding-design.md`
@@ -48,11 +53,8 @@
 - 其内容没有被后续实现显著推翻；
 - 它更像长期设计说明，而不是某个已完成切片的执行稿。
 
-例如：
+当前仍保留的例子：
 
-- `2026-04-06-ref-repos-submodules-design.md`
-- `2026-04-13-ainrf-onboard-design.md`
-- `2026-04-14-webui-style-loading-fix-design.md`
 - `2026-04-22-docs-context-isolation-design.md`
 
 ## 维护规则
