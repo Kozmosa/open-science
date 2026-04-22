@@ -18,6 +18,11 @@ class TerminalMuxKind(StrEnum):
     TMUX = "tmux"
 
 
+class TerminalAttachmentMode(StrEnum):
+    INTERACTIVE = "interactive"
+    OBSERVE = "observe"
+
+
 @dataclass(slots=True)
 class UserEnvironmentBinding:
     binding_id: str
@@ -80,6 +85,10 @@ class TerminalAttachmentTarget:
     working_directory: str | None
     attach_command: tuple[str, ...]
     spawn_working_directory: Path
+    readonly: bool = False
+    mode: TerminalAttachmentMode = TerminalAttachmentMode.INTERACTIVE
+    window_id: str | None = None
+    window_name: str | None = None
 
 
 @dataclass(slots=True)
@@ -99,6 +108,9 @@ class TerminalAttachment:
     attach_command: tuple[str, ...]
     spawn_working_directory: Path
     readonly: bool = False
+    mode: TerminalAttachmentMode = TerminalAttachmentMode.INTERACTIVE
+    window_id: str | None = None
+    window_name: str | None = None
 
 
 def utc_now() -> datetime:

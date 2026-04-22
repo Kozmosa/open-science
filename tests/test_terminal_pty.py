@@ -187,3 +187,55 @@ def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None
             f"/terminal/attachments/{attachment.attachment_id}/ws?token=wrong-token"
         ) as ws:
             ws.receive_text()
+
+
+def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+    input_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "ainrf.api.routes.terminal.write_terminal_input",
+        lambda runtime, data: input_calls.append(data),
+    )
+    monkeypatch.setattr("ainrf.terminal.attachments.stop_terminal_bridge", lambda runtime: None)
+
+    read_fd, write_fd = os.pipe()
+    runtime = TerminalBridgeRuntime(
+        process=cast(Any, DummyProcess()),
+        master_fd=read_fd,
+    )
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        lambda command, cwd: runtime,
+    )
+
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="ainrf:u:daemon:e:env-1:agent",
+            session_name="ainrf:u:daemon:e:env-1:agent",
+            user_id="daemon",
+            environment_id="env-1",
+            environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:agent"),
+            spawn_working_directory=tmp_path,
+            readonly=True,
+        ),
+    )
+
+    with client.websocket_connect(
+        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+    ) as ws:
+        ws.send_text(json.dumps({"type": "input", "data": "ls\n"}))
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_text()
+
+    assert input_calls == []
+    os.close(read_fd)
+    os.close(write_fd)

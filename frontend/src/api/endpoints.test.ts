@@ -12,16 +12,33 @@ describe('api endpoints', () => {
   it('uses the mock transport only when VITE_USE_MOCK is true', async () => {
     vi.stubEnv('VITE_USE_MOCK', 'true');
 
-    const { createTerminalSession, getTerminalSession, resetTerminalSession } = await import('./endpoints');
+    const {
+      createTask,
+      createTerminalSession,
+      getTaskTerminal,
+      getTerminalSession,
+      openTaskTerminal,
+      resetTerminalSession,
+    } = await import('./endpoints');
     const session = await getTerminalSession('env-localhost');
     const created = await createTerminalSession('env-localhost');
     const reset = await resetTerminalSession('env-localhost', created.attachment_id);
+    const task = await createTask({
+      environment_id: 'env-localhost',
+      title: 'Train Task',
+      command: 'python train.py',
+    });
+    const taskTerminal = await getTaskTerminal(task.task_id);
+    const taskAttachment = await openTaskTerminal(task.task_id);
 
     expect(session.status).toBe('idle');
     expect(created.status).toBe('running');
     expect(created.terminal_ws_url).toContain('/terminal/attachments/');
     expect(created.session_name).toBe('ainrf:u:mock-daemon:e:env-localhost:personal');
     expect(reset.attachment_id).not.toBe(created.attachment_id);
+    expect(task.status).toBe('running');
+    expect(taskTerminal.mode).toBe('observe');
+    expect(taskAttachment.readonly).toBe(true);
   });
 
   it('uses the real api client when VITE_USE_MOCK is false', async () => {

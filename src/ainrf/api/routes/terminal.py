@@ -16,6 +16,8 @@ from ainrf.api.schemas import (
     TerminalSessionResetRequest,
     TerminalSessionResponse,
     TerminalSessionStatus,
+    UserSessionPairListResponse,
+    UserSessionPairResponse,
 )
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
 from ainrf.environments.models import EnvironmentRegistryEntry
@@ -26,7 +28,7 @@ from ainrf.terminal.attachments import (
     TerminalAttachmentExpiredError,
     TerminalAttachmentNotFoundError,
 )
-from ainrf.terminal.models import TerminalSessionRecord
+from ainrf.terminal.models import TerminalSessionRecord, UserEnvironmentBinding, UserSessionPair
 from ainrf.terminal.pty import resize_terminal, write_terminal_input
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
 
@@ -56,6 +58,34 @@ def _serialize_session(
         "attachment_expires_at": session.attachment_expires_at.isoformat()
         if session.attachment_expires_at
         else None,
+    }
+
+
+def _serialize_session_pair(
+    binding: UserEnvironmentBinding,
+    pair: UserSessionPair,
+    environment: EnvironmentRegistryEntry | None,
+) -> dict[str, str | None | TerminalSessionStatus]:
+    return {
+        "binding_id": binding.binding_id,
+        "environment_id": binding.environment_id,
+        "environment_alias": environment.alias if environment is not None else None,
+        "personal_session_name": pair.personal_session_name,
+        "agent_session_name": pair.agent_session_name,
+        "personal_status": pair.personal_status,
+        "agent_status": pair.agent_status,
+        "created_at": pair.created_at.isoformat() if pair.created_at is not None else None,
+        "updated_at": pair.updated_at.isoformat() if pair.updated_at is not None else None,
+        "last_verified_at": pair.last_verified_at.isoformat()
+        if pair.last_verified_at is not None
+        else None,
+        "last_personal_attach_at": pair.last_personal_attach_at.isoformat()
+        if pair.last_personal_attach_at is not None
+        else None,
+        "last_agent_attach_at": pair.last_agent_attach_at.isoformat()
+        if pair.last_agent_attach_at is not None
+        else None,
+        "detail": pair.detail,
     }
 
 
@@ -150,6 +180,28 @@ async def read_terminal_session(
         working_directory,
     )
     return TerminalSessionResponse.model_validate(_serialize_session(session))
+
+
+@router.get("/session-pairs", response_model=UserSessionPairListResponse)
+async def read_terminal_session_pairs(
+    request: Request,
+    environment_id: str | None = Query(default=None),
+) -> UserSessionPairListResponse:
+    service = _get_environment_service(request)
+    manager = _get_session_manager(request)
+    if environment_id is not None:
+        try:
+            service.get_environment(environment_id)
+        except Exception as exc:
+            raise _translate_environment_error(exc) from exc
+
+    items = await to_thread.run_sync(manager.list_session_pairs, environment_id)
+    return UserSessionPairListResponse(
+        items=[
+            UserSessionPairResponse.model_validate(_serialize_session_pair(binding, pair, environment))
+            for binding, pair, environment in items
+        ]
+    )
 
 
 @router.post("/session", response_model=TerminalSessionResponse)
@@ -293,7 +345,10 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                 message_type = payload.get("type")
                 if message_type == "input":
                     if attachment.readonly:
-                        raise ValueError("terminal attachment is read-only")
+                        if websocket.client_state == WebSocketState.CONNECTED:
+                            with suppress(Exception):
+                                await websocket.close(code=4409)
+                        return
                     data = payload.get("data")
                     if not isinstance(data, str):
                         raise ValueError("input payload must include string data")
@@ -308,6 +363,11 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:
+            return
+        except ValueError:
+            if websocket.client_state == WebSocketState.CONNECTED:
+                with suppress(Exception):
+                    await websocket.close(code=4409)
             return
         finally:
             task_group.cancel_scope.cancel()
@@ -350,5 +410,8 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
     finally:
         loop.remove_reader(master_fd)
         broker.close_runtime(attachment_id)
-        if websocket.client_state != WebSocketState.DISCONNECTED:
+        if (
+            websocket.client_state != WebSocketState.DISCONNECTED
+            and websocket.application_state != WebSocketState.DISCONNECTED
+        ):
             await websocket.close()

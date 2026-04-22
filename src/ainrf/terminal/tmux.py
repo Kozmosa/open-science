@@ -24,6 +24,15 @@ class _CommandResult:
     stderr: str
 
 
+@dataclass(slots=True)
+class TmuxWindowInfo:
+    window_id: str
+    window_name: str
+    is_dead: bool = False
+    exit_status: int | None = None
+    current_path: str | None = None
+
+
 class TmuxAdapter:
     def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
@@ -67,6 +76,23 @@ class TmuxAdapter:
         return False
 
     def ensure_personal_session(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+    ) -> None:
+        self._ensure_session(binding, environment, session_name)
+
+    def ensure_agent_session(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+    ) -> None:
+        self._ensure_session(binding, environment, session_name)
+        self._configure_remain_on_exit(binding, environment, session_name)
+
+    def _ensure_session(
         self,
         binding: UserEnvironmentBinding,
         environment: EnvironmentRegistryEntry,
@@ -141,6 +167,117 @@ class TmuxAdapter:
         if result.returncode not in {0, 1}:
             self._raise_command_error(result, environment)
 
+    def create_window(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+        *,
+        window_name: str,
+        working_directory: str,
+        command: str,
+    ) -> TmuxWindowInfo:
+        shell_command = self._build_shell_exec_command(binding.default_shell, command)
+        format_string = "#{window_id}\t#{window_name}"
+        tmux_command = (
+            "tmux",
+            "new-window",
+            "-P",
+            "-F",
+            format_string,
+            "-t",
+            session_name,
+            "-n",
+            window_name,
+            "-c",
+            working_directory,
+            shell_command,
+        )
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            result = self._run_local_command(tmux_command)
+        else:
+            result = self._run_remote_command(
+                environment,
+                binding.remote_login_user,
+                self._wrap_remote_tmux_check(shlex.join(tmux_command)),
+            )
+
+        if result.returncode != 0:
+            self._raise_command_error(result, environment)
+        return self._parse_window_creation(result.stdout)
+
+    def inspect_window(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+        window_id: str,
+    ) -> TmuxWindowInfo | None:
+        format_string = "#{window_id}\t#{window_name}\t#{window_dead}\t#{pane_dead_status}\t#{pane_current_path}"
+        tmux_command = ("tmux", "list-windows", "-t", session_name, "-F", format_string)
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            result = self._run_local_command(tmux_command)
+        else:
+            result = self._run_remote_command(
+                environment,
+                binding.remote_login_user,
+                self._wrap_remote_tmux_check(shlex.join(tmux_command)),
+            )
+
+        if result.returncode == 1:
+            return None
+        if result.returncode != 0:
+            self._raise_command_error(result, environment)
+        for line in result.stdout.splitlines():
+            parsed = self._parse_window_line(line)
+            if parsed is not None and parsed.window_id == window_id:
+                return parsed
+        return None
+
+    def build_window_attach_command(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+        window_id: str,
+    ) -> tuple[str, ...]:
+        tmux_command = (
+            "tmux",
+            "attach-session",
+            "-t",
+            session_name,
+            ";",
+            "select-window",
+            "-t",
+            window_id,
+        )
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            return tmux_command
+        return self._build_ssh_command(
+            environment,
+            binding.remote_login_user,
+            f"exec {shlex.join(tmux_command)}",
+            tty=True,
+        )
+
+    def send_window_interrupt(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        window_id: str,
+    ) -> None:
+        tmux_command = ("tmux", "send-keys", "-t", window_id, "C-c")
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            result = self._run_local_command(tmux_command)
+        else:
+            result = self._run_remote_command(
+                environment,
+                binding.remote_login_user,
+                self._wrap_remote_tmux_check(shlex.join(tmux_command)),
+            )
+        if result.returncode != 0:
+            self._raise_command_error(result, environment)
+
     def build_attach_command(
         self,
         binding: UserEnvironmentBinding,
@@ -155,6 +292,24 @@ class TmuxAdapter:
             f"exec {shlex.join(['tmux', 'attach-session', '-t', session_name])}",
             tty=True,
         )
+
+    def _configure_remain_on_exit(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+    ) -> None:
+        tmux_command = ("tmux", "set-option", "-t", session_name, "remain-on-exit", "on")
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            result = self._run_local_command(tmux_command)
+        else:
+            result = self._run_remote_command(
+                environment,
+                binding.remote_login_user,
+                self._wrap_remote_tmux_check(shlex.join(tmux_command)),
+            )
+        if result.returncode != 0:
+            self._raise_command_error(result, environment)
 
     def _run_local_command(self, command: tuple[str, ...]) -> _CommandResult:
         try:
@@ -249,3 +404,36 @@ class TmuxAdapter:
         if not output:
             output = f"tmux command failed with exit code {result.returncode}"
         raise TmuxCommandError(output)
+
+    @staticmethod
+    def _build_shell_exec_command(default_shell: str | None, command: str) -> str:
+        shell = default_shell or "/bin/bash"
+        return f"exec {shlex.quote(shell)} -lc {shlex.quote(command)}"
+
+    @staticmethod
+    def _parse_window_creation(output: str) -> TmuxWindowInfo:
+        for line in output.splitlines():
+            parts = line.split("\t", 1)
+            if len(parts) != 2 or not parts[0]:
+                continue
+            return TmuxWindowInfo(window_id=parts[0], window_name=parts[1])
+        raise TmuxCommandError("tmux did not return the created window metadata")
+
+    @staticmethod
+    def _parse_window_line(line: str) -> TmuxWindowInfo | None:
+        parts = line.split("\t", 4)
+        if len(parts) != 5 or not parts[0]:
+            return None
+        exit_status: int | None = None
+        if parts[3].strip():
+            try:
+                exit_status = int(parts[3].strip())
+            except ValueError:
+                exit_status = None
+        return TmuxWindowInfo(
+            window_id=parts[0],
+            window_name=parts[1],
+            is_dead=parts[2].strip() == "1",
+            exit_status=exit_status,
+            current_path=parts[4] or None,
+        )

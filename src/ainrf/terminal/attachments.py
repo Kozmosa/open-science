@@ -63,6 +63,10 @@ class TerminalAttachmentBroker:
             expires_at=now + TERMINAL_ATTACHMENT_TOKEN_TTL,
             attach_command=target.attach_command,
             spawn_working_directory=target.spawn_working_directory,
+            readonly=target.readonly,
+            mode=target.mode,
+            window_id=target.window_id,
+            window_name=target.window_name,
         )
         self._attachments[attachment_id] = attachment
         return attachment

@@ -1,4 +1,12 @@
-import { Boxes, ChevronLeft, ChevronRight, FolderKanban, Settings, SquareTerminal } from 'lucide-react';
+import {
+  Boxes,
+  ChevronLeft,
+  ChevronRight,
+  FolderKanban,
+  ListChecks,
+  Settings,
+  SquareTerminal,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -26,6 +34,12 @@ function Layout({ children }: Props) {
       to: '/terminal',
       description: t('navigation.terminal.description'),
       icon: SquareTerminal,
+    },
+    {
+      label: t('navigation.tasks.label'),
+      to: '/tasks',
+      description: t('navigation.tasks.description'),
+      icon: ListChecks,
     },
     {
       label: t('navigation.workspaces.label'),

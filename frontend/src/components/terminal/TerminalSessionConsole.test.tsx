@@ -268,4 +268,30 @@ describe('TerminalSessionConsole', () => {
 
     expect(screen.getByText('Attach to a personal terminal session to open the xterm console.')).toBeInTheDocument();
   });
+
+  it('keeps observe attachments readonly while still forwarding resize events', async () => {
+    render(
+      <TerminalSessionConsole
+        sessionId="ainrf:u:mock-daemon:e:env-1:agent"
+        attachmentId="attach-task-1"
+        terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-task-1/ws?token=test-token"
+        status="running"
+        readonly
+        mode="observe"
+      />
+    );
+
+    await waitFor(() => expect(terminalMocks.sockets).toHaveLength(1));
+
+    const socket = terminalMocks.sockets[0];
+    const terminal = terminalMocks.terminals[0];
+    socket.onopen?.(new Event('open'));
+    terminal.emitData('ignored input');
+
+    expect(
+      socket.sent.every((message) => JSON.parse(message).type === 'resize')
+    ).toBe(true);
+    expect(socket.sent.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Observe-only')).toBeInTheDocument();
+  });
 });
