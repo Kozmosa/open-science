@@ -40,13 +40,13 @@ const idleSession: TerminalSession = {
   terminal_ws_url: null,
   detail: null,
   binding_id: null,
-  session_name: 'ainrf:u:mock-daemon:e:env-1:personal',
+  session_name: 'ainrf:u:mock-browser-user:e:env-1:personal',
   attachment_id: null,
   attachment_expires_at: null,
 };
 
 const runningAttachedSession: TerminalSession = {
-  session_id: 'ainrf:u:mock-daemon:e:env-1:personal',
+  session_id: 'ainrf:u:mock-browser-user:e:env-1:personal',
   provider: 'tmux',
   target_kind: 'environment-ssh',
   environment_id: 'env-1',
@@ -59,7 +59,7 @@ const runningAttachedSession: TerminalSession = {
   terminal_ws_url: 'ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token',
   detail: null,
   binding_id: 'binding-1',
-  session_name: 'ainrf:u:mock-daemon:e:env-1:personal',
+  session_name: 'ainrf:u:mock-browser-user:e:env-1:personal',
   attachment_id: 'attach-1',
   attachment_expires_at: '2026-04-21T00:05:01Z',
 };

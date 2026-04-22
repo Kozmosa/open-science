@@ -65,7 +65,7 @@ function TerminalSessionConsole({
   status,
   onDisconnected,
   readonly = false,
-  mode = 'interactive',
+  mode = 'write',
   placeholderText,
 }: Props) {
   const t = useT();
@@ -236,7 +236,9 @@ function TerminalSessionConsole({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
-            {t('components.terminalConsole.interactive')}
+            {isObserveOnly
+              ? t('components.terminalConsole.observeOnly')
+              : t('components.terminalConsole.writeEnabled')}
           </h3>
           <p className="text-sm text-gray-600">
             {t('components.terminalConsole.websocketSession')}{' '}
@@ -245,11 +247,16 @@ function TerminalSessionConsole({
           <p className="text-sm text-gray-600">
             {t('components.terminalConsole.attachment')} <code className="rounded bg-gray-100 px-1.5 py-0.5">{attachmentId ?? 'n/a'}</code>
           </p>
-          {isObserveOnly ? (
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-amber-700">
-              {t('components.terminalConsole.observeOnly')}
-            </p>
-          ) : null}
+          <p
+            className={[
+              'text-xs font-medium uppercase tracking-[0.18em]',
+              isObserveOnly ? 'text-amber-700' : 'text-emerald-700',
+            ].join(' ')}
+          >
+            {isObserveOnly
+              ? t('components.terminalConsole.observeOnly')
+              : t('components.terminalConsole.writeEnabled')}
+          </p>
         </div>
         <div className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
           {t('components.terminalConsole.connection')} {connectionLabel[displaySocketStatus]}

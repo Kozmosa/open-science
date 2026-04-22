@@ -41,6 +41,8 @@ import {
   mockGetProjectEnvironmentReferences,
   mockGetTerminalSession,
   mockOpenTaskTerminal,
+  mockReleaseTaskTerminal,
+  mockTakeoverTaskTerminal,
   mockResetTerminalSession,
   mockUpdateProjectEnvironmentReference,
   mockUpdateEnvironment,
@@ -137,6 +139,16 @@ export const openTaskTerminal = (taskId: string): Promise<TerminalAttachment> =>
   USE_MOCK
     ? Promise.resolve(mockOpenTaskTerminal(taskId))
     : api.post<TerminalAttachment>(`/tasks/${taskId}/terminal/open`, {});
+
+export const takeoverTaskTerminal = (taskId: string): Promise<TerminalAttachment> =>
+  USE_MOCK
+    ? Promise.resolve(mockTakeoverTaskTerminal(taskId))
+    : api.post<TerminalAttachment>(`/tasks/${taskId}/terminal/takeover`, {});
+
+export const releaseTaskTerminal = (taskId: string): Promise<TerminalAttachment> =>
+  USE_MOCK
+    ? Promise.resolve(mockReleaseTaskTerminal(taskId))
+    : api.post<TerminalAttachment>(`/tasks/${taskId}/terminal/release`, {});
 
 export const getCodeServerStatus = (environmentId?: string): Promise<CodeServerStatus> =>
   USE_MOCK

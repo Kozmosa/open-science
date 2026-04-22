@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { LocaleProvider } from './i18n';
 
-vi.mock('./pages/DashboardPage', () => ({
-  default: () => <div data-testid="dashboard-page">dashboard-page</div>,
+vi.mock('./pages/TerminalPage', () => ({
+  default: () => <div data-testid="terminal-page">terminal-page</div>,
 }));
 
 vi.mock('./pages/TasksPage', () => ({

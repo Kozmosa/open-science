@@ -1,3 +1,5 @@
+import { getAppUserId } from './appUser';
+
 const API_BASE = '/api';
 const API_KEY = import.meta.env.VITE_AINRF_API_KEY?.trim() ?? '';
 
@@ -83,6 +85,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (API_KEY && !headers.has('X-API-Key')) {
     headers.set('X-API-Key', API_KEY);
+  }
+
+  if (!headers.has('X-AINRF-User-Id')) {
+    headers.set('X-AINRF-User-Id', getAppUserId());
   }
 
   const init: RequestInit = {

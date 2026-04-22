@@ -1,27 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
   cancelTask,
   createTask,
   getTask,
   getTasks,
   getTaskTerminal,
-  openTaskTerminal,
+  releaseTaskTerminal,
 } from '../api';
-import {
-  EnvironmentSelectorPanel,
-  TerminalSessionConsole,
-  useEnvironmentSelection,
-} from '../components';
+import { getAppUserId } from '../api/appUser';
+import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
-import type {
-  TaskCreateRequest,
-  TaskListResponse,
-  TaskRecord,
-  TaskStatus,
-  TaskTerminalBinding,
-  TerminalAttachment,
-} from '../types';
+import type { TaskCreateRequest, TaskListResponse, TaskRecord, TaskTerminalBinding, TaskStatus } from '../types';
 
 const statusLabelKey: Record<TaskStatus, string> = {
   pending: 'pages.tasks.status.pending',
@@ -33,15 +24,13 @@ const statusLabelKey: Record<TaskStatus, string> = {
 
 function TasksPage() {
   const t = useT();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const environmentSelection = useEnvironmentSelection();
   const selectedEnvironment = environmentSelection.selectedEnvironment;
   const selectedEnvironmentId = selectedEnvironment?.id ?? null;
+  const currentUserId = getAppUserId();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeAttachmentState, setActiveAttachmentState] = useState<{
-    taskId: string;
-    attachment: TerminalAttachment;
-  } | null>(null);
   const [draft, setDraft] = useState({
     title: '',
     command: '',
@@ -59,7 +48,6 @@ function TasksPage() {
   });
 
   const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
-
   const effectiveSelectedTaskId = useMemo(() => {
     if (!selectedEnvironmentId) {
       return null;
@@ -75,7 +63,6 @@ function TasksPage() {
     queryFn: () => getTask(effectiveSelectedTaskId ?? ''),
     enabled: effectiveSelectedTaskId !== null,
   });
-
   const selectedTerminalQuery = useQuery({
     queryKey: ['task-terminal', effectiveSelectedTaskId],
     queryFn: () => getTaskTerminal(effectiveSelectedTaskId ?? ''),
@@ -87,8 +74,6 @@ function TasksPage() {
     tasks.find((task) => task.task_id === effectiveSelectedTaskId) ??
     null;
   const selectedTerminal = selectedTerminalQuery.data ?? selectedTask?.terminal ?? null;
-  const activeAttachment =
-    activeAttachmentState?.taskId === effectiveSelectedTaskId ? activeAttachmentState.attachment : null;
 
   function upsertTask(task: TaskRecord): void {
     queryClient.setQueryData<TaskRecord>(['task', task.task_id], task);
@@ -108,7 +93,6 @@ function TasksPage() {
     onSuccess: (task) => {
       upsertTask(task);
       setSelectedTaskId(task.task_id);
-      setActiveAttachmentState(null);
       setDraft({ title: '', command: '', workingDirectory: '' });
     },
   });
@@ -117,50 +101,21 @@ function TasksPage() {
     mutationFn: (taskId: string) => cancelTask(taskId),
     onSuccess: (task) => {
       upsertTask(task);
-      queryClient.invalidateQueries({ queryKey: ['tasks', task.environment_id] });
-      queryClient.invalidateQueries({ queryKey: ['task-terminal', task.task_id] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks', task.environment_id] });
+      void queryClient.invalidateQueries({ queryKey: ['task-terminal', task.task_id] });
     },
   });
 
-  const openTerminalMutation = useMutation({
-    mutationFn: (taskId: string) => openTaskTerminal(taskId),
-    onSuccess: (attachment, taskId) => {
-      setActiveAttachmentState({ taskId, attachment });
+  const releaseMutation = useMutation({
+    mutationFn: (taskId: string) => releaseTaskTerminal(taskId),
+    onSuccess: (_attachment, taskId) => {
+      void queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+      void queryClient.invalidateQueries({ queryKey: ['task-terminal', taskId] });
+      if (selectedEnvironmentId) {
+        void queryClient.invalidateQueries({ queryKey: ['tasks', selectedEnvironmentId] });
+      }
     },
   });
-
-  const createError =
-    createMutation.error instanceof Error ? createMutation.error.message : null;
-  const tasksError = tasksQuery.error instanceof Error ? tasksQuery.error.message : null;
-  const detailError =
-    selectedTaskQuery.error instanceof Error ? selectedTaskQuery.error.message : null;
-  const terminalError =
-    selectedTerminalQuery.error instanceof Error
-      ? selectedTerminalQuery.error.message
-      : openTerminalMutation.error instanceof Error
-        ? openTerminalMutation.error.message
-        : cancelMutation.error instanceof Error
-          ? cancelMutation.error.message
-          : null;
-
-  const selectedTaskStatusLabel = selectedTask
-    ? t(statusLabelKey[selectedTask.status] as never)
-    : null;
-
-  const canCreate =
-    selectedEnvironmentId !== null &&
-    draft.title.trim().length > 0 &&
-    draft.command.trim().length > 0 &&
-    !createMutation.isPending;
-
-  const canOpenTerminal =
-    effectiveSelectedTaskId !== null && selectedTerminal !== null && !openTerminalMutation.isPending;
-
-  const canCancel =
-    effectiveSelectedTaskId !== null &&
-    selectedTask !== null &&
-    !cancelMutation.isPending &&
-    !['completed', 'failed', 'cancelled'].includes(selectedTask.status);
 
   const selectedEnvironmentSummary = useMemo(() => {
     if (!selectedEnvironment) {
@@ -169,6 +124,69 @@ function TasksPage() {
     return `${selectedEnvironment.alias} · ${selectedEnvironment.display_name}`;
   }, [selectedEnvironment]);
 
+  const createError = createMutation.error instanceof Error ? createMutation.error.message : null;
+  const tasksError = tasksQuery.error instanceof Error ? tasksQuery.error.message : null;
+  const detailError = selectedTaskQuery.error instanceof Error ? selectedTaskQuery.error.message : null;
+  const terminalError =
+    selectedTerminalQuery.error instanceof Error
+      ? selectedTerminalQuery.error.message
+      : releaseMutation.error instanceof Error
+        ? releaseMutation.error.message
+        : cancelMutation.error instanceof Error
+          ? cancelMutation.error.message
+          : null;
+
+  const canCreate =
+    selectedEnvironmentId !== null &&
+    draft.title.trim().length > 0 &&
+    draft.command.trim().length > 0 &&
+    !createMutation.isPending;
+  const canCancel =
+    effectiveSelectedTaskId !== null &&
+    selectedTask !== null &&
+    !cancelMutation.isPending &&
+    !['completed', 'failed', 'cancelled'].includes(selectedTask.status);
+  const canRelease =
+    effectiveSelectedTaskId !== null &&
+    selectedTerminal !== null &&
+    selectedTerminal.binding_status === 'taken_over' &&
+    selectedTerminal.ownership_user_id === currentUserId &&
+    !releaseMutation.isPending;
+
+  function navigateToTerminal(intent: 'open' | 'takeover'): void {
+    if (!selectedTask) {
+      return;
+    }
+    const params = new URLSearchParams({
+      environment_id: selectedTask.environment_id,
+      task_id: selectedTask.task_id,
+      intent,
+    });
+    navigate(`/terminal?${params.toString()}`);
+  }
+
+  function terminalStatusLabel(binding: TaskTerminalBinding | null): string {
+    if (!binding) {
+      return t('pages.terminal.task.pending');
+    }
+    if (binding.binding_status === 'taken_over') {
+      return t('pages.terminal.task.takenOver');
+    }
+    if (binding.binding_status === 'running_observe') {
+      return t('pages.terminal.task.observeOnly');
+    }
+    if (binding.binding_status === 'completed') {
+      return t('pages.tasks.status.completed');
+    }
+    if (binding.binding_status === 'archived') {
+      return t('pages.terminal.task.archived');
+    }
+    if (binding.binding_status === 'failed') {
+      return t('common.failed');
+    }
+    return t('pages.terminal.task.pending');
+  }
+
   return (
     <div className="px-4 py-8 sm:px-6 lg:px-8">
       <section className="mb-8 space-y-3">
@@ -176,9 +194,7 @@ function TasksPage() {
           {t('pages.tasks.eyebrow')}
         </p>
         <h1 className="text-3xl font-semibold text-gray-900">{t('pages.tasks.title')}</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">
-          {t('pages.tasks.description')}
-        </p>
+        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">{t('pages.tasks.description')}</p>
       </section>
 
       <div className="space-y-6">
@@ -207,10 +223,9 @@ function TasksPage() {
               }}
             >
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-gray-700">
-                  {t('pages.tasks.titleLabel')}
-                </span>
+                <span className="text-sm font-medium text-gray-700">{t('pages.tasks.titleLabel')}</span>
                 <input
+                  aria-label={t('pages.tasks.titleLabel')}
                   value={draft.title}
                   onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
@@ -219,10 +234,9 @@ function TasksPage() {
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-gray-700">
-                  {t('pages.tasks.commandLabel')}
-                </span>
+                <span className="text-sm font-medium text-gray-700">{t('pages.tasks.commandLabel')}</span>
                 <textarea
+                  aria-label={t('pages.tasks.commandLabel')}
                   value={draft.command}
                   onChange={(event) => setDraft((current) => ({ ...current, command: event.target.value }))}
                   className="min-h-28 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
@@ -235,6 +249,7 @@ function TasksPage() {
                   {t('pages.tasks.workingDirectoryLabel')}
                 </span>
                 <input
+                  aria-label={t('pages.tasks.workingDirectoryLabel')}
                   value={draft.workingDirectory}
                   onChange={(event) =>
                     setDraft((current) => ({ ...current, workingDirectory: event.target.value }))
@@ -254,9 +269,7 @@ function TasksPage() {
                 disabled={!canCreate}
                 className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {createMutation.isPending
-                  ? t('pages.tasks.creatingAction')
-                  : t('pages.tasks.createAction')}
+                {createMutation.isPending ? t('pages.tasks.creatingAction') : t('pages.tasks.createAction')}
               </button>
             </form>
           </section>
@@ -280,10 +293,7 @@ function TasksPage() {
                     <button
                       key={task.task_id}
                       type="button"
-                      onClick={() => {
-                        setSelectedTaskId(task.task_id);
-                        setActiveAttachmentState(null);
-                      }}
+                      onClick={() => setSelectedTaskId(task.task_id)}
                       className={[
                         'flex w-full flex-col gap-2 rounded-2xl border px-4 py-4 text-left transition',
                         effectiveSelectedTaskId === task.task_id
@@ -299,6 +309,9 @@ function TasksPage() {
                       </div>
                       <p className="text-xs text-gray-600">
                         {t('pages.tasks.windowLabel')} {task.terminal?.window_name ?? 'n/a'}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {t('pages.tasks.bindingStatusLabel')} {terminalStatusLabel(task.terminal)}
                       </p>
                       <p className="text-xs text-gray-500">
                         {t('pages.tasks.updatedAtLabel')} {task.updated_at}
@@ -320,53 +333,88 @@ function TasksPage() {
                   <div className="space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
                     <p>
                       <span className="font-medium text-gray-900">{t('pages.tasks.statusLabel')}</span>{' '}
-                      {selectedTaskStatusLabel}
+                      {t(statusLabelKey[selectedTask.status] as never)}
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">{t('pages.tasks.environmentLabel')}</span>{' '}
-                      {selectedEnvironmentSummary ?? selectedTask.environment_alias ?? 'n/a'}
+                      <span className="font-medium text-gray-900">
+                        {t('pages.tasks.bindingStatusLabel')}
+                      </span>{' '}
+                      {terminalStatusLabel(selectedTerminal)}
+                    </p>
+                    <p>
+                      <span className="font-medium text-gray-900">
+                        {t('pages.tasks.environmentLabel')}
+                      </span>{' '}
+                      {selectedTask.environment_alias ?? selectedTask.environment_id}
                     </p>
                     <p>
                       <span className="font-medium text-gray-900">{t('pages.tasks.windowLabel')}</span>{' '}
                       {selectedTerminal?.window_name ?? 'n/a'}
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">{t('pages.tasks.updatedAtLabel')}</span>{' '}
-                      {selectedTask.updated_at}
+                      <span className="font-medium text-gray-900">{t('pages.tasks.ownerLabel')}</span>{' '}
+                      {selectedTerminal?.ownership_user_id ?? t('pages.tasks.noOwner')}
+                    </p>
+                    <p>
+                      <span className="font-medium text-gray-900">
+                        {t('pages.tasks.lastOutputLabel')}
+                      </span>{' '}
+                      {selectedTerminal?.last_output_at ?? t('common.unavailable')}
                     </p>
                     <p>
                       <span className="font-medium text-gray-900">{t('pages.tasks.commandLabel')}</span>{' '}
-                      <code className="rounded bg-white px-1.5 py-0.5">{selectedTask.command}</code>
+                      <code className="rounded bg-white px-2 py-1">{selectedTask.command}</code>
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">{t('pages.tasks.workingDirectoryLabel')}</span>{' '}
-                      <code className="rounded bg-white px-1.5 py-0.5">{selectedTask.working_directory}</code>
+                      <span className="font-medium text-gray-900">
+                        {t('pages.tasks.workingDirectoryLabel')}
+                      </span>{' '}
+                      <code className="rounded bg-white px-2 py-1">{selectedTask.working_directory}</code>
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
+                  {detailError ? <p className="text-sm text-red-700">{detailError}</p> : null}
+                  {terminalError ? <p className="text-sm text-red-700">{terminalError}</p> : null}
+
+                  <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
-                      disabled={!canOpenTerminal}
-                      onClick={() => {
-                        if (effectiveSelectedTaskId) {
-                          openTerminalMutation.mutate(effectiveSelectedTaskId);
-                        }
-                      }}
+                      onClick={() => navigateToTerminal('open')}
+                      disabled={effectiveSelectedTaskId === null}
                       className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {openTerminalMutation.isPending
-                        ? t('pages.tasks.openingAction')
-                        : t('pages.tasks.openTerminal')}
+                      {t('pages.tasks.openTerminal')}
                     </button>
                     <button
                       type="button"
-                      disabled={!canCancel}
+                      onClick={() => navigateToTerminal('takeover')}
+                      disabled={effectiveSelectedTaskId === null}
+                      className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {t('pages.tasks.takeover')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (effectiveSelectedTaskId) {
+                          releaseMutation.mutate(effectiveSelectedTaskId);
+                        }
+                      }}
+                      disabled={!canRelease}
+                      className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {releaseMutation.isPending
+                        ? t('pages.tasks.releasingAction')
+                        : t('pages.tasks.release')}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => {
                         if (effectiveSelectedTaskId) {
                           cancelMutation.mutate(effectiveSelectedTaskId);
                         }
                       }}
+                      disabled={!canCancel}
                       className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {cancelMutation.isPending
@@ -380,27 +428,6 @@ function TasksPage() {
                   {t('pages.tasks.selectTaskPrompt')}
                 </div>
               )}
-
-              {detailError ? <p className="text-sm text-red-700">{detailError}</p> : null}
-              {terminalError ? <p className="text-sm text-red-700">{terminalError}</p> : null}
-
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">
-                    {t('pages.tasks.terminalTitle')}
-                  </h3>
-                  <p className="text-sm text-gray-600">{t('pages.tasks.terminalDescription')}</p>
-                </div>
-                <TerminalSessionConsole
-                  sessionId={activeAttachment?.session_name ?? selectedTerminal?.agent_session_name ?? null}
-                  attachmentId={activeAttachment?.attachment_id ?? null}
-                  terminalWsUrl={activeAttachment?.terminal_ws_url ?? null}
-                  status={activeAttachment ? 'running' : 'idle'}
-                  readonly
-                  mode="observe"
-                  placeholderText={t('pages.tasks.terminalPlaceholder')}
-                />
-              </div>
             </section>
           </section>
         </div>

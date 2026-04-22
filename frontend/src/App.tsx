@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
 import { useT } from './i18n';
-import DashboardPage from './pages/DashboardPage';
+import TerminalPage from './pages/TerminalPage';
 import TasksPage from './pages/TasksPage';
 import ContainersPage from './pages/ContainersPage';
 import WorkspacesPage from './pages/WorkspacesPage';
@@ -29,7 +29,7 @@ function App() {
             <Layout>
               <Routes>
                 <Route path="/" element={<Navigate replace to="/terminal" />} />
-                <Route path="/terminal" element={<DashboardPage />} />
+                <Route path="/terminal" element={<TerminalPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/workspaces" element={<WorkspacesPage />} />
                 <Route path="/containers" element={<ContainersPage />} />
