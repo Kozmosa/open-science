@@ -22,6 +22,7 @@ import type {
 
 const DEFAULT_PROJECT_ID = 'default';
 const MOCK_STATE_ROOT = '.ainrf';
+const MOCK_APP_USER_ID = 'mock-browser-user';
 
 const mockHealth: SystemHealth = {
   status: 'ok',
@@ -199,7 +200,7 @@ function terminalTargetKind(environment: EnvironmentRecord): string {
 }
 
 function terminalSessionName(environmentId: string): string {
-  return `ainrf:u:mock-daemon:e:${environmentId}:personal`;
+  return `ainrf:u:${MOCK_APP_USER_ID}:e:${environmentId}:personal`;
 }
 
 function createAttachmentUrl(attachmentId: string): string {
@@ -207,7 +208,7 @@ function createAttachmentUrl(attachmentId: string): string {
 }
 
 function agentSessionName(environmentId: string): string {
-  return `ainrf:u:mock-daemon:e:${environmentId}:agent`;
+  return `ainrf:u:${MOCK_APP_USER_ID}:e:${environmentId}:agent`;
 }
 
 function cloneTaskTerminalBinding(binding: TaskTerminalBinding): TaskTerminalBinding {
@@ -505,9 +506,11 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskRecord {
     agent_session_name: agentSessionName(payload.environment_id),
     window_id: `@${mockTaskCounter}`,
     window_name: sanitizeTaskWindowName(payload.title, taskId),
-    status: 'running',
+    binding_status: 'running_observe',
     mode: 'observe',
     readonly: true,
+    ownership_user_id: null,
+    agent_write_state: 'running',
     last_output_at: timestamp,
   };
   const task: TaskRecord = {
@@ -547,7 +550,9 @@ export function mockCancelTask(taskId: string): TaskRecord {
     terminal: task.terminal
       ? {
           ...task.terminal,
-          status: 'cancelled',
+          binding_status: 'completed',
+          ownership_user_id: null,
+          agent_write_state: 'running',
           last_output_at: timestamp,
         }
       : null,
@@ -588,6 +593,100 @@ export function mockOpenTaskTerminal(taskId: string): TerminalAttachment {
     mode: 'observe',
     window_id: task.terminal.window_id,
     window_name: task.terminal.window_name,
+  };
+}
+
+export function mockTakeoverTaskTerminal(taskId: string): TerminalAttachment {
+  const task = mockGetTask(taskId);
+  if (!task.terminal) {
+    throw new Error(`Task terminal not found: ${taskId}`);
+  }
+  const updatedTerminal: TaskTerminalBinding = {
+    ...task.terminal,
+    binding_status: 'taken_over',
+    mode: 'write',
+    readonly: false,
+    ownership_user_id: MOCK_APP_USER_ID,
+    agent_write_state: 'paused_by_user',
+  };
+  const timestamp = nowIso();
+  const updatedTask: TaskRecord = {
+    ...task,
+    updated_at: timestamp,
+    terminal: {
+      ...updatedTerminal,
+      last_output_at: timestamp,
+    },
+  };
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: updatedTask,
+  };
+  const attachmentId = `mock-task-attachment-${++mockTaskAttachmentCounter}`;
+  return {
+    attachment_id: attachmentId,
+    terminal_ws_url: createAttachmentUrl(attachmentId),
+    expires_at: timestamp,
+    binding_id: updatedTask.binding_id,
+    session_id: updatedTerminal.window_id,
+    session_name: updatedTerminal.agent_session_name,
+    environment_id: updatedTask.environment_id,
+    environment_alias:
+      updatedTask.environment_alias ?? findEnvironment(updatedTask.environment_id).alias,
+    target_kind:
+      updatedTask.environment_id === 'env-localhost' ? 'environment-local' : 'environment-ssh',
+    working_directory: updatedTask.working_directory,
+    readonly: false,
+    mode: 'write',
+    window_id: updatedTerminal.window_id,
+    window_name: updatedTerminal.window_name,
+  };
+}
+
+export function mockReleaseTaskTerminal(taskId: string): TerminalAttachment {
+  const task = mockGetTask(taskId);
+  if (!task.terminal) {
+    throw new Error(`Task terminal not found: ${taskId}`);
+  }
+  const updatedTerminal: TaskTerminalBinding = {
+    ...task.terminal,
+    binding_status: task.status === 'running' ? 'running_observe' : 'completed',
+    mode: 'observe',
+    readonly: true,
+    ownership_user_id: null,
+    agent_write_state: 'running',
+  };
+  const timestamp = nowIso();
+  const updatedTask: TaskRecord = {
+    ...task,
+    updated_at: timestamp,
+    terminal: {
+      ...updatedTerminal,
+      last_output_at: timestamp,
+    },
+  };
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: updatedTask,
+  };
+  const attachmentId = `mock-task-attachment-${++mockTaskAttachmentCounter}`;
+  return {
+    attachment_id: attachmentId,
+    terminal_ws_url: createAttachmentUrl(attachmentId),
+    expires_at: timestamp,
+    binding_id: updatedTask.binding_id,
+    session_id: updatedTerminal.window_id,
+    session_name: updatedTerminal.agent_session_name,
+    environment_id: updatedTask.environment_id,
+    environment_alias:
+      updatedTask.environment_alias ?? findEnvironment(updatedTask.environment_id).alias,
+    target_kind:
+      updatedTask.environment_id === 'env-localhost' ? 'environment-local' : 'environment-ssh',
+    working_directory: updatedTask.working_directory,
+    readonly: true,
+    mode: 'observe',
+    window_id: updatedTerminal.window_id,
+    window_name: updatedTerminal.window_name,
   };
 }
 

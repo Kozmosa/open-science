@@ -28,12 +28,18 @@ from ainrf.terminal.attachments import (
     TerminalAttachmentExpiredError,
     TerminalAttachmentNotFoundError,
 )
-from ainrf.terminal.models import TerminalSessionRecord, UserEnvironmentBinding, UserSessionPair
+from ainrf.terminal.models import (
+    TerminalAttachmentMode,
+    TerminalSessionRecord,
+    UserEnvironmentBinding,
+    UserSessionPair,
+)
 from ainrf.terminal.pty import resize_terminal, write_terminal_input
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
 
 router = APIRouter(prefix="/terminal", tags=["terminal"])
 _DEFAULT_PROJECT_ID = "default"
+_APP_USER_HEADER = "X-AINRF-User-Id"
 
 
 def _serialize_session(
@@ -110,6 +116,13 @@ def _get_attachment_broker(request: Request | WebSocket) -> TerminalAttachmentBr
     return broker
 
 
+def _require_app_user_id(request: Request) -> str:
+    user_id = request.headers.get(_APP_USER_HEADER, "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail=f"Missing required header: {_APP_USER_HEADER}")
+    return user_id
+
+
 def _translate_environment_error(exc: Exception) -> HTTPException:
     if isinstance(exc, EnvironmentNotFoundError):
         return HTTPException(status_code=404, detail="Environment not found")
@@ -163,6 +176,7 @@ async def read_terminal_session(
     request: Request,
     environment_id: str | None = Query(default=None),
 ) -> TerminalSessionResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     try:
@@ -176,6 +190,7 @@ async def read_terminal_session(
 
     session = await to_thread.run_sync(
         manager.get_session_record,
+        app_user_id,
         environment,
         working_directory,
     )
@@ -187,6 +202,7 @@ async def read_terminal_session_pairs(
     request: Request,
     environment_id: str | None = Query(default=None),
 ) -> UserSessionPairListResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     if environment_id is not None:
@@ -195,10 +211,12 @@ async def read_terminal_session_pairs(
         except Exception as exc:
             raise _translate_environment_error(exc) from exc
 
-    items = await to_thread.run_sync(manager.list_session_pairs, environment_id)
+    items = await to_thread.run_sync(manager.list_session_pairs, app_user_id, environment_id)
     return UserSessionPairListResponse(
         items=[
-            UserSessionPairResponse.model_validate(_serialize_session_pair(binding, pair, environment))
+            UserSessionPairResponse.model_validate(
+                _serialize_session_pair(binding, pair, environment)
+            )
             for binding, pair, environment in items
         ]
     )
@@ -209,6 +227,7 @@ async def create_terminal_session(
     payload: TerminalSessionCreateRequest,
     request: Request,
 ) -> TerminalSessionResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
@@ -225,6 +244,7 @@ async def create_terminal_session(
     try:
         session, target = await to_thread.run_sync(
             manager.ensure_personal_session,
+            app_user_id,
             environment,
             working_directory,
         )
@@ -243,6 +263,7 @@ async def delete_terminal_session(
     environment_id: str | None = Query(default=None),
     attachment_id: str | None = Query(default=None),
 ) -> TerminalSessionResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
@@ -261,6 +282,7 @@ async def delete_terminal_session(
 
     session = await to_thread.run_sync(
         manager.get_session_record,
+        app_user_id,
         environment,
         working_directory,
     )
@@ -272,6 +294,7 @@ async def reset_terminal_session(
     payload: TerminalSessionResetRequest,
     request: Request,
 ) -> TerminalSessionResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
@@ -289,6 +312,7 @@ async def reset_terminal_session(
     try:
         session, target = await to_thread.run_sync(
             manager.reset_personal_session,
+            app_user_id,
             environment,
             working_directory,
         )
@@ -344,7 +368,7 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                 payload = json.loads(message)
                 message_type = payload.get("type")
                 if message_type == "input":
-                    if attachment.readonly:
+                    if attachment.readonly or attachment.mode is TerminalAttachmentMode.OBSERVE:
                         if websocket.client_state == WebSocketState.CONNECTED:
                             with suppress(Exception):
                                 await websocket.close(code=4409)

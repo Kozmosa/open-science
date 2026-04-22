@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.tasks.runtime import build_runtime_control_invocation
 from ainrf.terminal.models import UserEnvironmentBinding
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND, TERMINAL_SSH_TARGET_KIND
 
@@ -133,7 +135,9 @@ class TmuxAdapter:
                     ]
                 )
             )
-            result = self._run_remote_command(environment, binding.remote_login_user, remote_command)
+            result = self._run_remote_command(
+                environment, binding.remote_login_user, remote_command
+            )
 
         if result.returncode != 0:
             self._raise_command_error(result, environment)
@@ -292,6 +296,50 @@ class TmuxAdapter:
             f"exec {shlex.join(['tmux', 'attach-session', '-t', session_name])}",
             tty=True,
         )
+
+    def run_shell_command(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        command: tuple[str, ...],
+    ) -> _CommandResult:
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            return self._run_local_command(command)
+        return self._run_remote_command(
+            environment,
+            binding.remote_login_user,
+            shlex.join(command),
+        )
+
+    def run_task_runtime_control(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        *,
+        runtime_dir: str,
+        action: str,
+        timeout_seconds: float = 5.0,
+    ) -> dict[str, object]:
+        result = self.run_shell_command(
+            binding,
+            environment,
+            build_runtime_control_invocation(
+                runtime_dir=runtime_dir,
+                action=action,
+                timeout_seconds=timeout_seconds,
+            ),
+        )
+        if result.returncode != 0:
+            self._raise_command_error(result, environment)
+        stdout = result.stdout.strip()
+        if not stdout:
+            raise TmuxCommandError(f"Task runtime {action} returned an empty response")
+        try:
+            return json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise TmuxCommandError(
+                f"Task runtime {action} returned invalid JSON: {stdout}"
+            ) from exc
 
     def _configure_remain_on_exit(
         self,

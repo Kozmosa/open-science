@@ -37,8 +37,20 @@ export interface TerminalSession {
   attachment_expires_at: string | null;
 }
 
-export type TerminalAttachmentMode = 'interactive' | 'observe';
+export type TerminalAttachmentMode = 'write' | 'observe';
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskTerminalBindingStatus =
+  | 'pending_attach'
+  | 'running_observe'
+  | 'taken_over'
+  | 'completed'
+  | 'failed'
+  | 'archived';
+export type TaskAgentWriteState =
+  | 'running'
+  | 'pause_requested'
+  | 'paused_by_user'
+  | 'resume_requested';
 
 export interface UserSessionPair {
   binding_id: string;
@@ -67,9 +79,11 @@ export interface TaskTerminalBinding {
   agent_session_name: string;
   window_id: string;
   window_name: string;
-  status: TaskStatus;
+  binding_status: TaskTerminalBindingStatus;
   mode: TerminalAttachmentMode;
   readonly: boolean;
+  ownership_user_id: string | null;
+  agent_write_state: TaskAgentWriteState;
   last_output_at: string | null;
 }
 

@@ -2,20 +2,10 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from './TasksPage';
 import { renderWithProviders } from '../test/render';
-import type {
-  EnvironmentRecord,
-  TaskRecord,
-  TaskTerminalBinding,
-  TerminalAttachment,
-} from '../types';
-import {
-  cancelTask,
-  createTask,
-  getTask,
-  getTasks,
-  getTaskTerminal,
-  openTaskTerminal,
-} from '../api';
+import type { EnvironmentRecord, TaskRecord, TaskTerminalBinding, TerminalAttachment } from '../types';
+import { cancelTask, createTask, getTask, getTasks, getTaskTerminal, releaseTaskTerminal } from '../api';
+
+const mockNavigate = vi.fn();
 
 const selectedEnvironment: EnvironmentRecord = {
   id: 'env-1',
@@ -45,12 +35,14 @@ const runningTerminal: TaskTerminalBinding = {
   task_id: 'task-1',
   binding_id: 'binding-env-1',
   environment_id: 'env-1',
-  agent_session_name: 'ainrf:u:mock-daemon:e:env-1:agent',
+  agent_session_name: 'ainrf:u:mock-browser-user:e:env-1:agent',
   window_id: '@1',
   window_name: 'train-task',
-  status: 'running',
+  binding_status: 'running_observe',
   mode: 'observe',
   readonly: true,
+  ownership_user_id: null,
+  agent_write_state: 'running',
   last_output_at: '2026-04-22T00:00:02Z',
 };
 
@@ -72,6 +64,15 @@ const runningTask: TaskRecord = {
   terminal: runningTerminal,
 };
 
+const takenOverTerminal: TaskTerminalBinding = {
+  ...runningTerminal,
+  binding_status: 'taken_over',
+  mode: 'write',
+  readonly: false,
+  ownership_user_id: 'mock-browser-user',
+  agent_write_state: 'paused_by_user',
+};
+
 const cancelledTask: TaskRecord = {
   ...runningTask,
   status: 'cancelled',
@@ -80,18 +81,18 @@ const cancelledTask: TaskRecord = {
   exit_code: 130,
   terminal: {
     ...runningTerminal,
-    status: 'cancelled',
+    binding_status: 'completed',
     last_output_at: '2026-04-22T00:00:05Z',
   },
 };
 
-const taskAttachment: TerminalAttachment = {
+const releaseAttachment: TerminalAttachment = {
   attachment_id: 'attach-task-1',
   terminal_ws_url: 'ws://127.0.0.1:8000/terminal/attachments/attach-task-1/ws?token=test-token',
   expires_at: '2026-04-22T00:05:00Z',
   binding_id: 'binding-env-1',
   session_id: '@1',
-  session_name: 'ainrf:u:mock-daemon:e:env-1:agent',
+  session_name: 'ainrf:u:mock-browser-user:e:env-1:agent',
   environment_id: 'env-1',
   environment_alias: 'gpu-lab',
   target_kind: 'environment-ssh',
@@ -104,17 +105,6 @@ const taskAttachment: TerminalAttachment = {
 
 vi.mock('../components', () => ({
   EnvironmentSelectorPanel: () => <div data-testid="environment-selector" />,
-  TerminalSessionConsole: ({
-    terminalWsUrl,
-    readonly,
-  }: {
-    terminalWsUrl: string | null;
-    readonly?: boolean;
-  }) => (
-    <div data-testid="terminal-console">
-      {terminalWsUrl ?? 'no-terminal'} {readonly ? 'readonly' : 'interactive'}
-    </div>
-  ),
   useEnvironmentSelection: () => ({
     selectedEnvironment,
     selectedEnvironmentId: selectedEnvironment.id,
@@ -126,13 +116,21 @@ vi.mock('../components', () => ({
   }),
 }));
 
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
 vi.mock('../api', () => ({
   cancelTask: vi.fn(),
   createTask: vi.fn(),
   getTask: vi.fn(),
   getTasks: vi.fn(),
   getTaskTerminal: vi.fn(),
-  openTaskTerminal: vi.fn(),
+  releaseTaskTerminal: vi.fn(),
 }));
 
 const mockGetTasks = vi.mocked(getTasks);
@@ -140,15 +138,18 @@ const mockGetTask = vi.mocked(getTask);
 const mockGetTaskTerminal = vi.mocked(getTaskTerminal);
 const mockCreateTask = vi.mocked(createTask);
 const mockCancelTask = vi.mocked(cancelTask);
-const mockOpenTaskTerminal = vi.mocked(openTaskTerminal);
+const mockReleaseTaskTerminal = vi.mocked(releaseTaskTerminal);
 
 beforeEach(() => {
+  window.localStorage.clear();
+  window.localStorage.setItem('ainrf.app_user_id', 'mock-browser-user');
+  mockNavigate.mockReset();
   mockGetTasks.mockReset();
   mockGetTask.mockReset();
   mockGetTaskTerminal.mockReset();
   mockCreateTask.mockReset();
   mockCancelTask.mockReset();
-  mockOpenTaskTerminal.mockReset();
+  mockReleaseTaskTerminal.mockReset();
 
   mockGetTasks.mockResolvedValue({ items: [runningTask] });
   mockGetTask.mockResolvedValue(runningTask);
@@ -192,18 +193,33 @@ describe('TasksPage', () => {
     expect(await screen.findByText('Eval Task')).toBeInTheDocument();
   });
 
-  it('opens an observe-only terminal for the selected task', async () => {
-    mockOpenTaskTerminal.mockResolvedValue(taskAttachment);
-
+  it('navigates to the terminal route for open and takeover intents', async () => {
     renderWithProviders(<TasksPage />);
 
     expect(await screen.findByText('Train Task')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }));
-
-    await waitFor(() => expect(mockOpenTaskTerminal).toHaveBeenCalledWith('task-1'));
-    expect(await screen.findByTestId('terminal-console')).toHaveTextContent(
-      `${taskAttachment.terminal_ws_url} readonly`
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/terminal?environment_id=env-1&task_id=task-1&intent=open'
     );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/terminal?environment_id=env-1&task_id=task-1&intent=takeover'
+    );
+  });
+
+  it('releases a taken-over task from the detail panel', async () => {
+    mockGetTasks.mockResolvedValue({ items: [{ ...runningTask, terminal: takenOverTerminal }] });
+    mockGetTask.mockResolvedValue({ ...runningTask, terminal: takenOverTerminal });
+    mockGetTaskTerminal.mockResolvedValue(takenOverTerminal);
+    mockReleaseTaskTerminal.mockResolvedValue(releaseAttachment);
+
+    renderWithProviders(<TasksPage />);
+
+    expect(await screen.findByText('Train Task')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Release' }));
+
+    await waitFor(() => expect(mockReleaseTaskTerminal).toHaveBeenCalledWith('task-1'));
   });
 
   it('cancels the selected task and refreshes the status pill', async () => {

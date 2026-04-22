@@ -15,6 +15,27 @@ class ManagedTaskStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class TaskTerminalBindingStatus(StrEnum):
+    PENDING_ATTACH = "pending_attach"
+    RUNNING_OBSERVE = "running_observe"
+    TAKEN_OVER = "taken_over"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ARCHIVED = "archived"
+
+
+class TaskAgentWriteState(StrEnum):
+    RUNNING = "running"
+    PAUSE_REQUESTED = "pause_requested"
+    PAUSED_BY_USER = "paused_by_user"
+    RESUME_REQUESTED = "resume_requested"
+
+
+class TaskTakeoverLeaseStatus(StrEnum):
+    ACTIVE = "active"
+    RELEASED = "released"
+
+
 @dataclass(slots=True)
 class ManagedTask:
     task_id: str
@@ -40,9 +61,28 @@ class TaskTerminalBinding:
     agent_session_name: str
     window_id: str
     window_name: str
-    status: ManagedTaskStatus
+    binding_status: TaskTerminalBindingStatus
     mode: TerminalAttachmentMode = TerminalAttachmentMode.OBSERVE
     readonly: bool = True
+    ownership_user_id: str | None = None
+    agent_write_state: TaskAgentWriteState = TaskAgentWriteState.RUNNING
+    pause_requested_at: datetime | None = None
+    pause_acknowledged_at: datetime | None = None
+    last_takeover_at: datetime | None = None
     last_output_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    @property
+    def status(self) -> TaskTerminalBindingStatus:
+        return self.binding_status
+
+
+@dataclass(slots=True)
+class TaskTakeoverLease:
+    lease_id: str
+    task_id: str
+    user_id: str
+    status: TaskTakeoverLeaseStatus
+    acquired_at: datetime
+    released_at: datetime | None = None

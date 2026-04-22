@@ -216,7 +216,7 @@ afterEach(() => {
 function renderConsole(status: TerminalSessionStatus = 'running') {
   return render(
     <TerminalSessionConsole
-      sessionId="ainrf:u:mock-daemon:e:env-1:personal"
+      sessionId="ainrf:u:mock-browser-user:e:env-1:personal"
       attachmentId="attach-1"
       terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token"
       status={status}
@@ -231,7 +231,7 @@ describe('TerminalSessionConsole', () => {
 
     render(
       <TerminalSessionConsole
-        sessionId="ainrf:u:mock-daemon:e:env-1:personal"
+        sessionId="ainrf:u:mock-browser-user:e:env-1:personal"
         attachmentId="attach-1"
         terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token"
         status="running"
@@ -272,7 +272,7 @@ describe('TerminalSessionConsole', () => {
   it('keeps observe attachments readonly while still forwarding resize events', async () => {
     render(
       <TerminalSessionConsole
-        sessionId="ainrf:u:mock-daemon:e:env-1:agent"
+        sessionId="ainrf:u:mock-browser-user:e:env-1:agent"
         attachmentId="attach-task-1"
         terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-task-1/ws?token=test-token"
         status="running"
@@ -292,6 +292,6 @@ describe('TerminalSessionConsole', () => {
       socket.sent.every((message) => JSON.parse(message).type === 'resize')
     ).toBe(true);
     expect(socket.sent.length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Observe-only')).toBeInTheDocument();
+    expect(screen.getAllByText('Observe-only')).toHaveLength(2);
   });
 });

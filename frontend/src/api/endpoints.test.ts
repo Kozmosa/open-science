@@ -18,6 +18,8 @@ describe('api endpoints', () => {
       getTaskTerminal,
       getTerminalSession,
       openTaskTerminal,
+      releaseTaskTerminal,
+      takeoverTaskTerminal,
       resetTerminalSession,
     } = await import('./endpoints');
     const session = await getTerminalSession('env-localhost');
@@ -30,15 +32,19 @@ describe('api endpoints', () => {
     });
     const taskTerminal = await getTaskTerminal(task.task_id);
     const taskAttachment = await openTaskTerminal(task.task_id);
+    const takeoverAttachment = await takeoverTaskTerminal(task.task_id);
+    const releaseAttachment = await releaseTaskTerminal(task.task_id);
 
     expect(session.status).toBe('idle');
     expect(created.status).toBe('running');
     expect(created.terminal_ws_url).toContain('/terminal/attachments/');
-    expect(created.session_name).toBe('ainrf:u:mock-daemon:e:env-localhost:personal');
+    expect(created.session_name).toBe('ainrf:u:mock-browser-user:e:env-localhost:personal');
     expect(reset.attachment_id).not.toBe(created.attachment_id);
     expect(task.status).toBe('running');
-    expect(taskTerminal.mode).toBe('observe');
+    expect(taskTerminal.binding_status).toBe('running_observe');
     expect(taskAttachment.readonly).toBe(true);
+    expect(takeoverAttachment.mode).toBe('write');
+    expect(releaseAttachment.mode).toBe('observe');
   });
 
   it('uses the real api client when VITE_USE_MOCK is false', async () => {

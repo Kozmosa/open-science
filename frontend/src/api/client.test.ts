@@ -7,8 +7,9 @@ beforeEach(() => {
 });
 
 describe('api client', () => {
-  it('injects the configured API key header', async () => {
+  it('injects the configured API key header and app user id header', async () => {
     vi.stubEnv('VITE_AINRF_API_KEY', 'secret-key');
+    window.localStorage.clear();
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
@@ -26,6 +27,7 @@ describe('api client', () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(init).toBeDefined();
     expect(new Headers(init?.headers).get('X-API-Key')).toBe('secret-key');
+    expect(new Headers(init?.headers).get('X-AINRF-User-Id')).toBeTruthy();
   });
 
   it('preserves manually provided API key headers', async () => {
@@ -47,6 +49,7 @@ describe('api client', () => {
 
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(new Headers(init?.headers).get('X-API-Key')).toBe('manual-secret');
+    expect(new Headers(init?.headers).get('X-AINRF-User-Id')).toBeTruthy();
   });
 
   it('surfaces server error details in ApiError', async () => {

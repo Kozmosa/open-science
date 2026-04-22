@@ -19,7 +19,8 @@ class TerminalMuxKind(StrEnum):
 
 
 class TerminalAttachmentMode(StrEnum):
-    INTERACTIVE = "interactive"
+    WRITE = "write"
+    INTERACTIVE = "write"
     OBSERVE = "observe"
 
 
@@ -86,9 +87,12 @@ class TerminalAttachmentTarget:
     attach_command: tuple[str, ...]
     spawn_working_directory: Path
     readonly: bool = False
-    mode: TerminalAttachmentMode = TerminalAttachmentMode.INTERACTIVE
+    mode: TerminalAttachmentMode = TerminalAttachmentMode.WRITE
     window_id: str | None = None
     window_name: str | None = None
+    owner_user_id: str | None = None
+    task_id: str | None = None
+    binding_status: str | None = None
 
 
 @dataclass(slots=True)
@@ -108,9 +112,12 @@ class TerminalAttachment:
     attach_command: tuple[str, ...]
     spawn_working_directory: Path
     readonly: bool = False
-    mode: TerminalAttachmentMode = TerminalAttachmentMode.INTERACTIVE
+    mode: TerminalAttachmentMode = TerminalAttachmentMode.WRITE
     window_id: str | None = None
     window_name: str | None = None
+    owner_user_id: str | None = None
+    task_id: str | None = None
+    binding_status: str | None = None
 
 
 def utc_now() -> datetime:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -157,6 +158,9 @@ def test_terminal_attachment_websocket_bridge(
         ws.send_text(json.dumps({"type": "resize", "cols": 120, "rows": 40}))
 
         assert input_calls == ["ls\n"]
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline and not resize_calls:
+            time.sleep(0.01)
         assert resize_calls == [(120, 40)]
 
     os.close(read_fd)
