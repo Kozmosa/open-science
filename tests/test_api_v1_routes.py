@@ -42,13 +42,20 @@ async def test_openapi_registers_projects_terminal_and_code_session_routes(tmp_p
     assert "/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/v1/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/terminal/session" in payload["paths"]
+    assert "/terminal/session-pairs" in payload["paths"]
     assert "/terminal/session/reset" in payload["paths"]
     assert "/v1/terminal/session" in payload["paths"]
+    assert "/v1/terminal/session-pairs" in payload["paths"]
     assert "/v1/terminal/session/reset" in payload["paths"]
     assert "/code/session" in payload["paths"]
     assert "/v1/code/session" in payload["paths"]
-    assert "/tasks" not in payload["paths"]
-    assert "/v1/tasks" not in payload["paths"]
+    assert "/tasks" in payload["paths"]
+    assert "/tasks/{task_id}" in payload["paths"]
+    assert "/tasks/{task_id}/cancel" in payload["paths"]
+    assert "/tasks/{task_id}/terminal" in payload["paths"]
+    assert "/tasks/{task_id}/terminal/open" in payload["paths"]
+    assert "/v1/tasks" in payload["paths"]
+    assert "/v1/tasks/{task_id}" in payload["paths"]
 
 
 @pytest.mark.anyio

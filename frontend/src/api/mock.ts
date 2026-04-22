@@ -10,7 +10,14 @@ import type {
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
   SystemHealth,
+  TaskCreateRequest,
+  TaskListResponse,
+  TaskRecord,
+  TaskTerminalBinding,
+  TerminalAttachment,
   TerminalSession,
+  UserSessionPair,
+  UserSessionPairListResponse,
 } from '../types';
 
 const DEFAULT_PROJECT_ID = 'default';
@@ -36,11 +43,14 @@ const mockHealth: SystemHealth = {
 
 let mockEnvironmentCounter = 0;
 let mockTerminalAttachmentCounter = 0;
+let mockTaskCounter = 0;
+let mockTaskAttachmentCounter = 0;
 let mockEnvironments: EnvironmentRecord[] = [];
 let mockProjectEnvironmentReferences: Record<string, ProjectEnvironmentReference[]> = {
   [DEFAULT_PROJECT_ID]: [],
 };
 let mockTerminalSessions: Record<string, TerminalSession> = {};
+let mockTasks: Record<string, TaskRecord> = {};
 let mockCodeServerStatus: CodeServerStatus = createUnavailableCodeServerStatus();
 
 function nowIso(): string {
@@ -194,6 +204,30 @@ function terminalSessionName(environmentId: string): string {
 
 function createAttachmentUrl(attachmentId: string): string {
   return `ws://127.0.0.1:8000/terminal/attachments/${attachmentId}/ws?token=mock-token-${attachmentId}`;
+}
+
+function agentSessionName(environmentId: string): string {
+  return `ainrf:u:mock-daemon:e:${environmentId}:agent`;
+}
+
+function cloneTaskTerminalBinding(binding: TaskTerminalBinding): TaskTerminalBinding {
+  return { ...binding };
+}
+
+function cloneTask(task: TaskRecord): TaskRecord {
+  return {
+    ...task,
+    terminal: task.terminal ? cloneTaskTerminalBinding(task.terminal) : null,
+  };
+}
+
+function sanitizeTaskWindowName(title: string, taskId: string): string {
+  const normalized = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `${normalized || 'task'}-${taskId.slice(0, 8)}`;
 }
 
 function createMockRunningTerminalSession(
@@ -404,6 +438,159 @@ export function mockResetTerminalSession(environmentId: string): TerminalSession
   return { ...nextSession };
 }
 
+export function mockGetSessionPairs(environmentId?: string): UserSessionPairListResponse {
+  const environmentIds = environmentId
+    ? [environmentId]
+    : Array.from(
+        new Set([
+          ...Object.keys(mockTerminalSessions),
+          ...Object.values(mockTasks).map((task) => task.environment_id),
+        ])
+      );
+  const items: UserSessionPair[] = [];
+  for (const currentEnvironmentId of environmentIds) {
+    const environment = mockEnvironments.find((item) => item.id === currentEnvironmentId);
+    if (!environment) {
+      continue;
+    }
+    const terminalSession = mockTerminalSessions[currentEnvironmentId];
+    const tasks = Object.values(mockTasks).filter((task) => task.environment_id === currentEnvironmentId);
+    const latestTask = tasks[0] ?? null;
+    items.push({
+      binding_id: terminalSession?.binding_id ?? latestTask?.binding_id ?? `binding-${currentEnvironmentId}`,
+      environment_id: currentEnvironmentId,
+      environment_alias: environment.alias,
+      personal_session_name: terminalSession?.session_name ?? terminalSessionName(currentEnvironmentId),
+      agent_session_name: latestTask?.terminal?.agent_session_name ?? agentSessionName(currentEnvironmentId),
+      personal_status: terminalSession?.status ?? 'idle',
+      agent_status: latestTask ? 'running' : 'idle',
+      created_at: terminalSession?.created_at ?? latestTask?.created_at ?? null,
+      updated_at: terminalSession?.started_at ?? latestTask?.updated_at ?? null,
+      last_verified_at: latestTask?.updated_at ?? terminalSession?.started_at ?? null,
+      last_personal_attach_at: terminalSession?.attachment_expires_at ?? null,
+      last_agent_attach_at: latestTask?.updated_at ?? null,
+      detail: null,
+    });
+  }
+  return { items };
+}
+
+export function mockGetTasks(environmentId: string): TaskListResponse {
+  return {
+    items: Object.values(mockTasks)
+      .filter((task) => task.environment_id === environmentId)
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+      .map((task) => cloneTask(task)),
+  };
+}
+
+export function mockGetTask(taskId: string): TaskRecord {
+  const task = mockTasks[taskId];
+  if (!task) {
+    throw new Error(`Task not found: ${taskId}`);
+  }
+  return cloneTask(task);
+}
+
+export function mockCreateTask(payload: TaskCreateRequest): TaskRecord {
+  const environment = findEnvironment(payload.environment_id);
+  const timestamp = nowIso();
+  const taskId = `task-${++mockTaskCounter}`;
+  const workingDirectory =
+    payload.working_directory ?? buildEffectiveWorkdir(payload.environment_id);
+  const terminalBinding: TaskTerminalBinding = {
+    task_id: taskId,
+    binding_id: `binding-${payload.environment_id}`,
+    environment_id: payload.environment_id,
+    agent_session_name: agentSessionName(payload.environment_id),
+    window_id: `@${mockTaskCounter}`,
+    window_name: sanitizeTaskWindowName(payload.title, taskId),
+    status: 'running',
+    mode: 'observe',
+    readonly: true,
+    last_output_at: timestamp,
+  };
+  const task: TaskRecord = {
+    task_id: taskId,
+    binding_id: terminalBinding.binding_id,
+    environment_id: payload.environment_id,
+    environment_alias: environment.alias,
+    title: payload.title,
+    command: payload.command,
+    working_directory: workingDirectory,
+    status: 'running',
+    created_at: timestamp,
+    updated_at: timestamp,
+    started_at: timestamp,
+    completed_at: null,
+    exit_code: null,
+    detail: null,
+    terminal: terminalBinding,
+  };
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: task,
+  };
+  return cloneTask(task);
+}
+
+export function mockCancelTask(taskId: string): TaskRecord {
+  const task = mockGetTask(taskId);
+  const timestamp = nowIso();
+  const cancelled: TaskRecord = {
+    ...task,
+    status: 'cancelled',
+    updated_at: timestamp,
+    completed_at: timestamp,
+    exit_code: 130,
+    detail: null,
+    terminal: task.terminal
+      ? {
+          ...task.terminal,
+          status: 'cancelled',
+          last_output_at: timestamp,
+        }
+      : null,
+  };
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: cancelled,
+  };
+  return cloneTask(cancelled);
+}
+
+export function mockGetTaskTerminal(taskId: string): TaskTerminalBinding {
+  const task = mockGetTask(taskId);
+  if (!task.terminal) {
+    throw new Error(`Task terminal not found: ${taskId}`);
+  }
+  return cloneTaskTerminalBinding(task.terminal);
+}
+
+export function mockOpenTaskTerminal(taskId: string): TerminalAttachment {
+  const task = mockGetTask(taskId);
+  if (!task.terminal) {
+    throw new Error(`Task terminal not found: ${taskId}`);
+  }
+  const attachmentId = `mock-task-attachment-${++mockTaskAttachmentCounter}`;
+  return {
+    attachment_id: attachmentId,
+    terminal_ws_url: createAttachmentUrl(attachmentId),
+    expires_at: nowIso(),
+    binding_id: task.binding_id,
+    session_id: task.terminal.window_id,
+    session_name: task.terminal.agent_session_name,
+    environment_id: task.environment_id,
+    environment_alias: task.environment_alias ?? findEnvironment(task.environment_id).alias,
+    target_kind: task.environment_id === 'env-localhost' ? 'environment-local' : 'environment-ssh',
+    working_directory: task.working_directory,
+    readonly: true,
+    mode: 'observe',
+    window_id: task.terminal.window_id,
+    window_name: task.terminal.window_name,
+  };
+}
+
 export function mockGetCodeServerStatus(environmentId?: string): CodeServerStatus {
   if (!environmentId) {
     return { ...mockCodeServerStatus };
@@ -569,15 +756,21 @@ export function mockDeleteProjectEnvironmentReference(
 export function resetMockTerminalSession(): TerminalSession {
   mockTerminalSessions = {};
   mockTerminalAttachmentCounter = 0;
+  mockTaskAttachmentCounter = 0;
+  mockTaskCounter = 0;
+  mockTasks = {};
   return createIdleTerminalSession();
 }
 
 export function resetMockEnvironmentState(): EnvironmentListResponse {
   mockEnvironmentCounter = 0;
   mockTerminalAttachmentCounter = 0;
+  mockTaskCounter = 0;
+  mockTaskAttachmentCounter = 0;
   mockEnvironments = [...initialMockEnvironments];
   mockProjectEnvironmentReferences = { [DEFAULT_PROJECT_ID]: [] };
   mockTerminalSessions = {};
+  mockTasks = {};
   mockCodeServerStatus = createUnavailableCodeServerStatus();
   return mockGetEnvironments();
 }

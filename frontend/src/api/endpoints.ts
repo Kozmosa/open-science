@@ -10,13 +10,21 @@ import type {
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
   SystemHealth,
+  TaskCreateRequest,
+  TaskListResponse,
+  TaskRecord,
+  TaskTerminalBinding,
+  TerminalAttachment,
   TerminalSession,
+  UserSessionPairListResponse,
 } from '../types';
 import {
   mockCreateCodeServerSession,
   mockCreateEnvironment,
   mockCreateProjectEnvironmentReference,
+  mockCreateTask,
   mockCreateTerminalSession,
+  mockCancelTask,
   mockDeleteCodeServerSession,
   mockDeleteEnvironment,
   mockDeleteProjectEnvironmentReference,
@@ -24,10 +32,15 @@ import {
   mockDetectEnvironment,
   mockGetCodeServerStatus,
   mockGetEnvironments,
+  mockGetSessionPairs,
+  mockGetTask,
+  mockGetTaskTerminal,
+  mockGetTasks,
   mockGetHealth,
   mockGetEnvironment,
   mockGetProjectEnvironmentReferences,
   mockGetTerminalSession,
+  mockOpenTaskTerminal,
   mockResetTerminalSession,
   mockUpdateProjectEnvironmentReference,
   mockUpdateEnvironment,
@@ -70,6 +83,11 @@ export const getTerminalSession = (environmentId?: string): Promise<TerminalSess
     ? Promise.resolve(mockGetTerminalSession(environmentId))
     : api.get<TerminalSession>(withEnvironmentId('/terminal/session', environmentId));
 
+export const getSessionPairs = (environmentId?: string): Promise<UserSessionPairListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetSessionPairs(environmentId))
+    : api.get<UserSessionPairListResponse>(withEnvironmentId('/terminal/session-pairs', environmentId));
+
 export const createTerminalSession = (environmentId: string): Promise<TerminalSession> =>
   USE_MOCK
     ? Promise.resolve(mockCreateTerminalSession(environmentId))
@@ -93,6 +111,32 @@ export const resetTerminalSession = (
         environment_id: environmentId,
         attachment_id: attachmentId ?? null,
       });
+
+export const getTasks = (environmentId: string): Promise<TaskListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetTasks(environmentId))
+    : api.get<TaskListResponse>(withEnvironmentId('/tasks', environmentId));
+
+export const getTask = (taskId: string): Promise<TaskRecord> =>
+  USE_MOCK ? Promise.resolve(mockGetTask(taskId)) : api.get<TaskRecord>(`/tasks/${taskId}`);
+
+export const createTask = (payload: TaskCreateRequest): Promise<TaskRecord> =>
+  USE_MOCK ? Promise.resolve(mockCreateTask(payload)) : api.post<TaskRecord>('/tasks', payload);
+
+export const cancelTask = (taskId: string): Promise<TaskRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockCancelTask(taskId))
+    : api.post<TaskRecord>(`/tasks/${taskId}/cancel`, {});
+
+export const getTaskTerminal = (taskId: string): Promise<TaskTerminalBinding> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetTaskTerminal(taskId))
+    : api.get<TaskTerminalBinding>(`/tasks/${taskId}/terminal`);
+
+export const openTaskTerminal = (taskId: string): Promise<TerminalAttachment> =>
+  USE_MOCK
+    ? Promise.resolve(mockOpenTaskTerminal(taskId))
+    : api.post<TerminalAttachment>(`/tasks/${taskId}/terminal/open`, {});
 
 export const getCodeServerStatus = (environmentId?: string): Promise<CodeServerStatus> =>
   USE_MOCK

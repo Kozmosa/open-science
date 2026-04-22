@@ -37,6 +37,88 @@ export interface TerminalSession {
   attachment_expires_at: string | null;
 }
 
+export type TerminalAttachmentMode = 'interactive' | 'observe';
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface UserSessionPair {
+  binding_id: string;
+  environment_id: string;
+  environment_alias: string | null;
+  personal_session_name: string;
+  agent_session_name: string | null;
+  personal_status: TerminalSessionStatus;
+  agent_status: TerminalSessionStatus | null;
+  created_at: string | null;
+  updated_at: string | null;
+  last_verified_at: string | null;
+  last_personal_attach_at: string | null;
+  last_agent_attach_at: string | null;
+  detail: string | null;
+}
+
+export interface UserSessionPairListResponse {
+  items: UserSessionPair[];
+}
+
+export interface TaskTerminalBinding {
+  task_id: string;
+  binding_id: string;
+  environment_id: string;
+  agent_session_name: string;
+  window_id: string;
+  window_name: string;
+  status: TaskStatus;
+  mode: TerminalAttachmentMode;
+  readonly: boolean;
+  last_output_at: string | null;
+}
+
+export interface TaskRecord {
+  task_id: string;
+  binding_id: string;
+  environment_id: string;
+  environment_alias: string | null;
+  title: string;
+  command: string;
+  working_directory: string;
+  status: TaskStatus;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  exit_code: number | null;
+  detail: string | null;
+  terminal: TaskTerminalBinding | null;
+}
+
+export interface TaskListResponse {
+  items: TaskRecord[];
+}
+
+export interface TaskCreateRequest {
+  environment_id: string;
+  title: string;
+  command: string;
+  working_directory?: string | null;
+}
+
+export interface TerminalAttachment {
+  attachment_id: string;
+  terminal_ws_url: string;
+  expires_at: string;
+  binding_id: string;
+  session_id: string;
+  session_name: string;
+  environment_id: string;
+  environment_alias: string;
+  target_kind: string;
+  working_directory: string | null;
+  readonly: boolean;
+  mode: TerminalAttachmentMode;
+  window_id: string | null;
+  window_name: string | null;
+}
+
 export type CodeServerLifecycleStatus = 'starting' | 'ready' | 'unavailable';
 
 export interface CodeServerStatus {

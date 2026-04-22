@@ -2,7 +2,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from 'xterm';
 import 'xterm/css/xterm.css';
 import { useEffect, useRef, useState } from 'react';
-import type { TerminalSessionStatus } from '../../types';
+import type { TerminalAttachmentMode, TerminalSessionStatus } from '../../types';
 import { useT } from '../../i18n';
 
 type SocketStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -13,6 +13,9 @@ interface Props {
   terminalWsUrl: string | null;
   status: TerminalSessionStatus;
   onDisconnected?: () => void;
+  readonly?: boolean;
+  mode?: TerminalAttachmentMode;
+  placeholderText?: string;
 }
 
 interface SocketOutputMessage {
@@ -61,6 +64,9 @@ function TerminalSessionConsole({
   terminalWsUrl,
   status,
   onDisconnected,
+  readonly = false,
+  mode = 'interactive',
+  placeholderText,
 }: Props) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -68,6 +74,7 @@ function TerminalSessionConsole({
   const translateRef = useRef(t);
   const disconnectNotifiedRef = useRef(false);
   const [socketStatus, setSocketStatus] = useState<SocketStatus>('idle');
+  const isObserveOnly = readonly || mode === 'observe';
   const displaySocketStatus =
     status !== 'running' || terminalWsUrl === null
       ? 'idle'
@@ -98,7 +105,7 @@ function TerminalSessionConsole({
 
     const terminal = new Terminal({
       convertEol: true,
-      cursorBlink: true,
+      cursorBlink: !isObserveOnly,
       fontFamily: 'var(--mono)',
       fontSize: 13,
       scrollback: 2000,
@@ -123,11 +130,13 @@ function TerminalSessionConsole({
       }
     });
 
-    const inputDisposable = terminal.onData((data) => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'input', data }));
-      }
-    });
+    const inputDisposable = isObserveOnly
+      ? { dispose: () => {} }
+      : terminal.onData((data) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'input', data }));
+          }
+        });
 
     const fitTerminal = () => {
       try {
@@ -212,12 +221,12 @@ function TerminalSessionConsole({
       terminal.dispose();
       disconnectNotifiedRef.current = false;
     };
-  }, [sessionId, status, terminalWsUrl]);
+  }, [isObserveOnly, sessionId, status, terminalWsUrl]);
 
   if (status !== 'running' || terminalWsUrl === null) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
-        {t('components.terminalConsole.startPrompt')}
+        {placeholderText ?? t('components.terminalConsole.startPrompt')}
       </div>
     );
   }
@@ -236,6 +245,11 @@ function TerminalSessionConsole({
           <p className="text-sm text-gray-600">
             {t('components.terminalConsole.attachment')} <code className="rounded bg-gray-100 px-1.5 py-0.5">{attachmentId ?? 'n/a'}</code>
           </p>
+          {isObserveOnly ? (
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-amber-700">
+              {t('components.terminalConsole.observeOnly')}
+            </p>
+          ) : null}
         </div>
         <div className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
           {t('components.terminalConsole.connection')} {connectionLabel[displaySocketStatus]}

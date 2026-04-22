@@ -67,6 +67,19 @@ def test_session_name_generation_is_stable(tmp_path: Path) -> None:
     assert manager.session_name_for(environment.id) == expected
 
 
+def test_agent_session_name_generation_is_stable(tmp_path: Path) -> None:
+    manager, environment_service = make_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+
+    expected = f"ainrf:u:{manager.user_id}:e:{environment.id}:agent"
+    assert manager.agent_session_name_for(environment.id) == expected
+    assert manager.agent_session_name_for(environment.id) == expected
+
+
 def test_tmux_adapter_builds_local_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = TmuxAdapter(tmp_path)
     environment = InMemoryEnvironmentService().create_environment(
@@ -163,6 +176,157 @@ def test_tmux_adapter_builds_remote_commands(tmp_path: Path, monkeypatch: pytest
         "StrictHostKeyChecking=no",
         "researcher@gpu.example.com",
         "exec tmux attach-session -t session-1",
+    )
+
+
+def test_tmux_adapter_builds_local_task_window_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+    )
+    binding = manager_binding(environment.id)
+    captured: list[tuple[str, ...]] = []
+
+    def fake_run_local(command: tuple[str, ...]) -> SimpleNamespace:
+        captured.append(command)
+        if command[:3] == ("tmux", "new-window", "-P"):
+            return SimpleNamespace(returncode=0, stdout="@3\ttrain-task\n", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
+    monkeypatch.setattr(adapter, "has_session", lambda *args, **kwargs: False)
+
+    adapter.ensure_agent_session(binding, environment, "agent-1")
+    window = adapter.create_window(
+        binding,
+        environment,
+        "agent-1",
+        window_name="train-task",
+        working_directory="/workspace/project",
+        command="python train.py",
+    )
+
+    assert captured == [
+        (
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            "agent-1",
+            "-c",
+            "/workspace/project",
+            "/bin/bash",
+            "-l",
+        ),
+        ("tmux", "set-option", "-t", "agent-1", "remain-on-exit", "on"),
+        (
+            "tmux",
+            "new-window",
+            "-P",
+            "-F",
+            "#{window_id}\t#{window_name}",
+            "-t",
+            "agent-1",
+            "-n",
+            "train-task",
+            "-c",
+            "/workspace/project",
+            "exec /bin/bash -lc 'python train.py'",
+        ),
+    ]
+    assert window.window_id == "@3"
+    assert window.window_name == "train-task"
+    assert adapter.build_window_attach_command(binding, environment, "agent-1", "@3") == (
+        "tmux",
+        "attach-session",
+        "-t",
+        "agent-1",
+        ";",
+        "select-window",
+        "-t",
+        "@3",
+    )
+
+
+def test_tmux_adapter_builds_remote_task_window_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    home_dir = tmp_path / "home"
+    monkeypatch.setattr("ainrf.terminal.tmux.Path.home", lambda: home_dir)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="remote-lab",
+        display_name="Remote Lab",
+        host="gpu.example.com",
+        port=2222,
+        user="researcher",
+        identity_file="/keys/id_ed25519",
+        ssh_options={"StrictHostKeyChecking": "no"},
+    )
+    binding = manager_binding(environment.id, remote_login_user="researcher")
+    captured: list[tuple[str, str]] = []
+
+    def fake_remote_command(
+        env: object, remote_login_user: str, remote_command: str
+    ) -> SimpleNamespace:
+        _ = env
+        captured.append((remote_login_user, remote_command))
+        if "new-window" in remote_command:
+            return SimpleNamespace(returncode=0, stdout="@7\ttrain-task\n", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(adapter, "has_session", lambda *args, **kwargs: False)
+    monkeypatch.setattr(adapter, "_run_remote_command", fake_remote_command)
+
+    adapter.ensure_agent_session(binding, environment, "agent-1")
+    adapter.create_window(
+        binding,
+        environment,
+        "agent-1",
+        window_name="train-task",
+        working_directory="/workspace/project",
+        command="python train.py",
+    )
+    adapter.send_window_interrupt(binding, environment, "@7")
+
+    assert captured == [
+        (
+            "researcher",
+            "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
+            "tmux new-session -d -s agent-1 -c /workspace/project /bin/bash -l",
+        ),
+        (
+            "researcher",
+            "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
+            "tmux set-option -t agent-1 remain-on-exit on",
+        ),
+        (
+            "researcher",
+            "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
+            "tmux new-window -P -F '#{window_id}\t#{window_name}' -t agent-1 -n train-task -c "
+            "/workspace/project 'exec /bin/bash -lc '\"'\"'python train.py'\"'\"''",
+        ),
+        (
+            "researcher",
+            "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
+            "tmux send-keys -t @7 C-c",
+        ),
+    ]
+    assert adapter.build_window_attach_command(binding, environment, "agent-1", "@7") == (
+        "ssh",
+        "-tt",
+        "-p",
+        "2222",
+        "-i",
+        "/keys/id_ed25519",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "researcher@gpu.example.com",
+        "exec tmux attach-session -t agent-1 ';' select-window -t @7",
     )
 
 

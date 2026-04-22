@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from ainrf.environments.models import AnthropicEnvStatus, DetectionStatus, EnvironmentAuthKind
+from ainrf.terminal.models import TerminalAttachmentMode
 
 
 class ApiStatus(StrEnum):
@@ -26,6 +27,14 @@ class CodeServerLifecycleStatus(StrEnum):
     STARTING = "starting"
     READY = "ready"
     UNAVAILABLE = "unavailable"
+
+
+class TaskStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class HealthResponse(BaseModel):
@@ -57,6 +66,90 @@ class TerminalSessionResponse(BaseModel):
     session_name: str | None = None
     attachment_id: str | None = None
     attachment_expires_at: str | None = None
+
+
+class UserSessionPairResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    binding_id: str
+    environment_id: str
+    environment_alias: str | None = None
+    personal_session_name: str
+    agent_session_name: str | None = None
+    personal_status: TerminalSessionStatus
+    agent_status: TerminalSessionStatus | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    last_verified_at: str | None = None
+    last_personal_attach_at: str | None = None
+    last_agent_attach_at: str | None = None
+    detail: str | None = None
+
+
+class UserSessionPairListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[UserSessionPairResponse]
+
+
+class TaskTerminalBindingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    binding_id: str
+    environment_id: str
+    agent_session_name: str
+    window_id: str
+    window_name: str
+    status: TaskStatus
+    mode: TerminalAttachmentMode = TerminalAttachmentMode.OBSERVE
+    readonly: bool = True
+    last_output_at: str | None = None
+
+
+class TaskResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    binding_id: str
+    environment_id: str
+    environment_alias: str | None = None
+    title: str
+    command: str
+    working_directory: str
+    status: TaskStatus
+    created_at: str
+    updated_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    exit_code: int | None = None
+    detail: str | None = None
+    terminal: TaskTerminalBindingResponse | None = None
+
+
+class TaskListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TaskResponse]
+
+
+class TerminalAttachmentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attachment_id: str
+    terminal_ws_url: str
+    expires_at: str
+    binding_id: str
+    session_id: str
+    session_name: str
+    environment_id: str
+    environment_alias: str
+    target_kind: str
+    working_directory: str | None = None
+    readonly: bool = False
+    mode: TerminalAttachmentMode = TerminalAttachmentMode.INTERACTIVE
+    window_id: str | None = None
+    window_name: str | None = None
 
 
 class CodeServerStatusResponse(BaseModel):
@@ -228,6 +321,15 @@ class TerminalSessionResetRequest(BaseModel):
 
     environment_id: str
     attachment_id: str | None = None
+
+
+class TaskCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    environment_id: str
+    title: str
+    command: str
+    working_directory: str | None = None
 
 
 class CodeServerSessionRequest(BaseModel):
