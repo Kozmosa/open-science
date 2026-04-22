@@ -168,7 +168,9 @@ def _build_upstream_url(base_url: str, request: Request, path: str) -> str:
 
 
 @router.api_route(
-    "/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    include_in_schema=False,
 )
 async def proxy_code_server(request: Request, path: str) -> Response:
     manager = _get_code_server_manager(request)

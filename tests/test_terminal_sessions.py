@@ -348,6 +348,67 @@ def test_tmux_adapter_builds_remote_task_window_commands(
     )
 
 
+def test_tmux_adapter_kill_window_is_idempotent_locally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+    )
+    binding = manager_binding(environment.id)
+    captured: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(
+        adapter,
+        "_run_local_command",
+        lambda command: (
+            captured.append(command) or SimpleNamespace(returncode=1, stdout="", stderr="")
+        ),
+    )
+
+    adapter.kill_window(binding, environment, "@9")
+
+    assert captured == [("tmux", "kill-window", "-t", "@9")]
+
+
+def test_tmux_adapter_kill_window_is_idempotent_remotely(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="remote-lab",
+        display_name="Remote Lab",
+        host="gpu.example.com",
+        port=2222,
+        user="researcher",
+        identity_file="/keys/id_ed25519",
+        ssh_options={"StrictHostKeyChecking": "no"},
+    )
+    binding = manager_binding(environment.id, remote_login_user="researcher")
+    captured: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        adapter,
+        "_run_remote_command",
+        lambda env, remote_login_user, remote_command: (
+            captured.append((remote_login_user, remote_command))
+            or SimpleNamespace(returncode=1, stdout="", stderr="")
+        ),
+    )
+
+    adapter.kill_window(binding, environment, "@9")
+
+    assert captured == [
+        (
+            "researcher",
+            "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
+            "tmux kill-window -t @9",
+        )
+    ]
+
+
 def test_terminal_attachment_broker_validates_token_and_expiry(tmp_path: Path) -> None:
     broker = TerminalAttachmentBroker()
     attachment = broker.create_attachment("http://testserver/", attachment_target(tmp_path))

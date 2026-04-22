@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from anyio import to_thread
+from anyio import create_task_group, sleep, to_thread
 from fastapi import FastAPI
 
 from ainrf.api.config import ApiConfig
@@ -26,6 +26,12 @@ def _run_sync_in_lifespan(callback: Callable[[], None]) -> Awaitable[None]:
     return to_thread.run_sync(callback)
 
 
+async def _task_state_sweep_loop(task_manager: TaskManager) -> None:
+    while True:
+        await sleep(1.0)
+        await _run_sync_in_lifespan(task_manager.sweep_time_based_state)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     environment_service = app.state.environment_service
@@ -43,7 +49,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         await _run_sync_in_lifespan(terminal_session_manager.reconcile)
         await _run_sync_in_lifespan(task_manager.reconcile)
-        yield
+        async with create_task_group() as task_group:
+            task_group.start_soon(_task_state_sweep_loop, task_manager)
+            yield
+            task_group.cancel_scope.cancel()
     finally:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
         await manager.stop()

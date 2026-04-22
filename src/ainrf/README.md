@@ -161,19 +161,23 @@ export AINRF_API_KEY_HASHES=<hash1>,<hash2>
 
 ## 4. API 路由说明
 
-### 4.1 Terminal Bench keepalive personal session 与 Workspace Browser
+### 4.1 Terminal Bench keepalive sessions、managed task terminals 与 Workspace Browser
 
 Terminal Bench MVP 现已切换为 `xterm.js + PTY/WebSocket`，不再依赖 `ttyd` 二进制。
 联调时只需要确保后端 API 服务可启动，并且前端能访问同源 WebSocket 地址即可。
 
 Terminal 与 Workspace 现均绑定到选中的 `environment`。当前项目在这一轮固定为隐式项目键 `default`，并可通过 project environment refs API 声明默认环境与 runtime-only overrides。
-Terminal Slice 1 已经从“单全局 PTY”切换为“daemon 单用户 × environment 的 tmux-backed personal session + attachment attach/detach/reset”模型：
+Terminal Slice 1-4 已经从“单全局 PTY”切换为“app user × environment 的 tmux-backed personal session + managed task window + attachment lifecycle”模型：
 
-- 每个 `user × environment` 对应一个长期保活的 personal tmux session。
+- 每个 `app user × environment` 对应一个长期保活的 personal tmux session。
 - 浏览器 websocket 只代表短生命周期 attachment，不再等同于底层 session 本体。
 - 页面刷新、浏览器关闭或显式 `Detach` 都不会销毁底层 tmux session。
 - 服务重启后会从 `state_root/runtime/terminal_state.sqlite3` 读取 binding / session pair 元数据，并按 tmux 状态做 reconcile。
 - V1 多路复用后端固定为 `tmux`；如果 daemon 主机或远端 environment 缺少 `tmux`，terminal ensure/reset 会直接失败，不再回退到旧 PTY shell。
+- 每个 managed task 会在共享 agent tmux session 中创建独立 window，并通过 `/tasks` 控制面暴露只读附着、takeover、release 与 cancel。
+- task terminal attachment 严格区分 `observe` / `write`；`takeover` 会先向 embedded runtime 发 `pause`，`release` 或 grace 过期后再 `resume`。
+- write task attachment 断开后进入 backend-only `5 秒` reconnect grace；同一 `X-AINRF-User-Id` 可在宽限期内通过 `open` 或 `takeover` 直接 reclaim 原写权限。
+- completed / failed / cancelled task 的 tmux window 默认保留 `60 分钟` 观察窗口，之后会主动 kill window 并把 terminal binding 标记为 `archived`；task 仍保留在列表和详情中，但不再允许 live attach。
 
 Workspace Browser 在本地环境下依赖本机可执行的 `code-server` 二进制；联调前请先确认：
 
@@ -208,15 +212,33 @@ code-server --version
   - `POST /v1/projects/{project_id}/environment-refs`
   - `PATCH /v1/projects/{project_id}/environment-refs/{environment_id}`
   - `DELETE /v1/projects/{project_id}/environment-refs/{environment_id}`
-- Terminal Bench MVP 路径（均受 API key 中间件保护）：
+- Terminal / task surface 路径（均受 API key 中间件保护）：
   - `GET /terminal/session?environment_id=...`
+  - `GET /terminal/session-pairs?environment_id=...`
   - `POST /terminal/session`
   - `DELETE /terminal/session`
   - `POST /terminal/session/reset`
+  - `GET /tasks?environment_id=...`
+  - `POST /tasks`
+  - `GET /tasks/{task_id}`
+  - `POST /tasks/{task_id}/cancel`
+  - `GET /tasks/{task_id}/terminal`
+  - `POST /tasks/{task_id}/terminal/open`
+  - `POST /tasks/{task_id}/terminal/takeover`
+  - `POST /tasks/{task_id}/terminal/release`
   - `GET /v1/terminal/session?environment_id=...`
+  - `GET /v1/terminal/session-pairs?environment_id=...`
   - `POST /v1/terminal/session`
   - `DELETE /v1/terminal/session`
   - `POST /v1/terminal/session/reset`
+  - `GET /v1/tasks?environment_id=...`
+  - `POST /v1/tasks`
+  - `GET /v1/tasks/{task_id}`
+  - `POST /v1/tasks/{task_id}/cancel`
+  - `GET /v1/tasks/{task_id}/terminal`
+  - `POST /v1/tasks/{task_id}/terminal/open`
+  - `POST /v1/tasks/{task_id}/terminal/takeover`
+  - `POST /v1/tasks/{task_id}/terminal/release`
 - code-server 状态路径（均受 API key 中间件保护）：
   - `GET /code/status?environment_id=...`
   - `GET /v1/code/status?environment_id=...`
@@ -230,15 +252,35 @@ code-server --version
   - `GET /v1/code/`
   - `GET /code/...` 与 `GET /v1/code/...` 下的嵌套静态资源 / 子路径，均由 API 反向代理到受管 `code-server`
 
-其中 terminal session API 现在控制按 environment 绑定的 keepalive personal tmux session：
+其中 terminal / task API 现在控制两类 tmux-backed attach surface：
+
+- personal terminal session：按 environment 绑定的 keepalive personal tmux session
+- managed task terminal：共享 agent session 中的 task window
+
+terminal 与 task 路由除 API key 外，还要求 `X-AINRF-User-Id`；当前 WebUI 会自动生成并持久化浏览器级 app user id，再随每次 REST 请求一起注入。
+
+personal terminal session 语义如下：
 
 - `GET /terminal/session?environment_id=...`：读取当前用户在所选 environment 下的 personal session 摘要；若还未 ensure，则返回 `idle`
+- `GET /terminal/session-pairs?environment_id=...`：读取当前 app user 在所选 environment 下的 personal / agent session 摘要
 - `POST /terminal/session`：按 `environment_id` 执行 idempotent ensure，并返回当前浏览器的短期 attachment 信息（`attachment_id`、`attachment_expires_at`、`terminal_ws_url`）
 - `DELETE /terminal/session?environment_id=...&attachment_id=...`：只 detach 当前 attachment，不销毁底层 personal tmux session
 - `POST /terminal/session/reset`：显式 kill 并重建 personal tmux session，然后返回新的 attachment
 - `GET /terminal/attachments/{attachment_id}/ws?token=...`：terminal attachment 数据通道
 
-`/v1/terminal/session` 与 `/v1/terminal/session/reset` 提供相同语义的版本化镜像路径。
+managed task terminal 语义如下：
+
+- `GET /tasks?environment_id=...`：列出所选 environment 下的 managed task 与 terminal binding 摘要
+- `POST /tasks`：创建一个新的 tmux-backed task window
+- `GET /tasks/{task_id}`：读取 task 详情与当前 terminal binding
+- `POST /tasks/{task_id}/cancel`：向 runtime 发中断并等待任务退出或进入取消中的过渡态
+- `GET /tasks/{task_id}/terminal`：读取当前 terminal binding 摘要，包括 `binding_status`、`ownership_user_id`、`agent_write_state`
+- `POST /tasks/{task_id}/terminal/open`：获取 observe attachment；若当前 user 正处于 grace reclaim 窗口，则直接恢复 write attachment
+- `POST /tasks/{task_id}/terminal/takeover`：为当前 user 请求 write attachment；若已被其他 user takeover，则返回 `409`
+- `POST /tasks/{task_id}/terminal/release`：显式 release 当前 user's takeover，并恢复 observe-only 运行态
+- archived task 的 `open` / `takeover` 固定返回 `409`
+
+`/v1/terminal/session`、`/v1/terminal/session-pairs`、`/v1/tasks` 及对应子路径提供相同语义的版本化镜像路径。
 
 `auth_kind=password` 的 environment 只支持 terminal 内交互式输入密码；不会通过 API 注入 secret。
 
@@ -254,7 +296,7 @@ code-server 相关路径只暴露当前 daemon 受管的单实例 workspace brow
 
 如果本机未安装 `code-server`，或受管 session 尚未 ensure，API 仍会正常启动；此时 `/code/status` 会返回 `unavailable`，`/code/` 会返回不可用错误，而不会阻断主服务启动。
 
-已移除的旧 task 路径不会再由应用注册；在提供有效 API key 后会返回 `404`。
+早期 orchestrator 风格的 task / gate / artifact / event runtime surface 不再由当前应用注册；当前 `/tasks` 路径只承载上述 tmux-backed managed task control plane，而不是旧版研究任务引擎语义。
 
 ## 5. 状态目录结构
 
@@ -271,10 +313,13 @@ code-server 相关路径只暴露当前 daemon 受管的单实例 workspace brow
     terminal_state.sqlite3
 ```
 
-`terminal_state.sqlite3` 当前持久化两张 terminal keepalive 主表：
+`terminal_state.sqlite3` 当前持久化以下 terminal / task keepalive 主表：
 
 - `user_environment_bindings`
 - `user_session_pairs`
+- `managed_tasks`
+- `task_terminal_bindings`
+- `task_takeover_leases`
 
 ## 6. 调试与排障
 

@@ -63,6 +63,9 @@ function TerminalPage() {
     },
   });
 
+  const task: TaskRecord | null = taskQuery.data ?? null;
+  const terminalBinding: TaskTerminalBinding | null = terminalQuery.data ?? task?.terminal ?? null;
+
   useEffect(() => {
     if (taskId === null) {
       attachKeyRef.current = null;
@@ -71,18 +74,21 @@ function TerminalPage() {
     if (taskQuery.isLoading || terminalQuery.isLoading || attachMutation.isPending) {
       return;
     }
+    if (terminalBinding?.binding_status === 'archived') {
+      attachKeyRef.current = null;
+      return;
+    }
     const attachKey = `${taskId}:${intent}`;
     if (attachKeyRef.current === attachKey) {
       return;
     }
     attachKeyRef.current = attachKey;
     attachMutation.mutate({ taskId, intent });
-  }, [attachMutation, intent, taskId, taskQuery.isLoading, terminalQuery.isLoading]);
-
-  const task: TaskRecord | null = taskQuery.data ?? null;
-  const terminalBinding: TaskTerminalBinding | null = terminalQuery.data ?? task?.terminal ?? null;
+  }, [attachMutation, intent, taskId, taskQuery.isLoading, terminalBinding?.binding_status, terminalQuery.isLoading]);
   const effectiveAttachment =
-    attachmentState?.taskId === taskId ? attachmentState.attachment : null;
+    attachmentState?.taskId === taskId && terminalBinding?.binding_status !== 'archived'
+      ? attachmentState.attachment
+      : null;
   const effectiveMode = effectiveAttachment?.mode ?? terminalBinding?.mode ?? 'observe';
   const effectiveReadonly = effectiveAttachment?.readonly ?? terminalBinding?.readonly ?? true;
   const effectiveWindowName = effectiveAttachment?.window_name ?? terminalBinding?.window_name ?? 'n/a';
@@ -214,6 +220,8 @@ function TerminalPage() {
           placeholderText={t('pages.terminal.task.placeholder')}
           onDisconnected={() => {
             if (taskId) {
+              setAttachmentState(null);
+              attachKeyRef.current = null;
               void queryClient.invalidateQueries({ queryKey: ['task', taskId] });
               void queryClient.invalidateQueries({ queryKey: ['task-terminal', taskId] });
             }

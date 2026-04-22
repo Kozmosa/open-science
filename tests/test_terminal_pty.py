@@ -14,7 +14,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.terminal.models import TerminalAttachmentTarget
+from ainrf.terminal.models import TerminalAttachmentMode, TerminalAttachmentTarget
 from ainrf.terminal.pty import (
     TERMINAL_LOCAL_TARGET_KIND,
     TerminalBridgeRuntime,
@@ -54,7 +54,9 @@ def test_build_attachment_ws_url_translates_http_base() -> None:
     )
 
 
-def test_start_terminal_bridge_launches_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_terminal_bridge_launches_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     captured: dict[str, object] = {}
 
     class PopenProcess:
@@ -241,5 +243,65 @@ def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(
             ws.receive_text()
 
     assert input_calls == []
+    os.close(read_fd)
+    os.close(write_fd)
+
+
+def test_task_attachment_websocket_close_notifies_task_manager(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+    disconnected_attachment_ids: list[str] = []
+
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.stop_terminal_bridge",
+        lambda runtime: None,
+    )
+
+    read_fd, write_fd = os.pipe()
+    runtime = TerminalBridgeRuntime(
+        process=cast(Any, DummyProcess()),
+        master_fd=read_fd,
+    )
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        lambda command, cwd: runtime,
+    )
+    monkeypatch.setattr(
+        app.state.task_manager,
+        "handle_task_attachment_disconnect",
+        lambda attachment: disconnected_attachment_ids.append(attachment.attachment_id),
+    )
+
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="@1",
+            session_name="ainrf:u:browser-user:e:env-1:agent",
+            user_id="browser-user",
+            environment_id="env-1",
+            environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "ainrf:u:browser-user:e:env-1:agent"),
+            spawn_working_directory=tmp_path,
+            readonly=False,
+            mode=TerminalAttachmentMode.WRITE,
+            window_id="@1",
+            window_name="train-task",
+            owner_user_id="browser-user",
+            task_id="task-1",
+            binding_status="taken_over",
+        ),
+    )
+
+    with client.websocket_connect(
+        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+    ):
+        pass
+
+    assert disconnected_attachment_ids == [attachment.attachment_id]
     os.close(read_fd)
     os.close(write_fd)

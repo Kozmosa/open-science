@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -8,6 +10,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.tasks.models import ManagedTaskStatus, TaskTerminalBindingStatus
 from ainrf.terminal.tmux import TmuxWindowInfo
 
 APP_USER_ID = "browser-user"
@@ -520,6 +523,169 @@ async def test_task_takeover_conflicts_for_another_user(
     assert first_takeover.status_code == 200
     assert second_takeover.status_code == 409
     assert second_takeover.json() == {"detail": "Task is already taken over by another user"}
+
+
+@pytest.mark.anyio
+async def test_task_terminal_open_reclaims_same_user_grace_as_write_attachment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="127.0.0.1",
+    )
+    _configure_task_runtime(
+        app,
+        monkeypatch,
+        inspect_window=TmuxWindowInfo(window_id="@1", window_name="train-task", is_dead=False),
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "create_window",
+        lambda *args, **kwargs: TmuxWindowInfo(window_id="@1", window_name="train-task"),
+    )
+    runtime_actions: list[str] = []
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "run_task_runtime_control",
+        lambda *args, action, **kwargs: (
+            runtime_actions.append(action)
+            or {"ok": True, "state": "paused" if action == "pause" else "running"}
+        ),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        created = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "environment_id": environment.id,
+                "title": "Train Task",
+                "command": "python train.py",
+            },
+        )
+        takeover = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/takeover",
+            headers=API_HEADERS,
+        )
+
+        attachment = app.state.terminal_attachment_broker._attachments[
+            takeover.json()["attachment_id"]
+        ]
+        app.state.task_manager.handle_task_attachment_disconnect(attachment)
+
+        reopened = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/open",
+            headers=API_HEADERS,
+        )
+        binding = await client.get(
+            f"/tasks/{created.json()['task_id']}/terminal",
+            headers=API_HEADERS,
+        )
+
+    assert reopened.status_code == 200
+    assert reopened.json()["mode"] == "write"
+    assert reopened.json()["readonly"] is False
+    assert binding.status_code == 200
+    assert binding.json()["binding_status"] == "taken_over"
+    assert binding.json()["ownership_user_id"] == APP_USER_ID
+    assert runtime_actions == ["pause"]
+
+
+@pytest.mark.anyio
+async def test_archived_task_open_and_takeover_return_conflict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="127.0.0.1",
+    )
+    _configure_task_runtime(
+        app,
+        monkeypatch,
+        inspect_window=TmuxWindowInfo(
+            window_id="@1", window_name="train-task", is_dead=True, exit_status=0
+        ),
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "create_window",
+        lambda *args, **kwargs: TmuxWindowInfo(window_id="@1", window_name="train-task"),
+    )
+    kill_calls: list[str] = []
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "kill_window",
+        lambda binding, environment, window_id: kill_calls.append(window_id),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        created = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "environment_id": environment.id,
+                "title": "Train Task",
+                "command": "python train.py",
+            },
+        )
+
+        task, terminal_binding = app.state.task_manager.get_task(
+            created.json()["task_id"], APP_USER_ID
+        )
+        assert terminal_binding is not None
+        completed_at = datetime(2026, 4, 22, 7, 0, 0, tzinfo=UTC)
+        app.state.task_manager._store_task(
+            replace(
+                task,
+                status=ManagedTaskStatus.COMPLETED,
+                updated_at=completed_at,
+                completed_at=completed_at,
+                exit_code=0,
+            )
+        )
+        app.state.task_manager._store_terminal_binding(
+            replace(
+                terminal_binding,
+                binding_status=TaskTerminalBindingStatus.COMPLETED,
+                updated_at=completed_at,
+            )
+        )
+        monkeypatch.setattr(
+            "ainrf.tasks.service.utc_now",
+            lambda: completed_at + timedelta(minutes=61),
+        )
+        app.state.task_manager.sweep_time_based_state()
+
+        open_response = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/open",
+            headers=API_HEADERS,
+        )
+        takeover_response = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/takeover",
+            headers=API_HEADERS,
+        )
+        binding = await client.get(
+            f"/tasks/{created.json()['task_id']}/terminal",
+            headers=API_HEADERS,
+        )
+
+    assert kill_calls == ["@1"]
+    assert binding.status_code == 200
+    assert binding.json()["binding_status"] == "archived"
+    assert open_response.status_code == 409
+    assert takeover_response.status_code == 409
 
 
 @pytest.mark.anyio
