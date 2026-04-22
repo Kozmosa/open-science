@@ -4,7 +4,12 @@ from dataclasses import replace
 from secrets import token_urlsafe
 from uuid import uuid4
 
-from ainrf.terminal.models import TerminalAttachment, TerminalAttachmentTarget, TerminalSessionRecord, utc_now
+from ainrf.terminal.models import (
+    TerminalAttachment,
+    TerminalAttachmentTarget,
+    TerminalSessionRecord,
+    utc_now,
+)
 from ainrf.terminal.pty import (
     TERMINAL_ATTACHMENT_TOKEN_TTL,
     TerminalBridgeRuntime,
@@ -67,6 +72,9 @@ class TerminalAttachmentBroker:
             mode=target.mode,
             window_id=target.window_id,
             window_name=target.window_name,
+            owner_user_id=target.owner_user_id,
+            task_id=target.task_id,
+            binding_status=target.binding_status,
         )
         self._attachments[attachment_id] = attachment
         return attachment
@@ -88,7 +96,9 @@ class TerminalAttachmentBroker:
             attachment_expires_at=attachment.expires_at,
         )
 
-    def open_runtime(self, attachment_id: str, token: str) -> tuple[TerminalAttachment, TerminalBridgeRuntime]:
+    def open_runtime(
+        self, attachment_id: str, token: str
+    ) -> tuple[TerminalAttachment, TerminalBridgeRuntime]:
         attachment = self._validate_attachment(attachment_id, token)
         if attachment_id in self._runtimes:
             raise TerminalAttachmentConflictError("terminal attachment is already connected")

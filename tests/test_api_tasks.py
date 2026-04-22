@@ -10,6 +10,9 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.terminal.tmux import TmuxWindowInfo
 
+APP_USER_ID = "browser-user"
+API_HEADERS = {"X-API-Key": "secret-key", "X-AINRF-User-Id": APP_USER_ID}
+
 
 def make_app(tmp_path: Path) -> FastAPI:
     return create_app(
@@ -97,12 +100,12 @@ async def test_terminal_session_pairs_returns_personal_and_agent_summary(
     ) as client:
         personal = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": environment.id},
         )
         created = await client.post(
             "/tasks",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={
                 "environment_id": environment.id,
                 "title": "Train Task",
@@ -111,11 +114,11 @@ async def test_terminal_session_pairs_returns_personal_and_agent_summary(
         )
         opened = await client.post(
             f"/tasks/{created.json()['task_id']}/terminal/open",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
         session_pairs = await client.get(
             f"/terminal/session-pairs?environment_id={environment.id}",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
 
     assert personal.status_code == 200
@@ -168,7 +171,7 @@ async def test_post_tasks_ensures_agent_session_and_reuses_same_session_for_mult
     ) as client:
         first = await client.post(
             "/tasks",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={
                 "environment_id": environment.id,
                 "title": "Train Task",
@@ -177,7 +180,7 @@ async def test_post_tasks_ensures_agent_session_and_reuses_same_session_for_mult
         )
         second = await client.post(
             "/tasks",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={
                 "environment_id": environment.id,
                 "title": "Eval Task",
@@ -190,7 +193,10 @@ async def test_post_tasks_ensures_agent_session_and_reuses_same_session_for_mult
     first_payload = first.json()
     second_payload = second.json()
     assert ensured_sessions[0].endswith(":agent")
-    assert first_payload["terminal"]["agent_session_name"] == second_payload["terminal"]["agent_session_name"]
+    assert (
+        first_payload["terminal"]["agent_session_name"]
+        == second_payload["terminal"]["agent_session_name"]
+    )
     assert first_payload["terminal"]["window_id"] != second_payload["terminal"]["window_id"]
 
 
@@ -222,7 +228,7 @@ async def test_get_tasks_and_get_task_refresh_completed_status(
     ) as client:
         created = await client.post(
             "/tasks",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={
                 "environment_id": environment.id,
                 "title": "Train Task",
@@ -243,17 +249,17 @@ async def test_get_tasks_and_get_task_refresh_completed_status(
 
         listed = await client.get(
             f"/tasks?environment_id={environment.id}",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
         fetched = await client.get(
             f"/tasks/{created.json()['task_id']}",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
 
     assert listed.status_code == 200
     assert fetched.status_code == 200
     assert listed.json()["items"][0]["status"] == "completed"
-    assert listed.json()["items"][0]["terminal"]["status"] == "completed"
+    assert listed.json()["items"][0]["terminal"]["binding_status"] == "completed"
     assert fetched.json()["status"] == "completed"
     assert fetched.json()["exit_code"] == 0
 
@@ -286,7 +292,7 @@ async def test_task_terminal_open_returns_readonly_attachment_and_terminal_bindi
     ) as client:
         created = await client.post(
             "/tasks",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={
                 "environment_id": environment.id,
                 "title": "Train Task",
@@ -295,11 +301,11 @@ async def test_task_terminal_open_returns_readonly_attachment_and_terminal_bindi
         )
         terminal = await client.get(
             f"/tasks/{created.json()['task_id']}/terminal",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
         opened = await client.post(
             f"/tasks/{created.json()['task_id']}/terminal/open",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
 
     assert terminal.status_code == 200
@@ -347,7 +353,7 @@ async def test_task_cancel_transitions_to_cancelled(
     ) as client:
         created = await client.post(
             "/tasks",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={
                 "environment_id": environment.id,
                 "title": "Train Task",
@@ -358,7 +364,9 @@ async def test_task_cancel_transitions_to_cancelled(
         inspect_windows = iter(
             [
                 TmuxWindowInfo(window_id="@1", window_name="train-task", is_dead=False),
-                TmuxWindowInfo(window_id="@1", window_name="train-task", is_dead=True, exit_status=130),
+                TmuxWindowInfo(
+                    window_id="@1", window_name="train-task", is_dead=True, exit_status=130
+                ),
             ]
         )
         monkeypatch.setattr(
@@ -369,10 +377,168 @@ async def test_task_cancel_transitions_to_cancelled(
 
         cancelled = await client.post(
             f"/tasks/{created.json()['task_id']}/cancel",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
 
     assert cancelled.status_code == 200
     assert interrupt_calls == ["@1"]
     assert cancelled.json()["status"] == "cancelled"
-    assert cancelled.json()["terminal"]["status"] == "cancelled"
+    assert cancelled.json()["terminal"]["binding_status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_task_takeover_and_release_roundtrip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="127.0.0.1",
+    )
+    _configure_task_runtime(
+        app,
+        monkeypatch,
+        inspect_window=TmuxWindowInfo(window_id="@1", window_name="train-task", is_dead=False),
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "create_window",
+        lambda *args, **kwargs: TmuxWindowInfo(window_id="@1", window_name="train-task"),
+    )
+    runtime_actions: list[str] = []
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "run_task_runtime_control",
+        lambda *args, action, **kwargs: (
+            runtime_actions.append(action)
+            or {"ok": True, "state": "paused" if action == "pause" else "running"}
+        ),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        created = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "environment_id": environment.id,
+                "title": "Train Task",
+                "command": "python train.py",
+            },
+        )
+        takeover = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/takeover",
+            headers=API_HEADERS,
+        )
+        taken_over_binding = await client.get(
+            f"/tasks/{created.json()['task_id']}/terminal",
+            headers=API_HEADERS,
+        )
+        release = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/release",
+            headers=API_HEADERS,
+        )
+        released_binding = await client.get(
+            f"/tasks/{created.json()['task_id']}/terminal",
+            headers=API_HEADERS,
+        )
+
+    assert created.status_code == 200
+    assert takeover.status_code == 200
+    assert takeover.json()["mode"] == "write"
+    assert takeover.json()["readonly"] is False
+    assert taken_over_binding.status_code == 200
+    assert taken_over_binding.json()["binding_status"] == "taken_over"
+    assert taken_over_binding.json()["ownership_user_id"] == APP_USER_ID
+    assert taken_over_binding.json()["agent_write_state"] == "paused_by_user"
+    assert release.status_code == 200
+    assert release.json()["mode"] == "observe"
+    assert release.json()["readonly"] is True
+    assert released_binding.status_code == 200
+    assert released_binding.json()["binding_status"] == "running_observe"
+    assert released_binding.json()["ownership_user_id"] is None
+    assert released_binding.json()["agent_write_state"] == "running"
+    assert runtime_actions == ["pause", "resume"]
+
+
+@pytest.mark.anyio
+async def test_task_takeover_conflicts_for_another_user(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="127.0.0.1",
+    )
+    _configure_task_runtime(
+        app,
+        monkeypatch,
+        inspect_window=TmuxWindowInfo(window_id="@1", window_name="train-task", is_dead=False),
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "create_window",
+        lambda *args, **kwargs: TmuxWindowInfo(window_id="@1", window_name="train-task"),
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "run_task_runtime_control",
+        lambda *args, action, **kwargs: {
+            "ok": True,
+            "state": "paused" if action == "pause" else "running",
+        },
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        created = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "environment_id": environment.id,
+                "title": "Train Task",
+                "command": "python train.py",
+            },
+        )
+        first_takeover = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/takeover",
+            headers=API_HEADERS,
+        )
+        second_takeover = await client.post(
+            f"/tasks/{created.json()['task_id']}/terminal/takeover",
+            headers={"X-API-Key": "secret-key", "X-AINRF-User-Id": "other-user"},
+        )
+
+    assert first_takeover.status_code == 200
+    assert second_takeover.status_code == 409
+    assert second_takeover.json() == {"detail": "Task is already taken over by another user"}
+
+
+@pytest.mark.anyio
+async def test_task_routes_require_app_user_header(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            f"/tasks?environment_id={environment.id}",
+            headers={"X-API-Key": "secret-key"},
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Missing required header: X-AINRF-User-Id"}

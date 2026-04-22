@@ -10,17 +10,24 @@ from ainrf.api.schemas import (
     TaskCreateRequest,
     TaskListResponse,
     TaskResponse,
-    TaskStatus,
     TaskTerminalBindingResponse,
     TerminalAttachmentResponse,
 )
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
-from ainrf.tasks import ManagedTask, TaskManager, TaskOperationError, TaskTerminalBinding
+from ainrf.tasks.models import ManagedTask, TaskTerminalBinding
+from ainrf.tasks.service import (
+    TaskConflictError,
+    TaskManager,
+    TaskNotFoundError,
+    TaskOperationError,
+    TaskRuntimeControlError,
+)
 from ainrf.terminal.attachments import TerminalAttachment, TerminalAttachmentBroker
 from ainrf.terminal.pty import build_attachment_ws_url
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 _DEFAULT_PROJECT_ID = "default"
+_APP_USER_HEADER = "X-AINRF-User-Id"
 
 
 def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
@@ -44,6 +51,13 @@ def _get_attachment_broker(request: Request) -> TerminalAttachmentBroker:
     return broker
 
 
+def _require_app_user_id(request: Request) -> str:
+    user_id = request.headers.get(_APP_USER_HEADER, "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail=f"Missing required header: {_APP_USER_HEADER}")
+    return user_id
+
+
 def _translate_environment_error(exc: Exception) -> HTTPException:
     if isinstance(exc, EnvironmentNotFoundError):
         return HTTPException(status_code=404, detail="Environment not found")
@@ -51,17 +65,20 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
 
 
 def _translate_task_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, TaskNotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, TaskConflictError):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, TaskRuntimeControlError):
+        return HTTPException(status_code=503, detail=str(exc))
     if isinstance(exc, TaskOperationError):
-        message = str(exc)
-        if "not found" in message.lower():
-            return HTTPException(status_code=404, detail=message)
-        return HTTPException(status_code=503, detail=message)
+        return HTTPException(status_code=503, detail=str(exc))
     return HTTPException(status_code=500, detail="Unexpected task runtime error")
 
 
 def _serialize_terminal_binding(
     terminal_binding: TaskTerminalBinding,
-) -> dict[str, str | bool | None | TaskStatus]:
+) -> dict[str, str | bool | None]:
     return {
         "task_id": terminal_binding.task_id,
         "binding_id": terminal_binding.binding_id,
@@ -69,9 +86,11 @@ def _serialize_terminal_binding(
         "agent_session_name": terminal_binding.agent_session_name,
         "window_id": terminal_binding.window_id,
         "window_name": terminal_binding.window_name,
-        "status": terminal_binding.status.value,
+        "binding_status": terminal_binding.binding_status.value,
         "mode": terminal_binding.mode,
         "readonly": terminal_binding.readonly,
+        "ownership_user_id": terminal_binding.ownership_user_id,
+        "agent_write_state": terminal_binding.agent_write_state.value,
         "last_output_at": terminal_binding.last_output_at.isoformat()
         if terminal_binding.last_output_at is not None
         else None,
@@ -99,7 +118,9 @@ def _serialize_task(
         "completed_at": task.completed_at.isoformat() if task.completed_at is not None else None,
         "exit_code": task.exit_code,
         "detail": task.detail,
-        "terminal": _serialize_terminal_binding(terminal_binding) if terminal_binding is not None else None,
+        "terminal": _serialize_terminal_binding(terminal_binding)
+        if terminal_binding is not None
+        else None,
     }
 
 
@@ -131,6 +152,7 @@ async def list_tasks(
     request: Request,
     environment_id: str = Query(),
 ) -> TaskListResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_task_manager(request)
     try:
@@ -139,7 +161,7 @@ async def list_tasks(
         raise _translate_environment_error(exc) from exc
 
     try:
-        items = await to_thread.run_sync(manager.list_tasks, environment_id)
+        items = await to_thread.run_sync(manager.list_tasks, environment_id, app_user_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
 
@@ -155,6 +177,7 @@ async def list_tasks(
 
 @router.post("", response_model=TaskResponse)
 async def create_task(payload: TaskCreateRequest, request: Request) -> TaskResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_task_manager(request)
     try:
@@ -171,6 +194,7 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskRespo
         task, terminal_binding = await to_thread.run_sync(
             partial(
                 manager.create_task,
+                app_user_id,
                 environment,
                 title=payload.title,
                 command=payload.command,
@@ -187,10 +211,11 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskRespo
 
 @router.get("/{task_id}", response_model=TaskResponse)
 async def read_task(task_id: str, request: Request) -> TaskResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_task_manager(request)
     try:
-        task, terminal_binding = await to_thread.run_sync(manager.get_task, task_id)
+        task, terminal_binding = await to_thread.run_sync(manager.get_task, task_id, app_user_id)
         environment_alias = service.get_environment(task.environment_id).alias
     except EnvironmentNotFoundError:
         environment_alias = None
@@ -204,10 +229,11 @@ async def read_task(task_id: str, request: Request) -> TaskResponse:
 
 @router.post("/{task_id}/cancel", response_model=TaskResponse)
 async def cancel_task(task_id: str, request: Request) -> TaskResponse:
+    app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
     manager = _get_task_manager(request)
     try:
-        task, terminal_binding = await to_thread.run_sync(manager.cancel_task, task_id)
+        task, terminal_binding = await to_thread.run_sync(manager.cancel_task, task_id, app_user_id)
         environment_alias = service.get_environment(task.environment_id).alias
     except EnvironmentNotFoundError:
         environment_alias = None
@@ -221,9 +247,14 @@ async def cancel_task(task_id: str, request: Request) -> TaskResponse:
 
 @router.get("/{task_id}/terminal", response_model=TaskTerminalBindingResponse)
 async def read_task_terminal(task_id: str, request: Request) -> TaskTerminalBindingResponse:
+    app_user_id = _require_app_user_id(request)
     manager = _get_task_manager(request)
     try:
-        terminal_binding = await to_thread.run_sync(manager.get_task_terminal_binding, task_id)
+        terminal_binding = await to_thread.run_sync(
+            manager.get_task_terminal_binding,
+            task_id,
+            app_user_id,
+        )
     except Exception as exc:
         raise _translate_task_error(exc) from exc
 
@@ -232,15 +263,66 @@ async def read_task_terminal(task_id: str, request: Request) -> TaskTerminalBind
 
 @router.post("/{task_id}/terminal/open", response_model=TerminalAttachmentResponse)
 async def open_task_terminal(task_id: str, request: Request) -> TerminalAttachmentResponse:
+    app_user_id = _require_app_user_id(request)
     manager = _get_task_manager(request)
     broker = _get_attachment_broker(request)
     try:
-        _, _, target = await to_thread.run_sync(manager.open_task_terminal, task_id)
+        _, _, target = await to_thread.run_sync(manager.open_task_terminal, task_id, app_user_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
 
     attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(request.app.state.terminal_session_manager.record_agent_attach, target.binding_id)
+    await to_thread.run_sync(
+        request.app.state.terminal_session_manager.record_agent_attach, target.binding_id
+    )
+    terminal_ws_url = build_attachment_ws_url(
+        str(request.base_url),
+        attachment.attachment_id,
+        attachment.token,
+    )
+    return TerminalAttachmentResponse.model_validate(
+        _serialize_attachment(attachment, terminal_ws_url=terminal_ws_url)
+    )
+
+
+@router.post("/{task_id}/terminal/takeover", response_model=TerminalAttachmentResponse)
+async def takeover_task_terminal(task_id: str, request: Request) -> TerminalAttachmentResponse:
+    app_user_id = _require_app_user_id(request)
+    manager = _get_task_manager(request)
+    broker = _get_attachment_broker(request)
+    try:
+        _, _, target = await to_thread.run_sync(manager.takeover, task_id, app_user_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+
+    attachment = broker.create_attachment(str(request.base_url), target)
+    await to_thread.run_sync(
+        request.app.state.terminal_session_manager.record_agent_attach, target.binding_id
+    )
+    terminal_ws_url = build_attachment_ws_url(
+        str(request.base_url),
+        attachment.attachment_id,
+        attachment.token,
+    )
+    return TerminalAttachmentResponse.model_validate(
+        _serialize_attachment(attachment, terminal_ws_url=terminal_ws_url)
+    )
+
+
+@router.post("/{task_id}/terminal/release", response_model=TerminalAttachmentResponse)
+async def release_task_terminal(task_id: str, request: Request) -> TerminalAttachmentResponse:
+    app_user_id = _require_app_user_id(request)
+    manager = _get_task_manager(request)
+    broker = _get_attachment_broker(request)
+    try:
+        _, _, target = await to_thread.run_sync(manager.release, task_id, app_user_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+
+    attachment = broker.create_attachment(str(request.base_url), target)
+    await to_thread.run_sync(
+        request.app.state.terminal_session_manager.record_agent_attach, target.binding_id
+    )
     terminal_ws_url = build_attachment_ws_url(
         str(request.base_url),
         attachment.attachment_id,

@@ -9,6 +9,9 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 
+APP_USER_ID = "browser-user"
+API_HEADERS = {"X-API-Key": "secret-key", "X-AINRF-User-Id": APP_USER_ID}
+
 
 def make_app(tmp_path: Path) -> FastAPI:
     return create_app(
@@ -37,7 +40,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
     ) as client:
         response = await client.get(
             f"/terminal/session?environment_id={environment.id}",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
 
     assert response.status_code == 200
@@ -55,7 +58,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
         "terminal_ws_url": None,
         "detail": None,
         "binding_id": None,
-        "session_name": f"ainrf:u:{app.state.terminal_session_manager.user_id}:e:{environment.id}:personal",
+        "session_name": f"ainrf:u:{APP_USER_ID}:e:{environment.id}:personal",
         "attachment_id": None,
         "attachment_expires_at": None,
     }
@@ -89,7 +92,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     ) as client:
         response = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": environment.id},
         )
 
@@ -101,9 +104,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     assert payload["working_directory"] == "/workspace/override"
     assert payload["status"] == "running"
     assert payload["binding_id"] is not None
-    assert payload["session_name"] == (
-        f"ainrf:u:{app.state.terminal_session_manager.user_id}:e:{environment.id}:personal"
-    )
+    assert payload["session_name"] == (f"ainrf:u:{APP_USER_ID}:e:{environment.id}:personal")
     assert payload["attachment_id"] is not None
     assert payload["attachment_expires_at"] is not None
     assert (
@@ -136,7 +137,7 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
     ) as client:
         response = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": environment.id},
         )
 
@@ -174,12 +175,12 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
     ) as client:
         first = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": environment.id},
         )
         second = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": environment.id},
         )
 
@@ -224,17 +225,17 @@ async def test_terminal_session_switching_environment_keeps_distinct_personal_se
     ) as client:
         first = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": first_environment.id},
         )
         second = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": second_environment.id},
         )
         first_summary = await client.get(
             f"/terminal/session?environment_id={first_environment.id}",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
 
     assert first.status_code == 200
@@ -272,12 +273,12 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
     ) as client:
         created = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": environment.id},
         )
         detached = await client.delete(
             f"/terminal/session?environment_id={environment.id}&attachment_id={created.json()['attachment_id']}",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
         )
 
     assert created.status_code == 200
@@ -320,12 +321,12 @@ async def test_terminal_session_reset_returns_new_attachment(
     ) as client:
         created = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": environment.id},
         )
         reset = await client.post(
             "/terminal/session/reset",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={
                 "environment_id": environment.id,
                 "attachment_id": created.json()["attachment_id"],
@@ -349,9 +350,31 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
     ) as client:
         response = await client.post(
             "/terminal/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=API_HEADERS,
             json={"environment_id": "missing"},
         )
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Environment not found"}
+
+
+@pytest.mark.anyio
+async def test_terminal_session_routes_require_app_user_header(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            f"/terminal/session?environment_id={environment.id}",
+            headers={"X-API-Key": "secret-key"},
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Missing required header: X-AINRF-User-Id"}

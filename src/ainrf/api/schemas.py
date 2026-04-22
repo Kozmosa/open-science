@@ -37,6 +37,22 @@ class TaskStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class TaskTerminalBindingStatus(StrEnum):
+    PENDING_ATTACH = "pending_attach"
+    RUNNING_OBSERVE = "running_observe"
+    TAKEN_OVER = "taken_over"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ARCHIVED = "archived"
+
+
+class TaskAgentWriteState(StrEnum):
+    RUNNING = "running"
+    PAUSE_REQUESTED = "pause_requested"
+    PAUSED_BY_USER = "paused_by_user"
+    RESUME_REQUESTED = "resume_requested"
+
+
 class HealthResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -101,9 +117,11 @@ class TaskTerminalBindingResponse(BaseModel):
     agent_session_name: str
     window_id: str
     window_name: str
-    status: TaskStatus
+    binding_status: TaskTerminalBindingStatus
     mode: TerminalAttachmentMode = TerminalAttachmentMode.OBSERVE
     readonly: bool = True
+    ownership_user_id: str | None = None
+    agent_write_state: TaskAgentWriteState = TaskAgentWriteState.RUNNING
     last_output_at: str | None = None
 
 
@@ -147,7 +165,7 @@ class TerminalAttachmentResponse(BaseModel):
     target_kind: str
     working_directory: str | None = None
     readonly: bool = False
-    mode: TerminalAttachmentMode = TerminalAttachmentMode.INTERACTIVE
+    mode: TerminalAttachmentMode = TerminalAttachmentMode.WRITE
     window_id: str | None = None
     window_name: str | None = None
 

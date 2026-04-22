@@ -16,7 +16,7 @@ from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.code_server import CodeServerSupervisor
 from ainrf.environments import InMemoryEnvironmentService
-from ainrf.tasks import TaskManager
+from ainrf.tasks.service import TaskManager
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter

@@ -56,7 +56,7 @@ class SessionManager:
         self._environment_service = environment_service
         self._tmux_adapter = tmux_adapter
         self._default_shell = default_shell
-        self._user_id = user_id or current_daemon_user()
+        self._legacy_user_id = user_id or current_daemon_user()
         self._initialized = False
 
     @property
@@ -65,7 +65,11 @@ class SessionManager:
 
     @property
     def user_id(self) -> str:
-        return self._user_id
+        return self._legacy_user_id
+
+    @property
+    def legacy_user_id(self) -> str:
+        return self._legacy_user_id
 
     @property
     def tmux_adapter(self) -> TmuxAdapter:
@@ -115,18 +119,32 @@ class SessionManager:
             connection.commit()
         self._initialized = True
 
-    def session_name_for(self, environment_id: str) -> str:
-        return self._tmux_adapter.session_name_for(self._user_id, environment_id, kind="personal")
+    def session_name_for(self, app_user_id: str, environment_id: str | None = None) -> str:
+        if environment_id is None:
+            environment_id = app_user_id
+            app_user_id = self._legacy_user_id
+        return self._tmux_adapter.session_name_for(app_user_id, environment_id, kind="personal")
 
-    def agent_session_name_for(self, environment_id: str) -> str:
-        return self._tmux_adapter.session_name_for(self._user_id, environment_id, kind="agent")
+    def agent_session_name_for(self, app_user_id: str, environment_id: str | None = None) -> str:
+        if environment_id is None:
+            environment_id = app_user_id
+            app_user_id = self._legacy_user_id
+        return self._tmux_adapter.session_name_for(app_user_id, environment_id, kind="agent")
 
     def get_session_record(
         self,
-        environment: EnvironmentRegistryEntry | None,
-        working_directory: str | None,
+        app_user_id: str | EnvironmentRegistryEntry | None,
+        environment: EnvironmentRegistryEntry | str | None = None,
+        working_directory: str | None = None,
     ) -> TerminalSessionRecord:
         self.initialize()
+        if isinstance(app_user_id, EnvironmentRegistryEntry):
+            working_directory = environment if isinstance(environment, str) else None
+            environment = app_user_id
+            app_user_id = self._legacy_user_id
+        elif app_user_id is None:
+            app_user_id = self._legacy_user_id
+        assert environment is None or isinstance(environment, EnvironmentRegistryEntry)
         if environment is None:
             return TerminalSessionRecord(
                 session_id=None,
@@ -135,8 +153,8 @@ class SessionManager:
                 status=TerminalSessionStatus.IDLE,
             )
 
-        binding = self._load_binding(environment.id)
-        predicted_session_name = self.session_name_for(environment.id)
+        binding = self._load_binding(app_user_id, environment.id)
+        predicted_session_name = self.session_name_for(app_user_id, environment.id)
         if binding is None:
             return self._build_record(
                 environment=environment,
@@ -167,12 +185,18 @@ class SessionManager:
 
     def ensure_personal_session(
         self,
-        environment: EnvironmentRegistryEntry,
-        working_directory: str | None,
+        app_user_id: str | EnvironmentRegistryEntry,
+        environment: EnvironmentRegistryEntry | str | None = None,
+        working_directory: str | None = None,
     ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
         self.initialize()
-        binding = self._upsert_binding(environment, working_directory)
-        pair = self._upsert_pair(binding, environment.id)
+        if isinstance(app_user_id, EnvironmentRegistryEntry):
+            working_directory = environment if isinstance(environment, str) else None
+            environment = app_user_id
+            app_user_id = self._legacy_user_id
+        assert isinstance(environment, EnvironmentRegistryEntry)
+        binding = self._upsert_binding(app_user_id, environment, working_directory)
+        pair = self._upsert_pair(app_user_id, binding, environment.id)
         try:
             self._tmux_adapter.ensure_personal_session(
                 binding,
@@ -231,13 +255,22 @@ class SessionManager:
 
     def ensure_agent_session(
         self,
-        environment: EnvironmentRegistryEntry,
-        working_directory: str | None,
+        app_user_id: str | EnvironmentRegistryEntry,
+        environment: EnvironmentRegistryEntry | str | None = None,
+        working_directory: str | None = None,
     ) -> tuple[UserEnvironmentBinding, UserSessionPair]:
         self.initialize()
-        binding = self._upsert_binding(environment, working_directory)
-        pair = self._upsert_pair(binding, environment.id)
-        agent_session_name = pair.agent_session_name or self.agent_session_name_for(environment.id)
+        if isinstance(app_user_id, EnvironmentRegistryEntry):
+            working_directory = environment if isinstance(environment, str) else None
+            environment = app_user_id
+            app_user_id = self._legacy_user_id
+        assert isinstance(environment, EnvironmentRegistryEntry)
+        binding = self._upsert_binding(app_user_id, environment, working_directory)
+        pair = self._upsert_pair(app_user_id, binding, environment.id)
+        agent_session_name = pair.agent_session_name or self.agent_session_name_for(
+            app_user_id,
+            environment.id,
+        )
         try:
             self._tmux_adapter.ensure_agent_session(
                 binding,
@@ -273,12 +306,18 @@ class SessionManager:
 
     def reset_personal_session(
         self,
-        environment: EnvironmentRegistryEntry,
-        working_directory: str | None,
+        app_user_id: str | EnvironmentRegistryEntry,
+        environment: EnvironmentRegistryEntry | str | None = None,
+        working_directory: str | None = None,
     ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
         self.initialize()
-        binding = self._upsert_binding(environment, working_directory)
-        pair = self._upsert_pair(binding, environment.id)
+        if isinstance(app_user_id, EnvironmentRegistryEntry):
+            working_directory = environment if isinstance(environment, str) else None
+            environment = app_user_id
+            app_user_id = self._legacy_user_id
+        assert isinstance(environment, EnvironmentRegistryEntry)
+        binding = self._upsert_binding(app_user_id, environment, working_directory)
+        pair = self._upsert_pair(app_user_id, binding, environment.id)
         try:
             self._tmux_adapter.reset_personal_session(
                 binding,
@@ -361,13 +400,16 @@ class SessionManager:
 
     def list_session_pairs(
         self,
+        app_user_id: str,
         environment_id: str | None = None,
     ) -> list[tuple[UserEnvironmentBinding, UserSessionPair, EnvironmentRegistryEntry | None]]:
         self.initialize()
-        bindings = self._list_bindings()
+        bindings = [binding for binding in self._list_bindings() if binding.user_id == app_user_id]
         if environment_id is not None:
             bindings = [binding for binding in bindings if binding.environment_id == environment_id]
-        items: list[tuple[UserEnvironmentBinding, UserSessionPair, EnvironmentRegistryEntry | None]] = []
+        items: list[
+            tuple[UserEnvironmentBinding, UserSessionPair, EnvironmentRegistryEntry | None]
+        ] = []
         for binding in bindings:
             pair = self._load_pair(binding.binding_id)
             if pair is None:
@@ -478,15 +520,19 @@ class SessionManager:
 
     def _upsert_binding(
         self,
+        app_user_id: str,
         environment: EnvironmentRegistryEntry,
         working_directory: str | None,
     ) -> UserEnvironmentBinding:
-        existing = self._load_binding(environment.id)
+        existing = self._load_binding(app_user_id, environment.id)
+        if existing is None:
+            existing = self._claim_legacy_binding(app_user_id, environment.id)
+
         now = utc_now()
         if existing is None:
             binding = UserEnvironmentBinding(
                 binding_id=str(uuid4()),
-                user_id=self._user_id,
+                user_id=app_user_id,
                 environment_id=environment.id,
                 remote_login_user=environment.user,
                 default_shell=self._default_shell,
@@ -498,6 +544,7 @@ class SessionManager:
         else:
             binding = replace(
                 existing,
+                user_id=app_user_id,
                 remote_login_user=environment.user,
                 default_shell=self._default_shell,
                 default_workdir=working_directory,
@@ -505,14 +552,62 @@ class SessionManager:
             )
         return self._store_binding(binding)
 
-    def _upsert_pair(self, binding: UserEnvironmentBinding, environment_id: str) -> UserSessionPair:
+    def _claim_legacy_binding(
+        self,
+        app_user_id: str,
+        environment_id: str,
+    ) -> UserEnvironmentBinding | None:
+        if app_user_id == self._legacy_user_id:
+            return None
+        with self._connect() as connection:
+            legacy_row = connection.execute(
+                """
+                SELECT binding_id, user_id, environment_id, remote_login_user, default_shell,
+                       default_workdir, mux_kind, created_at, updated_at
+                FROM user_environment_bindings
+                WHERE user_id = ? AND environment_id = ?
+                """,
+                (self._legacy_user_id, environment_id),
+            ).fetchone()
+            if legacy_row is None:
+                return None
+
+            non_legacy_count = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM user_environment_bindings
+                WHERE environment_id = ? AND user_id != ?
+                """,
+                (environment_id, self._legacy_user_id),
+            ).fetchone()
+            if non_legacy_count is not None and int(non_legacy_count["count"]) > 0:
+                return None
+
+            connection.execute(
+                """
+                UPDATE user_environment_bindings
+                SET user_id = ?, updated_at = ?
+                WHERE binding_id = ?
+                """,
+                (app_user_id, utc_now().isoformat(), legacy_row["binding_id"]),
+            )
+            connection.commit()
+
+        return self._load_binding(app_user_id, environment_id)
+
+    def _upsert_pair(
+        self,
+        app_user_id: str,
+        binding: UserEnvironmentBinding,
+        environment_id: str,
+    ) -> UserSessionPair:
         existing = self._load_pair(binding.binding_id)
         now = utc_now()
         if existing is None:
             pair = UserSessionPair(
                 binding_id=binding.binding_id,
-                personal_session_name=self.session_name_for(environment_id),
-                agent_session_name=self.agent_session_name_for(environment_id),
+                personal_session_name=self.session_name_for(app_user_id, environment_id),
+                agent_session_name=self.agent_session_name_for(app_user_id, environment_id),
                 personal_status=TerminalSessionStatus.IDLE,
                 agent_status=TerminalSessionStatus.IDLE,
                 created_at=now,
@@ -521,8 +616,8 @@ class SessionManager:
         else:
             pair = replace(
                 existing,
-                personal_session_name=self.session_name_for(environment_id),
-                agent_session_name=self.agent_session_name_for(environment_id),
+                personal_session_name=self.session_name_for(app_user_id, environment_id),
+                agent_session_name=self.agent_session_name_for(app_user_id, environment_id),
                 agent_status=existing.agent_status or TerminalSessionStatus.IDLE,
                 updated_at=now,
             )
@@ -565,7 +660,14 @@ class SessionManager:
             ).fetchall()
         return [self._row_to_binding(row) for row in rows]
 
-    def _load_binding(self, environment_id: str) -> UserEnvironmentBinding | None:
+    def _load_binding(
+        self,
+        app_user_id: str,
+        environment_id: str | None = None,
+    ) -> UserEnvironmentBinding | None:
+        if environment_id is None:
+            environment_id = app_user_id
+            app_user_id = self._legacy_user_id
         with self._connect() as connection:
             row = connection.execute(
                 """
@@ -574,7 +676,7 @@ class SessionManager:
                 FROM user_environment_bindings
                 WHERE user_id = ? AND environment_id = ?
                 """,
-                (self._user_id, environment_id),
+                (app_user_id, environment_id),
             ).fetchone()
         if row is None:
             return None
@@ -613,6 +715,9 @@ class SessionManager:
         return self._row_to_pair(row)
 
     def _store_binding(self, binding: UserEnvironmentBinding) -> UserEnvironmentBinding:
+        created_at = binding.created_at or utc_now()
+        updated_at = binding.updated_at or created_at
+        stored = replace(binding, created_at=created_at, updated_at=updated_at)
         with self._connect() as connection:
             connection.execute(
                 """
@@ -621,6 +726,7 @@ class SessionManager:
                     default_shell, default_workdir, mux_kind, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(binding_id) DO UPDATE SET
+                    user_id = excluded.user_id,
                     remote_login_user = excluded.remote_login_user,
                     default_shell = excluded.default_shell,
                     default_workdir = excluded.default_workdir,
@@ -628,21 +734,24 @@ class SessionManager:
                     updated_at = excluded.updated_at
                 """,
                 (
-                    binding.binding_id,
-                    binding.user_id,
-                    binding.environment_id,
-                    binding.remote_login_user,
-                    binding.default_shell,
-                    binding.default_workdir,
-                    binding.mux_kind.value,
-                    binding.created_at.isoformat() if binding.created_at is not None else utc_now().isoformat(),
-                    binding.updated_at.isoformat() if binding.updated_at is not None else utc_now().isoformat(),
+                    stored.binding_id,
+                    stored.user_id,
+                    stored.environment_id,
+                    stored.remote_login_user,
+                    stored.default_shell,
+                    stored.default_workdir,
+                    stored.mux_kind.value,
+                    created_at.isoformat(),
+                    updated_at.isoformat(),
                 ),
             )
             connection.commit()
-        return binding
+        return stored
 
     def _store_pair(self, pair: UserSessionPair) -> UserSessionPair:
+        created_at = pair.created_at or utc_now()
+        updated_at = pair.updated_at or created_at
+        stored = replace(pair, created_at=created_at, updated_at=updated_at)
         with self._connect() as connection:
             connection.execute(
                 """
@@ -666,27 +775,33 @@ class SessionManager:
                     detail = excluded.detail
                 """,
                 (
-                    pair.binding_id,
-                    pair.personal_session_name,
-                    pair.agent_session_name,
-                    pair.personal_status.value,
-                    pair.agent_status.value if pair.agent_status is not None else None,
-                    pair.created_at.isoformat() if pair.created_at is not None else utc_now().isoformat(),
-                    pair.updated_at.isoformat() if pair.updated_at is not None else utc_now().isoformat(),
-                    pair.personal_started_at.isoformat()
-                    if pair.personal_started_at is not None
+                    stored.binding_id,
+                    stored.personal_session_name,
+                    stored.agent_session_name,
+                    stored.personal_status.value,
+                    stored.agent_status.value if stored.agent_status is not None else None,
+                    created_at.isoformat(),
+                    updated_at.isoformat(),
+                    stored.personal_started_at.isoformat()
+                    if stored.personal_started_at is not None
                     else None,
-                    pair.personal_closed_at.isoformat() if pair.personal_closed_at is not None else None,
-                    pair.last_verified_at.isoformat() if pair.last_verified_at is not None else None,
-                    pair.last_personal_attach_at.isoformat()
-                    if pair.last_personal_attach_at is not None
+                    stored.personal_closed_at.isoformat()
+                    if stored.personal_closed_at is not None
                     else None,
-                    pair.last_agent_attach_at.isoformat() if pair.last_agent_attach_at is not None else None,
-                    pair.detail or "",
+                    stored.last_verified_at.isoformat()
+                    if stored.last_verified_at is not None
+                    else None,
+                    stored.last_personal_attach_at.isoformat()
+                    if stored.last_personal_attach_at is not None
+                    else None,
+                    stored.last_agent_attach_at.isoformat()
+                    if stored.last_agent_attach_at is not None
+                    else None,
+                    stored.detail or "",
                 ),
             )
             connection.commit()
-        return pair
+        return stored
 
     @staticmethod
     def _row_to_binding(row: sqlite3.Row) -> UserEnvironmentBinding:
