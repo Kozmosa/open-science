@@ -21,6 +21,7 @@ from ainrf.api.schemas import (
 )
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
 from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.tasks.service import TaskManager
 from ainrf.terminal.attachments import (
     TerminalAttachmentAuthorizationError,
     TerminalAttachmentBroker,
@@ -114,6 +115,10 @@ def _get_attachment_broker(request: Request | WebSocket) -> TerminalAttachmentBr
     if broker is None:
         raise HTTPException(status_code=500, detail="terminal attachment broker not initialized")
     return broker
+
+
+def _get_task_manager(request: Request | WebSocket) -> TaskManager | None:
+    return getattr(request.app.state, "task_manager", None)
 
 
 def _require_app_user_id(request: Request) -> str:
@@ -328,6 +333,7 @@ async def reset_terminal_session(
 @router.websocket("/attachments/{attachment_id}/ws")
 async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebSocket) -> None:
     broker = _get_attachment_broker(websocket)
+    task_manager = _get_task_manager(websocket)
     try:
         attachment, runtime = broker.open_runtime(attachment_id, token)
     except Exception as exc:
@@ -434,6 +440,8 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
     finally:
         loop.remove_reader(master_fd)
         broker.close_runtime(attachment_id)
+        if task_manager is not None:
+            await to_thread.run_sync(task_manager.handle_task_attachment_disconnect, attachment)
         if (
             websocket.client_state != WebSocketState.DISCONNECTED
             and websocket.application_state != WebSocketState.DISCONNECTED

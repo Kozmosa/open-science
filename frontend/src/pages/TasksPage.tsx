@@ -152,6 +152,8 @@ function TasksPage() {
     selectedTerminal.binding_status === 'taken_over' &&
     selectedTerminal.ownership_user_id === currentUserId &&
     !releaseMutation.isPending;
+  const canAttachTerminal =
+    effectiveSelectedTaskId !== null && selectedTerminal?.binding_status !== 'archived';
 
   function navigateToTerminal(intent: 'open' | 'takeover'): void {
     if (!selectedTask) {
@@ -380,7 +382,7 @@ function TasksPage() {
                     <button
                       type="button"
                       onClick={() => navigateToTerminal('open')}
-                      disabled={effectiveSelectedTaskId === null}
+                      disabled={!canAttachTerminal}
                       className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {t('pages.tasks.openTerminal')}
@@ -388,7 +390,7 @@ function TasksPage() {
                     <button
                       type="button"
                       onClick={() => navigateToTerminal('takeover')}
-                      disabled={effectiveSelectedTaskId === null}
+                      disabled={!canAttachTerminal}
                       className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {t('pages.tasks.takeover')}

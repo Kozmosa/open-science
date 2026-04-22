@@ -86,6 +86,16 @@ const cancelledTask: TaskRecord = {
   },
 };
 
+const archivedTask: TaskRecord = {
+  ...runningTask,
+  status: 'completed',
+  completed_at: '2026-04-22T00:10:00Z',
+  terminal: {
+    ...runningTerminal,
+    binding_status: 'archived',
+  },
+};
+
 const releaseAttachment: TerminalAttachment = {
   attachment_id: 'attach-task-1',
   terminal_ws_url: 'ws://127.0.0.1:8000/terminal/attachments/attach-task-1/ws?token=test-token',
@@ -232,5 +242,17 @@ describe('TasksPage', () => {
 
     await waitFor(() => expect(mockCancelTask).toHaveBeenCalledWith('task-1'));
     expect(await screen.findByText('Cancelled')).toBeInTheDocument();
+  });
+
+  it('disables terminal attach actions for archived tasks', async () => {
+    mockGetTasks.mockResolvedValue({ items: [archivedTask] });
+    mockGetTask.mockResolvedValue(archivedTask);
+    mockGetTaskTerminal.mockResolvedValue(archivedTask.terminal as TaskTerminalBinding);
+
+    renderWithProviders(<TasksPage />);
+
+    expect(await screen.findByText('Train Task')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open terminal' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Take over' })).toBeDisabled();
   });
 });

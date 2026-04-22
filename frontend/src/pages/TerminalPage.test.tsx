@@ -14,13 +14,18 @@ vi.mock('../components', () => ({
     attachmentId,
     mode,
     readonly,
+    onDisconnected,
   }: {
     attachmentId: string | null;
     mode?: 'observe' | 'write';
     readonly?: boolean;
+    onDisconnected?: () => void;
   }) => (
     <div data-testid="terminal-console">
       {attachmentId ?? 'no-attachment'} {mode ?? 'observe'} {readonly ? 'readonly' : 'write'}
+      <button type="button" onClick={onDisconnected}>
+        disconnect
+      </button>
     </div>
   ),
 }));
@@ -130,5 +135,20 @@ describe('TerminalPage', () => {
     await waitFor(() => expect(mockTakeoverTaskTerminal).toHaveBeenCalledWith('task-1'));
     expect(await screen.findByText('Train Task')).toBeInTheDocument();
     expect(screen.getByTestId('terminal-console')).toHaveTextContent('attach-1 write write');
+  });
+
+  it('allows the current intent to attach again after a task-mode disconnect', async () => {
+    renderWithProviders(<TerminalPage />, {
+      route: '/terminal?environment_id=env-1&task_id=task-1&intent=open',
+    });
+
+    await waitFor(() => expect(mockOpenTaskTerminal).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('terminal-console')).toHaveTextContent(
+      'attach-open observe readonly'
+    );
+
+    screen.getByRole('button', { name: 'disconnect' }).click();
+
+    await waitFor(() => expect(mockOpenTaskTerminal).toHaveBeenCalledTimes(2));
   });
 });

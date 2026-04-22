@@ -33,6 +33,7 @@ class TaskAgentWriteState(StrEnum):
 
 class TaskTakeoverLeaseStatus(StrEnum):
     ACTIVE = "active"
+    GRACE_PENDING = "grace_pending"
     RELEASED = "released"
 
 
@@ -70,6 +71,7 @@ class TaskTerminalBinding:
     pause_acknowledged_at: datetime | None = None
     last_takeover_at: datetime | None = None
     last_output_at: datetime | None = None
+    archived_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -85,4 +87,6 @@ class TaskTakeoverLease:
     user_id: str
     status: TaskTakeoverLeaseStatus
     acquired_at: datetime
+    grace_started_at: datetime | None = None
+    grace_expires_at: datetime | None = None
     released_at: datetime | None = None

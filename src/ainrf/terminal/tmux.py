@@ -282,6 +282,24 @@ class TmuxAdapter:
         if result.returncode != 0:
             self._raise_command_error(result, environment)
 
+    def kill_window(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        window_id: str,
+    ) -> None:
+        tmux_command = ("tmux", "kill-window", "-t", window_id)
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            result = self._run_local_command(tmux_command)
+        else:
+            result = self._run_remote_command(
+                environment,
+                binding.remote_login_user,
+                self._wrap_remote_tmux_check(shlex.join(tmux_command)),
+            )
+        if result.returncode not in {0, 1}:
+            self._raise_command_error(result, environment)
+
     def build_attach_command(
         self,
         binding: UserEnvironmentBinding,

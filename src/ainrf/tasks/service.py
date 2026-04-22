@@ -4,7 +4,7 @@ import re
 import sqlite3
 import time
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,6 +21,7 @@ from ainrf.tasks.models import (
 )
 from ainrf.tasks.runtime import build_runtime_run_command, runtime_dir_for_task
 from ainrf.terminal.models import (
+    TerminalAttachment,
     TerminalAttachmentMode,
     TerminalAttachmentTarget,
     UserEnvironmentBinding,
@@ -70,6 +71,8 @@ class TaskManager:
         cancel_grace_seconds: float = 5.0,
         cancel_poll_interval_seconds: float = 0.25,
         takeover_ack_timeout_seconds: float = 5.0,
+        takeover_disconnect_grace_seconds: float = 5.0,
+        final_window_retention_seconds: float = 60.0 * 60.0,
     ) -> None:
         self._state_root = state_root
         self._runtime_root = state_root / "runtime"
@@ -80,6 +83,8 @@ class TaskManager:
         self._cancel_grace_seconds = cancel_grace_seconds
         self._cancel_poll_interval_seconds = cancel_poll_interval_seconds
         self._takeover_ack_timeout_seconds = takeover_ack_timeout_seconds
+        self._takeover_disconnect_grace_seconds = takeover_disconnect_grace_seconds
+        self._final_window_retention_seconds = final_window_retention_seconds
         self._initialized = False
 
     def initialize(self) -> None:
@@ -125,6 +130,7 @@ class TaskManager:
                     pause_acknowledged_at TEXT,
                     last_takeover_at TEXT,
                     last_output_at TEXT,
+                    archived_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY(task_id) REFERENCES managed_tasks(task_id)
@@ -139,6 +145,8 @@ class TaskManager:
                     user_id TEXT NOT NULL,
                     status TEXT NOT NULL,
                     acquired_at TEXT NOT NULL,
+                    grace_started_at TEXT,
+                    grace_expires_at TEXT,
                     released_at TEXT,
                     FOREIGN KEY(task_id) REFERENCES managed_tasks(task_id)
                 )
@@ -176,6 +184,24 @@ class TaskManager:
                 "task_terminal_bindings",
                 "last_takeover_at",
                 "ALTER TABLE task_terminal_bindings ADD COLUMN last_takeover_at TEXT",
+            )
+            self._ensure_column(
+                connection,
+                "task_terminal_bindings",
+                "archived_at",
+                "ALTER TABLE task_terminal_bindings ADD COLUMN archived_at TEXT",
+            )
+            self._ensure_column(
+                connection,
+                "task_takeover_leases",
+                "grace_started_at",
+                "ALTER TABLE task_takeover_leases ADD COLUMN grace_started_at TEXT",
+            )
+            self._ensure_column(
+                connection,
+                "task_takeover_leases",
+                "grace_expires_at",
+                "ALTER TABLE task_takeover_leases ADD COLUMN grace_expires_at TEXT",
             )
             connection.commit()
         self._initialized = True
@@ -303,20 +329,31 @@ class TaskManager:
         task, terminal_binding = self.get_task(task_id, app_user_id)
         if terminal_binding is None:
             raise TaskNotFoundError("Task terminal binding not found")
+        if terminal_binding.binding_status is TaskTerminalBindingStatus.ARCHIVED:
+            raise TaskConflictError("Task terminal has been archived")
 
-        environment = self._resolve_environment(task.environment_id)
-        binding = self._resolve_user_binding(task.binding_id)
-        assert environment is not None
-        assert binding is not None
-        window = self._inspect_window(binding, environment, terminal_binding)
-        if window is None:
-            raise TaskOperationError("Task terminal window is unavailable")
+        current_lease = self._load_live_lease(task_id)
+        if (
+            current_lease is not None
+            and current_lease.user_id == app_user_id
+            and current_lease.status is TaskTakeoverLeaseStatus.GRACE_PENDING
+            and self._is_grace_lease_reclaimable(current_lease)
+        ):
+            terminal_binding, _ = self._reactivate_grace_lease(
+                task,
+                terminal_binding,
+                current_lease,
+            )
+            return self._build_task_attachment(
+                task,
+                terminal_binding,
+                mode=TerminalAttachmentMode.WRITE,
+                readonly=False,
+                owner_user_id=app_user_id,
+            )
 
-        target = self._build_task_attachment_target(
+        _, _, target = self._build_task_attachment(
             task,
-            binding,
-            environment,
-            window.window_name,
             terminal_binding,
             mode=TerminalAttachmentMode.OBSERVE,
             readonly=True,
@@ -332,32 +369,38 @@ class TaskManager:
         task, terminal_binding = self.get_task(task_id, app_user_id)
         if terminal_binding is None:
             raise TaskNotFoundError("Task terminal binding not found")
+        if terminal_binding.binding_status is TaskTerminalBindingStatus.ARCHIVED:
+            raise TaskConflictError("Task terminal has been archived")
         if task.status is not ManagedTaskStatus.RUNNING:
             raise TaskConflictError("Task is not running")
 
-        active_lease = self._load_active_lease(task_id)
-        if active_lease is not None:
-            if active_lease.user_id != app_user_id:
+        live_lease = self._load_live_lease(task_id)
+        if live_lease is not None:
+            if live_lease.user_id != app_user_id:
                 raise TaskConflictError("Task is already taken over by another user")
-            if terminal_binding.binding_status is TaskTerminalBindingStatus.TAKEN_OVER:
-                environment = self._resolve_environment(task.environment_id)
-                binding = self._resolve_user_binding(task.binding_id)
-                assert environment is not None
-                assert binding is not None
-                window = self._inspect_window(binding, environment, terminal_binding)
-                if window is None:
-                    raise TaskOperationError("Task terminal window is unavailable")
-                target = self._build_task_attachment_target(
+            if (
+                live_lease.status is TaskTakeoverLeaseStatus.GRACE_PENDING
+                and self._is_grace_lease_reclaimable(live_lease)
+            ):
+                terminal_binding, _ = self._reactivate_grace_lease(
                     task,
-                    binding,
-                    environment,
-                    window.window_name,
+                    terminal_binding,
+                    live_lease,
+                )
+                return self._build_task_attachment(
+                    task,
                     terminal_binding,
                     mode=TerminalAttachmentMode.WRITE,
                     readonly=False,
                     owner_user_id=app_user_id,
                 )
-                return task, terminal_binding, target
+            return self._build_task_attachment(
+                task,
+                terminal_binding,
+                mode=TerminalAttachmentMode.WRITE,
+                readonly=False,
+                owner_user_id=app_user_id,
+            )
 
         requested_at = utc_now()
         original_binding = terminal_binding
@@ -377,17 +420,17 @@ class TaskManager:
             self._store_terminal_binding(original_binding)
             raise
 
-        if active_lease is None:
-            self._store_lease(
-                TaskTakeoverLease(
-                    lease_id=str(uuid4()),
-                    task_id=task_id,
-                    user_id=app_user_id,
-                    status=TaskTakeoverLeaseStatus.ACTIVE,
-                    acquired_at=requested_at,
-                )
+        self._store_lease(
+            TaskTakeoverLease(
+                lease_id=str(uuid4()),
+                task_id=task_id,
+                user_id=app_user_id,
+                status=TaskTakeoverLeaseStatus.ACTIVE,
+                acquired_at=requested_at,
+                grace_started_at=None,
+                grace_expires_at=None,
             )
-
+        )
         acknowledged_at = utc_now()
         taken_over_binding = self._store_terminal_binding(
             replace(
@@ -399,27 +442,17 @@ class TaskManager:
                 agent_write_state=TaskAgentWriteState.PAUSED_BY_USER,
                 pause_acknowledged_at=acknowledged_at,
                 last_takeover_at=acknowledged_at,
+                archived_at=None,
                 updated_at=acknowledged_at,
             )
         )
-        environment = self._resolve_environment(task.environment_id)
-        binding = self._resolve_user_binding(task.binding_id)
-        assert environment is not None
-        assert binding is not None
-        window = self._inspect_window(binding, environment, taken_over_binding)
-        if window is None:
-            raise TaskOperationError("Task terminal window is unavailable")
-        target = self._build_task_attachment_target(
+        return self._build_task_attachment(
             task,
-            binding,
-            environment,
-            window.window_name,
             taken_over_binding,
             mode=TerminalAttachmentMode.WRITE,
             readonly=False,
             owner_user_id=app_user_id,
         )
-        return task, taken_over_binding, target
 
     def release(
         self,
@@ -430,62 +463,71 @@ class TaskManager:
         if terminal_binding is None:
             raise TaskNotFoundError("Task terminal binding not found")
 
-        active_lease = self._load_active_lease(task_id)
-        if active_lease is None or active_lease.user_id != app_user_id:
+        live_lease = self._load_live_lease(task_id)
+        if live_lease is None or live_lease.user_id != app_user_id:
             raise TaskConflictError("Task is not taken over by the current user")
 
-        resume_requested_at = utc_now()
-        pending_binding = self._store_terminal_binding(
-            replace(
-                terminal_binding,
-                agent_write_state=TaskAgentWriteState.RESUME_REQUESTED,
-                updated_at=resume_requested_at,
-            )
-        )
-        if task.status is ManagedTaskStatus.RUNNING:
-            self._run_task_runtime_action(
-                task,
-                "resume",
-                timeout_seconds=self._takeover_ack_timeout_seconds,
-            )
-
-        self._store_lease(
-            replace(
-                active_lease,
-                status=TaskTakeoverLeaseStatus.RELEASED,
-                released_at=resume_requested_at,
-            )
-        )
-
-        released_binding = self._store_terminal_binding(
-            replace(
-                pending_binding,
-                binding_status=self._binding_status_for_task(task.status),
-                mode=TerminalAttachmentMode.OBSERVE,
-                readonly=True,
-                ownership_user_id=None,
-                agent_write_state=TaskAgentWriteState.RUNNING,
-                updated_at=resume_requested_at,
-            )
-        )
-        environment = self._resolve_environment(task.environment_id)
-        binding = self._resolve_user_binding(task.binding_id)
-        assert environment is not None
-        assert binding is not None
-        window = self._inspect_window(binding, environment, released_binding)
-        if window is None:
-            raise TaskOperationError("Task terminal window is unavailable")
-        target = self._build_task_attachment_target(
+        released_binding = self._release_takeover(
             task,
-            binding,
-            environment,
-            window.window_name,
+            terminal_binding,
+            live_lease,
+            released_at=utc_now(),
+            resume_runtime=task.status is ManagedTaskStatus.RUNNING,
+        )
+        return self._build_task_attachment(
+            task,
             released_binding,
             mode=TerminalAttachmentMode.OBSERVE,
             readonly=True,
             owner_user_id=None,
         )
-        return task, released_binding, target
+
+    def handle_task_attachment_disconnect(self, attachment: TerminalAttachment) -> None:
+        self.initialize()
+        if attachment.task_id is None:
+            return
+        if attachment.mode is not TerminalAttachmentMode.WRITE:
+            return
+        if attachment.owner_user_id is None:
+            return
+
+        live_lease = self._load_live_lease(attachment.task_id)
+        if live_lease is None:
+            return
+        if live_lease.status is not TaskTakeoverLeaseStatus.ACTIVE:
+            return
+        if live_lease.user_id != attachment.owner_user_id:
+            return
+
+        now = utc_now()
+        self._store_lease(
+            replace(
+                live_lease,
+                status=TaskTakeoverLeaseStatus.GRACE_PENDING,
+                grace_started_at=now,
+                grace_expires_at=now + timedelta(seconds=self._takeover_disconnect_grace_seconds),
+            )
+        )
+        terminal_binding = self._load_terminal_binding(attachment.task_id)
+        if terminal_binding is None:
+            return
+        self._store_terminal_binding(
+            replace(
+                terminal_binding,
+                binding_status=TaskTerminalBindingStatus.TAKEN_OVER,
+                mode=TerminalAttachmentMode.WRITE,
+                readonly=False,
+                ownership_user_id=attachment.owner_user_id,
+                agent_write_state=TaskAgentWriteState.PAUSED_BY_USER,
+                updated_at=now,
+            )
+        )
+
+    def sweep_time_based_state(self) -> None:
+        self.initialize()
+        now = utc_now()
+        for task in self._list_tasks():
+            self._refresh_task_bundle(task, now=now)
 
     def cancel_task(
         self,
@@ -529,7 +571,15 @@ class TaskManager:
                         detail=None,
                     )
                 )
-                self._release_active_lease(task_id, cancelled_at)
+                live_lease = self._load_live_lease(task_id)
+                if live_lease is not None:
+                    self._store_lease(
+                        replace(
+                            live_lease,
+                            status=TaskTakeoverLeaseStatus.RELEASED,
+                            released_at=cancelled_at,
+                        )
+                    )
                 cancelled_binding = self._store_terminal_binding(
                     replace(
                         terminal_binding,
@@ -542,6 +592,7 @@ class TaskManager:
                         if window is not None
                         else terminal_binding.window_name,
                         last_output_at=cancelled_at,
+                        archived_at=None,
                         updated_at=cancelled_at,
                     )
                 )
@@ -566,22 +617,45 @@ class TaskManager:
 
     def reconcile(self) -> None:
         self.initialize()
+        startup_at = utc_now()
         for task in self._list_tasks():
-            self._refresh_task_bundle(task)
+            self._refresh_task_bundle(task, now=startup_at, startup_reconcile=True)
 
     def _refresh_task_bundle(
         self,
         task: ManagedTask,
+        *,
+        now: datetime | None = None,
+        startup_reconcile: bool = False,
     ) -> tuple[ManagedTask, TaskTerminalBinding | None]:
         terminal_binding = self._load_terminal_binding(task.task_id)
         if terminal_binding is None:
             return task, None
+        refresh_at = now or utc_now()
+        live_lease = self._load_live_lease(task.task_id)
+        if terminal_binding.binding_status is TaskTerminalBindingStatus.ARCHIVED:
+            if live_lease is not None:
+                self._store_lease(
+                    replace(
+                        live_lease,
+                        status=TaskTakeoverLeaseStatus.RELEASED,
+                        released_at=refresh_at,
+                    )
+                )
+            return task, terminal_binding
 
         environment = self._resolve_environment(task.environment_id, raise_on_error=False)
         binding = self._resolve_user_binding(task.binding_id, raise_on_error=False)
-        active_lease = self._load_active_lease(task.task_id)
         if environment is None:
-            failure_at = utc_now()
+            failure_at = refresh_at
+            if live_lease is not None:
+                self._store_lease(
+                    replace(
+                        live_lease,
+                        status=TaskTakeoverLeaseStatus.RELEASED,
+                        released_at=failure_at,
+                    )
+                )
             return self._store_task(
                 replace(
                     task,
@@ -594,11 +668,24 @@ class TaskManager:
                 replace(
                     terminal_binding,
                     binding_status=TaskTerminalBindingStatus.FAILED,
+                    mode=TerminalAttachmentMode.OBSERVE,
+                    readonly=True,
+                    ownership_user_id=None,
+                    agent_write_state=TaskAgentWriteState.RUNNING,
+                    archived_at=None,
                     updated_at=failure_at,
                 )
             )
         if binding is None:
-            failure_at = utc_now()
+            failure_at = refresh_at
+            if live_lease is not None:
+                self._store_lease(
+                    replace(
+                        live_lease,
+                        status=TaskTakeoverLeaseStatus.RELEASED,
+                        released_at=failure_at,
+                    )
+                )
             return self._store_task(
                 replace(
                     task,
@@ -611,14 +698,27 @@ class TaskManager:
                 replace(
                     terminal_binding,
                     binding_status=TaskTerminalBindingStatus.FAILED,
+                    mode=TerminalAttachmentMode.OBSERVE,
+                    readonly=True,
+                    ownership_user_id=None,
+                    agent_write_state=TaskAgentWriteState.RUNNING,
+                    archived_at=None,
                     updated_at=failure_at,
                 )
             )
         window = self._inspect_window(binding, environment, terminal_binding, raise_on_error=False)
         if window is None:
+            if live_lease is not None:
+                self._store_lease(
+                    replace(
+                        live_lease,
+                        status=TaskTakeoverLeaseStatus.RELEASED,
+                        released_at=refresh_at,
+                    )
+                )
             if task.status in _FINAL_TASK_STATUSES:
-                return task, terminal_binding
-            failure_at = utc_now()
+                return self._archive_terminal_binding(task, terminal_binding, refresh_at)
+            failure_at = refresh_at
             return self._store_task(
                 replace(
                     task,
@@ -631,19 +731,81 @@ class TaskManager:
                 replace(
                     terminal_binding,
                     binding_status=TaskTerminalBindingStatus.FAILED,
+                    mode=TerminalAttachmentMode.OBSERVE,
+                    readonly=True,
+                    ownership_user_id=None,
+                    agent_write_state=TaskAgentWriteState.RUNNING,
                     updated_at=failure_at,
                 )
             )
-        return self._apply_window_state(task, terminal_binding, window, active_lease)
+        if task.status in _FINAL_TASK_STATUSES:
+            if live_lease is not None:
+                self._store_lease(
+                    replace(
+                        live_lease,
+                        status=TaskTakeoverLeaseStatus.RELEASED,
+                        released_at=refresh_at,
+                    )
+                )
+            return self._refresh_final_task_bundle(
+                task,
+                terminal_binding,
+                binding,
+                environment,
+                window,
+                refresh_at,
+            )
+        if (
+            live_lease is not None
+            and live_lease.status is TaskTakeoverLeaseStatus.GRACE_PENDING
+            and self._is_grace_lease_expired(live_lease, refresh_at)
+            and not startup_reconcile
+        ):
+            terminal_binding = self._release_takeover(
+                task,
+                terminal_binding,
+                live_lease,
+                released_at=refresh_at,
+                resume_runtime=True,
+            )
+            live_lease = None
+        if startup_reconcile and live_lease is not None and not window.is_dead:
+            live_lease = self._store_lease(
+                replace(
+                    live_lease,
+                    status=TaskTakeoverLeaseStatus.GRACE_PENDING,
+                    grace_started_at=refresh_at,
+                    grace_expires_at=refresh_at
+                    + timedelta(seconds=self._takeover_disconnect_grace_seconds),
+                )
+            )
+        updated_task, updated_binding = self._apply_window_state(
+            task,
+            terminal_binding,
+            window,
+            live_lease,
+            now=refresh_at,
+        )
+        if updated_task.status in _FINAL_TASK_STATUSES:
+            return self._refresh_final_task_bundle(
+                updated_task,
+                updated_binding,
+                binding,
+                environment,
+                window,
+                refresh_at,
+            )
+        return updated_task, updated_binding
 
     def _apply_window_state(
         self,
         task: ManagedTask,
         terminal_binding: TaskTerminalBinding,
         window: TmuxWindowInfo,
-        active_lease: TaskTakeoverLease | None,
+        live_lease: TaskTakeoverLease | None,
+        *,
+        now: datetime,
     ) -> tuple[ManagedTask, TaskTerminalBinding]:
-        now = utc_now()
         if window.is_dead:
             final_status = self._final_status_for(task.status, window.exit_status)
             detail: str | None
@@ -661,7 +823,14 @@ class TaskManager:
                     detail=detail,
                 )
             )
-            self._release_active_lease(task.task_id, now)
+            if live_lease is not None:
+                self._store_lease(
+                    replace(
+                        live_lease,
+                        status=TaskTakeoverLeaseStatus.RELEASED,
+                        released_at=now,
+                    )
+                )
             updated_binding = self._store_terminal_binding(
                 replace(
                     terminal_binding,
@@ -672,6 +841,7 @@ class TaskManager:
                     ownership_user_id=None,
                     agent_write_state=TaskAgentWriteState.RUNNING,
                     last_output_at=now,
+                    archived_at=None,
                     updated_at=now,
                 )
             )
@@ -686,10 +856,10 @@ class TaskManager:
                 detail=None,
             )
         )
-        owner_user_id = active_lease.user_id if active_lease is not None else None
+        owner_user_id = live_lease.user_id if live_lease is not None else None
         binding_status = (
             TaskTerminalBindingStatus.TAKEN_OVER
-            if active_lease is not None
+            if live_lease is not None
             else TaskTerminalBindingStatus.RUNNING_OBSERVE
         )
         updated_binding = self._store_terminal_binding(
@@ -698,18 +868,158 @@ class TaskManager:
                 window_name=window.window_name,
                 binding_status=binding_status,
                 mode=TerminalAttachmentMode.WRITE
-                if active_lease is not None
+                if live_lease is not None
                 else TerminalAttachmentMode.OBSERVE,
-                readonly=active_lease is None,
+                readonly=live_lease is None,
                 ownership_user_id=owner_user_id,
                 agent_write_state=TaskAgentWriteState.PAUSED_BY_USER
-                if active_lease is not None
+                if live_lease is not None
                 else TaskAgentWriteState.RUNNING,
                 last_output_at=now,
+                archived_at=None,
                 updated_at=now,
             )
         )
         return updated_task, updated_binding
+
+    def _refresh_final_task_bundle(
+        self,
+        task: ManagedTask,
+        terminal_binding: TaskTerminalBinding,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        window: TmuxWindowInfo,
+        now: datetime,
+    ) -> tuple[ManagedTask, TaskTerminalBinding]:
+        final_binding = self._store_terminal_binding(
+            replace(
+                terminal_binding,
+                window_name=window.window_name,
+                binding_status=self._binding_status_for_task(task.status),
+                mode=TerminalAttachmentMode.OBSERVE,
+                readonly=True,
+                ownership_user_id=None,
+                agent_write_state=TaskAgentWriteState.RUNNING,
+                archived_at=None,
+                updated_at=now,
+            )
+        )
+        if not self._should_archive_terminal_window(task, now):
+            return task, final_binding
+        try:
+            self._tmux_adapter.kill_window(binding, environment, final_binding.window_id)
+        except TmuxCommandError as exc:
+            raise TaskOperationError(str(exc)) from exc
+        return self._archive_terminal_binding(task, final_binding, now)
+
+    def _archive_terminal_binding(
+        self,
+        task: ManagedTask,
+        terminal_binding: TaskTerminalBinding,
+        archived_at: datetime,
+    ) -> tuple[ManagedTask, TaskTerminalBinding]:
+        archived_binding = self._store_terminal_binding(
+            replace(
+                terminal_binding,
+                binding_status=TaskTerminalBindingStatus.ARCHIVED,
+                mode=TerminalAttachmentMode.OBSERVE,
+                readonly=True,
+                ownership_user_id=None,
+                agent_write_state=TaskAgentWriteState.RUNNING,
+                archived_at=archived_at,
+                updated_at=archived_at,
+            )
+        )
+        return task, archived_binding
+
+    def _should_archive_terminal_window(self, task: ManagedTask, now: datetime) -> bool:
+        completed_at = task.completed_at or task.updated_at
+        return now >= completed_at + timedelta(seconds=self._final_window_retention_seconds)
+
+    def _is_grace_lease_reclaimable(self, lease: TaskTakeoverLease) -> bool:
+        return not self._is_grace_lease_expired(lease, utc_now())
+
+    @staticmethod
+    def _is_grace_lease_expired(lease: TaskTakeoverLease, now: datetime) -> bool:
+        if lease.status is not TaskTakeoverLeaseStatus.GRACE_PENDING:
+            return False
+        if lease.grace_expires_at is None:
+            return True
+        return lease.grace_expires_at <= now
+
+    def _reactivate_grace_lease(
+        self,
+        task: ManagedTask,
+        terminal_binding: TaskTerminalBinding,
+        lease: TaskTakeoverLease,
+    ) -> tuple[TaskTerminalBinding, TaskTakeoverLease]:
+        reactivated_at = utc_now()
+        reactivated_lease = self._store_lease(
+            replace(
+                lease,
+                status=TaskTakeoverLeaseStatus.ACTIVE,
+                grace_started_at=None,
+                grace_expires_at=None,
+                released_at=None,
+            )
+        )
+        reactivated_binding = self._store_terminal_binding(
+            replace(
+                terminal_binding,
+                binding_status=TaskTerminalBindingStatus.TAKEN_OVER,
+                mode=TerminalAttachmentMode.WRITE,
+                readonly=False,
+                ownership_user_id=lease.user_id,
+                agent_write_state=TaskAgentWriteState.PAUSED_BY_USER,
+                last_takeover_at=reactivated_at,
+                archived_at=None,
+                updated_at=reactivated_at,
+            )
+        )
+        return reactivated_binding, reactivated_lease
+
+    def _release_takeover(
+        self,
+        task: ManagedTask,
+        terminal_binding: TaskTerminalBinding,
+        lease: TaskTakeoverLease,
+        *,
+        released_at: datetime,
+        resume_runtime: bool,
+    ) -> TaskTerminalBinding:
+        release_binding = terminal_binding
+        if resume_runtime:
+            release_binding = self._store_terminal_binding(
+                replace(
+                    terminal_binding,
+                    agent_write_state=TaskAgentWriteState.RESUME_REQUESTED,
+                    updated_at=released_at,
+                )
+            )
+            self._run_task_runtime_action(
+                task,
+                "resume",
+                timeout_seconds=self._takeover_ack_timeout_seconds,
+            )
+        self._store_lease(
+            replace(
+                lease,
+                status=TaskTakeoverLeaseStatus.RELEASED,
+                released_at=released_at,
+            )
+        )
+        return self._store_terminal_binding(
+            replace(
+                release_binding,
+                binding_status=self._binding_status_for_task(task.status),
+                mode=TerminalAttachmentMode.OBSERVE,
+                readonly=True,
+                ownership_user_id=None,
+                agent_write_state=TaskAgentWriteState.RUNNING,
+                archived_at=None,
+                updated_at=released_at,
+            )
+        )
 
     def _resolve_environment(
         self,
@@ -754,6 +1064,34 @@ class TaskManager:
             if raise_on_error:
                 raise
             return None
+
+    def _build_task_attachment(
+        self,
+        task: ManagedTask,
+        terminal_binding: TaskTerminalBinding,
+        *,
+        mode: TerminalAttachmentMode,
+        readonly: bool,
+        owner_user_id: str | None,
+    ) -> tuple[ManagedTask, TaskTerminalBinding, TerminalAttachmentTarget]:
+        environment = self._resolve_environment(task.environment_id)
+        binding = self._resolve_user_binding(task.binding_id)
+        assert environment is not None
+        assert binding is not None
+        window = self._inspect_window(binding, environment, terminal_binding)
+        if window is None:
+            raise TaskOperationError("Task terminal window is unavailable")
+        target = self._build_task_attachment_target(
+            task,
+            binding,
+            environment,
+            window.window_name,
+            terminal_binding,
+            mode=mode,
+            readonly=readonly,
+            owner_user_id=owner_user_id,
+        )
+        return task, terminal_binding, target
 
     def _build_task_attachment_target(
         self,
@@ -909,7 +1247,7 @@ class TaskManager:
                 SELECT task_id, binding_id, environment_id, agent_session_name, window_id,
                        window_name, status, mode, readonly, ownership_user_id, agent_write_state,
                        pause_requested_at, pause_acknowledged_at, last_takeover_at,
-                       last_output_at, created_at, updated_at
+                       last_output_at, archived_at, created_at, updated_at
                 FROM task_terminal_bindings
                 WHERE task_id = ?
                 """,
@@ -970,8 +1308,8 @@ class TaskManager:
                     task_id, binding_id, environment_id, agent_session_name, window_id, window_name,
                     status, mode, readonly, ownership_user_id, agent_write_state,
                     pause_requested_at, pause_acknowledged_at, last_takeover_at,
-                    last_output_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    last_output_at, archived_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(task_id) DO UPDATE SET
                     binding_id = excluded.binding_id,
                     environment_id = excluded.environment_id,
@@ -987,6 +1325,7 @@ class TaskManager:
                     pause_acknowledged_at = excluded.pause_acknowledged_at,
                     last_takeover_at = excluded.last_takeover_at,
                     last_output_at = excluded.last_output_at,
+                    archived_at = excluded.archived_at,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -1013,6 +1352,7 @@ class TaskManager:
                     stored.last_output_at.isoformat()
                     if stored.last_output_at is not None
                     else None,
+                    stored.archived_at.isoformat() if stored.archived_at is not None else None,
                     created_at.isoformat(),
                     updated_at.isoformat(),
                 ),
@@ -1020,17 +1360,22 @@ class TaskManager:
             connection.commit()
         return stored
 
-    def _load_active_lease(self, task_id: str) -> TaskTakeoverLease | None:
+    def _load_live_lease(self, task_id: str) -> TaskTakeoverLease | None:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT lease_id, task_id, user_id, status, acquired_at, released_at
+                SELECT lease_id, task_id, user_id, status, acquired_at,
+                       grace_started_at, grace_expires_at, released_at
                 FROM task_takeover_leases
-                WHERE task_id = ? AND status = ?
+                WHERE task_id = ? AND status IN (?, ?)
                 ORDER BY acquired_at DESC
                 LIMIT 1
                 """,
-                (task_id, TaskTakeoverLeaseStatus.ACTIVE.value),
+                (
+                    task_id,
+                    TaskTakeoverLeaseStatus.ACTIVE.value,
+                    TaskTakeoverLeaseStatus.GRACE_PENDING.value,
+                ),
             ).fetchone()
         if row is None:
             return None
@@ -1041,13 +1386,16 @@ class TaskManager:
             connection.execute(
                 """
                 INSERT INTO task_takeover_leases (
-                    lease_id, task_id, user_id, status, acquired_at, released_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    lease_id, task_id, user_id, status, acquired_at,
+                    grace_started_at, grace_expires_at, released_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(lease_id) DO UPDATE SET
                     task_id = excluded.task_id,
                     user_id = excluded.user_id,
                     status = excluded.status,
                     acquired_at = excluded.acquired_at,
+                    grace_started_at = excluded.grace_started_at,
+                    grace_expires_at = excluded.grace_expires_at,
                     released_at = excluded.released_at
                 """,
                 (
@@ -1056,23 +1404,17 @@ class TaskManager:
                     lease.user_id,
                     lease.status.value,
                     lease.acquired_at.isoformat(),
+                    lease.grace_started_at.isoformat()
+                    if lease.grace_started_at is not None
+                    else None,
+                    lease.grace_expires_at.isoformat()
+                    if lease.grace_expires_at is not None
+                    else None,
                     lease.released_at.isoformat() if lease.released_at is not None else None,
                 ),
             )
             connection.commit()
         return lease
-
-    def _release_active_lease(self, task_id: str, released_at: datetime) -> None:
-        lease = self._load_active_lease(task_id)
-        if lease is None:
-            return
-        self._store_lease(
-            replace(
-                lease,
-                status=TaskTakeoverLeaseStatus.RELEASED,
-                released_at=released_at,
-            )
-        )
 
     @staticmethod
     def _row_to_task(row: sqlite3.Row) -> ManagedTask:
@@ -1122,6 +1464,7 @@ class TaskManager:
             pause_acknowledged_at=_parse_datetime(row["pause_acknowledged_at"]),
             last_takeover_at=_parse_datetime(row["last_takeover_at"]),
             last_output_at=_parse_datetime(row["last_output_at"]),
+            archived_at=_parse_datetime(row["archived_at"]),
             created_at=_parse_datetime(row["created_at"]),
             updated_at=_parse_datetime(row["updated_at"]),
         )
@@ -1134,6 +1477,8 @@ class TaskManager:
             user_id=row["user_id"],
             status=TaskTakeoverLeaseStatus(row["status"]),
             acquired_at=datetime.fromisoformat(row["acquired_at"]),
+            grace_started_at=_parse_datetime(row["grace_started_at"]),
+            grace_expires_at=_parse_datetime(row["grace_expires_at"]),
             released_at=_parse_datetime(row["released_at"]),
         )
 
