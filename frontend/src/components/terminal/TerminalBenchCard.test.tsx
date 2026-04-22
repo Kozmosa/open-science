@@ -11,22 +11,25 @@ import {
   createTerminalSession,
   deleteTerminalSession,
   getTerminalSession,
+  resetTerminalSession,
 } from '../../api';
 
 vi.mock('../../api', () => ({
   createTerminalSession: vi.fn(),
   deleteTerminalSession: vi.fn(),
   getTerminalSession: vi.fn(),
+  resetTerminalSession: vi.fn(),
 }));
 
 const mockGetTerminalSession = vi.mocked(getTerminalSession);
 const mockCreateTerminalSession = vi.mocked(createTerminalSession);
 const mockDeleteTerminalSession = vi.mocked(deleteTerminalSession);
+const mockResetTerminalSession = vi.mocked(resetTerminalSession);
 
 const idleSession: TerminalSession = {
   session_id: null,
-  provider: 'pty',
-  target_kind: 'daemon-host',
+  provider: 'tmux',
+  target_kind: 'environment-ssh',
   environment_id: 'env-1',
   environment_alias: 'gpu-lab',
   working_directory: '/workspace/project',
@@ -36,11 +39,15 @@ const idleSession: TerminalSession = {
   closed_at: null,
   terminal_ws_url: null,
   detail: null,
+  binding_id: null,
+  session_name: 'ainrf:u:mock-daemon:e:env-1:personal',
+  attachment_id: null,
+  attachment_expires_at: null,
 };
 
-const runningSession: TerminalSession = {
-  session_id: 'term-1',
-  provider: 'pty',
+const runningAttachedSession: TerminalSession = {
+  session_id: 'ainrf:u:mock-daemon:e:env-1:personal',
+  provider: 'tmux',
   target_kind: 'environment-ssh',
   environment_id: 'env-1',
   environment_alias: 'gpu-lab',
@@ -49,8 +56,26 @@ const runningSession: TerminalSession = {
   created_at: '2026-04-21T00:00:00Z',
   started_at: '2026-04-21T00:00:01Z',
   closed_at: null,
-  terminal_ws_url: 'ws://127.0.0.1:8000/terminal/session/term-1/ws?token=test-token',
+  terminal_ws_url: 'ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token',
   detail: null,
+  binding_id: 'binding-1',
+  session_name: 'ainrf:u:mock-daemon:e:env-1:personal',
+  attachment_id: 'attach-1',
+  attachment_expires_at: '2026-04-21T00:05:01Z',
+};
+
+const runningDetachedSession: TerminalSession = {
+  ...runningAttachedSession,
+  terminal_ws_url: null,
+  attachment_id: null,
+  attachment_expires_at: null,
+};
+
+const resetSession: TerminalSession = {
+  ...runningAttachedSession,
+  terminal_ws_url: 'ws://127.0.0.1:8000/terminal/attachments/attach-2/ws?token=test-token-2',
+  attachment_id: 'attach-2',
+  attachment_expires_at: '2026-04-21T00:10:01Z',
 };
 
 const selectedEnvironment: EnvironmentRecord = {
@@ -81,52 +106,82 @@ beforeEach(() => {
   mockGetTerminalSession.mockReset();
   mockCreateTerminalSession.mockReset();
   mockDeleteTerminalSession.mockReset();
+  mockResetTerminalSession.mockReset();
 });
 
 describe('TerminalBenchCard', () => {
-  it('renders the idle state from the backend', async () => {
+  it('renders the idle state from the backend with attach controls', async () => {
     mockGetTerminalSession.mockResolvedValue(idleSession);
 
     renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
 
     expect(await screen.findByText('Status: Idle')).toBeInTheDocument();
     expect(mockGetTerminalSession).toHaveBeenCalledWith('env-1');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Start terminal' })).not.toBeDisabled());
-    expect(screen.getByRole('button', { name: 'Stop terminal' })).toBeDisabled();
-    expect(screen.getByText('No terminal session is running.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Attach' })).not.toBeDisabled());
+    expect(screen.getByRole('button', { name: 'Detach' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reset session' })).toBeEnabled();
+    expect(screen.getByText('No personal terminal session has been created yet.')).toBeInTheDocument();
     expect(screen.getByTestId('terminal-console')).toBeInTheDocument();
   });
 
-  it('starts a terminal session and shows the console', async () => {
+  it('attaches a personal terminal session when the user clicks Attach', async () => {
     mockGetTerminalSession.mockResolvedValue(idleSession);
-    mockCreateTerminalSession.mockResolvedValue(runningSession);
+    mockCreateTerminalSession.mockResolvedValue(runningAttachedSession);
 
     renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
 
     await screen.findByText('Status: Idle');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Start terminal' })).not.toBeDisabled());
-    fireEvent.click(screen.getByRole('button', { name: 'Start terminal' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Attach' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Attach' }));
 
     await waitFor(() => expect(mockCreateTerminalSession).toHaveBeenCalledWith('env-1'));
     expect(await screen.findByText('Status: Running')).toBeInTheDocument();
-    expect(screen.getByTestId('terminal-console')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Stop terminal' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Detach' })).toBeEnabled();
   });
 
-  it('stops a running terminal session and returns to idle state', async () => {
-    mockGetTerminalSession.mockResolvedValue(runningSession);
-    mockDeleteTerminalSession.mockResolvedValue(idleSession);
+  it('auto-reattaches when the personal session is already running without an attachment', async () => {
+    mockGetTerminalSession.mockResolvedValue(runningDetachedSession);
+    mockCreateTerminalSession.mockResolvedValue(runningAttachedSession);
 
     renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
 
     expect(await screen.findByText('Status: Running')).toBeInTheDocument();
-    expect(screen.getByTestId('terminal-console')).toBeInTheDocument();
+    await waitFor(() => expect(mockCreateTerminalSession).toHaveBeenCalledWith('env-1'));
+    expect(screen.getByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Stop terminal' }));
+  it('detaches a running attachment without immediately auto-reattaching', async () => {
+    mockGetTerminalSession.mockResolvedValue(runningAttachedSession);
+    mockDeleteTerminalSession.mockResolvedValue(runningDetachedSession);
 
-    await waitFor(() => expect(mockDeleteTerminalSession).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('Status: Idle')).toBeInTheDocument();
-    expect(screen.getByTestId('terminal-console')).toBeInTheDocument();
+    renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
+
+    expect(await screen.findByText('Status: Running')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Detach' }));
+
+    await waitFor(() =>
+      expect(mockDeleteTerminalSession).toHaveBeenCalledWith({
+        environmentId: 'env-1',
+        attachmentId: 'attach-1',
+      })
+    );
+    expect(await screen.findByText('The personal session is still running, but this page is currently detached.')).toBeInTheDocument();
+    expect(mockCreateTerminalSession).not.toHaveBeenCalled();
+  });
+
+  it('resets the personal session and switches to the new attachment url', async () => {
+    mockGetTerminalSession.mockResolvedValue(runningAttachedSession);
+    mockResetTerminalSession.mockResolvedValue(resetSession);
+
+    renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
+
+    expect(await screen.findByText('Status: Running')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset session' }));
+
+    await waitFor(() =>
+      expect(mockResetTerminalSession).toHaveBeenCalledWith('env-1', 'attach-1')
+    );
+    expect(await screen.findByText(/\/terminal\/attachments\/attach-2\/ws/)).toBeInTheDocument();
   });
 
   it('surfaces backend load errors', async () => {
@@ -135,16 +190,17 @@ describe('TerminalBenchCard', () => {
     renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
 
     expect(await screen.findByText('Load error: backend offline')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start terminal' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Stop terminal' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Attach' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Detach' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reset session' })).toBeDisabled();
   });
 
-  it('requires a selected environment before enabling the terminal', async () => {
+  it('requires a selected environment before enabling terminal actions', async () => {
     renderWithProviders(<TerminalBenchCard selectedEnvironment={null} />);
 
     expect(await screen.findByText('Status: Idle')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start terminal' })).toBeDisabled();
-    expect(screen.getByText('Select an environment before starting the terminal session.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Attach' })).toBeDisabled();
+    expect(screen.getByText('Select an environment before attaching the terminal session.')).toBeInTheDocument();
     expect(mockGetTerminalSession).not.toHaveBeenCalled();
   });
 });

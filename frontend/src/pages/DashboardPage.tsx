@@ -37,7 +37,9 @@ function DashboardPage() {
             <code className="rounded bg-gray-100 px-1.5 py-0.5">/projects/default/environment-refs</code>,{' '}
             <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/projects/default/environment-refs</code>,{' '}
             <code className="rounded bg-gray-100 px-1.5 py-0.5">/terminal/session</code>,{' '}
+            <code className="rounded bg-gray-100 px-1.5 py-0.5">/terminal/session/reset</code>,{' '}
             <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/terminal/session</code>,{' '}
+            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/terminal/session/reset</code>,{' '}
             <code className="rounded bg-gray-100 px-1.5 py-0.5">/code/status</code>,{' '}
             <code className="rounded bg-gray-100 px-1.5 py-0.5">/code/session</code>,{' '}
             <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/code/status</code>, and{' '}

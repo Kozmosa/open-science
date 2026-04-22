@@ -6,27 +6,21 @@ import signal
 import struct
 import subprocess
 import termios
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from secrets import token_urlsafe
 from typing import Any
-from uuid import uuid4
 
-from ainrf.terminal.models import TerminalSessionRecord, TerminalSessionStatus, utc_now
-
-TERMINAL_PROVIDER = "pty"
+TERMINAL_PROVIDER = "tmux"
 TERMINAL_IDLE_TARGET_KIND = "daemon-host"
 TERMINAL_LOCAL_TARGET_KIND = "environment-local"
 TERMINAL_SSH_TARGET_KIND = "environment-ssh"
-TERMINAL_WS_TOKEN_TTL = timedelta(minutes=30)
-_TERMINAL_READ_SIZE = 4096
+TERMINAL_ATTACHMENT_TOKEN_TTL = timedelta(minutes=5)
 _TERMINAL_CLOSE_TIMEOUT_SECONDS = 5.0
 
 
 @dataclass(slots=True)
-class TerminalSessionRuntime:
-    record: TerminalSessionRecord
+class TerminalBridgeRuntime:
     process: subprocess.Popen[Any]
     master_fd: int | None
 
@@ -40,9 +34,9 @@ def _to_websocket_base(api_base_url: str) -> str:
     return normalized
 
 
-def build_terminal_ws_url(api_base_url: str, session_id: str, token: str) -> str:
+def build_attachment_ws_url(api_base_url: str, attachment_id: str, token: str) -> str:
     websocket_base = _to_websocket_base(api_base_url)
-    return f"{websocket_base}/terminal/session/{session_id}/ws?token={token}"
+    return f"{websocket_base}/terminal/attachments/{attachment_id}/ws?token={token}"
 
 
 def _close_master_fd(master_fd: int | None) -> None:
@@ -54,10 +48,12 @@ def _close_master_fd(master_fd: int | None) -> None:
         pass
 
 
-def _spawn_terminal_process(
+def start_terminal_bridge(
     shell_command: tuple[str, ...],
-    working_directory: Path,
-) -> tuple[subprocess.Popen[Any], int]:
+    spawn_working_directory: Path,
+) -> TerminalBridgeRuntime:
+    spawn_working_directory.mkdir(parents=True, exist_ok=True)
+    normalized_working_directory = spawn_working_directory.resolve(strict=True)
     master_fd, slave_fd = os.openpty()
     try:
         process = subprocess.Popen(
@@ -65,7 +61,7 @@ def _spawn_terminal_process(
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
-            cwd=working_directory,
+            cwd=normalized_working_directory,
             start_new_session=True,
             text=False,
             close_fds=True,
@@ -78,98 +74,12 @@ def _spawn_terminal_process(
         _close_master_fd(slave_fd)
 
     os.set_blocking(master_fd, False)
-    return process, master_fd
+    return TerminalBridgeRuntime(process=process, master_fd=master_fd)
 
 
-def start_terminal_session(
-    api_base_url: str,
-    shell_command: tuple[str, ...],
-    spawn_working_directory: Path | None = None,
-    *,
-    environment_id: str = "",
-    environment_alias: str = "",
-    working_directory: str | Path | None = None,
-    target_kind: str = TERMINAL_LOCAL_TARGET_KIND,
-) -> TerminalSessionRuntime:
-    if spawn_working_directory is None:
-        if isinstance(working_directory, Path):
-            spawn_working_directory = working_directory
-            working_directory = str(working_directory)
-        else:
-            raise TypeError("spawn_working_directory is required when working_directory is not a Path")
-    elif isinstance(working_directory, Path):
-        working_directory = str(working_directory)
-
-    spawn_working_directory.mkdir(parents=True, exist_ok=True)
-    normalized_working_directory = spawn_working_directory.resolve(strict=True)
-    process, master_fd = _spawn_terminal_process(shell_command, normalized_working_directory)
-    started_at = utc_now()
-    session_id = str(uuid4())
-    ws_token = token_urlsafe(24)
-    record = TerminalSessionRecord(
-        session_id=session_id,
-        provider=TERMINAL_PROVIDER,
-        target_kind=target_kind,
-        environment_id=environment_id,
-        environment_alias=environment_alias,
-        working_directory=working_directory,
-        status=TerminalSessionStatus.RUNNING,
-        created_at=started_at,
-        started_at=started_at,
-        terminal_ws_url=build_terminal_ws_url(api_base_url, session_id, ws_token),
-        detail=None,
-        pid=process.pid,
-        terminal_ws_token=ws_token,
-    )
-    return TerminalSessionRuntime(record=record, process=process, master_fd=master_fd)
-
-
-def _mark_failed(runtime: TerminalSessionRuntime, close_fd: bool) -> TerminalSessionRecord:
-    if runtime.record.status is TerminalSessionStatus.FAILED:
-        return runtime.record
-
-    return_code = runtime.process.returncode
-    detail = (
-        f"Terminal session exited with code {return_code}"
-        if return_code is not None
-        else "Terminal session exited unexpectedly"
-    )
-    if close_fd:
-        _close_master_fd(runtime.master_fd)
-        runtime.master_fd = None
-
-    runtime.record = replace(
-        runtime.record,
-        status=TerminalSessionStatus.FAILED,
-        closed_at=utc_now(),
-        terminal_ws_url=None,
-        detail=detail,
-    )
-    return runtime.record
-
-
-def refresh_terminal_session(
-    runtime: TerminalSessionRuntime,
-    *,
-    close_fd: bool = True,
-) -> TerminalSessionRecord:
-    if runtime.process.poll() is None:
-        return runtime.record
-    return _mark_failed(runtime, close_fd=close_fd)
-
-
-def stop_terminal_session(runtime: TerminalSessionRuntime | None) -> TerminalSessionRecord:
+def stop_terminal_bridge(runtime: TerminalBridgeRuntime | None) -> None:
     if runtime is None:
-        return TerminalSessionRecord(
-            session_id=None,
-            provider=TERMINAL_PROVIDER,
-            target_kind=TERMINAL_IDLE_TARGET_KIND,
-            environment_id=None,
-            environment_alias=None,
-            working_directory=None,
-            status=TerminalSessionStatus.IDLE,
-            closed_at=utc_now(),
-        )
+        return
 
     _close_master_fd(runtime.master_fd)
     runtime.master_fd = None
@@ -188,26 +98,14 @@ def stop_terminal_session(runtime: TerminalSessionRuntime | None) -> TerminalSes
                 pass
             runtime.process.wait(timeout=_TERMINAL_CLOSE_TIMEOUT_SECONDS)
 
-    runtime.record = TerminalSessionRecord(
-        session_id=None,
-        provider=TERMINAL_PROVIDER,
-        target_kind=TERMINAL_IDLE_TARGET_KIND,
-        environment_id=runtime.record.environment_id,
-        environment_alias=runtime.record.environment_alias,
-        working_directory=runtime.record.working_directory,
-        status=TerminalSessionStatus.IDLE,
-        closed_at=utc_now(),
-    )
-    return runtime.record
 
-
-def write_terminal_input(runtime: TerminalSessionRuntime, data: str) -> None:
+def write_terminal_input(runtime: TerminalBridgeRuntime, data: str) -> None:
     if runtime.master_fd is None:
         return
     os.write(runtime.master_fd, data.encode("utf-8"))
 
 
-def resize_terminal(runtime: TerminalSessionRuntime, cols: int, rows: int) -> None:
+def resize_terminal(runtime: TerminalBridgeRuntime, cols: int, rows: int) -> None:
     if runtime.master_fd is None:
         return
     packed = struct.pack("HHHH", rows, cols, 0, 0)

@@ -161,12 +161,19 @@ export AINRF_API_KEY_HASHES=<hash1>,<hash2>
 
 ## 4. API 路由说明
 
-### 4.1 Terminal Bench MVP 与 Workspace Browser
+### 4.1 Terminal Bench keepalive personal session 与 Workspace Browser
 
 Terminal Bench MVP 现已切换为 `xterm.js + PTY/WebSocket`，不再依赖 `ttyd` 二进制。
 联调时只需要确保后端 API 服务可启动，并且前端能访问同源 WebSocket 地址即可。
 
 Terminal 与 Workspace 现均绑定到选中的 `environment`。当前项目在这一轮固定为隐式项目键 `default`，并可通过 project environment refs API 声明默认环境与 runtime-only overrides。
+Terminal Slice 1 已经从“单全局 PTY”切换为“daemon 单用户 × environment 的 tmux-backed personal session + attachment attach/detach/reset”模型：
+
+- 每个 `user × environment` 对应一个长期保活的 personal tmux session。
+- 浏览器 websocket 只代表短生命周期 attachment，不再等同于底层 session 本体。
+- 页面刷新、浏览器关闭或显式 `Detach` 都不会销毁底层 tmux session。
+- 服务重启后会从 `state_root/runtime/terminal_state.sqlite3` 读取 binding / session pair 元数据，并按 tmux 状态做 reconcile。
+- V1 多路复用后端固定为 `tmux`；如果 daemon 主机或远端 environment 缺少 `tmux`，terminal ensure/reset 会直接失败，不再回退到旧 PTY shell。
 
 Workspace Browser 在本地环境下依赖本机可执行的 `code-server` 二进制；联调前请先确认：
 
@@ -205,9 +212,11 @@ code-server --version
   - `GET /terminal/session?environment_id=...`
   - `POST /terminal/session`
   - `DELETE /terminal/session`
+  - `POST /terminal/session/reset`
   - `GET /v1/terminal/session?environment_id=...`
   - `POST /v1/terminal/session`
   - `DELETE /v1/terminal/session`
+  - `POST /v1/terminal/session/reset`
 - code-server 状态路径（均受 API key 中间件保护）：
   - `GET /code/status?environment_id=...`
   - `GET /v1/code/status?environment_id=...`
@@ -221,14 +230,15 @@ code-server --version
   - `GET /v1/code/`
   - `GET /code/...` 与 `GET /v1/code/...` 下的嵌套静态资源 / 子路径，均由 API 反向代理到受管 `code-server`
 
-其中 terminal session API 只控制单个按 environment 绑定的 PTY terminal session：
+其中 terminal session API 现在控制按 environment 绑定的 keepalive personal tmux session：
 
-- `GET /terminal/session?environment_id=...`：读取当前所选 environment 对应的终端 session 状态；若活跃 session 绑定到其他 environment，则返回 `idle`
-- `POST /terminal/session`：按 `environment_id` 执行 idempotent ensure，并返回 `terminal_ws_url`
-- `DELETE /terminal/session`：关闭当前终端 session
-- `GET /terminal/session/{session_id}/ws?token=...`：终端数据通道
+- `GET /terminal/session?environment_id=...`：读取当前用户在所选 environment 下的 personal session 摘要；若还未 ensure，则返回 `idle`
+- `POST /terminal/session`：按 `environment_id` 执行 idempotent ensure，并返回当前浏览器的短期 attachment 信息（`attachment_id`、`attachment_expires_at`、`terminal_ws_url`）
+- `DELETE /terminal/session?environment_id=...&attachment_id=...`：只 detach 当前 attachment，不销毁底层 personal tmux session
+- `POST /terminal/session/reset`：显式 kill 并重建 personal tmux session，然后返回新的 attachment
+- `GET /terminal/attachments/{attachment_id}/ws?token=...`：terminal attachment 数据通道
 
-`/v1/terminal/session` 提供相同语义的版本化镜像路径。
+`/v1/terminal/session` 与 `/v1/terminal/session/reset` 提供相同语义的版本化镜像路径。
 
 `auth_kind=password` 的 environment 只支持 terminal 内交互式输入密码；不会通过 API 注入 secret。
 
@@ -258,7 +268,13 @@ code-server 相关路径只暴露当前 daemon 受管的单实例 workspace brow
   runtime/
     ainrf-api.pid
     ainrf-api.log
+    terminal_state.sqlite3
 ```
+
+`terminal_state.sqlite3` 当前持久化两张 terminal keepalive 主表：
+
+- `user_environment_bindings`
+- `user_session_pairs`
 
 ## 6. 调试与排障
 

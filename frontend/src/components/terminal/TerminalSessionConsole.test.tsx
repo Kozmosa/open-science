@@ -216,8 +216,9 @@ afterEach(() => {
 function renderConsole(status: TerminalSessionStatus = 'running') {
   return render(
     <TerminalSessionConsole
-      sessionId="term-1"
-      terminalWsUrl="ws://127.0.0.1:8000/terminal/session/term-1/ws?token=test-token"
+      sessionId="ainrf:u:mock-daemon:e:env-1:personal"
+      attachmentId="attach-1"
+      terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token"
       status={status}
       onDisconnected={vi.fn()}
     />
@@ -230,8 +231,9 @@ describe('TerminalSessionConsole', () => {
 
     render(
       <TerminalSessionConsole
-        sessionId="term-1"
-        terminalWsUrl="ws://127.0.0.1:8000/terminal/session/term-1/ws?token=test-token"
+        sessionId="ainrf:u:mock-daemon:e:env-1:personal"
+        attachmentId="attach-1"
+        terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token"
         status="running"
         onDisconnected={onDisconnected}
       />
@@ -243,7 +245,7 @@ describe('TerminalSessionConsole', () => {
     const terminal = terminalMocks.terminals[0];
 
     expect(socket.url).toBe(
-      'ws://127.0.0.1:8000/terminal/session/term-1/ws?token=test-token'
+      'ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token'
     );
     socket.onopen?.(new Event('open'));
     await waitFor(() => expect(screen.getByText('Connection: connected')).toBeInTheDocument());
@@ -264,6 +266,6 @@ describe('TerminalSessionConsole', () => {
   it('renders a placeholder when the session is not running', () => {
     renderConsole('idle');
 
-    expect(screen.getByText('Start a terminal session to open the xterm console.')).toBeInTheDocument();
+    expect(screen.getByText('Attach to a personal terminal session to open the xterm console.')).toBeInTheDocument();
   });
 });

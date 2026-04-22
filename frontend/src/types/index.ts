@@ -20,7 +20,7 @@ export type TerminalSessionStatus = 'idle' | 'starting' | 'running' | 'stopping'
 
 export interface TerminalSession {
   session_id: string | null;
-  provider: 'pty';
+  provider: 'pty' | 'tmux';
   target_kind: string;
   environment_id: string | null;
   environment_alias: string | null;
@@ -31,6 +31,10 @@ export interface TerminalSession {
   closed_at: string | null;
   terminal_ws_url: string | null;
   detail: string | null;
+  binding_id: string | null;
+  session_name: string | null;
+  attachment_id: string | null;
+  attachment_expires_at: string | null;
 }
 
 export type CodeServerLifecycleStatus = 'starting' | 'ready' | 'unavailable';

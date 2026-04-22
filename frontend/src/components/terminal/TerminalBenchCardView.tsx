@@ -4,35 +4,45 @@ import { useT } from '../../i18n';
 
 interface Props {
   sessionId: string | null;
+  sessionName: string | null;
+  attachmentId: string | null;
   status: TerminalSessionStatus;
   terminalWsUrl: string | null;
   detail: string | null;
   loadError: string | null;
   isLoading: boolean;
-  isStarting: boolean;
-  isStopping: boolean;
-  canStart: boolean;
-  canStop: boolean;
+  isAttaching: boolean;
+  isDetaching: boolean;
+  isResetting: boolean;
+  canAttach: boolean;
+  canDetach: boolean;
+  canReset: boolean;
   selectedEnvironmentSummary: string | null;
-  onStart: () => void;
-  onStop: () => void;
+  onAttach: () => void;
+  onDetach: () => void;
+  onReset: () => void;
   onTerminalDisconnected: () => void;
 }
 
 function TerminalBenchCardView({
   sessionId,
+  sessionName,
+  attachmentId,
   status,
   terminalWsUrl,
   detail,
   loadError,
   isLoading,
-  isStarting,
-  isStopping,
-  canStart,
-  canStop,
+  isAttaching,
+  isDetaching,
+  isResetting,
+  canAttach,
+  canDetach,
+  canReset,
   selectedEnvironmentSummary,
-  onStart,
-  onStop,
+  onAttach,
+  onDetach,
+  onReset,
   onTerminalDisconnected,
 }: Props) {
   const t = useT();
@@ -69,19 +79,27 @@ function TerminalBenchCardView({
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          onClick={onStart}
-          disabled={!canStart}
+          onClick={onAttach}
+          disabled={!canAttach}
           className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isStarting ? t('components.terminalBench.starting') : t('components.terminalBench.start')}
+          {isAttaching ? t('components.terminalBench.attaching') : t('components.terminalBench.attach')}
         </button>
         <button
           type="button"
-          onClick={onStop}
-          disabled={!canStop}
+          onClick={onDetach}
+          disabled={!canDetach}
           className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isStopping ? t('components.terminalBench.stopping') : t('components.terminalBench.stop')}
+          {isDetaching ? t('components.terminalBench.detaching') : t('components.terminalBench.detach')}
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={!canReset}
+          className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isResetting ? t('components.terminalBench.resetting') : t('components.terminalBench.resetSession')}
         </button>
       </div>
 
@@ -97,12 +115,18 @@ function TerminalBenchCardView({
           <span>
             {t('components.terminalBench.environment')} {selectedEnvironmentSummary ?? t('common.notSelected')}
           </span>
+          <span>
+            {t('components.terminalBench.sessionName')} {sessionName ?? sessionId ?? t('common.unavailable')}
+          </span>
+          <span>
+            {t('components.terminalBench.attachment')} {attachmentId ?? t('common.unavailable')}
+          </span>
         </div>
 
         {loadError ? <p className="text-sm text-red-700">{t('components.terminalBench.loadError')} {loadError}</p> : null}
         {!selectedEnvironmentSummary ? (
           <p className="text-sm text-amber-700">
-            {t('components.terminalBench.selectEnvironmentBeforeStart')}
+            {t('components.terminalBench.selectEnvironmentBeforeAttach')}
           </p>
         ) : null}
         {detail ? (
@@ -111,12 +135,16 @@ function TerminalBenchCardView({
           </p>
         ) : null}
         {!hasRuntimeError && !isLoading && status === 'idle' ? (
-          <p className="text-sm text-gray-500">{t('components.terminalBench.noSessionRunning')}</p>
+          <p className="text-sm text-gray-500">{t('components.terminalBench.noSessionYet')}</p>
+        ) : null}
+        {!hasRuntimeError && !isLoading && status === 'running' && terminalWsUrl === null ? (
+          <p className="text-sm text-gray-500">{t('components.terminalBench.detachedNotice')}</p>
         ) : null}
       </div>
 
       <TerminalSessionConsole
         sessionId={sessionId}
+        attachmentId={attachmentId}
         terminalWsUrl={terminalWsUrl}
         status={status}
         onDisconnected={onTerminalDisconnected}

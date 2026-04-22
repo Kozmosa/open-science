@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
 
 import httpx
 import pytest
@@ -9,25 +8,9 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.terminal.models import TerminalSessionRecord, TerminalSessionStatus, utc_now
-from ainrf.terminal.pty import TerminalSessionRuntime, build_terminal_ws_url
 
 
-class DummyProcess:
-    def __init__(self, returncode: int | None = None) -> None:
-        self.pid = 4321
-        self.returncode = returncode
-
-    def poll(self) -> int | None:
-        return self.returncode
-
-    def wait(self, timeout: float) -> int:
-        _ = timeout
-        self.returncode = 0
-        return 0
-
-
-def _make_app(tmp_path: Path) -> FastAPI:
+def make_app(tmp_path: Path) -> FastAPI:
     return create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -37,32 +20,11 @@ def _make_app(tmp_path: Path) -> FastAPI:
     )
 
 
-def _runtime_for(
-    environment_id: str, environment_alias: str, target_kind: str
-) -> TerminalSessionRuntime:
-    return TerminalSessionRuntime(
-        record=TerminalSessionRecord(
-            session_id=f"term-{environment_id}",
-            provider="pty",
-            target_kind=target_kind,
-            status=TerminalSessionStatus.RUNNING,
-            environment_id=environment_id,
-            environment_alias=environment_alias,
-            working_directory="/workspace/project",
-            created_at=utc_now(),
-            started_at=utc_now(),
-            terminal_ws_url=f"ws://testserver/terminal/session/term-{environment_id}/ws?token=token",
-            terminal_ws_token="token",
-            pid=4321,
-        ),
-        process=cast(Any, DummyProcess()),
-        master_fd=11,
-    )
-
-
 @pytest.mark.anyio
-async def test_terminal_session_get_returns_idle_for_selected_environment(tmp_path: Path) -> None:
-    app = _make_app(tmp_path)
+async def test_terminal_session_get_returns_idle_summary_for_selected_environment(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -81,8 +43,8 @@ async def test_terminal_session_get_returns_idle_for_selected_environment(tmp_pa
     assert response.status_code == 200
     assert response.json() == {
         "session_id": None,
-        "provider": "pty",
-        "target_kind": "daemon-host",
+        "provider": "tmux",
+        "target_kind": "environment-ssh",
         "environment_id": environment.id,
         "environment_alias": "gpu-lab",
         "working_directory": str(tmp_path),
@@ -92,40 +54,18 @@ async def test_terminal_session_get_returns_idle_for_selected_environment(tmp_pa
         "closed_at": None,
         "terminal_ws_url": None,
         "detail": None,
+        "binding_id": None,
+        "session_name": f"ainrf:u:{app.state.terminal_session_manager.user_id}:e:{environment.id}:personal",
+        "attachment_id": None,
+        "attachment_expires_at": None,
     }
 
 
 @pytest.mark.anyio
-async def test_terminal_session_post_uses_project_override_for_local_environment(
+async def test_terminal_session_post_creates_personal_session_and_attachment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    captured: dict[str, object] = {}
-    running = _runtime_for("env-1", "gpu-lab", "environment-local")
-
-    def fake_start_terminal_session(
-        api_base_url: str,
-        shell_command: tuple[str, ...],
-        spawn_working_directory: Path,
-        *,
-        environment_id: str,
-        environment_alias: str,
-        working_directory: str | None,
-        target_kind: str,
-    ) -> TerminalSessionRuntime:
-        captured["api_base_url"] = api_base_url
-        captured["shell_command"] = shell_command
-        captured["spawn_working_directory"] = spawn_working_directory
-        captured["environment_id"] = environment_id
-        captured["environment_alias"] = environment_alias
-        captured["working_directory"] = working_directory
-        captured["target_kind"] = target_kind
-        return running
-
-    monkeypatch.setattr(
-        "ainrf.api.routes.terminal.start_terminal_session", fake_start_terminal_session
-    )
-
-    app = _make_app(tmp_path)
+    app = make_app(tmp_path)
     environment = app.state.environment_service.create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -136,6 +76,11 @@ async def test_terminal_session_post_uses_project_override_for_local_environment
         project_id="default",
         environment_id=environment.id,
         override_workdir="/workspace/override",
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
     )
 
     async with httpx.AsyncClient(
@@ -148,70 +93,41 @@ async def test_terminal_session_post_uses_project_override_for_local_environment
             json={"environment_id": environment.id},
         )
 
+    payload = response.json()
     assert response.status_code == 200
-    assert captured == {
-        "api_base_url": "http://testserver/",
-        "shell_command": ("/bin/bash", "-l"),
-        "spawn_working_directory": Path("/workspace/override"),
-        "environment_id": environment.id,
-        "environment_alias": "localhost-2",
-        "working_directory": "/workspace/override",
-        "target_kind": "environment-local",
-    }
+    assert payload["provider"] == "tmux"
+    assert payload["target_kind"] == "environment-local"
+    assert payload["environment_id"] == environment.id
+    assert payload["working_directory"] == "/workspace/override"
+    assert payload["status"] == "running"
+    assert payload["binding_id"] is not None
+    assert payload["session_name"] == (
+        f"ainrf:u:{app.state.terminal_session_manager.user_id}:e:{environment.id}:personal"
+    )
+    assert payload["attachment_id"] is not None
+    assert payload["attachment_expires_at"] is not None
+    assert (
+        payload["terminal_ws_url"]
+        == f"ws://testserver/terminal/attachments/{payload['attachment_id']}/ws?token="
+        f"{app.state.terminal_attachment_broker._attachments[payload['attachment_id']].token}"
+    )
 
 
 @pytest.mark.anyio
-async def test_terminal_session_post_returns_webui_origin_terminal_ws_url(
+async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_start_terminal_session(
-        api_base_url: str,
-        shell_command: tuple[str, ...],
-        spawn_working_directory: Path,
-        *,
-        environment_id: str,
-        environment_alias: str,
-        working_directory: str | None,
-        target_kind: str,
-    ) -> TerminalSessionRuntime:
-        captured["api_base_url"] = api_base_url
-        captured["shell_command"] = shell_command
-        captured["spawn_working_directory"] = spawn_working_directory
-        return TerminalSessionRuntime(
-            record=TerminalSessionRecord(
-                session_id=f"term-{environment_id}",
-                provider="pty",
-                target_kind=target_kind,
-                status=TerminalSessionStatus.RUNNING,
-                environment_id=environment_id,
-                environment_alias=environment_alias,
-                working_directory=working_directory,
-                created_at=utc_now(),
-                started_at=utc_now(),
-                terminal_ws_url=build_terminal_ws_url(
-                    api_base_url,
-                    f"term-{environment_id}",
-                    "token",
-                ),
-                terminal_ws_token="token",
-                pid=4321,
-            ),
-            process=cast(Any, DummyProcess()),
-            master_fd=11,
-        )
-
-    monkeypatch.setattr(
-        "ainrf.api.routes.terminal.start_terminal_session", fake_start_terminal_session
-    )
-
-    app = _make_app(tmp_path)
+    app = make_app(tmp_path)
     environment = app.state.environment_service.create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
         host="127.0.0.1",
         default_workdir="/workspace/override",
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
     )
 
     async with httpx.AsyncClient(
@@ -225,157 +141,207 @@ async def test_terminal_session_post_returns_webui_origin_terminal_ws_url(
         )
 
     assert response.status_code == 200
-    assert captured["api_base_url"] == "http://lab.internal:5173/"
-    assert captured["shell_command"] == ("/bin/bash", "-l")
-    assert captured["spawn_working_directory"] == Path("/workspace/override")
-    assert response.json()["terminal_ws_url"] == (
-        f"ws://lab.internal:5173/terminal/session/term-{environment.id}/ws?token=token"
-    )
+    assert response.json()["terminal_ws_url"] is not None
+    ws_url = response.json()["terminal_ws_url"]
+    assert ws_url.startswith("ws://lab.internal:5173/terminal/attachments/")
+    assert "/ws?token=" in ws_url
 
 
 @pytest.mark.anyio
-async def test_terminal_session_post_reuses_existing_session_for_same_environment(
+async def test_terminal_session_post_reuses_same_personal_session_for_same_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    app = _make_app(tmp_path)
+    app = make_app(tmp_path)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
     )
-    app.state.terminal_runtime = _runtime_for(environment.id, environment.alias, "environment-ssh")
-
     monkeypatch.setattr(
-        "ainrf.api.routes.terminal.start_terminal_session",
-        lambda *args, **kwargs: pytest.fail("start_terminal_session should not be called"),
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "has_session",
+        lambda *args, **kwargs: True,
     )
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        response = await client.post(
+        first = await client.post(
+            "/terminal/session",
+            headers={"X-API-Key": "secret-key"},
+            json={"environment_id": environment.id},
+        )
+        second = await client.post(
             "/terminal/session",
             headers={"X-API-Key": "secret-key"},
             json={"environment_id": environment.id},
         )
 
-    assert response.status_code == 200
-    assert response.json()["status"] == "running"
-    assert response.json()["environment_id"] == environment.id
+    first_payload = first.json()
+    second_payload = second.json()
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first_payload["binding_id"] == second_payload["binding_id"]
+    assert first_payload["session_name"] == second_payload["session_name"]
+    assert first_payload["attachment_id"] != second_payload["attachment_id"]
 
 
 @pytest.mark.anyio
-async def test_terminal_session_post_replaces_existing_session_for_different_environment_and_builds_ssh_command(
+async def test_terminal_session_switching_environment_keeps_distinct_personal_sessions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    captured: dict[str, object] = {}
-    stopped_runtime: list[object] = []
-    running = _runtime_for("env-new", "remote-lab", "environment-ssh")
-
-    def fake_start_terminal_session(
-        api_base_url: str,
-        shell_command: tuple[str, ...],
-        spawn_working_directory: Path,
-        *,
-        environment_id: str,
-        environment_alias: str,
-        working_directory: str | None,
-        target_kind: str,
-    ) -> TerminalSessionRuntime:
-        captured["api_base_url"] = api_base_url
-        captured["shell_command"] = shell_command
-        captured["spawn_working_directory"] = spawn_working_directory
-        captured["environment_id"] = environment_id
-        captured["environment_alias"] = environment_alias
-        captured["working_directory"] = working_directory
-        captured["target_kind"] = target_kind
-        return running
-
-    def fake_stop_terminal_session(runtime: object) -> TerminalSessionRecord:
-        stopped_runtime.append(runtime)
-        return TerminalSessionRecord(
-            session_id=None,
-            provider="pty",
-            target_kind="daemon-host",
-            status=TerminalSessionStatus.IDLE,
-        )
-
-    home_dir = tmp_path / "home"
-    (home_dir / ".ssh").mkdir(parents=True)
-    (home_dir / ".ssh" / "config").write_text("Host *\n", encoding="utf-8")
-    monkeypatch.setattr("ainrf.api.routes.terminal.Path.home", lambda: home_dir)
-    monkeypatch.setattr(
-        "ainrf.api.routes.terminal.start_terminal_session", fake_start_terminal_session
-    )
-    monkeypatch.setattr(
-        "ainrf.api.routes.terminal.stop_terminal_session", fake_stop_terminal_session
-    )
-
-    app = _make_app(tmp_path)
-    old_environment = app.state.environment_service.create_environment(
-        alias="old-lab",
-        display_name="Old Lab",
-        host="old.example.com",
-    )
-    old_runtime = _runtime_for(old_environment.id, old_environment.alias, "environment-ssh")
-    app.state.terminal_runtime = old_runtime
-    environment = app.state.environment_service.create_environment(
-        alias="remote-lab",
-        display_name="Remote Lab",
+    app = make_app(tmp_path)
+    first_environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
         host="gpu.example.com",
-        port=2222,
-        user="researcher",
-        identity_file="/keys/id_ed25519",
-        proxy_jump="bastion",
-        proxy_command="ssh -W %h:%p bastion",
-        ssh_options={"StrictHostKeyChecking": "no", "ServerAliveInterval": "30"},
-        default_workdir="/workspace/project",
+    )
+    second_environment = app.state.environment_service.create_environment(
+        alias="cpu-lab",
+        display_name="CPU Lab",
+        host="cpu.example.com",
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "has_session",
+        lambda *args, **kwargs: True,
     )
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        response = await client.post(
+        first = await client.post(
+            "/terminal/session",
+            headers={"X-API-Key": "secret-key"},
+            json={"environment_id": first_environment.id},
+        )
+        second = await client.post(
+            "/terminal/session",
+            headers={"X-API-Key": "secret-key"},
+            json={"environment_id": second_environment.id},
+        )
+        first_summary = await client.get(
+            f"/terminal/session?environment_id={first_environment.id}",
+            headers={"X-API-Key": "secret-key"},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["binding_id"] != second.json()["binding_id"]
+    assert first_summary.status_code == 200
+    assert first_summary.json()["status"] == "running"
+    assert first_summary.json()["environment_id"] == first_environment.id
+
+
+@pytest.mark.anyio
+async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "has_session",
+        lambda *args, **kwargs: True,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        created = await client.post(
             "/terminal/session",
             headers={"X-API-Key": "secret-key"},
             json={"environment_id": environment.id},
         )
+        detached = await client.delete(
+            f"/terminal/session?environment_id={environment.id}&attachment_id={created.json()['attachment_id']}",
+            headers={"X-API-Key": "secret-key"},
+        )
 
-    assert response.status_code == 200
-    assert stopped_runtime == [old_runtime]
-    assert captured["api_base_url"] == "http://testserver/"
-    assert captured["spawn_working_directory"] == tmp_path
-    assert captured["environment_id"] == environment.id
-    assert captured["environment_alias"] == "remote-lab"
-    assert captured["working_directory"] == "/workspace/project"
-    assert captured["target_kind"] == "environment-ssh"
-    assert captured["shell_command"] == (
-        "ssh",
-        "-tt",
-        "-F",
-        str(home_dir / ".ssh" / "config"),
-        "-p",
-        "2222",
-        "-i",
-        "/keys/id_ed25519",
-        "-o",
-        "ProxyJump=bastion",
-        "-o",
-        "ProxyCommand=ssh -W %h:%p bastion",
-        "-o",
-        "ServerAliveInterval=30",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "researcher@gpu.example.com",
-        "cd /workspace/project && exec ${SHELL:-/bin/bash} -l",
+    assert created.status_code == 200
+    assert detached.status_code == 200
+    assert detached.json()["status"] == "running"
+    assert detached.json()["attachment_id"] is None
+    assert detached.json()["terminal_ws_url"] is None
+
+
+@pytest.mark.anyio
+async def test_terminal_session_reset_returns_new_attachment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
     )
+    reset_calls: list[str] = []
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "has_session",
+        lambda *args, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "reset_personal_session",
+        lambda *args, **kwargs: reset_calls.append("reset"),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        created = await client.post(
+            "/terminal/session",
+            headers={"X-API-Key": "secret-key"},
+            json={"environment_id": environment.id},
+        )
+        reset = await client.post(
+            "/terminal/session/reset",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "environment_id": environment.id,
+                "attachment_id": created.json()["attachment_id"],
+            },
+        )
+
+    assert created.status_code == 200
+    assert reset.status_code == 200
+    assert reset_calls == ["reset"]
+    assert reset.json()["attachment_id"] != created.json()["attachment_id"]
+    assert reset.json()["session_name"] == created.json()["session_name"]
 
 
 @pytest.mark.anyio
 async def test_terminal_session_post_returns_404_for_missing_environment(tmp_path: Path) -> None:
-    app = _make_app(tmp_path)
+    app = make_app(tmp_path)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

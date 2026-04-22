@@ -35,11 +35,12 @@ const mockHealth: SystemHealth = {
 };
 
 let mockEnvironmentCounter = 0;
+let mockTerminalAttachmentCounter = 0;
 let mockEnvironments: EnvironmentRecord[] = [];
 let mockProjectEnvironmentReferences: Record<string, ProjectEnvironmentReference[]> = {
   [DEFAULT_PROJECT_ID]: [],
 };
-let mockTerminalSession: TerminalSession = createIdleTerminalSession();
+let mockTerminalSessions: Record<string, TerminalSession> = {};
 let mockCodeServerStatus: CodeServerStatus = createUnavailableCodeServerStatus();
 
 function nowIso(): string {
@@ -163,8 +164,8 @@ function createIdleTerminalSession(
 ): TerminalSession {
   return {
     session_id: null,
-    provider: 'pty',
-    target_kind: 'daemon-host',
+    provider: 'tmux',
+    target_kind: environmentId ? 'environment-ssh' : 'daemon-host',
     environment_id: environmentId,
     environment_alias: environmentAlias,
     working_directory: workingDirectory,
@@ -174,6 +175,51 @@ function createIdleTerminalSession(
     closed_at: null,
     terminal_ws_url: null,
     detail: null,
+    binding_id: null,
+    session_name: null,
+    attachment_id: null,
+    attachment_expires_at: null,
+  };
+}
+
+function terminalTargetKind(environment: EnvironmentRecord): string {
+  return environment.host === '127.0.0.1' || environment.host === 'localhost'
+    ? 'environment-local'
+    : 'environment-ssh';
+}
+
+function terminalSessionName(environmentId: string): string {
+  return `ainrf:u:mock-daemon:e:${environmentId}:personal`;
+}
+
+function createAttachmentUrl(attachmentId: string): string {
+  return `ws://127.0.0.1:8000/terminal/attachments/${attachmentId}/ws?token=mock-token-${attachmentId}`;
+}
+
+function createMockRunningTerminalSession(
+  environment: EnvironmentRecord,
+  workingDirectory: string,
+  existing?: TerminalSession
+): TerminalSession {
+  const timestamp = nowIso();
+  const attachmentId = `mock-attachment-${environment.id}-${++mockTerminalAttachmentCounter}`;
+  return {
+    session_id: terminalSessionName(environment.id),
+    provider: 'tmux',
+    target_kind: terminalTargetKind(environment),
+    environment_id: environment.id,
+    environment_alias: environment.alias,
+    working_directory: workingDirectory,
+    status: 'running',
+    created_at: existing?.created_at ?? timestamp,
+    started_at: timestamp,
+    closed_at: null,
+    terminal_ws_url: createAttachmentUrl(attachmentId),
+    detail: null,
+    binding_id: existing?.binding_id ?? `binding-${environment.id}`,
+    session_name: terminalSessionName(environment.id),
+    attachment_id: attachmentId,
+    attachment_expires_at: timestamp,
   };
 }
 
@@ -282,50 +328,80 @@ export function mockGetHealth(): SystemHealth {
 
 export function mockGetTerminalSession(environmentId?: string): TerminalSession {
   if (!environmentId) {
-    return { ...mockTerminalSession };
+    return createIdleTerminalSession();
   }
-  if (mockTerminalSession.environment_id === environmentId) {
-    return { ...mockTerminalSession };
+  const existing = mockTerminalSessions[environmentId];
+  if (existing) {
+    return { ...existing };
   }
   const environment = findEnvironment(environmentId);
-  return createIdleTerminalSession(environment.id, environment.alias, buildEffectiveWorkdir(environmentId));
+  return {
+    ...createIdleTerminalSession(environment.id, environment.alias, buildEffectiveWorkdir(environmentId)),
+    target_kind: terminalTargetKind(environment),
+    session_name: terminalSessionName(environment.id),
+  };
 }
 
 export function mockCreateTerminalSession(environmentId: string): TerminalSession {
   const environment = findEnvironment(environmentId);
-  const timestamp = nowIso();
   const workingDirectory = buildEffectiveWorkdir(environmentId);
-  mockTerminalSession = {
-    session_id: `mock-terminal-session-${environmentId}`,
-    provider: 'pty',
-    target_kind:
-      environment.host === '127.0.0.1' || environment.host === 'localhost'
-        ? 'environment-local'
-        : 'environment-ssh',
-    environment_id: environment.id,
-    environment_alias: environment.alias,
-    working_directory: workingDirectory,
-    status: 'running',
-    created_at: mockTerminalSession.created_at ?? timestamp,
-    started_at: timestamp,
-    closed_at: null,
-    terminal_ws_url: `ws://127.0.0.1:8000/terminal/session/mock-terminal-session-${environmentId}/ws?token=mock-token`,
-    detail: null,
+  const nextSession = createMockRunningTerminalSession(
+    environment,
+    workingDirectory,
+    mockTerminalSessions[environmentId]
+  );
+  mockTerminalSessions = {
+    ...mockTerminalSessions,
+    [environmentId]: nextSession,
   };
-  return { ...mockTerminalSession };
+  return { ...nextSession };
 }
 
-export function mockDeleteTerminalSession(): TerminalSession {
-  mockTerminalSession = {
-    ...mockTerminalSession,
-    session_id: null,
-    target_kind: 'daemon-host',
-    status: 'idle',
-    closed_at: nowIso(),
+export function mockDeleteTerminalSession(
+  environmentId?: string | null,
+  attachmentId?: string | null
+): TerminalSession {
+  if (!environmentId) {
+    return createIdleTerminalSession();
+  }
+  const current = mockTerminalSessions[environmentId];
+  if (!current) {
+    const environment = findEnvironment(environmentId);
+    return {
+      ...createIdleTerminalSession(environment.id, environment.alias, buildEffectiveWorkdir(environmentId)),
+      target_kind: terminalTargetKind(environment),
+      session_name: terminalSessionName(environment.id),
+    };
+  }
+  if (attachmentId && current.attachment_id !== attachmentId) {
+    return { ...current };
+  }
+  const detached: TerminalSession = {
+    ...current,
     terminal_ws_url: null,
-    detail: null,
+    attachment_id: null,
+    attachment_expires_at: null,
   };
-  return { ...mockTerminalSession };
+  mockTerminalSessions = {
+    ...mockTerminalSessions,
+    [environmentId]: detached,
+  };
+  return { ...detached };
+}
+
+export function mockResetTerminalSession(environmentId: string): TerminalSession {
+  const environment = findEnvironment(environmentId);
+  const workingDirectory = buildEffectiveWorkdir(environmentId);
+  const nextSession = createMockRunningTerminalSession(
+    environment,
+    workingDirectory,
+    mockTerminalSessions[environmentId]
+  );
+  mockTerminalSessions = {
+    ...mockTerminalSessions,
+    [environmentId]: nextSession,
+  };
+  return { ...nextSession };
 }
 
 export function mockGetCodeServerStatus(environmentId?: string): CodeServerStatus {
@@ -491,15 +567,17 @@ export function mockDeleteProjectEnvironmentReference(
 }
 
 export function resetMockTerminalSession(): TerminalSession {
-  mockTerminalSession = createIdleTerminalSession();
-  return { ...mockTerminalSession };
+  mockTerminalSessions = {};
+  mockTerminalAttachmentCounter = 0;
+  return createIdleTerminalSession();
 }
 
 export function resetMockEnvironmentState(): EnvironmentListResponse {
   mockEnvironmentCounter = 0;
+  mockTerminalAttachmentCounter = 0;
   mockEnvironments = [...initialMockEnvironments];
   mockProjectEnvironmentReferences = { [DEFAULT_PROJECT_ID]: [] };
-  mockTerminalSession = createIdleTerminalSession();
+  mockTerminalSessions = {};
   mockCodeServerStatus = createUnavailableCodeServerStatus();
   return mockGetEnvironments();
 }

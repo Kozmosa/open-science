@@ -28,6 +28,7 @@ import {
   mockGetEnvironment,
   mockGetProjectEnvironmentReferences,
   mockGetTerminalSession,
+  mockResetTerminalSession,
   mockUpdateProjectEnvironmentReference,
   mockUpdateEnvironment,
 } from './mock';
@@ -43,6 +44,24 @@ function withEnvironmentId(path: string, environmentId?: string): string {
   return `${path}?${search.toString()}`;
 }
 
+function withTerminalDetachQuery(
+  path: string,
+  options: {
+    environmentId?: string | null;
+    attachmentId?: string | null;
+  } = {}
+): string {
+  const search = new URLSearchParams();
+  if (options.environmentId) {
+    search.set('environment_id', options.environmentId);
+  }
+  if (options.attachmentId) {
+    search.set('attachment_id', options.attachmentId);
+  }
+  const query = search.toString();
+  return query ? `${path}?${query}` : path;
+}
+
 export const getHealth = (): Promise<SystemHealth> =>
   USE_MOCK ? Promise.resolve(mockGetHealth()) : api.get<SystemHealth>('/health');
 
@@ -56,10 +75,24 @@ export const createTerminalSession = (environmentId: string): Promise<TerminalSe
     ? Promise.resolve(mockCreateTerminalSession(environmentId))
     : api.post<TerminalSession>('/terminal/session', { environment_id: environmentId });
 
-export const deleteTerminalSession = (): Promise<TerminalSession> =>
+export const deleteTerminalSession = (options: {
+  environmentId?: string | null;
+  attachmentId?: string | null;
+}): Promise<TerminalSession> =>
   USE_MOCK
-    ? Promise.resolve(mockDeleteTerminalSession())
-    : api.delete<TerminalSession>('/terminal/session');
+    ? Promise.resolve(mockDeleteTerminalSession(options.environmentId, options.attachmentId))
+    : api.delete<TerminalSession>(withTerminalDetachQuery('/terminal/session', options));
+
+export const resetTerminalSession = (
+  environmentId: string,
+  attachmentId?: string | null
+): Promise<TerminalSession> =>
+  USE_MOCK
+    ? Promise.resolve(mockResetTerminalSession(environmentId))
+    : api.post<TerminalSession>('/terminal/session/reset', {
+        environment_id: environmentId,
+        attachment_id: attachmentId ?? null,
+      });
 
 export const getCodeServerStatus = (environmentId?: string): Promise<CodeServerStatus> =>
   USE_MOCK

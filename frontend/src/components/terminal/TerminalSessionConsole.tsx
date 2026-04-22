@@ -9,6 +9,7 @@ type SocketStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'erro
 
 interface Props {
   sessionId: string | null;
+  attachmentId: string | null;
   terminalWsUrl: string | null;
   status: TerminalSessionStatus;
   onDisconnected?: () => void;
@@ -54,7 +55,13 @@ function isSocketMessage(value: unknown): value is SocketMessage {
   return false;
 }
 
-function TerminalSessionConsole({ sessionId, terminalWsUrl, status, onDisconnected }: Props) {
+function TerminalSessionConsole({
+  sessionId,
+  attachmentId,
+  terminalWsUrl,
+  status,
+  onDisconnected,
+}: Props) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onDisconnectedRef = useRef(onDisconnected);
@@ -225,6 +232,9 @@ function TerminalSessionConsole({ sessionId, terminalWsUrl, status, onDisconnect
           <p className="text-sm text-gray-600">
             {t('components.terminalConsole.websocketSession')}{' '}
             <code className="rounded bg-gray-100 px-1.5 py-0.5">{sessionId ?? 'n/a'}</code>
+          </p>
+          <p className="text-sm text-gray-600">
+            {t('components.terminalConsole.attachment')} <code className="rounded bg-gray-100 px-1.5 py-0.5">{attachmentId ?? 'n/a'}</code>
           </p>
         </div>
         <div className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">

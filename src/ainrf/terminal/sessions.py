@@ -1,0 +1,604 @@
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import replace
+from datetime import datetime
+from getpass import getuser
+from pathlib import Path
+from uuid import uuid4
+
+from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
+from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.terminal.models import (
+    TerminalAttachmentTarget,
+    TerminalMuxKind,
+    TerminalSessionRecord,
+    TerminalSessionStatus,
+    UserEnvironmentBinding,
+    UserSessionPair,
+    utc_now,
+)
+from ainrf.terminal.pty import TERMINAL_IDLE_TARGET_KIND, TERMINAL_PROVIDER
+from ainrf.terminal.tmux import TmuxAdapter, TmuxCommandError
+
+
+class TerminalSessionOperationError(RuntimeError):
+    pass
+
+
+def current_daemon_user() -> str:
+    try:
+        resolved = getuser()
+    except Exception:
+        return "root"
+    return resolved or "root"
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.fromisoformat(value)
+
+
+class SessionManager:
+    def __init__(
+        self,
+        *,
+        state_root: Path,
+        environment_service: InMemoryEnvironmentService,
+        tmux_adapter: TmuxAdapter,
+        default_shell: str | None,
+        user_id: str | None = None,
+    ) -> None:
+        self._state_root = state_root
+        self._runtime_root = state_root / "runtime"
+        self._db_path = self._runtime_root / "terminal_state.sqlite3"
+        self._environment_service = environment_service
+        self._tmux_adapter = tmux_adapter
+        self._default_shell = default_shell
+        self._user_id = user_id or current_daemon_user()
+        self._initialized = False
+
+    @property
+    def db_path(self) -> Path:
+        return self._db_path
+
+    @property
+    def user_id(self) -> str:
+        return self._user_id
+
+    def initialize(self) -> None:
+        if self._initialized:
+            return
+        self._runtime_root.mkdir(parents=True, exist_ok=True)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_environment_bindings (
+                    binding_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    environment_id TEXT NOT NULL,
+                    remote_login_user TEXT NOT NULL,
+                    default_shell TEXT,
+                    default_workdir TEXT,
+                    mux_kind TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(user_id, environment_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_session_pairs (
+                    binding_id TEXT PRIMARY KEY,
+                    personal_session_name TEXT NOT NULL,
+                    agent_session_name TEXT,
+                    personal_status TEXT NOT NULL,
+                    agent_status TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    personal_started_at TEXT,
+                    personal_closed_at TEXT,
+                    last_verified_at TEXT,
+                    last_personal_attach_at TEXT,
+                    last_agent_attach_at TEXT,
+                    detail TEXT NOT NULL DEFAULT '',
+                    FOREIGN KEY(binding_id) REFERENCES user_environment_bindings(binding_id)
+                )
+                """
+            )
+            connection.commit()
+        self._initialized = True
+
+    def session_name_for(self, environment_id: str) -> str:
+        return self._tmux_adapter.session_name_for(self._user_id, environment_id, kind="personal")
+
+    def get_session_record(
+        self,
+        environment: EnvironmentRegistryEntry | None,
+        working_directory: str | None,
+    ) -> TerminalSessionRecord:
+        self.initialize()
+        if environment is None:
+            return TerminalSessionRecord(
+                session_id=None,
+                provider=TERMINAL_PROVIDER,
+                target_kind=TERMINAL_IDLE_TARGET_KIND,
+                status=TerminalSessionStatus.IDLE,
+            )
+
+        binding = self._load_binding(environment.id)
+        predicted_session_name = self.session_name_for(environment.id)
+        if binding is None:
+            return self._build_record(
+                environment=environment,
+                working_directory=working_directory,
+                binding=None,
+                pair=None,
+                session_name=predicted_session_name,
+            )
+
+        pair = self._load_pair(binding.binding_id)
+        if pair is None:
+            return self._build_record(
+                environment=environment,
+                working_directory=working_directory,
+                binding=binding,
+                pair=None,
+                session_name=predicted_session_name,
+            )
+
+        refreshed_pair = self._refresh_pair(binding, environment, pair)
+        return self._build_record(
+            environment=environment,
+            working_directory=working_directory,
+            binding=binding,
+            pair=refreshed_pair,
+            session_name=refreshed_pair.personal_session_name,
+        )
+
+    def ensure_personal_session(
+        self,
+        environment: EnvironmentRegistryEntry,
+        working_directory: str | None,
+    ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
+        self.initialize()
+        binding = self._upsert_binding(environment, working_directory)
+        pair = self._upsert_pair(binding, environment.id)
+        try:
+            self._tmux_adapter.ensure_personal_session(
+                binding,
+                environment,
+                pair.personal_session_name,
+            )
+        except TmuxCommandError as exc:
+            failure_time = utc_now()
+            self._store_pair(
+                replace(
+                    pair,
+                    personal_status=TerminalSessionStatus.FAILED,
+                    personal_closed_at=failure_time,
+                    last_verified_at=failure_time,
+                    detail=str(exc),
+                )
+            )
+            raise TerminalSessionOperationError(str(exc)) from exc
+
+        success_time = utc_now()
+        running_pair = self._store_pair(
+            replace(
+                pair,
+                personal_status=TerminalSessionStatus.RUNNING,
+                personal_started_at=pair.personal_started_at or success_time,
+                personal_closed_at=None,
+                last_verified_at=success_time,
+                updated_at=success_time,
+                detail=None,
+            )
+        )
+        record = self._build_record(
+            environment=environment,
+            working_directory=working_directory,
+            binding=binding,
+            pair=running_pair,
+            session_name=running_pair.personal_session_name,
+        )
+        target = TerminalAttachmentTarget(
+            binding_id=binding.binding_id,
+            session_id=record.session_id or running_pair.personal_session_name,
+            session_name=running_pair.personal_session_name,
+            user_id=binding.user_id,
+            environment_id=environment.id,
+            environment_alias=environment.alias,
+            target_kind=record.target_kind,
+            working_directory=working_directory,
+            attach_command=self._tmux_adapter.build_attach_command(
+                binding,
+                environment,
+                running_pair.personal_session_name,
+            ),
+            spawn_working_directory=self._state_root,
+        )
+        return record, target
+
+    def reset_personal_session(
+        self,
+        environment: EnvironmentRegistryEntry,
+        working_directory: str | None,
+    ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
+        self.initialize()
+        binding = self._upsert_binding(environment, working_directory)
+        pair = self._upsert_pair(binding, environment.id)
+        try:
+            self._tmux_adapter.reset_personal_session(
+                binding,
+                environment,
+                pair.personal_session_name,
+            )
+        except TmuxCommandError as exc:
+            failure_time = utc_now()
+            self._store_pair(
+                replace(
+                    pair,
+                    personal_status=TerminalSessionStatus.FAILED,
+                    personal_closed_at=failure_time,
+                    last_verified_at=failure_time,
+                    detail=str(exc),
+                )
+            )
+            raise TerminalSessionOperationError(str(exc)) from exc
+
+        reset_time = utc_now()
+        reset_pair = self._store_pair(
+            replace(
+                pair,
+                personal_status=TerminalSessionStatus.RUNNING,
+                personal_started_at=reset_time,
+                personal_closed_at=None,
+                last_verified_at=reset_time,
+                updated_at=reset_time,
+                detail=None,
+            )
+        )
+        record = self._build_record(
+            environment=environment,
+            working_directory=working_directory,
+            binding=binding,
+            pair=reset_pair,
+            session_name=reset_pair.personal_session_name,
+        )
+        target = TerminalAttachmentTarget(
+            binding_id=binding.binding_id,
+            session_id=record.session_id or reset_pair.personal_session_name,
+            session_name=reset_pair.personal_session_name,
+            user_id=binding.user_id,
+            environment_id=environment.id,
+            environment_alias=environment.alias,
+            target_kind=record.target_kind,
+            working_directory=working_directory,
+            attach_command=self._tmux_adapter.build_attach_command(
+                binding,
+                environment,
+                reset_pair.personal_session_name,
+            ),
+            spawn_working_directory=self._state_root,
+        )
+        return record, target
+
+    def record_personal_attach(self, binding_id: str) -> None:
+        self.initialize()
+        pair = self._load_pair(binding_id)
+        if pair is None:
+            return
+        attach_time = utc_now()
+        self._store_pair(
+            replace(
+                pair,
+                last_personal_attach_at=attach_time,
+                updated_at=attach_time,
+            )
+        )
+
+    def reconcile(self) -> None:
+        self.initialize()
+        bindings = self._list_bindings()
+        for binding in bindings:
+            pair = self._load_pair(binding.binding_id)
+            if pair is None:
+                continue
+            try:
+                environment = self._environment_service.get_environment(binding.environment_id)
+            except EnvironmentNotFoundError:
+                reconcile_time = utc_now()
+                self._store_pair(
+                    replace(
+                        pair,
+                        personal_status=TerminalSessionStatus.IDLE,
+                        personal_closed_at=reconcile_time,
+                        last_verified_at=reconcile_time,
+                        detail="Environment not found during terminal reconcile",
+                    )
+                )
+                continue
+            self._refresh_pair(binding, environment, pair)
+
+    def _refresh_pair(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        pair: UserSessionPair,
+    ) -> UserSessionPair:
+        try:
+            session_exists = self._tmux_adapter.has_session(
+                binding,
+                environment,
+                pair.personal_session_name,
+            )
+        except TmuxCommandError as exc:
+            failure_time = utc_now()
+            return self._store_pair(
+                replace(
+                    pair,
+                    personal_status=TerminalSessionStatus.FAILED,
+                    personal_closed_at=failure_time,
+                    last_verified_at=failure_time,
+                    detail=str(exc),
+                )
+            )
+
+        if session_exists:
+            verify_time = utc_now()
+            return self._store_pair(
+                replace(
+                    pair,
+                    personal_status=TerminalSessionStatus.RUNNING,
+                    personal_started_at=pair.personal_started_at or verify_time,
+                    personal_closed_at=None,
+                    last_verified_at=verify_time,
+                    detail=None,
+                )
+            )
+
+        idle_time = utc_now()
+        return self._store_pair(
+            replace(
+                pair,
+                personal_status=TerminalSessionStatus.IDLE,
+                personal_closed_at=idle_time,
+                last_verified_at=idle_time,
+                detail="Personal tmux session is not running",
+            )
+        )
+
+    def _upsert_binding(
+        self,
+        environment: EnvironmentRegistryEntry,
+        working_directory: str | None,
+    ) -> UserEnvironmentBinding:
+        existing = self._load_binding(environment.id)
+        now = utc_now()
+        if existing is None:
+            binding = UserEnvironmentBinding(
+                binding_id=str(uuid4()),
+                user_id=self._user_id,
+                environment_id=environment.id,
+                remote_login_user=environment.user,
+                default_shell=self._default_shell,
+                default_workdir=working_directory,
+                mux_kind=TerminalMuxKind.TMUX,
+                created_at=now,
+                updated_at=now,
+            )
+        else:
+            binding = replace(
+                existing,
+                remote_login_user=environment.user,
+                default_shell=self._default_shell,
+                default_workdir=working_directory,
+                updated_at=now,
+            )
+        return self._store_binding(binding)
+
+    def _upsert_pair(self, binding: UserEnvironmentBinding, environment_id: str) -> UserSessionPair:
+        existing = self._load_pair(binding.binding_id)
+        now = utc_now()
+        if existing is None:
+            pair = UserSessionPair(
+                binding_id=binding.binding_id,
+                personal_session_name=self.session_name_for(environment_id),
+                personal_status=TerminalSessionStatus.IDLE,
+                created_at=now,
+                updated_at=now,
+            )
+        else:
+            pair = replace(
+                existing,
+                personal_session_name=self.session_name_for(environment_id),
+                updated_at=now,
+            )
+        return self._store_pair(pair)
+
+    def _build_record(
+        self,
+        *,
+        environment: EnvironmentRegistryEntry,
+        working_directory: str | None,
+        binding: UserEnvironmentBinding | None,
+        pair: UserSessionPair | None,
+        session_name: str,
+    ) -> TerminalSessionRecord:
+        return TerminalSessionRecord(
+            session_id=session_name if pair is not None else None,
+            provider=TERMINAL_PROVIDER,
+            target_kind=self._tmux_adapter.target_kind_for(environment),
+            environment_id=environment.id,
+            environment_alias=environment.alias,
+            working_directory=working_directory,
+            status=pair.personal_status if pair is not None else TerminalSessionStatus.IDLE,
+            created_at=pair.created_at if pair is not None else None,
+            started_at=pair.personal_started_at if pair is not None else None,
+            closed_at=pair.personal_closed_at if pair is not None else None,
+            detail=pair.detail if pair is not None else None,
+            binding_id=binding.binding_id if binding is not None else None,
+            session_name=session_name,
+        )
+
+    def _list_bindings(self) -> list[UserEnvironmentBinding]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT binding_id, user_id, environment_id, remote_login_user, default_shell,
+                       default_workdir, mux_kind, created_at, updated_at
+                FROM user_environment_bindings
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+        return [self._row_to_binding(row) for row in rows]
+
+    def _load_binding(self, environment_id: str) -> UserEnvironmentBinding | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT binding_id, user_id, environment_id, remote_login_user, default_shell,
+                       default_workdir, mux_kind, created_at, updated_at
+                FROM user_environment_bindings
+                WHERE user_id = ? AND environment_id = ?
+                """,
+                (self._user_id, environment_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_binding(row)
+
+    def _load_pair(self, binding_id: str) -> UserSessionPair | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT binding_id, personal_session_name, agent_session_name, personal_status,
+                       agent_status, created_at, updated_at, personal_started_at,
+                       personal_closed_at, last_verified_at, last_personal_attach_at,
+                       last_agent_attach_at, detail
+                FROM user_session_pairs
+                WHERE binding_id = ?
+                """,
+                (binding_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_pair(row)
+
+    def _store_binding(self, binding: UserEnvironmentBinding) -> UserEnvironmentBinding:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO user_environment_bindings (
+                    binding_id, user_id, environment_id, remote_login_user,
+                    default_shell, default_workdir, mux_kind, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(binding_id) DO UPDATE SET
+                    remote_login_user = excluded.remote_login_user,
+                    default_shell = excluded.default_shell,
+                    default_workdir = excluded.default_workdir,
+                    mux_kind = excluded.mux_kind,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    binding.binding_id,
+                    binding.user_id,
+                    binding.environment_id,
+                    binding.remote_login_user,
+                    binding.default_shell,
+                    binding.default_workdir,
+                    binding.mux_kind.value,
+                    binding.created_at.isoformat() if binding.created_at is not None else utc_now().isoformat(),
+                    binding.updated_at.isoformat() if binding.updated_at is not None else utc_now().isoformat(),
+                ),
+            )
+            connection.commit()
+        return binding
+
+    def _store_pair(self, pair: UserSessionPair) -> UserSessionPair:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO user_session_pairs (
+                    binding_id, personal_session_name, agent_session_name, personal_status,
+                    agent_status, created_at, updated_at, personal_started_at,
+                    personal_closed_at, last_verified_at, last_personal_attach_at,
+                    last_agent_attach_at, detail
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(binding_id) DO UPDATE SET
+                    personal_session_name = excluded.personal_session_name,
+                    agent_session_name = excluded.agent_session_name,
+                    personal_status = excluded.personal_status,
+                    agent_status = excluded.agent_status,
+                    updated_at = excluded.updated_at,
+                    personal_started_at = excluded.personal_started_at,
+                    personal_closed_at = excluded.personal_closed_at,
+                    last_verified_at = excluded.last_verified_at,
+                    last_personal_attach_at = excluded.last_personal_attach_at,
+                    last_agent_attach_at = excluded.last_agent_attach_at,
+                    detail = excluded.detail
+                """,
+                (
+                    pair.binding_id,
+                    pair.personal_session_name,
+                    pair.agent_session_name,
+                    pair.personal_status.value,
+                    pair.agent_status.value if pair.agent_status is not None else None,
+                    pair.created_at.isoformat() if pair.created_at is not None else utc_now().isoformat(),
+                    pair.updated_at.isoformat() if pair.updated_at is not None else utc_now().isoformat(),
+                    pair.personal_started_at.isoformat()
+                    if pair.personal_started_at is not None
+                    else None,
+                    pair.personal_closed_at.isoformat() if pair.personal_closed_at is not None else None,
+                    pair.last_verified_at.isoformat() if pair.last_verified_at is not None else None,
+                    pair.last_personal_attach_at.isoformat()
+                    if pair.last_personal_attach_at is not None
+                    else None,
+                    pair.last_agent_attach_at.isoformat() if pair.last_agent_attach_at is not None else None,
+                    pair.detail or "",
+                ),
+            )
+            connection.commit()
+        return pair
+
+    @staticmethod
+    def _row_to_binding(row: sqlite3.Row) -> UserEnvironmentBinding:
+        return UserEnvironmentBinding(
+            binding_id=row["binding_id"],
+            user_id=row["user_id"],
+            environment_id=row["environment_id"],
+            remote_login_user=row["remote_login_user"],
+            default_shell=row["default_shell"],
+            default_workdir=row["default_workdir"],
+            mux_kind=TerminalMuxKind(row["mux_kind"]),
+            created_at=_parse_datetime(row["created_at"]),
+            updated_at=_parse_datetime(row["updated_at"]),
+        )
+
+    @staticmethod
+    def _row_to_pair(row: sqlite3.Row) -> UserSessionPair:
+        detail = row["detail"] or None
+        agent_status_raw = row["agent_status"]
+        return UserSessionPair(
+            binding_id=row["binding_id"],
+            personal_session_name=row["personal_session_name"],
+            agent_session_name=row["agent_session_name"],
+            personal_status=TerminalSessionStatus(row["personal_status"]),
+            agent_status=TerminalSessionStatus(agent_status_raw) if agent_status_raw else None,
+            created_at=_parse_datetime(row["created_at"]),
+            updated_at=_parse_datetime(row["updated_at"]),
+            personal_started_at=_parse_datetime(row["personal_started_at"]),
+            personal_closed_at=_parse_datetime(row["personal_closed_at"]),
+            last_verified_at=_parse_datetime(row["last_verified_at"]),
+            last_personal_attach_at=_parse_datetime(row["last_personal_attach_at"]),
+            last_agent_attach_at=_parse_datetime(row["last_agent_attach_at"]),
+            detail=detail,
+        )
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self._db_path)
+        connection.row_factory = sqlite3.Row
+        return connection

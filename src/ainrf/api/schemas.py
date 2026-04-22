@@ -42,7 +42,7 @@ class TerminalSessionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     session_id: str | None = None
-    provider: str = "pty"
+    provider: str = "tmux"
     target_kind: str = "daemon-host"
     environment_id: str | None = None
     environment_alias: str | None = None
@@ -53,6 +53,10 @@ class TerminalSessionResponse(BaseModel):
     closed_at: str | None = None
     terminal_ws_url: str | None = None
     detail: str | None = None
+    binding_id: str | None = None
+    session_name: str | None = None
+    attachment_id: str | None = None
+    attachment_expires_at: str | None = None
 
 
 class CodeServerStatusResponse(BaseModel):
@@ -217,6 +221,13 @@ class TerminalSessionCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     environment_id: str
+
+
+class TerminalSessionResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    environment_id: str
+    attachment_id: str | None = None
 
 
 class CodeServerSessionRequest(BaseModel):

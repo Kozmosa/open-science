@@ -5,7 +5,6 @@ import os
 import signal
 from pathlib import Path
 from typing import Any, cast
-from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
@@ -14,13 +13,13 @@ from starlette.websockets import WebSocketDisconnect
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.terminal.models import TerminalSessionRecord, TerminalSessionStatus, utc_now
+from ainrf.terminal.models import TerminalAttachmentTarget
 from ainrf.terminal.pty import (
     TERMINAL_LOCAL_TARGET_KIND,
-    TerminalSessionRuntime,
-    build_terminal_ws_url,
-    start_terminal_session,
-    stop_terminal_session,
+    TerminalBridgeRuntime,
+    build_attachment_ws_url,
+    start_terminal_bridge,
+    stop_terminal_bridge,
 )
 
 
@@ -48,15 +47,13 @@ def make_client(tmp_path: Path) -> tuple[TestClient, FastAPI]:
     return TestClient(app), app
 
 
-def test_build_terminal_ws_url_translates_http_base() -> None:
-    assert build_terminal_ws_url("http://testserver", "term-1", "token-1") == (
-        "ws://testserver/terminal/session/term-1/ws?token=token-1"
+def test_build_attachment_ws_url_translates_http_base() -> None:
+    assert build_attachment_ws_url("http://testserver", "attach-1", "token-1") == (
+        "ws://testserver/terminal/attachments/attach-1/ws?token=token-1"
     )
 
 
-def test_start_terminal_session_launches_process_and_returns_ws_url(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_start_terminal_bridge_launches_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
     class PopenProcess:
@@ -69,17 +66,8 @@ def test_start_terminal_session_launches_process_and_returns_ws_url(
 
     monkeypatch.setattr("ainrf.terminal.pty.os.openpty", lambda: (11, 12))
     monkeypatch.setattr("ainrf.terminal.pty.subprocess.Popen", fake_popen)
-    monkeypatch.setattr("ainrf.terminal.pty.uuid4", lambda: UUID(int=1))
-    monkeypatch.setattr("ainrf.terminal.pty.token_urlsafe", lambda length: "token-1")
 
-    runtime = start_terminal_session(
-        api_base_url="http://testserver",
-        shell_command=("/bin/sh",),
-        working_directory=tmp_path,
-        environment_id="env-1",
-        environment_alias="gpu-lab",
-        target_kind=TERMINAL_LOCAL_TARGET_KIND,
-    )
+    runtime = start_terminal_bridge(("/bin/sh",), tmp_path)
 
     assert captured["args"] == (["/bin/sh"],)
     assert captured["kwargs"] == {
@@ -91,19 +79,11 @@ def test_start_terminal_session_launches_process_and_returns_ws_url(
         "text": False,
         "close_fds": True,
     }
-    assert runtime.record.session_id == "00000000-0000-0000-0000-000000000001"
-    assert runtime.record.status is TerminalSessionStatus.RUNNING
-    assert runtime.record.environment_id == "env-1"
-    assert runtime.record.environment_alias == "gpu-lab"
-    assert runtime.record.working_directory == str(tmp_path)
-    assert runtime.record.terminal_ws_url == (
-        "ws://testserver/terminal/session/00000000-0000-0000-0000-000000000001/ws?token=token-1"
-    )
+    assert runtime.process.pid == 4321
+    assert runtime.master_fd == 11
 
 
-def test_stop_terminal_session_terminates_running_process(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_stop_terminal_bridge_terminates_running_process(monkeypatch: pytest.MonkeyPatch) -> None:
     kill_calls: list[tuple[int, int]] = []
 
     def fake_killpg(pid: int, signum: int) -> None:
@@ -112,38 +92,22 @@ def test_stop_terminal_session_terminates_running_process(
     monkeypatch.setattr("ainrf.terminal.pty.os.killpg", fake_killpg)
     monkeypatch.setattr("ainrf.terminal.pty.os.close", lambda fd: None)
 
-    runtime = TerminalSessionRuntime(
-        record=TerminalSessionRecord(
-            session_id="term-1",
-            provider="pty",
-            target_kind=TERMINAL_LOCAL_TARGET_KIND,
-            status=TerminalSessionStatus.RUNNING,
-            environment_id="env-1",
-            environment_alias="gpu-lab",
-            working_directory="/workspace/project",
-            created_at=utc_now(),
-            started_at=utc_now(),
-            terminal_ws_url="ws://testserver/terminal/session/term-1/ws?token=token-1",
-            pid=4321,
-            terminal_ws_token="token-1",
-        ),
+    runtime = TerminalBridgeRuntime(
         process=cast(Any, DummyProcess()),
         master_fd=10,
     )
 
-    stopped = stop_terminal_session(runtime)
+    stop_terminal_bridge(runtime)
 
     assert kill_calls == [(4321, signal.SIGTERM)]
-    assert stopped.status is TerminalSessionStatus.IDLE
-    assert stopped.session_id is None
-    assert stopped.environment_id == "env-1"
-    assert stopped.terminal_ws_url is None
+    assert runtime.master_fd is None
 
 
-def test_terminal_session_routes_and_websocket_bridge(
+def test_terminal_attachment_websocket_bridge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
     input_calls: list[str] = []
     resize_calls: list[tuple[int, int]] = []
 
@@ -155,31 +119,39 @@ def test_terminal_session_routes_and_websocket_bridge(
         "ainrf.api.routes.terminal.resize_terminal",
         lambda runtime, cols, rows: resize_calls.append((cols, rows)),
     )
+    monkeypatch.setattr("ainrf.terminal.attachments.stop_terminal_bridge", lambda runtime: None)
 
     read_fd, write_fd = os.pipe()
-    runtime = TerminalSessionRuntime(
-        record=TerminalSessionRecord(
-            session_id="term-1",
-            provider="pty",
-            target_kind=TERMINAL_LOCAL_TARGET_KIND,
-            status=TerminalSessionStatus.RUNNING,
-            environment_id="env-1",
-            environment_alias="gpu-lab",
-            working_directory="/workspace/project",
-            created_at=utc_now(),
-            started_at=utc_now(),
-            terminal_ws_url="ws://testserver/terminal/session/term-1/ws?token=token-1",
-            pid=4321,
-            terminal_ws_token="token-1",
-        ),
+    runtime = TerminalBridgeRuntime(
         process=cast(Any, DummyProcess()),
         master_fd=read_fd,
     )
-    app.state.terminal_runtime = runtime
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        lambda command, cwd: runtime,
+    )
 
-    with client.websocket_connect("/terminal/session/term-1/ws?token=token-1") as ws:
-        os.write(write_fd, b"hello from pty\n")
-        assert ws.receive_json() == {"type": "output", "data": "hello from pty\n"}
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="ainrf:u:daemon:e:env-1:personal",
+            session_name="ainrf:u:daemon:e:env-1:personal",
+            user_id="daemon",
+            environment_id="env-1",
+            environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+
+    with client.websocket_connect(
+        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+    ) as ws:
+        os.write(write_fd, b"hello from bridge\n")
+        assert ws.receive_json() == {"type": "output", "data": "hello from bridge\n"}
 
         ws.send_text(json.dumps({"type": "input", "data": "ls\n"}))
         ws.send_text(json.dumps({"type": "resize", "cols": 120, "rows": 40}))
@@ -187,33 +159,31 @@ def test_terminal_session_routes_and_websocket_bridge(
         assert input_calls == ["ls\n"]
         assert resize_calls == [(120, 40)]
 
+    os.close(read_fd)
     os.close(write_fd)
 
 
-def test_terminal_session_websocket_rejects_bad_token(
-    tmp_path: Path,
-) -> None:
+def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None:
     client, app = make_client(tmp_path)
-    runtime = TerminalSessionRuntime(
-        record=TerminalSessionRecord(
-            session_id="term-1",
-            provider="pty",
-            target_kind=TERMINAL_LOCAL_TARGET_KIND,
-            status=TerminalSessionStatus.RUNNING,
+    broker = app.state.terminal_attachment_broker
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="ainrf:u:daemon:e:env-1:personal",
+            session_name="ainrf:u:daemon:e:env-1:personal",
+            user_id="daemon",
             environment_id="env-1",
             environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            created_at=utc_now(),
-            started_at=utc_now(),
-            terminal_ws_url="ws://testserver/terminal/session/term-1/ws?token=token-1",
-            pid=4321,
-            terminal_ws_token="token-1",
+            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            spawn_working_directory=tmp_path,
         ),
-        process=cast(Any, DummyProcess()),
-        master_fd=11,
     )
-    app.state.terminal_runtime = runtime
 
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/terminal/session/term-1/ws?token=wrong-token") as ws:
+        with client.websocket_connect(
+            f"/terminal/attachments/{attachment.attachment_id}/ws?token=wrong-token"
+        ) as ws:
             ws.receive_text()

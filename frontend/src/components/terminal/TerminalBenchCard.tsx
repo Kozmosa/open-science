@@ -15,7 +15,6 @@ function TerminalBenchCard({ selectedEnvironment }: Props) {
       selectedEnvironmentSummary={
         selectedEnvironment ? `${selectedEnvironment.alias} · ${selectedEnvironment.display_name}` : null
       }
-      canStart={state.canStart}
     />
   );
 }
