@@ -35,7 +35,15 @@ from ainrf.terminal.models import (
     UserEnvironmentBinding,
     UserSessionPair,
 )
-from ainrf.terminal.pty import resize_terminal, write_terminal_input
+from ainrf.terminal.pty import (
+    TERMINAL_OUTPUT_HIGH_WATERMARK_BYTES,
+    TERMINAL_OUTPUT_LOW_WATERMARK_BYTES,
+    TERMINAL_OUTPUT_QUEUE_MAX_CHUNKS,
+    TERMINAL_OUTPUT_READ_CHUNK_BYTES,
+    PtyUtf8Decoder,
+    resize_terminal,
+    write_terminal_input,
+)
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
 
 router = APIRouter(prefix="/terminal", tags=["terminal"])
@@ -174,6 +182,10 @@ def _get_environment_context(
         state_root,
     )
     return environment, working_directory
+
+
+def _get_running_loop() -> asyncio.AbstractEventLoop:
+    return asyncio.get_running_loop()
 
 
 @router.get("/session", response_model=TerminalSessionResponse)
@@ -347,23 +359,75 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
         await websocket.close(code=4409)
         return
 
-    loop = asyncio.get_running_loop()
-    output_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    loop = _get_running_loop()
+    output_queue: asyncio.Queue[bytes | None] = asyncio.Queue(
+        maxsize=TERMINAL_OUTPUT_QUEUE_MAX_CHUNKS
+    )
+    decoder = PtyUtf8Decoder()
+    buffered_output_bytes = 0
+    reader_paused = False
+    reader_closed = False
+    output_complete_pending = False
+
+    def pause_reader() -> None:
+        nonlocal reader_paused
+        if reader_paused:
+            return
+        loop.remove_reader(master_fd)
+        reader_paused = True
+
+    def close_reader() -> None:
+        nonlocal reader_closed
+        if reader_closed:
+            return
+        reader_closed = True
+        pause_reader()
+
+    def try_enqueue_output_complete() -> None:
+        nonlocal output_complete_pending
+        if not output_complete_pending or output_queue.full():
+            return
+        output_queue.put_nowait(None)
+        output_complete_pending = False
+
+    def mark_output_complete() -> None:
+        nonlocal output_complete_pending
+        close_reader()
+        if output_complete_pending:
+            return
+        output_complete_pending = True
+        try_enqueue_output_complete()
+
+    def maybe_resume_reader() -> None:
+        nonlocal reader_paused
+        if not reader_paused or reader_closed or runtime.master_fd is None:
+            return
+        if buffered_output_bytes > TERMINAL_OUTPUT_LOW_WATERMARK_BYTES:
+            return
+        loop.add_reader(master_fd, on_master_ready)
+        reader_paused = False
 
     def on_master_ready() -> None:
+        nonlocal buffered_output_bytes
         if runtime.master_fd is None:
             return
+        if output_queue.full():
+            pause_reader()
+            return
         try:
-            raw_chunk = os.read(runtime.master_fd, 4096)
+            raw_chunk = os.read(runtime.master_fd, TERMINAL_OUTPUT_READ_CHUNK_BYTES)
         except OSError as exc:
             if exc.errno not in {errno.EIO, errno.EBADF}:
-                output_queue.put_nowait(None)
+                mark_output_complete()
                 return
             raw_chunk = b""
         if raw_chunk:
-            output_queue.put_nowait(raw_chunk.decode("utf-8", errors="replace"))
+            output_queue.put_nowait(raw_chunk)
+            buffered_output_bytes += len(raw_chunk)
+            if buffered_output_bytes >= TERMINAL_OUTPUT_HIGH_WATERMARK_BYTES:
+                pause_reader()
             return
-        output_queue.put_nowait(None)
+        mark_output_complete()
 
     loop.add_reader(master_fd, on_master_ready)
 
@@ -403,34 +467,40 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
             task_group.cancel_scope.cancel()
 
     async def forward_output() -> None:
+        nonlocal buffered_output_bytes
         try:
             while True:
                 chunk = await output_queue.get()
                 if chunk is None:
+                    remainder = decoder.flush()
+                    if remainder:
+                        await websocket.send_json({"type": "output", "data": remainder})
                     return
-                await websocket.send_json({"type": "output", "data": chunk})
+                buffered_output_bytes -= len(chunk)
+                try_enqueue_output_complete()
+                maybe_resume_reader()
+                decoded_chunk = decoder.feed(chunk)
+                if not decoded_chunk:
+                    continue
+                await websocket.send_json({"type": "output", "data": decoded_chunk})
         finally:
             task_group.cancel_scope.cancel()
 
     async def watch_process() -> None:
-        try:
-            while True:
-                returncode = runtime.process.poll()
-                if returncode is not None:
-                    output_queue.put_nowait(None)
-                    if websocket.client_state == WebSocketState.CONNECTED:
-                        with suppress(Exception):
-                            await websocket.send_json(
-                                {
-                                    "type": "status",
-                                    "status": "exited",
-                                    "return_code": returncode,
-                                }
-                            )
-                    return
-                await asyncio.sleep(0.25)
-        finally:
-            task_group.cancel_scope.cancel()
+        while True:
+            returncode = runtime.process.poll()
+            if returncode is not None:
+                if websocket.client_state == WebSocketState.CONNECTED:
+                    with suppress(Exception):
+                        await websocket.send_json(
+                            {
+                                "type": "status",
+                                "status": "exited",
+                                "return_code": returncode,
+                            }
+                        )
+                return
+            await asyncio.sleep(0.25)
 
     try:
         async with create_task_group() as task_group:

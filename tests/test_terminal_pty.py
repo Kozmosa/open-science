@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import signal
@@ -10,13 +11,14 @@ from typing import Any, cast
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.terminal.models import TerminalAttachmentMode, TerminalAttachmentTarget
 from ainrf.terminal.pty import (
     TERMINAL_LOCAL_TARGET_KIND,
+    PtyUtf8Decoder,
     TerminalBridgeRuntime,
     build_attachment_ws_url,
     start_terminal_bridge,
@@ -36,6 +38,21 @@ class DummyProcess:
         _ = timeout
         self.returncode = 0
         return 0
+
+
+class LoopProxy:
+    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+        self._loop = loop
+        self.add_reader_calls: list[int] = []
+        self.remove_reader_calls: list[int] = []
+
+    def add_reader(self, fd: int, callback: Any, *args: Any) -> None:
+        self.add_reader_calls.append(fd)
+        self._loop.add_reader(fd, callback, *args)
+
+    def remove_reader(self, fd: int) -> bool:
+        self.remove_reader_calls.append(fd)
+        return self._loop.remove_reader(fd)
 
 
 def make_client(tmp_path: Path) -> tuple[TestClient, FastAPI]:
@@ -106,6 +123,51 @@ def test_stop_terminal_bridge_terminates_running_process(monkeypatch: pytest.Mon
     assert runtime.master_fd is None
 
 
+def test_pty_utf8_decoder_preserves_split_multibyte_characters() -> None:
+    decoder = PtyUtf8Decoder()
+    encoded = "中".encode("utf-8")
+
+    assert decoder.feed(encoded[:1]) == ""
+    assert decoder.feed(encoded[1:2]) == ""
+    assert decoder.feed(encoded[2:]) == "中"
+    assert decoder.flush() == ""
+
+
+def test_pty_utf8_decoder_preserves_mixed_ascii_and_chinese_across_chunks() -> None:
+    decoder = PtyUtf8Decoder()
+    text = "hello中文\n"
+    encoded = text.encode("utf-8")
+
+    decoded = "".join(
+        [
+            decoder.feed(encoded[:4]),
+            decoder.feed(encoded[4:6]),
+            decoder.feed(encoded[6:8]),
+            decoder.feed(encoded[8:10]),
+            decoder.feed(encoded[10:]),
+            decoder.flush(),
+        ]
+    )
+
+    assert decoded == text
+    assert "�" not in decoded
+
+
+def test_pty_utf8_decoder_replaces_invalid_bytes_without_raising() -> None:
+    decoder = PtyUtf8Decoder()
+
+    decoded = decoder.feed(b"ok\xff\xfe") + decoder.flush()
+
+    assert decoded == "ok��"
+
+
+def test_pty_utf8_decoder_flushes_incomplete_sequence_at_eof() -> None:
+    decoder = PtyUtf8Decoder()
+
+    assert decoder.feed(b"A\xe4\xb8") == "A"
+    assert decoder.flush() == "�"
+
+
 def test_terminal_attachment_websocket_bridge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -167,6 +229,187 @@ def test_terminal_attachment_websocket_bridge(
 
     os.close(read_fd)
     os.close(write_fd)
+
+
+def test_terminal_attachment_websocket_preserves_split_utf8_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+
+    monkeypatch.setattr("ainrf.api.routes.terminal.TERMINAL_OUTPUT_READ_CHUNK_BYTES", 1)
+    monkeypatch.setattr("ainrf.terminal.attachments.stop_terminal_bridge", lambda runtime: None)
+
+    read_fd, write_fd = os.pipe()
+    runtime = TerminalBridgeRuntime(
+        process=cast(Any, DummyProcess()),
+        master_fd=read_fd,
+    )
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        lambda command, cwd: runtime,
+    )
+
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="ainrf:u:daemon:e:env-1:personal",
+            session_name="ainrf:u:daemon:e:env-1:personal",
+            user_id="daemon",
+            environment_id="env-1",
+            environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+
+    with client.websocket_connect(
+        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+    ) as ws:
+        os.write(write_fd, "中文\n".encode("utf-8"))
+        os.close(write_fd)
+
+        payloads = [ws.receive_json(), ws.receive_json(), ws.receive_json()]
+
+        assert payloads == [
+            {"type": "output", "data": "中"},
+            {"type": "output", "data": "文"},
+            {"type": "output", "data": "\n"},
+        ]
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_text()
+
+    os.close(read_fd)
+
+
+def test_terminal_attachment_websocket_flushes_decoder_on_eof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+
+    monkeypatch.setattr("ainrf.api.routes.terminal.TERMINAL_OUTPUT_READ_CHUNK_BYTES", 2)
+    monkeypatch.setattr("ainrf.terminal.attachments.stop_terminal_bridge", lambda runtime: None)
+
+    read_fd, write_fd = os.pipe()
+    runtime = TerminalBridgeRuntime(
+        process=cast(Any, DummyProcess()),
+        master_fd=read_fd,
+    )
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        lambda command, cwd: runtime,
+    )
+
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="ainrf:u:daemon:e:env-1:personal",
+            session_name="ainrf:u:daemon:e:env-1:personal",
+            user_id="daemon",
+            environment_id="env-1",
+            environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+
+    with client.websocket_connect(
+        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+    ) as ws:
+        os.write(write_fd, b"A\xe4\xb8")
+        os.close(write_fd)
+
+        assert ws.receive_json() == {"type": "output", "data": "A"}
+        assert ws.receive_json() == {"type": "output", "data": "�"}
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_text()
+
+    os.close(read_fd)
+
+
+def test_terminal_attachment_websocket_soft_backpressure_pauses_and_resumes_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+    original_send_json = WebSocket.send_json
+    real_get_running_loop = asyncio.get_running_loop
+    loop_proxy_holder: dict[str, LoopProxy] = {}
+
+    monkeypatch.setattr("ainrf.api.routes.terminal.TERMINAL_OUTPUT_READ_CHUNK_BYTES", 4)
+    monkeypatch.setattr("ainrf.api.routes.terminal.TERMINAL_OUTPUT_QUEUE_MAX_CHUNKS", 4)
+    monkeypatch.setattr("ainrf.api.routes.terminal.TERMINAL_OUTPUT_HIGH_WATERMARK_BYTES", 8)
+    monkeypatch.setattr("ainrf.api.routes.terminal.TERMINAL_OUTPUT_LOW_WATERMARK_BYTES", 4)
+    monkeypatch.setattr("ainrf.terminal.attachments.stop_terminal_bridge", lambda runtime: None)
+
+    def fake_get_running_loop() -> LoopProxy:
+        loop_proxy = loop_proxy_holder.get("loop")
+        if loop_proxy is None:
+            loop_proxy = LoopProxy(real_get_running_loop())
+            loop_proxy_holder["loop"] = loop_proxy
+        return loop_proxy
+
+    async def delayed_send_json(websocket: WebSocket, data: Any, mode: str = "text") -> None:
+        if isinstance(data, dict) and data.get("type") == "output":
+            await asyncio.sleep(0.05)
+        await original_send_json(websocket, data, mode=mode)
+
+    monkeypatch.setattr("ainrf.api.routes.terminal._get_running_loop", fake_get_running_loop)
+    monkeypatch.setattr(WebSocket, "send_json", delayed_send_json)
+
+    read_fd, write_fd = os.pipe()
+    runtime = TerminalBridgeRuntime(
+        process=cast(Any, DummyProcess()),
+        master_fd=read_fd,
+    )
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        lambda command, cwd: runtime,
+    )
+
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="ainrf:u:daemon:e:env-1:personal",
+            session_name="ainrf:u:daemon:e:env-1:personal",
+            user_id="daemon",
+            environment_id="env-1",
+            environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+
+    with client.websocket_connect(
+        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+    ) as ws:
+        os.write(write_fd, b"abcdefghijkl")
+        os.close(write_fd)
+
+        payloads = [ws.receive_json(), ws.receive_json(), ws.receive_json()]
+
+        assert payloads == [
+            {"type": "output", "data": "abcd"},
+            {"type": "output", "data": "efgh"},
+            {"type": "output", "data": "ijkl"},
+        ]
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_text()
+
+    loop_proxy = loop_proxy_holder["loop"]
+    assert loop_proxy.add_reader_calls.count(read_fd) >= 2
+    assert loop_proxy.remove_reader_calls.count(read_fd) >= 2
+    os.close(read_fd)
 
 
 def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None:

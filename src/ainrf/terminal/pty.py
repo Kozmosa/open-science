@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import errno
 import os
 import signal
@@ -17,12 +18,28 @@ TERMINAL_LOCAL_TARGET_KIND = "environment-local"
 TERMINAL_SSH_TARGET_KIND = "environment-ssh"
 TERMINAL_ATTACHMENT_TOKEN_TTL = timedelta(minutes=5)
 _TERMINAL_CLOSE_TIMEOUT_SECONDS = 5.0
+TERMINAL_OUTPUT_READ_CHUNK_BYTES = 4096
+TERMINAL_OUTPUT_QUEUE_MAX_CHUNKS = 128
+TERMINAL_OUTPUT_HIGH_WATERMARK_BYTES = 262144
+TERMINAL_OUTPUT_LOW_WATERMARK_BYTES = 131072
 
 
 @dataclass(slots=True)
 class TerminalBridgeRuntime:
     process: subprocess.Popen[Any]
     master_fd: int | None
+
+
+class PtyUtf8Decoder:
+    def __init__(self) -> None:
+        decoder_factory = codecs.getincrementaldecoder("utf-8")
+        self._decoder: codecs.IncrementalDecoder = decoder_factory(errors="replace")
+
+    def feed(self, chunk: bytes) -> str:
+        return self._decoder.decode(chunk, final=False)
+
+    def flush(self) -> str:
+        return self._decoder.decode(b"", final=True)
 
 
 def _to_websocket_base(api_base_url: str) -> str:
