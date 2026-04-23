@@ -65,7 +65,7 @@ describe('terminal contract smoke test', () => {
       terminal_ws_url: 'ws://lab.internal:5173/terminal/attachments/attach-1/ws?token=test-token',
       detail: null,
       binding_id: 'binding-1',
-      session_name: 'ainrf:u:mock-browser-user:e:env-1:personal',
+      session_name: 'p-1234567890',
       attachment_id: 'attach-1',
       attachment_expires_at: '2026-04-13T16:05:00Z',
     };

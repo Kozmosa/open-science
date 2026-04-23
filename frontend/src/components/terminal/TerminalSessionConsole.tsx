@@ -59,6 +59,16 @@ function isSocketMessage(value: unknown): value is SocketMessage {
   return false;
 }
 
+function scheduleAnimationFrame(callback: () => void): () => void {
+  if (typeof window.requestAnimationFrame === 'function') {
+    const frameId = window.requestAnimationFrame(callback);
+    return () => window.cancelAnimationFrame(frameId);
+  }
+
+  const timeoutId = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(timeoutId);
+}
+
 function TerminalSessionConsole({
   sessionId,
   attachmentId,
@@ -125,6 +135,8 @@ function TerminalSessionConsole({
 
     const socket = new WebSocket(resolveWebSocketUrl(terminalWsUrl));
     let disposed = false;
+    let intentionalClose = false;
+    let cancelScheduledFit = () => {};
 
     const resizeDisposable = terminal.onResize(({ cols, rows }) => {
       if (socket.readyState === WebSocket.OPEN) {
@@ -148,6 +160,16 @@ function TerminalSessionConsole({
       }
     };
 
+    const scheduleFit = () => {
+      cancelScheduledFit();
+      cancelScheduledFit = scheduleAnimationFrame(() => {
+        cancelScheduledFit = () => {};
+        if (!disposed) {
+          fitTerminal();
+        }
+      });
+    };
+
     const notifyDisconnected = () => {
       if (disconnectNotifiedRef.current) {
         return;
@@ -157,7 +179,7 @@ function TerminalSessionConsole({
     };
 
     const handleWindowResize = () => {
-      fitTerminal();
+      scheduleFit();
     };
 
     socket.onopen = () => {
@@ -165,8 +187,13 @@ function TerminalSessionConsole({
         return;
       }
       setSocketStatus('connected');
-      fitTerminal();
-      socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+      scheduleFit();
+      queueMicrotask(() => {
+        if (disposed || socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+      });
     };
 
     socket.onmessage = (event) => {
@@ -205,17 +232,32 @@ function TerminalSessionConsole({
     };
 
     socket.onclose = () => {
-      if (!disposed) {
+      if (!disposed && !intentionalClose) {
         setSocketStatus((current) => (current === 'connected' ? 'disconnected' : current));
         notifyDisconnected();
       }
     };
 
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            scheduleFit();
+          });
+
+    resizeObserver?.observe(containerRef.current);
     window.addEventListener('resize', handleWindowResize);
-    fitTerminal();
+    scheduleFit();
+    const cancelDeferredFit = scheduleAnimationFrame(() => {
+      scheduleFit();
+    });
 
     return () => {
       disposed = true;
+      intentionalClose = true;
+      cancelDeferredFit();
+      cancelScheduledFit();
+      resizeObserver?.disconnect();
       window.removeEventListener('resize', handleWindowResize);
       resizeDisposable.dispose();
       inputDisposable.dispose();
@@ -267,7 +309,7 @@ function TerminalSessionConsole({
 
       <div
         ref={containerRef}
-        className="min-h-[480px] overflow-hidden rounded-lg border border-gray-800 bg-[#0b1020]"
+        className="ainrf-terminal h-[480px] w-full overflow-hidden rounded-lg border border-gray-800 bg-[#0b1020]"
       />
     </section>
   );

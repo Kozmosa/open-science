@@ -5,6 +5,7 @@ import re
 import shlex
 import subprocess
 from dataclasses import dataclass
+from hashlib import blake2s
 from pathlib import Path
 
 from ainrf.environments.models import EnvironmentRegistryEntry
@@ -43,7 +44,12 @@ class TmuxAdapter:
 
     @staticmethod
     def session_name_for(user_id: str, environment_id: str, *, kind: str = "personal") -> str:
-        return f"ainrf:u:{user_id}:e:{environment_id}:{kind}"
+        prefix = "a" if kind == "agent" else "p"
+        digest = blake2s(
+            f"{user_id}\0{environment_id}\0{kind}".encode("utf-8"),
+            digest_size=5,
+        ).hexdigest()
+        return f"{prefix}-{digest}"
 
     @staticmethod
     def target_kind_for(environment: EnvironmentRegistryEntry) -> str:
