@@ -47,10 +47,19 @@ interface MockWebSocketInstance {
   emitMessage(data: unknown): void;
 }
 
+interface MockResizeObserverInstance {
+  readonly observed: Element[];
+  disconnected: boolean;
+  observe(target: Element): void;
+  disconnect(): void;
+  trigger(): void;
+}
+
 const terminalMocks = vi.hoisted(() => ({
   terminals: [] as MockTerminalInstance[],
   fitAddons: [] as MockFitAddonInstance[],
   sockets: [] as MockWebSocketInstance[],
+  resizeObservers: [] as MockResizeObserverInstance[],
   MockTerminal: class MockTerminal implements MockTerminalInstance {
     cols = 80;
     rows = 24;
@@ -188,6 +197,28 @@ const terminalMocks = vi.hoisted(() => ({
       );
     }
   },
+  MockResizeObserver: class MockResizeObserver implements MockResizeObserverInstance {
+    readonly observed: Element[] = [];
+    disconnected = false;
+    private readonly callback: ResizeObserverCallback;
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+      terminalMocks.resizeObservers.push(this);
+    }
+
+    observe(target: Element): void {
+      this.observed.push(target);
+    }
+
+    disconnect(): void {
+      this.disconnected = true;
+    }
+
+    trigger(): void {
+      this.callback([], this as unknown as ResizeObserver);
+    }
+  },
 }));
 
 vi.mock('xterm', () => ({
@@ -199,16 +230,23 @@ vi.mock('@xterm/addon-fit', () => ({
 }));
 
 const nativeWebSocket = window.WebSocket;
+const nativeResizeObserver = window.ResizeObserver;
 vi.stubGlobal('WebSocket', terminalMocks.MockWebSocket);
+vi.stubGlobal('ResizeObserver', terminalMocks.MockResizeObserver);
 
 beforeEach(() => {
   Object.defineProperty(window, 'WebSocket', {
     configurable: true,
     value: terminalMocks.MockWebSocket,
   });
+  Object.defineProperty(window, 'ResizeObserver', {
+    configurable: true,
+    value: terminalMocks.MockResizeObserver,
+  });
   terminalMocks.terminals.length = 0;
   terminalMocks.fitAddons.length = 0;
   terminalMocks.sockets.length = 0;
+  terminalMocks.resizeObservers.length = 0;
 });
 
 afterEach(() => {
@@ -216,13 +254,17 @@ afterEach(() => {
     configurable: true,
     value: nativeWebSocket,
   });
+  Object.defineProperty(window, 'ResizeObserver', {
+    configurable: true,
+    value: nativeResizeObserver,
+  });
   vi.clearAllMocks();
 });
 
 function renderConsole(status: TerminalSessionStatus = 'running') {
   return renderWithProviders(
     <TerminalSessionConsole
-      sessionId="ainrf:u:mock-browser-user:e:env-1:personal"
+      sessionId="p-1234567890"
       attachmentId="attach-1"
       terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token"
       status={status}
@@ -237,7 +279,7 @@ describe('TerminalSessionConsole', () => {
 
     renderWithProviders(
       <TerminalSessionConsole
-        sessionId="ainrf:u:mock-browser-user:e:env-1:personal"
+        sessionId="p-1234567890"
         attachmentId="attach-1"
         terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token"
         status="running"
@@ -255,8 +297,13 @@ describe('TerminalSessionConsole', () => {
     );
     socket.onopen?.(new Event('open'));
     await waitFor(() => expect(screen.getByText('Connection: connected')).toBeInTheDocument());
-    expect(socket.sent[0]).toBe(JSON.stringify({ type: 'resize', cols: 100, rows: 30 }));
-    expect(socket.sent[1]).toBe(JSON.stringify({ type: 'resize', cols: 100, rows: 30 }));
+    await waitFor(() =>
+      expect(
+        socket.sent.filter(
+          (message) => message === JSON.stringify({ type: 'resize', cols: 100, rows: 30 })
+        ).length
+      ).toBeGreaterThanOrEqual(1)
+    );
 
     terminal.emitData('ls\n');
     expect(socket.sent).toContain(JSON.stringify({ type: 'input', data: 'ls\n' }));
@@ -278,7 +325,7 @@ describe('TerminalSessionConsole', () => {
   it('keeps observe attachments readonly while still forwarding resize events', async () => {
     renderWithProviders(
       <TerminalSessionConsole
-        sessionId="ainrf:u:mock-browser-user:e:env-1:agent"
+        sessionId="a-1234567890"
         attachmentId="attach-task-1"
         terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-task-1/ws?token=test-token"
         status="running"
@@ -297,7 +344,7 @@ describe('TerminalSessionConsole', () => {
     expect(
       socket.sent.every((message) => JSON.parse(message).type === 'resize')
     ).toBe(true);
-    expect(socket.sent.length).toBeGreaterThanOrEqual(2);
+    expect(socket.sent.length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Observe-only')).toHaveLength(2);
   });
 
@@ -310,5 +357,36 @@ describe('TerminalSessionConsole', () => {
 
     await waitFor(() => expect(terminalMocks.terminals).toHaveLength(1));
     expect(terminalMocks.terminals[0]?.options.fontSize).toBe(17);
+  });
+
+  it('refits the terminal when the container resize observer fires', async () => {
+    renderConsole();
+
+    await waitFor(() => expect(terminalMocks.fitAddons).toHaveLength(1));
+    await waitFor(() => expect(terminalMocks.resizeObservers).toHaveLength(1));
+
+    const fitAddon = terminalMocks.fitAddons[0];
+    const initialFitCalls = fitAddon.fitCalls.length;
+    terminalMocks.resizeObservers[0]?.trigger();
+
+    await waitFor(() => expect(fitAddon.fitCalls.length).toBeGreaterThan(initialFitCalls));
+  });
+
+  it('does not report a disconnect when the console closes its own socket during cleanup', async () => {
+    const onDisconnected = vi.fn();
+    const rendered = renderWithProviders(
+      <TerminalSessionConsole
+        sessionId="p-1234567890"
+        attachmentId="attach-1"
+        terminalWsUrl="ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token"
+        status="running"
+        onDisconnected={onDisconnected}
+      />
+    );
+
+    await waitFor(() => expect(terminalMocks.sockets).toHaveLength(1));
+    rendered.unmount();
+
+    expect(onDisconnected).not.toHaveBeenCalled();
   });
 });

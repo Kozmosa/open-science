@@ -200,14 +200,14 @@ def test_terminal_attachment_websocket_bridge(
         "http://testserver/",
         TerminalAttachmentTarget(
             binding_id="binding-1",
-            session_id="ainrf:u:daemon:e:env-1:personal",
-            session_name="ainrf:u:daemon:e:env-1:personal",
+            session_id="p-deadbeef10",
+            session_name="p-deadbeef10",
             user_id="daemon",
             environment_id="env-1",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            attach_command=("tmux", "attach-session", "-t", "p-deadbeef10"),
             spawn_working_directory=tmp_path,
         ),
     )
@@ -254,14 +254,14 @@ def test_terminal_attachment_websocket_preserves_split_utf8_output(
         "http://testserver/",
         TerminalAttachmentTarget(
             binding_id="binding-1",
-            session_id="ainrf:u:daemon:e:env-1:personal",
-            session_name="ainrf:u:daemon:e:env-1:personal",
+            session_id="p-deadbeef10",
+            session_name="p-deadbeef10",
             user_id="daemon",
             environment_id="env-1",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            attach_command=("tmux", "attach-session", "-t", "p-deadbeef10"),
             spawn_working_directory=tmp_path,
         ),
     )
@@ -308,14 +308,14 @@ def test_terminal_attachment_websocket_flushes_decoder_on_eof(
         "http://testserver/",
         TerminalAttachmentTarget(
             binding_id="binding-1",
-            session_id="ainrf:u:daemon:e:env-1:personal",
-            session_name="ainrf:u:daemon:e:env-1:personal",
+            session_id="p-deadbeef10",
+            session_name="p-deadbeef10",
             user_id="daemon",
             environment_id="env-1",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            attach_command=("tmux", "attach-session", "-t", "p-deadbeef10"),
             spawn_working_directory=tmp_path,
         ),
     )
@@ -328,6 +328,56 @@ def test_terminal_attachment_websocket_flushes_decoder_on_eof(
 
         assert ws.receive_json() == {"type": "output", "data": "A"}
         assert ws.receive_json() == {"type": "output", "data": "�"}
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_text()
+
+    os.close(read_fd)
+
+
+def test_terminal_attachment_websocket_drains_output_before_exit_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+
+    monkeypatch.setattr("ainrf.terminal.attachments.stop_terminal_bridge", lambda runtime: None)
+
+    process = DummyProcess()
+    read_fd, write_fd = os.pipe()
+    runtime = TerminalBridgeRuntime(
+        process=cast(Any, process),
+        master_fd=read_fd,
+    )
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        lambda command, cwd: runtime,
+    )
+
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-1",
+            session_id="p-deadbeef10",
+            session_name="p-deadbeef10",
+            user_id="daemon",
+            environment_id="env-1",
+            environment_alias="gpu-lab",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "p-deadbeef10"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+
+    with client.websocket_connect(
+        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+    ) as ws:
+        os.write(write_fd, b"hello before exit\n")
+        process.returncode = 0
+        os.close(write_fd)
+
+        assert ws.receive_json() == {"type": "output", "data": "hello before exit\n"}
+        assert ws.receive_json() == {"type": "status", "status": "exited", "return_code": 0}
         with pytest.raises(WebSocketDisconnect):
             ws.receive_text()
 
@@ -378,14 +428,14 @@ def test_terminal_attachment_websocket_soft_backpressure_pauses_and_resumes_read
         "http://testserver/",
         TerminalAttachmentTarget(
             binding_id="binding-1",
-            session_id="ainrf:u:daemon:e:env-1:personal",
-            session_name="ainrf:u:daemon:e:env-1:personal",
+            session_id="p-deadbeef10",
+            session_name="p-deadbeef10",
             user_id="daemon",
             environment_id="env-1",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            attach_command=("tmux", "attach-session", "-t", "p-deadbeef10"),
             spawn_working_directory=tmp_path,
         ),
     )
@@ -419,14 +469,14 @@ def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None
         "http://testserver/",
         TerminalAttachmentTarget(
             binding_id="binding-1",
-            session_id="ainrf:u:daemon:e:env-1:personal",
-            session_name="ainrf:u:daemon:e:env-1:personal",
+            session_id="p-deadbeef10",
+            session_name="p-deadbeef10",
             user_id="daemon",
             environment_id="env-1",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:personal"),
+            attach_command=("tmux", "attach-session", "-t", "p-deadbeef10"),
             spawn_working_directory=tmp_path,
         ),
     )
@@ -465,14 +515,14 @@ def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(
         "http://testserver/",
         TerminalAttachmentTarget(
             binding_id="binding-1",
-            session_id="ainrf:u:daemon:e:env-1:agent",
-            session_name="ainrf:u:daemon:e:env-1:agent",
+            session_id="a-deadbeef10",
+            session_name="a-deadbeef10",
             user_id="daemon",
             environment_id="env-1",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon:e:env-1:agent"),
+            attach_command=("tmux", "attach-session", "-t", "a-deadbeef10"),
             spawn_working_directory=tmp_path,
             readonly=True,
         ),
@@ -516,13 +566,13 @@ def test_task_attachment_websocket_close_tolerates_missing_task_manager(
         TerminalAttachmentTarget(
             binding_id="binding-1",
             session_id="@1",
-            session_name="ainrf:u:browser-user:e:env-1:agent",
+            session_name="a-abcdef1234",
             user_id="browser-user",
             environment_id="env-1",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
-            attach_command=("tmux", "attach-session", "-t", "ainrf:u:browser-user:e:env-1:agent"),
+            attach_command=("tmux", "attach-session", "-t", "a-abcdef1234"),
             spawn_working_directory=tmp_path,
             readonly=False,
             mode=TerminalAttachmentMode.WRITE,

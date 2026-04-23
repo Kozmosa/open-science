@@ -62,7 +62,9 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
         "terminal_ws_url": None,
         "detail": None,
         "binding_id": None,
-        "session_name": f"ainrf:u:{APP_USER_ID}:e:{environment.id}:personal",
+        "session_name": app.state.terminal_session_manager.session_name_for(
+            APP_USER_ID, environment.id
+        ),
         "attachment_id": None,
         "attachment_expires_at": None,
     }
@@ -108,7 +110,9 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     assert payload["working_directory"] == "/workspace/override"
     assert payload["status"] == "running"
     assert payload["binding_id"] is not None
-    assert payload["session_name"] == (f"ainrf:u:{APP_USER_ID}:e:{environment.id}:personal")
+    assert payload["session_name"] == app.state.terminal_session_manager.session_name_for(
+        APP_USER_ID, environment.id
+    )
     assert payload["attachment_id"] is not None
     assert payload["attachment_expires_at"] is not None
     assert (

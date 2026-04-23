@@ -29,3 +29,17 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+
+.ainrf-terminal .xterm {
+  height: 100%;
+  width: 100%;
+}
+
+.ainrf-terminal .xterm-viewport,
+.ainrf-terminal .xterm-screen {
+  width: 100% !important;
+}
+
+.ainrf-terminal .xterm-viewport {
+  background: #0b1020;
+}

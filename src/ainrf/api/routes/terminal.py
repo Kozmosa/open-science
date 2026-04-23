@@ -368,6 +368,8 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
     reader_paused = False
     reader_closed = False
     output_complete_pending = False
+    process_return_code: int | None = None
+    empty_read_retry_scheduled = False
 
     def pause_reader() -> None:
         nonlocal reader_paused
@@ -399,7 +401,8 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
         try_enqueue_output_complete()
 
     def maybe_resume_reader() -> None:
-        nonlocal reader_paused
+        nonlocal reader_paused, empty_read_retry_scheduled
+        empty_read_retry_scheduled = False
         if not reader_paused or reader_closed or runtime.master_fd is None:
             return
         if buffered_output_bytes > TERMINAL_OUTPUT_LOW_WATERMARK_BYTES:
@@ -408,24 +411,36 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
         reader_paused = False
 
     def on_master_ready() -> None:
-        nonlocal buffered_output_bytes
+        nonlocal buffered_output_bytes, empty_read_retry_scheduled, process_return_code
         if runtime.master_fd is None:
             return
         if output_queue.full():
             pause_reader()
             return
+        transient_empty_read = False
         try:
             raw_chunk = os.read(runtime.master_fd, TERMINAL_OUTPUT_READ_CHUNK_BYTES)
         except OSError as exc:
             if exc.errno not in {errno.EIO, errno.EBADF}:
                 mark_output_complete()
                 return
+            transient_empty_read = True
             raw_chunk = b""
         if raw_chunk:
             output_queue.put_nowait(raw_chunk)
             buffered_output_bytes += len(raw_chunk)
             if buffered_output_bytes >= TERMINAL_OUTPUT_HIGH_WATERMARK_BYTES:
                 pause_reader()
+            return
+        if transient_empty_read and process_return_code is None:
+            process_return_code = runtime.process.poll()
+        if transient_empty_read and process_return_code is None:
+            # Some PTY stacks can surface a transient readable/empty state before the
+            # attach process has actually exited. Re-arm the reader instead of closing.
+            pause_reader()
+            if not empty_read_retry_scheduled:
+                empty_read_retry_scheduled = True
+                loop.call_later(0.25, maybe_resume_reader)
             return
         mark_output_complete()
 
@@ -457,17 +472,15 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:
-            return
+            task_group.cancel_scope.cancel()
         except ValueError:
             if websocket.client_state == WebSocketState.CONNECTED:
                 with suppress(Exception):
                     await websocket.close(code=4409)
-            return
-        finally:
             task_group.cancel_scope.cancel()
 
     async def forward_output() -> None:
-        nonlocal buffered_output_bytes
+        nonlocal buffered_output_bytes, process_return_code
         try:
             while True:
                 chunk = await output_queue.get()
@@ -475,6 +488,17 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     remainder = decoder.flush()
                     if remainder:
                         await websocket.send_json({"type": "output", "data": remainder})
+                    if process_return_code is None:
+                        process_return_code = runtime.process.poll()
+                    if process_return_code is not None:
+                        with suppress(Exception):
+                            await websocket.send_json(
+                                {
+                                    "type": "status",
+                                    "status": "exited",
+                                    "return_code": process_return_code,
+                                }
+                            )
                     return
                 buffered_output_bytes -= len(chunk)
                 try_enqueue_output_complete()
@@ -483,22 +507,18 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                 if not decoded_chunk:
                     continue
                 await websocket.send_json({"type": "output", "data": decoded_chunk})
+        except Exception:
+            pass
         finally:
             task_group.cancel_scope.cancel()
 
     async def watch_process() -> None:
+        nonlocal process_return_code
         while True:
             returncode = runtime.process.poll()
             if returncode is not None:
-                if websocket.client_state == WebSocketState.CONNECTED:
-                    with suppress(Exception):
-                        await websocket.send_json(
-                            {
-                                "type": "status",
-                                "status": "exited",
-                                "return_code": returncode,
-                            }
-                        )
+                process_return_code = returncode
+                mark_output_complete()
                 return
             await asyncio.sleep(0.25)
 

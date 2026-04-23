@@ -230,8 +230,17 @@ function terminalTargetKind(environment: EnvironmentRecord): string {
     : 'environment-ssh';
 }
 
+function shortSessionSuffix(environmentId: string, kind: 'personal' | 'agent'): string {
+  const seed = `${MOCK_APP_USER_ID}:${environmentId}:${kind}`;
+  let hash = 0;
+  for (const character of seed) {
+    hash = (hash * 33 + character.charCodeAt(0)) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0').slice(0, 8);
+}
+
 function terminalSessionName(environmentId: string): string {
-  return `ainrf:u:${MOCK_APP_USER_ID}:e:${environmentId}:personal`;
+  return `p-${shortSessionSuffix(environmentId, 'personal')}`;
 }
 
 function createAttachmentUrl(attachmentId: string): string {
@@ -239,7 +248,7 @@ function createAttachmentUrl(attachmentId: string): string {
 }
 
 function agentSessionName(environmentId: string): string {
-  return `ainrf:u:${MOCK_APP_USER_ID}:e:${environmentId}:agent`;
+  return `a-${shortSessionSuffix(environmentId, 'agent')}`;
 }
 
 function cloneTask(task: TaskRecord): TaskRecord {

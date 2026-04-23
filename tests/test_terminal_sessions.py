@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +47,10 @@ def tmux_session_target(session_name: str) -> str:
     return session_name.replace(":", "_")
 
 
+def assert_short_session_name(session_name: str, *, prefix: str) -> None:
+    assert re.fullmatch(rf"{prefix}-[0-9a-f]{{10}}", session_name)
+
+
 def test_binding_upsert_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manager, environment_service = make_manager(tmp_path)
     environment = environment_service.create_environment(
@@ -80,7 +85,8 @@ def test_session_name_generation_is_stable(tmp_path: Path) -> None:
         host="gpu.example.com",
     )
 
-    expected = f"ainrf:u:{manager.user_id}:e:{environment.id}:personal"
+    expected = manager.session_name_for(environment.id)
+    assert_short_session_name(expected, prefix="p")
     assert manager.session_name_for(environment.id) == expected
     assert manager.session_name_for(environment.id) == expected
 
@@ -93,7 +99,8 @@ def test_agent_session_name_generation_is_stable(tmp_path: Path) -> None:
         host="gpu.example.com",
     )
 
-    expected = f"ainrf:u:{manager.user_id}:e:{environment.id}:agent"
+    expected = manager.agent_session_name_for(environment.id)
+    assert_short_session_name(expected, prefix="a")
     assert manager.agent_session_name_for(environment.id) == expected
     assert manager.agent_session_name_for(environment.id) == expected
 
@@ -102,7 +109,7 @@ def test_tmux_adapter_builds_local_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
-    session_name = "ainrf:u:daemon-user:e:env-1:personal"
+    session_name = "p-abc123def4"
     environment = InMemoryEnvironmentService().create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -147,7 +154,7 @@ def test_tmux_adapter_treats_duplicate_new_session_after_recheck_as_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
-    session_name = "ainrf:u:daemon-user:e:env-1:personal"
+    session_name = "p-abc123def4"
     session_target = tmux_session_target(session_name)
     environment = InMemoryEnvironmentService().create_environment(
         alias="localhost-2",
@@ -197,7 +204,7 @@ def test_tmux_adapter_builds_remote_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
-    session_name = "ainrf:u:daemon-user:e:env-1:personal"
+    session_name = "p-abc123def4"
     environment = InMemoryEnvironmentService().create_environment(
         alias="remote-lab",
         display_name="Remote Lab",
@@ -262,7 +269,7 @@ def test_tmux_adapter_builds_local_task_window_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
-    session_name = "ainrf:u:daemon-user:e:env-1:agent"
+    session_name = "a-abc123def4"
     environment = InMemoryEnvironmentService().create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -343,7 +350,7 @@ def test_tmux_adapter_builds_remote_task_window_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
-    session_name = "ainrf:u:daemon-user:e:env-1:agent"
+    session_name = "a-abc123def4"
     home_dir = tmp_path / "home"
     monkeypatch.setattr("ainrf.terminal.tmux.Path.home", lambda: home_dir)
     environment = InMemoryEnvironmentService().create_environment(
@@ -721,16 +728,17 @@ def test_session_names_include_app_user_namespace(tmp_path: Path) -> None:
         host="gpu.example.com",
     )
 
-    assert manager.session_name_for("browser-a", environment.id) != manager.session_name_for(
-        "browser-b",
-        environment.id,
-    )
-    assert manager.agent_session_name_for(
-        "browser-a", environment.id
-    ) != manager.agent_session_name_for(
-        "browser-b",
-        environment.id,
-    )
+    first_personal = manager.session_name_for("browser-a", environment.id)
+    second_personal = manager.session_name_for("browser-b", environment.id)
+    first_agent = manager.agent_session_name_for("browser-a", environment.id)
+    second_agent = manager.agent_session_name_for("browser-b", environment.id)
+
+    assert_short_session_name(first_personal, prefix="p")
+    assert_short_session_name(second_personal, prefix="p")
+    assert_short_session_name(first_agent, prefix="a")
+    assert_short_session_name(second_agent, prefix="a")
+    assert first_personal != second_personal
+    assert first_agent != second_agent
 
 
 def test_first_real_app_user_claims_legacy_binding(
@@ -760,7 +768,7 @@ def test_first_real_app_user_claims_legacy_binding(
     assert claimed_binding.binding_id == legacy_binding.binding_id
     assert claimed_binding.user_id == "browser-user"
     assert record.binding_id == legacy_binding.binding_id
-    assert record.session_name == f"ainrf:u:browser-user:e:{environment.id}:personal"
+    assert record.session_name == manager.session_name_for("browser-user", environment.id)
 
 
 def manager_binding(
@@ -783,13 +791,13 @@ def manager_binding(
 def attachment_target(tmp_path: Path) -> TerminalAttachmentTarget:
     return TerminalAttachmentTarget(
         binding_id="binding-1",
-        session_id="ainrf:u:daemon-user:e:env-1:personal",
-        session_name="ainrf:u:daemon-user:e:env-1:personal",
+        session_id="p-deadbeef10",
+        session_name="p-deadbeef10",
         user_id="daemon-user",
         environment_id="env-1",
         environment_alias="gpu-lab",
         target_kind=TERMINAL_LOCAL_TARGET_KIND,
         working_directory="/workspace/project",
-        attach_command=("tmux", "attach-session", "-t", "ainrf:u:daemon-user:e:env-1:personal"),
+        attach_command=("tmux", "attach-session", "-t", "p-deadbeef10"),
         spawn_working_directory=tmp_path,
     )
