@@ -78,6 +78,9 @@ export function useTerminalBenchSession(
       }
       return getTerminalSession(selectedEnvironmentId);
     },
+    refetchInterval: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   });
 
   const attachMutation = useMutation({

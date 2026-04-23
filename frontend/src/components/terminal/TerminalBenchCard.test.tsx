@@ -3,6 +3,7 @@ vi.mock('./TerminalSessionConsole', () => ({
 }));
 
 import { StrictMode } from 'react';
+import { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalBenchCard from './TerminalBenchCard';
@@ -177,6 +178,42 @@ describe('TerminalBenchCard', () => {
     });
 
     expect(await screen.findByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
+  });
+
+  it('does not poll or reattach an attached session when the global query client uses interval refetching', async () => {
+    mockGetTerminalSession.mockResolvedValue(runningAttachedSession);
+
+    const pollingClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+          staleTime: 0,
+          refetchInterval: 10,
+          refetchIntervalInBackground: true,
+        },
+        mutations: {
+          retry: false,
+        },
+      },
+    });
+
+    const { unmount } = renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />, {
+      client: pollingClient,
+    });
+
+    expect(await screen.findByText('Status: Running')).toBeInTheDocument();
+    expect(mockGetTerminalSession).toHaveBeenCalledTimes(1);
+    expect(mockCreateTerminalSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    });
+
+    expect(mockGetTerminalSession).toHaveBeenCalledTimes(1);
+    expect(mockCreateTerminalSession).not.toHaveBeenCalled();
+
+    unmount();
+    pollingClient.clear();
   });
 
   it('detaches a running attachment without immediately auto-reattaching', async () => {

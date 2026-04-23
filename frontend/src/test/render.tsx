@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render } from '@testing-library/react';
 import { LocaleProvider, type Locale } from '../i18n';
+import { appQueryClientDefaultOptions } from '../queryClient';
 import { SettingsProvider } from '../settings';
 
 interface RenderOptions {
@@ -14,10 +15,10 @@ interface RenderOptions {
 export function createTestQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
+      ...appQueryClientDefaultOptions,
       queries: {
+        ...appQueryClientDefaultOptions.queries,
         retry: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
       },
       mutations: {
         retry: false,

@@ -69,6 +69,11 @@ function scheduleAnimationFrame(callback: () => void): () => void {
   return () => window.clearTimeout(timeoutId);
 }
 
+function scheduleTimeout(callback: () => void, delay: number): () => void {
+  const timeoutId = window.setTimeout(callback, delay);
+  return () => window.clearTimeout(timeoutId);
+}
+
 function TerminalSessionConsole({
   sessionId,
   attachmentId,
@@ -136,7 +141,7 @@ function TerminalSessionConsole({
     const socket = new WebSocket(resolveWebSocketUrl(terminalWsUrl));
     let disposed = false;
     let intentionalClose = false;
-    let cancelScheduledFit = () => {};
+    let cancelScheduledFits: Array<() => void> = [];
 
     const resizeDisposable = terminal.onResize(({ cols, rows }) => {
       if (socket.readyState === WebSocket.OPEN) {
@@ -161,12 +166,53 @@ function TerminalSessionConsole({
     };
 
     const scheduleFit = () => {
-      cancelScheduledFit();
-      cancelScheduledFit = scheduleAnimationFrame(() => {
-        cancelScheduledFit = () => {};
+      for (const cancel of cancelScheduledFits) {
+        cancel();
+      }
+      cancelScheduledFits = [];
+
+      const runFit = () => {
         if (!disposed) {
           fitTerminal();
         }
+      };
+
+      // xterm measures character cells after open(), but browser layout and
+      // font metrics can settle over more than one frame in the Vite shell.
+      cancelScheduledFits.push(scheduleAnimationFrame(runFit));
+      cancelScheduledFits.push(
+        scheduleAnimationFrame(() => {
+          cancelScheduledFits.push(scheduleAnimationFrame(runFit));
+        })
+      );
+      cancelScheduledFits.push(scheduleTimeout(runFit, 80));
+      if (typeof document.fonts?.ready?.then === 'function') {
+        document.fonts.ready.then(runFit).catch(() => {});
+      }
+    };
+
+    const fitAndSendResize = () => {
+      fitTerminal();
+      if (!disposed && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+      }
+    };
+
+    const scheduleFitAndSendResize = () => {
+      scheduleFit();
+      cancelScheduledFits.push(
+        scheduleTimeout(() => {
+          fitAndSendResize();
+        }, 120)
+      );
+    };
+
+    const sendResizeAfterFit = () => {
+      scheduleAnimationFrame(() => {
+        if (disposed || socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        fitAndSendResize();
       });
     };
 
@@ -187,13 +233,8 @@ function TerminalSessionConsole({
         return;
       }
       setSocketStatus('connected');
-      scheduleFit();
-      queueMicrotask(() => {
-        if (disposed || socket.readyState !== WebSocket.OPEN) {
-          return;
-        }
-        socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
-      });
+      scheduleFitAndSendResize();
+      queueMicrotask(sendResizeAfterFit);
     };
 
     socket.onmessage = (event) => {
@@ -256,7 +297,10 @@ function TerminalSessionConsole({
       disposed = true;
       intentionalClose = true;
       cancelDeferredFit();
-      cancelScheduledFit();
+      for (const cancel of cancelScheduledFits) {
+        cancel();
+      }
+      cancelScheduledFits = [];
       resizeObserver?.disconnect();
       window.removeEventListener('resize', handleWindowResize);
       resizeDisposable.dispose();

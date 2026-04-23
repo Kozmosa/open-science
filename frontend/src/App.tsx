@@ -1,8 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
 import { useT } from './i18n';
+import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useSettings } from './settings';
 import './index.css';
 
@@ -12,14 +13,7 @@ const ContainersPage = lazy(() => import('./pages/ContainersPage'));
 const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5000,
-      refetchInterval: 10000,
-    },
-  },
-});
+const queryClient = createAppQueryClient();
 
 const defaultRoutePathById = {
   terminal: '/terminal',

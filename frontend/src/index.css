@@ -31,15 +31,21 @@ body {
 }
 
 .ainrf-terminal .xterm {
+  display: block;
   height: 100%;
+  max-height: 100%;
+  position: relative;
   width: 100%;
 }
 
+.ainrf-terminal .xterm-helpers,
 .ainrf-terminal .xterm-viewport,
 .ainrf-terminal .xterm-screen {
+  height: 100% !important;
   width: 100% !important;
 }
 
 .ainrf-terminal .xterm-viewport {
   background: #0b1020;
+  overflow-y: auto;
 }
