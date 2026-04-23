@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createTerminalSession,
@@ -9,6 +9,11 @@ import {
 import type { EnvironmentRecord, TerminalSession, TerminalSessionStatus } from '../../types';
 
 const terminalSessionQueryKey = ['terminal-session'] as const;
+
+interface AttachRequest {
+  environmentId: string;
+  requestKey: string;
+}
 
 export interface TerminalBenchSessionState {
   sessionId: string | null;
@@ -62,7 +67,7 @@ export function useTerminalBenchSession(
   const queryClient = useQueryClient();
   const selectedEnvironmentId = selectedEnvironment?.id ?? null;
   const previousEnvironmentIdRef = useRef<string | null>(selectedEnvironmentId);
-  const autoAttachKeyRef = useRef<string | null>(null);
+  const attachRequestKeyRef = useRef<string | null>(null);
   const [detachedEnvironmentId, setDetachedEnvironmentId] = useState<string | null>(null);
 
   const terminalQuery = useQuery({
@@ -76,9 +81,22 @@ export function useTerminalBenchSession(
   });
 
   const attachMutation = useMutation({
-    mutationFn: (environmentId: string) => createTerminalSession(environmentId),
-    onSuccess: (session, environmentId) => {
-      queryClient.setQueryData([...terminalSessionQueryKey, environmentId], session);
+    mutationFn: ({ environmentId }: AttachRequest) => createTerminalSession(environmentId),
+    onSuccess: (session, variables) => {
+      if (attachRequestKeyRef.current === variables.requestKey) {
+        attachRequestKeyRef.current = null;
+      }
+      queryClient.setQueryData([...terminalSessionQueryKey, variables.environmentId], session);
+    },
+    onError: (_error, variables) => {
+      if (attachRequestKeyRef.current === variables.requestKey) {
+        attachRequestKeyRef.current = null;
+      }
+    },
+    onSettled: (_session, _error, variables) => {
+      if (variables !== undefined && attachRequestKeyRef.current === variables.requestKey) {
+        attachRequestKeyRef.current = null;
+      }
     },
   });
 
@@ -103,11 +121,26 @@ export function useTerminalBenchSession(
       return;
     }
     previousEnvironmentIdRef.current = selectedEnvironmentId;
-    autoAttachKeyRef.current = null;
+    attachRequestKeyRef.current = null;
     queueMicrotask(() => {
       setDetachedEnvironmentId(null);
     });
   }, [selectedEnvironmentId]);
+
+  const requestAttach = useCallback(
+    (
+      environmentId: string,
+      currentSession: TerminalSession | undefined
+    ): void => {
+      const requestKey = `${environmentId}:${currentSession?.session_name ?? 'none'}:${currentSession?.status ?? 'idle'}`;
+      if (attachRequestKeyRef.current === requestKey) {
+        return;
+      }
+      attachRequestKeyRef.current = requestKey;
+      attachMutation.mutate({ environmentId, requestKey });
+    },
+    [attachMutation]
+  );
 
   const session = terminalQuery.data;
   const shouldAutoAttach =
@@ -122,16 +155,10 @@ export function useTerminalBenchSession(
 
   useEffect(() => {
     if (!shouldAutoAttach || selectedEnvironmentId === null || session === undefined) {
-      autoAttachKeyRef.current = null;
       return;
     }
-    const autoAttachKey = `${selectedEnvironmentId}:${session.session_name ?? 'none'}:${session.status}`;
-    if (autoAttachKeyRef.current === autoAttachKey) {
-      return;
-    }
-    autoAttachKeyRef.current = autoAttachKey;
-    attachMutation.mutate(selectedEnvironmentId);
-  }, [attachMutation, selectedEnvironmentId, session, shouldAutoAttach]);
+    requestAttach(selectedEnvironmentId, session);
+  }, [requestAttach, selectedEnvironmentId, session, shouldAutoAttach]);
 
   const status = session?.status ?? 'idle';
   const loadError = getErrorMessage(terminalQuery.error);
@@ -178,16 +205,15 @@ export function useTerminalBenchSession(
       if (selectedEnvironmentId === null) {
         return;
       }
-      autoAttachKeyRef.current = null;
       setDetachedEnvironmentId(null);
-      attachMutation.mutate(selectedEnvironmentId);
+      requestAttach(selectedEnvironmentId, session);
     },
     onDetach: () => {
       const currentAttachmentId = session?.attachment_id ?? null;
       if (selectedEnvironmentId === null || currentAttachmentId === null) {
         return;
       }
-      autoAttachKeyRef.current = null;
+      attachRequestKeyRef.current = null;
       setDetachedEnvironmentId(selectedEnvironmentId);
       detachMutation.mutate({
         environmentId: selectedEnvironmentId,
@@ -198,7 +224,7 @@ export function useTerminalBenchSession(
       if (selectedEnvironmentId === null) {
         return;
       }
-      autoAttachKeyRef.current = null;
+      attachRequestKeyRef.current = null;
       setDetachedEnvironmentId(null);
       resetMutation.mutate({
         environmentId: selectedEnvironmentId,
@@ -206,6 +232,7 @@ export function useTerminalBenchSession(
       });
     },
     onTerminalDisconnected: () => {
+      attachRequestKeyRef.current = null;
       queryClient.invalidateQueries({
         queryKey: [...terminalSessionQueryKey, selectedEnvironmentId],
       });

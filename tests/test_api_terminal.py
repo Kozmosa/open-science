@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+import time
 
+import anyio
 import httpx
 import pytest
 from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.terminal.tmux import TmuxCommandError
 
 APP_USER_ID = "browser-user"
 API_HEADERS = {"X-API-Key": "secret-key", "X-AINRF-User-Id": APP_USER_ID}
@@ -191,6 +195,85 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
     assert first_payload["binding_id"] == second_payload["binding_id"]
     assert first_payload["session_name"] == second_payload["session_name"]
     assert first_payload["attachment_id"] != second_payload["attachment_id"]
+
+
+@pytest.mark.anyio
+async def test_terminal_session_post_serializes_concurrent_attach_requests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        seeded = await client.post(
+            "/terminal/session",
+            headers=API_HEADERS,
+            json={"environment_id": environment.id},
+        )
+        assert seeded.status_code == 200
+
+        active_calls = 0
+        max_active_calls = 0
+        state_lock = threading.Lock()
+
+        def duplicate_on_overlap(*args: object, **kwargs: object) -> None:
+            nonlocal active_calls, max_active_calls
+            with state_lock:
+                active_calls += 1
+                max_active_calls = max(max_active_calls, active_calls)
+                overlap = active_calls > 1
+            try:
+                if overlap:
+                    raise TmuxCommandError("duplicate session: concurrent attach")
+                time.sleep(0.05)
+            finally:
+                with state_lock:
+                    active_calls -= 1
+
+        monkeypatch.setattr(
+            app.state.terminal_session_manager._tmux_adapter,
+            "ensure_personal_session",
+            duplicate_on_overlap,
+        )
+
+        responses: list[httpx.Response | None] = [None, None]
+        start_event = anyio.Event()
+
+        async def attach(index: int) -> None:
+            await start_event.wait()
+            responses[index] = await client.post(
+                "/terminal/session",
+                headers=API_HEADERS,
+                json={"environment_id": environment.id},
+            )
+
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(attach, 0)
+            task_group.start_soon(attach, 1)
+            await anyio.sleep(0)
+            start_event.set()
+
+    first, second = responses
+    assert first is not None
+    assert second is not None
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["binding_id"] == second.json()["binding_id"]
+    assert first.json()["session_name"] == second.json()["session_name"]
+    assert first.json()["attachment_id"] != second.json()["attachment_id"]
+    assert max_active_calls == 1
 
 
 @pytest.mark.anyio

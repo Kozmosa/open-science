@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import replace
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from datetime import datetime
 from getpass import getuser
 from pathlib import Path
@@ -40,6 +43,19 @@ def _parse_datetime(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value)
 
 
+@dataclass(frozen=True, slots=True)
+class _SessionLifecycleKey:
+    app_user_id: str
+    environment_id: str
+    kind: str
+
+
+@dataclass(slots=True)
+class _SessionLifecycleLockState:
+    lock: threading.Lock
+    holders: int = 0
+
+
 class SessionManager:
     def __init__(
         self,
@@ -58,6 +74,8 @@ class SessionManager:
         self._default_shell = default_shell
         self._legacy_user_id = user_id or current_daemon_user()
         self._initialized = False
+        self._session_lifecycle_locks: dict[_SessionLifecycleKey, _SessionLifecycleLockState] = {}
+        self._session_lifecycle_lock_guard = threading.Lock()
 
     @property
     def db_path(self) -> Path:
@@ -195,63 +213,64 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        binding = self._upsert_binding(app_user_id, environment, working_directory)
-        pair = self._upsert_pair(app_user_id, binding, environment.id)
-        try:
-            self._tmux_adapter.ensure_personal_session(
-                binding,
-                environment,
-                pair.personal_session_name,
-            )
-        except TmuxCommandError as exc:
-            failure_time = utc_now()
-            self._store_pair(
+        with self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
+            binding = self._upsert_binding(app_user_id, environment, working_directory)
+            pair = self._upsert_pair(app_user_id, binding, environment.id)
+            try:
+                self._tmux_adapter.ensure_personal_session(
+                    binding,
+                    environment,
+                    pair.personal_session_name,
+                )
+            except TmuxCommandError as exc:
+                failure_time = utc_now()
+                self._store_pair(
+                    replace(
+                        pair,
+                        personal_status=TerminalSessionStatus.FAILED,
+                        personal_closed_at=failure_time,
+                        last_verified_at=failure_time,
+                        detail=str(exc),
+                    )
+                )
+                raise TerminalSessionOperationError(str(exc)) from exc
+
+            success_time = utc_now()
+            running_pair = self._store_pair(
                 replace(
                     pair,
-                    personal_status=TerminalSessionStatus.FAILED,
-                    personal_closed_at=failure_time,
-                    last_verified_at=failure_time,
-                    detail=str(exc),
+                    personal_status=TerminalSessionStatus.RUNNING,
+                    personal_started_at=pair.personal_started_at or success_time,
+                    personal_closed_at=None,
+                    last_verified_at=success_time,
+                    updated_at=success_time,
+                    detail=None,
                 )
             )
-            raise TerminalSessionOperationError(str(exc)) from exc
-
-        success_time = utc_now()
-        running_pair = self._store_pair(
-            replace(
-                pair,
-                personal_status=TerminalSessionStatus.RUNNING,
-                personal_started_at=pair.personal_started_at or success_time,
-                personal_closed_at=None,
-                last_verified_at=success_time,
-                updated_at=success_time,
-                detail=None,
+            record = self._build_record(
+                environment=environment,
+                working_directory=working_directory,
+                binding=binding,
+                pair=running_pair,
+                session_name=running_pair.personal_session_name,
             )
-        )
-        record = self._build_record(
-            environment=environment,
-            working_directory=working_directory,
-            binding=binding,
-            pair=running_pair,
-            session_name=running_pair.personal_session_name,
-        )
-        target = TerminalAttachmentTarget(
-            binding_id=binding.binding_id,
-            session_id=record.session_id or running_pair.personal_session_name,
-            session_name=running_pair.personal_session_name,
-            user_id=binding.user_id,
-            environment_id=environment.id,
-            environment_alias=environment.alias,
-            target_kind=record.target_kind,
-            working_directory=working_directory,
-            attach_command=self._tmux_adapter.build_attach_command(
-                binding,
-                environment,
-                running_pair.personal_session_name,
-            ),
-            spawn_working_directory=self._state_root,
-        )
-        return record, target
+            target = TerminalAttachmentTarget(
+                binding_id=binding.binding_id,
+                session_id=record.session_id or running_pair.personal_session_name,
+                session_name=running_pair.personal_session_name,
+                user_id=binding.user_id,
+                environment_id=environment.id,
+                environment_alias=environment.alias,
+                target_kind=record.target_kind,
+                working_directory=working_directory,
+                attach_command=self._tmux_adapter.build_attach_command(
+                    binding,
+                    environment,
+                    running_pair.personal_session_name,
+                ),
+                spawn_working_directory=self._state_root,
+            )
+            return record, target
 
     def ensure_agent_session(
         self,
@@ -265,44 +284,45 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        binding = self._upsert_binding(app_user_id, environment, working_directory)
-        pair = self._upsert_pair(app_user_id, binding, environment.id)
-        agent_session_name = pair.agent_session_name or self.agent_session_name_for(
-            app_user_id,
-            environment.id,
-        )
-        try:
-            self._tmux_adapter.ensure_agent_session(
-                binding,
-                environment,
-                agent_session_name,
+        with self._session_lifecycle_guard(app_user_id, environment.id, kind="agent"):
+            binding = self._upsert_binding(app_user_id, environment, working_directory)
+            pair = self._upsert_pair(app_user_id, binding, environment.id)
+            agent_session_name = pair.agent_session_name or self.agent_session_name_for(
+                app_user_id,
+                environment.id,
             )
-        except TmuxCommandError as exc:
-            failure_time = utc_now()
-            self._store_pair(
+            try:
+                self._tmux_adapter.ensure_agent_session(
+                    binding,
+                    environment,
+                    agent_session_name,
+                )
+            except TmuxCommandError as exc:
+                failure_time = utc_now()
+                self._store_pair(
+                    replace(
+                        pair,
+                        agent_session_name=agent_session_name,
+                        agent_status=TerminalSessionStatus.FAILED,
+                        last_verified_at=failure_time,
+                        updated_at=failure_time,
+                        detail=str(exc),
+                    )
+                )
+                raise TerminalSessionOperationError(str(exc)) from exc
+
+            success_time = utc_now()
+            running_pair = self._store_pair(
                 replace(
                     pair,
                     agent_session_name=agent_session_name,
-                    agent_status=TerminalSessionStatus.FAILED,
-                    last_verified_at=failure_time,
-                    updated_at=failure_time,
-                    detail=str(exc),
+                    agent_status=TerminalSessionStatus.RUNNING,
+                    last_verified_at=success_time,
+                    updated_at=success_time,
+                    detail=None,
                 )
             )
-            raise TerminalSessionOperationError(str(exc)) from exc
-
-        success_time = utc_now()
-        running_pair = self._store_pair(
-            replace(
-                pair,
-                agent_session_name=agent_session_name,
-                agent_status=TerminalSessionStatus.RUNNING,
-                last_verified_at=success_time,
-                updated_at=success_time,
-                detail=None,
-            )
-        )
-        return binding, running_pair
+            return binding, running_pair
 
     def reset_personal_session(
         self,
@@ -316,63 +336,64 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        binding = self._upsert_binding(app_user_id, environment, working_directory)
-        pair = self._upsert_pair(app_user_id, binding, environment.id)
-        try:
-            self._tmux_adapter.reset_personal_session(
-                binding,
-                environment,
-                pair.personal_session_name,
-            )
-        except TmuxCommandError as exc:
-            failure_time = utc_now()
-            self._store_pair(
+        with self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
+            binding = self._upsert_binding(app_user_id, environment, working_directory)
+            pair = self._upsert_pair(app_user_id, binding, environment.id)
+            try:
+                self._tmux_adapter.reset_personal_session(
+                    binding,
+                    environment,
+                    pair.personal_session_name,
+                )
+            except TmuxCommandError as exc:
+                failure_time = utc_now()
+                self._store_pair(
+                    replace(
+                        pair,
+                        personal_status=TerminalSessionStatus.FAILED,
+                        personal_closed_at=failure_time,
+                        last_verified_at=failure_time,
+                        detail=str(exc),
+                    )
+                )
+                raise TerminalSessionOperationError(str(exc)) from exc
+
+            reset_time = utc_now()
+            reset_pair = self._store_pair(
                 replace(
                     pair,
-                    personal_status=TerminalSessionStatus.FAILED,
-                    personal_closed_at=failure_time,
-                    last_verified_at=failure_time,
-                    detail=str(exc),
+                    personal_status=TerminalSessionStatus.RUNNING,
+                    personal_started_at=reset_time,
+                    personal_closed_at=None,
+                    last_verified_at=reset_time,
+                    updated_at=reset_time,
+                    detail=None,
                 )
             )
-            raise TerminalSessionOperationError(str(exc)) from exc
-
-        reset_time = utc_now()
-        reset_pair = self._store_pair(
-            replace(
-                pair,
-                personal_status=TerminalSessionStatus.RUNNING,
-                personal_started_at=reset_time,
-                personal_closed_at=None,
-                last_verified_at=reset_time,
-                updated_at=reset_time,
-                detail=None,
+            record = self._build_record(
+                environment=environment,
+                working_directory=working_directory,
+                binding=binding,
+                pair=reset_pair,
+                session_name=reset_pair.personal_session_name,
             )
-        )
-        record = self._build_record(
-            environment=environment,
-            working_directory=working_directory,
-            binding=binding,
-            pair=reset_pair,
-            session_name=reset_pair.personal_session_name,
-        )
-        target = TerminalAttachmentTarget(
-            binding_id=binding.binding_id,
-            session_id=record.session_id or reset_pair.personal_session_name,
-            session_name=reset_pair.personal_session_name,
-            user_id=binding.user_id,
-            environment_id=environment.id,
-            environment_alias=environment.alias,
-            target_kind=record.target_kind,
-            working_directory=working_directory,
-            attach_command=self._tmux_adapter.build_attach_command(
-                binding,
-                environment,
-                reset_pair.personal_session_name,
-            ),
-            spawn_working_directory=self._state_root,
-        )
-        return record, target
+            target = TerminalAttachmentTarget(
+                binding_id=binding.binding_id,
+                session_id=record.session_id or reset_pair.personal_session_name,
+                session_name=reset_pair.personal_session_name,
+                user_id=binding.user_id,
+                environment_id=environment.id,
+                environment_alias=environment.alias,
+                target_kind=record.target_kind,
+                working_directory=working_directory,
+                attach_command=self._tmux_adapter.build_attach_command(
+                    binding,
+                    environment,
+                    reset_pair.personal_session_name,
+                ),
+                spawn_working_directory=self._state_root,
+            )
+            return record, target
 
     def record_personal_attach(self, binding_id: str) -> None:
         self._record_attach(binding_id, personal=True)
@@ -622,6 +643,39 @@ class SessionManager:
                 updated_at=now,
             )
         return self._store_pair(pair)
+
+    @contextmanager
+    def _session_lifecycle_guard(
+        self,
+        app_user_id: str,
+        environment_id: str,
+        *,
+        kind: str,
+    ) -> Iterator[None]:
+        key = _SessionLifecycleKey(
+            app_user_id=app_user_id,
+            environment_id=environment_id,
+            kind=kind,
+        )
+        with self._session_lifecycle_lock_guard:
+            state = self._session_lifecycle_locks.get(key)
+            if state is None:
+                state = _SessionLifecycleLockState(lock=threading.Lock())
+                self._session_lifecycle_locks[key] = state
+            state.holders += 1
+            lifecycle_lock = state.lock
+
+        lifecycle_lock.acquire()
+        try:
+            yield
+        finally:
+            lifecycle_lock.release()
+            with self._session_lifecycle_lock_guard:
+                state = self._session_lifecycle_locks.get(key)
+                if state is not None:
+                    state.holders -= 1
+                    if state.holders == 0:
+                        self._session_lifecycle_locks.pop(key, None)
 
     def _build_record(
         self,

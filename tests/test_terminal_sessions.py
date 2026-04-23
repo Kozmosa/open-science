@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,7 +25,7 @@ from ainrf.terminal.models import (
 )
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND
 from ainrf.terminal.sessions import SessionManager
-from ainrf.terminal.tmux import TmuxAdapter
+from ainrf.terminal.tmux import TmuxAdapter, TmuxCommandError
 
 
 def make_manager(
@@ -138,6 +141,56 @@ def test_tmux_adapter_builds_local_commands(
         "-t",
         tmux_session_target(session_name),
     )
+
+
+def test_tmux_adapter_treats_duplicate_new_session_after_recheck_as_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    session_name = "ainrf:u:daemon-user:e:env-1:personal"
+    session_target = tmux_session_target(session_name)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+    )
+    binding = manager_binding(environment.id)
+    captured: list[tuple[str, ...]] = []
+    scripted_results = iter(
+        (
+            SimpleNamespace(returncode=1, stdout="", stderr=""),
+            SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr=f"duplicate session: {session_target}",
+            ),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+    )
+
+    def fake_run_local(command: tuple[str, ...]) -> SimpleNamespace:
+        captured.append(command)
+        return next(scripted_results)
+
+    monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
+
+    adapter.ensure_personal_session(binding, environment, session_name)
+
+    assert captured == [
+        ("tmux", "has-session", "-t", session_target),
+        (
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            session_target,
+            "-c",
+            "/workspace/project",
+            "/bin/bash",
+            "-l",
+        ),
+        ("tmux", "has-session", "-t", session_target),
+    ]
 
 
 def test_tmux_adapter_builds_remote_commands(
@@ -486,6 +539,75 @@ def test_reset_kills_and_recreates_personal_session(
     adapter.reset_personal_session(binding, environment, "session-1")
 
     assert calls == ["kill", "ensure"]
+
+
+def test_session_manager_serializes_personal_ensure_and_reset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+        default_workdir="/workspace/project",
+    )
+    adapter = manager._tmux_adapter
+    monkeypatch.setattr(adapter, "ensure_personal_session", lambda *args, **kwargs: None)
+    monkeypatch.setattr(adapter, "reset_personal_session", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        adapter, "build_attach_command", lambda *args, **kwargs: ("tmux", "attach-session")
+    )
+
+    manager.ensure_personal_session("browser-user", environment, "/workspace/project")
+
+    active_calls = 0
+    max_active_calls = 0
+    state_lock = threading.Lock()
+
+    def fail_on_overlap(label: str) -> None:
+        nonlocal active_calls, max_active_calls
+        with state_lock:
+            active_calls += 1
+            max_active_calls = max(max_active_calls, active_calls)
+            overlap = active_calls > 1
+        try:
+            if overlap:
+                raise TmuxCommandError(f"duplicate session during {label}")
+            time.sleep(0.05)
+        finally:
+            with state_lock:
+                active_calls -= 1
+
+    monkeypatch.setattr(
+        adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: fail_on_overlap("ensure"),
+    )
+    monkeypatch.setattr(
+        adapter,
+        "reset_personal_session",
+        lambda *args, **kwargs: fail_on_overlap("reset"),
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        ensure_future = executor.submit(
+            manager.ensure_personal_session,
+            "browser-user",
+            environment,
+            "/workspace/project",
+        )
+        reset_future = executor.submit(
+            manager.reset_personal_session,
+            "browser-user",
+            environment,
+            "/workspace/project",
+        )
+        ensure_record, _ = ensure_future.result()
+        reset_record, _ = reset_future.result()
+
+    assert max_active_calls == 1
+    assert ensure_record.status is TerminalSessionStatus.RUNNING
+    assert reset_record.status is TerminalSessionStatus.RUNNING
 
 
 def test_personal_session_reattach_reuses_tmux_safe_target(
