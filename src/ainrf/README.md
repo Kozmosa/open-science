@@ -188,6 +188,7 @@ code-server --version
 - 公共健康检查路径：
   - `GET /health`
   - `GET /v1/health`
+  - 容器健康摘要当前只暴露 SSH、Claude CLI、project dir、GPU/CUDA/disk 等探测结果；不再返回 `anthropic_api_key_ok`，也不由 AINRF 预检查 Claude 鉴权配置。
 - environment 控制面路径（均受 API key 中间件保护）：
   - `GET /environments`
   - `POST /environments`
@@ -270,6 +271,7 @@ managed task terminal 语义如下：
 
 - `GET /tasks?environment_id=...`：列出所选 environment 下的 managed task 与 terminal binding 摘要
 - `POST /tasks`：创建一个新的 tmux-backed task window
+- task harness 在启动 task 时不再提前检查 `ANTHROPIC_API_KEY` 或 Claude 本地配置，而是直接执行 `claude` 命令并回放其真实 stdout/stderr。
 - `GET /tasks/{task_id}`：读取 task 详情与当前 terminal binding
 - `POST /tasks/{task_id}/cancel`：向 runtime 发中断并等待任务退出或进入取消中的过渡态
 - `GET /tasks/{task_id}/terminal`：读取当前 terminal binding 摘要，包括 `binding_status`、`ownership_user_id`、`agent_write_state`

@@ -52,7 +52,6 @@ class CommandResult:
 class ContainerHealth:
     ssh_ok: bool
     claude_ok: bool
-    anthropic_api_key_ok: bool
     project_dir_writable: bool
     claude_version: str | None = None
     gpu_models: list[str] = field(default_factory=list)

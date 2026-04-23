@@ -165,10 +165,6 @@ class SSHExecutor:
                 f"Claude Code CLI version {installed_version} is below the minimum {min_version}"
             )
 
-        api_key_result = await self.run_command("printenv ANTHROPIC_API_KEY")
-        if api_key_result.exit_code != 0 or not api_key_result.stdout.strip():
-            raise BootstrapError("Remote ANTHROPIC_API_KEY is not configured")
-
         return installed_version
 
     async def ping(self) -> ContainerHealth:
@@ -179,7 +175,6 @@ class SSHExecutor:
             return ContainerHealth(
                 ssh_ok=False,
                 claude_ok=False,
-                anthropic_api_key_ok=False,
                 project_dir_writable=False,
                 warnings=[str(exc)],
             )
@@ -191,11 +186,6 @@ class SSHExecutor:
         claude_ok = claude_result.exit_code == 0 and claude_version is not None
         if not claude_ok:
             warnings.append("claude_unavailable")
-
-        api_key_result = await self.run_command("printenv ANTHROPIC_API_KEY", timeout=30)
-        anthropic_api_key_ok = api_key_result.exit_code == 0 and bool(api_key_result.stdout.strip())
-        if not anthropic_api_key_ok:
-            warnings.append("anthropic_api_key_missing")
 
         gpu_models_result = await self.run_command(
             "nvidia-smi --query-gpu=name --format=csv,noheader", timeout=30
@@ -230,7 +220,6 @@ class SSHExecutor:
         return ContainerHealth(
             ssh_ok=True,
             claude_ok=claude_ok,
-            anthropic_api_key_ok=anthropic_api_key_ok,
             project_dir_writable=project_dir_writable,
             claude_version=claude_version,
             gpu_models=gpu_models,
