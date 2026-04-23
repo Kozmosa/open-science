@@ -58,9 +58,8 @@ scripts/webui.sh preview --backend-public
 这个入口会自动处理：
 
 - 默认 `UV_CACHE_DIR=/tmp/uv-cache`
-- 本地 `./.ainrf/` 状态目录
-- `./.ainrf/webui.env` 中的 WebUI service key 生成或复用
-- `./.ainrf/config.json` 的 `api_key_hashes` 补齐
+- 当前 shell 会话中的 `AINRF_WEBUI_API_KEY`
+- 当前 shell 会话中的 `AINRF_API_KEY_HASHES`
 - 后端 `ainrf serve` 与前端 dev/preview server 的联合启动
 
 默认暴露策略是：

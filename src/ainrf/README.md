@@ -17,9 +17,8 @@ scripts/webui.sh preview --backend-public
 默认模式是 `dev`。脚本会自动：
 
 - 使用 `UV_CACHE_DIR=/tmp/uv-cache`（若当前环境未显式设置）
-- 在仓库根目录准备 `./.ainrf/`
-- 在 `./.ainrf/webui.env` 里生成或复用本地 WebUI service key
-- 把对应 hash 合并进 `./.ainrf/config.json` 的 `api_key_hashes`
+- 在当前 shell 会话中生成或复用 `AINRF_WEBUI_API_KEY`
+- 在当前 shell 会话中计算并导出 `AINRF_API_KEY_HASHES`
 - 启动后端 `uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root .ainrf`
 - 启动前端 dev server（`0.0.0.0:5173`）或 preview server（`0.0.0.0:4173`）
 
@@ -30,8 +29,6 @@ scripts/webui.sh preview --backend-public
 
 此时浏览器统一通过前端代理访问 `/api`、`/code` 与 `/terminal`，不再需要手动设置
 `VITE_AINRF_API_KEY`，浏览器端也不会持有 service key。只有在明确需要让内网直接访问后端 API 时，再额外加 `--backend-public`。
-
-`./.ainrf/webui.env` 属于本地运行态文件；开启 `--backend-public` 时，脚本只会提示这个文件路径，不会把 key 明文回显到终端。
 
 ## 1. 目录定位
 
@@ -127,7 +124,7 @@ profile，供后续容器连接配置复用。
 ### 3.3 API Key 配置（启动 API 必需）
 
 低层 API 中间件读取 `AINRF_API_KEY_HASHES`（SHA-256 哈希值，支持逗号分隔多个 key）。
-如果你走 `scripts/webui.sh`，则不需要手动设置这个环境变量；脚本会自动把本地 WebUI service key 的 hash 写入 `./.ainrf/config.json`，并由前端代理层代为注入 `X-API-Key`。
+如果你走 `scripts/webui.sh`，则不需要手动设置这个环境变量；脚本会在当前 shell 会话中直接导出临时 token 与对应 hash，并由前端代理层代为注入 `X-API-Key`。
 
 生成哈希示例：
 

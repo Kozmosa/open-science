@@ -36,7 +36,12 @@ scripts/webui.sh preview
 - `uv run ainrf serve`
 - Vite dev server 或 preview server
 
-并自动处理本地 `./.ainrf/` 状态目录、WebUI service key 与同源代理头注入。
+并自动处理：
+
+- `UV_CACHE_DIR=/tmp/uv-cache` 的默认值
+- 当前 shell 会话内的 `AINRF_WEBUI_API_KEY`
+- 对应的 `AINRF_API_KEY_HASHES`
+- 同源代理需要的 API key 头注入
 
 ## 边界
 
