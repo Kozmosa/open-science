@@ -22,6 +22,9 @@ last_local_commit: workspace aggregate
 > [!note]
 > 与旧版 P-series `LLM-Working` 散档对应的遗留继承说明已统一收拢到 [[LLM-Working/legacy-v1-summary]]；以下阶段描述仅作为历史路线图背景，不再指向分散实施文档。
 
+> [!note]
+> 路线图中提到的 `src/ainrf/artifacts/`、`src/ainrf/gates/`、`src/ainrf/events/` 等路径，只代表当时的设计与实现想象，不应再被理解为当前源码树必须维持的目录 contract。当前产品面入口请优先参考 [[ainrf/index]] 与 `src/ainrf/README.md`。
+
 ## Overview
 
 > [!tip]
@@ -187,7 +190,7 @@ gantt
 > [!info]
 > FastAPI 服务是框架的对外接口层（详见 [[framework/v1-rfc]]）。本阶段交付 API 骨架、认证和所有端点的 request/response models。
 >
-> 结合当前仓库已落地的 `execution`、`artifacts`、`state` 模块边界与本地 daemon 约束，P4 的具体实施规划见 [[LLM-Working/legacy-v1-summary]]。
+> 结合该历史阶段当时设想的 `execution`、`artifacts`、`state` 模块边界与本地 daemon 约束，P4 的具体实施规划见 [[LLM-Working/legacy-v1-summary]]。
 
 **交付物：**
 

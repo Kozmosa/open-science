@@ -16,10 +16,13 @@ last_local_commit: workspace aggregate
 > [!abstract]
 > 本文档用于把 `scholar-agent` 的 next release 架构从“未来态研究引擎蓝图”收敛为“围绕单用户 research dashboard 的可实现控制面架构”。目标不是重写现有 `[[framework/v1-rfc]]`，而是基于当前已经落地的 `ainrf` 控制面能力，固定 next release 的核心对象、模块边界、前后端契约、must-have 数据面和明确延期项，从而给后续真正的 architecture 文档和实现切片提供稳定基线。
 
+> [!note]
+> 本文档仍保留 baseline 价值，但其中早期使用的 `gates / events / artifacts` vocabulary 已经部分落后于当前目录现实。当前产品面应以 `task_harness / tasks / workspaces / terminal / environments / code_server` 为主，并以 [[ainrf/index]] 与 `src/ainrf/README.md` 作为事实层入口。
+
 ## 规划结论
 
 - next release 的架构必须围绕 `task-centric operator control plane` 组织，而不是围绕未来态完整 research runtime 组织。
-- 当前 `ainrf` 已有的 API、state、gates、events、SSH health 基础，应被视为 next release 的真实起点，而不是被新架构推倒重来。
+- 当前 `ainrf` 已有的 API、state、task_harness、tasks、workspaces、terminal、environment control plane 与 SSH health 基础，应被视为 next release 的真实起点，而不是被新架构推倒重来。
 - architecture 的核心对象应收敛为：task、workspace、session、container、artifact preview、resource snapshot。
 - 任何需要完整 TaskEngine、完整 experiment runtime、全局 analytics 或多用户权限系统才能成立的设计，都必须延期。
 
@@ -155,17 +158,16 @@ next release 中 task 至少应包含：
 ### 已有基础
 
 - FastAPI service。
-- task 路由与 task read model。
-- human gate lifecycle。
-- SSE 事件流。
-- 本地 state / artifacts / events 持久化。
-- SSH health / container config 基础。
+- task harness / tasks 路由与 task 运行时。
+- workspaces / terminal / code-server 控制面。
+- environments 配置与 SSH health / container config 基础。
+- 本地 state root / runtime 持久化。
 
 ### 架构策略
 
 - 优先复用现有控制面基础，而不是发明一套与当前 `ainrf` 脱节的新模型。
 - architecture 文档必须承认 next release 是“control plane first”，而不是“runtime-first”。
-- 所有新增设计都应尽量作为现有 task、state、events、health 能力的扩展，而不是并行体系。
+- 所有新增设计都应尽量作为现有 task_harness、tasks、workspaces、terminal、state、health 能力的扩展，而不是并行体系。
 
 ## Frontend / Backend Contract Baseline
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import subprocess
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND, TERMINAL_SSH_TARGET_K
 
 _LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 _REMOTE_TMUX_MISSING_MARKER = "__AINRF_REMOTE_TMUX_MISSING__"
+_TMUX_UNSAFE_SESSION_TARGET_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 class TmuxCommandError(RuntimeError):
@@ -53,20 +55,25 @@ class TmuxAdapter:
             return TERMINAL_LOCAL_TARGET_KIND
         return TERMINAL_SSH_TARGET_KIND
 
+    @staticmethod
+    def session_target_for(session_name: str) -> str:
+        return _TMUX_UNSAFE_SESSION_TARGET_PATTERN.sub("_", session_name)
+
     def has_session(
         self,
         binding: UserEnvironmentBinding,
         environment: EnvironmentRegistryEntry,
         session_name: str,
     ) -> bool:
+        session_target = self.session_target_for(session_name)
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
-            result = self._run_local_command(("tmux", "has-session", "-t", session_name))
+            result = self._run_local_command(("tmux", "has-session", "-t", session_target))
         else:
             result = self._run_remote_command(
                 environment,
                 binding.remote_login_user,
                 self._wrap_remote_tmux_check(
-                    shlex.join(["tmux", "has-session", "-t", session_name])
+                    shlex.join(["tmux", "has-session", "-t", session_target])
                 ),
             )
 
@@ -103,6 +110,7 @@ class TmuxAdapter:
         if self.has_session(binding, environment, session_name):
             return
 
+        session_target = self.session_target_for(session_name)
         default_workdir = binding.default_workdir or str(self._state_root)
         default_shell = binding.default_shell or "/bin/bash"
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
@@ -112,7 +120,7 @@ class TmuxAdapter:
                     "new-session",
                     "-d",
                     "-s",
-                    session_name,
+                    session_target,
                     "-c",
                     default_workdir,
                     default_shell,
@@ -127,7 +135,7 @@ class TmuxAdapter:
                         "new-session",
                         "-d",
                         "-s",
-                        session_name,
+                        session_target,
                         "-c",
                         default_workdir,
                         default_shell,
@@ -158,14 +166,15 @@ class TmuxAdapter:
         environment: EnvironmentRegistryEntry,
         session_name: str,
     ) -> None:
+        session_target = self.session_target_for(session_name)
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
-            result = self._run_local_command(("tmux", "kill-session", "-t", session_name))
+            result = self._run_local_command(("tmux", "kill-session", "-t", session_target))
         else:
             result = self._run_remote_command(
                 environment,
                 binding.remote_login_user,
                 self._wrap_remote_tmux_check(
-                    shlex.join(["tmux", "kill-session", "-t", session_name])
+                    shlex.join(["tmux", "kill-session", "-t", session_target])
                 ),
             )
         if result.returncode not in {0, 1}:
@@ -181,6 +190,7 @@ class TmuxAdapter:
         working_directory: str,
         command: str,
     ) -> TmuxWindowInfo:
+        session_target = self.session_target_for(session_name)
         shell_command = self._build_shell_exec_command(binding.default_shell, command)
         format_string = "#{window_id}\t#{window_name}"
         tmux_command = (
@@ -190,7 +200,7 @@ class TmuxAdapter:
             "-F",
             format_string,
             "-t",
-            session_name,
+            session_target,
             "-n",
             window_name,
             "-c",
@@ -218,7 +228,14 @@ class TmuxAdapter:
         window_id: str,
     ) -> TmuxWindowInfo | None:
         format_string = "#{window_id}\t#{window_name}\t#{window_dead}\t#{pane_dead_status}\t#{pane_current_path}"
-        tmux_command = ("tmux", "list-windows", "-t", session_name, "-F", format_string)
+        tmux_command = (
+            "tmux",
+            "list-windows",
+            "-t",
+            self.session_target_for(session_name),
+            "-F",
+            format_string,
+        )
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
             result = self._run_local_command(tmux_command)
         else:
@@ -245,11 +262,12 @@ class TmuxAdapter:
         session_name: str,
         window_id: str,
     ) -> tuple[str, ...]:
+        session_target = self.session_target_for(session_name)
         tmux_command = (
             "tmux",
             "attach-session",
             "-t",
-            session_name,
+            session_target,
             ";",
             "select-window",
             "-t",
@@ -306,12 +324,13 @@ class TmuxAdapter:
         environment: EnvironmentRegistryEntry,
         session_name: str,
     ) -> tuple[str, ...]:
+        session_target = self.session_target_for(session_name)
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
-            return ("tmux", "attach-session", "-t", session_name)
+            return ("tmux", "attach-session", "-t", session_target)
         return self._build_ssh_command(
             environment,
             binding.remote_login_user,
-            f"exec {shlex.join(['tmux', 'attach-session', '-t', session_name])}",
+            f"exec {shlex.join(['tmux', 'attach-session', '-t', session_target])}",
             tty=True,
         )
 
@@ -365,7 +384,14 @@ class TmuxAdapter:
         environment: EnvironmentRegistryEntry,
         session_name: str,
     ) -> None:
-        tmux_command = ("tmux", "set-option", "-t", session_name, "remain-on-exit", "on")
+        tmux_command = (
+            "tmux",
+            "set-option",
+            "-t",
+            self.session_target_for(session_name),
+            "remain-on-exit",
+            "on",
+        )
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
             result = self._run_local_command(tmux_command)
         else:
