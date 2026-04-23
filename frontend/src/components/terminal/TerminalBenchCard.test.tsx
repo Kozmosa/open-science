@@ -269,4 +269,19 @@ describe('TerminalBenchCard', () => {
     expect(screen.getByText('Select an environment before attaching the terminal session.')).toBeInTheDocument();
     expect(mockGetTerminalSession).not.toHaveBeenCalled();
   });
+
+  it('renders translated Chinese terminal bench copy when locale is zh', async () => {
+    mockGetTerminalSession.mockResolvedValue(idleSession);
+
+    renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />, {
+      locale: 'zh',
+    });
+
+    expect(await screen.findByText('个人终端控制')).toBeInTheDocument();
+    expect(screen.getByText(/状态：\s*空闲/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: '附着' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: '脱离' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '重置会话' })).toBeEnabled();
+    expect(screen.getByText('尚未创建个人终端会话。')).toBeInTheDocument();
+  });
 });

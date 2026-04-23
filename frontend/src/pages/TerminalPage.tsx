@@ -4,6 +4,7 @@ import { useT } from '../i18n';
 function TerminalPage() {
   const t = useT();
   const environmentSelection = useEnvironmentSelection();
+  const description = t('pages.terminal.description');
 
   return (
     <div className="space-y-8">
@@ -17,15 +18,15 @@ function TerminalPage() {
         >
           {t('pages.terminal.title')}
         </h1>
-        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
-          {t('pages.terminal.description')}
-        </p>
+        {description ? (
+          <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
+            {description}
+          </p>
+        ) : null}
       </section>
 
-      <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
-        <EnvironmentSelectorPanel {...environmentSelection} />
-        <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
-      </section>
+      <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
+      <EnvironmentSelectorPanel {...environmentSelection} />
     </div>
   );
 }
