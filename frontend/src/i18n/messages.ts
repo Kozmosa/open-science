@@ -176,6 +176,47 @@ export const messages = {
         description:
           'This surface mirrors the shared environment selector from Terminal so future workspace bindings can use the same upstream runtime choice. The browser panel below stays read only for now and reflects the current environment selection.',
       },
+      settings: {
+        eyebrow: 'Settings',
+        title: 'WebUI settings baseline',
+        description:
+          'Control local WebUI defaults only: default route, terminal font size, the project-level default environment, and task draft presets grouped by environment.',
+        recoveryNotice:
+          'The local settings document was missing fields, invalid, or no longer compatible. Defaults were restored so the app can keep running.',
+        routes: {
+          terminal: 'Terminal',
+          tasks: 'Tasks',
+          workspaces: 'Workspaces',
+          containers: 'Containers',
+        },
+        general: {
+          title: 'General Preferences',
+          description:
+            'These browser-local preferences apply to the whole frontend shell.',
+          defaultRouteLabel: 'Default route',
+          terminalFontSizeLabel: 'Terminal font size',
+          terminalFontSizeHelp:
+            'Font size is clamped to a stable range of {{min}}-{{max}} px. Current save value: {{current}} px.',
+        },
+        project: {
+          title: 'Project Defaults',
+          description:
+            'These defaults apply to the current fixed project and stay local to this browser.',
+          defaultEnvironmentLabel: 'Default environment',
+          defaultEnvironmentEmpty: 'No project default environment',
+          defaultEnvironmentHelp:
+            'This preferred environment is used before the remembered local selection.',
+          noEnvironments:
+            'Create at least one environment in Containers before configuring project defaults.',
+          environmentCardDescription:
+            'These fields only prefill new task drafts for this environment.',
+          titleTemplateLabel: 'Title template',
+          titleTemplatePlaceholder: 'Optional task title preset',
+          taskInputTemplateLabel: 'Task input template',
+          taskInputTemplatePlaceholder:
+            'Describe the default task input to preload for this environment.',
+        },
+      },
       placeholder: {
         eyebrow: 'Settings',
         title: 'Settings are coming soon',
@@ -256,7 +297,7 @@ export const messages = {
         eyebrow: 'Environment selector',
         title: 'Shared environment selection',
         description:
-          'Pick the execution environment once and reuse it across the terminal and workspace surfaces. Selection priority is: current project default, remembered local choice, localhost seed, then the first available environment.',
+          'Pick the execution environment once and reuse it across the frontend. Selection priority is: settings project default, remembered local choice, localhost seed, then the first available environment.',
         selectedNone: 'No environment selected',
         activeLabel: 'Active environment',
         noAvailable: 'No environments available',
@@ -539,6 +580,41 @@ export const messages = {
         description:
           '此页面与 Terminal 共享环境选择器，便于未来工作区绑定沿用同一上游运行时选择。下方浏览器面板当前仍为只读，并反映当前环境选择。',
       },
+      settings: {
+        eyebrow: '设置',
+        title: 'WebUI 设置基线',
+        description:
+          '这里只管理浏览器本地的 WebUI 默认行为，包括默认首页、终端字号、项目默认环境以及按 environment 分组的任务草稿预填。',
+        recoveryNotice:
+          '本地设置文档缺字段、已损坏或版本不兼容，应用已回退到默认配置以继续运行。',
+        routes: {
+          terminal: '终端',
+          tasks: '任务',
+          workspaces: '工作区',
+          containers: '容器',
+        },
+        general: {
+          title: 'General Preferences',
+          description: '这些浏览器本地偏好会作用于整个前端控制面。',
+          defaultRouteLabel: '默认首页',
+          terminalFontSizeLabel: '终端字号',
+          terminalFontSizeHelp:
+            '字号会被限制在稳定区间 {{min}}-{{max}} px，当前保存值为 {{current}} px。',
+        },
+        project: {
+          title: 'Project Defaults',
+          description: '这些默认值只作用于当前固定 project，并且仅保存在当前浏览器中。',
+          defaultEnvironmentLabel: '默认环境',
+          defaultEnvironmentEmpty: '不设置项目默认环境',
+          defaultEnvironmentHelp: '这个环境优先级高于本地记忆的最近一次显式选择。',
+          noEnvironments: '请先在 Containers 页面创建至少一个 environment，再配置项目默认值。',
+          environmentCardDescription: '这些字段只用于预填当前 environment 下的新建任务草稿。',
+          titleTemplateLabel: '标题模板',
+          titleTemplatePlaceholder: '可选的任务标题预设',
+          taskInputTemplateLabel: '任务输入模板',
+          taskInputTemplatePlaceholder: '填写该 environment 下默认预载入的 task input。',
+        },
+      },
       placeholder: {
         eyebrow: '设置',
         title: '设置即将上线',
@@ -616,7 +692,7 @@ export const messages = {
         eyebrow: '环境选择器',
         title: '共享环境选择',
         description:
-          '只需选择一次执行环境，终端和工作区都会复用它。优先级固定为当前项目默认环境、本地记忆选择、localhost，最后才是列表首项。',
+          '只需选择一次执行环境，前端各页面都会复用它。优先级固定为设置页中的项目默认环境、本地记忆选择、localhost，最后才是列表首项。',
         selectedNone: '未选择环境',
         activeLabel: '当前环境',
         noAvailable: '没有可用环境',

@@ -1,11 +1,14 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalSessionConsole from './TerminalSessionConsole';
+import { createDefaultWebUiSettings, settingsStorageKey } from '../../settings';
+import { renderWithProviders } from '../../test/render';
 import type { TerminalSessionStatus } from '../../types';
 
 interface MockTerminalInstance {
   cols: number;
   rows: number;
+  options: Record<string, unknown>;
   readonly dataHandlers: Array<(data: string) => void>;
   readonly resizeHandlers: Array<(size: { cols: number; rows: number }) => void>;
   readonly writeCalls: string[];
@@ -58,7 +61,10 @@ const terminalMocks = vi.hoisted(() => ({
     readonly writelnCalls: string[] = [];
     disposed = false;
 
-    constructor() {
+    options: Record<string, unknown>;
+
+    constructor(options: Record<string, unknown> = {}) {
+      this.options = options;
       terminalMocks.terminals.push(this);
     }
 
@@ -214,7 +220,7 @@ afterEach(() => {
 });
 
 function renderConsole(status: TerminalSessionStatus = 'running') {
-  return render(
+  return renderWithProviders(
     <TerminalSessionConsole
       sessionId="ainrf:u:mock-browser-user:e:env-1:personal"
       attachmentId="attach-1"
@@ -229,7 +235,7 @@ describe('TerminalSessionConsole', () => {
   it('connects to the websocket, writes output, and forwards input', async () => {
     const onDisconnected = vi.fn();
 
-    render(
+    renderWithProviders(
       <TerminalSessionConsole
         sessionId="ainrf:u:mock-browser-user:e:env-1:personal"
         attachmentId="attach-1"
@@ -270,7 +276,7 @@ describe('TerminalSessionConsole', () => {
   });
 
   it('keeps observe attachments readonly while still forwarding resize events', async () => {
-    render(
+    renderWithProviders(
       <TerminalSessionConsole
         sessionId="ainrf:u:mock-browser-user:e:env-1:agent"
         attachmentId="attach-task-1"
@@ -293,5 +299,16 @@ describe('TerminalSessionConsole', () => {
     ).toBe(true);
     expect(socket.sent.length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('Observe-only')).toHaveLength(2);
+  });
+
+  it('reads the terminal font size from settings', async () => {
+    const settings = createDefaultWebUiSettings();
+    settings.general.terminal.fontSize = 17;
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+
+    renderConsole();
+
+    await waitFor(() => expect(terminalMocks.terminals).toHaveLength(1));
+    expect(terminalMocks.terminals[0]?.options.fontSize).toBe(17);
   });
 });
