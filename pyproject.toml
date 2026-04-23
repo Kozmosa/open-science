@@ -51,5 +51,8 @@ target-version = "py313"
 quote-style = "double"
 indent-style = "space"
 
+[tool.ty.src]
+exclude = ["ref-repos"]
+
 [tool.uv]
 package = true
