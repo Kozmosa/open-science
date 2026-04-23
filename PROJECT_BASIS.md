@@ -5,7 +5,8 @@
 ## 项目目标与当前边界
 
 - 项目名称：`scholar-agent`
-- 当前主要目标：沉淀面向学术研究 Agent 的调研笔记与框架设计，同时维护一个可扩展的 `ainrf`。
+- 当前主要目标：把 `ainrf` 持续收敛为本仓库的核心前后端产品，包括可安装 CLI、后端 API、WebUI 控制面，以及与 environment / terminal / task / workspace browser 相关的运行时能力。
+- `docs/`、`ref-repos/` 与其他研究笔记材料的主要职责是为 `ainrf` 的产品设计、实现取舍和历史追溯提供参考输入，而不是继续充当仓库的默认产品中心。
 - `vsa` 在本项目中指工作在容器内的 vibe scientist agent 研究员预设。
 
 ## 约束优先级
@@ -16,6 +17,7 @@
 ## LLM 协作与文档目录约定
 
 - 本仓库现有长期文档主目录是 `docs/`；新增需要长期维护、会被纳入知识库与站点构建的 Markdown 内容，默认放入 `docs/` 下合适子目录。
+- `docs/` 的默认入口与主叙事应服务于当前 `ainrf` 产品面；研究笔记、外部项目调研与历史设计文档继续保留，但不应再与 AINRF 当前实现面竞争同等入口地位。
 - `docs/framework/` 用于框架设计、RFC、路线图和体系化方法论。
 - `docs/projects/` 用于外部项目调研与对照分析。
 - `docs/summary/` 用于跨项目综述、矩阵和汇总结论。
@@ -64,18 +66,21 @@
 
 - 文档构建逻辑、CLI 入口、日志配置和未来研究运行时能力应继续保持职责分离。
 - `src/ainrf/` 负责可安装 Python 包与 CLI/服务运行时代码，避免把仓库级脚本逻辑直接堆入命令入口。
+- `frontend/` 负责 AINRF 的 WebUI 前端；它与 `src/ainrf/` 一起构成仓库的核心产品实现面。
 - `scripts/` 负责本地构建与辅助流程；若脚本演化为可复用运行时能力，应回收进入 `src/ainrf/`。
-- `docs/` 负责长期知识资产；不要把仅用于一次调试的中间日志混入知识库主目录。
+- `docs/` 负责长期知识资产与产品文档；不要把仅用于一次调试的中间日志混入知识库主目录。
+- `docs/projects/`、`docs/summary/`、`ref-repos/` 与其他调研材料默认视为参考语料层，不直接定义 AINRF 当前产品 contract。
 - 未来扩展 `ainrf` 时，优先把核心研究逻辑设计为可脱离具体宿主 CLI 复用的模块，再在 Typer 命令层做装配。
 
 ## 目录约定
 
-- `docs/`：Obsidian 风格知识库与站点源文档。
-- `src/ainrf/`：AINRF Python 包、CLI 入口、日志与未来运行时代码。
+- `docs/`：AINRF 产品文档、研究知识库与历史设计材料。
+- `frontend/`：AINRF WebUI 前端。
+- `src/ainrf/`：AINRF Python 包、CLI 入口、后端 API、日志与运行时代码。
 - `tests/`：CLI smoke tests 与后续 Python 测试。
 - `scripts/`：本地构建与预览辅助脚本。
 - `site/`、`.cache/html-notes/`：生成产物，仅由构建流程维护。
-- `ref-repos/`：参考仓库，只读研究输入，不在此目录内直接做业务开发。
+- `ref-repos/`：参考仓库，只读研究输入，不在此目录内直接做业务开发，也不把它们视为本仓库主产品源码的一部分。
 
 ## 技术栈与官方参考链接
 
