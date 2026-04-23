@@ -148,6 +148,12 @@ class TmuxAdapter:
             )
 
         if result.returncode != 0:
+            if self._is_duplicate_session_result(result, session_target) and self.has_session(
+                binding,
+                environment,
+                session_name,
+            ):
+                return
             self._raise_command_error(result, environment)
 
     def reset_personal_session(
@@ -402,6 +408,11 @@ class TmuxAdapter:
             )
         if result.returncode != 0:
             self._raise_command_error(result, environment)
+
+    @staticmethod
+    def _is_duplicate_session_result(result: _CommandResult, session_target: str) -> bool:
+        output = "\n".join(part.strip() for part in [result.stdout, result.stderr] if part.strip())
+        return "duplicate session" in output.lower() and session_target in output
 
     def _run_local_command(self, command: tuple[str, ...]) -> _CommandResult:
         try:

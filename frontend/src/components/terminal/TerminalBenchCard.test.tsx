@@ -2,7 +2,8 @@ vi.mock('./TerminalSessionConsole', () => ({
   default: () => <div data-testid="terminal-console" />,
 }));
 
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalBenchCard from './TerminalBenchCard';
 import type { EnvironmentRecord, TerminalSession } from '../../types';
@@ -149,6 +150,33 @@ describe('TerminalBenchCard', () => {
     expect(await screen.findByText('Status: Running')).toBeInTheDocument();
     await waitFor(() => expect(mockCreateTerminalSession).toHaveBeenCalledWith('env-1'));
     expect(screen.getByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
+  });
+
+  it('auto-reattaches only once in StrictMode when the personal session is detached', async () => {
+    mockGetTerminalSession.mockResolvedValue(runningDetachedSession);
+    let resolveAttach: ((session: TerminalSession) => void) | null = null;
+    mockCreateTerminalSession.mockImplementation(
+      () =>
+        new Promise<TerminalSession>((resolve) => {
+          resolveAttach = resolve;
+        })
+    );
+
+    renderWithProviders(
+      <StrictMode>
+        <TerminalBenchCard selectedEnvironment={selectedEnvironment} />
+      </StrictMode>
+    );
+
+    expect(await screen.findByText('Status: Running')).toBeInTheDocument();
+    await waitFor(() => expect(mockCreateTerminalSession).toHaveBeenCalledTimes(1));
+
+    expect(resolveAttach).not.toBeNull();
+    await act(async () => {
+      resolveAttach?.(runningAttachedSession);
+    });
+
+    expect(await screen.findByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
   });
 
   it('detaches a running attachment without immediately auto-reattaching', async () => {
