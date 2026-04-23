@@ -1,438 +1,528 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import {
-  cancelTask,
+  buildTaskStreamUrl,
   createTask,
+  getEnvironments,
   getTask,
+  getTaskOutput,
   getTasks,
-  getTaskTerminal,
-  releaseTaskTerminal,
+  getWorkspaces,
 } from '../api';
-import { getAppUserId } from '../api/appUser';
-import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
-import { useT } from '../i18n';
-import type { TaskCreateRequest, TaskListResponse, TaskRecord, TaskTerminalBinding, TaskStatus } from '../types';
+import type {
+  TaskCreateRequest,
+  TaskOutputEvent,
+  TaskStatus,
+  TaskSummary,
+} from '../types';
 
-const statusLabelKey: Record<TaskStatus, string> = {
-  pending: 'pages.tasks.status.pending',
-  running: 'common.running',
-  completed: 'pages.tasks.status.completed',
-  failed: 'common.failed',
-  cancelled: 'pages.tasks.status.cancelled',
+const statusLabel: Record<TaskStatus, string> = {
+  queued: 'Queued',
+  starting: 'Starting',
+  running: 'Running',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
 };
 
+function mergeOutputItems(current: TaskOutputEvent[], incoming: TaskOutputEvent[]): TaskOutputEvent[] {
+  const bySeq = new Map<number, TaskOutputEvent>();
+  for (const item of current) {
+    bySeq.set(item.seq, item);
+  }
+  for (const item of incoming) {
+    bySeq.set(item.seq, item);
+  }
+  return [...bySeq.values()].sort((left, right) => left.seq - right.seq);
+}
+
 function TasksPage() {
-  const t = useT();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const environmentSelection = useEnvironmentSelection();
-  const selectedEnvironment = environmentSelection.selectedEnvironment;
-  const selectedEnvironmentId = selectedEnvironment?.id ?? null;
-  const currentUserId = getAppUserId();
+  const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: getWorkspaces });
+  const environmentsQuery = useQuery({ queryKey: ['environments'], queryFn: getEnvironments });
+  const tasksQuery = useQuery({
+    queryKey: ['tasks'],
+    queryFn: getTasks,
+    refetchInterval: 5000,
+  });
+
+  const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
+  const environments = useMemo(() => environmentsQuery.data?.items ?? [], [environmentsQuery.data]);
+  const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
+
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>('');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     title: '',
-    command: '',
-    workingDirectory: '',
+    task_input: '',
+    task_profile: 'claude-code',
   });
+  const [outputItems, setOutputItems] = useState<TaskOutputEvent[]>([]);
+  const [outputError, setOutputError] = useState<string | null>(null);
 
-  const tasksQuery = useQuery({
-    queryKey: ['tasks', selectedEnvironmentId],
-    queryFn: () => {
-      if (!selectedEnvironmentId) {
-        return Promise.resolve<TaskListResponse>({ items: [] });
-      }
-      return getTasks(selectedEnvironmentId);
-    },
-  });
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const nextSeqRef = useRef<number>(0);
+  const reconnectTimerRef = useRef<number | null>(null);
 
-  const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
   const effectiveSelectedTaskId = useMemo(() => {
-    if (!selectedEnvironmentId) {
-      return null;
-    }
     if (selectedTaskId && tasks.some((task) => task.task_id === selectedTaskId)) {
       return selectedTaskId;
     }
     return tasks[0]?.task_id ?? null;
-  }, [selectedEnvironmentId, selectedTaskId, tasks]);
+  }, [selectedTaskId, tasks]);
 
   const selectedTaskQuery = useQuery({
     queryKey: ['task', effectiveSelectedTaskId],
     queryFn: () => getTask(effectiveSelectedTaskId ?? ''),
     enabled: effectiveSelectedTaskId !== null,
-  });
-  const selectedTerminalQuery = useQuery({
-    queryKey: ['task-terminal', effectiveSelectedTaskId],
-    queryFn: () => getTaskTerminal(effectiveSelectedTaskId ?? ''),
-    enabled: effectiveSelectedTaskId !== null,
+    refetchInterval: 5000,
   });
 
-  const selectedTask =
-    selectedTaskQuery.data ??
-    tasks.find((task) => task.task_id === effectiveSelectedTaskId) ??
-    null;
-  const selectedTerminal = selectedTerminalQuery.data ?? selectedTask?.terminal ?? null;
-
-  function upsertTask(task: TaskRecord): void {
-    queryClient.setQueryData<TaskRecord>(['task', task.task_id], task);
-    if (task.terminal) {
-      queryClient.setQueryData<TaskTerminalBinding>(['task-terminal', task.task_id], task.terminal);
-    }
-    queryClient.setQueryData<TaskListResponse>(['tasks', task.environment_id], (current) => {
-      const items = current?.items ?? [];
-      const next = [task, ...items.filter((item) => item.task_id !== task.task_id)];
-      next.sort((left, right) => right.created_at.localeCompare(left.created_at));
-      return { items: next };
-    });
-  }
+  const selectedTask = selectedTaskQuery.data ?? null;
 
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreateRequest) => createTask(payload),
     onSuccess: (task) => {
-      upsertTask(task);
+      queryClient.setQueryData<{ items: TaskSummary[] }>(['tasks'], (current) => ({
+        items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
+      }));
       setSelectedTaskId(task.task_id);
-      setDraft({ title: '', command: '', workingDirectory: '' });
+      setDraft({ title: '', task_input: '', task_profile: 'claude-code' });
+      void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
     },
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: (taskId: string) => cancelTask(taskId),
-    onSuccess: (task) => {
-      upsertTask(task);
-      void queryClient.invalidateQueries({ queryKey: ['tasks', task.environment_id] });
-      void queryClient.invalidateQueries({ queryKey: ['task-terminal', task.task_id] });
-    },
-  });
-
-  const releaseMutation = useMutation({
-    mutationFn: (taskId: string) => releaseTaskTerminal(taskId),
-    onSuccess: (_attachment, taskId) => {
-      void queryClient.invalidateQueries({ queryKey: ['task', taskId] });
-      void queryClient.invalidateQueries({ queryKey: ['task-terminal', taskId] });
-      if (selectedEnvironmentId) {
-        void queryClient.invalidateQueries({ queryKey: ['tasks', selectedEnvironmentId] });
-      }
-    },
-  });
-
-  const selectedEnvironmentSummary = useMemo(() => {
-    if (!selectedEnvironment) {
-      return null;
+  useEffect(() => {
+    if (effectiveSelectedTaskId === null) {
+      nextSeqRef.current = 0;
+      return undefined;
     }
-    return `${selectedEnvironment.alias} · ${selectedEnvironment.display_name}`;
-  }, [selectedEnvironment]);
+    let active = true;
+
+    const closeStream = (): void => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const appendOutput = (items: TaskOutputEvent[]): void => {
+      setOutputItems((current) => mergeOutputItems(current, items));
+      if (items.length > 0) {
+        nextSeqRef.current = items[items.length - 1]?.seq ?? nextSeqRef.current;
+      }
+    };
+
+    const refillGap = async (): Promise<void> => {
+      try {
+        const page = await getTaskOutput(effectiveSelectedTaskId, nextSeqRef.current);
+        if (!active) {
+          return;
+        }
+        appendOutput(page.items);
+        nextSeqRef.current = page.next_seq;
+      } catch (error) {
+        if (active) {
+          setOutputError(error instanceof Error ? error.message : 'Unable to replay task output');
+        }
+      }
+    };
+
+    const openStream = (): void => {
+      closeStream();
+      const source = new EventSource(buildTaskStreamUrl(effectiveSelectedTaskId, nextSeqRef.current));
+      eventSourceRef.current = source;
+      source.onmessage = (event: MessageEvent<string>) => {
+        try {
+          const item = JSON.parse(event.data) as TaskOutputEvent;
+          if (item.seq > nextSeqRef.current + 1) {
+            void refillGap();
+          }
+          if (item.seq > nextSeqRef.current) {
+            appendOutput([item]);
+          }
+          if (item.kind === 'lifecycle') {
+            void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            void queryClient.invalidateQueries({ queryKey: ['task', effectiveSelectedTaskId] });
+          }
+        } catch (error) {
+          setOutputError(error instanceof Error ? error.message : 'Unable to parse task output');
+        }
+      };
+      source.onerror = () => {
+        source.close();
+        if (!active) {
+          return;
+        }
+        void refillGap().finally(() => {
+          if (!active) {
+            return;
+          }
+          reconnectTimerRef.current = window.setTimeout(openStream, 1000);
+        });
+      };
+    };
+
+    void (async () => {
+      try {
+        setOutputError(null);
+        const page = await getTaskOutput(effectiveSelectedTaskId, 0);
+        if (!active) {
+          return;
+        }
+        setOutputItems(page.items);
+        nextSeqRef.current = page.next_seq;
+        openStream();
+      } catch (error) {
+        if (active) {
+          setOutputError(error instanceof Error ? error.message : 'Unable to load task output');
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      closeStream();
+    };
+  }, [effectiveSelectedTaskId, queryClient]);
+
+  const effectiveWorkspaceId = selectedWorkspaceId || workspaces[0]?.workspace_id || '';
+  const effectiveEnvironmentId = selectedEnvironmentId || environments[0]?.id || '';
+  const selectedWorkspace =
+    workspaces.find((workspace) => workspace.workspace_id === effectiveWorkspaceId) ?? null;
+  const selectedEnvironment =
+    environments.find((environment) => environment.id === effectiveEnvironmentId) ?? null;
+
+  const canCreate =
+    selectedWorkspace !== null &&
+    selectedEnvironment !== null &&
+    draft.task_input.trim().length > 0 &&
+    !createMutation.isPending;
 
   const createError = createMutation.error instanceof Error ? createMutation.error.message : null;
   const tasksError = tasksQuery.error instanceof Error ? tasksQuery.error.message : null;
   const detailError = selectedTaskQuery.error instanceof Error ? selectedTaskQuery.error.message : null;
-  const terminalError =
-    selectedTerminalQuery.error instanceof Error
-      ? selectedTerminalQuery.error.message
-      : releaseMutation.error instanceof Error
-        ? releaseMutation.error.message
-        : cancelMutation.error instanceof Error
-          ? cancelMutation.error.message
-          : null;
-
-  const canCreate =
-    selectedEnvironmentId !== null &&
-    draft.title.trim().length > 0 &&
-    draft.command.trim().length > 0 &&
-    !createMutation.isPending;
-  const canCancel =
-    effectiveSelectedTaskId !== null &&
-    selectedTask !== null &&
-    !cancelMutation.isPending &&
-    !['completed', 'failed', 'cancelled'].includes(selectedTask.status);
-  const canRelease =
-    effectiveSelectedTaskId !== null &&
-    selectedTerminal !== null &&
-    selectedTerminal.binding_status === 'taken_over' &&
-    selectedTerminal.ownership_user_id === currentUserId &&
-    !releaseMutation.isPending;
-  const canAttachTerminal =
-    effectiveSelectedTaskId !== null && selectedTerminal?.binding_status !== 'archived';
-
-  function navigateToTerminal(intent: 'open' | 'takeover'): void {
-    if (!selectedTask) {
-      return;
-    }
-    const params = new URLSearchParams({
-      environment_id: selectedTask.environment_id,
-      task_id: selectedTask.task_id,
-      intent,
-    });
-    navigate(`/terminal?${params.toString()}`);
-  }
-
-  function terminalStatusLabel(binding: TaskTerminalBinding | null): string {
-    if (!binding) {
-      return t('pages.terminal.task.pending');
-    }
-    if (binding.binding_status === 'taken_over') {
-      return t('pages.terminal.task.takenOver');
-    }
-    if (binding.binding_status === 'running_observe') {
-      return t('pages.terminal.task.observeOnly');
-    }
-    if (binding.binding_status === 'completed') {
-      return t('pages.tasks.status.completed');
-    }
-    if (binding.binding_status === 'archived') {
-      return t('pages.terminal.task.archived');
-    }
-    if (binding.binding_status === 'failed') {
-      return t('common.failed');
-    }
-    return t('pages.terminal.task.pending');
-  }
 
   return (
     <div className="px-4 py-8 sm:px-6 lg:px-8">
       <section className="mb-8 space-y-3">
         <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
-          {t('pages.tasks.eyebrow')}
+          Task Harness
         </p>
-        <h1 className="text-3xl font-semibold text-gray-900">{t('pages.tasks.title')}</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">{t('pages.tasks.description')}</p>
+        <h1 className="text-3xl font-semibold text-gray-900">Task Harness v1</h1>
+        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">
+          Create Claude Code tasks against a workspace and environment binding, then inspect the
+          persisted prompt, runtime payload, replayed output, and final result.
+        </p>
       </section>
 
-      <div className="space-y-6">
-        <EnvironmentSelectorPanel {...environmentSelection} />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-gray-900">Create task</h2>
+            <p className="text-sm text-gray-600">
+              Workspace and environment are selected per task. The backend derives a title when the
+              title field is left empty.
+            </p>
+          </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="space-y-1">
-              <h2 className="text-lg font-medium text-gray-900">{t('pages.tasks.createTitle')}</h2>
-              <p className="text-sm text-gray-600">{t('pages.tasks.createDescription')}</p>
-            </div>
-
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!selectedEnvironmentId) {
-                  return;
-                }
-                createMutation.mutate({
-                  environment_id: selectedEnvironmentId,
-                  title: draft.title.trim(),
-                  command: draft.command.trim(),
-                  working_directory: draft.workingDirectory.trim() || undefined,
-                });
-              }}
-            >
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-gray-700">{t('pages.tasks.titleLabel')}</span>
-                <input
-                  aria-label={t('pages.tasks.titleLabel')}
-                  value={draft.title}
-                  onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-                  placeholder="Train Task"
-                />
-              </label>
-
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-gray-700">{t('pages.tasks.commandLabel')}</span>
-                <textarea
-                  aria-label={t('pages.tasks.commandLabel')}
-                  value={draft.command}
-                  onChange={(event) => setDraft((current) => ({ ...current, command: event.target.value }))}
-                  className="min-h-28 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-                  placeholder="python train.py --epochs 3"
-                />
-              </label>
-
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-gray-700">
-                  {t('pages.tasks.workingDirectoryLabel')}
-                </span>
-                <input
-                  aria-label={t('pages.tasks.workingDirectoryLabel')}
-                  value={draft.workingDirectory}
-                  onChange={(event) =>
-                    setDraft((current) => ({ ...current, workingDirectory: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-                  placeholder="/workspace/project"
-                />
-              </label>
-
-              {createError ? <p className="text-sm text-red-700">{createError}</p> : null}
-              {!selectedEnvironmentSummary ? (
-                <p className="text-sm text-amber-700">{t('pages.tasks.selectEnvironmentPrompt')}</p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={!canCreate}
-                className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!selectedWorkspace || !selectedEnvironment) {
+                return;
+              }
+              createMutation.mutate({
+                workspace_id: selectedWorkspace.workspace_id,
+                environment_id: selectedEnvironment.id,
+                task_profile: draft.task_profile,
+                task_input: draft.task_input.trim(),
+                title: draft.title.trim() || undefined,
+              });
+            }}
+          >
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-gray-700">Workspace</span>
+              <select
+                aria-label="Workspace"
+                value={effectiveWorkspaceId}
+                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
               >
-                {createMutation.isPending ? t('pages.tasks.creatingAction') : t('pages.tasks.createAction')}
-              </button>
-            </form>
+                {workspaces.map((workspace) => (
+                  <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                    {workspace.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-gray-700">Environment</span>
+              <select
+                aria-label="Environment"
+                value={effectiveEnvironmentId}
+                onChange={(event) => setSelectedEnvironmentId(event.target.value)}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+              >
+                {environments.map((environment) => (
+                  <option key={environment.id} value={environment.id}>
+                    {environment.alias} · {environment.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-gray-700">Task profile</span>
+              <select
+                aria-label="Task profile"
+                value={draft.task_profile}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, task_profile: event.target.value }))
+                }
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+              >
+                <option value="claude-code">claude-code</option>
+              </select>
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-gray-700">Title</span>
+              <input
+                aria-label="Title"
+                value={draft.title}
+                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+                placeholder="Optional"
+              />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-gray-700">Task input</span>
+              <textarea
+                aria-label="Task input"
+                value={draft.task_input}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, task_input: event.target.value }))
+                }
+                className="min-h-40 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+                placeholder="Implement Task Harness v1 according to the current repository plan."
+              />
+            </label>
+
+            {selectedWorkspace ? (
+              <p className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                Default workdir: <code>{selectedWorkspace.default_workdir ?? 'n/a'}</code>
+              </p>
+            ) : null}
+            {createError ? <p className="text-sm text-red-700">{createError}</p> : null}
+
+            <button
+              type="submit"
+              disabled={!canCreate}
+              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {createMutation.isPending ? 'Creating…' : 'Create task'}
+            </button>
+          </form>
+
+          <section className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-lg font-medium text-gray-900">Task list</h2>
+              <p className="text-sm text-gray-600">All harness-managed tasks are listed below.</p>
+            </div>
+            {tasksError ? <p className="text-sm text-red-700">{tasksError}</p> : null}
+            <div className="space-y-3">
+              {tasks.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
+                  No tasks have been created yet.
+                </div>
+              ) : (
+                tasks.map((task) => (
+                  <button
+                    key={task.task_id}
+                    type="button"
+                    onClick={() => setSelectedTaskId(task.task_id)}
+                    className={[
+                      'flex w-full flex-col gap-2 rounded-2xl border px-4 py-4 text-left transition',
+                      effectiveSelectedTaskId === task.task_id
+                        ? 'border-[var(--accent)]/25 bg-[var(--accent)]/10'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white',
+                    ].join(' ')}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-gray-900">{task.title}</span>
+                      <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                        {statusLabel[task.status]}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {task.workspace_summary.label} · {task.environment_summary.alias}
+                    </p>
+                    <p className="text-xs text-gray-500">Updated {task.updated_at}</p>
+                  </button>
+                ))
+              )}
+            </div>
           </section>
+        </section>
 
-          <section className="space-y-6">
-            <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="space-y-1">
-                <h2 className="text-lg font-medium text-gray-900">{t('pages.tasks.listTitle')}</h2>
-                <p className="text-sm text-gray-600">{t('pages.tasks.listDescription')}</p>
-              </div>
+        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-gray-900">Task detail</h2>
+            <p className="text-sm text-gray-600">
+              Detail combines binding snapshot, prompt layers, runtime payload, output replay, and
+              result summary.
+            </p>
+          </div>
 
-              {tasksError ? <p className="text-sm text-red-700">{tasksError}</p> : null}
+          {detailError ? <p className="text-sm text-red-700">{detailError}</p> : null}
+          {selectedTask ? (
+            <div className="space-y-6">
+              <section className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                  Summary
+                </h3>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium text-gray-900">Status:</span>{' '}
+                  {statusLabel[selectedTask.status]}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium text-gray-900">Workspace:</span>{' '}
+                  {selectedTask.workspace_summary.label}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium text-gray-900">Environment:</span>{' '}
+                  {selectedTask.environment_summary.alias} · {selectedTask.environment_summary.display_name}
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium text-gray-900">Latest seq:</span>{' '}
+                  {selectedTask.latest_output_seq}
+                </p>
+                {selectedTask.error_summary ? (
+                  <p className="text-sm text-red-700">{selectedTask.error_summary}</p>
+                ) : null}
+              </section>
 
-              <div className="space-y-3">
-                {tasks.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
-                    {t('pages.tasks.empty')}
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                  Binding
+                </h3>
+                {selectedTask.binding ? (
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                    <p>
+                      <span className="font-medium text-gray-900">Resolved workdir:</span>{' '}
+                      <code>{selectedTask.binding.resolved_workdir}</code>
+                    </p>
+                    <p>
+                      <span className="font-medium text-gray-900">Snapshot:</span>{' '}
+                      <code>{selectedTask.binding.snapshot_path}</code>
+                    </p>
                   </div>
                 ) : (
-                  tasks.map((task) => (
-                    <button
-                      key={task.task_id}
-                      type="button"
-                      onClick={() => setSelectedTaskId(task.task_id)}
-                      className={[
-                        'flex w-full flex-col gap-2 rounded-2xl border px-4 py-4 text-left transition',
-                        effectiveSelectedTaskId === task.task_id
-                          ? 'border-[var(--accent)]/25 bg-[var(--accent)]/10'
-                          : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white',
-                      ].join(' ')}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-gray-900">{task.title}</span>
-                        <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                          {t(statusLabelKey[task.status] as never)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-600">
-                        {t('pages.tasks.windowLabel')} {task.terminal?.window_name ?? 'n/a'}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        {t('pages.tasks.bindingStatusLabel')} {terminalStatusLabel(task.terminal)}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {t('pages.tasks.updatedAtLabel')} {task.updated_at}
-                      </p>
-                    </button>
-                  ))
+                  <p className="text-sm text-gray-500">Binding snapshot is not available yet.</p>
                 )}
-              </div>
-            </section>
+              </section>
 
-            <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="space-y-1">
-                <h2 className="text-lg font-medium text-gray-900">{t('pages.tasks.detailTitle')}</h2>
-                <p className="text-sm text-gray-600">{t('pages.tasks.detailDescription')}</p>
-              </div>
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                  Prompt
+                </h3>
+                {selectedTask.prompt ? (
+                  <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    {selectedTask.prompt.layers.map((layer) => (
+                      <div key={layer.name} className="space-y-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {layer.label} <span className="text-xs text-gray-500">({layer.char_count} chars)</span>
+                        </p>
+                        <pre className="overflow-x-auto rounded-xl bg-white p-3 text-xs text-gray-700">
+                          {layer.content}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Prompt manifest is not available yet.</p>
+                )}
+              </section>
 
-              {selectedTask ? (
-                <>
-                  <div className="space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                  Runtime
+                </h3>
+                {selectedTask.runtime ? (
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
                     <p>
-                      <span className="font-medium text-gray-900">{t('pages.tasks.statusLabel')}</span>{' '}
-                      {t(statusLabelKey[selectedTask.status] as never)}
+                      <span className="font-medium text-gray-900">Runner:</span>{' '}
+                      {selectedTask.runtime.runner_kind ?? 'n/a'}
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">
-                        {t('pages.tasks.bindingStatusLabel')}
-                      </span>{' '}
-                      {terminalStatusLabel(selectedTerminal)}
+                      <span className="font-medium text-gray-900">Working directory:</span>{' '}
+                      <code>{selectedTask.runtime.working_directory ?? 'n/a'}</code>
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">
-                        {t('pages.tasks.environmentLabel')}
-                      </span>{' '}
-                      {selectedTask.environment_alias ?? selectedTask.environment_id}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-900">{t('pages.tasks.windowLabel')}</span>{' '}
-                      {selectedTerminal?.window_name ?? 'n/a'}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-900">{t('pages.tasks.ownerLabel')}</span>{' '}
-                      {selectedTerminal?.ownership_user_id ?? t('pages.tasks.noOwner')}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-900">
-                        {t('pages.tasks.lastOutputLabel')}
-                      </span>{' '}
-                      {selectedTerminal?.last_output_at ?? t('common.unavailable')}
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-900">{t('pages.tasks.commandLabel')}</span>{' '}
-                      <code className="rounded bg-white px-2 py-1">{selectedTask.command}</code>
-                    </p>
-                    <p>
-                      <span className="font-medium text-gray-900">
-                        {t('pages.tasks.workingDirectoryLabel')}
-                      </span>{' '}
-                      <code className="rounded bg-white px-2 py-1">{selectedTask.working_directory}</code>
+                      <span className="font-medium text-gray-900">Command:</span>{' '}
+                      <code>{selectedTask.runtime.command.join(' ') || 'pending'}</code>
                     </p>
                   </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Runtime payload is not available yet.</p>
+                )}
+              </section>
 
-                  {detailError ? <p className="text-sm text-red-700">{detailError}</p> : null}
-                  {terminalError ? <p className="text-sm text-red-700">{terminalError}</p> : null}
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => navigateToTerminal('open')}
-                      disabled={!canAttachTerminal}
-                      className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {t('pages.tasks.openTerminal')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigateToTerminal('takeover')}
-                      disabled={!canAttachTerminal}
-                      className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {t('pages.tasks.takeover')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (effectiveSelectedTaskId) {
-                          releaseMutation.mutate(effectiveSelectedTaskId);
-                        }
-                      }}
-                      disabled={!canRelease}
-                      className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {releaseMutation.isPending
-                        ? t('pages.tasks.releasingAction')
-                        : t('pages.tasks.release')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (effectiveSelectedTaskId) {
-                          cancelMutation.mutate(effectiveSelectedTaskId);
-                        }
-                      }}
-                      disabled={!canCancel}
-                      className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {cancelMutation.isPending
-                        ? t('pages.tasks.cancellingAction')
-                        : t('pages.tasks.cancelTask')}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
-                  {t('pages.tasks.selectTaskPrompt')}
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                  Output
+                </h3>
+                {outputError ? <p className="text-sm text-red-700">{outputError}</p> : null}
+                <div className="max-h-[26rem] space-y-2 overflow-auto rounded-2xl border border-gray-200 bg-gray-950 p-4 text-xs text-gray-100">
+                  {outputItems.length === 0 ? (
+                    <p className="text-gray-400">No output has been recorded yet.</p>
+                  ) : (
+                    outputItems.map((item) => (
+                      <div key={item.seq} className="space-y-1">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+                          #{item.seq} · {item.kind}
+                        </p>
+                        <pre className="whitespace-pre-wrap break-words">{item.content}</pre>
+                      </div>
+                    ))
+                  )}
                 </div>
-              )}
-            </section>
-          </section>
-        </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                  Result
+                </h3>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                  <p>
+                    <span className="font-medium text-gray-900">Exit code:</span>{' '}
+                    {selectedTask.result.exit_code ?? 'n/a'}
+                  </p>
+                  <p>
+                    <span className="font-medium text-gray-900">Failure category:</span>{' '}
+                    {selectedTask.result.failure_category ?? 'n/a'}
+                  </p>
+                  <p>
+                    <span className="font-medium text-gray-900">Completed at:</span>{' '}
+                    {selectedTask.result.completed_at ?? 'n/a'}
+                  </p>
+                </div>
+              </section>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
+              Select a task from the list to inspect its persisted state.
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

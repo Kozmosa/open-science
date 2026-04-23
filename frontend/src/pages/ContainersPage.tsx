@@ -47,6 +47,7 @@ interface EnvironmentFormValues {
   preferred_python: string;
   preferred_env_manager: string;
   preferred_runtime_notes: string;
+  task_harness_profile: string;
 }
 
 const emptyFormValues = (): EnvironmentFormValues => ({
@@ -66,6 +67,7 @@ const emptyFormValues = (): EnvironmentFormValues => ({
   preferred_python: '',
   preferred_env_manager: '',
   preferred_runtime_notes: '',
+  task_harness_profile: '',
 });
 
 function valuesFromEnvironment(environment: EnvironmentRecord): EnvironmentFormValues {
@@ -86,6 +88,7 @@ function valuesFromEnvironment(environment: EnvironmentRecord): EnvironmentFormV
     preferred_python: environment.preferred_python ?? '',
     preferred_env_manager: environment.preferred_env_manager ?? '',
     preferred_runtime_notes: environment.preferred_runtime_notes ?? '',
+    task_harness_profile: environment.task_harness_profile ?? '',
   };
 }
 
@@ -228,6 +231,7 @@ function EnvironmentEditor({
     preferredEnvManager: t('components.environmentEditor.placeholders.preferredEnvManager'),
     preferredRuntimeNotes: t('components.environmentEditor.placeholders.preferredRuntimeNotes'),
     sshOptionsJson: t('components.environmentEditor.placeholders.sshOptionsJson'),
+    taskHarnessProfile: 'You are running inside the task harness for this environment.',
   };
   const authKindLabels = {
     ssh_key: t('components.environmentEditor.authKindOptions.ssh_key'),
@@ -464,6 +468,17 @@ function EnvironmentEditor({
             rows={3}
             className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
             placeholder={placeholders.preferredRuntimeNotes}
+          />
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-gray-900">Task harness profile</span>
+          <textarea
+            value={values.task_harness_profile}
+            onChange={(event) => updateField('task_harness_profile', event.target.value)}
+            rows={5}
+            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            placeholder={placeholders.taskHarnessProfile}
           />
         </label>
 
@@ -811,6 +826,7 @@ function ContainersPage() {
         preferred_python: values.preferred_python.trim() || null,
         preferred_env_manager: values.preferred_env_manager.trim() || null,
         preferred_runtime_notes: values.preferred_runtime_notes.trim() || null,
+        task_harness_profile: values.task_harness_profile.trim() || null,
       } satisfies EnvironmentCreateRequest;
 
       if (!Number.isInteger(requestBase.port) || requestBase.port < 1 || requestBase.port > 65535) {

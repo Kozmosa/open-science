@@ -12,11 +12,13 @@ import type {
   SystemHealth,
   TaskCreateRequest,
   TaskListResponse,
+  TaskOutputListResponse,
   TaskRecord,
-  TaskTerminalBinding,
-  TerminalAttachment,
+  TaskSummary,
   TerminalSession,
   UserSessionPairListResponse,
+  WorkspaceListResponse,
+  WorkspaceRecord,
 } from '../types';
 import {
   mockCreateCodeServerSession,
@@ -24,32 +26,32 @@ import {
   mockCreateProjectEnvironmentReference,
   mockCreateTask,
   mockCreateTerminalSession,
-  mockCancelTask,
   mockDeleteCodeServerSession,
   mockDeleteEnvironment,
   mockDeleteProjectEnvironmentReference,
   mockDeleteTerminalSession,
   mockDetectEnvironment,
   mockGetCodeServerStatus,
-  mockGetEnvironments,
-  mockGetSessionPairs,
-  mockGetTask,
-  mockGetTaskTerminal,
-  mockGetTasks,
-  mockGetHealth,
   mockGetEnvironment,
+  mockGetEnvironments,
+  mockGetHealth,
   mockGetProjectEnvironmentReferences,
+  mockGetTask,
+  mockGetTaskOutput,
+  mockGetTasks,
   mockGetTerminalSession,
-  mockOpenTaskTerminal,
-  mockReleaseTaskTerminal,
-  mockTakeoverTaskTerminal,
+  mockGetWorkspaces,
+  mockGetWorkspace,
   mockResetTerminalSession,
-  mockUpdateProjectEnvironmentReference,
+  mockGetSessionPairs,
   mockUpdateEnvironment,
+  mockUpdateProjectEnvironmentReference,
 } from './mock';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 const DEFAULT_PROJECT_ID = 'default';
+const API_BASE = '/api';
+const API_KEY = import.meta.env.VITE_AINRF_API_KEY?.trim() ?? '';
 
 function withEnvironmentId(path: string, environmentId?: string): string {
   if (!environmentId) {
@@ -114,41 +116,38 @@ export const resetTerminalSession = (
         attachment_id: attachmentId ?? null,
       });
 
-export const getTasks = (environmentId: string): Promise<TaskListResponse> =>
+export const getWorkspaces = (): Promise<WorkspaceListResponse> =>
+  USE_MOCK ? Promise.resolve(mockGetWorkspaces()) : api.get<WorkspaceListResponse>('/workspaces');
+
+export const getWorkspace = (workspaceId: string): Promise<WorkspaceRecord> =>
   USE_MOCK
-    ? Promise.resolve(mockGetTasks(environmentId))
-    : api.get<TaskListResponse>(withEnvironmentId('/tasks', environmentId));
+    ? Promise.resolve(mockGetWorkspace(workspaceId))
+    : api.get<WorkspaceRecord>(`/workspaces/${workspaceId}`);
+
+export const getTasks = (): Promise<TaskListResponse> =>
+  USE_MOCK ? Promise.resolve(mockGetTasks()) : api.get<TaskListResponse>('/tasks');
 
 export const getTask = (taskId: string): Promise<TaskRecord> =>
   USE_MOCK ? Promise.resolve(mockGetTask(taskId)) : api.get<TaskRecord>(`/tasks/${taskId}`);
 
-export const createTask = (payload: TaskCreateRequest): Promise<TaskRecord> =>
-  USE_MOCK ? Promise.resolve(mockCreateTask(payload)) : api.post<TaskRecord>('/tasks', payload);
+export const createTask = (payload: TaskCreateRequest): Promise<TaskSummary> =>
+  USE_MOCK ? Promise.resolve(mockCreateTask(payload)) : api.post<TaskSummary>('/tasks', payload);
 
-export const cancelTask = (taskId: string): Promise<TaskRecord> =>
+export const getTaskOutput = (
+  taskId: string,
+  afterSeq: number = 0
+): Promise<TaskOutputListResponse> =>
   USE_MOCK
-    ? Promise.resolve(mockCancelTask(taskId))
-    : api.post<TaskRecord>(`/tasks/${taskId}/cancel`, {});
+    ? Promise.resolve(mockGetTaskOutput(taskId, afterSeq))
+    : api.get<TaskOutputListResponse>(`/tasks/${taskId}/output?after_seq=${afterSeq}`);
 
-export const getTaskTerminal = (taskId: string): Promise<TaskTerminalBinding> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetTaskTerminal(taskId))
-    : api.get<TaskTerminalBinding>(`/tasks/${taskId}/terminal`);
-
-export const openTaskTerminal = (taskId: string): Promise<TerminalAttachment> =>
-  USE_MOCK
-    ? Promise.resolve(mockOpenTaskTerminal(taskId))
-    : api.post<TerminalAttachment>(`/tasks/${taskId}/terminal/open`, {});
-
-export const takeoverTaskTerminal = (taskId: string): Promise<TerminalAttachment> =>
-  USE_MOCK
-    ? Promise.resolve(mockTakeoverTaskTerminal(taskId))
-    : api.post<TerminalAttachment>(`/tasks/${taskId}/terminal/takeover`, {});
-
-export const releaseTaskTerminal = (taskId: string): Promise<TerminalAttachment> =>
-  USE_MOCK
-    ? Promise.resolve(mockReleaseTaskTerminal(taskId))
-    : api.post<TerminalAttachment>(`/tasks/${taskId}/terminal/release`, {});
+export const buildTaskStreamUrl = (taskId: string, afterSeq: number = 0): string => {
+  const search = new URLSearchParams({ after_seq: String(afterSeq) });
+  if (API_KEY) {
+    search.set('api_key', API_KEY);
+  }
+  return `${API_BASE}/tasks/${taskId}/stream?${search.toString()}`;
+};
 
 export const getCodeServerStatus = (environmentId?: string): Promise<CodeServerStatus> =>
   USE_MOCK

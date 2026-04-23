@@ -38,19 +38,6 @@ export interface TerminalSession {
 }
 
 export type TerminalAttachmentMode = 'write' | 'observe';
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-export type TaskTerminalBindingStatus =
-  | 'pending_attach'
-  | 'running_observe'
-  | 'taken_over'
-  | 'completed'
-  | 'failed'
-  | 'archived';
-export type TaskAgentWriteState =
-  | 'running'
-  | 'pause_requested'
-  | 'paused_by_user'
-  | 'resume_requested';
 
 export interface UserSessionPair {
   binding_id: string;
@@ -72,65 +59,124 @@ export interface UserSessionPairListResponse {
   items: UserSessionPair[];
 }
 
-export interface TaskTerminalBinding {
-  task_id: string;
-  binding_id: string;
-  environment_id: string;
-  agent_session_name: string;
-  window_id: string;
-  window_name: string;
-  binding_status: TaskTerminalBindingStatus;
-  mode: TerminalAttachmentMode;
-  readonly: boolean;
-  ownership_user_id: string | null;
-  agent_write_state: TaskAgentWriteState;
-  last_output_at: string | null;
+export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed';
+export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle';
+
+export interface WorkspaceRecord {
+  workspace_id: string;
+  label: string;
+  description: string | null;
+  default_workdir: string | null;
+  workspace_prompt: string;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface TaskRecord {
-  task_id: string;
-  binding_id: string;
+export interface WorkspaceListResponse {
+  items: WorkspaceRecord[];
+}
+
+export interface WorkspaceSummary {
+  workspace_id: string;
+  label: string;
+  description: string | null;
+  default_workdir: string | null;
+}
+
+export interface TaskEnvironmentSummary {
   environment_id: string;
-  environment_alias: string | null;
+  alias: string;
+  display_name: string;
+  host: string;
+  default_workdir: string | null;
+}
+
+export interface TaskSummary {
+  task_id: string;
   title: string;
-  command: string;
-  working_directory: string;
+  task_profile: string;
   status: TaskStatus;
+  workspace_summary: WorkspaceSummary;
+  environment_summary: TaskEnvironmentSummary;
   created_at: string;
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
+  error_summary: string | null;
+  latest_output_seq: number;
+}
+
+export interface TaskBindingSummary {
+  workspace: WorkspaceSummary;
+  environment: TaskEnvironmentSummary;
+  task_profile: string;
+  title: string;
+  task_input: string;
+  resolved_workdir: string;
+  snapshot_path: string;
+}
+
+export interface TaskPromptLayer {
+  position: number;
+  name: string;
+  label: string;
+  content: string;
+  char_count: number;
+}
+
+export interface TaskPromptSummary {
+  rendered_prompt: string;
+  layer_order: string[];
+  layers: TaskPromptLayer[];
+  manifest_path: string;
+}
+
+export interface TaskRuntimeSummary {
+  runner_kind: string | null;
+  working_directory: string | null;
+  command: string[];
+  prompt_file: string | null;
+  helper_path: string | null;
+  launch_payload_path: string | null;
+}
+
+export interface TaskResultSummary {
   exit_code: number | null;
-  detail: string | null;
-  terminal: TaskTerminalBinding | null;
+  failure_category: string | null;
+  error_summary: string | null;
+  completed_at: string | null;
+}
+
+export interface TaskRecord extends TaskSummary {
+  binding: TaskBindingSummary | null;
+  prompt: TaskPromptSummary | null;
+  runtime: TaskRuntimeSummary | null;
+  result: TaskResultSummary;
 }
 
 export interface TaskListResponse {
-  items: TaskRecord[];
+  items: TaskSummary[];
 }
 
 export interface TaskCreateRequest {
+  workspace_id: string;
   environment_id: string;
-  title: string;
-  command: string;
-  working_directory?: string | null;
+  task_profile: string;
+  task_input: string;
+  title?: string | null;
 }
 
-export interface TerminalAttachment {
-  attachment_id: string;
-  terminal_ws_url: string;
-  expires_at: string;
-  binding_id: string;
-  session_id: string;
-  session_name: string;
-  environment_id: string;
-  environment_alias: string;
-  target_kind: string;
-  working_directory: string | null;
-  readonly: boolean;
-  mode: TerminalAttachmentMode;
-  window_id: string | null;
-  window_name: string | null;
+export interface TaskOutputEvent {
+  task_id: string;
+  seq: number;
+  kind: TaskOutputKind;
+  content: string;
+  created_at: string;
+}
+
+export interface TaskOutputListResponse {
+  items: TaskOutputEvent[];
+  next_seq: number;
 }
 
 export type CodeServerLifecycleStatus = 'starting' | 'ready' | 'unavailable';
@@ -197,6 +243,7 @@ export interface EnvironmentRecord {
   preferred_python: string | null;
   preferred_env_manager: string | null;
   preferred_runtime_notes: string | null;
+  task_harness_profile: string | null;
   created_at: string | null;
   updated_at: string | null;
   latest_detection: EnvironmentDetection | null;
@@ -237,6 +284,7 @@ export interface EnvironmentCreateRequest {
   preferred_python?: string | null;
   preferred_env_manager?: string | null;
   preferred_runtime_notes?: string | null;
+  task_harness_profile?: string | null;
 }
 
 export interface EnvironmentUpdateRequest {
@@ -256,6 +304,7 @@ export interface EnvironmentUpdateRequest {
   preferred_python?: string | null;
   preferred_env_manager?: string | null;
   preferred_runtime_notes?: string | null;
+  task_harness_profile?: string | null;
 }
 
 export interface ProjectEnvironmentReferenceCreateRequest {

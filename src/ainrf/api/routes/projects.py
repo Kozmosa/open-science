@@ -28,7 +28,9 @@ def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
     return service
 
 
-def _serialize_reference(reference: ProjectEnvironmentReference) -> ProjectEnvironmentReferenceResponse:
+def _serialize_reference(
+    reference: ProjectEnvironmentReference,
+) -> ProjectEnvironmentReferenceResponse:
     payload = dict(asdict(reference))
     payload.pop("project_id", None)
     return ProjectEnvironmentReferenceResponse.model_validate(payload)
@@ -63,8 +65,7 @@ async def list_project_environment_refs(
 ) -> ProjectEnvironmentReferenceListResponse:
     service = _get_environment_service(request)
     items = [
-        _serialize_reference(reference)
-        for reference in service.list_project_references(project_id)
+        _serialize_reference(reference) for reference in service.list_project_references(project_id)
     ]
     return ProjectEnvironmentReferenceListResponse(items=items)
 

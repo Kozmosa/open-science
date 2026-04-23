@@ -97,6 +97,7 @@ const selectedEnvironment: EnvironmentRecord = {
   preferred_python: null,
   preferred_env_manager: null,
   preferred_runtime_notes: null,
+  task_harness_profile: null,
   created_at: '2026-04-21T00:00:00Z',
   updated_at: '2026-04-21T00:00:00Z',
   latest_detection: null,

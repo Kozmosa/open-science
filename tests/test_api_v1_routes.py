@@ -33,7 +33,9 @@ async def test_health_routes_are_public(tmp_path: Path, path: str) -> None:
 
 
 @pytest.mark.anyio
-async def test_openapi_registers_projects_terminal_and_code_session_routes(tmp_path: Path) -> None:
+async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
+    tmp_path: Path,
+) -> None:
     async with make_client(tmp_path) as client:
         response = await client.get("/openapi.json")
 
@@ -41,6 +43,10 @@ async def test_openapi_registers_projects_terminal_and_code_session_routes(tmp_p
     payload = response.json()
     assert "/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/v1/projects/{project_id}/environment-refs" in payload["paths"]
+    assert "/workspaces" in payload["paths"]
+    assert "/workspaces/{workspace_id}" in payload["paths"]
+    assert "/v1/workspaces" in payload["paths"]
+    assert "/v1/workspaces/{workspace_id}" in payload["paths"]
     assert "/terminal/session" in payload["paths"]
     assert "/terminal/session-pairs" in payload["paths"]
     assert "/terminal/session/reset" in payload["paths"]
@@ -51,15 +57,17 @@ async def test_openapi_registers_projects_terminal_and_code_session_routes(tmp_p
     assert "/v1/code/session" in payload["paths"]
     assert "/tasks" in payload["paths"]
     assert "/tasks/{task_id}" in payload["paths"]
-    assert "/tasks/{task_id}/cancel" in payload["paths"]
-    assert "/tasks/{task_id}/terminal" in payload["paths"]
-    assert "/tasks/{task_id}/terminal/open" in payload["paths"]
-    assert "/tasks/{task_id}/terminal/takeover" in payload["paths"]
-    assert "/tasks/{task_id}/terminal/release" in payload["paths"]
+    assert "/tasks/{task_id}/output" in payload["paths"]
+    assert "/tasks/{task_id}/stream" in payload["paths"]
     assert "/v1/tasks" in payload["paths"]
     assert "/v1/tasks/{task_id}" in payload["paths"]
-    assert "/v1/tasks/{task_id}/terminal/takeover" in payload["paths"]
-    assert "/v1/tasks/{task_id}/terminal/release" in payload["paths"]
+    assert "/v1/tasks/{task_id}/output" in payload["paths"]
+    assert "/v1/tasks/{task_id}/stream" in payload["paths"]
+    assert "/tasks/{task_id}/cancel" not in payload["paths"]
+    assert "/tasks/{task_id}/terminal" not in payload["paths"]
+    assert "/tasks/{task_id}/terminal/open" not in payload["paths"]
+    assert "/tasks/{task_id}/terminal/takeover" not in payload["paths"]
+    assert "/tasks/{task_id}/terminal/release" not in payload["paths"]
 
 
 @pytest.mark.anyio

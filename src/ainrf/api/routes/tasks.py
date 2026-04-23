@@ -1,333 +1,217 @@
 from __future__ import annotations
 
-from functools import partial
+import asyncio
+from dataclasses import asdict
 from typing import Any
 
-from anyio import to_thread
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 
 from ainrf.api.schemas import (
     TaskCreateRequest,
+    TaskDetailResponse,
     TaskListResponse,
-    TaskResponse,
-    TaskTerminalBindingResponse,
-    TerminalAttachmentResponse,
+    TaskOutputEventResponse,
+    TaskOutputListResponse,
+    TaskSummaryResponse,
 )
-from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
-from ainrf.tasks.models import ManagedTask, TaskTerminalBinding
-from ainrf.tasks.service import (
-    TaskConflictError,
-    TaskManager,
-    TaskNotFoundError,
-    TaskOperationError,
-    TaskRuntimeControlError,
+from ainrf.task_harness import (
+    TaskDetail,
+    TaskHarnessError,
+    TaskHarnessNotFoundError,
+    TaskHarnessService,
+    TaskListItem,
+    TaskOutputPage,
 )
-from ainrf.terminal.attachments import TerminalAttachment, TerminalAttachmentBroker
-from ainrf.terminal.pty import build_attachment_ws_url
+from ainrf.workspaces import WorkspaceNotFoundError
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
-_DEFAULT_PROJECT_ID = "default"
-_APP_USER_HEADER = "X-AINRF-User-Id"
 
 
-def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
-    service = getattr(request.app.state, "environment_service", None)
+def _get_task_harness_service(request: Request) -> TaskHarnessService:
+    service = getattr(request.app.state, "task_harness_service", None)
     if service is None:
-        raise HTTPException(status_code=500, detail="environment service not initialized")
+        raise HTTPException(status_code=500, detail="task harness service not initialized")
     return service
 
 
-def _get_task_manager(request: Request) -> TaskManager:
-    manager = getattr(request.app.state, "task_manager", None)
-    if manager is None:
-        raise HTTPException(status_code=500, detail="task manager not initialized")
-    return manager
-
-
-def _get_attachment_broker(request: Request) -> TerminalAttachmentBroker:
-    broker = getattr(request.app.state, "terminal_attachment_broker", None)
-    if broker is None:
-        raise HTTPException(status_code=500, detail="terminal attachment broker not initialized")
-    return broker
-
-
-def _require_app_user_id(request: Request) -> str:
-    user_id = request.headers.get(_APP_USER_HEADER, "").strip()
-    if not user_id:
-        raise HTTPException(status_code=400, detail=f"Missing required header: {_APP_USER_HEADER}")
-    return user_id
-
-
-def _translate_environment_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, EnvironmentNotFoundError):
-        return HTTPException(status_code=404, detail="Environment not found")
-    return HTTPException(status_code=500, detail="Unexpected task environment error")
-
-
 def _translate_task_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, TaskNotFoundError):
+    if isinstance(exc, TaskHarnessNotFoundError):
         return HTTPException(status_code=404, detail=str(exc))
-    if isinstance(exc, TaskConflictError):
+    if isinstance(exc, WorkspaceNotFoundError):
+        return HTTPException(status_code=404, detail="Workspace not found")
+    if exc.__class__.__name__ == "EnvironmentNotFoundError":
+        return HTTPException(status_code=404, detail="Environment not found")
+    if isinstance(exc, TaskHarnessError):
         return HTTPException(status_code=409, detail=str(exc))
-    if isinstance(exc, TaskRuntimeControlError):
-        return HTTPException(status_code=503, detail=str(exc))
-    if isinstance(exc, TaskOperationError):
-        return HTTPException(status_code=503, detail=str(exc))
-    return HTTPException(status_code=500, detail="Unexpected task runtime error")
+    return HTTPException(status_code=500, detail="Unexpected task harness error")
 
 
-def _serialize_terminal_binding(
-    terminal_binding: TaskTerminalBinding,
-) -> dict[str, str | bool | None]:
-    return {
-        "task_id": terminal_binding.task_id,
-        "binding_id": terminal_binding.binding_id,
-        "environment_id": terminal_binding.environment_id,
-        "agent_session_name": terminal_binding.agent_session_name,
-        "window_id": terminal_binding.window_id,
-        "window_name": terminal_binding.window_name,
-        "binding_status": terminal_binding.binding_status.value,
-        "mode": terminal_binding.mode,
-        "readonly": terminal_binding.readonly,
-        "ownership_user_id": terminal_binding.ownership_user_id,
-        "agent_write_state": terminal_binding.agent_write_state.value,
-        "last_output_at": terminal_binding.last_output_at.isoformat()
-        if terminal_binding.last_output_at is not None
-        else None,
-    }
-
-
-def _serialize_task(
-    task: ManagedTask,
-    terminal_binding: TaskTerminalBinding | None,
-    *,
-    environment_alias: str | None,
-) -> dict[str, Any]:
+def _serialize_task_summary(task: TaskListItem) -> dict[str, Any]:
     return {
         "task_id": task.task_id,
-        "binding_id": task.binding_id,
-        "environment_id": task.environment_id,
-        "environment_alias": environment_alias,
         "title": task.title,
-        "command": task.command,
-        "working_directory": task.working_directory,
+        "task_profile": task.task_profile,
         "status": task.status.value,
+        "workspace_summary": asdict(task.workspace_summary),
+        "environment_summary": asdict(task.environment_summary),
         "created_at": task.created_at.isoformat(),
         "updated_at": task.updated_at.isoformat(),
         "started_at": task.started_at.isoformat() if task.started_at is not None else None,
         "completed_at": task.completed_at.isoformat() if task.completed_at is not None else None,
-        "exit_code": task.exit_code,
-        "detail": task.detail,
-        "terminal": _serialize_terminal_binding(terminal_binding)
-        if terminal_binding is not None
-        else None,
+        "error_summary": task.error_summary,
+        "latest_output_seq": task.latest_output_seq,
     }
 
 
-def _serialize_attachment(
-    attachment: TerminalAttachment,
-    *,
-    terminal_ws_url: str,
-) -> dict[str, Any]:
+def _serialize_task_detail(task: TaskDetail) -> dict[str, Any]:
+    payload = _serialize_task_summary(
+        TaskListItem(
+            task_id=task.task_id,
+            title=task.title,
+            task_profile=task.task_profile,
+            status=task.status,
+            workspace_summary=task.workspace_summary,
+            environment_summary=task.environment_summary,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+            started_at=task.started_at,
+            completed_at=task.completed_at,
+            error_summary=task.error_summary,
+            latest_output_seq=task.latest_output_seq,
+        )
+    )
+    payload["binding"] = asdict(task.binding) if task.binding is not None else None
+    payload["prompt"] = (
+        {
+            "rendered_prompt": task.prompt.rendered_prompt,
+            "layer_order": task.prompt.layer_order,
+            "layers": [asdict(layer) for layer in task.prompt.layers],
+            "manifest_path": task.prompt.manifest_path,
+        }
+        if task.prompt is not None
+        else None
+    )
+    payload["runtime"] = asdict(task.runtime) if task.runtime is not None else None
+    payload["result"] = {
+        "exit_code": task.result.exit_code,
+        "failure_category": task.result.failure_category,
+        "error_summary": task.result.error_summary,
+        "completed_at": task.result.completed_at.isoformat()
+        if task.result.completed_at is not None
+        else None,
+    }
+    return payload
+
+
+def _serialize_output_page(page: TaskOutputPage) -> dict[str, Any]:
     return {
-        "attachment_id": attachment.attachment_id,
-        "terminal_ws_url": terminal_ws_url,
-        "expires_at": attachment.expires_at.isoformat(),
-        "binding_id": attachment.binding_id,
-        "session_id": attachment.session_id,
-        "session_name": attachment.session_name,
-        "environment_id": attachment.environment_id,
-        "environment_alias": attachment.environment_alias,
-        "target_kind": attachment.target_kind,
-        "working_directory": attachment.working_directory,
-        "readonly": attachment.readonly,
-        "mode": attachment.mode,
-        "window_id": attachment.window_id,
-        "window_name": attachment.window_name,
+        "items": [
+            {
+                "task_id": item.task_id,
+                "seq": item.seq,
+                "kind": item.kind.value,
+                "content": item.content,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in page.items
+        ],
+        "next_seq": page.next_seq,
     }
 
 
 @router.get("", response_model=TaskListResponse)
-async def list_tasks(
+async def list_tasks(request: Request) -> TaskListResponse:
+    service = _get_task_harness_service(request)
+    try:
+        items = service.list_tasks()
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskListResponse.model_validate(
+        {
+            "items": [
+                TaskSummaryResponse.model_validate(_serialize_task_summary(item)) for item in items
+            ]
+        }
+    )
+
+
+@router.post("", response_model=TaskSummaryResponse, status_code=status.HTTP_201_CREATED)
+async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSummaryResponse:
+    service = _get_task_harness_service(request)
+    try:
+        task = service.create_task(
+            workspace_id=payload.workspace_id,
+            environment_id=payload.environment_id,
+            task_profile=payload.task_profile,
+            task_input=payload.task_input,
+            title=payload.title,
+        )
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@router.get("/{task_id}", response_model=TaskDetailResponse)
+async def read_task(task_id: str, request: Request) -> TaskDetailResponse:
+    service = _get_task_harness_service(request)
+    try:
+        task = service.get_task(task_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskDetailResponse.model_validate(_serialize_task_detail(task))
+
+
+@router.get("/{task_id}/output", response_model=TaskOutputListResponse)
+async def read_task_output(
+    task_id: str,
     request: Request,
-    environment_id: str = Query(),
-) -> TaskListResponse:
-    app_user_id = _require_app_user_id(request)
-    service = _get_environment_service(request)
-    manager = _get_task_manager(request)
+    after_seq: int = Query(default=0, ge=0),
+) -> TaskOutputListResponse:
+    service = _get_task_harness_service(request)
     try:
-        environment = service.get_environment(environment_id)
+        page = service.get_output(task_id, after_seq=after_seq)
     except Exception as exc:
-        raise _translate_environment_error(exc) from exc
+        raise _translate_task_error(exc) from exc
+    return TaskOutputListResponse.model_validate(_serialize_output_page(page))
 
+
+@router.get("/{task_id}/stream")
+async def stream_task_output(
+    task_id: str,
+    request: Request,
+    after_seq: int = Query(default=0, ge=0),
+) -> StreamingResponse:
+    service = _get_task_harness_service(request)
     try:
-        items = await to_thread.run_sync(manager.list_tasks, environment_id, app_user_id)
+        service.get_task(task_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
 
-    return TaskListResponse(
-        items=[
-            TaskResponse.model_validate(
-                _serialize_task(task, terminal_binding, environment_alias=environment.alias)
-            )
-            for task, terminal_binding in items
-        ]
-    )
+    async def event_stream() -> Any:
+        next_seq = after_seq
+        while True:
+            if await request.is_disconnected():
+                return
+            page = service.get_output(task_id, after_seq=next_seq)
+            if page.items:
+                for item in page.items:
+                    payload = TaskOutputEventResponse.model_validate(
+                        {
+                            "task_id": item.task_id,
+                            "seq": item.seq,
+                            "kind": item.kind.value,
+                            "content": item.content,
+                            "created_at": item.created_at.isoformat(),
+                        }
+                    )
+                    yield f"id: {item.seq}\ndata: {payload.model_dump_json()}\n\n"
+                next_seq = page.next_seq
+                continue
+            task = service.get_task(task_id)
+            if task.status.value in {"succeeded", "failed"} and next_seq >= task.latest_output_seq:
+                return
+            yield ": keep-alive\n\n"
+            await asyncio.sleep(1.0)
 
-
-@router.post("", response_model=TaskResponse)
-async def create_task(payload: TaskCreateRequest, request: Request) -> TaskResponse:
-    app_user_id = _require_app_user_id(request)
-    service = _get_environment_service(request)
-    manager = _get_task_manager(request)
-    try:
-        environment = service.get_environment(payload.environment_id)
-        default_working_directory = service.resolve_effective_workdir(
-            _DEFAULT_PROJECT_ID,
-            payload.environment_id,
-            request.app.state.api_config.state_root,
-        )
-    except Exception as exc:
-        raise _translate_environment_error(exc) from exc
-
-    try:
-        task, terminal_binding = await to_thread.run_sync(
-            partial(
-                manager.create_task,
-                app_user_id,
-                environment,
-                title=payload.title,
-                command=payload.command,
-                working_directory=payload.working_directory or default_working_directory,
-            )
-        )
-    except Exception as exc:
-        raise _translate_task_error(exc) from exc
-
-    return TaskResponse.model_validate(
-        _serialize_task(task, terminal_binding, environment_alias=environment.alias)
-    )
-
-
-@router.get("/{task_id}", response_model=TaskResponse)
-async def read_task(task_id: str, request: Request) -> TaskResponse:
-    app_user_id = _require_app_user_id(request)
-    service = _get_environment_service(request)
-    manager = _get_task_manager(request)
-    try:
-        task, terminal_binding = await to_thread.run_sync(manager.get_task, task_id, app_user_id)
-        environment_alias = service.get_environment(task.environment_id).alias
-    except EnvironmentNotFoundError:
-        environment_alias = None
-    except Exception as exc:
-        raise _translate_task_error(exc) from exc
-
-    return TaskResponse.model_validate(
-        _serialize_task(task, terminal_binding, environment_alias=environment_alias)
-    )
-
-
-@router.post("/{task_id}/cancel", response_model=TaskResponse)
-async def cancel_task(task_id: str, request: Request) -> TaskResponse:
-    app_user_id = _require_app_user_id(request)
-    service = _get_environment_service(request)
-    manager = _get_task_manager(request)
-    try:
-        task, terminal_binding = await to_thread.run_sync(manager.cancel_task, task_id, app_user_id)
-        environment_alias = service.get_environment(task.environment_id).alias
-    except EnvironmentNotFoundError:
-        environment_alias = None
-    except Exception as exc:
-        raise _translate_task_error(exc) from exc
-
-    return TaskResponse.model_validate(
-        _serialize_task(task, terminal_binding, environment_alias=environment_alias)
-    )
-
-
-@router.get("/{task_id}/terminal", response_model=TaskTerminalBindingResponse)
-async def read_task_terminal(task_id: str, request: Request) -> TaskTerminalBindingResponse:
-    app_user_id = _require_app_user_id(request)
-    manager = _get_task_manager(request)
-    try:
-        terminal_binding = await to_thread.run_sync(
-            manager.get_task_terminal_binding,
-            task_id,
-            app_user_id,
-        )
-    except Exception as exc:
-        raise _translate_task_error(exc) from exc
-
-    return TaskTerminalBindingResponse.model_validate(_serialize_terminal_binding(terminal_binding))
-
-
-@router.post("/{task_id}/terminal/open", response_model=TerminalAttachmentResponse)
-async def open_task_terminal(task_id: str, request: Request) -> TerminalAttachmentResponse:
-    app_user_id = _require_app_user_id(request)
-    manager = _get_task_manager(request)
-    broker = _get_attachment_broker(request)
-    try:
-        _, _, target = await to_thread.run_sync(manager.open_task_terminal, task_id, app_user_id)
-    except Exception as exc:
-        raise _translate_task_error(exc) from exc
-
-    attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(
-        request.app.state.terminal_session_manager.record_agent_attach, target.binding_id
-    )
-    terminal_ws_url = build_attachment_ws_url(
-        str(request.base_url),
-        attachment.attachment_id,
-        attachment.token,
-    )
-    return TerminalAttachmentResponse.model_validate(
-        _serialize_attachment(attachment, terminal_ws_url=terminal_ws_url)
-    )
-
-
-@router.post("/{task_id}/terminal/takeover", response_model=TerminalAttachmentResponse)
-async def takeover_task_terminal(task_id: str, request: Request) -> TerminalAttachmentResponse:
-    app_user_id = _require_app_user_id(request)
-    manager = _get_task_manager(request)
-    broker = _get_attachment_broker(request)
-    try:
-        _, _, target = await to_thread.run_sync(manager.takeover, task_id, app_user_id)
-    except Exception as exc:
-        raise _translate_task_error(exc) from exc
-
-    attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(
-        request.app.state.terminal_session_manager.record_agent_attach, target.binding_id
-    )
-    terminal_ws_url = build_attachment_ws_url(
-        str(request.base_url),
-        attachment.attachment_id,
-        attachment.token,
-    )
-    return TerminalAttachmentResponse.model_validate(
-        _serialize_attachment(attachment, terminal_ws_url=terminal_ws_url)
-    )
-
-
-@router.post("/{task_id}/terminal/release", response_model=TerminalAttachmentResponse)
-async def release_task_terminal(task_id: str, request: Request) -> TerminalAttachmentResponse:
-    app_user_id = _require_app_user_id(request)
-    manager = _get_task_manager(request)
-    broker = _get_attachment_broker(request)
-    try:
-        _, _, target = await to_thread.run_sync(manager.release, task_id, app_user_id)
-    except Exception as exc:
-        raise _translate_task_error(exc) from exc
-
-    attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(
-        request.app.state.terminal_session_manager.record_agent_attach, target.binding_id
-    )
-    terminal_ws_url = build_attachment_ws_url(
-        str(request.base_url),
-        attachment.attachment_id,
-        attachment.token,
-    )
-    return TerminalAttachmentResponse.model_validate(
-        _serialize_attachment(attachment, terminal_ws_url=terminal_ws_url)
-    )
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

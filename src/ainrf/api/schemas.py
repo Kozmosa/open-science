@@ -30,11 +30,11 @@ class CodeServerLifecycleStatus(StrEnum):
 
 
 class TaskStatus(StrEnum):
-    PENDING = "pending"
+    QUEUED = "queued"
+    STARTING = "starting"
     RUNNING = "running"
-    COMPLETED = "completed"
+    SUCCEEDED = "succeeded"
     FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
 class TaskTerminalBindingStatus(StrEnum):
@@ -106,49 +106,6 @@ class UserSessionPairListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[UserSessionPairResponse]
-
-
-class TaskTerminalBindingResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    task_id: str
-    binding_id: str
-    environment_id: str
-    agent_session_name: str
-    window_id: str
-    window_name: str
-    binding_status: TaskTerminalBindingStatus
-    mode: TerminalAttachmentMode = TerminalAttachmentMode.OBSERVE
-    readonly: bool = True
-    ownership_user_id: str | None = None
-    agent_write_state: TaskAgentWriteState = TaskAgentWriteState.RUNNING
-    last_output_at: str | None = None
-
-
-class TaskResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    task_id: str
-    binding_id: str
-    environment_id: str
-    environment_alias: str | None = None
-    title: str
-    command: str
-    working_directory: str
-    status: TaskStatus
-    created_at: str
-    updated_at: str
-    started_at: str | None = None
-    completed_at: str | None = None
-    exit_code: int | None = None
-    detail: str | None = None
-    terminal: TaskTerminalBindingResponse | None = None
-
-
-class TaskListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[TaskResponse]
 
 
 class TerminalAttachmentResponse(BaseModel):
@@ -236,6 +193,7 @@ class EnvironmentResponse(BaseModel):
     preferred_python: str | None = None
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
+    task_harness_profile: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     latest_detection: EnvironmentDetectionResponse | None = None
@@ -284,6 +242,7 @@ class EnvironmentCreateRequest(BaseModel):
     preferred_python: str | None = None
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
+    task_harness_profile: str | None = None
 
 
 class EnvironmentUpdateRequest(BaseModel):
@@ -305,6 +264,7 @@ class EnvironmentUpdateRequest(BaseModel):
     preferred_python: str | None = None
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
+    task_harness_profile: str | None = None
 
 
 class ProjectEnvironmentReferenceCreateRequest(BaseModel):
@@ -344,10 +304,160 @@ class TerminalSessionResetRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    workspace_id: str
     environment_id: str
+    task_profile: str = Field(default="claude-code", min_length=1)
+    task_input: str = Field(min_length=1)
+    title: str | None = None
+
+
+class WorkspaceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: str
+    label: str
+    description: str | None = None
+    default_workdir: str | None = None
+    workspace_prompt: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkspaceListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[WorkspaceResponse]
+
+
+class WorkspaceSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: str
+    label: str
+    description: str | None = None
+    default_workdir: str | None = None
+
+
+class EnvironmentSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    environment_id: str
+    alias: str
+    display_name: str
+    host: str
+    default_workdir: str | None = None
+
+
+class TaskSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
     title: str
-    command: str
+    task_profile: str
+    status: TaskStatus
+    workspace_summary: WorkspaceSummaryResponse
+    environment_summary: EnvironmentSummaryResponse
+    created_at: str
+    updated_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    error_summary: str | None = None
+    latest_output_seq: int = 0
+
+
+class TaskListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TaskSummaryResponse]
+
+
+class TaskBindingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace: WorkspaceSummaryResponse
+    environment: EnvironmentSummaryResponse
+    task_profile: str
+    title: str
+    task_input: str
+    resolved_workdir: str
+    snapshot_path: str
+
+
+class TaskPromptLayerResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    position: int
+    name: str
+    label: str
+    content: str
+    char_count: int
+
+
+class TaskPromptResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rendered_prompt: str
+    layer_order: list[str] = Field(default_factory=list)
+    layers: list[TaskPromptLayerResponse] = Field(default_factory=list)
+    manifest_path: str
+
+
+class TaskRuntimeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    runner_kind: str | None = None
     working_directory: str | None = None
+    command: list[str] = Field(default_factory=list)
+    prompt_file: str | None = None
+    helper_path: str | None = None
+    launch_payload_path: str | None = None
+
+
+class TaskResultResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    exit_code: int | None = None
+    failure_category: str | None = None
+    error_summary: str | None = None
+    completed_at: str | None = None
+
+
+class TaskDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    title: str
+    task_profile: str
+    status: TaskStatus
+    workspace_summary: WorkspaceSummaryResponse
+    environment_summary: EnvironmentSummaryResponse
+    created_at: str
+    updated_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    error_summary: str | None = None
+    latest_output_seq: int = 0
+    binding: TaskBindingResponse | None = None
+    prompt: TaskPromptResponse | None = None
+    runtime: TaskRuntimeResponse | None = None
+    result: TaskResultResponse
+
+
+class TaskOutputEventResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    seq: int
+    kind: str
+    content: str
+    created_at: str
+
+
+class TaskOutputListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TaskOutputEventResponse]
+    next_seq: int
 
 
 class CodeServerSessionRequest(BaseModel):

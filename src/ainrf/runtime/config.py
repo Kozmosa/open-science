@@ -16,8 +16,10 @@ DEFAULT_COMMAND_TIMEOUT = 3600
 
 
 def _default_container_user() -> str:
-    env_user = os.environ.get("AINRF_CONTAINER_USER") or os.environ.get("USER") or os.environ.get(
-        "USERNAME"
+    env_user = (
+        os.environ.get("AINRF_CONTAINER_USER")
+        or os.environ.get("USER")
+        or os.environ.get("USERNAME")
     )
     if env_user:
         return env_user

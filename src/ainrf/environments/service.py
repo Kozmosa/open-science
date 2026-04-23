@@ -64,6 +64,10 @@ def _build_seed_environment() -> EnvironmentRegistryEntry:
         auth_kind=EnvironmentAuthKind.SSH_KEY,
         ssh_options={},
         default_workdir="/workspace/projects",
+        task_harness_profile=(
+            "You are running in the default localhost task harness environment.\n"
+            "Prefer repository-local tools and keep changes scoped to the requested task."
+        ),
         created_at=now,
         updated_at=now,
     )
@@ -105,6 +109,7 @@ class InMemoryEnvironmentService:
         preferred_python: str | None = None,
         preferred_env_manager: str | None = None,
         preferred_runtime_notes: str | None = None,
+        task_harness_profile: str | None = None,
     ) -> EnvironmentRegistryEntry:
         self._ensure_alias_available(alias)
         now = utc_now()
@@ -127,6 +132,7 @@ class InMemoryEnvironmentService:
             preferred_python=preferred_python,
             preferred_env_manager=preferred_env_manager,
             preferred_runtime_notes=preferred_runtime_notes,
+            task_harness_profile=task_harness_profile,
             created_at=now,
             updated_at=now,
         )
@@ -153,6 +159,7 @@ class InMemoryEnvironmentService:
         preferred_python: str | None = None,
         preferred_env_manager: str | None = None,
         preferred_runtime_notes: str | None = None,
+        task_harness_profile: str | None = None,
     ) -> EnvironmentRegistryEntry:
         environment = self.get_environment(environment_id)
         if alias is not None and alias != environment.alias:
@@ -188,6 +195,8 @@ class InMemoryEnvironmentService:
             environment.preferred_env_manager = preferred_env_manager
         if preferred_runtime_notes is not None:
             environment.preferred_runtime_notes = preferred_runtime_notes
+        if task_harness_profile is not None:
+            environment.task_harness_profile = task_harness_profile
         environment.updated_at = utc_now()
         return environment
 

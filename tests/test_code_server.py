@@ -105,7 +105,9 @@ class FakeConnection:
         return None
 
 
-def _make_manager(tmp_path: Path) -> tuple[EnvironmentCodeServerManager, InMemoryEnvironmentService]:
+def _make_manager(
+    tmp_path: Path,
+) -> tuple[EnvironmentCodeServerManager, InMemoryEnvironmentService]:
     service = InMemoryEnvironmentService()
     manager = EnvironmentCodeServerManager(state_root=tmp_path, environment_service=service)
     return manager, service

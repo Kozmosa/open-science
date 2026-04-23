@@ -43,7 +43,9 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
     if isinstance(exc, EnvironmentNotFoundError):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found")
     if isinstance(exc, AliasConflictError):
-        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Environment alias already exists")
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Environment alias already exists"
+        )
     if isinstance(exc, DeleteReferencedEnvironmentError):
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -54,13 +56,18 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail="Default localhost environment cannot be deleted",
         )
-    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected environment error")
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected environment error"
+    )
 
 
 @router.get("", response_model=EnvironmentListResponse)
 async def list_environments(request: Request) -> EnvironmentListResponse:
     service = _get_environment_service(request)
-    items = [_serialize_environment(service, environment.id) for environment in service.list_environments()]
+    items = [
+        _serialize_environment(service, environment.id)
+        for environment in service.list_environments()
+    ]
     return EnvironmentListResponse(items=items)
 
 
@@ -88,6 +95,7 @@ async def create_environment(
             preferred_python=payload.preferred_python,
             preferred_env_manager=payload.preferred_env_manager,
             preferred_runtime_notes=payload.preferred_runtime_notes,
+            task_harness_profile=payload.task_harness_profile,
         )
     except Exception as exc:  # pragma: no cover - defensive translation
         raise _translate_environment_error(exc) from exc
@@ -129,6 +137,7 @@ async def update_environment(
             preferred_python=payload.preferred_python,
             preferred_env_manager=payload.preferred_env_manager,
             preferred_runtime_notes=payload.preferred_runtime_notes,
+            task_harness_profile=payload.task_harness_profile,
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc

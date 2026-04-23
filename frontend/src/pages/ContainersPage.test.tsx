@@ -49,6 +49,7 @@ const baseEnvironment: EnvironmentRecord = {
   preferred_python: 'python3.13',
   preferred_env_manager: 'uv',
   preferred_runtime_notes: 'Use CUDA 12 image',
+  task_harness_profile: 'Use the configured environment profile.',
   created_at: '2026-04-21T00:00:00Z',
   updated_at: '2026-04-21T00:00:00Z',
   latest_detection: null,

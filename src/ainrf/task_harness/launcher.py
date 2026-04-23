@@ -1,0 +1,234 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import shlex
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.execution.models import ContainerConfig
+from ainrf.execution.ssh import SSHExecutor
+
+_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+_CLAUDE_COMMAND = [
+    "claude",
+    "-p",
+    "--no-session-persistence",
+    "--permission-mode",
+    "bypassPermissions",
+]
+
+
+class TaskLaunchError(RuntimeError):
+    pass
+
+
+@dataclass(slots=True)
+class LaunchPayload:
+    runner_kind: str
+    working_directory: str
+    command: list[str]
+    prompt_file: str
+    helper_path: str | None = None
+    launch_payload_path: str | None = None
+
+
+@dataclass(slots=True)
+class RunningProcess:
+    stdout: Any
+    stderr: Any
+    runner_kind: str
+    _wait: Any
+    _terminate: Any
+    _kill: Any
+    _cleanup: Any
+
+    async def wait(self) -> int:
+        return int(await self._wait())
+
+    async def terminate(self) -> None:
+        await self._terminate()
+
+    async def kill(self) -> None:
+        await self._kill()
+
+    async def cleanup(self) -> None:
+        await self._cleanup()
+
+
+def is_local_environment(environment: EnvironmentRegistryEntry) -> bool:
+    return (
+        environment.host in _LOCAL_HOSTS
+        and environment.proxy_jump is None
+        and environment.proxy_command is None
+    )
+
+
+def build_local_launcher(
+    *,
+    working_directory: str,
+    prompt_file: Path,
+    rendered_prompt: str,
+) -> tuple[LaunchPayload, Any]:
+    command = [*_CLAUDE_COMMAND, rendered_prompt]
+    payload = LaunchPayload(
+        runner_kind="local-process",
+        working_directory=working_directory,
+        command=command,
+        prompt_file=str(prompt_file),
+    )
+
+    async def launch() -> RunningProcess:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=working_directory,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=os.environ.copy(),
+        )
+        if process.stdout is None or process.stderr is None:
+            raise TaskLaunchError("Local launcher failed to attach pipes")
+        return RunningProcess(
+            stdout=process.stdout,
+            stderr=process.stderr,
+            runner_kind=payload.runner_kind,
+            _wait=process.wait,
+            _terminate=_sync_wrapper(process.terminate),
+            _kill=_sync_wrapper(process.kill),
+            _cleanup=_async_noop,
+        )
+
+    return payload, launch
+
+
+def validate_local_readiness(working_directory: str) -> None:
+    if shutil.which("claude") is None:
+        raise TaskLaunchError("startup failure: local claude executable is unavailable")
+    if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        raise TaskLaunchError("startup failure: local ANTHROPIC_API_KEY is missing")
+    if not Path(working_directory).is_dir():
+        raise TaskLaunchError(
+            f"startup failure: local working directory does not exist: {working_directory}"
+        )
+
+
+def build_ssh_executor(
+    environment: EnvironmentRegistryEntry,
+    *,
+    project_dir: str,
+) -> SSHExecutor:
+    return SSHExecutor(
+        ContainerConfig(
+            host=environment.host,
+            port=environment.port,
+            user=environment.user,
+            ssh_key_path=environment.identity_file,
+            project_dir=project_dir,
+        )
+    )
+
+
+async def validate_remote_readiness(
+    executor: SSHExecutor,
+    *,
+    working_directory: str,
+) -> None:
+    try:
+        await executor.connect()
+        claude_result = await executor.run_command("command -v claude", timeout=30)
+        if claude_result.exit_code != 0 or not claude_result.stdout.strip():
+            raise TaskLaunchError("startup failure: remote claude executable is unavailable")
+        api_key_result = await executor.run_command("printenv ANTHROPIC_API_KEY", timeout=30)
+        if api_key_result.exit_code != 0 or not api_key_result.stdout.strip():
+            raise TaskLaunchError("startup failure: remote ANTHROPIC_API_KEY is missing")
+        workdir_result = await executor.run_command(
+            f"test -d {shlex.quote(working_directory)}",
+            timeout=30,
+        )
+        if workdir_result.exit_code != 0:
+            raise TaskLaunchError(
+                f"startup failure: remote working directory does not exist: {working_directory}"
+            )
+    except TaskLaunchError:
+        raise
+    except Exception as exc:
+        raise TaskLaunchError(f"startup failure: remote launch readiness failed: {exc}") from exc
+
+
+async def build_remote_launcher(
+    *,
+    executor: SSHExecutor,
+    task_id: str,
+    local_task_dir: Path,
+    working_directory: str,
+    prompt_file: Path,
+) -> tuple[LaunchPayload, Any]:
+    home_result = await executor.run_command('printf %s "$HOME"', timeout=30)
+    if home_result.exit_code != 0 or not home_result.stdout.strip():
+        raise TaskLaunchError("startup failure: unable to resolve remote home directory")
+    remote_root = f"{home_result.stdout.strip()}/.ainrf/task-harness/{task_id}"
+    remote_prompt = f"{remote_root}/prompt.txt"
+    remote_helper = f"{remote_root}/launch.sh"
+    helper_path = local_task_dir / "remote-launch.sh"
+    helper_path.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                "set -euo pipefail",
+                'PROMPT_FILE="$1"',
+                'WORKDIR="$2"',
+                'PROMPT_CONTENT="$(cat "$PROMPT_FILE")"',
+                'cd "$WORKDIR"',
+                'exec claude -p --no-session-persistence --permission-mode bypassPermissions "$PROMPT_CONTENT"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    await executor.upload(prompt_file, remote_prompt)
+    await executor.upload(helper_path, remote_helper)
+    chmod_result = await executor.run_command(f"chmod +x {shlex.quote(remote_helper)}", timeout=30)
+    if chmod_result.exit_code != 0:
+        raise TaskLaunchError("startup failure: unable to chmod remote helper script")
+    command = [remote_helper, remote_prompt, working_directory]
+    payload = LaunchPayload(
+        runner_kind="ssh-process",
+        working_directory=working_directory,
+        command=command,
+        prompt_file=remote_prompt,
+        helper_path=remote_helper,
+    )
+
+    async def launch() -> RunningProcess:
+        remote_command = " ".join(shlex.quote(part) for part in command)
+        process = await executor.create_process(remote_command)
+
+        async def _wait() -> int:
+            await process.wait()
+            return int(process.returncode or 0)
+
+        return RunningProcess(
+            stdout=process.stdout,
+            stderr=process.stderr,
+            runner_kind=payload.runner_kind,
+            _wait=_wait,
+            _terminate=_sync_wrapper(process.terminate),
+            _kill=_sync_wrapper(process.kill),
+            _cleanup=executor.close,
+        )
+
+    return payload, launch
+
+
+async def _async_noop() -> None:
+    return None
+
+
+def _sync_wrapper(callback: Any) -> Any:
+    async def _wrapped() -> None:
+        callback()
+
+    return _wrapped
