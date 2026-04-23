@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -104,17 +103,6 @@ def build_local_launcher(
     return payload, launch
 
 
-def validate_local_readiness(working_directory: str) -> None:
-    if shutil.which("claude") is None:
-        raise TaskLaunchError("startup failure: local claude executable is unavailable")
-    if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
-        raise TaskLaunchError("startup failure: local ANTHROPIC_API_KEY is missing")
-    if not Path(working_directory).is_dir():
-        raise TaskLaunchError(
-            f"startup failure: local working directory does not exist: {working_directory}"
-        )
-
-
 def build_ssh_executor(
     environment: EnvironmentRegistryEntry,
     *,
@@ -129,33 +117,6 @@ def build_ssh_executor(
             project_dir=project_dir,
         )
     )
-
-
-async def validate_remote_readiness(
-    executor: SSHExecutor,
-    *,
-    working_directory: str,
-) -> None:
-    try:
-        await executor.connect()
-        claude_result = await executor.run_command("command -v claude", timeout=30)
-        if claude_result.exit_code != 0 or not claude_result.stdout.strip():
-            raise TaskLaunchError("startup failure: remote claude executable is unavailable")
-        api_key_result = await executor.run_command("printenv ANTHROPIC_API_KEY", timeout=30)
-        if api_key_result.exit_code != 0 or not api_key_result.stdout.strip():
-            raise TaskLaunchError("startup failure: remote ANTHROPIC_API_KEY is missing")
-        workdir_result = await executor.run_command(
-            f"test -d {shlex.quote(working_directory)}",
-            timeout=30,
-        )
-        if workdir_result.exit_code != 0:
-            raise TaskLaunchError(
-                f"startup failure: remote working directory does not exist: {working_directory}"
-            )
-    except TaskLaunchError:
-        raise
-    except Exception as exc:
-        raise TaskLaunchError(f"startup failure: remote launch readiness failed: {exc}") from exc
 
 
 async def build_remote_launcher(

@@ -24,7 +24,6 @@ async def health_check(request: Request) -> JSONResponse | HealthResponse:
         container_health={
             "ssh_ok": health.ssh_ok,
             "claude_ok": health.claude_ok,
-            "anthropic_api_key_ok": health.anthropic_api_key_ok,
             "project_dir_writable": health.project_dir_writable,
             "claude_version": health.claude_version,
             "gpu_models": health.gpu_models,

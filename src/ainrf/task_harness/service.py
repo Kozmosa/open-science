@@ -17,8 +17,6 @@ from ainrf.task_harness.launcher import (
     build_remote_launcher,
     build_ssh_executor,
     is_local_environment,
-    validate_local_readiness,
-    validate_remote_readiness,
 )
 from ainrf.task_harness.models import (
     EnvironmentSummary,
@@ -331,7 +329,6 @@ class TaskHarnessService:
             )
 
             if is_local_environment(environment):
-                validate_local_readiness(resolved_workdir)
                 launch_payload, launch = build_local_launcher(
                     working_directory=resolved_workdir,
                     prompt_file=prompt_file,
@@ -340,7 +337,6 @@ class TaskHarnessService:
             else:
                 executor = build_ssh_executor(environment, project_dir=resolved_workdir)
                 try:
-                    await validate_remote_readiness(executor, working_directory=resolved_workdir)
                     launch_payload, launch = await build_remote_launcher(
                         executor=executor,
                         task_id=task_id,

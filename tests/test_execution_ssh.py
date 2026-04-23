@@ -7,7 +7,6 @@ from typing import Callable
 import pytest
 
 from ainrf.execution import (
-    BootstrapError,
     CommandResult,
     CommandTimeoutError,
     ContainerConfig,
@@ -322,7 +321,7 @@ def test_download_falls_back_to_sftp_without_rsync(
     assert local_path.parent.exists()
 
 
-def test_ensure_claude_code_installs_and_validates_key(
+def test_ensure_claude_code_installs_without_api_key_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     executor = SSHExecutor(_container_config())
@@ -350,8 +349,6 @@ def test_ensure_claude_code_installs_and_validates_key(
             return CommandResult(0, "claude 2.1.0\n", "")
         if cmd == ssh_module._CLAUDE_INSTALL_COMMAND:
             return CommandResult(0, "installed", "")
-        if cmd == "printenv ANTHROPIC_API_KEY":
-            return CommandResult(0, "sk-ant-test", "")
         raise AssertionError(f"Unexpected command: {cmd}")
 
     monkeypatch.setattr(executor, "run_command", fake_run_command)
@@ -360,6 +357,7 @@ def test_ensure_claude_code_installs_and_validates_key(
 
     assert version == "2.1.0"
     assert ssh_module._CLAUDE_INSTALL_COMMAND in seen_commands
+    assert "printenv ANTHROPIC_API_KEY" not in seen_commands
 
 
 def test_ensure_claude_code_rejects_unsupported_os(
@@ -386,7 +384,7 @@ def test_ensure_claude_code_rejects_unsupported_os(
         asyncio.run(executor.ensure_claude_code())
 
 
-def test_ensure_claude_code_requires_api_key(
+def test_ensure_claude_code_ignores_missing_api_key_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     executor = SSHExecutor(_container_config())
@@ -406,14 +404,13 @@ def test_ensure_claude_code_requires_api_key(
             return CommandResult(0, "/usr/bin/bin\n", "")
         if cmd == "claude --version":
             return CommandResult(0, "claude 2.1.0\n", "")
-        if cmd == "printenv ANTHROPIC_API_KEY":
-            return CommandResult(1, "", "")
         raise AssertionError(f"Unexpected command: {cmd}")
 
     monkeypatch.setattr(executor, "run_command", fake_run_command)
 
-    with pytest.raises(BootstrapError):
-        asyncio.run(executor.ensure_claude_code())
+    version = asyncio.run(executor.ensure_claude_code())
+
+    assert version == "2.1.0"
 
 
 def test_ping_collects_health_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -435,8 +432,6 @@ def test_ping_collects_health_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
         _ = timeout, cwd, env
         if cmd == "claude --version":
             return CommandResult(0, "claude 2.1.0\n", "")
-        if cmd == "printenv ANTHROPIC_API_KEY":
-            return CommandResult(0, "sk-ant-test", "")
         if cmd == "nvidia-smi --query-gpu=name --format=csv,noheader":
             return CommandResult(0, "NVIDIA A100-SXM4-80GB\n", "")
         if cmd == "nvcc --version":
@@ -454,7 +449,6 @@ def test_ping_collects_health_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert health.ssh_ok is True
     assert health.claude_ok is True
-    assert health.anthropic_api_key_ok is True
     assert health.project_dir_writable is True
     assert health.claude_version == "2.1.0"
     assert health.gpu_models == ["NVIDIA A100-SXM4-80GB"]

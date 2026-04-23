@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ from ainrf.task_harness.launcher import LaunchPayload
 from ainrf.task_harness.models import TaskHarnessStatus
 
 API_HEADERS = {"X-API-Key": "secret-key", "X-AINRF-User-Id": "browser-user"}
+_LIVE_CLAUDE_TASK_ENV = "AINRF_RUN_LIVE_CLAUDE_TASK"
 
 
 class FakeStream:
@@ -70,6 +72,7 @@ async def wait_for_status(
     expected: TaskHarnessStatus,
     *,
     attempts: int = 40,
+    delay_seconds: float = 0.05,
 ) -> dict[str, Any]:
     for _ in range(attempts):
         response = await client.get(f"/tasks/{task_id}", headers=API_HEADERS)
@@ -77,8 +80,26 @@ async def wait_for_status(
         payload = response.json()
         if payload["status"] == expected.value:
             return payload
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(delay_seconds)
     raise AssertionError(f"Task {task_id} did not reach {expected.value}")
+
+
+async def wait_for_final_status(
+    client: httpx.AsyncClient,
+    task_id: str,
+    *,
+    attempts: int = 240,
+    delay_seconds: float = 0.5,
+) -> dict[str, Any]:
+    final_statuses = {TaskHarnessStatus.SUCCEEDED.value, TaskHarnessStatus.FAILED.value}
+    for _ in range(attempts):
+        response = await client.get(f"/tasks/{task_id}", headers=API_HEADERS)
+        assert response.status_code == 200
+        payload = response.json()
+        if payload["status"] in final_statuses:
+            return payload
+        await asyncio.sleep(delay_seconds)
+    raise AssertionError(f"Task {task_id} did not reach a final status")
 
 
 @pytest.mark.anyio
@@ -114,9 +135,6 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
 
         return payload, launch
 
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.validate_local_readiness", lambda _workdir: None
-    )
     monkeypatch.setattr(
         "ainrf.task_harness.service.build_local_launcher",
         fake_build_local_launcher,
@@ -179,7 +197,6 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
 @pytest.mark.anyio
 async def test_task_harness_startup_failure_when_environment_profile_is_empty(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = make_app(tmp_path)
     environment = app.state.environment_service.create_environment(
@@ -188,9 +205,6 @@ async def test_task_harness_startup_failure_when_environment_profile_is_empty(
         host="127.0.0.1",
         default_workdir="/workspace/project",
         task_harness_profile="",
-    )
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.validate_local_readiness", lambda _workdir: None
     )
 
     async with httpx.AsyncClient(
@@ -251,9 +265,6 @@ async def test_task_harness_stream_endpoint_emits_new_events(
         return payload, launch
 
     monkeypatch.setattr(
-        "ainrf.task_harness.service.validate_local_readiness", lambda _workdir: None
-    )
-    monkeypatch.setattr(
         "ainrf.task_harness.service.build_local_launcher",
         fake_build_local_launcher,
     )
@@ -288,3 +299,125 @@ async def test_task_harness_stream_endpoint_emits_new_events(
 
     assert '"kind":"stdout"' in body
     assert "hello\\n" in body
+
+
+@pytest.mark.anyio
+async def test_task_harness_remote_path_runs_without_readiness_precheck(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="ssh-lab",
+        display_name="SSH Lab",
+        host="gpu-server-01",
+        default_workdir="/workspace/project",
+        task_harness_profile="Use the configured SSH environment.",
+    )
+    recorded: dict[str, str] = {}
+    fake_executor = object()
+
+    def fake_build_ssh_executor(*_args: object, project_dir: str) -> object:
+        recorded["project_dir"] = project_dir
+        return fake_executor
+
+    async def fake_build_remote_launcher(
+        *,
+        executor: object,
+        task_id: str,
+        local_task_dir: Path,
+        working_directory: str,
+        prompt_file: Path,
+    ) -> tuple[LaunchPayload, object]:
+        assert executor is fake_executor
+        assert task_id
+        assert local_task_dir.exists()
+        assert prompt_file.exists()
+        payload = LaunchPayload(
+            runner_kind="ssh-process",
+            working_directory=working_directory,
+            command=["/remote/launch.sh", "/remote/prompt.txt", working_directory],
+            prompt_file="/remote/prompt.txt",
+            helper_path="/remote/launch.sh",
+        )
+
+        async def launch() -> FakeRunningProcess:
+            return FakeRunningProcess(stdout_chunks=["remote hello\n"])
+
+        return payload, launch
+
+    monkeypatch.setattr("ainrf.task_harness.service.build_ssh_executor", fake_build_ssh_executor)
+    monkeypatch.setattr(
+        "ainrf.task_harness.service.build_remote_launcher",
+        fake_build_remote_launcher,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        create_response = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": "Run through the remote launcher path.",
+            },
+        )
+        assert create_response.status_code == 201
+        created = create_response.json()
+        detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED)
+        output = await client.get(f"/tasks/{created['task_id']}/output", headers=API_HEADERS)
+
+    assert recorded["project_dir"] == str(Path.cwd())
+    assert detail["runtime"]["runner_kind"] == "ssh-process"
+    assert detail["runtime"]["helper_path"] == "/remote/launch.sh"
+    assert any(item["content"] == "remote hello\n" for item in output.json()["items"])
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    os.environ.get(_LIVE_CLAUDE_TASK_ENV) != "1",
+    reason="Set AINRF_RUN_LIVE_CLAUDE_TASK=1 to run the real Claude task smoke test",
+)
+async def test_task_harness_live_claude_task_output(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="live-local",
+        display_name="Live Local",
+        host="127.0.0.1",
+        default_workdir=str(Path.cwd()),
+        task_harness_profile="Use the configured localhost environment.",
+    )
+    marker = "HELLO_FROM_CLAUDE_TASK_20260423"
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        timeout=60.0,
+    ) as client:
+        create_response = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": (
+                    f"Reply with exactly {marker} on a single line. "
+                    "Do not add punctuation, explanation, or code fences."
+                ),
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        detail = await wait_for_final_status(client, task_id)
+        output = await client.get(f"/tasks/{task_id}/output", headers=API_HEADERS)
+
+    output_items = output.json()["items"]
+    combined_output = "".join(item["content"] for item in output_items)
+    print(f"Live Claude task {task_id} output:\n{combined_output}")
+    assert detail["status"] == TaskHarnessStatus.SUCCEEDED.value, combined_output
+    assert marker in combined_output, combined_output

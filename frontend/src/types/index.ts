@@ -5,7 +5,6 @@ export interface SystemHealth {
   container_health?: {
     ssh_ok: boolean;
     claude_ok: boolean;
-    anthropic_api_key_ok: boolean;
     project_dir_writable: boolean;
     claude_version: string | null;
     gpu_models: string[];

@@ -18,7 +18,6 @@ async def test_health_reports_container_probe_success(
         return ContainerHealth(
             ssh_ok=True,
             claude_ok=True,
-            anthropic_api_key_ok=True,
             project_dir_writable=True,
             warnings=[],
         )
@@ -40,6 +39,7 @@ async def test_health_reports_container_probe_success(
 
     assert response.status_code == 200
     assert response.json()["container_health"]["ssh_ok"] is True
+    assert "anthropic_api_key_ok" not in response.json()["container_health"]
 
 
 @pytest.mark.anyio
@@ -50,7 +50,6 @@ async def test_health_reports_degraded_container_probe(
         return ContainerHealth(
             ssh_ok=False,
             claude_ok=False,
-            anthropic_api_key_ok=False,
             project_dir_writable=False,
             warnings=["ssh_unreachable"],
         )

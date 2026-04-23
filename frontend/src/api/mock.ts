@@ -34,7 +34,6 @@ const mockHealth: SystemHealth = {
   container_health: {
     ssh_ok: true,
     claude_ok: true,
-    anthropic_api_key_ok: true,
     project_dir_writable: true,
     claude_version: 'mock',
     gpu_models: ['Mock GPU'],
