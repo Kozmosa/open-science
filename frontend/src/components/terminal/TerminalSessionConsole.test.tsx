@@ -338,13 +338,10 @@ describe('TerminalSessionConsole', () => {
 
     const socket = terminalMocks.sockets[0];
     const terminal = terminalMocks.terminals[0];
-    socket.onopen?.(new Event('open'));
     terminal.emitData('ignored input');
 
-    expect(
-      socket.sent.every((message) => JSON.parse(message).type === 'resize')
-    ).toBe(true);
-    expect(socket.sent.length).toBeGreaterThanOrEqual(1);
+    await waitFor(() => expect(socket.sent.length).toBeGreaterThanOrEqual(1));
+    expect(socket.sent.every((message) => JSON.parse(message).type === 'resize')).toBe(true);
     expect(screen.getAllByText('Observe-only')).toHaveLength(2);
   });
 
