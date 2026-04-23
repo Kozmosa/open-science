@@ -39,7 +39,7 @@ function App() {
               <Layout>
                 <Suspense
                   fallback={
-                    <div className="px-4 py-8 text-sm text-gray-500 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-center py-16 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
                       {t('common.loading')}
                     </div>
                   }

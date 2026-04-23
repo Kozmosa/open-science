@@ -83,24 +83,29 @@ function CodeServerCard({ selectedEnvironment }: Props) {
     (status === 'ready' || status === 'starting');
 
   return (
-    <section className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-5">
+    <section className="space-y-4 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
       <div className="space-y-1">
-        <h2 className="text-lg font-medium text-gray-900">{t('components.codeServer.title')}</h2>
-        <p className="text-sm text-gray-600">
+        <h2
+          className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('components.codeServer.title')}
+        </h2>
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
           {t('components.codeServer.descriptionPrefix')}{' '}
-          <code className="rounded bg-gray-100 px-1.5 py-0.5">/code/</code>.
+          <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/code/</code>.
         </p>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
           {t('components.codeServer.selectedEnvironment')}{' '}
-          <code className="rounded bg-gray-100 px-1.5 py-0.5">
+          <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">
             {selectedEnvironment
               ? `${selectedEnvironment.alias} · ${selectedEnvironment.display_name}`
               : t('common.notSelected')}
           </code>
         </p>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
           {t('components.codeServer.workspaceRoot')}{' '}
-          <code className="rounded bg-gray-100 px-1.5 py-0.5">{workspaceDir}</code>
+          <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{workspaceDir}</code>
         </p>
       </div>
 
@@ -113,7 +118,7 @@ function CodeServerCard({ selectedEnvironment }: Props) {
             }
           }}
           disabled={!canOpen}
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {ensureMutation.isPending
             ? t('components.codeServer.starting')
@@ -123,7 +128,7 @@ function CodeServerCard({ selectedEnvironment }: Props) {
           type="button"
           onClick={() => stopMutation.mutate()}
           disabled={!canStop}
-          className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {stopMutation.isPending
             ? t('components.codeServer.stopping')
@@ -132,25 +137,31 @@ function CodeServerCard({ selectedEnvironment }: Props) {
       </div>
 
       {selectedEnvironmentId === null ? (
-        <p className="text-sm text-amber-700">
+        <p className="text-sm text-[#ff9500]">
           {t('components.codeServer.selectEnvironmentBeforeOpen')}
         </p>
       ) : null}
 
       {selectedEnvironment?.auth_kind === 'password' ? (
-        <p className="text-sm text-amber-700">{t('components.codeServer.passwordUnsupportedHint')}</p>
+        <p className="text-sm text-[#ff9500]">{t('components.codeServer.passwordUnsupportedHint')}</p>
       ) : null}
 
-      {isStarting ? <p className="text-sm text-gray-500">{t('components.codeServer.starting')}</p> : null}
+      {isStarting ? (
+        <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+          {t('components.codeServer.starting')}
+        </p>
+      ) : null}
 
       {detail ? (
-        <p className="text-sm text-red-700">
+        <p className="text-sm text-[#ff3b30]">
           {t('components.codeServer.unavailable')} {detail}
         </p>
       ) : null}
 
       {!detail && selectedEnvironmentId !== null && !isReady && !isStarting ? (
-        <p className="text-sm text-gray-500">{t('components.codeServer.notOpenedYet')}</p>
+        <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+          {t('components.codeServer.notOpenedYet')}
+        </p>
       ) : null}
 
       {isReady ? (
@@ -158,7 +169,7 @@ function CodeServerCard({ selectedEnvironment }: Props) {
           key={`${selectedEnvironmentId ?? 'none'}-${iframeRevision}`}
           title={t('components.codeServer.iframeTitle')}
           src="/code/"
-          className="h-[640px] w-full rounded-lg border border-gray-300 bg-white"
+          className="h-[640px] w-full rounded-lg border border-[var(--border)] bg-[var(--bg)]"
         />
       ) : null}
     </section>

@@ -117,20 +117,20 @@ function TerminalSessionConsole({
   useEffect(() => {
     if (status !== 'running' || terminalWsUrl === null || containerRef.current === null) {
       disconnectNotifiedRef.current = false;
-      return;
+      return undefined;
     }
 
     const terminal = new Terminal({
       convertEol: true,
       cursorBlink: !isObserveOnly,
-      fontFamily: 'var(--mono)',
+      fontFamily: 'var(--font-mono)',
       fontSize,
       scrollback: 2000,
       theme: {
         background: '#0b1020',
         foreground: '#e5eefc',
-        cursor: '#c084fc',
-        selectionBackground: '#334155',
+        cursor: '#0071e3',
+        selectionBackground: '#1d3a5c',
       },
     });
     const fitAddon = new FitAddon();
@@ -256,7 +256,9 @@ function TerminalSessionConsole({
 
         if (payload.type === 'status' && payload.status === 'exited') {
           terminal.writeln('');
-          terminal.writeln(translateRef.current('components.terminalConsole.exited', { code: payload.return_code }));
+          terminal.writeln(
+            translateRef.current('components.terminalConsole.exited', { code: payload.return_code })
+          );
           setSocketStatus('disconnected');
           notifyDisconnected();
         }
@@ -313,32 +315,37 @@ function TerminalSessionConsole({
 
   if (status !== 'running' || terminalWsUrl === null) {
     return (
-      <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+      <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-6 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
         {placeholderText ?? t('components.terminalConsole.startPrompt')}
       </div>
     );
   }
 
   return (
-    <section className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+    <section className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
             {isObserveOnly
               ? t('components.terminalConsole.observeOnly')
               : t('components.terminalConsole.writeEnabled')}
           </h3>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
             {t('components.terminalConsole.websocketSession')}{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">{sessionId ?? 'n/a'}</code>
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">
+              {sessionId ?? 'n/a'}
+            </code>
           </p>
-          <p className="text-sm text-gray-600">
-            {t('components.terminalConsole.attachment')} <code className="rounded bg-gray-100 px-1.5 py-0.5">{attachmentId ?? 'n/a'}</code>
+          <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+            {t('components.terminalConsole.attachment')}{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">
+              {attachmentId ?? 'n/a'}
+            </code>
           </p>
           <p
             className={[
-              'text-xs font-medium uppercase tracking-[0.18em]',
-              isObserveOnly ? 'text-amber-700' : 'text-emerald-700',
+              'text-xs font-medium uppercase tracking-[0.08em]',
+              isObserveOnly ? 'text-[#ff9500]' : 'text-[#34c759]',
             ].join(' ')}
           >
             {isObserveOnly
@@ -346,14 +353,23 @@ function TerminalSessionConsole({
               : t('components.terminalConsole.writeEnabled')}
           </p>
         </div>
-        <div className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
+        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs font-medium text-[var(--text)]">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              displaySocketStatus === 'connected'
+                ? 'bg-[#34c759]'
+                : displaySocketStatus === 'error' || displaySocketStatus === 'disconnected'
+                  ? 'bg-[#ff3b30]'
+                  : 'bg-[#ff9500]'
+            }`}
+          />
           {t('components.terminalConsole.connection')} {connectionLabel[displaySocketStatus]}
         </div>
       </div>
 
       <div
         ref={containerRef}
-        className="ainrf-terminal h-[480px] w-full overflow-hidden rounded-lg border border-gray-800 bg-[#0b1020]"
+        className="ainrf-terminal min-h-[480px] w-full overflow-hidden rounded-lg border border-[#1a1a2e] bg-[#0b1020]"
       />
     </section>
   );

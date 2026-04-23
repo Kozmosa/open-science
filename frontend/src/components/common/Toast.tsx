@@ -1,4 +1,5 @@
 import { useState, useEffect, createContext, type ReactNode } from 'react';
+import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -33,7 +34,7 @@ export function ToastProvider({ children }: ProviderProps) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2">
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
         ))}
@@ -47,27 +48,36 @@ interface ItemProps {
   onClose: () => void;
 }
 
+const toastStyles: Record<ToastType, { bg: string; border: string; icon: typeof Info }> = {
+  success: { bg: 'bg-[#e8f5e9]', border: 'border-[#81c784]', icon: CheckCircle },
+  error: { bg: 'bg-[#ffebee]', border: 'border-[#e57373]', icon: AlertCircle },
+  warning: { bg: 'bg-[#fff8e1]', border: 'border-[#ffb74d]', icon: AlertTriangle },
+  info: { bg: 'bg-[#e3f2fd]', border: 'border-[#64b5f6]', icon: Info },
+};
+
 function ToastItem({ toast, onClose }: ItemProps) {
   useEffect(() => {
     const timer = setTimeout(onClose, 5000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColors = {
-    success: 'bg-green-100 border-green-300 text-green-800',
-    error: 'bg-red-100 border-red-300 text-red-800',
-    warning: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-    info: 'bg-blue-100 border-blue-300 text-blue-800',
-  };
+  const style = toastStyles[toast.type];
+  const Icon = style.icon;
 
   return (
-    <div className={`p-3 rounded border shadow-lg ${bgColors[toast.type]}`}>
-      <div className="flex items-center gap-2">
-        <span className="text-sm">{toast.message}</span>
-        <button onClick={onClose} className="ml-2 text-sm opacity-50 hover:opacity-100">
-          ×
-        </button>
-      </div>
+    <div
+      className={`flex items-center gap-3 rounded-lg border ${style.border} ${style.bg} px-4 py-3 shadow-lg`}
+    >
+      <Icon size={16} className="shrink-0 text-[var(--apple-near-black)]" />
+      <span className="text-sm tracking-[-0.224px] text-[var(--apple-near-black)]">
+        {toast.message}
+      </span>
+      <button
+        onClick={onClose}
+        className="ml-2 shrink-0 rounded-md p-0.5 text-[var(--apple-near-black)]/50 transition hover:bg-black/5 hover:text-[var(--apple-near-black)]"
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }

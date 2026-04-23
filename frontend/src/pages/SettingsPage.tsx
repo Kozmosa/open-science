@@ -69,15 +69,22 @@ function GeneralPreferencesSection({
     clampedFontSize !== savedGeneral.terminal.fontSize;
 
   return (
-    <section className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
       <div className="space-y-1">
-        <h2 className="text-lg font-medium text-gray-900">{t('pages.settings.general.title')}</h2>
-        <p className="text-sm text-gray-600">{t('pages.settings.general.description')}</p>
+        <h2
+          className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.settings.general.title')}
+        </h2>
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+          {t('pages.settings.general.description')}
+        </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('pages.settings.general.defaultRouteLabel')}
           </span>
           <select
@@ -89,7 +96,7 @@ function GeneralPreferencesSection({
                 defaultRoute: event.target.value as DefaultRoute,
               }))
             }
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           >
             <option value="terminal">{t('pages.settings.routes.terminal')}</option>
             <option value="tasks">{t('pages.settings.routes.tasks')}</option>
@@ -99,7 +106,7 @@ function GeneralPreferencesSection({
         </label>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('pages.settings.general.terminalFontSizeLabel')}
           </span>
           <input
@@ -115,12 +122,12 @@ function GeneralPreferencesSection({
                 terminalFontSize: event.target.value,
               }))
             }
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           />
         </label>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--bg-secondary)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
         <p>
           {t('pages.settings.general.terminalFontSizeHelp', {
             min: minTerminalFontSize,
@@ -132,7 +139,7 @@ function GeneralPreferencesSection({
           <button
             type="button"
             onClick={onReset}
-            className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
+            className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
           >
             {t('common.reset')}
           </button>
@@ -147,7 +154,7 @@ function GeneralPreferencesSection({
               })
             }
             disabled={!hasChanges}
-            className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('common.saveChanges')}
           </button>
@@ -168,18 +175,21 @@ function EnvironmentDefaultsCard({
   const hasChanges = hasEnvironmentDefaultChanges(draft, savedDefaults);
 
   return (
-    <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
+    <section className="space-y-4 rounded-xl bg-[var(--surface)] p-5 shadow-sm">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold text-gray-900">
+        <h3
+          className="text-base font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
           {environment.alias} · {environment.display_name}
         </h3>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
           {t('pages.settings.project.environmentCardDescription')}
         </p>
       </div>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
           {t('pages.settings.project.titleTemplateLabel')}
         </span>
         <input
@@ -191,13 +201,13 @@ function EnvironmentDefaultsCard({
               titleTemplate: event.target.value,
             }))
           }
-          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           placeholder={t('pages.settings.project.titleTemplatePlaceholder')}
         />
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
           {t('pages.settings.project.taskInputTemplateLabel')}
         </span>
         <textarea
@@ -209,7 +219,7 @@ function EnvironmentDefaultsCard({
               taskInputTemplate: event.target.value,
             }))
           }
-          className="min-h-32 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          className="min-h-32 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           placeholder={t('pages.settings.project.taskInputTemplatePlaceholder')}
         />
       </label>
@@ -218,7 +228,7 @@ function EnvironmentDefaultsCard({
         <button
           type="button"
           onClick={onReset}
-          className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
         >
           {t('common.reset')}
         </button>
@@ -226,7 +236,7 @@ function EnvironmentDefaultsCard({
           type="button"
           onClick={() => onSave(draft)}
           disabled={!hasChanges}
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t('common.saveChanges')}
         </button>
@@ -253,15 +263,22 @@ function ProjectDefaultsSection({
   const hasProjectDefaultChanges = defaultEnvironmentDraft !== persistedProjectDefaultEnvironmentId;
 
   return (
-    <section className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
       <div className="space-y-1">
-        <h2 className="text-lg font-medium text-gray-900">{t('pages.settings.project.title')}</h2>
-        <p className="text-sm text-gray-600">{t('pages.settings.project.description')}</p>
+        <h2
+          className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.settings.project.title')}
+        </h2>
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+          {t('pages.settings.project.description')}
+        </p>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+      <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('pages.settings.project.defaultEnvironmentLabel')}
           </span>
           <select
@@ -269,7 +286,7 @@ function ProjectDefaultsSection({
             value={defaultEnvironmentDraft}
             onChange={(event) => setDefaultEnvironmentDraft(event.target.value)}
             disabled={environments.length === 0}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:bg-gray-100"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15 disabled:cursor-not-allowed disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)]"
           >
             <option value="">{t('pages.settings.project.defaultEnvironmentEmpty')}</option>
             {environments.map((environment) => (
@@ -281,12 +298,14 @@ function ProjectDefaultsSection({
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">{t('pages.settings.project.defaultEnvironmentHelp')}</p>
+          <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+            {t('pages.settings.project.defaultEnvironmentHelp')}
+          </p>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => saveProjectDefaultEnvironment(null)}
-              className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
+              className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
             >
               {t('common.reset')}
             </button>
@@ -294,7 +313,7 @@ function ProjectDefaultsSection({
               type="button"
               onClick={() => saveProjectDefaultEnvironment(defaultEnvironmentDraft || null)}
               disabled={!hasProjectDefaultChanges}
-              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {t('common.saveChanges')}
             </button>
@@ -302,10 +321,14 @@ function ProjectDefaultsSection({
         </div>
       </div>
 
-      {isLoading ? <p className="text-sm text-gray-500">{t('common.loading')}</p> : null}
-      {loadError ? <p className="text-sm text-red-700">{loadError}</p> : null}
+      {isLoading ? (
+        <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+          {t('common.loading')}
+        </p>
+      ) : null}
+      {loadError ? <p className="text-sm text-[#ff3b30]">{loadError}</p> : null}
       {environments.length === 0 && !isLoading ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
+        <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
           {t('pages.settings.project.noEnvironments')}
         </div>
       ) : null}
@@ -353,20 +376,25 @@ function SettingsPage() {
     environmentsQuery.error instanceof Error ? environmentsQuery.error.message : null;
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-8 space-y-3">
-        <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
           {t('pages.settings.eyebrow')}
         </p>
-        <h1 className="text-3xl font-semibold text-gray-900">{t('pages.settings.title')}</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">
+        <h1
+          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.settings.title')}
+        </h1>
+        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
           {t('pages.settings.description')}
         </p>
       </section>
 
       <div className="space-y-6">
         {recoveryReason !== null ? (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <section className="rounded-lg border border-[#ffb74d]/30 bg-[#fff8e1] px-4 py-3 text-sm tracking-[-0.224px] text-[#e65100]">
             {t('pages.settings.recoveryNotice')}
           </section>
         ) : null}

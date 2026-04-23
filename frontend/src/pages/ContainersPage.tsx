@@ -254,26 +254,33 @@ function EnvironmentEditor({
   };
 
   return (
-    <section className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
           {t('components.environmentEditor.eyebrow')}
         </p>
-        <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-        <p className="text-sm text-gray-600">{t('components.environmentEditor.description')}</p>
+        <h2
+          className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {title}
+        </h2>
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+          {t('components.environmentEditor.description')}
+        </p>
       </div>
 
       {activeEnvironment ? (
         <div
           data-testid="active-environment-banner"
-          className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"
+          className="rounded-lg bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px] text-[var(--text-secondary)]"
         >
           {t('components.environmentEditor.activeLabel')}{' '}
-          <span className="font-medium text-gray-900">{activeEnvironment.alias}</span>
-          <span className="ml-2 text-gray-500">({activeEnvironment.display_name})</span>
+          <span className="font-medium text-[var(--text)]">{activeEnvironment.alias}</span>
+          <span className="ml-2 text-[var(--text-tertiary)]">({activeEnvironment.display_name})</span>
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
+        <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
           {t('components.environmentEditor.noActive')}
         </div>
       )}
@@ -281,55 +288,63 @@ function EnvironmentEditor({
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">{t('components.environmentEditor.alias')}</span>
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+              {t('components.environmentEditor.alias')}
+            </span>
             <input
               required
               value={values.alias}
               onChange={(event) => updateField('alias', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.alias}
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">{t('components.environmentEditor.displayName')}</span>
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+              {t('components.environmentEditor.displayName')}
+            </span>
             <input
               required
               value={values.display_name}
               onChange={(event) => updateField('display_name', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.displayName}
             />
           </label>
         </div>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('components.environmentEditor.descriptionField')}
           </span>
           <textarea
             value={values.description}
             onChange={(event) => updateField('description', event.target.value)}
             rows={3}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.description}
           />
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">{t('components.environmentEditor.host')}</span>
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+              {t('components.environmentEditor.host')}
+            </span>
             <input
               required
               value={values.host}
               onChange={(event) => updateField('host', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.host}
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">{t('components.environmentEditor.port')}</span>
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+              {t('components.environmentEditor.port')}
+            </span>
             <input
               required
               type="number"
@@ -337,7 +352,7 @@ function EnvironmentEditor({
               max={65535}
               value={values.port}
               onChange={(event) => updateField('port', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.port}
             />
           </label>
@@ -345,23 +360,25 @@ function EnvironmentEditor({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">{t('components.environmentEditor.user')}</span>
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+              {t('components.environmentEditor.user')}
+            </span>
             <input
               value={values.user}
               onChange={(event) => updateField('user', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.user}
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('components.environmentEditor.authKindLabel')}
             </span>
             <select
               value={values.auth_kind}
               onChange={(event) => updateField('auth_kind', event.target.value as EnvironmentAuthKind)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             >
               <option value="ssh_key">{authKindLabels.ssh_key}</option>
               <option value="password">{authKindLabels.password}</option>
@@ -372,61 +389,63 @@ function EnvironmentEditor({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('components.environmentEditor.identityFile')}
             </span>
             <input
               value={values.identity_file}
               onChange={(event) => updateField('identity_file', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.identityFile}
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('components.environmentEditor.proxyJump')}
             </span>
             <input
               value={values.proxy_jump}
               onChange={(event) => updateField('proxy_jump', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.proxyJump}
             />
           </label>
         </div>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('components.environmentEditor.proxyCommand')}
           </span>
           <input
             value={values.proxy_command}
             onChange={(event) => updateField('proxy_command', event.target.value)}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.proxyCommand}
           />
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">{t('components.environmentEditor.tags')}</span>
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+              {t('components.environmentEditor.tags')}
+            </span>
             <input
               value={values.tags}
               onChange={(event) => updateField('tags', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.tags}
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('components.environmentEditor.defaultWorkdir')}
             </span>
             <input
               value={values.default_workdir}
               onChange={(event) => updateField('default_workdir', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.defaultWorkdir}
             />
           </label>
@@ -434,69 +453,71 @@ function EnvironmentEditor({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('components.environmentEditor.preferredPython')}
             </span>
             <input
               value={values.preferred_python}
               onChange={(event) => updateField('preferred_python', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.preferredPython}
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('components.environmentEditor.preferredEnvManager')}
             </span>
             <input
               value={values.preferred_env_manager}
               onChange={(event) => updateField('preferred_env_manager', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.preferredEnvManager}
             />
           </label>
         </div>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('components.environmentEditor.preferredRuntimeNotes')}
           </span>
           <textarea
             value={values.preferred_runtime_notes}
             onChange={(event) => updateField('preferred_runtime_notes', event.target.value)}
             rows={3}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.preferredRuntimeNotes}
           />
         </label>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">Task harness profile</span>
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            Task harness profile
+          </span>
           <textarea
             value={values.task_harness_profile}
             onChange={(event) => updateField('task_harness_profile', event.target.value)}
             rows={5}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.taskHarnessProfile}
           />
         </label>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('components.environmentEditor.sshOptionsJson')}
           </span>
           <textarea
             value={values.ssh_options}
             onChange={(event) => updateField('ssh_options', event.target.value)}
             rows={4}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 font-mono text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 font-mono text-sm tracking-[-0.12px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.sshOptionsJson}
           />
         </label>
 
         {formError ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-3 py-2 text-sm text-[#c62828]">
             {formError}
           </p>
         ) : null}
@@ -505,16 +526,18 @@ function EnvironmentEditor({
           <button
             type="submit"
             disabled={isSaving}
-            className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSaving ? t('components.environmentEditor.saving') : submitLabel}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
+            className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
           >
-            {mode === 'create' ? t('components.environmentEditor.reset') : t('components.environmentEditor.cancelEdit')}
+            {mode === 'create'
+              ? t('components.environmentEditor.reset')
+              : t('components.environmentEditor.cancelEdit')}
           </button>
         </div>
       </form>
@@ -573,16 +596,19 @@ function ProjectReferenceEditor({
 
   if (selectedEnvironment === null) {
     return (
-      <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="space-y-4 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-gray-900">
+          <h2
+            className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
             {t('pages.containers.projectReferenceTitle')}
           </h2>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
             {t('pages.containers.projectReferenceDescription')}
           </p>
         </div>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
           {t('pages.containers.projectReferenceNoSelection')}
         </p>
       </section>
@@ -590,32 +616,35 @@ function ProjectReferenceEditor({
   }
 
   return (
-    <section className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2
+          className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
           {t('pages.containers.projectReferenceTitle')}
         </h2>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
           {t('pages.containers.projectReferenceDescription')}
         </p>
-        <p className="text-sm text-gray-600">
-          <span className="font-medium text-gray-900">{selectedEnvironment.alias}</span>
-          <span className="ml-2 text-gray-500">({selectedEnvironment.display_name})</span>
+        <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+          <span className="font-medium text-[var(--text)]">{selectedEnvironment.alias}</span>
+          <span className="ml-2 text-[var(--text-tertiary)]">({selectedEnvironment.display_name})</span>
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {projectReference ? (
-          <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+          <span className="rounded-full bg-[var(--apple-blue)]/10 px-3 py-1 text-xs font-semibold text-[var(--apple-blue)]">
             {t('pages.containers.projectReferencedBadge')}
           </span>
         ) : (
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+          <span className="rounded-full bg-[var(--bg-secondary)] px-3 py-1 text-xs font-semibold text-[var(--text-tertiary)]">
             {t('pages.containers.projectUnreferencedBadge')}
           </span>
         )}
         {projectReference?.is_default ? (
-          <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+          <span className="rounded-full bg-[var(--apple-blue)]/10 px-3 py-1 text-xs font-semibold text-[var(--apple-blue)]">
             {t('pages.containers.projectDefaultBadge')}
           </span>
         ) : null}
@@ -635,7 +664,7 @@ function ProjectReferenceEditor({
             }
           }}
           disabled={isSaving || isRemoving || projectReference?.is_default === true}
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {projectReference?.is_default
             ? t('pages.containers.setProjectDefaultDisabled')
@@ -655,7 +684,7 @@ function ProjectReferenceEditor({
               }
             }}
             disabled={isSaving || isRemoving}
-            className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('pages.containers.clearProjectDefault')}
           </button>
@@ -674,7 +703,7 @@ function ProjectReferenceEditor({
               }
             }}
             disabled={isSaving || isRemoving}
-            className="rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-4 py-2 text-sm font-medium text-[#c62828] transition hover:bg-[#ffcdd2] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('pages.containers.removeProjectReference')}
           </button>
@@ -696,58 +725,58 @@ function ProjectReferenceEditor({
         }}
       >
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('pages.containers.projectOverrideWorkdir')}
           </span>
           <input
             value={values.override_workdir}
             onChange={(event) => updateField('override_workdir', event.target.value)}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={t('pages.containers.projectOverrideWorkdirPlaceholder')}
           />
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('pages.containers.projectOverrideEnvName')}
             </span>
             <input
               value={values.override_env_name}
               onChange={(event) => updateField('override_env_name', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={t('pages.containers.projectOverrideEnvNamePlaceholder')}
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
               {t('pages.containers.projectOverrideEnvManager')}
             </span>
             <input
               value={values.override_env_manager}
               onChange={(event) => updateField('override_env_manager', event.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={t('pages.containers.projectOverrideEnvManagerPlaceholder')}
             />
           </label>
         </div>
 
         <label className="space-y-2">
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('pages.containers.projectOverrideRuntimeNotes')}
           </span>
           <textarea
             value={values.override_runtime_notes}
             onChange={(event) => updateField('override_runtime_notes', event.target.value)}
             rows={4}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--accent)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={t('pages.containers.projectOverrideRuntimeNotesPlaceholder')}
           />
         </label>
 
         {formError ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-3 py-2 text-sm text-[#c62828]">
             {formError}
           </p>
         ) : null}
@@ -755,7 +784,7 @@ function ProjectReferenceEditor({
         <button
           type="submit"
           disabled={isSaving || isRemoving}
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isSaving
             ? t('pages.containers.projectReferenceSaving')
@@ -956,66 +985,92 @@ function ContainersPage() {
   };
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-8 space-y-3">
-        <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
           {t('pages.containers.eyebrow')}
         </p>
-        <h1 className="text-3xl font-semibold text-gray-900">{t('pages.containers.title')}</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">{t('pages.containers.description')}</p>
+        <h1
+          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.containers.title')}
+        </h1>
+        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
+          {t('pages.containers.description')}
+        </p>
       </section>
 
-      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
-              {t('pages.containers.currentSelection')}
-            </p>
-            <p className="mt-1 text-sm text-gray-600">{activeEnvironmentSummary}</p>
-          </div>
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95"
-          >
-            {t('pages.containers.addEnvironment')}
-          </button>
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--surface)] p-5 shadow-sm">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
+            {t('pages.containers.currentSelection')}
+          </p>
+          <p className="mt-1 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+            {activeEnvironmentSummary}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={handleCreate}
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)]"
+        >
+          {t('pages.containers.addEnvironment')}
+        </button>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="space-y-4 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
           <div className="space-y-1">
-            <h2 className="text-xl font-semibold text-gray-900">{t('pages.containers.listTitle')}</h2>
-            <p className="text-sm text-gray-600">{t('pages.containers.listDescription')}</p>
+            <h2
+              className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              {t('pages.containers.listTitle')}
+            </h2>
+            <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+              {t('pages.containers.listDescription')}
+            </p>
           </div>
 
           {environmentSelection.isLoading ? (
-            <p className="text-sm text-gray-500">{t('pages.containers.loading')}</p>
+            <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+              {t('pages.containers.loading')}
+            </p>
           ) : null}
 
-          {requestError ? <p className="text-sm text-red-700">{requestError}</p> : null}
-          {mutationError ? <p className="text-sm text-red-700">{mutationError}</p> : null}
+          {requestError ? <p className="text-sm text-[#ff3b30]">{requestError}</p> : null}
+          {mutationError ? <p className="text-sm text-[#ff3b30]">{mutationError}</p> : null}
 
           {!environmentSelection.isLoading && environments.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+            <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-6 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
               {t('pages.containers.empty')}
             </div>
           ) : null}
 
           {environments.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">{t('pages.containers.alias')}</th>
-                    <th className="px-4 py-3 font-medium">{t('pages.containers.host')}</th>
-                    <th className="px-4 py-3 font-medium">{t('pages.containers.auth')}</th>
-                    <th className="px-4 py-3 font-medium">{t('pages.containers.detection')}</th>
-                    <th className="px-4 py-3 font-medium">{t('pages.containers.actions')}</th>
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+                      {t('pages.containers.alias')}
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+                      {t('pages.containers.host')}
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+                      {t('pages.containers.auth')}
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+                      {t('pages.containers.detection')}
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+                      {t('pages.containers.actions')}
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {environments.map((environment) => {
                     const detection = environment.latest_detection;
                     const projectReference =
@@ -1025,70 +1080,80 @@ function ContainersPage() {
                     return (
                       <tr
                         key={environment.id}
-                        className={isActive ? 'bg-[var(--accent)]/5' : 'bg-white'}
+                        className={`border-b border-[var(--border)] transition ${
+                          isActive ? 'bg-[var(--apple-blue)]/[0.04]' : ''
+                        }`}
                       >
                         <td className="px-4 py-4">
                           <div className="space-y-1">
-                            <p className="font-medium text-gray-900">
+                            <p className="font-medium text-[var(--text)]">
                               {environment.display_name}
                               {environment.is_seed ? (
-                                <span className="ml-2 rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--accent)]">
+                                <span className="ml-2 rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]">
                                   {t('common.default')}
                                 </span>
                               ) : null}
                               {projectReference ? (
-                                <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                                <span className="ml-2 rounded-full bg-[var(--bg-secondary)] px-2 py-0.5 text-xs font-semibold text-[var(--text-tertiary)]">
                                   {t('pages.containers.projectReferencedBadge')}
                                 </span>
                               ) : null}
                               {projectReference?.is_default ? (
-                                <span className="ml-2 rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--accent)]">
+                                <span className="ml-2 rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]">
                                   {t('pages.containers.projectDefaultBadge')}
                                 </span>
                               ) : null}
                               {isActive ? (
-                                <span className="ml-2 rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--accent)]">
+                                <span className="ml-2 rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]">
                                   {t('pages.containers.activeBadge')}
                                 </span>
                               ) : null}
                             </p>
-                            <p className="text-xs text-gray-500">
-                              <code className="rounded bg-gray-100 px-1.5 py-0.5">{environment.alias}</code>
+                            <p className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
+                              <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5">
+                                {environment.alias}
+                              </code>
                               {isEditing ? (
-                                <span className="ml-2 text-[var(--accent)]">
+                                <span className="ml-2 text-[var(--apple-blue)]">
                                   {t('pages.containers.editingBadge')}
                                 </span>
                               ) : null}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
                               {environment.default_workdir ?? t('pages.containers.defaultWorkdir')}
                             </p>
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-gray-700">
+                        <td className="px-4 py-4 text-[var(--text-secondary)]">
                           <div>{environment.host}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
                             {environment.user}@{environment.port}
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-gray-700">
+                        <td className="px-4 py-4 text-[var(--text-secondary)]">
                           <div>{authKindLabels[environment.auth_kind]}</div>
-                          <div className="text-xs text-gray-500">
-                            {environment.tags.length > 0 ? environment.tags.join(', ') : t('common.noTags')}
+                          <div className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
+                            {environment.tags.length > 0
+                              ? environment.tags.join(', ')
+                              : t('common.noTags')}
                           </div>
                         </td>
                         <td className="px-4 py-4">
                           {detection ? (
                             <div className="space-y-1">
-                              <div className="text-sm font-medium text-gray-900">
-                                {detectionStatusLabels[detection.status] ?? detection.status} · {detection.summary}
+                              <div className="text-sm font-medium text-[var(--text)]">
+                                {detectionStatusLabels[detection.status] ?? detection.status} ·{' '}
+                                {detection.summary}
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {t('pages.containers.detectedAt')} {formatTimestamp(detection.detected_at, locale, t('common.never'))}
+                              <div className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
+                                {t('pages.containers.detectedAt')}{' '}
+                                {formatTimestamp(detection.detected_at, locale, t('common.never'))}
                               </div>
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-500">{t('pages.containers.notDetected')}</span>
+                            <span className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+                              {t('pages.containers.notDetected')}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-4">
@@ -1096,7 +1161,7 @@ function ContainersPage() {
                             <button
                               type="button"
                               onClick={() => environmentSelection.onSelectEnvironment(environment.id)}
-                              className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
+                              className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
                             >
                               {t('common.use')}
                             </button>
@@ -1106,7 +1171,7 @@ function ContainersPage() {
                                 setEditorMode('edit');
                                 setEditorEnvironmentId(environment.id);
                               }}
-                              className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
+                              className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
                             >
                               {t('common.edit')}
                             </button>
@@ -1116,14 +1181,18 @@ function ContainersPage() {
                                 detectMutation.mutate(environment.id);
                               }}
                               disabled={detectMutation.isPending}
-                              className="rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/15 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-lg border border-[var(--apple-blue)]/20 bg-[var(--apple-blue)]/10 px-3 py-1.5 text-xs font-medium text-[var(--apple-blue)] transition hover:bg-[var(--apple-blue)]/15 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {t('common.detect')}
                             </button>
                             <button
                               type="button"
                               onClick={() => {
-                                if (window.confirm(t('pages.containers.confirmDelete', { alias: environment.alias }))) {
+                                if (
+                                  window.confirm(
+                                    t('pages.containers.confirmDelete', { alias: environment.alias })
+                                  )
+                                ) {
                                   deleteMutation.mutate(environment.id);
                                 }
                               }}
@@ -1133,7 +1202,7 @@ function ContainersPage() {
                                   ? t('pages.containers.defaultEnvironmentLocked')
                                   : undefined
                               }
-                              className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-3 py-1.5 text-xs font-medium text-[#c62828] transition hover:bg-[#ffcdd2] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {t('common.delete')}
                             </button>

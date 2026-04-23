@@ -6,16 +6,20 @@ interface Props {
 function LoadingSpinner({ size = 'md', message }: Props) {
   const sizeClasses = {
     sm: 'w-4 h-4',
-    md: 'w-8 h-8',
-    lg: 'w-12 h-12',
+    md: 'w-6 h-6',
+    lg: 'w-10 h-10',
   };
 
   return (
     <div className="flex flex-col items-center justify-center gap-2">
       <div
-        className={`${sizeClasses[size]} border-2 border-gray-300 border-t-[var(--accent)] rounded-full animate-spin`}
+        className={`${sizeClasses[size]} rounded-full border-2 border-[var(--border)] border-t-[var(--apple-blue)] animate-spin`}
       />
-      {message && <span className="text-sm text-gray-500">{message}</span>}
+      {message && (
+        <span className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+          {message}
+        </span>
+      )}
     </div>
   );
 }

@@ -55,23 +55,36 @@ function TerminalBenchCardView({
   };
   const hasRuntimeError = loadError !== null || detail !== null;
 
+  const statusColor =
+    status === 'running'
+      ? 'bg-[#34c759]'
+      : status === 'failed'
+        ? 'bg-[#ff3b30]'
+        : status === 'starting' || status === 'stopping'
+          ? 'bg-[#ff9500]'
+          : 'bg-[var(--text-tertiary)]';
+
   return (
-    <section className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
               {t('components.terminalBench.eyebrow')}
             </p>
-            <h2 className="mt-1 text-xl font-semibold text-gray-900">
+            <h2
+              className="mt-1 text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
               {t('components.terminalBench.title')}
             </h2>
           </div>
-          <div className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm font-medium text-gray-700">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-tertiary)] px-3 py-1.5 text-sm font-medium text-[var(--text)]">
+            <span className={`h-2 w-2 rounded-full ${statusColor}`} />
             {t('components.terminalBench.statusPrefix')} {statusLabel[status]}
           </div>
         </div>
-        <p className="max-w-3xl text-sm text-gray-600">
+        <p className="max-w-3xl text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
           {t('components.terminalBench.description')}
         </p>
       </div>
@@ -81,7 +94,7 @@ function TerminalBenchCardView({
           type="button"
           onClick={onAttach}
           disabled={!canAttach}
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isAttaching ? t('components.terminalBench.attaching') : t('components.terminalBench.attach')}
         </button>
@@ -89,7 +102,7 @@ function TerminalBenchCardView({
           type="button"
           onClick={onDetach}
           disabled={!canDetach}
-          className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isDetaching ? t('components.terminalBench.detaching') : t('components.terminalBench.detach')}
         </button>
@@ -97,15 +110,17 @@ function TerminalBenchCardView({
           type="button"
           onClick={onReset}
           disabled={!canReset}
-          className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isResetting ? t('components.terminalBench.resetting') : t('components.terminalBench.resetSession')}
         </button>
       </div>
 
-      <div className="space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700">
-          <span className="font-medium text-gray-900">{t('components.terminalBench.sessionSource')}</span>
+      <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4">
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+          <span className="font-medium text-[var(--text)]">
+            {t('components.terminalBench.sessionSource')}
+          </span>
           <span>
             {t('components.terminalBench.loading')} {isLoading ? t('common.yes') : t('common.no')}
           </span>
@@ -123,22 +138,30 @@ function TerminalBenchCardView({
           </span>
         </div>
 
-        {loadError ? <p className="text-sm text-red-700">{t('components.terminalBench.loadError')} {loadError}</p> : null}
+        {loadError ? (
+          <p className="text-sm text-[#ff3b30]">
+            {t('components.terminalBench.loadError')} {loadError}
+          </p>
+        ) : null}
         {!selectedEnvironmentSummary ? (
-          <p className="text-sm text-amber-700">
+          <p className="text-sm text-[#ff9500]">
             {t('components.terminalBench.selectEnvironmentBeforeAttach')}
           </p>
         ) : null}
         {detail ? (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
             {t('common.detailLabel')} {detail}
           </p>
         ) : null}
         {!hasRuntimeError && !isLoading && status === 'idle' ? (
-          <p className="text-sm text-gray-500">{t('components.terminalBench.noSessionYet')}</p>
+          <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+            {t('components.terminalBench.noSessionYet')}
+          </p>
         ) : null}
         {!hasRuntimeError && !isLoading && status === 'running' && terminalWsUrl === null ? (
-          <p className="text-sm text-gray-500">{t('components.terminalBench.detachedNotice')}</p>
+          <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+            {t('components.terminalBench.detachedNotice')}
+          </p>
         ) : null}
       </div>
 
