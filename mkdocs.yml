@@ -1,5 +1,5 @@
-site_name: Scholar Agent Notes
-site_description: HTML export for Obsidian-style research notes
+site_name: AINRF Docs and References
+site_description: Product docs, design notes, and reference materials for AINRF
 docs_dir: .cache/html-notes/docs
 site_dir: site
 use_directory_urls: true

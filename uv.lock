@@ -11,6 +11,61 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "ainrf"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "asyncssh" },
+    { name = "claude-code-sdk" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "mkdocs-mermaid2-plugin" },
+    { name = "pydantic" },
+    { name = "pymdown-extensions" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+    { name = "typer" },
+    { name = "uvicorn" },
+    { name = "websockets" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "ty" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncssh", specifier = ">=2.21.1" },
+    { name = "claude-code-sdk", specifier = ">=0.0.14" },
+    { name = "fastapi", specifier = ">=0.116.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "mkdocs", specifier = ">=1.6.0" },
+    { name = "mkdocs-material", specifier = ">=9.5.0" },
+    { name = "mkdocs-mermaid2-plugin", specifier = ">=1.1.1" },
+    { name = "pydantic", specifier = ">=2.11.7" },
+    { name = "pymdown-extensions", specifier = ">=10.14" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "structlog", specifier = ">=25.4.0" },
+    { name = "typer", specifier = ">=0.17.4" },
+    { name = "uvicorn", specifier = ">=0.35.0" },
+    { name = "websockets", specifier = ">=15.0.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit", specifier = ">=4.3.0" },
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "ruff", specifier = ">=0.12.11" },
+    { name = "ty", specifier = ">=0.0.1a19" },
+]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1118,61 +1173,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/25/3fc9114abf979a41673ce877c08016f8e660ad6cf508c3957f537d2e9fa9/ruff-0.15.6-py3-none-win32.whl", hash = "sha256:bbf67d39832404812a2d23020dda68fee7f18ce15654e96fb1d3ad21a5fe436c", size = 10616872, upload-time = "2026-03-12T23:05:42.451Z" },
     { url = "https://files.pythonhosted.org/packages/89/7a/09ece68445ceac348df06e08bf75db72d0e8427765b96c9c0ffabc1be1d9/ruff-0.15.6-py3-none-win_amd64.whl", hash = "sha256:aee25bc84c2f1007ecb5037dff75cef00414fdf17c23f07dc13e577883dca406", size = 11787271, upload-time = "2026-03-12T23:05:20.168Z" },
     { url = "https://files.pythonhosted.org/packages/7f/d0/578c47dd68152ddddddf31cd7fc67dc30b7cdf639a86275fda821b0d9d98/ruff-0.15.6-py3-none-win_arm64.whl", hash = "sha256:c34de3dd0b0ba203be50ae70f5910b17188556630e2178fd7d79fc030eb0d837", size = 11060497, upload-time = "2026-03-12T23:05:25.968Z" },
-]
-
-[[package]]
-name = "scholar-agent-notes"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "asyncssh" },
-    { name = "claude-code-sdk" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "mkdocs" },
-    { name = "mkdocs-material" },
-    { name = "mkdocs-mermaid2-plugin" },
-    { name = "pydantic" },
-    { name = "pymdown-extensions" },
-    { name = "pyyaml" },
-    { name = "structlog" },
-    { name = "typer" },
-    { name = "uvicorn" },
-    { name = "websockets" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "ty" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "asyncssh", specifier = ">=2.21.1" },
-    { name = "claude-code-sdk", specifier = ">=0.0.14" },
-    { name = "fastapi", specifier = ">=0.116.1" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "mkdocs", specifier = ">=1.6.0" },
-    { name = "mkdocs-material", specifier = ">=9.5.0" },
-    { name = "mkdocs-mermaid2-plugin", specifier = ">=1.1.1" },
-    { name = "pydantic", specifier = ">=2.11.7" },
-    { name = "pymdown-extensions", specifier = ">=10.14" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "structlog", specifier = ">=25.4.0" },
-    { name = "typer", specifier = ">=0.17.4" },
-    { name = "uvicorn", specifier = ">=0.35.0" },
-    { name = "websockets", specifier = ">=15.0.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pre-commit", specifier = ">=4.3.0" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "ruff", specifier = ">=0.12.11" },
-    { name = "ty", specifier = ">=0.0.1a19" },
 ]
 
 [[package]]
