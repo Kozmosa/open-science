@@ -48,13 +48,22 @@ beforeEach(() => {
 });
 
 describe('TerminalPage', () => {
-  it('renders the personal terminal bench even when legacy task query params are present', async () => {
+  it('renders the simplified Chinese terminal header and keeps the bench card above the selector', async () => {
     renderWithProviders(<TerminalPage />, {
       route: '/terminal?environment_id=env-1&task_id=task-1&intent=takeover',
+      locale: 'zh',
     });
 
-    expect(await screen.findByText('Personal terminal bench')).toBeInTheDocument();
-    expect(screen.getByTestId('environment-selector')).toBeInTheDocument();
-    expect(screen.getByTestId('terminal-bench-card')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '终端' })).toBeInTheDocument();
+    expect(screen.getByText('TERMINAL')).toBeInTheDocument();
+    expect(screen.queryByText('附着终端视图')).not.toBeInTheDocument();
+    expect(screen.queryByText(/task attach intent/)).not.toBeInTheDocument();
+
+    const terminalBenchCard = screen.getByTestId('terminal-bench-card');
+    const environmentSelector = screen.getByTestId('environment-selector');
+
+    expect(terminalBenchCard.compareDocumentPosition(environmentSelector) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
   });
 });
