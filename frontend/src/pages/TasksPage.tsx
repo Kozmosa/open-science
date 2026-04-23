@@ -3,17 +3,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   buildTaskStreamUrl,
   createTask,
-  getEnvironments,
   getTask,
   getTaskOutput,
   getTasks,
   getWorkspaces,
 } from '../api';
+import { useEnvironmentSelection } from '../components';
+import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
 import type {
   TaskCreateRequest,
   TaskOutputEvent,
   TaskStatus,
   TaskSummary,
+  EnvironmentRecord,
+  WorkspaceRecord,
 } from '../types';
 
 const statusLabel: Record<TaskStatus, string> = {
@@ -35,10 +38,175 @@ function mergeOutputItems(current: TaskOutputEvent[], incoming: TaskOutputEvent[
   return [...bySeq.values()].sort((left, right) => left.seq - right.seq);
 }
 
+interface TaskCreateFormProps {
+  workspaces: WorkspaceRecord[];
+  environments: EnvironmentRecord[];
+  selectedWorkspaceId: string;
+  selectedEnvironmentId: string;
+  selectedWorkspace: WorkspaceRecord | null;
+  selectedEnvironment: EnvironmentRecord | null;
+  draftDefaults: {
+    title: string;
+    task_input: string;
+  };
+  isSubmitting: boolean;
+  createError: string | null;
+  onSelectWorkspace: (workspaceId: string) => void;
+  onSelectEnvironment: (environmentId: string) => void;
+  onSubmit: (payload: TaskCreateRequest) => void;
+}
+
+function TaskCreateForm({
+  workspaces,
+  environments,
+  selectedWorkspaceId,
+  selectedEnvironmentId,
+  selectedWorkspace,
+  selectedEnvironment,
+  draftDefaults,
+  isSubmitting,
+  createError,
+  onSelectWorkspace,
+  onSelectEnvironment,
+  onSubmit,
+}: TaskCreateFormProps) {
+  const [draft, setDraft] = useState({
+    title: draftDefaults.title,
+    task_input: draftDefaults.task_input,
+    task_profile: 'claude-code',
+  });
+
+  const canCreate =
+    selectedWorkspace !== null &&
+    selectedEnvironment !== null &&
+    draft.task_input.trim().length > 0 &&
+    !isSubmitting;
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!selectedWorkspace || !selectedEnvironment) {
+          return;
+        }
+
+        onSubmit({
+          workspace_id: selectedWorkspace.workspace_id,
+          environment_id: selectedEnvironment.id,
+          task_profile: draft.task_profile,
+          task_input: draft.task_input.trim(),
+          title: draft.title.trim() || undefined,
+        });
+      }}
+    >
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-gray-700">Workspace</span>
+        <select
+          aria-label="Workspace"
+          value={selectedWorkspaceId}
+          onChange={(event) => onSelectWorkspace(event.target.value)}
+          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+        >
+          {workspaces.map((workspace) => (
+            <option key={workspace.workspace_id} value={workspace.workspace_id}>
+              {workspace.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-gray-700">Environment</span>
+        <select
+          aria-label="Environment"
+          value={selectedEnvironmentId}
+          onChange={(event) => onSelectEnvironment(event.target.value)}
+          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+        >
+          {environments.map((environment) => (
+            <option key={environment.id} value={environment.id}>
+              {environment.alias} · {environment.display_name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-gray-700">Task profile</span>
+        <select
+          aria-label="Task profile"
+          value={draft.task_profile}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, task_profile: event.target.value }))
+          }
+          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+        >
+          <option value="claude-code">claude-code</option>
+        </select>
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-gray-700">Title</span>
+        <input
+          aria-label="Title"
+          value={draft.title}
+          onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          placeholder="Optional"
+        />
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-gray-700">Task input</span>
+        <textarea
+          aria-label="Task input"
+          value={draft.task_input}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, task_input: event.target.value }))
+          }
+          className="min-h-40 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          placeholder="Implement Task Harness v1 according to the current repository plan."
+        />
+      </label>
+
+      <button
+        type="button"
+        className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
+        onClick={() =>
+          setDraft({
+            title: draftDefaults.title,
+            task_input: draftDefaults.task_input,
+            task_profile: 'claude-code',
+          })
+        }
+      >
+        Reset draft
+      </button>
+
+      {selectedWorkspace ? (
+        <p className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          Default workdir: <code>{selectedWorkspace.default_workdir ?? 'n/a'}</code>
+        </p>
+      ) : null}
+      {createError ? <p className="text-sm text-red-700">{createError}</p> : null}
+
+      <button
+        type="submit"
+        disabled={!canCreate}
+        className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {isSubmitting ? 'Creating…' : 'Create task'}
+      </button>
+    </form>
+  );
+}
+
 function TasksPage() {
   const queryClient = useQueryClient();
+  const environmentSelection = useEnvironmentSelection();
+  const { settings } = useSettings();
   const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: getWorkspaces });
-  const environmentsQuery = useQuery({ queryKey: ['environments'], queryFn: getEnvironments });
   const tasksQuery = useQuery({
     queryKey: ['tasks'],
     queryFn: getTasks,
@@ -46,17 +214,12 @@ function TasksPage() {
   });
 
   const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
-  const environments = useMemo(() => environmentsQuery.data?.items ?? [], [environmentsQuery.data]);
+  const environments = environmentSelection.environments;
   const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>('');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [draft, setDraft] = useState({
-    title: '',
-    task_input: '',
-    task_profile: 'claude-code',
-  });
+  const [draftResetVersion, setDraftResetVersion] = useState(0);
   const [outputItems, setOutputItems] = useState<TaskOutputEvent[]>([]);
   const [outputError, setOutputError] = useState<string | null>(null);
 
@@ -87,7 +250,7 @@ function TasksPage() {
         items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
       }));
       setSelectedTaskId(task.task_id);
-      setDraft({ title: '', task_input: '', task_profile: 'claude-code' });
+      setDraftResetVersion((current) => current + 1);
       void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
     },
   });
@@ -191,17 +354,21 @@ function TasksPage() {
   }, [effectiveSelectedTaskId, queryClient]);
 
   const effectiveWorkspaceId = selectedWorkspaceId || workspaces[0]?.workspace_id || '';
-  const effectiveEnvironmentId = selectedEnvironmentId || environments[0]?.id || '';
+  const effectiveEnvironmentId = environmentSelection.selectedEnvironmentId || environments[0]?.id || '';
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.workspace_id === effectiveWorkspaceId) ?? null;
-  const selectedEnvironment =
-    environments.find((environment) => environment.id === effectiveEnvironmentId) ?? null;
+  const selectedEnvironment = environmentSelection.selectedEnvironment;
+  const draftDefaults = useMemo(() => {
+    const environmentDefaults =
+      (environmentSelection.selectedEnvironmentId
+        ? settings.projectDefaults.default.environmentDefaults[environmentSelection.selectedEnvironmentId]
+        : null) ?? createEmptyEnvironmentTaskDefaults();
 
-  const canCreate =
-    selectedWorkspace !== null &&
-    selectedEnvironment !== null &&
-    draft.task_input.trim().length > 0 &&
-    !createMutation.isPending;
+    return {
+      title: environmentDefaults.titleTemplate,
+      task_input: environmentDefaults.taskInputTemplate,
+    };
+  }, [environmentSelection.selectedEnvironmentId, settings.projectDefaults.default.environmentDefaults]);
 
   const createError = createMutation.error instanceof Error ? createMutation.error.message : null;
   const tasksError = tasksQuery.error instanceof Error ? tasksQuery.error.message : null;
@@ -230,107 +397,21 @@ function TasksPage() {
             </p>
           </div>
 
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!selectedWorkspace || !selectedEnvironment) {
-                return;
-              }
-              createMutation.mutate({
-                workspace_id: selectedWorkspace.workspace_id,
-                environment_id: selectedEnvironment.id,
-                task_profile: draft.task_profile,
-                task_input: draft.task_input.trim(),
-                title: draft.title.trim() || undefined,
-              });
-            }}
-          >
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-gray-700">Workspace</span>
-              <select
-                aria-label="Workspace"
-                value={effectiveWorkspaceId}
-                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-              >
-                {workspaces.map((workspace) => (
-                  <option key={workspace.workspace_id} value={workspace.workspace_id}>
-                    {workspace.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-gray-700">Environment</span>
-              <select
-                aria-label="Environment"
-                value={effectiveEnvironmentId}
-                onChange={(event) => setSelectedEnvironmentId(event.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-              >
-                {environments.map((environment) => (
-                  <option key={environment.id} value={environment.id}>
-                    {environment.alias} · {environment.display_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-gray-700">Task profile</span>
-              <select
-                aria-label="Task profile"
-                value={draft.task_profile}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, task_profile: event.target.value }))
-                }
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-              >
-                <option value="claude-code">claude-code</option>
-              </select>
-            </label>
-
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-gray-700">Title</span>
-              <input
-                aria-label="Title"
-                value={draft.title}
-                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-                placeholder="Optional"
-              />
-            </label>
-
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-gray-700">Task input</span>
-              <textarea
-                aria-label="Task input"
-                value={draft.task_input}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, task_input: event.target.value }))
-                }
-                className="min-h-40 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
-                placeholder="Implement Task Harness v1 according to the current repository plan."
-              />
-            </label>
-
-            {selectedWorkspace ? (
-              <p className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                Default workdir: <code>{selectedWorkspace.default_workdir ?? 'n/a'}</code>
-              </p>
-            ) : null}
-            {createError ? <p className="text-sm text-red-700">{createError}</p> : null}
-
-            <button
-              type="submit"
-              disabled={!canCreate}
-              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {createMutation.isPending ? 'Creating…' : 'Create task'}
-            </button>
-          </form>
+          <TaskCreateForm
+            key={`${effectiveEnvironmentId}:${draftResetVersion}`}
+            workspaces={workspaces}
+            environments={environments}
+            selectedWorkspaceId={effectiveWorkspaceId}
+            selectedEnvironmentId={effectiveEnvironmentId}
+            selectedWorkspace={selectedWorkspace}
+            selectedEnvironment={selectedEnvironment}
+            draftDefaults={draftDefaults}
+            isSubmitting={createMutation.isPending}
+            createError={createError}
+            onSelectWorkspace={setSelectedWorkspaceId}
+            onSelectEnvironment={environmentSelection.onSelectEnvironment}
+            onSubmit={(payload) => createMutation.mutate(payload)}
+          />
 
           <section className="space-y-4">
             <div className="space-y-1">

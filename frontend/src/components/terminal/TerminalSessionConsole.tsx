@@ -4,6 +4,7 @@ import 'xterm/css/xterm.css';
 import { useEffect, useRef, useState } from 'react';
 import type { TerminalAttachmentMode, TerminalSessionStatus } from '../../types';
 import { useT } from '../../i18n';
+import { useTerminalFontSize } from '../../settings';
 
 type SocketStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -69,6 +70,7 @@ function TerminalSessionConsole({
   placeholderText,
 }: Props) {
   const t = useT();
+  const fontSize = useTerminalFontSize();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onDisconnectedRef = useRef(onDisconnected);
   const translateRef = useRef(t);
@@ -107,7 +109,7 @@ function TerminalSessionConsole({
       convertEol: true,
       cursorBlink: !isObserveOnly,
       fontFamily: 'var(--mono)',
-      fontSize: 13,
+      fontSize,
       scrollback: 2000,
       theme: {
         background: '#0b1020',
@@ -221,7 +223,7 @@ function TerminalSessionConsole({
       terminal.dispose();
       disconnectNotifiedRef.current = false;
     };
-  }, [isObserveOnly, sessionId, status, terminalWsUrl]);
+  }, [fontSize, isObserveOnly, sessionId, status, terminalWsUrl]);
 
   if (status !== 'running' || terminalWsUrl === null) {
     return (

@@ -4,6 +4,10 @@ import ContainersPage from './ContainersPage';
 import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '../types';
 import { renderWithProviders } from '../test/render';
 import {
+  createDefaultWebUiSettings,
+  settingsStorageKey,
+} from '../settings';
+import {
   createProjectEnvironmentReference,
   createEnvironment,
   deleteEnvironment,
@@ -108,7 +112,10 @@ describe('ContainersPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
 
     expect(screen.getByTestId('active-environment-banner')).toHaveTextContent('gpu-lab');
-    expect(window.localStorage.getItem('scholar-agent:selected-environment-id')).toBe('env-1');
+    const storedSettings = JSON.parse(
+      window.localStorage.getItem(settingsStorageKey) ?? '{}'
+    ) as ReturnType<typeof createDefaultWebUiSettings>;
+    expect(storedSettings.projectDefaults.default.selection.lastEnvironmentId).toBe('env-1');
   });
 
   it('creates a new environment through the form', async () => {

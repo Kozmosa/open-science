@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from './TasksPage';
 import { renderWithProviders } from '../test/render';
+import { createDefaultWebUiSettings, settingsStorageKey } from '../settings';
 import type {
   EnvironmentRecord,
   TaskOutputListResponse,
@@ -66,6 +67,14 @@ const environment: EnvironmentRecord = {
   created_at: '2026-04-23T08:00:00Z',
   updated_at: '2026-04-23T08:00:00Z',
   latest_detection: null,
+};
+
+const secondaryEnvironment: EnvironmentRecord = {
+  ...environment,
+  id: 'env-2',
+  alias: 'cpu-lab',
+  display_name: 'CPU Lab',
+  host: 'cpu.example.com',
 };
 
 const taskSummary: TaskSummary = {
@@ -156,6 +165,7 @@ const mockGetWorkspaces = vi.mocked(getWorkspaces);
 beforeEach(() => {
   MockEventSource.instances = [];
   vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource);
+  window.localStorage.clear();
 
   mockBuildTaskStreamUrl.mockReset();
   mockCreateTask.mockReset();
@@ -196,10 +206,14 @@ describe('TasksPage', () => {
     mockCreateTask.mockResolvedValue(created);
 
     renderWithProviders(<TasksPage />);
+    await waitFor(() => expect(screen.getByLabelText('Environment')).toHaveValue('env-1'));
 
     fireEvent.change(screen.getByLabelText('Task input'), {
       target: { value: 'Implement harness\nMake it stream output.' },
     });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled()
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() =>
@@ -214,12 +228,52 @@ describe('TasksPage', () => {
     expect(await screen.findByText('Implement harness')).toBeInTheDocument();
   });
 
+  it('prefills the draft from environment settings and resets when the environment changes', async () => {
+    const settings = createDefaultWebUiSettings();
+    settings.projectDefaults.default.defaultEnvironmentId = 'env-1';
+    settings.projectDefaults.default.environmentDefaults['env-1'] = {
+      titleTemplate: 'GPU batch',
+      taskInputTemplate: 'Run the GPU validation checklist.',
+    };
+    settings.projectDefaults.default.environmentDefaults['env-2'] = {
+      titleTemplate: 'CPU fallback',
+      taskInputTemplate: 'Run the CPU fallback checklist.',
+    };
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+    mockGetEnvironments.mockResolvedValue({ items: [environment, secondaryEnvironment] });
+
+    renderWithProviders(<TasksPage />);
+
+    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('GPU batch'));
+    expect(screen.getByLabelText('Task input')).toHaveValue('Run the GPU validation checklist.');
+
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'edited title' },
+    });
+
+    fireEvent.change(screen.getByLabelText('Environment'), {
+      target: { value: 'env-2' },
+    });
+
+    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('CPU fallback'));
+    expect(screen.getByLabelText('Task input')).toHaveValue('Run the CPU fallback checklist.');
+
+    fireEvent.change(screen.getByLabelText('Task input'), {
+      target: { value: 'temporary override' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset draft' }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Task input')).toHaveValue('Run the CPU fallback checklist.')
+    );
+  });
+
   it('renders prompt and replayed output for the selected task', async () => {
     renderWithProviders(<TasksPage />);
 
     expect(await screen.findByText('Train model')).toBeInTheDocument();
     expect(await screen.findByText('Resolved workdir:')).toBeInTheDocument();
-    expect(screen.getByText('Task input')).toBeInTheDocument();
+    expect(screen.getAllByText('Task input')).not.toHaveLength(0);
     expect(screen.getByText('first line')).toBeInTheDocument();
     expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-1', 1);
   });

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getEnvironments, getProjectEnvironmentReferences } from '../../api';
 import { renderWithProviders } from '../../test/render';
 import type { EnvironmentRecord } from '../../types';
+import { createDefaultWebUiSettings, settingsStorageKey } from '../../settings';
 import EnvironmentSelectorPanel from './EnvironmentSelectorPanel';
 import { useEnvironmentSelection } from './useEnvironmentSelection';
 
@@ -71,23 +72,13 @@ beforeEach(() => {
 });
 
 describe('EnvironmentSelectorPanel', () => {
-  it('prioritizes the project default over the remembered selection', async () => {
-    window.localStorage.setItem('scholar-agent:selected-environment-id', 'env-2');
+  it('prioritizes the settings default over the remembered selection', async () => {
+    const settings = createDefaultWebUiSettings();
+    settings.projectDefaults.default.defaultEnvironmentId = 'env-1';
+    settings.projectDefaults.default.selection.lastEnvironmentId = 'env-2';
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
     mockGetEnvironments.mockResolvedValue({
       items: [baseEnvironment, defaultEnvironment, secondaryEnvironment],
-    });
-    mockGetProjectEnvironmentReferences.mockResolvedValue({
-      items: [
-        {
-          environment_id: 'env-1',
-          is_default: true,
-          override_workdir: null,
-          override_env_name: null,
-          override_env_manager: null,
-          override_runtime_notes: null,
-          updated_at: '2026-04-21T00:00:00Z',
-        },
-      ],
     });
 
     renderWithProviders(<EnvironmentSelectionHarness />);
@@ -117,11 +108,17 @@ describe('EnvironmentSelectorPanel', () => {
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: 'Active environment' })).toHaveValue('env-2')
     );
-    expect(window.localStorage.getItem('scholar-agent:selected-environment-id')).toBe('env-2');
+
+    const storedSettings = JSON.parse(
+      window.localStorage.getItem(settingsStorageKey) ?? '{}'
+    ) as ReturnType<typeof createDefaultWebUiSettings>;
+    expect(storedSettings.projectDefaults.default.selection.lastEnvironmentId).toBe('env-2');
   });
 
   it('falls back to a live environment after the selected one disappears', async () => {
-    window.localStorage.setItem('scholar-agent:selected-environment-id', 'env-2');
+    const settings = createDefaultWebUiSettings();
+    settings.projectDefaults.default.selection.lastEnvironmentId = 'env-2';
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
     mockGetEnvironments.mockResolvedValue({
       items: [secondaryEnvironment, defaultEnvironment, baseEnvironment],
     });
@@ -139,8 +136,11 @@ describe('EnvironmentSelectorPanel', () => {
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: 'Active environment' })).toHaveValue('env-1')
     );
-    await waitFor(() =>
-      expect(window.localStorage.getItem('scholar-agent:selected-environment-id')).toBe('env-1')
-    );
+    await waitFor(() => {
+      const storedSettings = JSON.parse(
+        window.localStorage.getItem(settingsStorageKey) ?? '{}'
+      ) as ReturnType<typeof createDefaultWebUiSettings>;
+      expect(storedSettings.projectDefaults.default.selection.lastEnvironmentId).toBe('env-1');
+    });
   });
 });

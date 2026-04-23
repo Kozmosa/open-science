@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render } from '@testing-library/react';
 import { LocaleProvider, type Locale } from '../i18n';
+import { SettingsProvider } from '../settings';
 
 interface RenderOptions {
   route?: string;
@@ -32,9 +33,11 @@ export function renderWithProviders(
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <LocaleProvider initialLocale={locale}>
-        <QueryClientProvider client={client}>
-          <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
-        </QueryClientProvider>
+        <SettingsProvider>
+          <QueryClientProvider client={client}>
+            <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+          </QueryClientProvider>
+        </SettingsProvider>
       </LocaleProvider>
     );
   }
