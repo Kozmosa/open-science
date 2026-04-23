@@ -16,6 +16,9 @@ last_local_commit: workspace aggregate
 > [!warning]
 > 本文档保留为历史状态记录。它用于描述早期 `AINRF v1` / WebUI-v1 叙事下的阶段划分、实现映射与当时的完成度判断，不再代表当前项目的产品方向、requirements 或 next release 评估口径。
 
+> [!note]
+> 文中若出现 `src/ainrf/artifacts/`、`src/ainrf/gates/`、`src/ainrf/events/` 等路径，应理解为“当时用于对照旧版路线图的历史代码锚点”。这些目录并不构成当前源码树的现状；当前产品面请回看 [[ainrf/index]] 与 `src/ainrf/README.md`。
+
 > [!abstract]
 > 这份文档原本用于对齐 [[framework/v1-roadmap]] 与 [[framework/v1-rfc]] 的阶段定义，逐阶段标注当时认定的已实现 / 未实现状态，并列出与设计文档的差异。随着项目从旧版 orchestrator / WebUI-v1 路线收缩为 dashboard-first realignment，这类阶段统计只应按历史材料理解，而不是继续被视为当前主线进度表。
 
@@ -133,7 +136,7 @@ last_local_commit: workspace aggregate
 
 **历史摘记：** 当时的 P3 记录重点在于工件模型与状态持久化是否已形成闭环；以下路径只是该阶段文档曾引用的代码锚点。
 
-**当时记录的实现范围：**
+**当时记录的实现范围（以下路径已不在当前源码树中，仅作历史锚点）：**
 - `src/ainrf/artifacts/models.py` — 全部工件 Pydantic models (246 行)
 - `src/ainrf/artifacts/transitions.py` — 状态转换表
 - `src/ainrf/state/store.py` — JsonStateStore (330 行)
@@ -196,7 +199,7 @@ last_local_commit: workspace aggregate
 
 **历史摘记：** 当时的 P5 记录把人工关卡与 webhook 机制视为一条已经补齐的运行时支线；以下位置只是历史说明里引用过的实现入口。
 
-**当时记录的实现范围：**
+**当时记录的实现范围（以下路径已不在当前源码树中，仅作历史锚点）：**
 - `src/ainrf/gates/manager.py` — HumanGateManager + WebhookDispatcher
 - `src/ainrf/gates/models.py` — GateWebhookPayload, IntakeGatePayload, PlanApprovalGatePayload
 - `src/ainrf/runtime/secrets.py` — WebhookSecretStore
@@ -223,7 +226,7 @@ last_local_commit: workspace aggregate
 
 **历史摘记：** 当时的 P6 盘点主要确认事件流与持久化链路已经具备；下面保留的是用于回看该实现切面的代码锚点。
 
-**当时记录的实现范围：**
+**当时记录的实现范围（以下路径已不在当前源码树中，仅作历史锚点）：**
 - `src/ainrf/events/store.py` — JsonlTaskEventStore（append-only JSONL）
 - `src/ainrf/events/service.py` — TaskEventService
 - `src/ainrf/events/models.py` — TaskEvent, TaskEventCategory

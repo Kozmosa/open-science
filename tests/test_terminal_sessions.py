@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -36,6 +37,10 @@ def make_manager(
         user_id=user_id,
     )
     return manager, environment_service
+
+
+def tmux_session_target(session_name: str) -> str:
+    return session_name.replace(":", "_")
 
 
 def test_binding_upsert_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -94,6 +99,7 @@ def test_tmux_adapter_builds_local_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
+    session_name = "ainrf:u:daemon-user:e:env-1:personal"
     environment = InMemoryEnvironmentService().create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -111,7 +117,7 @@ def test_tmux_adapter_builds_local_commands(
         ),
     )
 
-    adapter.ensure_personal_session(binding, environment, "session-1")
+    adapter.ensure_personal_session(binding, environment, session_name)
 
     assert captured == [
         (
@@ -119,18 +125,18 @@ def test_tmux_adapter_builds_local_commands(
             "new-session",
             "-d",
             "-s",
-            "session-1",
+            tmux_session_target(session_name),
             "-c",
             "/workspace/project",
             "/bin/bash",
             "-l",
         )
     ]
-    assert adapter.build_attach_command(binding, environment, "session-1") == (
+    assert adapter.build_attach_command(binding, environment, session_name) == (
         "tmux",
         "attach-session",
         "-t",
-        "session-1",
+        tmux_session_target(session_name),
     )
 
 
@@ -138,6 +144,7 @@ def test_tmux_adapter_builds_remote_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
+    session_name = "ainrf:u:daemon-user:e:env-1:personal"
     environment = InMemoryEnvironmentService().create_environment(
         alias="remote-lab",
         display_name="Remote Lab",
@@ -166,16 +173,17 @@ def test_tmux_adapter_builds_remote_commands(
         ),
     )
 
-    adapter.ensure_personal_session(binding, environment, "session-1")
+    adapter.ensure_personal_session(binding, environment, session_name)
 
     assert captured == [
         (
             "researcher",
             "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
-            "tmux new-session -d -s session-1 -c /workspace/project /bin/bash -l",
+            f"tmux new-session -d -s {tmux_session_target(session_name)} -c "
+            "/workspace/project /bin/bash -l",
         )
     ]
-    assert adapter.build_attach_command(binding, environment, "session-1") == (
+    assert adapter.build_attach_command(binding, environment, session_name) == (
         "ssh",
         "-tt",
         "-F",
@@ -193,7 +201,7 @@ def test_tmux_adapter_builds_remote_commands(
         "-o",
         "StrictHostKeyChecking=no",
         "researcher@gpu.example.com",
-        "exec tmux attach-session -t session-1",
+        f"exec tmux attach-session -t {tmux_session_target(session_name)}",
     )
 
 
@@ -201,6 +209,7 @@ def test_tmux_adapter_builds_local_task_window_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
+    session_name = "ainrf:u:daemon-user:e:env-1:agent"
     environment = InMemoryEnvironmentService().create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -218,11 +227,11 @@ def test_tmux_adapter_builds_local_task_window_commands(
     monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
     monkeypatch.setattr(adapter, "has_session", lambda *args, **kwargs: False)
 
-    adapter.ensure_agent_session(binding, environment, "agent-1")
+    adapter.ensure_agent_session(binding, environment, session_name)
     window = adapter.create_window(
         binding,
         environment,
-        "agent-1",
+        session_name,
         window_name="train-task",
         working_directory="/workspace/project",
         command="python train.py",
@@ -234,13 +243,20 @@ def test_tmux_adapter_builds_local_task_window_commands(
             "new-session",
             "-d",
             "-s",
-            "agent-1",
+            tmux_session_target(session_name),
             "-c",
             "/workspace/project",
             "/bin/bash",
             "-l",
         ),
-        ("tmux", "set-option", "-t", "agent-1", "remain-on-exit", "on"),
+        (
+            "tmux",
+            "set-option",
+            "-t",
+            tmux_session_target(session_name),
+            "remain-on-exit",
+            "on",
+        ),
         (
             "tmux",
             "new-window",
@@ -248,7 +264,7 @@ def test_tmux_adapter_builds_local_task_window_commands(
             "-F",
             "#{window_id}\t#{window_name}",
             "-t",
-            "agent-1",
+            tmux_session_target(session_name),
             "-n",
             "train-task",
             "-c",
@@ -258,11 +274,11 @@ def test_tmux_adapter_builds_local_task_window_commands(
     ]
     assert window.window_id == "@3"
     assert window.window_name == "train-task"
-    assert adapter.build_window_attach_command(binding, environment, "agent-1", "@3") == (
+    assert adapter.build_window_attach_command(binding, environment, session_name, "@3") == (
         "tmux",
         "attach-session",
         "-t",
-        "agent-1",
+        tmux_session_target(session_name),
         ";",
         "select-window",
         "-t",
@@ -274,6 +290,7 @@ def test_tmux_adapter_builds_remote_task_window_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     adapter = TmuxAdapter(tmp_path)
+    session_name = "ainrf:u:daemon-user:e:env-1:agent"
     home_dir = tmp_path / "home"
     monkeypatch.setattr("ainrf.terminal.tmux.Path.home", lambda: home_dir)
     environment = InMemoryEnvironmentService().create_environment(
@@ -300,11 +317,11 @@ def test_tmux_adapter_builds_remote_task_window_commands(
     monkeypatch.setattr(adapter, "has_session", lambda *args, **kwargs: False)
     monkeypatch.setattr(adapter, "_run_remote_command", fake_remote_command)
 
-    adapter.ensure_agent_session(binding, environment, "agent-1")
+    adapter.ensure_agent_session(binding, environment, session_name)
     adapter.create_window(
         binding,
         environment,
-        "agent-1",
+        session_name,
         window_name="train-task",
         working_directory="/workspace/project",
         command="python train.py",
@@ -315,18 +332,20 @@ def test_tmux_adapter_builds_remote_task_window_commands(
         (
             "researcher",
             "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
-            "tmux new-session -d -s agent-1 -c /workspace/project /bin/bash -l",
+            f"tmux new-session -d -s {tmux_session_target(session_name)} -c "
+            "/workspace/project /bin/bash -l",
         ),
         (
             "researcher",
             "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
-            "tmux set-option -t agent-1 remain-on-exit on",
+            f"tmux set-option -t {tmux_session_target(session_name)} remain-on-exit on",
         ),
         (
             "researcher",
             "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
-            "tmux new-window -P -F '#{window_id}\t#{window_name}' -t agent-1 -n train-task -c "
-            "/workspace/project 'exec /bin/bash -lc '\"'\"'python train.py'\"'\"''",
+            "tmux new-window -P -F '#{window_id}\t#{window_name}' "
+            f"-t {tmux_session_target(session_name)} -n train-task -c /workspace/project "
+            "'exec /bin/bash -lc '\"'\"'python train.py'\"'\"''",
         ),
         (
             "researcher",
@@ -334,7 +353,7 @@ def test_tmux_adapter_builds_remote_task_window_commands(
             "tmux send-keys -t @7 C-c",
         ),
     ]
-    assert adapter.build_window_attach_command(binding, environment, "agent-1", "@7") == (
+    assert adapter.build_window_attach_command(binding, environment, session_name, "@7") == (
         "ssh",
         "-tt",
         "-p",
@@ -344,7 +363,7 @@ def test_tmux_adapter_builds_remote_task_window_commands(
         "-o",
         "StrictHostKeyChecking=no",
         "researcher@gpu.example.com",
-        "exec tmux attach-session -t agent-1 ';' select-window -t @7",
+        f"exec tmux attach-session -t {tmux_session_target(session_name)} ';' select-window -t @7",
     )
 
 
@@ -467,6 +486,74 @@ def test_reset_kills_and_recreates_personal_session(
     adapter.reset_personal_session(binding, environment, "session-1")
 
     assert calls == ["kill", "ensure"]
+
+
+def test_personal_session_reattach_reuses_tmux_safe_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+        default_workdir="/workspace/project",
+    )
+    tmux_sessions: set[str] = set()
+    opened_commands: list[tuple[str, ...]] = []
+
+    def fake_run_local(command: tuple[str, ...]) -> SimpleNamespace:
+        if command[:3] == ("tmux", "has-session", "-t"):
+            return SimpleNamespace(
+                returncode=0 if command[3] in tmux_sessions else 1,
+                stdout="",
+                stderr="",
+            )
+        if command[:4] == ("tmux", "new-session", "-d", "-s"):
+            tmux_target = tmux_session_target(command[4])
+            if tmux_target in tmux_sessions:
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr=f"duplicate session: {tmux_target}",
+                )
+            tmux_sessions.add(tmux_target)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected tmux command: {command}")
+
+    def fake_start_terminal_bridge(command: tuple[str, ...], cwd: Path) -> Any:
+        opened_commands.append(command)
+        assert cwd == tmp_path
+        return object()
+
+    monkeypatch.setattr(manager._tmux_adapter, "_run_local_command", fake_run_local)
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.start_terminal_bridge",
+        fake_start_terminal_bridge,
+    )
+    monkeypatch.setattr("ainrf.terminal.attachments.stop_terminal_bridge", lambda runtime: None)
+
+    record, target = manager.ensure_personal_session(
+        "browser-user", environment, "/workspace/project"
+    )
+    assert record.session_name is not None
+    expected_target = tmux_session_target(record.session_name)
+    assert target.attach_command == ("tmux", "attach-session", "-t", expected_target)
+
+    broker = TerminalAttachmentBroker()
+    attachment = broker.create_attachment("http://testserver/", target)
+    broker.open_runtime(attachment.attachment_id, attachment.token)
+    broker.close_runtime(attachment.attachment_id)
+
+    second_record, second_target = manager.ensure_personal_session(
+        "browser-user",
+        environment,
+        "/workspace/project",
+    )
+
+    assert second_record.status is TerminalSessionStatus.RUNNING
+    assert second_target.attach_command == ("tmux", "attach-session", "-t", expected_target)
+    assert opened_commands == [("tmux", "attach-session", "-t", expected_target)]
+    assert tmux_sessions == {expected_target}
 
 
 def test_reconcile_restores_running_state_from_sqlite(

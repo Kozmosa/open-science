@@ -16,11 +16,14 @@ last_local_commit: workspace aggregate
 > [!abstract]
 > 本文档用于把 `refactoring-plan/` 下已经冻结的 contracts，与当前 `src/ainrf/` 已有实现逐项对照，明确“哪些已经具备、哪些只具备一半、哪些仍然缺失”，并给出 next release 最小实现切片顺序。目标不是重新设计系统，而是把规划链真正转换成可执行的工程缺口图。
 
+> [!warning]
+> 本文档成稿于 `task_harness / workspaces / terminal / code_server` 成为当前产品面主线之前。文中出现的 `src/ainrf/events/`、`src/ainrf/gates/`、`TaskArtifactsResponse` 等表述，应按当时的 gap-analysis 语境理解，而不是当作当前源码树的现状描述。当前 source of truth 请优先回到 [[ainrf/index]]、`src/ainrf/README.md` 与 [[superpowers/specs/2026-04-22-implemented-runtime-surface-archive]]。
+
 ## 结论
 
-- 当前 `ainrf` 已具备 next release control plane 的骨架：FastAPI、task API、health、gates、events、state store、SSH health 已经存在。
-- 当前最主要的缺口不是“完全没有后端”，而是“contracts 需要的 read model shape、summary shape、preview metadata 和 dashboard-friendly 聚合层还没有正式形成”。
-- 因此 next release 的最小实现重点不应是重写 runtime，而应是：扩展当前 read model 和 API 聚合，使其稳定支撑 dashboard。
+- 本文成稿时，把 FastAPI、task API、health、gates、events、state store、SSH health 视为 next release control plane 的骨架。
+- 当前仓库已经进一步收敛为 `task_harness + tasks + workspaces + terminal + environments + code_server` 的控制面，文中的旧模块名不再代表现状目录。
+- 本文保留价值主要在于“dashboard-oriented summary / preview / aggregation” 这组缺口判断，而不是它对当时模块边界的逐字枚举。
 
 ## 对照范围
 
@@ -30,7 +33,7 @@ last_local_commit: workspace aggregate
 - `[[LLM-Working/refactoring-plan/workspace-session-container-summary-contract]]`
 - `[[LLM-Working/refactoring-plan/artifact-preview-contract]]`
 
-本次对照的当前实现主要来自：
+本文当时对照的实现主要来自：
 
 - `src/ainrf/api/routes/tasks.py`
 - `src/ainrf/api/routes/health.py`
@@ -39,9 +42,11 @@ last_local_commit: workspace aggregate
 - `src/ainrf/events/`
 - `src/ainrf/gates/`
 
+其中 `src/ainrf/events/` 与 `src/ainrf/gates/` 已不在当前源码树中。
+
 ## 一、Task Read Model 合约对照
 
-### 当前已具备
+### 当时已具备
 
 - `TaskSummaryResponse` 已提供：
   - `task_id`
@@ -59,16 +64,16 @@ last_local_commit: workspace aggregate
   - `artifact_summary`
   - `config`
 
-### 当前只具备一半
+### 当时只具备一半
 
 - `input_summary`
-  - 当前只有原始 `config`，没有面向 dashboard 的 `title` / `brief` / `seed_inputs` / `target_inputs` 摘要层。
+  - 当时只有原始 `config`，没有面向 dashboard 的 `title` / `brief` / `seed_inputs` / `target_inputs` 摘要层。
 - `progress_summary`
-  - 当前只有 `current_stage` 和事件流能力，没有正式的 `current_checkpoint`、`milestones`、`recent_events` 聚合字段。
+  - 当时只有 `current_stage` 和事件流能力，没有正式的 `current_checkpoint`、`milestones`、`recent_events` 聚合字段。
 - `result_summary`
-  - 当前只有 `termination_reason` 和 artifact summary，没有 `result_brief`、`recent_artifacts`、`error_summary` 的专门摘要层。
+  - 当时只有 `termination_reason` 和 artifact summary，没有 `result_brief`、`recent_artifacts`、`error_summary` 的专门摘要层。
 
-### 当前缺失
+### 当时缺失
 
 - dashboard 友好的 task card shape。
 - 首页任务列表与详情页之间明确分层的 read model。
@@ -81,7 +86,7 @@ last_local_commit: workspace aggregate
 
 ## 二、Workspace / Session / Container Summary 合约对照
 
-### 当前已具备
+### 当时已具备
 
 - `TaskCreateRequest.container` 已有：
   - `host`
@@ -99,16 +104,16 @@ last_local_commit: workspace aggregate
   - `cuda_version`
   - `disk_free_bytes`
 
-### 当前只具备一半
+### 当时只具备一半
 
 - workspace summary
-  - 当前有 `project_dir`，但没有专门的 `workspace_id` / `workspace_label` 抽象。
+  - 当时有 `project_dir`，但没有专门的 `workspace_id` / `workspace_label` 抽象。
 - session summary
-  - 当前能从健康检查和 SSH 可达性间接推断 session 可用性，但没有正式的 `session_status` / `connected` / `recoverable` read model。
+  - 当时能从健康检查和 SSH 可达性间接推断 session 可用性，但没有正式的 `session_status` / `connected` / `recoverable` read model。
 - resource snapshot
-  - 当前只在 `/health` 里有部分 container health 字段，没有统一成 dashboard summary shape。
+  - 当时只在 `/health` 里有部分 container health 字段，没有统一成 dashboard summary shape。
 
-### 当前缺失
+### 当时缺失
 
 - 一个稳定的 task-scoped execution context summary。
 - 能直接挂在 task detail 上的 workspace/session/container 摘要响应。
@@ -121,7 +126,7 @@ last_local_commit: workspace aggregate
 
 ## 三、Artifact Preview 合约对照
 
-### 当前已具备
+### 当时已具备
 
 - `TaskArtifactsResponse` 已支持列出 task 关联 artifacts。
 - `ArtifactItemResponse` 已有：
@@ -132,15 +137,15 @@ last_local_commit: workspace aggregate
   - `status`
   - `payload`
 
-### 当前只具备一半
+### 当时只具备一半
 
 - 已有 artifact list，但没有 dashboard-friendly preview metadata。
-- 当前 `payload` 是原始 JSON payload，不等于 preview contract 所需的：
+- 当时的 `payload` 是原始 JSON payload，不等于 preview contract 所需的：
   - `display_title`
   - `preview_format`
   - `preview_ref`
 
-### 当前缺失
+### 当时缺失
 
 - 三类核心 artifact 的稳定 preview shape：
   - tables
@@ -156,7 +161,7 @@ last_local_commit: workspace aggregate
 
 ## 四、总体缺口总结
 
-### 已有骨架
+### 当时已有骨架
 
 - task API 已有。
 - health API 已有。
@@ -164,7 +169,7 @@ last_local_commit: workspace aggregate
 - gate lifecycle 已有。
 - artifact list 已有。
 
-### 真实缺口
+### 当时判断的真实缺口
 
 1. 缺 dashboard-oriented read model，而不是缺 task 概念。
 2. 缺 execution context summary，而不是缺 SSH / container 基础。
@@ -257,3 +262,4 @@ last_local_commit: workspace aggregate
 - [[LLM-Working/refactoring-plan/task-read-model-contract]]
 - [[LLM-Working/refactoring-plan/workspace-session-container-summary-contract]]
 - [[LLM-Working/refactoring-plan/artifact-preview-contract]]
+- [[ainrf/index]]
