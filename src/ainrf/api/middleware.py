@@ -27,7 +27,7 @@ def build_api_key_middleware(
         if request.url.path in _EXEMPT_PATHS:
             return await call_next(request)
 
-        api_key = request.headers.get("X-API-Key")
+        api_key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
         if not api_config.verify_api_key(api_key):
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
         return await call_next(request)

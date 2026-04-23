@@ -50,6 +50,7 @@ class EnvironmentRegistryEntry:
     preferred_python: str | None = None
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
+    task_harness_profile: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

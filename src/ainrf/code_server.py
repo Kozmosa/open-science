@@ -112,7 +112,9 @@ def _build_asyncssh_connect_kwargs(environment: EnvironmentRegistryEntry) -> dic
     return connect_kwargs
 
 
-async def _wait_until_ready(host: str, port: int, timeout_seconds: float = _READY_TIMEOUT_SECONDS) -> bool:
+async def _wait_until_ready(
+    host: str, port: int, timeout_seconds: float = _READY_TIMEOUT_SECONDS
+) -> bool:
     deadline = time.monotonic() + timeout_seconds
     url = f"http://{host}:{port}/"
     async with httpx.AsyncClient() as client:
@@ -127,7 +129,9 @@ async def _wait_until_ready(host: str, port: int, timeout_seconds: float = _READ
     return False
 
 
-def _terminate_process(process: subprocess.Popen[str], timeout_seconds: float = _PROCESS_CLOSE_TIMEOUT_SECONDS) -> None:
+def _terminate_process(
+    process: subprocess.Popen[str], timeout_seconds: float = _PROCESS_CLOSE_TIMEOUT_SECONDS
+) -> None:
     if process.poll() is not None:
         return
     process.terminate()

@@ -62,6 +62,7 @@ async def test_environment_create_returns_saved_fields_and_null_latest_detection
         "preferred_python": "python3.13",
         "preferred_env_manager": "uv",
         "preferred_runtime_notes": "Use CUDA 12 image",
+        "task_harness_profile": "Use the configured GPU environment.",
     }
 
     async with make_client(app) as client:
@@ -91,6 +92,7 @@ async def test_environment_create_returns_saved_fields_and_null_latest_detection
     assert data["preferred_python"] == payload["preferred_python"]
     assert data["preferred_env_manager"] == payload["preferred_env_manager"]
     assert data["preferred_runtime_notes"] == payload["preferred_runtime_notes"]
+    assert data["task_harness_profile"] == payload["task_harness_profile"]
     assert data["latest_detection"] is None
     assert data["created_at"] is not None
     assert data["updated_at"] is not None
@@ -125,6 +127,7 @@ async def test_environment_lifecycle_supports_update_detect_and_delete(tmp_path:
             json={
                 "display_name": "GPU Lab Updated",
                 "default_workdir": "/workspace/project-a",
+                "task_harness_profile": "Updated task harness profile.",
             },
         )
         detect_response = await client.post(
@@ -151,11 +154,15 @@ async def test_environment_lifecycle_supports_update_detect_and_delete(tmp_path:
     assert update_response.status_code == 200
     assert update_response.json()["display_name"] == "GPU Lab Updated"
     assert update_response.json()["default_workdir"] == "/workspace/project-a"
+    assert update_response.json()["task_harness_profile"] == "Updated task harness profile."
 
     assert detect_response.status_code == 200
     assert detect_response.json()["latest_detection"]["environment_id"] == environment_id
     assert detect_response.json()["latest_detection"]["status"] == "success"
-    assert detect_response.json()["latest_detection"]["summary"] == "Manual detection completed for gpu-lab."
+    assert (
+        detect_response.json()["latest_detection"]["summary"]
+        == "Manual detection completed for gpu-lab."
+    )
 
     assert listed_response.status_code == 200
     listed_items = listed_response.json()["items"]

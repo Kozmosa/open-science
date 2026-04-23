@@ -490,12 +490,11 @@ def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(
     os.close(write_fd)
 
 
-def test_task_attachment_websocket_close_notifies_task_manager(
+def test_task_attachment_websocket_close_tolerates_missing_task_manager(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client, app = make_client(tmp_path)
     broker = app.state.terminal_attachment_broker
-    disconnected_attachment_ids: list[str] = []
 
     monkeypatch.setattr(
         "ainrf.terminal.attachments.stop_terminal_bridge",
@@ -510,11 +509,6 @@ def test_task_attachment_websocket_close_notifies_task_manager(
     monkeypatch.setattr(
         "ainrf.terminal.attachments.start_terminal_bridge",
         lambda command, cwd: runtime,
-    )
-    monkeypatch.setattr(
-        app.state.task_manager,
-        "handle_task_attachment_disconnect",
-        lambda attachment: disconnected_attachment_ids.append(attachment.attachment_id),
     )
 
     attachment = broker.create_attachment(
@@ -545,6 +539,5 @@ def test_task_attachment_websocket_close_notifies_task_manager(
     ):
         pass
 
-    assert disconnected_attachment_ids == [attachment.attachment_id]
     os.close(read_fd)
     os.close(write_fd)

@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetMockTerminalSession } from './mock';
+import { resetMockEnvironmentState, resetMockTaskState, resetMockTerminalSession } from './mock';
 
 beforeEach(() => {
   vi.resetModules();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   resetMockTerminalSession();
+  resetMockEnvironmentState();
+  resetMockTaskState();
 });
 
 describe('api endpoints', () => {
@@ -13,38 +15,34 @@ describe('api endpoints', () => {
     vi.stubEnv('VITE_USE_MOCK', 'true');
 
     const {
+      buildTaskStreamUrl,
       createTask,
-      createTerminalSession,
-      getTaskTerminal,
+      getTask,
+      getTaskOutput,
+      getTasks,
       getTerminalSession,
-      openTaskTerminal,
-      releaseTaskTerminal,
-      takeoverTaskTerminal,
-      resetTerminalSession,
+      getWorkspaces,
     } = await import('./endpoints');
+
     const session = await getTerminalSession('env-localhost');
-    const created = await createTerminalSession('env-localhost');
-    const reset = await resetTerminalSession('env-localhost', created.attachment_id);
-    const task = await createTask({
+    const workspaces = await getWorkspaces();
+    const created = await createTask({
+      workspace_id: 'workspace-default',
       environment_id: 'env-localhost',
-      title: 'Train Task',
-      command: 'python train.py',
+      task_profile: 'claude-code',
+      task_input: 'Implement harness',
     });
-    const taskTerminal = await getTaskTerminal(task.task_id);
-    const taskAttachment = await openTaskTerminal(task.task_id);
-    const takeoverAttachment = await takeoverTaskTerminal(task.task_id);
-    const releaseAttachment = await releaseTaskTerminal(task.task_id);
+    const tasks = await getTasks();
+    const detail = await getTask(created.task_id);
+    const output = await getTaskOutput(created.task_id);
 
     expect(session.status).toBe('idle');
-    expect(created.status).toBe('running');
-    expect(created.terminal_ws_url).toContain('/terminal/attachments/');
-    expect(created.session_name).toBe('ainrf:u:mock-browser-user:e:env-localhost:personal');
-    expect(reset.attachment_id).not.toBe(created.attachment_id);
-    expect(task.status).toBe('running');
-    expect(taskTerminal.binding_status).toBe('running_observe');
-    expect(taskAttachment.readonly).toBe(true);
-    expect(takeoverAttachment.mode).toBe('write');
-    expect(releaseAttachment.mode).toBe('observe');
+    expect(workspaces.items[0]?.workspace_id).toBe('workspace-default');
+    expect(created.status).toBe('queued');
+    expect(tasks.items[0]?.task_id).toBe(created.task_id);
+    expect(detail.binding?.resolved_workdir).toBeTruthy();
+    expect(output.items[0]?.kind).toBe('lifecycle');
+    expect(buildTaskStreamUrl(created.task_id, 3)).toContain(`/api/tasks/${created.task_id}/stream`);
   });
 
   it('uses the real api client when VITE_USE_MOCK is false', async () => {

@@ -93,6 +93,18 @@ class SSHExecutor:
 
         return await self._run_with_reconnect(operation, operation_timeout=effective_timeout)
 
+    async def create_process(
+        self,
+        cmd: str,
+        *,
+        cwd: str | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> asyncssh.SSHClientProcess:
+        deadline = asyncio.get_running_loop().time() + float(self._container.connect_timeout)
+        connection = await self._ensure_connection(deadline=deadline)
+        remote_command = self._build_remote_command(cmd, cwd=cwd, env=env)
+        return await connection.create_process(remote_command)
+
     async def upload(self, local: str | Path, remote: str) -> None:
         local_path = Path(local)
         if not local_path.exists():
