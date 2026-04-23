@@ -15,42 +15,55 @@ function DashboardPage() {
   const environmentSelection = useEnvironmentSelection();
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-8 space-y-3">
-        <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
           {t('pages.dashboard.eyebrow')}
         </p>
-        <h1 className="text-3xl font-semibold text-gray-900">{t('pages.dashboard.title')}</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">
+        <h1
+          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.dashboard.title')}
+        </h1>
+        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
           {t('pages.dashboard.description')}
         </p>
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
         <div className="space-y-1">
-          <h2 className="text-lg font-medium text-gray-900">{t('pages.dashboard.surfaceTitle')}</h2>
-          <p className="text-sm text-gray-600">
-            {t('pages.dashboard.endpointsLabel')} <code className="rounded bg-gray-100 px-1.5 py-0.5">/health</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/health</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/environments</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/environments</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/projects/default/environment-refs</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/projects/default/environment-refs</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/terminal/session</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/terminal/session/reset</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/terminal/session</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/terminal/session/reset</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/code/status</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/code/session</code>,{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/code/status</code>, and{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">/v1/code/session</code>.
+          <h2
+            className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            {t('pages.dashboard.surfaceTitle')}
+          </h2>
+          <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+            {t('pages.dashboard.endpointsLabel')}{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/health</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/v1/health</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/environments</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/v1/environments</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/projects/default/environment-refs</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/v1/projects/default/environment-refs</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/terminal/session</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/terminal/session/reset</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/v1/terminal/session</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/v1/terminal/session/reset</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/code/status</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/code/session</code>,{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/v1/code/status</code>, and{' '}
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/v1/code/session</code>.
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
             {t('pages.dashboard.stateRootLabel')}{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5">{healthQuery.data?.state_root ?? '.ainrf'}</code>
+            <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">
+              {healthQuery.data?.state_root ?? '.ainrf'}
+            </code>
           </p>
           {healthQuery.data?.detail ? (
-            <p className="text-sm text-yellow-700">
+            <p className="text-sm text-[#ff9500]">
               {t('pages.dashboard.detailLabel')} {healthQuery.data.detail}
             </p>
           ) : null}

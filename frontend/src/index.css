@@ -1,33 +1,82 @@
 @import "tailwindcss";
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
+  /* Apple Design System — Light */
+  --apple-blue: #0071e3;
+  --apple-blue-hover: #0077ed;
+  --apple-link: #0066cc;
+  --apple-link-dark: #2997ff;
+  --apple-black: #000000;
+  --apple-near-black: #1d1d1f;
+  --apple-white: #ffffff;
+  --apple-gray: #f5f5f7;
+  --apple-gray-2: #fafafc;
+  --apple-text-secondary: rgba(0, 0, 0, 0.8);
+  --apple-text-tertiary: rgba(0, 0, 0, 0.48);
+  --apple-dark-surface-1: #272729;
+  --apple-dark-surface-2: #262628;
+  --apple-dark-surface-3: #28282a;
+  --apple-dark-surface-4: #2a2a2d;
+  --apple-border-light: rgba(0, 0, 0, 0.08);
+  --apple-focus-ring: 0 0 0 4px rgba(0, 113, 227, 0.15);
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Semantic tokens */
+  --text: var(--apple-near-black);
+  --text-secondary: var(--apple-text-secondary);
+  --text-tertiary: var(--apple-text-tertiary);
+  --bg: var(--apple-white);
+  --bg-secondary: var(--apple-gray);
+  --bg-tertiary: var(--apple-gray-2);
+  --accent: var(--apple-blue);
+  --accent-hover: var(--apple-blue-hover);
+  --border: var(--apple-border-light);
+  --surface: var(--apple-white);
+  --surface-elevated: var(--apple-white);
+
+  /* Typography */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
+    --text: var(--apple-white);
+    --text-secondary: rgba(255, 255, 255, 0.85);
+    --text-tertiary: rgba(255, 255, 255, 0.55);
+    --bg: var(--apple-black);
+    --bg-secondary: var(--apple-dark-surface-1);
+    --bg-tertiary: var(--apple-dark-surface-2);
+    --border: rgba(255, 255, 255, 0.1);
+    --surface: var(--apple-dark-surface-1);
+    --surface-elevated: var(--apple-dark-surface-3);
   }
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  font-family: var(--sans);
+  font-family: var(--font-text);
   background: var(--bg);
   color: var(--text);
+  font-size: 17px;
+  line-height: 1.47;
+  letter-spacing: -0.374px;
+}
+
+/* Apple-style focus ring */
+*:focus-visible {
+  outline: 2px solid var(--apple-blue);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 113, 227, 0.2);
 }
 
 .ainrf-terminal .xterm {

@@ -1,22 +1,28 @@
 import { EnvironmentSelectorPanel, TerminalBenchCard, useEnvironmentSelection } from '../components';
+import { useT } from '../i18n';
 
 function TerminalPage() {
+  const t = useT();
   const environmentSelection = useEnvironmentSelection();
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-8 space-y-3">
-        <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
-          Terminal
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
+          {t('pages.terminal.eyebrow')}
         </p>
-        <h1 className="text-3xl font-semibold text-gray-900">Personal terminal bench</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">
-          This route is dedicated to the personal terminal bench. Task Harness v1 keeps task output
-          in the Tasks page instead of attaching task windows here.
+        <h1
+          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.terminal.title')}
+        </h1>
+        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
+          {t('pages.terminal.description')}
         </p>
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
         <EnvironmentSelectorPanel {...environmentSelection} />
         <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
       </section>

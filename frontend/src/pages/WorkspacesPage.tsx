@@ -6,18 +6,23 @@ function WorkspacesPage() {
   const environmentSelection = useEnvironmentSelection();
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-8 space-y-3">
-        <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
           {t('pages.workspaces.eyebrow')}
         </p>
-        <h1 className="text-3xl font-semibold text-gray-900">{t('pages.workspaces.title')}</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">
+        <h1
+          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.workspaces.title')}
+        </h1>
+        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
           {t('pages.workspaces.description')}
         </p>
       </section>
 
-      <section className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
         <EnvironmentSelectorPanel {...environmentSelection} />
         <CodeServerCard selectedEnvironment={environmentSelection.selectedEnvironment} />
       </section>

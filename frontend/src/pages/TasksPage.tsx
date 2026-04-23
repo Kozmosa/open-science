@@ -101,12 +101,12 @@ function TaskCreateForm({
       }}
     >
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-gray-700">Workspace</span>
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">Workspace</span>
         <select
           aria-label="Workspace"
           value={selectedWorkspaceId}
           onChange={(event) => onSelectWorkspace(event.target.value)}
-          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
         >
           {workspaces.map((workspace) => (
             <option key={workspace.workspace_id} value={workspace.workspace_id}>
@@ -117,12 +117,12 @@ function TaskCreateForm({
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-gray-700">Environment</span>
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">Environment</span>
         <select
           aria-label="Environment"
           value={selectedEnvironmentId}
           onChange={(event) => onSelectEnvironment(event.target.value)}
-          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
         >
           {environments.map((environment) => (
             <option key={environment.id} value={environment.id}>
@@ -133,71 +133,73 @@ function TaskCreateForm({
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-gray-700">Task profile</span>
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">Task profile</span>
         <select
           aria-label="Task profile"
           value={draft.task_profile}
           onChange={(event) =>
             setDraft((current) => ({ ...current, task_profile: event.target.value }))
           }
-          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
         >
           <option value="claude-code">claude-code</option>
         </select>
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-gray-700">Title</span>
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">Title</span>
         <input
           aria-label="Title"
           value={draft.title}
           onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           placeholder="Optional"
         />
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-gray-700">Task input</span>
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">Task input</span>
         <textarea
           aria-label="Task input"
           value={draft.task_input}
           onChange={(event) =>
             setDraft((current) => ({ ...current, task_input: event.target.value }))
           }
-          className="min-h-40 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15"
+          className="min-h-40 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           placeholder="Implement Task Harness v1 according to the current repository plan."
         />
       </label>
 
-      <button
-        type="button"
-        className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
-        onClick={() =>
-          setDraft({
-            title: draftDefaults.title,
-            task_input: draftDefaults.task_input,
-            task_profile: 'claude-code',
-          })
-        }
-      >
-        Reset draft
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
+          onClick={() =>
+            setDraft({
+              title: draftDefaults.title,
+              task_input: draftDefaults.task_input,
+              task_profile: 'claude-code',
+            })
+          }
+        >
+          Reset draft
+        </button>
+
+        <button
+          type="submit"
+          disabled={!canCreate}
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isSubmitting ? 'Creating…' : 'Create task'}
+        </button>
+      </div>
 
       {selectedWorkspace ? (
-        <p className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          Default workdir: <code>{selectedWorkspace.default_workdir ?? 'n/a'}</code>
+        <p className="rounded-lg bg-[var(--bg-secondary)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+          Default workdir: <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{selectedWorkspace.default_workdir ?? 'n/a'}</code>
         </p>
       ) : null}
-      {createError ? <p className="text-sm text-red-700">{createError}</p> : null}
-
-      <button
-        type="submit"
-        disabled={!canCreate}
-        className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {isSubmitting ? 'Creating…' : 'Create task'}
-      </button>
+      {createError ? <p className="text-sm text-[#ff3b30]">{createError}</p> : null}
     </form>
   );
 }
@@ -375,23 +377,33 @@ function TasksPage() {
   const detailError = selectedTaskQuery.error instanceof Error ? selectedTaskQuery.error.message : null;
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-8 space-y-3">
-        <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
           Task Harness
         </p>
-        <h1 className="text-3xl font-semibold text-gray-900">Task Harness v1</h1>
-        <p className="max-w-3xl text-sm text-gray-600 sm:text-base">
+        <h1
+          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          Task Harness v1
+        </h1>
+        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
           Create Claude Code tasks against a workspace and environment binding, then inspect the
           persisted prompt, runtime payload, replayed output, and final result.
         </p>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="space-y-6 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
           <div className="space-y-1">
-            <h2 className="text-lg font-medium text-gray-900">Create task</h2>
-            <p className="text-sm text-gray-600">
+            <h2
+              className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Create task
+            </h2>
+            <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
               Workspace and environment are selected per task. The backend derives a title when the
               title field is left empty.
             </p>
@@ -415,13 +427,20 @@ function TasksPage() {
 
           <section className="space-y-4">
             <div className="space-y-1">
-              <h2 className="text-lg font-medium text-gray-900">Task list</h2>
-              <p className="text-sm text-gray-600">All harness-managed tasks are listed below.</p>
+              <h2
+                className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                Task list
+              </h2>
+              <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+                All harness-managed tasks are listed below.
+              </p>
             </div>
-            {tasksError ? <p className="text-sm text-red-700">{tasksError}</p> : null}
+            {tasksError ? <p className="text-sm text-[#ff3b30]">{tasksError}</p> : null}
             <div className="space-y-3">
               {tasks.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
+                <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
                   No tasks have been created yet.
                 </div>
               ) : (
@@ -431,22 +450,24 @@ function TasksPage() {
                     type="button"
                     onClick={() => setSelectedTaskId(task.task_id)}
                     className={[
-                      'flex w-full flex-col gap-2 rounded-2xl border px-4 py-4 text-left transition',
+                      'flex w-full flex-col gap-2 rounded-lg px-4 py-4 text-left transition',
                       effectiveSelectedTaskId === task.task_id
-                        ? 'border-[var(--accent)]/25 bg-[var(--accent)]/10'
-                        : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white',
+                        ? 'bg-[var(--apple-blue)]/10'
+                        : 'bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]',
                     ].join(' ')}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <span className="text-sm font-semibold text-gray-900">{task.title}</span>
-                      <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                      <span className="text-sm font-semibold text-[var(--text)]">{task.title}</span>
+                      <span className="rounded-full bg-[var(--bg)] px-3 py-1 text-xs font-medium text-[var(--text)] border border-[var(--border)]">
                         {statusLabel[task.status]}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs tracking-[-0.12px] text-[var(--text-secondary)]">
                       {task.workspace_summary.label} · {task.environment_summary.alias}
                     </p>
-                    <p className="text-xs text-gray-500">Updated {task.updated_at}</p>
+                    <p className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
+                      Updated {task.updated_at}
+                    </p>
                   </button>
                 ))
               )}
@@ -454,121 +475,135 @@ function TasksPage() {
           </section>
         </section>
 
-        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="space-y-6 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
           <div className="space-y-1">
-            <h2 className="text-lg font-medium text-gray-900">Task detail</h2>
-            <p className="text-sm text-gray-600">
+            <h2
+              className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Task detail
+            </h2>
+            <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
               Detail combines binding snapshot, prompt layers, runtime payload, output replay, and
               result summary.
             </p>
           </div>
 
-          {detailError ? <p className="text-sm text-red-700">{detailError}</p> : null}
+          {detailError ? <p className="text-sm text-[#ff3b30]">{detailError}</p> : null}
           {selectedTask ? (
             <div className="space-y-6">
-              <section className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+              <section className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                   Summary
                 </h3>
-                <p className="text-sm text-gray-700">
-                  <span className="font-medium text-gray-900">Status:</span>{' '}
+                <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+                  <span className="font-medium text-[var(--text)]">Status:</span>{' '}
                   {statusLabel[selectedTask.status]}
                 </p>
-                <p className="text-sm text-gray-700">
-                  <span className="font-medium text-gray-900">Workspace:</span>{' '}
+                <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+                  <span className="font-medium text-[var(--text)]">Workspace:</span>{' '}
                   {selectedTask.workspace_summary.label}
                 </p>
-                <p className="text-sm text-gray-700">
-                  <span className="font-medium text-gray-900">Environment:</span>{' '}
+                <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+                  <span className="font-medium text-[var(--text)]">Environment:</span>{' '}
                   {selectedTask.environment_summary.alias} · {selectedTask.environment_summary.display_name}
                 </p>
-                <p className="text-sm text-gray-700">
-                  <span className="font-medium text-gray-900">Latest seq:</span>{' '}
+                <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+                  <span className="font-medium text-[var(--text)]">Latest seq:</span>{' '}
                   {selectedTask.latest_output_seq}
                 </p>
                 {selectedTask.error_summary ? (
-                  <p className="text-sm text-red-700">{selectedTask.error_summary}</p>
+                  <p className="text-sm text-[#ff3b30]">{selectedTask.error_summary}</p>
                 ) : null}
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                   Binding
                 </h3>
                 {selectedTask.binding ? (
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                  <div className="rounded-lg bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
                     <p>
-                      <span className="font-medium text-gray-900">Resolved workdir:</span>{' '}
-                      <code>{selectedTask.binding.resolved_workdir}</code>
+                      <span className="font-medium text-[var(--text)]">Resolved workdir:</span>{' '}
+                      <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{selectedTask.binding.resolved_workdir}</code>
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">Snapshot:</span>{' '}
-                      <code>{selectedTask.binding.snapshot_path}</code>
+                      <span className="font-medium text-[var(--text)]">Snapshot:</span>{' '}
+                      <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{selectedTask.binding.snapshot_path}</code>
                     </p>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">Binding snapshot is not available yet.</p>
+                  <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+                    Binding snapshot is not available yet.
+                  </p>
                 )}
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                   Prompt
                 </h3>
                 {selectedTask.prompt ? (
-                  <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4">
                     {selectedTask.prompt.layers.map((layer) => (
                       <div key={layer.name} className="space-y-1">
-                        <p className="text-sm font-medium text-gray-900">
-                          {layer.label} <span className="text-xs text-gray-500">({layer.char_count} chars)</span>
+                        <p className="text-sm font-medium text-[var(--text)]">
+                          {layer.label}{' '}
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            ({layer.char_count} chars)
+                          </span>
                         </p>
-                        <pre className="overflow-x-auto rounded-xl bg-white p-3 text-xs text-gray-700">
+                        <pre className="overflow-x-auto rounded-lg bg-[var(--bg)] p-3 text-xs tracking-[-0.12px] text-[var(--text-secondary)]">
                           {layer.content}
                         </pre>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">Prompt manifest is not available yet.</p>
+                  <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+                    Prompt manifest is not available yet.
+                  </p>
                 )}
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                   Runtime
                 </h3>
                 {selectedTask.runtime ? (
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                  <div className="rounded-lg bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
                     <p>
-                      <span className="font-medium text-gray-900">Runner:</span>{' '}
+                      <span className="font-medium text-[var(--text)]">Runner:</span>{' '}
                       {selectedTask.runtime.runner_kind ?? 'n/a'}
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">Working directory:</span>{' '}
-                      <code>{selectedTask.runtime.working_directory ?? 'n/a'}</code>
+                      <span className="font-medium text-[var(--text)]">Working directory:</span>{' '}
+                      <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{selectedTask.runtime.working_directory ?? 'n/a'}</code>
                     </p>
                     <p>
-                      <span className="font-medium text-gray-900">Command:</span>{' '}
-                      <code>{selectedTask.runtime.command.join(' ') || 'pending'}</code>
+                      <span className="font-medium text-[var(--text)]">Command:</span>{' '}
+                      <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{selectedTask.runtime.command.join(' ') || 'pending'}</code>
                     </p>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">Runtime payload is not available yet.</p>
+                  <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+                    Runtime payload is not available yet.
+                  </p>
                 )}
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                   Output
                 </h3>
-                {outputError ? <p className="text-sm text-red-700">{outputError}</p> : null}
-                <div className="max-h-[26rem] space-y-2 overflow-auto rounded-2xl border border-gray-200 bg-gray-950 p-4 text-xs text-gray-100">
+                {outputError ? <p className="text-sm text-[#ff3b30]">{outputError}</p> : null}
+                <div className="max-h-[26rem] space-y-2 overflow-auto rounded-lg border border-[var(--border)] bg-[#0b1020] p-4 text-xs text-gray-100">
                   {outputItems.length === 0 ? (
                     <p className="text-gray-400">No output has been recorded yet.</p>
                   ) : (
                     outputItems.map((item) => (
                       <div key={item.seq} className="space-y-1">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-gray-400">
                           #{item.seq} · {item.kind}
                         </p>
                         <pre className="whitespace-pre-wrap break-words">{item.content}</pre>
@@ -579,27 +614,27 @@ function TasksPage() {
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-600">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                   Result
                 </h3>
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="rounded-lg bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
                   <p>
-                    <span className="font-medium text-gray-900">Exit code:</span>{' '}
+                    <span className="font-medium text-[var(--text)]">Exit code:</span>{' '}
                     {selectedTask.result.exit_code ?? 'n/a'}
                   </p>
                   <p>
-                    <span className="font-medium text-gray-900">Failure category:</span>{' '}
+                    <span className="font-medium text-[var(--text)]">Failure category:</span>{' '}
                     {selectedTask.result.failure_category ?? 'n/a'}
                   </p>
                   <p>
-                    <span className="font-medium text-gray-900">Completed at:</span>{' '}
+                    <span className="font-medium text-[var(--text)]">Completed at:</span>{' '}
                     {selectedTask.result.completed_at ?? 'n/a'}
                   </p>
                 </div>
               </section>
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
+            <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
               Select a task from the list to inspect its persisted state.
             </div>
           )}

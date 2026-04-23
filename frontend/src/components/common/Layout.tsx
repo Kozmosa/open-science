@@ -27,7 +27,7 @@ interface NavigationItem {
 function Layout({ children }: Props) {
   const t = useT();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const asideWidth = useMemo(() => (isCollapsed ? 'w-20' : 'w-72'), [isCollapsed]);
+  const asideWidth = useMemo(() => (isCollapsed ? 'w-[72px]' : 'w-[260px]'), [isCollapsed]);
   const navigationItems: NavigationItem[] = [
     {
       label: t('navigation.terminal.label'),
@@ -62,27 +62,35 @@ function Layout({ children }: Props) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-[var(--bg-secondary)] text-[var(--text)]">
       <div className="flex min-h-screen">
         <aside
-          className={`${asideWidth} flex shrink-0 flex-col border-r border-gray-200 bg-white/95 px-3 py-4 shadow-sm transition-all duration-200`}
+          className={`${asideWidth} flex shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 ease-out`}
         >
-          <div className="flex items-start justify-between gap-3 px-2">
-            <div className={isCollapsed ? 'hidden' : 'block'}>
-              <p className="text-lg font-semibold text-[var(--accent)]">{t('common.appName')}</p>
-              <p className="mt-1 text-sm text-gray-600">{t('layout.brandLine')}</p>
-            </div>
+          {/* Sidebar header */}
+          <div className="flex items-center justify-between px-4 py-3">
+            {!isCollapsed && (
+              <div className="min-w-0">
+                <p
+                  className="truncate text-[21px] font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  {t('common.appName')}
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setIsCollapsed((value) => !value)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition hover:border-[var(--accent)]/30 hover:text-[var(--accent)]"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
               aria-label={isCollapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
             >
-              {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+              {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
             </button>
           </div>
 
-          <nav className="mt-6 flex flex-1 flex-col gap-2">
+          {/* Navigation */}
+          <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -91,46 +99,72 @@ function Layout({ children }: Props) {
                   to={item.to}
                   className={({ isActive }) =>
                     [
-                      'group flex items-center gap-3 rounded-2xl border px-3 py-3 transition',
+                      'group flex items-center gap-3 rounded-lg px-3 py-2.5 transition',
                       isCollapsed ? 'justify-center' : '',
                       isActive
-                        ? 'border-[var(--accent)]/20 bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm'
-                        : 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-900',
+                        ? 'bg-[var(--apple-blue)] text-white'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]',
                     ].join(' ')
                   }
                   title={isCollapsed ? item.label : undefined}
                 >
-                  <Icon size={18} className="shrink-0" />
+                  <Icon size={18} className="shrink-0" strokeWidth={1.5} />
                   {isCollapsed ? null : (
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium">{item.label}</span>
-                      <span className="block text-xs text-gray-500">{item.description}</span>
+                      <span className="block text-sm font-medium leading-tight tracking-[-0.224px]">
+                        {item.label}
+                      </span>
+                      <span className="block text-xs leading-relaxed text-[var(--text-tertiary)] tracking-[-0.12px]">
+                        {item.description}
+                      </span>
                     </span>
                   )}
                 </NavLink>
               );
             })}
           </nav>
+
+          {/* Sidebar footer */}
+          {!isCollapsed && (
+            <div className="border-t border-[var(--border)] px-4 py-3">
+              <p className="text-xs leading-relaxed tracking-[-0.12px] text-[var(--text-tertiary)]">
+                {t('layout.brandLine')}
+              </p>
+            </div>
+          )}
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-          <header className="border-b border-gray-200 bg-white/80 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-            <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6">
-              <div>
-                <p className="text-sm font-medium uppercase tracking-wide text-[var(--accent)]">
-                  {t('layout.headerEyebrow')}
-                </p>
-                <p className="mt-1 text-sm text-gray-600">{t('layout.headerDescription')}</p>
-              </div>
-              <LocaleSwitcher />
+          {/* Top navigation bar — Apple glass style */}
+          <header
+            className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-[var(--border)] px-6"
+            style={{
+              background: 'rgba(0, 0, 0, 0.72)',
+              backdropFilter: 'saturate(180%) blur(20px)',
+              WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+            }}
+          >
+            <div className="flex items-center gap-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-white/80">
+                {t('layout.headerEyebrow')}
+              </p>
+              <span className="h-3 w-px bg-white/20" />
+              <p className="text-xs text-white/60">
+                {t('layout.headerDescription')}
+              </p>
             </div>
+            <LocaleSwitcher />
           </header>
 
-          <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col">{children}</main>
+          <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col px-6 py-8">
+            {children}
+          </main>
 
-          <footer className="border-t border-gray-200 bg-white/80 px-4 py-4 text-sm text-gray-500 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-6xl">
-              {t('layout.footerDescription')}
+          <footer className="border-t border-[var(--border)] px-6 py-4">
+            <div className="mx-auto flex w-full max-w-[1100px] items-center justify-between">
+              <p className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
+                {t('layout.footerDescription')}
+              </p>
             </div>
           </footer>
         </div>

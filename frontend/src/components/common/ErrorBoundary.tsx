@@ -31,17 +31,26 @@ class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       const t = this.context.t;
-      return this.props.fallback || (
-        <div className="p-4 bg-red-100 text-red-700 rounded">
-          <h2 className="font-semibold">{t('components.errorBoundary.title')}</h2>
-          <p className="text-sm mt-1">{this.state.error?.message}</p>
-          <button
-            onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-2 px-3 py-1 bg-red-200 rounded hover:bg-red-300"
-          >
-            {t('components.errorBoundary.retry')}
-          </button>
-        </div>
+      return (
+        this.props.fallback || (
+          <div className="rounded-lg bg-[#272729] p-5 text-white">
+            <h2
+              className="text-lg font-semibold leading-tight tracking-[0.231px]"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              {t('components.errorBoundary.title')}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-white/70 tracking-[-0.224px]">
+              {this.state.error?.message}
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="mt-4 rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)]"
+            >
+              {t('components.errorBoundary.retry')}
+            </button>
+          </div>
+        )
       );
     }
 
