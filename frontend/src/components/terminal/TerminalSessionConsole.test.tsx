@@ -360,7 +360,7 @@ describe('TerminalSessionConsole', () => {
     renderConsole();
 
     await waitFor(() => expect(terminalMocks.fitAddons).toHaveLength(1));
-    await waitFor(() => expect(terminalMocks.resizeObservers).toHaveLength(1));
+    expect(terminalMocks.resizeObservers).toHaveLength(1);
 
     const fitAddon = terminalMocks.fitAddons[0];
     const initialFitCalls = fitAddon.fitCalls.length;

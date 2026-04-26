@@ -1,10 +1,11 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from 'xterm';
 import 'xterm/css/xterm.css';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TerminalAttachmentMode, TerminalSessionStatus } from '../../types';
 import { useT } from '../../i18n';
 import { useTerminalFontSize } from '../../settings';
+import { useTerminalFitScheduling } from './useTerminalFitScheduling';
 
 type SocketStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -59,21 +60,6 @@ function isSocketMessage(value: unknown): value is SocketMessage {
   return false;
 }
 
-function scheduleAnimationFrame(callback: () => void): () => void {
-  if (typeof window.requestAnimationFrame === 'function') {
-    const frameId = window.requestAnimationFrame(callback);
-    return () => window.cancelAnimationFrame(frameId);
-  }
-
-  const timeoutId = window.setTimeout(callback, 0);
-  return () => window.clearTimeout(timeoutId);
-}
-
-function scheduleTimeout(callback: () => void, delay: number): () => void {
-  const timeoutId = window.setTimeout(callback, delay);
-  return () => window.clearTimeout(timeoutId);
-}
-
 function TerminalSessionConsole({
   sessionId,
   attachmentId,
@@ -87,17 +73,16 @@ function TerminalSessionConsole({
   const t = useT();
   const fontSize = useTerminalFontSize();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const onDisconnectedRef = useRef(onDisconnected);
   const translateRef = useRef(t);
   const disconnectNotifiedRef = useRef(false);
   const [socketStatus, setSocketStatus] = useState<SocketStatus>('idle');
   const isObserveOnly = readonly || mode === 'observe';
-  const displaySocketStatus =
-    status !== 'running' || terminalWsUrl === null
-      ? 'idle'
-      : socketStatus === 'idle'
-        ? 'connecting'
-        : socketStatus;
+  const isActive = status === 'running' && terminalWsUrl !== null;
+  const displaySocketStatus = !isActive ? 'idle' : socketStatus === 'idle' ? 'connecting' : socketStatus;
   const connectionLabel: Record<SocketStatus, string> = {
     idle: t('common.idle'),
     connecting: t('common.connecting'),
@@ -114,9 +99,43 @@ function TerminalSessionConsole({
     translateRef.current = t;
   }, [t]);
 
+  const sendJsonMessage = useCallback(
+    (payload: { type: 'resize'; cols: number; rows: number } | { type: 'input'; data: string }) => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      if (payload.type === 'input' && isObserveOnly) {
+        return;
+      }
+
+      socket.send(JSON.stringify(payload));
+    },
+    [isObserveOnly]
+  );
+
+  const { scheduleFitAndSendResize, sendResizeAfterFit } = useTerminalFitScheduling({
+    active: isActive,
+    containerRef,
+    fitAddonRef,
+    terminalRef,
+  });
+
+  const notifyDisconnected = useCallback(() => {
+    if (disconnectNotifiedRef.current) {
+      return;
+    }
+    disconnectNotifiedRef.current = true;
+    onDisconnectedRef.current?.();
+  }, []);
+
   useEffect(() => {
-    if (status !== 'running' || terminalWsUrl === null || containerRef.current === null) {
+    if (!isActive || containerRef.current === null) {
       disconnectNotifiedRef.current = false;
+      socketRef.current = null;
+      terminalRef.current = null;
+      fitAddonRef.current = null;
       return undefined;
     }
 
@@ -134,107 +153,40 @@ function TerminalSessionConsole({
       },
     });
     const fitAddon = new FitAddon();
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
     terminal.loadAddon(fitAddon);
     terminal.open(containerRef.current);
     terminal.focus();
 
     const socket = new WebSocket(resolveWebSocketUrl(terminalWsUrl));
+    socketRef.current = socket;
     let disposed = false;
     let intentionalClose = false;
-    let cancelScheduledFits: Array<() => void> = [];
 
     const resizeDisposable = terminal.onResize(({ cols, rows }) => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'resize', cols, rows }));
-      }
+      sendJsonMessage({ type: 'resize', cols, rows });
     });
 
     const inputDisposable = isObserveOnly
       ? { dispose: () => {} }
       : terminal.onData((data) => {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: 'input', data }));
-          }
+          sendJsonMessage({ type: 'input', data });
         });
-
-    const fitTerminal = () => {
-      try {
-        fitAddon.fit();
-      } catch {
-        // ignore fit failures while the container is hidden or resizing
-      }
-    };
-
-    const scheduleFit = () => {
-      for (const cancel of cancelScheduledFits) {
-        cancel();
-      }
-      cancelScheduledFits = [];
-
-      const runFit = () => {
-        if (!disposed) {
-          fitTerminal();
-        }
-      };
-
-      // xterm measures character cells after open(), but browser layout and
-      // font metrics can settle over more than one frame in the Vite shell.
-      cancelScheduledFits.push(scheduleAnimationFrame(runFit));
-      cancelScheduledFits.push(
-        scheduleAnimationFrame(() => {
-          cancelScheduledFits.push(scheduleAnimationFrame(runFit));
-        })
-      );
-      cancelScheduledFits.push(scheduleTimeout(runFit, 80));
-      if (typeof document.fonts?.ready?.then === 'function') {
-        document.fonts.ready.then(runFit).catch(() => {});
-      }
-    };
-
-    const fitAndSendResize = () => {
-      fitTerminal();
-      if (!disposed && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
-      }
-    };
-
-    const scheduleFitAndSendResize = () => {
-      scheduleFit();
-      cancelScheduledFits.push(
-        scheduleTimeout(() => {
-          fitAndSendResize();
-        }, 120)
-      );
-    };
-
-    const sendResizeAfterFit = () => {
-      scheduleAnimationFrame(() => {
-        if (disposed || socket.readyState !== WebSocket.OPEN) {
-          return;
-        }
-        fitAndSendResize();
-      });
-    };
-
-    const notifyDisconnected = () => {
-      if (disconnectNotifiedRef.current) {
-        return;
-      }
-      disconnectNotifiedRef.current = true;
-      onDisconnectedRef.current?.();
-    };
-
-    const handleWindowResize = () => {
-      scheduleFit();
-    };
 
     socket.onopen = () => {
       if (disposed) {
         return;
       }
       setSocketStatus('connected');
-      scheduleFitAndSendResize();
-      queueMicrotask(sendResizeAfterFit);
+      scheduleFitAndSendResize((payload) => {
+        sendJsonMessage(payload);
+      });
+      queueMicrotask(() => {
+        sendResizeAfterFit((payload) => {
+          sendJsonMessage(payload);
+        });
+      });
     };
 
     socket.onmessage = (event) => {
@@ -254,14 +206,12 @@ function TerminalSessionConsole({
           return;
         }
 
-        if (payload.type === 'status' && payload.status === 'exited') {
-          terminal.writeln('');
-          terminal.writeln(
-            translateRef.current('components.terminalConsole.exited', { code: payload.return_code })
-          );
-          setSocketStatus('disconnected');
-          notifyDisconnected();
-        }
+        terminal.writeln('');
+        terminal.writeln(
+          translateRef.current('components.terminalConsole.exited', { code: payload.return_code })
+        );
+        setSocketStatus('disconnected');
+        notifyDisconnected();
         return;
       } catch {
         terminal.write(event.data);
@@ -281,39 +231,37 @@ function TerminalSessionConsole({
       }
     };
 
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(() => {
-            scheduleFit();
-          });
-
-    resizeObserver?.observe(containerRef.current);
-    window.addEventListener('resize', handleWindowResize);
-    scheduleFit();
-    const cancelDeferredFit = scheduleAnimationFrame(() => {
-      scheduleFit();
-    });
-
     return () => {
       disposed = true;
       intentionalClose = true;
-      cancelDeferredFit();
-      for (const cancel of cancelScheduledFits) {
-        cancel();
-      }
-      cancelScheduledFits = [];
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', handleWindowResize);
       resizeDisposable.dispose();
       inputDisposable.dispose();
       socket.close();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
       terminal.dispose();
+      if (terminalRef.current === terminal) {
+        terminalRef.current = null;
+      }
+      if (fitAddonRef.current === fitAddon) {
+        fitAddonRef.current = null;
+      }
       disconnectNotifiedRef.current = false;
     };
-  }, [fontSize, isObserveOnly, sessionId, status, terminalWsUrl]);
+  }, [
+    fontSize,
+    isActive,
+    isObserveOnly,
+    notifyDisconnected,
+    scheduleFitAndSendResize,
+    sendJsonMessage,
+    sendResizeAfterFit,
+    sessionId,
+    terminalWsUrl,
+  ]);
 
-  if (status !== 'running' || terminalWsUrl === null) {
+  if (!isActive) {
     return (
       <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-6 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
         {placeholderText ?? t('components.terminalConsole.startPrompt')}
