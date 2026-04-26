@@ -10,10 +10,11 @@ Agents working in this repository must treat [`PROJECT_BASIS.md`](PROJECT_BASIS.
 
 ## Project Structure & Module Organization
 
-This repository has two active concerns:
+This repository's active product surface is the AINRF runtime plus WebUI, while the docs tree remains the long-lived product/reference knowledge base:
 
-- `docs/`: source-of-truth Obsidian-style notes. Key areas are `docs/framework/`, `docs/projects/`, and `docs/summary/`.
-- `src/ainrf/`: Python runtime scaffold for the AINRF CLI and future service code.
+- `frontend/`: React + Vite WebUI for AINRF.
+- `src/ainrf/`: Python package, CLI, backend API, and runtime code.
+- `docs/`: AINRF product docs plus source-of-truth Obsidian-style notes. Key areas are `docs/framework/`, `docs/projects/`, and `docs/summary/`.
 - `tests/`: CLI smoke tests for the Python package.
 - `scripts/`: local build helpers for the notes site.
 - `site/` and `.cache/html-notes/`: generated output; do not edit them directly.

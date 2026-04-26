@@ -68,6 +68,11 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
     assert "/tasks/{task_id}/terminal/open" not in payload["paths"]
     assert "/tasks/{task_id}/terminal/takeover" not in payload["paths"]
     assert "/tasks/{task_id}/terminal/release" not in payload["paths"]
+    assert "/v1/tasks/{task_id}/cancel" not in payload["paths"]
+    assert "/v1/tasks/{task_id}/terminal" not in payload["paths"]
+    assert "/v1/tasks/{task_id}/terminal/open" not in payload["paths"]
+    assert "/v1/tasks/{task_id}/terminal/takeover" not in payload["paths"]
+    assert "/v1/tasks/{task_id}/terminal/release" not in payload["paths"]
 
 
 @pytest.mark.anyio

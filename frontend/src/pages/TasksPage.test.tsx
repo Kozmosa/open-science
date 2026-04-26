@@ -1,10 +1,11 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from './TasksPage';
-import { renderWithProviders } from '../test/render';
+import { createTestQueryClient, renderWithProviders } from '../test/render';
 import { createDefaultWebUiSettings, settingsStorageKey } from '../settings';
 import type {
   EnvironmentRecord,
+  TaskOutputEvent,
   TaskOutputListResponse,
   TaskRecord,
   TaskSummary,
@@ -14,11 +15,13 @@ import {
   buildTaskStreamUrl,
   createTask,
   getEnvironments,
+  getProjectEnvironmentReferences,
   getTask,
   getTaskOutput,
   getTasks,
   getWorkspaces,
 } from '../api';
+import { getNextOutputSeq, mergeOutputItems } from './tasks/output';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -144,10 +147,35 @@ const taskRecord: TaskRecord = {
   },
 };
 
+function createOutputEvent(
+  seq: number,
+  overrides: Partial<TaskOutputEvent> = {}
+): TaskOutputEvent {
+  return {
+    task_id: 'task-1',
+    seq,
+    kind: 'stdout',
+    content: `line ${seq}`,
+    created_at: `2026-04-23T08:01:0${seq}Z`,
+    ...overrides,
+  };
+}
+
+function createOutputPage(
+  items: TaskOutputEvent[],
+  nextSeq: number = items.reduce((maxSeq, item) => Math.max(maxSeq, item.seq), 0)
+): TaskOutputListResponse {
+  return {
+    items,
+    next_seq: nextSeq,
+  };
+}
+
 vi.mock('../api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
   getEnvironments: vi.fn(),
+  getProjectEnvironmentReferences: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
   getTasks: vi.fn(),
@@ -157,10 +185,15 @@ vi.mock('../api', () => ({
 const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
 const mockGetEnvironments = vi.mocked(getEnvironments);
+const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 const mockGetTask = vi.mocked(getTask);
 const mockGetTaskOutput = vi.mocked(getTaskOutput);
 const mockGetTasks = vi.mocked(getTasks);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   MockEventSource.instances = [];
@@ -170,42 +203,99 @@ beforeEach(() => {
   mockBuildTaskStreamUrl.mockReset();
   mockCreateTask.mockReset();
   mockGetEnvironments.mockReset();
+  mockGetProjectEnvironmentReferences.mockReset();
   mockGetTask.mockReset();
   mockGetTaskOutput.mockReset();
   mockGetTasks.mockReset();
   mockGetWorkspaces.mockReset();
 
-  mockBuildTaskStreamUrl.mockImplementation((taskId, afterSeq = 0) => `/api/tasks/${taskId}/stream?after_seq=${afterSeq}`);
+  mockBuildTaskStreamUrl.mockImplementation(
+    (taskId, afterSeq = 0) => `/api/tasks/${taskId}/stream?after_seq=${afterSeq}`
+  );
   mockGetWorkspaces.mockResolvedValue({ items: [workspace] });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
+  mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
   mockGetTask.mockResolvedValue(taskRecord);
-  mockGetTaskOutput.mockResolvedValue({
-    items: [
-      {
-        task_id: 'task-1',
-        seq: 1,
-        kind: 'stdout',
+  mockGetTaskOutput.mockImplementation(async (taskId) =>
+    createOutputPage([
+      createOutputEvent(1, {
+        task_id: taskId,
         content: 'first line',
         created_at: '2026-04-23T08:01:05Z',
-      },
-    ],
-    next_seq: 1,
+      }),
+    ])
+  );
+});
+
+describe('task output helpers', () => {
+  it('deduplicates output by seq and keeps ascending order', () => {
+    const merged = mergeOutputItems(
+      [createOutputEvent(3, { content: 'stale third line' }), createOutputEvent(1, { content: 'first line' })],
+      [createOutputEvent(2, { content: 'second line' }), createOutputEvent(3, { content: 'fresh third line' })]
+    );
+
+    expect(merged.map((item) => item.seq)).toEqual([1, 2, 3]);
+    expect(merged[2]?.content).toBe('fresh third line');
+    expect(getNextOutputSeq([merged[1]!, merged[0]!], 3)).toBe(3);
   });
 });
 
 describe('TasksPage', () => {
-  it('creates a task with derived title semantics when title is blank', async () => {
-    const created: TaskSummary = {
+  it('creates a task with derived title semantics and keeps it selected after list refresh', async () => {
+    const createdSummary: TaskSummary = {
       ...taskSummary,
       task_id: 'task-2',
       title: 'Implement harness',
       status: 'queued',
+      updated_at: '2026-04-23T08:02:00Z',
     };
-    mockGetTasks.mockResolvedValueOnce({ items: [] });
-    mockCreateTask.mockResolvedValue(created);
+    const createdRecord: TaskRecord = {
+      ...taskRecord,
+      ...createdSummary,
+      binding: {
+        ...taskRecord.binding!,
+        title: 'Implement harness',
+        task_input: 'Implement harness\nMake it stream output.',
+        resolved_workdir: '/workspace/created',
+        snapshot_path: '.ainrf/runtime/task-harness/tasks/task-2/binding_snapshot.json',
+      },
+      prompt: {
+        ...taskRecord.prompt!,
+        rendered_prompt: '[Task input]\nImplement harness',
+        manifest_path: '.ainrf/runtime/task-harness/tasks/task-2/prompt_layer_manifest.json',
+        layers: [
+          {
+            position: 1,
+            name: 'task_input',
+            label: 'Task input',
+            content: 'Implement harness\nMake it stream output.',
+            char_count: 35,
+          },
+        ],
+      },
+      runtime: {
+        ...taskRecord.runtime!,
+        working_directory: '/workspace/created',
+        prompt_file: '.ainrf/runtime/task-harness/tasks/task-2/rendered_prompt.txt',
+        launch_payload_path: '.ainrf/runtime/task-harness/tasks/task-2/resolved_launch_payload.json',
+      },
+    };
 
-    renderWithProviders(<TasksPage />);
+    mockGetTasks.mockResolvedValueOnce({ items: [] });
+    mockCreateTask.mockResolvedValue(createdSummary);
+    mockGetTask.mockImplementation(async (taskId) => (taskId === 'task-2' ? createdRecord : taskRecord));
+    mockGetTaskOutput.mockImplementation(async (taskId) =>
+      createOutputPage([
+        createOutputEvent(1, {
+          task_id: taskId,
+          content: taskId === 'task-2' ? 'created line' : 'first line',
+        }),
+      ])
+    );
+    const client = createTestQueryClient();
+
+    renderWithProviders(<TasksPage />, { client });
     await waitFor(() => expect(screen.getByLabelText('Environment')).toHaveValue('env-1'));
 
     fireEvent.change(screen.getByLabelText('Task input'), {
@@ -226,6 +316,16 @@ describe('TasksPage', () => {
       })
     );
     expect(await screen.findByText('Implement harness')).toBeInTheDocument();
+    expect((await screen.findAllByText('/workspace/created')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('created line')).toBeInTheDocument();
+    await waitFor(() => expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-2', 1));
+
+    act(() => {
+      client.setQueryData(['tasks'], { items: [taskSummary, createdSummary] });
+    });
+
+    await waitFor(() => expect(screen.getByText('created line')).toBeInTheDocument());
+    expect(screen.getByText('Implement harness')).toBeInTheDocument();
   });
 
   it('prefills the draft from environment settings and resets when the environment changes', async () => {
@@ -278,32 +378,54 @@ describe('TasksPage', () => {
     expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-1', 1);
   });
 
+  it('ignores duplicate and out-of-order stream events', async () => {
+    renderWithProviders(<TasksPage />);
+    await screen.findByText('Train model');
+
+    const source = MockEventSource.instances[0];
+    source.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify(createOutputEvent(1, { content: 'duplicate first line' })),
+      })
+    );
+    source.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify(createOutputEvent(0, { content: 'older line' })),
+      })
+    );
+    source.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify(createOutputEvent(2, { content: 'second line' })),
+      })
+    );
+
+    expect(await screen.findByText('second line')).toBeInTheDocument();
+    expect(screen.getAllByText('first line')).toHaveLength(1);
+    expect(screen.queryByText('duplicate first line')).not.toBeInTheDocument();
+    expect(screen.queryByText('older line')).not.toBeInTheDocument();
+  });
+
   it('fills SSE gaps by replaying missing output before continuing', async () => {
     mockGetTaskOutput
-      .mockResolvedValueOnce({
-        items: [
-          {
-            task_id: 'task-1',
-            seq: 1,
-            kind: 'stdout',
+      .mockResolvedValueOnce(
+        createOutputPage([
+          createOutputEvent(1, {
             content: 'first line',
             created_at: '2026-04-23T08:01:05Z',
-          },
-        ],
-        next_seq: 1,
-      })
-      .mockResolvedValueOnce({
-        items: [
-          {
-            task_id: 'task-1',
-            seq: 2,
-            kind: 'stdout',
-            content: 'second line',
-            created_at: '2026-04-23T08:01:06Z',
-          },
-        ],
-        next_seq: 2,
-      } satisfies TaskOutputListResponse);
+          }),
+        ])
+      )
+      .mockResolvedValueOnce(
+        createOutputPage(
+          [
+            createOutputEvent(2, {
+              content: 'second line',
+              created_at: '2026-04-23T08:01:06Z',
+            }),
+          ],
+          2
+        )
+      );
 
     renderWithProviders(<TasksPage />);
     await screen.findByText('Train model');
@@ -311,18 +433,59 @@ describe('TasksPage', () => {
     const source = MockEventSource.instances[0];
     source.onmessage?.(
       new MessageEvent('message', {
-        data: JSON.stringify({
-          task_id: 'task-1',
-          seq: 3,
-          kind: 'stdout',
-          content: 'third line',
-          created_at: '2026-04-23T08:01:07Z',
-        }),
+        data: JSON.stringify(
+          createOutputEvent(3, {
+            content: 'third line',
+            created_at: '2026-04-23T08:01:07Z',
+          })
+        ),
       })
     );
 
     expect(await screen.findByText('second line')).toBeInTheDocument();
     expect(await screen.findByText('third line')).toBeInTheDocument();
     await waitFor(() => expect(mockGetTaskOutput).toHaveBeenLastCalledWith('task-1', 1));
+  });
+
+  it('replays output after stream errors before reconnecting', async () => {
+    mockGetTaskOutput
+      .mockResolvedValueOnce(
+        createOutputPage([
+          createOutputEvent(1, {
+            content: 'first line',
+          }),
+        ])
+      )
+      .mockResolvedValueOnce(
+        createOutputPage(
+          [
+            createOutputEvent(2, {
+              content: 'second line',
+            }),
+          ],
+          2
+        )
+      );
+
+    renderWithProviders(<TasksPage />);
+    await screen.findByText('Train model');
+    vi.useFakeTimers();
+
+    const source = MockEventSource.instances[0];
+    await act(async () => {
+      source.onerror?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('second line')).toBeInTheDocument();
+    expect(mockGetTaskOutput).toHaveBeenLastCalledWith('task-1', 1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(MockEventSource.instances).toHaveLength(2);
+    expect(mockBuildTaskStreamUrl).toHaveBeenLastCalledWith('task-1', 2);
   });
 });

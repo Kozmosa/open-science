@@ -12,7 +12,7 @@ Claude Code must treat [PROJECT_BASIS.md](PROJECT_BASIS.md) as a required reposi
 
 ## Project Overview
 
-scholar-agent is an Obsidian-style knowledge base containing research notes on 8 academic research agent projects, plus a self-designed AI-Native Research Framework. Notes are written in Chinese with English file slugs. The repo also generates a static HTML site from these notes using MkDocs.
+scholar-agent currently centers on the AINRF frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities, while `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs, and the repository still generates a static HTML site from `docs/` with MkDocs.
 
 ## Build & Serve Commands
 
@@ -47,10 +47,10 @@ uv run ruff format .
 # Install pre-commit hooks (runs ruff on commit)
 uv run pre-commit install
 
-# Run the ainrf CLI (currently a scaffold with stub commands)
+# Run the ainrf CLI and service entrypoints
 uv run ainrf --version
-uv run ainrf serve  # P4 planned: API server
-uv run ainrf run    # P7/P8 planned: task execution
+uv run ainrf serve
+uv run ainrf run
 ```
 
 ## Architecture
@@ -72,12 +72,13 @@ Important: never edit files under `.cache/html-notes/` or `site/` — they are g
 
 ### Directory Layout
 
-- `docs/` — Source Obsidian notes (the only files you should edit)
+- `docs/` — Source markdown for the generated docs site, including product docs and reference notes
   - `docs/index.md` — Top-level research index
   - `docs/projects/` — Per-project research reports (one per reference repo)
   - `docs/framework/` — AI-Native Research Framework design notes
   - `docs/summary/` — Cross-project comparison and capability matrix
-- `src/ainrf/` — AINRF CLI scaffold (Typer-based, stub commands for future P4/P7/P8 work)
+- `frontend/` — AINRF WebUI
+- `src/ainrf/` — AINRF Python package, CLI, backend API, and runtime code
 - `tests/` — Test suite (run with `uv run pytest`)
 - `ref-repos/` — Cloned reference repositories (read-only research subjects, gitignored)
 - `.codex-skill-staging/` — Codex skill definitions (build-obsidian-mkdocs-site, write-obsidian-project-docs)
@@ -100,6 +101,10 @@ Important: never edit files under `.cache/html-notes/` or `site/` — they are g
 - The default unit is one changelog entry per completed modification plan or work slice, not one line per edit, validation, or commit action.
 - Each changelog entry must include the timestamp, the completed slice label, a concise summary of what changed, and the validation result. If commits were produced in that slice, append the commit hash and subject in the same entry.
 - Do not treat the worklog as a transcript of commit messages or atomic slice labels; summarize the completed batch in higher-level changelog form.
+
+## Git Maintenance
+
+- Worktree/branch cleanup: run `git fetch --prune origin`, inspect `git worktree list --porcelain`, `git branch -vv`, and only remove clean, audited worktrees or fully merged branches; preserve any dirty worktree.
 
 ## Code Quality
 
