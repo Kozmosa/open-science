@@ -63,6 +63,7 @@ class WorkspaceRegistryService:
 
     def _build_seed_workspace(self) -> WorkspaceRecord:
         now = utc_now()
+        # The seed workspace intentionally binds new state roots to the process checkout.
         default_workdir = str(Path.cwd())
         return WorkspaceRecord(
             workspace_id="workspace-default",

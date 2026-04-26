@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import sqlite3
 from dataclasses import asdict
 from datetime import datetime
@@ -11,6 +10,22 @@ from uuid import uuid4
 
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
 from ainrf.environments.models import EnvironmentRegistryEntry, utc_now
+from ainrf.task_harness.artifacts import (
+    binding_snapshot_path,
+    dump_json,
+    environment_summary,
+    environment_summary_from_json,
+    launch_payload_path,
+    prompt_manifest_path,
+    read_binding_summary,
+    read_prompt_summary,
+    read_runtime_summary,
+    workspace_summary,
+    workspace_summary_from_json,
+    write_binding_snapshot,
+    write_launch_payload,
+    write_prompt_artifacts,
+)
 from ainrf.task_harness.launcher import (
     TaskLaunchError,
     build_local_launcher,
@@ -19,23 +34,16 @@ from ainrf.task_harness.launcher import (
     is_local_environment,
 )
 from ainrf.task_harness.models import (
-    EnvironmentSummary,
-    TaskBindingSummary,
     TaskDetail,
     TaskHarnessStatus,
     TaskListItem,
     TaskOutputEvent,
     TaskOutputKind,
     TaskOutputPage,
-    TaskPromptLayer,
-    TaskPromptSummary,
     TaskResultSummary,
-    TaskRuntimeSummary,
-    WorkspaceSummary,
 )
 from ainrf.task_harness.prompting import (
     PromptCompositionError,
-    compose_task_prompt,
     derive_task_title,
 )
 from ainrf.workspaces import WorkspaceNotFoundError, WorkspaceRegistryService
@@ -148,8 +156,8 @@ class TaskHarnessService:
         task_dir = self.task_directory(task_id)
         task_dir.mkdir(parents=True, exist_ok=True)
         now = utc_now()
-        workspace_summary = _workspace_summary(workspace)
-        environment_summary = _environment_summary(environment)
+        workspace_summary_value = workspace_summary(workspace)
+        environment_summary_value = environment_summary(environment)
         with self._connect() as connection:
             connection.execute(
                 """
@@ -180,11 +188,11 @@ class TaskHarnessService:
                     TaskHarnessStatus.QUEUED.value,
                     now.isoformat(),
                     now.isoformat(),
-                    _dump_json(asdict(workspace_summary)),
-                    _dump_json(asdict(environment_summary)),
-                    str(task_dir / "binding_snapshot.json"),
-                    str(task_dir / "prompt_layer_manifest.json"),
-                    str(task_dir / "resolved_launch_payload.json"),
+                    dump_json(asdict(workspace_summary_value)),
+                    dump_json(asdict(environment_summary_value)),
+                    str(binding_snapshot_path(task_dir)),
+                    str(prompt_manifest_path(task_dir)),
+                    str(launch_payload_path(task_dir)),
                 ),
             )
             connection.commit()
@@ -210,16 +218,16 @@ class TaskHarnessService:
     def get_task(self, task_id: str) -> TaskDetail:
         self.initialize()
         row = self._load_task_row(task_id)
-        binding = self._read_binding_summary(row["binding_snapshot_path"])
-        prompt = self._read_prompt_summary(row["prompt_manifest_path"])
-        runtime = self._read_runtime_summary(row["launch_payload_path"])
+        binding = read_binding_summary(row["binding_snapshot_path"])
+        prompt = read_prompt_summary(row["prompt_manifest_path"])
+        runtime = read_runtime_summary(row["launch_payload_path"])
         return TaskDetail(
             task_id=row["task_id"],
             title=row["title"],
             task_profile=row["task_profile"],
             status=TaskHarnessStatus(row["status"]),
-            workspace_summary=_workspace_summary_from_json(row["workspace_summary_json"]),
-            environment_summary=_environment_summary_from_json(row["environment_summary_json"]),
+            workspace_summary=workspace_summary_from_json(row["workspace_summary_json"]),
+            environment_summary=environment_summary_from_json(row["environment_summary_json"]),
             created_at=_parse_required_datetime(row["created_at"]),
             updated_at=_parse_required_datetime(row["updated_at"]),
             started_at=_parse_datetime(row["started_at"]),
@@ -296,43 +304,29 @@ class TaskHarnessService:
             workspace = self._workspace_service.get_workspace(row["workspace_id"])
             environment = self._environment_service.get_environment(row["environment_id"])
             resolved_workdir = _resolve_workdir(workspace, environment)
-            binding_snapshot = TaskBindingSummary(
-                workspace=_workspace_summary(workspace),
-                environment=_environment_summary(environment),
+            write_binding_snapshot(
+                Path(row["binding_snapshot_path"]),
+                workspace=workspace,
+                environment=environment,
                 task_profile=row["task_profile"],
                 title=row["title"],
                 task_input=row["task_input"],
                 resolved_workdir=resolved_workdir,
-                snapshot_path=row["binding_snapshot_path"],
             )
-            self._write_json(
-                Path(row["binding_snapshot_path"]),
-                _binding_snapshot_payload(binding_snapshot, workspace, environment),
-            )
-
-            prompt_composition = compose_task_prompt(
+            prompt_file, prompt_summary = write_prompt_artifacts(
+                self.task_directory(task_id),
+                Path(row["prompt_manifest_path"]),
                 workspace=workspace,
                 environment=environment,
                 task_profile=row["task_profile"],
                 task_input=row["task_input"],
-            )
-            prompt_file = self.task_directory(task_id) / "rendered_prompt.txt"
-            prompt_file.write_text(prompt_composition.rendered_prompt, encoding="utf-8")
-            self._write_json(
-                Path(row["prompt_manifest_path"]),
-                {
-                    "rendered_prompt": prompt_composition.rendered_prompt,
-                    "layer_order": prompt_composition.layer_order,
-                    "layers": [asdict(layer) for layer in prompt_composition.layers],
-                    "manifest_path": row["prompt_manifest_path"],
-                },
             )
 
             if is_local_environment(environment):
                 launch_payload, launch = build_local_launcher(
                     working_directory=resolved_workdir,
                     prompt_file=prompt_file,
-                    rendered_prompt=prompt_composition.rendered_prompt,
+                    rendered_prompt=prompt_summary.rendered_prompt,
                 )
             else:
                 executor = build_ssh_executor(environment, project_dir=resolved_workdir)
@@ -348,7 +342,7 @@ class TaskHarnessService:
                     await executor.close()
                     raise
             launch_payload.launch_payload_path = row["launch_payload_path"]
-            self._write_json(Path(row["launch_payload_path"]), asdict(launch_payload))
+            write_launch_payload(Path(row["launch_payload_path"]), launch_payload)
             self._update_runtime_fields(
                 task_id,
                 resolved_workdir=resolved_workdir,
@@ -598,8 +592,8 @@ class TaskHarnessService:
             title=row["title"],
             task_profile=row["task_profile"],
             status=TaskHarnessStatus(row["status"]),
-            workspace_summary=_workspace_summary_from_json(row["workspace_summary_json"]),
-            environment_summary=_environment_summary_from_json(row["environment_summary_json"]),
+            workspace_summary=workspace_summary_from_json(row["workspace_summary_json"]),
+            environment_summary=environment_summary_from_json(row["environment_summary_json"]),
             created_at=_parse_required_datetime(row["created_at"]),
             updated_at=_parse_required_datetime(row["updated_at"]),
             started_at=_parse_datetime(row["started_at"]),
@@ -648,63 +642,6 @@ class TaskHarnessService:
             except TaskHarnessOutputStoreError:
                 continue
 
-    def _read_binding_summary(self, snapshot_path: str) -> TaskBindingSummary | None:
-        path = Path(snapshot_path)
-        if not path.exists():
-            return None
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return TaskBindingSummary(
-            workspace=_workspace_summary_from_json(_dump_json(payload["workspace"])),
-            environment=_environment_summary_from_json(_dump_json(payload["environment"])),
-            task_profile=str(payload["task_profile"]),
-            title=str(payload["title"]),
-            task_input=str(payload["task_input"]),
-            resolved_workdir=str(payload["resolved_workdir"]),
-            snapshot_path=str(payload["snapshot_path"]),
-        )
-
-    def _read_prompt_summary(self, manifest_path: str) -> TaskPromptSummary | None:
-        path = Path(manifest_path)
-        if not path.exists():
-            return None
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return TaskPromptSummary(
-            rendered_prompt=str(payload["rendered_prompt"]),
-            layer_order=[str(item) for item in payload["layer_order"]],
-            layers=[
-                TaskPromptLayer(
-                    position=int(item["position"]),
-                    name=str(item["name"]),
-                    label=str(item["label"]),
-                    content=str(item["content"]),
-                    char_count=int(item["char_count"]),
-                )
-                for item in payload["layers"]
-            ],
-            manifest_path=str(payload["manifest_path"]),
-        )
-
-    def _read_runtime_summary(self, launch_payload_path: str) -> TaskRuntimeSummary | None:
-        path = Path(launch_payload_path)
-        if not path.exists():
-            return None
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return TaskRuntimeSummary(
-            runner_kind=payload.get("runner_kind"),
-            working_directory=payload.get("working_directory"),
-            command=[str(item) for item in payload.get("command", [])],
-            prompt_file=payload.get("prompt_file"),
-            helper_path=payload.get("helper_path"),
-            launch_payload_path=payload.get("launch_payload_path"),
-        )
-
-    def _write_json(self, path: Path, payload: dict[str, Any]) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(payload, ensure_ascii=True, indent=2) + "\n",
-            encoding="utf-8",
-        )
-
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path)
         connection.row_factory = sqlite3.Row
@@ -723,82 +660,8 @@ def _parse_required_datetime(value: str | None) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def _workspace_summary(workspace: WorkspaceRecord) -> WorkspaceSummary:
-    return WorkspaceSummary(
-        workspace_id=workspace.workspace_id,
-        label=workspace.label,
-        description=workspace.description,
-        default_workdir=workspace.default_workdir,
-    )
-
-
-def _environment_summary(environment: EnvironmentRegistryEntry) -> EnvironmentSummary:
-    return EnvironmentSummary(
-        environment_id=environment.id,
-        alias=environment.alias,
-        display_name=environment.display_name,
-        host=environment.host,
-        default_workdir=environment.default_workdir,
-    )
-
-
-def _workspace_summary_from_json(value: str) -> WorkspaceSummary:
-    payload = json.loads(value)
-    return WorkspaceSummary(
-        workspace_id=str(payload["workspace_id"]),
-        label=str(payload["label"]),
-        description=payload.get("description"),
-        default_workdir=payload.get("default_workdir"),
-    )
-
-
-def _environment_summary_from_json(value: str) -> EnvironmentSummary:
-    payload = json.loads(value)
-    return EnvironmentSummary(
-        environment_id=str(payload["environment_id"]),
-        alias=str(payload["alias"]),
-        display_name=str(payload["display_name"]),
-        host=str(payload["host"]),
-        default_workdir=payload.get("default_workdir"),
-    )
-
-
 def _resolve_workdir(workspace: WorkspaceRecord, environment: EnvironmentRegistryEntry) -> str:
     candidate = workspace.default_workdir or environment.default_workdir
     if candidate is None or not candidate.strip():
         raise TaskLaunchError("startup failure: no working directory could be resolved")
     return candidate
-
-
-def _dump_json(payload: dict[str, Any]) -> str:
-    return json.dumps(payload, ensure_ascii=True, sort_keys=True)
-
-
-def _binding_snapshot_payload(
-    binding: TaskBindingSummary,
-    workspace: WorkspaceRecord,
-    environment: EnvironmentRegistryEntry,
-) -> dict[str, Any]:
-    return {
-        "workspace": {
-            **asdict(binding.workspace),
-            "workspace_prompt": workspace.workspace_prompt,
-            "created_at": workspace.created_at.isoformat(),
-            "updated_at": workspace.updated_at.isoformat(),
-        },
-        "environment": {
-            **asdict(binding.environment),
-            "task_harness_profile": environment.task_harness_profile,
-            "created_at": environment.created_at.isoformat()
-            if environment.created_at is not None
-            else None,
-            "updated_at": environment.updated_at.isoformat()
-            if environment.updated_at is not None
-            else None,
-        },
-        "task_profile": binding.task_profile,
-        "title": binding.title,
-        "task_input": binding.task_input,
-        "resolved_workdir": binding.resolved_workdir,
-        "snapshot_path": binding.snapshot_path,
-    }

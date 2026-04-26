@@ -1,8 +1,21 @@
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
 from pathlib import Path
 
+from ainrf.environments.models import EnvironmentAuthKind
 from ainrf.environments.service import InMemoryEnvironmentService
+from ainrf.task_harness.artifacts import (
+    binding_snapshot_path,
+    launch_payload_path,
+    prompt_manifest_path,
+    write_binding_snapshot,
+    write_launch_payload,
+    write_prompt_artifacts,
+)
+from ainrf.task_harness.launcher import LaunchPayload
+from ainrf.task_harness.models import TaskHarnessStatus
 from ainrf.task_harness.service import TaskHarnessService
 from ainrf.workspaces.service import WorkspaceRegistryService
 
@@ -71,3 +84,141 @@ def test_task_harness_initialize_marks_unfinished_tasks_failed(tmp_path: Path) -
         "startup failure: harness restart prevented Task Harness v1 from resuming this task"
     )
     assert output.items[-1].content == task.error_summary
+
+
+def test_task_harness_persists_and_reloads_known_artifacts(tmp_path: Path) -> None:
+    environment_service = InMemoryEnvironmentService()
+    environment = environment_service.create_environment(
+        alias="artifact-lab",
+        display_name="Artifact Lab",
+        host="127.0.0.1",
+        user="root",
+        auth_kind=EnvironmentAuthKind.SSH_KEY,
+        default_workdir=str(tmp_path),
+        task_harness_profile="Use the artifact lab profile.",
+    )
+    workspace_service = WorkspaceRegistryService(tmp_path)
+    service = TaskHarnessService(
+        state_root=tmp_path,
+        environment_service=environment_service,
+        workspace_service=workspace_service,
+    )
+    service.initialize()
+    task_dir = service.task_directory("task-artifacts")
+    task_dir.mkdir(parents=True, exist_ok=True)
+    binding_path = binding_snapshot_path(task_dir)
+    manifest_path = prompt_manifest_path(task_dir)
+    launch_path = launch_payload_path(task_dir)
+    workspace = workspace_service.get_workspace("workspace-default")
+    workspace_summary = {
+        "workspace_id": workspace.workspace_id,
+        "label": workspace.label,
+        "description": workspace.description,
+        "default_workdir": workspace.default_workdir,
+    }
+    environment_summary = {
+        "environment_id": environment.id,
+        "alias": environment.alias,
+        "display_name": environment.display_name,
+        "host": environment.host,
+        "default_workdir": environment.default_workdir,
+    }
+
+    write_binding_snapshot(
+        binding_path,
+        workspace=workspace,
+        environment=environment,
+        task_profile="claude-code",
+        title="Artifact task",
+        task_input="Inspect artifacts",
+        resolved_workdir=str(tmp_path),
+    )
+    prompt_file, prompt_summary = write_prompt_artifacts(
+        task_dir,
+        manifest_path,
+        workspace=workspace,
+        environment=environment,
+        task_profile="claude-code",
+        task_input="Inspect artifacts",
+    )
+    write_launch_payload(
+        launch_path,
+        LaunchPayload(
+            runner_kind="local-process",
+            working_directory=str(tmp_path),
+            command=["claude", "-p", "Inspect artifacts"],
+            prompt_file=str(prompt_file),
+            launch_payload_path=str(launch_path),
+        ),
+    )
+    with service._connect() as connection:  # noqa: SLF001
+        connection.execute(
+            """
+            INSERT INTO task_harness_tasks (
+                task_id,
+                workspace_id,
+                environment_id,
+                task_profile,
+                title,
+                task_input,
+                status,
+                created_at,
+                updated_at,
+                workspace_summary_json,
+                environment_summary_json,
+                binding_snapshot_path,
+                prompt_manifest_path,
+                launch_payload_path,
+                resolved_workdir,
+                runner_kind
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "task-artifacts",
+                workspace.workspace_id,
+                environment.id,
+                "claude-code",
+                "Artifact task",
+                "Inspect artifacts",
+                TaskHarnessStatus.SUCCEEDED.value,
+                "2026-04-23T08:00:00+00:00",
+                "2026-04-23T08:00:00+00:00",
+                json.dumps(workspace_summary, ensure_ascii=True, sort_keys=True),
+                json.dumps(environment_summary, ensure_ascii=True, sort_keys=True),
+                str(binding_path),
+                str(manifest_path),
+                str(launch_path),
+                str(tmp_path),
+                "local-process",
+            ),
+        )
+        connection.commit()
+
+    restored = TaskHarnessService(
+        state_root=tmp_path,
+        environment_service=environment_service,
+        workspace_service=workspace_service,
+    )
+    restored.initialize()
+    task = restored.get_task("task-artifacts")
+
+    assert task.binding is not None
+    assert task.prompt is not None
+    assert task.runtime is not None
+    assert (
+        json.loads(binding_path.read_text(encoding="utf-8"))["workspace"]["workspace_prompt"]
+        == workspace.workspace_prompt
+    )
+    assert (task_dir / "rendered_prompt.txt").read_text(
+        encoding="utf-8"
+    ) == task.prompt.rendered_prompt
+    assert (
+        json.loads(manifest_path.read_text(encoding="utf-8"))["layer_order"]
+        == task.prompt.layer_order
+    )
+    assert json.loads(launch_path.read_text(encoding="utf-8")) == asdict(task.runtime)
+    assert task.binding.snapshot_path == str(binding_path)
+    assert task.binding.resolved_workdir == str(tmp_path)
+    assert task.prompt.manifest_path == str(manifest_path)
+    assert task.prompt.rendered_prompt == prompt_summary.rendered_prompt
+    assert task.runtime.launch_payload_path == str(launch_path)

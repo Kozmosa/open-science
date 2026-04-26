@@ -14,6 +14,7 @@ import {
   detectEnvironment,
   getEnvironments,
   getProjectEnvironmentReferences,
+  updateProjectEnvironmentReference,
 } from '../api';
 
 vi.mock('../api', () => ({
@@ -33,6 +34,7 @@ const mockCreateProjectEnvironmentReference = vi.mocked(createProjectEnvironment
 const mockCreateEnvironment = vi.mocked(createEnvironment);
 const mockDeleteEnvironment = vi.mocked(deleteEnvironment);
 const mockDetectEnvironment = vi.mocked(detectEnvironment);
+const mockUpdateProjectEnvironmentReference = vi.mocked(updateProjectEnvironmentReference);
 
 const baseEnvironment: EnvironmentRecord = {
   id: 'env-1',
@@ -93,6 +95,7 @@ beforeEach(() => {
   mockCreateEnvironment.mockReset();
   mockDeleteEnvironment.mockReset();
   mockDetectEnvironment.mockReset();
+  mockUpdateProjectEnvironmentReference.mockReset();
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   window.localStorage.clear();
 });
@@ -168,6 +171,68 @@ describe('ContainersPage', () => {
           environment_id: 'env-1',
           is_default: true,
         }),
+        'default'
+      )
+    );
+    expect(await screen.findAllByText('Project default')).not.toHaveLength(0);
+  });
+
+  it('disables deleting the seed environment', async () => {
+    mockGetEnvironments.mockResolvedValue({
+      items: [{ ...baseEnvironment, id: 'env-seed', is_seed: true, alias: 'localhost' }],
+    });
+
+    renderWithProviders(<ContainersPage />);
+
+    const deleteButton = await screen.findByRole('button', { name: 'Delete' });
+    expect(deleteButton).toBeDisabled();
+    expect(deleteButton).toHaveAttribute('title', 'The default localhost environment cannot be deleted.');
+  });
+
+  it('surfaces the invalid ssh_options object error text', async () => {
+    mockGetEnvironments.mockResolvedValue({ items: [] });
+
+    renderWithProviders(<ContainersPage />);
+
+    expect(await screen.findByText('No environments have been created yet.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Alias'), { target: { value: 'gpu-lab' } });
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'GPU Lab' } });
+    fireEvent.change(screen.getByLabelText('Host'), { target: { value: 'gpu.example.com' } });
+    fireEvent.change(screen.getByLabelText('SSH options JSON'), { target: { value: '[]' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create environment' }));
+
+    expect(await screen.findByText('SSH options must be a JSON object')).toBeInTheDocument();
+    expect(mockCreateEnvironment).not.toHaveBeenCalled();
+  });
+
+  it('updates the selected project reference default flag', async () => {
+    const projectReference: ProjectEnvironmentReference = {
+      environment_id: 'env-1',
+      is_default: false,
+      override_workdir: '/workspace/project',
+      override_env_name: 'uv',
+      override_env_manager: 'uv',
+      override_runtime_notes: 'Use CUDA 12 image',
+      updated_at: '2026-04-21T00:02:00Z',
+    };
+    mockGetEnvironments.mockResolvedValue({ items: [baseEnvironment] });
+    mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [projectReference] });
+    mockUpdateProjectEnvironmentReference.mockResolvedValue({
+      ...projectReference,
+      is_default: true,
+      updated_at: '2026-04-21T00:03:00Z',
+    });
+
+    renderWithProviders(<ContainersPage />);
+
+    expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set project default' }));
+
+    await waitFor(() =>
+      expect(mockUpdateProjectEnvironmentReference).toHaveBeenCalledWith(
+        'env-1',
+        { is_default: true },
         'default'
       )
     );

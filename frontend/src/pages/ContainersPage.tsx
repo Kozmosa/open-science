@@ -11,180 +11,38 @@ import {
 } from '../api';
 import type {
   EnvironmentAuthKind,
-  EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
-  EnvironmentUpdateRequest,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
 } from '../types';
 import { useLocale, useT } from '../i18n';
 import { useEnvironmentSelection } from '../components';
-
-const environmentsQueryKey = ['environments'] as const;
-const projectEnvironmentRefsQueryKey = ['project-environment-refs', 'default'] as const;
-const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
-const EMPTY_PROJECT_REFS: ProjectEnvironmentReference[] = [];
-const defaultProjectId = 'default';
-
-type EnvironmentEditorMode = 'create' | 'edit';
-
-interface EnvironmentFormValues {
-  alias: string;
-  display_name: string;
-  description: string;
-  tags: string;
-  host: string;
-  port: string;
-  user: string;
-  auth_kind: EnvironmentAuthKind;
-  identity_file: string;
-  proxy_jump: string;
-  proxy_command: string;
-  ssh_options: string;
-  default_workdir: string;
-  preferred_python: string;
-  preferred_env_manager: string;
-  preferred_runtime_notes: string;
-  task_harness_profile: string;
-}
-
-const emptyFormValues = (): EnvironmentFormValues => ({
-  alias: '',
-  display_name: '',
-  description: '',
-  tags: '',
-  host: '',
-  port: '22',
-  user: 'root',
-  auth_kind: 'ssh_key',
-  identity_file: '',
-  proxy_jump: '',
-  proxy_command: '',
-  ssh_options: '{}',
-  default_workdir: '',
-  preferred_python: '',
-  preferred_env_manager: '',
-  preferred_runtime_notes: '',
-  task_harness_profile: '',
-});
-
-function valuesFromEnvironment(environment: EnvironmentRecord): EnvironmentFormValues {
-  return {
-    alias: environment.alias,
-    display_name: environment.display_name,
-    description: environment.description ?? '',
-    tags: environment.tags.join(', '),
-    host: environment.host,
-    port: String(environment.port),
-    user: environment.user,
-    auth_kind: environment.auth_kind,
-    identity_file: environment.identity_file ?? '',
-    proxy_jump: environment.proxy_jump ?? '',
-    proxy_command: environment.proxy_command ?? '',
-    ssh_options: JSON.stringify(environment.ssh_options, null, 2),
-    default_workdir: environment.default_workdir ?? '',
-    preferred_python: environment.preferred_python ?? '',
-    preferred_env_manager: environment.preferred_env_manager ?? '',
-    preferred_runtime_notes: environment.preferred_runtime_notes ?? '',
-    task_harness_profile: environment.task_harness_profile ?? '',
-  };
-}
-
-function parseTags(value: string): string[] {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
-
-function parseJsonObject(
-  value: string,
-  objectErrorMessage: string,
-  valuesErrorMessage: string
-): Record<string, string> {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return {};
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed) as unknown;
-  } catch {
-    throw new Error(objectErrorMessage);
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(objectErrorMessage);
-  }
-
-  const entries = Object.entries(parsed as Record<string, unknown>);
-  const normalized: Record<string, string> = {};
-  for (const [key, entryValue] of entries) {
-    if (typeof entryValue !== 'string') {
-      throw new Error(valuesErrorMessage);
-    }
-    normalized[key] = entryValue;
-  }
-  return normalized;
-}
-
-function formatTimestamp(value: string | null, locale: string, neverLabel: string): string {
-  if (!value) {
-    return neverLabel;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US');
-}
-
-function mergeEnvironmentList(
-  current: EnvironmentListResponse | undefined,
-  environment: EnvironmentRecord
-): EnvironmentListResponse {
-  const items = current?.items ?? [];
-  const nextItems = [...items];
-  const index = nextItems.findIndex((item) => item.id === environment.id);
-  if (index === -1) {
-    nextItems.unshift(environment);
-  } else {
-    nextItems[index] = environment;
-  }
-  return { items: nextItems };
-}
-
-function removeEnvironmentFromList(
-  current: EnvironmentListResponse | undefined,
-  environmentId: string
-): EnvironmentListResponse {
-  return {
-    items: (current?.items ?? []).filter((item) => item.id !== environmentId),
-  };
-}
-
-function mergeProjectReferenceList(
-  current: ProjectEnvironmentReferenceListResponse | undefined,
-  reference: ProjectEnvironmentReference
-): ProjectEnvironmentReferenceListResponse {
-  const items = (current?.items ?? [])
-    .filter((item) => item.environment_id !== reference.environment_id)
-    .map((item) => (reference.is_default ? { ...item, is_default: false } : item));
-  return { items: [...items, reference] };
-}
-
-function removeProjectReferenceFromList(
-  current: ProjectEnvironmentReferenceListResponse | undefined,
-  environmentId: string
-): ProjectEnvironmentReferenceListResponse {
-  return {
-    items: (current?.items ?? []).filter((item) => item.environment_id !== environmentId),
-  };
-}
+import {
+  buildEnvironmentRequest,
+  buildProjectReferenceCreateRequest,
+  buildProjectReferenceUpdateRequest,
+  defaultProjectId,
+  EMPTY_ENVIRONMENTS,
+  EMPTY_PROJECT_REFS,
+  emptyFormValues,
+  environmentsQueryKey,
+  formatTimestamp,
+  mergeEnvironmentList,
+  mergeProjectReferenceList,
+  projectEnvironmentRefsQueryKey,
+  removeEnvironmentFromList,
+  removeProjectReferenceFromList,
+  toEnvironmentUpdateRequest,
+  valuesFromEnvironment,
+  valuesFromProjectReference,
+} from './containers/helpers';
+import type {
+  EnvironmentEditorMode,
+  EnvironmentFormValues,
+  ProjectRefFormValues,
+} from './containers/helpers';
 
 interface EnvironmentEditorProps {
   mode: EnvironmentEditorMode;
@@ -545,24 +403,6 @@ function EnvironmentEditor({
   );
 }
 
-interface ProjectRefFormValues {
-  override_workdir: string;
-  override_env_name: string;
-  override_env_manager: string;
-  override_runtime_notes: string;
-}
-
-function valuesFromProjectReference(
-  reference: ProjectEnvironmentReference | null
-): ProjectRefFormValues {
-  return {
-    override_workdir: reference?.override_workdir ?? '',
-    override_env_name: reference?.override_env_name ?? '',
-    override_env_manager: reference?.override_env_manager ?? '',
-    override_runtime_notes: reference?.override_runtime_notes ?? '',
-  };
-}
-
 interface ProjectReferenceEditorProps {
   selectedEnvironment: EnvironmentRecord | null;
   projectReference: ProjectEnvironmentReference | null;
@@ -834,44 +674,21 @@ function ContainersPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (values: EnvironmentFormValues) => {
-      const requestBase = {
-        alias: values.alias.trim(),
-        display_name: values.display_name.trim(),
-        description: values.description.trim() || null,
-        tags: parseTags(values.tags),
-        host: values.host.trim(),
-        port: Number.parseInt(values.port, 10),
-        user: values.user.trim() || 'root',
-        auth_kind: values.auth_kind,
-        identity_file: values.identity_file.trim() || null,
-        proxy_jump: values.proxy_jump.trim() || null,
-        proxy_command: values.proxy_command.trim() || null,
-        ssh_options: parseJsonObject(
-          values.ssh_options,
-          t('components.environmentEditor.sshOptionsObjectError'),
-          t('components.environmentEditor.sshOptionsValuesError')
-        ),
-        default_workdir: values.default_workdir.trim() || null,
-        preferred_python: values.preferred_python.trim() || null,
-        preferred_env_manager: values.preferred_env_manager.trim() || null,
-        preferred_runtime_notes: values.preferred_runtime_notes.trim() || null,
-        task_harness_profile: values.task_harness_profile.trim() || null,
-      } satisfies EnvironmentCreateRequest;
-
-      if (!Number.isInteger(requestBase.port) || requestBase.port < 1 || requestBase.port > 65535) {
-        throw new Error(t('components.environmentEditor.portRangeError'));
-      }
+      const request = buildEnvironmentRequest(values, {
+        portRangeError: t('components.environmentEditor.portRangeError'),
+        sshOptionsObjectError: t('components.environmentEditor.sshOptionsObjectError'),
+        sshOptionsValuesError: t('components.environmentEditor.sshOptionsValuesError'),
+      });
 
       if (editorMode === 'create') {
-        return createEnvironment(requestBase);
+        return createEnvironment(request);
       }
 
       if (editorEnvironmentId === null) {
         throw new Error(t('components.environmentEditor.noEnvironmentSelectedForEditing'));
       }
 
-      const request: EnvironmentUpdateRequest = requestBase;
-      return updateEnvironment(editorEnvironmentId, request);
+      return updateEnvironment(editorEnvironmentId, toEnvironmentUpdateRequest(request));
     },
     onSuccess: (environment) => {
       const current = queryClient.getQueryData<EnvironmentListResponse>(environmentsQueryKey);
@@ -909,22 +726,11 @@ function ContainersPage() {
       }
 
       if (selectedProjectReference) {
-        return updateProjectEnvironmentReference(
-          selectedEnvironment.id,
-          payload,
-          defaultProjectId
-        );
+        return updateProjectEnvironmentReference(selectedEnvironment.id, payload, defaultProjectId);
       }
 
       return createProjectEnvironmentReference(
-        {
-          environment_id: selectedEnvironment.id,
-          is_default: payload.is_default ?? false,
-          override_workdir: payload.override_workdir ?? null,
-          override_env_name: payload.override_env_name ?? null,
-          override_env_manager: payload.override_env_manager ?? null,
-          override_runtime_notes: payload.override_runtime_notes ?? null,
-        },
+        buildProjectReferenceCreateRequest(selectedEnvironment.id, payload),
         defaultProjectId
       );
     },
@@ -1246,12 +1052,9 @@ function ContainersPage() {
             isSaving={saveProjectReferenceMutation.isPending}
             isRemoving={removeProjectReferenceMutation.isPending}
             onSave={async (values) => {
-              await saveProjectReferenceMutation.mutateAsync({
-                override_workdir: values.override_workdir.trim() || null,
-                override_env_name: values.override_env_name.trim() || null,
-                override_env_manager: values.override_env_manager.trim() || null,
-                override_runtime_notes: values.override_runtime_notes.trim() || null,
-              });
+              await saveProjectReferenceMutation.mutateAsync(
+                buildProjectReferenceUpdateRequest(values)
+              );
             }}
             onSetDefault={async () => {
               await saveProjectReferenceMutation.mutateAsync({ is_default: true });

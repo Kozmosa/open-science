@@ -41,6 +41,9 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
 
     assert response.status_code == 200
     payload = response.json()
+    assert {path for path in payload["paths"] if path.startswith("/v1/")} == {
+        f"/v1{path}" for path in payload["paths"] if not path.startswith("/v1/")
+    }
     assert "/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/v1/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/workspaces" in payload["paths"]

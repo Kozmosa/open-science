@@ -144,6 +144,7 @@ export const getTaskOutput = (
 export const buildTaskStreamUrl = (taskId: string, afterSeq: number = 0): string => {
   const search = new URLSearchParams({ after_seq: String(afterSeq) });
   if (API_KEY) {
+    // Native EventSource cannot attach arbitrary headers, so stream auth stays in the URL.
     search.set('api_key', API_KEY);
   }
   return `${API_BASE}/tasks/${taskId}/stream?${search.toString()}`;

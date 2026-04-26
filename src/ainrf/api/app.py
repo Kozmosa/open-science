@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from anyio import to_thread
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 from ainrf.api.config import ApiConfig
 from ainrf.api.middleware import build_api_key_middleware
@@ -25,7 +25,19 @@ from ainrf.workspaces import WorkspaceRegistryService
 
 
 def _run_sync_in_lifespan(callback: Callable[[], None]) -> Awaitable[None]:
+    # Startup services do filesystem/tmux work; run them off the event loop during lifespan.
     return to_thread.run_sync(callback)
+
+
+ROUTERS: tuple[APIRouter, ...] = (
+    health_router,
+    environments_router,
+    projects_router,
+    workspaces_router,
+    terminal_router,
+    tasks_router,
+    code_router,
+)
 
 
 @asynccontextmanager
@@ -73,18 +85,7 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
         workspace_service=app.state.workspace_service,
     )
     app.middleware("http")(build_api_key_middleware(api_config))
-    app.include_router(health_router)
-    app.include_router(environments_router)
-    app.include_router(projects_router)
-    app.include_router(workspaces_router)
-    app.include_router(terminal_router)
-    app.include_router(tasks_router)
-    app.include_router(code_router)
-    app.include_router(health_router, prefix="/v1")
-    app.include_router(environments_router, prefix="/v1")
-    app.include_router(projects_router, prefix="/v1")
-    app.include_router(workspaces_router, prefix="/v1")
-    app.include_router(terminal_router, prefix="/v1")
-    app.include_router(tasks_router, prefix="/v1")
-    app.include_router(code_router, prefix="/v1")
+    for router in ROUTERS:
+        app.include_router(router)
+        app.include_router(router, prefix="/v1")
     return app

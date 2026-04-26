@@ -45,6 +45,17 @@ describe('api endpoints', () => {
     expect(buildTaskStreamUrl(created.task_id, 3)).toContain(`/api/tasks/${created.task_id}/stream`);
   });
 
+  it('uses a query parameter for task stream API keys because EventSource cannot send custom headers', async () => {
+    vi.stubEnv('VITE_USE_MOCK', 'false');
+    vi.stubEnv('VITE_AINRF_API_KEY', 'stream-secret');
+
+    const { buildTaskStreamUrl } = await import('./endpoints');
+
+    expect(buildTaskStreamUrl('task-1', 7)).toBe(
+      '/api/tasks/task-1/stream?after_seq=7&api_key=stream-secret'
+    );
+  });
+
   it('uses the real api client when VITE_USE_MOCK is false', async () => {
     vi.stubEnv('VITE_USE_MOCK', 'false');
     const fetchMock = vi.fn().mockResolvedValue(

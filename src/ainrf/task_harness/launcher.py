@@ -10,6 +10,7 @@ from typing import Any
 from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.execution.models import ContainerConfig
 from ainrf.execution.ssh import SSHExecutor
+from ainrf.task_harness.artifacts import remote_launch_path
 
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 _CLAUDE_COMMAND = [
@@ -133,7 +134,7 @@ async def build_remote_launcher(
     remote_root = f"{home_result.stdout.strip()}/.ainrf/task-harness/{task_id}"
     remote_prompt = f"{remote_root}/prompt.txt"
     remote_helper = f"{remote_root}/launch.sh"
-    helper_path = local_task_dir / "remote-launch.sh"
+    helper_path = remote_launch_path(local_task_dir)
     helper_path.write_text(
         "\n".join(
             [
