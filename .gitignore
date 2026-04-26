@@ -23,3 +23,7 @@ test/Mode1/*.h5
 
 # ignore local research scratch area
 /test/
+
+
+# ref-repos
+kimi-cli/
