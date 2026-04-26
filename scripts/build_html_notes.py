@@ -101,6 +101,7 @@ def parse_frontmatter(raw: str) -> tuple[Frontmatter, str]:
     for idx in range(1, len(lines)):
         if lines[idx].strip() == "---":
             frontmatter_lines = lines[1:idx]
+            # Keep a permissive fallback so legacy note metadata still builds when strict YAML parsing fails.
             try:
                 meta = normalize_frontmatter(yaml.safe_load("\n".join(frontmatter_lines)))
             except yaml.YAMLError:
@@ -207,12 +208,30 @@ def convert_markdown_link(match: re.Match[str], current_path: Path) -> str:
     if resolved.is_relative_to(SOURCE_DOCS.resolve()):
         return match.group(0)
 
+    # Links escaping docs are rendered as inline code because the generated site cannot resolve repo-only paths.
     return f"`{label}`"
 
 
 def relative_markdown_href(source: Path, target: Path) -> str:
     source_dir = source.parent
     return Path(os.path.relpath(target, source_dir)).as_posix()
+
+
+def convert_note_body(
+    note: Note,
+    note_by_key: dict[str, Note],
+    alias_lookup: dict[str, str],
+) -> tuple[str, list[str]]:
+    converted_callouts = convert_callouts(note.body)
+    note_with_converted_callouts = Note(
+        source_path=note.source_path,
+        relative_path=note.relative_path,
+        canonical_key=note.canonical_key,
+        title=note.title,
+        aliases=note.aliases,
+        body=converted_callouts,
+    )
+    return convert_wikilinks(note_with_converted_callouts, note_by_key, alias_lookup)
 
 
 def convert_wikilinks(
@@ -277,6 +296,7 @@ def append_backlinks(
     if not incoming:
         return text
 
+    # Backlinks are appended only in generated output so source notes stay untouched while the site gains navigation.
     lines = [text.rstrip(), "", "## 反向链接", ""]
     for key in sorted(incoming, key=lambda item: note_by_key[item].title):
         target_note = note_by_key[key]
@@ -289,42 +309,54 @@ def append_backlinks(
     return "\n".join(lines) + "\n"
 
 
-def build_processed_docs() -> None:
-    notes, alias_lookup = load_notes()
+def collect_processed_notes(
+    notes: list[Note],
+    alias_lookup: dict[str, str],
+) -> tuple[dict[str, str], dict[str, set[str]]]:
     note_by_key = {note.canonical_key: note for note in notes}
     backlinks: dict[str, set[str]] = {}
     processed: dict[str, str] = {}
 
     for note in notes:
-        body = convert_callouts(note.body)
-        temp_note = Note(
-            source_path=note.source_path,
-            relative_path=note.relative_path,
-            canonical_key=note.canonical_key,
-            title=note.title,
-            aliases=note.aliases,
-            body=body,
-        )
-        converted, outgoing = convert_wikilinks(temp_note, note_by_key, alias_lookup)
+        converted, outgoing = convert_note_body(note, note_by_key, alias_lookup)
         processed[note.canonical_key] = converted
         for target in outgoing:
             backlinks.setdefault(target, set()).add(note.canonical_key)
 
-    shutil.rmtree(GENERATED_ROOT, ignore_errors=True)
-    GENERATED_DOCS.mkdir(parents=True, exist_ok=True)
+    return processed, backlinks
 
+
+def write_processed_markdown(
+    notes: list[Note],
+    processed: dict[str, str],
+    backlinks: dict[str, set[str]],
+) -> None:
+    note_by_key = {note.canonical_key: note for note in notes}
     for note in notes:
         content = append_backlinks(processed[note.canonical_key], note, backlinks, note_by_key)
         destination = GENERATED_DOCS / note.relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding="utf-8")
 
+
+def copy_non_markdown_assets() -> None:
     for path in sorted(SOURCE_DOCS.rglob("*")):
         if not path.is_file() or path.suffix.lower() == ".md":
             continue
         destination = GENERATED_DOCS / path.relative_to(SOURCE_DOCS)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
+
+
+def build_processed_docs() -> None:
+    notes, alias_lookup = load_notes()
+    processed, backlinks = collect_processed_notes(notes, alias_lookup)
+
+    shutil.rmtree(GENERATED_ROOT, ignore_errors=True)
+    GENERATED_DOCS.mkdir(parents=True, exist_ok=True)
+
+    write_processed_markdown(notes, processed, backlinks)
+    copy_non_markdown_assets()
 
 
 def run_mkdocs(command: str) -> int:
