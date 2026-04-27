@@ -48,6 +48,25 @@ beforeEach(() => {
 });
 
 describe('TerminalPage', () => {
+  it('renders page title in the current language and eyebrow in the alternate language', async () => {
+    const { unmount } = renderWithProviders(<TerminalPage />, {
+      route: '/terminal',
+      locale: 'en',
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Terminal' })).toBeInTheDocument();
+    expect(screen.getByText('终端')).toBeInTheDocument();
+
+    unmount();
+    renderWithProviders(<TerminalPage />, {
+      route: '/terminal',
+      locale: 'zh',
+    });
+
+    expect(await screen.findByRole('heading', { name: '终端' })).toBeInTheDocument();
+    expect(screen.getByText('TERMINAL')).toBeInTheDocument();
+  });
+
   it('renders the simplified Chinese terminal header and keeps the bench card above the selector', async () => {
     renderWithProviders(<TerminalPage />, {
       route: '/terminal?environment_id=env-1&task_id=task-1&intent=takeover',

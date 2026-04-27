@@ -41,6 +41,23 @@ describe('LocaleSwitcher', () => {
     expect(window.localStorage.getItem('scholar-agent:locale')).toBe('zh');
   });
 
+  it('uses semantic token colors so it remains visible in the app header', () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <LocaleSwitcher />
+      </LocaleProvider>
+    );
+
+    expect(screen.getByTestId('locale-switcher')).toHaveClass('bg-[var(--muted)]');
+    expect(screen.getByRole('button', { name: 'English' })).toHaveClass(
+      'bg-[var(--card)]',
+      'text-[var(--foreground)]'
+    );
+    expect(screen.getByRole('button', { name: '中文' })).toHaveClass(
+      'text-[var(--muted-foreground)]'
+    );
+  });
+
   it('restores the stored locale on mount', () => {
     window.localStorage.setItem('scholar-agent:locale', 'zh');
 

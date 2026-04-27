@@ -1,56 +1,108 @@
 @import "tailwindcss";
 
 :root {
-  /* Apple Design System — Light */
-  --apple-blue: #0071e3;
-  --apple-blue-hover: #0077ed;
-  --apple-link: #0066cc;
-  --apple-link-dark: #2997ff;
-  --apple-black: #000000;
-  --apple-near-black: #1d1d1f;
-  --apple-white: #ffffff;
-  --apple-gray: #f5f5f7;
-  --apple-gray-2: #fafafc;
-  --apple-text-secondary: rgba(0, 0, 0, 0.8);
-  --apple-text-tertiary: rgba(0, 0, 0, 0.48);
-  --apple-dark-surface-1: #272729;
-  --apple-dark-surface-2: #262628;
-  --apple-dark-surface-3: #28282a;
-  --apple-dark-surface-4: #2a2a2d;
-  --apple-border-light: rgba(0, 0, 0, 0.08);
-  --apple-focus-ring: 0 0 0 4px rgba(0, 113, 227, 0.15);
+  --radius: 0.75rem;
+  --background: #f7f7f8;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #262626;
+  --primary-foreground: #ffffff;
+  --secondary: #eeeeef;
+  --secondary-foreground: #262626;
+  --muted: #f1f1f2;
+  --muted-foreground: #6b6b70;
+  --accent: #2563eb;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: rgba(23, 23, 23, 0.1);
+  --input: rgba(23, 23, 23, 0.12);
+  --ring: rgba(37, 99, 235, 0.35);
+  --sidebar: #fbfbfc;
+  --sidebar-foreground: #1f1f23;
+  --sidebar-primary: #ececef;
+  --sidebar-primary-foreground: #171717;
+  --sidebar-accent: #2563eb;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(23, 23, 23, 0.08);
+  --code-background: #eeeeef;
+  --code-foreground: #171717;
+  --shadow-pane: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-input: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-toolbar: 0 1px 2px rgba(15, 23, 42, 0.04);
 
-  /* Semantic tokens */
-  --text: var(--apple-near-black);
-  --text-secondary: var(--apple-text-secondary);
-  --text-tertiary: var(--apple-text-tertiary);
-  --bg: var(--apple-white);
-  --bg-secondary: var(--apple-gray);
-  --bg-tertiary: var(--apple-gray-2);
-  --accent: var(--apple-blue);
-  --accent-hover: var(--apple-blue-hover);
-  --border: var(--apple-border-light);
-  --surface: var(--apple-white);
-  --surface-elevated: var(--apple-white);
-
-  /* Typography */
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --text: var(--foreground);
+  --text-secondary: rgba(23, 23, 23, 0.72);
+  --text-tertiary: rgba(23, 23, 23, 0.48);
+  --bg: var(--background);
+  --bg-secondary: var(--muted);
+  --bg-tertiary: var(--secondary);
+  --surface: var(--card);
+  --surface-elevated: var(--popover);
+  --apple-blue: var(--accent);
+  --apple-blue-hover: #1d4ed8;
+  --apple-near-black: var(--foreground);
+  --font-display: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-text: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: var(--apple-white);
-    --text-secondary: rgba(255, 255, 255, 0.85);
-    --text-tertiary: rgba(255, 255, 255, 0.55);
-    --bg: var(--apple-black);
-    --bg-secondary: var(--apple-dark-surface-1);
-    --bg-tertiary: var(--apple-dark-surface-2);
+    --background: #0f0f11;
+    --foreground: #f7f7f8;
+    --card: #18181b;
+    --card-foreground: #f7f7f8;
+    --popover: #202024;
+    --popover-foreground: #f7f7f8;
+    --primary: #f4f4f5;
+    --primary-foreground: #111113;
+    --secondary: #27272a;
+    --secondary-foreground: #f4f4f5;
+    --muted: #202024;
+    --muted-foreground: #a1a1aa;
+    --accent: #60a5fa;
+    --accent-foreground: #0f172a;
+    --destructive: #f87171;
     --border: rgba(255, 255, 255, 0.1);
-    --surface: var(--apple-dark-surface-1);
-    --surface-elevated: var(--apple-dark-surface-3);
+    --input: rgba(255, 255, 255, 0.14);
+    --ring: rgba(96, 165, 250, 0.4);
+    --sidebar: #141417;
+    --sidebar-foreground: #f4f4f5;
+    --sidebar-primary: #27272a;
+    --sidebar-primary-foreground: #f4f4f5;
+    --sidebar-accent: #60a5fa;
+    --sidebar-accent-foreground: #0f172a;
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --code-background: #27272a;
+    --code-foreground: #f4f4f5;
+    --shadow-pane: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.28);
+    --shadow-input: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-toolbar: 0 2px 8px rgba(0, 0, 0, 0.25);
+
+    --text: var(--foreground);
+    --text-secondary: rgba(247, 247, 248, 0.76);
+    --text-tertiary: rgba(247, 247, 248, 0.5);
+    --bg: var(--background);
+    --bg-secondary: var(--muted);
+    --bg-tertiary: var(--secondary);
+    --surface: var(--card);
+    --surface-elevated: var(--popover);
+    --apple-blue: var(--accent);
+    --apple-blue-hover: #93c5fd;
+    --apple-near-black: var(--foreground);
   }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 html {
@@ -61,22 +113,24 @@ html {
 body {
   margin: 0;
   font-family: var(--font-text);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 17px;
-  line-height: 1.47;
-  letter-spacing: -0.374px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-/* Apple-style focus ring */
 *:focus-visible {
-  outline: 2px solid var(--apple-blue);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* Selection */
 ::selection {
-  background: rgba(0, 113, 227, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
 }
 
 .ainrf-terminal .xterm {

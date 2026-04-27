@@ -44,6 +44,23 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
+  it('renders page title in the current language and eyebrow in the alternate language', async () => {
+    const { unmount } = renderWithProviders(<SettingsPage />, {
+      locale: 'en',
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByText('设置')).toBeInTheDocument();
+
+    unmount();
+    renderWithProviders(<SettingsPage />, {
+      locale: 'zh',
+    });
+
+    expect(await screen.findByRole('heading', { name: '设置' })).toBeInTheDocument();
+    expect(screen.getByText('SETTINGS')).toBeInTheDocument();
+  });
+
   it('falls back from an invalid document and persists section saves', async () => {
     window.localStorage.setItem(settingsStorageKey, '{invalid');
 

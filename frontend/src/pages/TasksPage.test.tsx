@@ -106,6 +106,26 @@ const taskSummary: TaskSummary = {
   latest_output_seq: 1,
 };
 
+const reviewTaskSummary: TaskSummary = {
+  ...taskSummary,
+  task_id: 'task-review',
+  title: 'Review paper draft',
+  status: 'queued',
+  workspace_summary: {
+    ...taskSummary.workspace_summary,
+    label: 'Paper Workspace',
+  },
+  environment_summary: {
+    ...taskSummary.environment_summary,
+    alias: 'cpu-lab',
+    display_name: 'CPU Lab',
+  },
+  created_at: '2026-04-23T09:00:00Z',
+  updated_at: '2026-04-23T09:01:00Z',
+  started_at: null,
+  latest_output_seq: 4,
+};
+
 const taskRecord: TaskRecord = {
   ...taskSummary,
   binding: {
@@ -296,6 +316,7 @@ describe('TasksPage', () => {
     const client = createTestQueryClient();
 
     renderWithProviders(<TasksPage />, { client });
+    fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
     await waitFor(() => expect(screen.getByLabelText('Environment')).toHaveValue('env-1'));
 
     fireEvent.change(screen.getByLabelText('Task input'), {
@@ -315,7 +336,7 @@ describe('TasksPage', () => {
         title: undefined,
       })
     );
-    expect(await screen.findByText('Implement harness')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Implement harness' })).toBeInTheDocument();
     expect((await screen.findAllByText('/workspace/created')).length).toBeGreaterThan(0);
     expect(await screen.findByText('created line')).toBeInTheDocument();
     await waitFor(() => expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-2', 1));
@@ -325,7 +346,251 @@ describe('TasksPage', () => {
     });
 
     await waitFor(() => expect(screen.getByText('created line')).toBeInTheDocument());
-    expect(screen.getByText('Implement harness')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Implement harness' })).toBeInTheDocument();
+  });
+
+  it('selects a task from the task query param and keeps selection in the URL', async () => {
+    const reviewRecord: TaskRecord = {
+      ...taskRecord,
+      ...reviewTaskSummary,
+      binding: {
+        ...taskRecord.binding!,
+        title: reviewTaskSummary.title,
+        task_input: 'Review paper draft',
+        resolved_workdir: '/workspace/paper',
+      },
+      runtime: {
+        ...taskRecord.runtime!,
+        working_directory: '/workspace/paper',
+      },
+    };
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
+    mockGetTask.mockImplementation(async (taskId) =>
+      taskId === 'task-review' ? reviewRecord : taskRecord
+    );
+    mockGetTaskOutput.mockImplementation(async (taskId) =>
+      createOutputPage([
+        createOutputEvent(1, {
+          task_id: taskId,
+          content: taskId === 'task-review' ? 'review output' : 'train output',
+        }),
+      ])
+    );
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-review' });
+
+    expect(await screen.findByRole('heading', { name: 'Review paper draft' })).toBeInTheDocument();
+    expect((await screen.findAllByText('/workspace/paper')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('review output')).toBeInTheDocument();
+    await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-review'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Train model/ }));
+
+    await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-1'));
+    expect(await screen.findByRole('heading', { name: 'Train model' })).toBeInTheDocument();
+  });
+
+  it('filters tasks from the sidebar search without changing the active task', async () => {
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+    expect(await screen.findByRole('heading', { name: 'Train model' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search tasks'), {
+      target: { value: 'paper' },
+    });
+
+    expect(screen.getByRole('button', { name: /Review paper draft/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Train model/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Train model' })).toBeInTheDocument();
+  });
+
+  it('resizes the task sidebar by dragging the splitter', async () => {
+    renderWithProviders(<TasksPage />);
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    const splitter = screen.getByRole('separator', { name: 'Resize task list' });
+    const sidebar = screen.getByTestId('task-sidebar');
+
+    expect(sidebar).toHaveStyle({ width: '320px' });
+
+    fireEvent.pointerDown(splitter, { pointerId: 1, clientX: 320 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 420 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+
+    expect(sidebar).toHaveStyle({ width: '420px' });
+    expect(splitter).toHaveAttribute('aria-valuenow', '420');
+  });
+
+  it('renders task page copy from Chinese i18n messages', async () => {
+    renderWithProviders(<TasksPage />, { locale: 'zh' });
+
+    expect(await screen.findByRole('heading', { name: 'Agent 任务' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新建任务' })).toBeInTheDocument();
+    expect(screen.getByLabelText('搜索任务')).toBeInTheDocument();
+    expect(await screen.findByText('任务工作区')).toBeInTheDocument();
+    expect(screen.getByText('输出时间线')).toBeInTheDocument();
+  });
+
+  it('creates a task from a dialog and selects it through the URL', async () => {
+    const createdSummary: TaskSummary = {
+      ...taskSummary,
+      task_id: 'task-created-dialog',
+      title: 'Dialog task',
+      status: 'queued',
+    };
+    const createdRecord: TaskRecord = {
+      ...taskRecord,
+      ...createdSummary,
+      binding: {
+        ...taskRecord.binding!,
+        title: 'Dialog task',
+        task_input: 'Dialog task body',
+        resolved_workdir: '/workspace/dialog',
+      },
+    };
+    mockCreateTask.mockResolvedValue(createdSummary);
+    mockGetTask.mockImplementation(async (taskId) =>
+      taskId === 'task-created-dialog' ? createdRecord : taskRecord
+    );
+    mockGetTaskOutput.mockImplementation(async (taskId) =>
+      createOutputPage([
+        createOutputEvent(1, {
+          task_id: taskId,
+          content: taskId === 'task-created-dialog' ? 'dialog output' : 'first line',
+        }),
+      ])
+    );
+
+    renderWithProviders(<TasksPage />);
+    await screen.findByRole('heading', { name: 'Train model' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New task' }));
+    expect(screen.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Dialog task' } });
+    fireEvent.change(screen.getByLabelText('Task input'), { target: { value: 'Dialog task body' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-created-dialog'));
+    expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Dialog task' })).toBeInTheDocument();
+    expect(await screen.findByText('dialog output')).toBeInTheDocument();
+  });
+
+  it('clears old output and binds a fresh stream when switching tasks', async () => {
+    const reviewRecord: TaskRecord = {
+      ...taskRecord,
+      ...reviewTaskSummary,
+    };
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
+    mockGetTask.mockImplementation(async (taskId) =>
+      taskId === 'task-review' ? reviewRecord : taskRecord
+    );
+    mockGetTaskOutput.mockImplementation(async (taskId) =>
+      createOutputPage([
+        createOutputEvent(1, {
+          task_id: taskId,
+          content: taskId === 'task-review' ? 'review output' : 'train output',
+        }),
+      ])
+    );
+
+    renderWithProviders(<TasksPage />);
+    expect(await screen.findByText('train output')).toBeInTheDocument();
+    const firstSource = MockEventSource.instances[0];
+
+    fireEvent.click(screen.getByRole('button', { name: /Review paper draft/ }));
+
+    await waitFor(() => expect(firstSource.close).toHaveBeenCalled());
+    expect(await screen.findByText('review output')).toBeInTheDocument();
+    expect(screen.queryByText('train output')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-review', 1));
+  });
+
+  it('closes the create dialog with Escape and focuses the task input on open', async () => {
+    renderWithProviders(<TasksPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Create task' });
+    expect(dialog).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Task input')).toHaveFocus());
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument()
+    );
+  });
+
+  it('retains only the latest output events in the rendered stream', async () => {
+    mockGetTaskOutput.mockResolvedValue(
+      createOutputPage(
+        Array.from({ length: 505 }, (_, index) =>
+          createOutputEvent(index + 1, {
+            content: `retained line ${index + 1}`,
+          })
+        ),
+        505
+      )
+    );
+
+    renderWithProviders(<TasksPage />);
+
+    expect(await screen.findByText('retained line 505')).toBeInTheDocument();
+    expect(screen.queryByText('retained line 1')).not.toBeInTheDocument();
+  });
+
+  it('coalesces repeated stream gaps into one replay request while refill is in flight', async () => {
+    let resolveReplay: (page: TaskOutputListResponse) => void = () => {};
+    mockGetTaskOutput
+      .mockResolvedValueOnce(createOutputPage([createOutputEvent(1, { content: 'first line' })]))
+      .mockImplementationOnce(
+        () =>
+          new Promise<TaskOutputListResponse>((resolve) => {
+            resolveReplay = resolve;
+          })
+      );
+
+    renderWithProviders(<TasksPage />);
+    await screen.findByText('first line');
+
+    const source = MockEventSource.instances[0];
+    source.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify(createOutputEvent(4, { content: 'fourth line' })),
+      })
+    );
+    source.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify(createOutputEvent(5, { content: 'fifth line' })),
+      })
+    );
+
+    expect(mockGetTaskOutput).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveReplay(createOutputPage([createOutputEvent(2, { content: 'second line' })], 2));
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('second line')).toBeInTheDocument();
+  });
+
+  it('traps focus in the create dialog and restores focus to the opener on close', async () => {
+    renderWithProviders(<TasksPage />);
+
+    const opener = await screen.findByRole('button', { name: 'New task' });
+    fireEvent.click(opener);
+    const dialog = screen.getByRole('dialog', { name: 'Create task' });
+
+    screen.getByLabelText('Close create task').focus();
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(screen.getByRole('button', { name: 'Reset draft' })).toHaveFocus();
+
+    fireEvent.click(screen.getByLabelText('Close create task'));
+
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it('prefills the draft from environment settings and resets when the environment changes', async () => {
@@ -343,6 +608,7 @@ describe('TasksPage', () => {
     mockGetEnvironments.mockResolvedValue({ items: [environment, secondaryEnvironment] });
 
     renderWithProviders(<TasksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
     await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('GPU batch'));
     expect(screen.getByLabelText('Task input')).toHaveValue('Run the GPU validation checklist.');
@@ -372,7 +638,7 @@ describe('TasksPage', () => {
     renderWithProviders(<TasksPage />);
 
     expect(await screen.findByText('Train model')).toBeInTheDocument();
-    expect(await screen.findByText('Resolved workdir:')).toBeInTheDocument();
+    expect(await screen.findByText('Workdir')).toBeInTheDocument();
     expect(screen.getAllByText('Task input')).not.toHaveLength(0);
     expect(screen.getByText('first line')).toBeInTheDocument();
     expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-1', 1);

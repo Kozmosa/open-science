@@ -6,8 +6,11 @@ function LocaleSwitcher() {
   const { locale, setLocale } = useLocaleSwitcher();
 
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1">
-      <Globe size={14} className="text-white/50" />
+    <div
+      data-testid="locale-switcher"
+      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--muted)] px-2 py-1"
+    >
+      <Globe size={14} className="text-[var(--muted-foreground)]" />
       <span className="sr-only">{t('common.language')}</span>
       <button
         type="button"
@@ -16,8 +19,8 @@ function LocaleSwitcher() {
         className={[
           'rounded-md px-2.5 py-1 text-xs font-medium transition',
           locale === 'en'
-            ? 'bg-white/20 text-white'
-            : 'text-white/60 hover:text-white',
+            ? 'bg-[var(--card)] text-[var(--foreground)] shadow-[var(--shadow-input)]'
+            : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
         ].join(' ')}
       >
         {t('common.english')}
@@ -29,8 +32,8 @@ function LocaleSwitcher() {
         className={[
           'rounded-md px-2.5 py-1 text-xs font-medium transition',
           locale === 'zh'
-            ? 'bg-white/20 text-white'
-            : 'text-white/60 hover:text-white',
+            ? 'bg-[var(--card)] text-[var(--foreground)] shadow-[var(--shadow-input)]'
+            : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
         ].join(' ')}
       >
         {t('common.chinese')}

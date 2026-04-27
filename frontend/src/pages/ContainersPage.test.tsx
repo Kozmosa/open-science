@@ -105,6 +105,25 @@ afterEach(() => {
 });
 
 describe('ContainersPage', () => {
+  it('renders page title in the current language and eyebrow in the alternate language', async () => {
+    mockGetEnvironments.mockResolvedValue({ items: [] });
+    const { unmount } = renderWithProviders(<ContainersPage />, {
+      locale: 'en',
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Containers' })).toBeInTheDocument();
+    expect(screen.getByText('容器')).toBeInTheDocument();
+
+    unmount();
+    mockGetEnvironments.mockResolvedValue({ items: [] });
+    renderWithProviders(<ContainersPage />, {
+      locale: 'zh',
+    });
+
+    expect(await screen.findByRole('heading', { name: '容器' })).toBeInTheDocument();
+    expect(screen.getByText('CONTAINERS')).toBeInTheDocument();
+  });
+
   it('renders the environment list and marks an environment active', async () => {
     const response: EnvironmentListResponse = { items: [baseEnvironment] };
     mockGetEnvironments.mockResolvedValue(response);

@@ -4,6 +4,8 @@ import { buildTaskStreamUrl, getTaskOutput } from '../../api';
 import type { TaskOutputEvent } from '../../types';
 import { getNextOutputSeq, mergeOutputItems } from './output';
 
+const maxOutputItems = 500;
+
 interface TaskOutputStreamState {
   outputItems: TaskOutputEvent[];
   outputError: string | null;
@@ -16,16 +18,10 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
   const eventSourceRef = useRef<EventSource | null>(null);
   const nextSeqRef = useRef<number>(0);
   const reconnectTimerRef = useRef<number | null>(null);
+  const refillPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
-    if (taskId === null) {
-      nextSeqRef.current = 0;
-      return undefined;
-    }
-
-    let active = true;
-
-    const closeStream = (): void => {
+    const closeCurrentStream = (): void => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -36,37 +32,66 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
       }
     };
 
+    closeCurrentStream();
+    refillPromiseRef.current = null;
+    setOutputItems([]);
+    setOutputError(null);
+    nextSeqRef.current = 0;
+
+    if (taskId === null) {
+      return undefined;
+    }
+
+    let active = true;
+
     const updateNextSeq = (seq: number): void => {
       nextSeqRef.current = Math.max(nextSeqRef.current, seq);
     };
 
     const appendOutput = (items: TaskOutputEvent[]): void => {
-      setOutputItems((current) => mergeOutputItems(current, items));
-      updateNextSeq(getNextOutputSeq(items, nextSeqRef.current));
+      const taskItems = items.filter((item) => item.task_id === taskId);
+      if (taskItems.length === 0) {
+        return;
+      }
+      setOutputItems((current) => mergeOutputItems(current, taskItems).slice(-maxOutputItems));
+      updateNextSeq(getNextOutputSeq(taskItems, nextSeqRef.current));
     };
 
     const refillGap = async (): Promise<void> => {
-      try {
-        const page = await getTaskOutput(taskId, nextSeqRef.current);
-        if (!active) {
-          return;
-        }
-        appendOutput(page.items);
-        updateNextSeq(page.next_seq);
-      } catch (error) {
-        if (active) {
-          setOutputError(error instanceof Error ? error.message : 'Unable to replay task output');
-        }
+      if (refillPromiseRef.current) {
+        return refillPromiseRef.current;
       }
+
+      refillPromiseRef.current = (async () => {
+        try {
+          const page = await getTaskOutput(taskId, nextSeqRef.current);
+          if (!active) {
+            return;
+          }
+          appendOutput(page.items);
+          updateNextSeq(page.next_seq);
+        } catch (error) {
+          if (active) {
+            setOutputError(error instanceof Error ? error.message : 'Unable to replay task output');
+          }
+        } finally {
+          refillPromiseRef.current = null;
+        }
+      })();
+
+      return refillPromiseRef.current;
     };
 
     const openStream = (): void => {
-      closeStream();
+      closeCurrentStream();
       const source = new EventSource(buildTaskStreamUrl(taskId, nextSeqRef.current));
       eventSourceRef.current = source;
       source.onmessage = (event: MessageEvent<string>) => {
         try {
           const item = JSON.parse(event.data) as TaskOutputEvent;
+          if (item.task_id !== taskId) {
+            return;
+          }
           if (item.seq > nextSeqRef.current + 1) {
             void refillGap();
           }
@@ -97,15 +122,15 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
 
     void (async () => {
       try {
-        setOutputItems([]);
-        setOutputError(null);
-        nextSeqRef.current = 0;
         const page = await getTaskOutput(taskId, 0);
         if (!active) {
           return;
         }
-        setOutputItems(page.items);
-        nextSeqRef.current = getNextOutputSeq(page.items, page.next_seq);
+        appendOutput(page.items);
+        nextSeqRef.current = getNextOutputSeq(
+          page.items.filter((item) => item.task_id === taskId),
+          page.next_seq
+        );
         openStream();
       } catch (error) {
         if (active) {
@@ -116,7 +141,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
 
     return () => {
       active = false;
-      closeStream();
+      closeCurrentStream();
     };
   }, [queryClient, taskId]);
 

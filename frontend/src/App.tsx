@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
 import { useT } from './i18n';
 import { createAppQueryClient } from './queryClient';
@@ -27,33 +27,41 @@ function RootRedirect() {
   return <Navigate replace to={defaultRoutePathById[settings.general.defaultRoute]} />;
 }
 
-function App() {
+function AppRoutes() {
   const t = useT();
+  const location = useLocation();
+  const isTaskRoute = location.pathname === '/tasks';
 
+  return (
+    <Layout edgeToEdge={isTaskRoute}>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+            {t('common.loading')}
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/terminal" element={<TerminalPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/workspaces" element={<WorkspacesPage />} />
+          <Route path="/containers" element={<ContainersPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
+      </Suspense>
+    </Layout>
+  );
+}
+
+function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <SettingsProvider>
           <ToastProvider>
             <BrowserRouter>
-              <Layout>
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center py-16 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
-                      {t('common.loading')}
-                    </div>
-                  }
-                >
-                  <Routes>
-                    <Route path="/" element={<RootRedirect />} />
-                    <Route path="/terminal" element={<TerminalPage />} />
-                    <Route path="/tasks" element={<TasksPage />} />
-                    <Route path="/workspaces" element={<WorkspacesPage />} />
-                    <Route path="/containers" element={<ContainersPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                  </Routes>
-                </Suspense>
-              </Layout>
+              <AppRoutes />
             </BrowserRouter>
           </ToastProvider>
         </SettingsProvider>
