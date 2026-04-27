@@ -76,6 +76,10 @@ export const messages = {
         label: 'Workspaces',
         description: 'Project workspaces and task context',
       },
+      workspaceBrowser: {
+        label: 'Browser',
+        description: 'Managed code-server workspace',
+      },
       containers: {
         label: 'Containers',
         description: 'Runtime environments and container status',
@@ -197,7 +201,26 @@ export const messages = {
         eyebrow: '工作区',
         title: 'Workspaces',
         description:
-          'This surface mirrors the shared environment selector from Terminal so future workspace bindings can use the same upstream runtime choice. The browser panel below stays read only for now and reflects the current environment selection.',
+          'Manage reusable workspace contexts for task prompts, default workdirs, and research run boundaries.',
+        managerTitle: 'Workspace manager',
+        managerDescription:
+          'Create and maintain workspace records that tasks can bind to before launching in an environment.',
+        newWorkspace: 'New workspace',
+        createWorkspace: 'Create workspace',
+        saveWorkspace: 'Save workspace',
+        deleteWorkspace: 'Delete workspace',
+        confirmDelete: 'Confirm delete',
+        labelField: 'Workspace label',
+        descriptionField: 'Description',
+        defaultWorkdirField: 'Default workdir',
+        promptField: 'Workspace prompt',
+        noDefaultWorkdir: 'No default workdir',
+      },
+      workspaceBrowser: {
+        eyebrow: '工作区浏览器',
+        title: 'Workspace Browser',
+        description:
+          'Open the managed code-server browser for the environment selected in Settings.',
       },
       settings: {
         eyebrow: '设置',
@@ -336,10 +359,10 @@ export const messages = {
           'Create an environment in Containers to enable terminal and workspace selection.',
       },
       terminalBench: {
-        eyebrow: 'Terminal bench',
-        title: 'Keepalive personal terminal control',
+        eyebrow: '个人终端会话',
+        title: 'Personal terminal session',
         description:
-          'Ensure the selected environment has a tmux-backed personal session, attach the current browser to it, detach without destroying it, or reset the long-lived session explicitly. Local environments attach directly on the daemon host, while remote environments open interactive SSH bridges and can still prompt for passwords inside the terminal.',
+          'Attach, detach, or reset the persistent personal terminal session for the selected environment, then open the interactive browser console.',
         statusPrefix: 'Status:',
         sessionSource: 'Session source',
         loading: 'Loading:',
@@ -508,6 +531,10 @@ export const messages = {
         label: '工作区',
         description: '项目工作区和任务上下文',
       },
+      workspaceBrowser: {
+        label: '浏览器',
+        description: '托管 code-server 工作区',
+      },
       containers: {
         label: '容器',
         description: '运行环境与容器状态',
@@ -622,7 +649,24 @@ export const messages = {
         eyebrow: 'WORKSPACES',
         title: '工作区',
         description:
-          '该页面复用了终端页的共享环境选择器，方便后续工作区绑定沿用同一上游运行时选择。下方浏览器面板当前保持只读，只反映当前环境选择。',
+          '管理可复用的工作区上下文，用于任务提示词、默认工作目录和研究运行边界。',
+        managerTitle: '工作区管理器',
+        managerDescription: '创建和维护任务启动前可绑定的工作区记录。',
+        newWorkspace: '新建工作区',
+        createWorkspace: '创建工作区',
+        saveWorkspace: '保存工作区',
+        deleteWorkspace: '删除工作区',
+        confirmDelete: '确认删除',
+        labelField: '工作区标签',
+        descriptionField: '说明',
+        defaultWorkdirField: '默认工作目录',
+        promptField: '工作区提示词',
+        noDefaultWorkdir: '未配置默认工作目录',
+      },
+      workspaceBrowser: {
+        eyebrow: 'WORKSPACE BROWSER',
+        title: '工作区浏览器',
+        description: '打开设置页所选环境的托管 code-server 工作区浏览器。',
       },
       settings: {
         eyebrow: 'SETTINGS',
@@ -754,10 +798,10 @@ export const messages = {
         createPrompt: '请先在“容器”中创建环境，以启用终端和工作区选择。',
       },
       terminalBench: {
-        eyebrow: '终端会话',
-        title: '个人终端控制',
+        eyebrow: 'PERSONAL TERMINAL SESSION',
+        title: '个人终端会话',
         description:
-          '确保所选环境存在由 tmux 托管的个人会话，将当前浏览器附着到该会话，在不销毁会话的情况下脱离，或显式重置这个长生命周期会话。本地环境会直接附着到守护进程主机；远程环境会打开交互式 SSH 桥接，并且仍可能在终端内提示输入密码。',
+          '连接、脱离或重置当前环境的持久个人终端会话，并在浏览器中打开交互式控制台。',
         statusPrefix: '状态：',
         sessionSource: '会话来源',
         loading: '加载中：',

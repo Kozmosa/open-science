@@ -1,4 +1,4 @@
-import { EnvironmentSelectorPanel, TerminalBenchCard, useEnvironmentSelection } from '../components';
+import { TerminalBenchCard, useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
 
 function TerminalPage() {
@@ -26,7 +26,6 @@ function TerminalPage() {
       </section>
 
       <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
-      <EnvironmentSelectorPanel {...environmentSelection} />
     </div>
   );
 }

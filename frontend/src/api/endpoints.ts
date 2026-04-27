@@ -17,8 +17,10 @@ import type {
   TaskSummary,
   TerminalSession,
   UserSessionPairListResponse,
+  WorkspaceCreateRequest,
   WorkspaceListResponse,
   WorkspaceRecord,
+  WorkspaceUpdateRequest,
 } from '../types';
 import {
   mockCreateCodeServerSession,
@@ -26,10 +28,12 @@ import {
   mockCreateProjectEnvironmentReference,
   mockCreateTask,
   mockCreateTerminalSession,
+  mockCreateWorkspace,
   mockDeleteCodeServerSession,
   mockDeleteEnvironment,
   mockDeleteProjectEnvironmentReference,
   mockDeleteTerminalSession,
+  mockDeleteWorkspace,
   mockDetectEnvironment,
   mockGetCodeServerStatus,
   mockGetEnvironment,
@@ -46,6 +50,7 @@ import {
   mockGetSessionPairs,
   mockUpdateEnvironment,
   mockUpdateProjectEnvironmentReference,
+  mockUpdateWorkspace,
 } from './mock';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
@@ -123,6 +128,24 @@ export const getWorkspace = (workspaceId: string): Promise<WorkspaceRecord> =>
   USE_MOCK
     ? Promise.resolve(mockGetWorkspace(workspaceId))
     : api.get<WorkspaceRecord>(`/workspaces/${workspaceId}`);
+
+export const createWorkspace = (payload: WorkspaceCreateRequest): Promise<WorkspaceRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockCreateWorkspace(payload))
+    : api.post<WorkspaceRecord>('/workspaces', payload);
+
+export const updateWorkspace = (
+  workspaceId: string,
+  payload: WorkspaceUpdateRequest
+): Promise<WorkspaceRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockUpdateWorkspace(workspaceId, payload))
+    : api.patch<WorkspaceRecord>(`/workspaces/${workspaceId}`, payload);
+
+export const deleteWorkspace = (workspaceId: string): Promise<void> =>
+  USE_MOCK
+    ? Promise.resolve(mockDeleteWorkspace(workspaceId))
+    : api.delete<void>(`/workspaces/${workspaceId}`);
 
 export const getTasks = (): Promise<TaskListResponse> =>
   USE_MOCK ? Promise.resolve(mockGetTasks()) : api.get<TaskListResponse>('/tasks');

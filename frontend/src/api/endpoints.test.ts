@@ -72,4 +72,88 @@ describe('api endpoints', () => {
     await expect(getHealth()).resolves.toEqual({ status: 'ok' });
     expect(fetchMock).toHaveBeenCalledWith('/api/health', expect.any(Object));
   });
+
+  it('sends workspace CRUD requests through the real api client', async () => {
+    vi.stubEnv('VITE_USE_MOCK', 'false');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            workspace_id: 'workspace-new',
+            label: 'New workspace',
+            description: null,
+            default_workdir: '/workspace/new',
+            workspace_prompt: 'Prompt',
+            created_at: '2026-04-27T00:00:00Z',
+            updated_at: '2026-04-27T00:00:00Z',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            workspace_id: 'workspace-new',
+            label: 'Updated workspace',
+            description: 'Updated',
+            default_workdir: '/workspace/updated',
+            workspace_prompt: 'Updated prompt',
+            created_at: '2026-04-27T00:00:00Z',
+            updated_at: '2026-04-27T00:01:00Z',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createWorkspace, updateWorkspace, deleteWorkspace } = await import('./endpoints');
+
+    await createWorkspace({
+      label: 'New workspace',
+      description: null,
+      default_workdir: '/workspace/new',
+      workspace_prompt: 'Prompt',
+    });
+    await updateWorkspace('workspace-new', {
+      label: 'Updated workspace',
+      description: 'Updated',
+      default_workdir: '/workspace/updated',
+      workspace_prompt: 'Updated prompt',
+    });
+    await deleteWorkspace('workspace-new');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/workspaces',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          label: 'New workspace',
+          description: null,
+          default_workdir: '/workspace/new',
+          workspace_prompt: 'Prompt',
+        }),
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/workspaces/workspace-new',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          label: 'Updated workspace',
+          description: 'Updated',
+          default_workdir: '/workspace/updated',
+          workspace_prompt: 'Updated prompt',
+        }),
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/workspaces/workspace-new',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
 });

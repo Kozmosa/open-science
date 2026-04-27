@@ -113,6 +113,35 @@ beforeEach(() => {
 });
 
 describe('TerminalBenchCard', () => {
+  it('renders terminal session heading in the current language and eyebrow in the alternate language', async () => {
+    mockGetTerminalSession.mockResolvedValue(idleSession);
+    const { unmount } = renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />, {
+      locale: 'en',
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Personal terminal session' })).toBeInTheDocument();
+    expect(screen.getByText('个人终端会话')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Attach, detach, or reset the persistent personal terminal session for the selected environment, then open the interactive browser console.'
+      )
+    ).toBeInTheDocument();
+
+    unmount();
+    mockGetTerminalSession.mockResolvedValue(idleSession);
+    renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />, {
+      locale: 'zh',
+    });
+
+    expect(await screen.findByRole('heading', { name: '个人终端会话' })).toBeInTheDocument();
+    expect(screen.getByText('PERSONAL TERMINAL SESSION')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '连接、脱离或重置当前环境的持久个人终端会话，并在浏览器中打开交互式控制台。'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('renders the idle state from the backend with attach controls', async () => {
     mockGetTerminalSession.mockResolvedValue(idleSession);
 
@@ -142,26 +171,24 @@ describe('TerminalBenchCard', () => {
     expect(screen.getByRole('button', { name: 'Detach' })).toBeEnabled();
   });
 
-  it('auto-reattaches when the personal session is already running without an attachment', async () => {
+  it('keeps a detached running personal session detached until the user clicks Attach', async () => {
     mockGetTerminalSession.mockResolvedValue(runningDetachedSession);
     mockCreateTerminalSession.mockResolvedValue(runningAttachedSession);
 
     renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
 
     expect(await screen.findByText('Status: Running')).toBeInTheDocument();
+    expect(screen.getByText('The personal session is still running, but this page is currently detached.')).toBeInTheDocument();
+    expect(mockCreateTerminalSession).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Attach' }));
+
     await waitFor(() => expect(mockCreateTerminalSession).toHaveBeenCalledWith('env-1'));
-    expect(screen.getByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
+    expect(await screen.findByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
   });
 
-  it('auto-reattaches only once in StrictMode when the personal session is detached', async () => {
+  it('does not auto-reattach a detached personal session in StrictMode', async () => {
     mockGetTerminalSession.mockResolvedValue(runningDetachedSession);
-    let resolveAttach: ((session: TerminalSession) => void) | null = null;
-    mockCreateTerminalSession.mockImplementation(
-      () =>
-        new Promise<TerminalSession>((resolve) => {
-          resolveAttach = resolve;
-        })
-    );
 
     renderWithProviders(
       <StrictMode>
@@ -170,14 +197,11 @@ describe('TerminalBenchCard', () => {
     );
 
     expect(await screen.findByText('Status: Running')).toBeInTheDocument();
-    await waitFor(() => expect(mockCreateTerminalSession).toHaveBeenCalledTimes(1));
-
-    expect(resolveAttach).not.toBeNull();
     await act(async () => {
-      resolveAttach?.(runningAttachedSession);
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
     });
 
-    expect(await screen.findByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
+    expect(mockCreateTerminalSession).not.toHaveBeenCalled();
   });
 
   it('does not poll or reattach an attached session when the global query client uses interval refetching', async () => {
@@ -277,7 +301,7 @@ describe('TerminalBenchCard', () => {
       locale: 'zh',
     });
 
-    expect(await screen.findByText('个人终端控制')).toBeInTheDocument();
+    expect(await screen.findByText('个人终端会话')).toBeInTheDocument();
     expect(screen.getByText(/状态：\s*空闲/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: '附着' })).toBeEnabled());
     expect(screen.getByRole('button', { name: '脱离' })).toBeDisabled();

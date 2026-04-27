@@ -6,6 +6,10 @@ import { renderWithProviders } from '../test/render';
 import type { EnvironmentRecord } from '../types';
 import SettingsPage from './SettingsPage';
 
+vi.mock('../components/environment/EnvironmentSelectorPanel', () => ({
+  default: () => <div data-testid="environment-selector" />,
+}));
+
 vi.mock('../api', () => ({
   getEnvironments: vi.fn(),
 }));
@@ -59,6 +63,21 @@ describe('SettingsPage', () => {
 
     expect(await screen.findByRole('heading', { name: '设置' })).toBeInTheDocument();
     expect(screen.getByText('SETTINGS')).toBeInTheDocument();
+  });
+
+  it('renders the shared environment selector between general and project defaults', async () => {
+    renderWithProviders(<SettingsPage />);
+
+    const generalHeading = await screen.findByRole('heading', { name: 'General Preferences' });
+    const selector = screen.getByTestId('environment-selector');
+    const projectHeading = screen.getByRole('heading', { name: 'Project Defaults' });
+
+    expect(generalHeading.compareDocumentPosition(selector) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(selector.compareDocumentPosition(projectHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
   });
 
   it('falls back from an invalid document and persists section saves', async () => {

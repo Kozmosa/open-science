@@ -4,6 +4,7 @@ import {
   ChevronRight,
   FolderKanban,
   ListChecks,
+  MonitorCog,
   Settings,
   SquareTerminal,
 } from 'lucide-react';
@@ -80,6 +81,12 @@ function Layout({ children, edgeToEdge = false }: Props) {
       icon: FolderKanban,
     },
     {
+      label: t('navigation.workspaceBrowser.label'),
+      to: '/workspace-browser',
+      description: t('navigation.workspaceBrowser.description'),
+      icon: MonitorCog,
+    },
+    {
       label: t('navigation.containers.label'),
       to: '/containers',
       description: t('navigation.containers.description'),
@@ -97,9 +104,10 @@ function Layout({ children, edgeToEdge = false }: Props) {
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className="flex min-h-screen">
         <aside
-          className={`${asideWidth} flex shrink-0 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] text-[var(--sidebar-foreground)] transition-all duration-200 ease-out`}
+          className={`${asideWidth} sticky top-0 h-screen shrink-0 overflow-hidden border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] text-[var(--sidebar-foreground)] transition-all duration-200 ease-out`}
         >
-          <div className="flex h-12 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
+          <div className="flex h-full flex-col">
+            <div className="flex h-12 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
             {!isCollapsed && (
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold tracking-tight">{t('common.appName')}</p>
@@ -155,6 +163,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
               </p>
             </div>
           )}
+          </div>
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
@@ -167,7 +176,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
 
           <main
             className={[
-              'flex w-full flex-1 flex-col overflow-hidden',
+              'flex w-full flex-1 flex-col overflow-y-auto',
               edgeToEdge ? '' : 'mx-auto max-w-[1100px] px-6 py-8',
             ].join(' ')}
           >

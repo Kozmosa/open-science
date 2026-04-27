@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import { getEnvironments } from '../api';
 import { useT } from '../i18n';
 import {
@@ -367,6 +368,7 @@ function SettingsPage() {
     resetProjectEnvironmentDefaults,
     getProjectEnvironmentDefaults,
   } = useSettings();
+  const environmentSelection = useEnvironmentSelection();
 
   const environments = useMemo(
     () => environmentsQuery.data?.items ?? [],
@@ -405,6 +407,8 @@ function SettingsPage() {
           onSave={saveGeneralPreferences}
           onReset={resetGeneralPreferences}
         />
+
+        <EnvironmentSelectorPanel {...environmentSelection} />
 
         <ProjectDefaultsSection
           key={`project-default:${settings.projectDefaults.default.defaultEnvironmentId ?? 'none'}`}

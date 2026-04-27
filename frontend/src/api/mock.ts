@@ -19,8 +19,10 @@ import type {
   TerminalSession,
   UserSessionPair,
   UserSessionPairListResponse,
+  WorkspaceCreateRequest,
   WorkspaceListResponse,
   WorkspaceRecord,
+  WorkspaceUpdateRequest,
 } from '../types';
 
 const DEFAULT_PROJECT_ID = 'default';
@@ -47,6 +49,7 @@ const mockHealth: SystemHealth = {
 let mockEnvironmentCounter = 0;
 let mockTerminalAttachmentCounter = 0;
 let mockTaskCounter = 0;
+let mockWorkspaceCounter = 0;
 let mockEnvironments: EnvironmentRecord[] = [];
 let mockWorkspaces: WorkspaceRecord[] = [];
 let mockProjectEnvironmentReferences: Record<string, ProjectEnvironmentReference[]> = {
@@ -559,6 +562,48 @@ export function mockGetWorkspace(workspaceId: string): WorkspaceRecord {
   return cloneWorkspace(findWorkspace(workspaceId));
 }
 
+export function mockCreateWorkspace(payload: WorkspaceCreateRequest): WorkspaceRecord {
+  const workspace = createMockWorkspace(payload);
+  mockWorkspaces = [...mockWorkspaces, workspace];
+  return cloneWorkspace(workspace);
+}
+
+export function mockUpdateWorkspace(
+  workspaceId: string,
+  payload: WorkspaceUpdateRequest
+): WorkspaceRecord {
+  const current = findWorkspace(workspaceId);
+  const updated = createMockWorkspace(payload, current);
+  mockWorkspaces = mockWorkspaces.map((workspace) =>
+    workspace.workspace_id === workspaceId ? updated : workspace
+  );
+  return cloneWorkspace(updated);
+}
+
+export function mockDeleteWorkspace(workspaceId: string): void {
+  findWorkspace(workspaceId);
+  if (workspaceId === 'workspace-default') {
+    throw new Error('Default workspace cannot be deleted');
+  }
+  mockWorkspaces = mockWorkspaces.filter((workspace) => workspace.workspace_id !== workspaceId);
+}
+
+function createMockWorkspace(
+  payload: WorkspaceCreateRequest | WorkspaceUpdateRequest,
+  existing?: WorkspaceRecord
+): WorkspaceRecord {
+  const timestamp = nowIso();
+  return {
+    workspace_id: existing?.workspace_id ?? `workspace-${++mockWorkspaceCounter}`,
+    label: payload.label ?? existing?.label ?? 'Mock Workspace',
+    description: payload.description ?? existing?.description ?? null,
+    default_workdir: payload.default_workdir ?? existing?.default_workdir ?? null,
+    workspace_prompt: payload.workspace_prompt ?? existing?.workspace_prompt ?? '',
+    created_at: existing?.created_at ?? timestamp,
+    updated_at: timestamp,
+  };
+}
+
 export function mockGetTasks(): TaskListResponse {
   return {
     items: Object.values(mockTasks)
@@ -903,6 +948,7 @@ export function resetMockEnvironmentState(): EnvironmentListResponse {
   mockEnvironmentCounter = 0;
   mockTerminalAttachmentCounter = 0;
   mockTaskCounter = 0;
+  mockWorkspaceCounter = 0;
   mockEnvironments = [...initialMockEnvironments];
   mockWorkspaces = [createSeedWorkspace()];
   mockProjectEnvironmentReferences = { [DEFAULT_PROJECT_ID]: [] };

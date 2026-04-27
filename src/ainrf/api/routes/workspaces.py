@@ -2,13 +2,32 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 
 from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
-from ainrf.workspaces import WorkspaceNotFoundError, WorkspaceRegistryService
+from ainrf.workspaces import (
+    WorkspaceDeletionError,
+    WorkspaceNotFoundError,
+    WorkspaceRegistryService,
+)
 from ainrf.workspaces.models import WorkspaceRecord
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
+
+
+class WorkspaceCreateRequest(BaseModel):
+    label: str = Field(min_length=1)
+    description: str | None = None
+    default_workdir: str | None = None
+    workspace_prompt: str = Field(min_length=1)
+
+
+class WorkspaceUpdateRequest(BaseModel):
+    label: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    default_workdir: str | None = None
+    workspace_prompt: str | None = Field(default=None, min_length=1)
 
 
 def _get_workspace_service(request: Request) -> WorkspaceRegistryService:
@@ -21,6 +40,8 @@ def _get_workspace_service(request: Request) -> WorkspaceRegistryService:
 def _translate_workspace_error(exc: Exception) -> HTTPException:
     if isinstance(exc, WorkspaceNotFoundError):
         return HTTPException(status_code=404, detail="Workspace not found")
+    if isinstance(exc, WorkspaceDeletionError):
+        return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=500, detail="Unexpected workspace error")
 
 
@@ -41,6 +62,24 @@ async def list_workspaces(request: Request) -> WorkspaceListResponse:
     return WorkspaceListResponse(items=items)
 
 
+@router.post("", response_model=WorkspaceResponse)
+async def create_workspace(
+    payload: WorkspaceCreateRequest,
+    request: Request,
+) -> WorkspaceResponse:
+    service = _get_workspace_service(request)
+    try:
+        workspace = service.create_workspace(
+            label=payload.label,
+            description=payload.description,
+            default_workdir=payload.default_workdir,
+            workspace_prompt=payload.workspace_prompt,
+        )
+        return _serialize_workspace(workspace)
+    except Exception as exc:
+        raise _translate_workspace_error(exc) from exc
+
+
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
 async def read_workspace(workspace_id: str, request: Request) -> WorkspaceResponse:
     service = _get_workspace_service(request)
@@ -48,3 +87,33 @@ async def read_workspace(workspace_id: str, request: Request) -> WorkspaceRespon
         return _serialize_workspace(service.get_workspace(workspace_id))
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
+
+
+@router.patch("/{workspace_id}", response_model=WorkspaceResponse)
+async def update_workspace(
+    workspace_id: str,
+    payload: WorkspaceUpdateRequest,
+    request: Request,
+) -> WorkspaceResponse:
+    service = _get_workspace_service(request)
+    try:
+        workspace = service.update_workspace(
+            workspace_id,
+            label=payload.label,
+            description=payload.description,
+            default_workdir=payload.default_workdir,
+            workspace_prompt=payload.workspace_prompt,
+        )
+        return _serialize_workspace(workspace)
+    except Exception as exc:
+        raise _translate_workspace_error(exc) from exc
+
+
+@router.delete("/{workspace_id}", status_code=204)
+async def delete_workspace(workspace_id: str, request: Request) -> Response:
+    service = _get_workspace_service(request)
+    try:
+        service.delete_workspace(workspace_id)
+    except Exception as exc:
+        raise _translate_workspace_error(exc) from exc
+    return Response(status_code=204)

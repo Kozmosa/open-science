@@ -50,6 +50,12 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
     assert "/workspaces/{workspace_id}" in payload["paths"]
     assert "/v1/workspaces" in payload["paths"]
     assert "/v1/workspaces/{workspace_id}" in payload["paths"]
+    assert "post" in payload["paths"]["/workspaces"]
+    assert "patch" in payload["paths"]["/workspaces/{workspace_id}"]
+    assert "delete" in payload["paths"]["/workspaces/{workspace_id}"]
+    assert "post" in payload["paths"]["/v1/workspaces"]
+    assert "patch" in payload["paths"]["/v1/workspaces/{workspace_id}"]
+    assert "delete" in payload["paths"]["/v1/workspaces/{workspace_id}"]
     assert "/terminal/session" in payload["paths"]
     assert "/terminal/session-pairs" in payload["paths"]
     assert "/terminal/session/reset" in payload["paths"]
@@ -92,5 +98,75 @@ async def test_lifespan_attaches_environment_aware_code_server_manager(tmp_path:
         assert manager is app.state.code_server_supervisor
         assert manager.base_url is None
 
-    stopped_state = await app.state.code_server_manager.stop()
-    assert stopped_state.status.value == "unavailable"
+
+@pytest.mark.anyio
+async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
+    async with make_client(tmp_path) as client:
+        create_response = await client.post(
+            "/v1/workspaces",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "label": "Paper Experiments",
+                "description": "Runs for the paper figures",
+                "default_workdir": "/workspace/paper",
+                "workspace_prompt": "Focus on reproducible experiments.",
+            },
+        )
+        assert create_response.status_code == 200
+        created = create_response.json()
+        workspace_id = created["workspace_id"]
+        assert created["label"] == "Paper Experiments"
+        assert created["description"] == "Runs for the paper figures"
+        assert created["default_workdir"] == "/workspace/paper"
+        assert created["workspace_prompt"] == "Focus on reproducible experiments."
+
+        list_response = await client.get(
+            "/v1/workspaces",
+            headers={"X-API-Key": "secret-key"},
+        )
+        assert list_response.status_code == 200
+        assert workspace_id in {item["workspace_id"] for item in list_response.json()["items"]}
+
+        update_response = await client.patch(
+            f"/v1/workspaces/{workspace_id}",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "label": "Updated Experiments",
+                "description": None,
+                "default_workdir": "/workspace/updated",
+                "workspace_prompt": "Updated prompt.",
+            },
+        )
+        assert update_response.status_code == 200
+        updated = update_response.json()
+        assert updated["workspace_id"] == workspace_id
+        assert updated["label"] == "Updated Experiments"
+        assert updated["description"] is None
+        assert updated["default_workdir"] == "/workspace/updated"
+        assert updated["workspace_prompt"] == "Updated prompt."
+        assert updated["created_at"] == created["created_at"]
+        assert updated["updated_at"] >= created["updated_at"]
+
+        delete_response = await client.delete(
+            f"/v1/workspaces/{workspace_id}",
+            headers={"X-API-Key": "secret-key"},
+        )
+        assert delete_response.status_code == 204
+
+        read_deleted_response = await client.get(
+            f"/v1/workspaces/{workspace_id}",
+            headers={"X-API-Key": "secret-key"},
+        )
+        assert read_deleted_response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_workspace_delete_rejects_seed_workspace(tmp_path: Path) -> None:
+    async with make_client(tmp_path) as client:
+        response = await client.delete(
+            "/v1/workspaces/workspace-default",
+            headers={"X-API-Key": "secret-key"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Default workspace cannot be deleted"

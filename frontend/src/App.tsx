@@ -11,6 +11,7 @@ const TerminalPage = lazy(() => import('./pages/TerminalPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
 const ContainersPage = lazy(() => import('./pages/ContainersPage'));
 const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage'));
+const WorkspaceBrowserPage = lazy(() => import('./pages/WorkspaceBrowserPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 const queryClient = createAppQueryClient();
@@ -46,6 +47,7 @@ function AppRoutes() {
           <Route path="/terminal" element={<TerminalPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/workspaces" element={<WorkspacesPage />} />
+          <Route path="/workspace-browser" element={<WorkspaceBrowserPage />} />
           <Route path="/containers" element={<ContainersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

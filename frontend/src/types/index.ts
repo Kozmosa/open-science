@@ -75,6 +75,20 @@ export interface WorkspaceListResponse {
   items: WorkspaceRecord[];
 }
 
+export interface WorkspaceCreateRequest {
+  label: string;
+  description?: string | null;
+  default_workdir?: string | null;
+  workspace_prompt: string;
+}
+
+export interface WorkspaceUpdateRequest {
+  label?: string | null;
+  description?: string | null;
+  default_workdir?: string | null;
+  workspace_prompt?: string | null;
+}
+
 export interface WorkspaceSummary {
   workspace_id: string;
   label: string;
