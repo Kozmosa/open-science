@@ -5,11 +5,13 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ainrf.api.schemas import (
+    EnvironmentCodeServerInstallResponse,
     EnvironmentCreateRequest,
     EnvironmentListResponse,
     EnvironmentResponse,
     EnvironmentUpdateRequest,
 )
+from ainrf.code_server_installer import CodeServerInstallError, install_code_server
 from ainrf.environments import (
     AliasConflictError,
     DeleteReferencedEnvironmentError,
@@ -56,6 +58,8 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail="Default localhost environment cannot be deleted",
         )
+    if isinstance(exc, CodeServerInstallError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected environment error"
     )
@@ -96,6 +100,7 @@ async def create_environment(
             preferred_env_manager=payload.preferred_env_manager,
             preferred_runtime_notes=payload.preferred_runtime_notes,
             task_harness_profile=payload.task_harness_profile,
+            code_server_path=payload.code_server_path,
         )
     except Exception as exc:  # pragma: no cover - defensive translation
         raise _translate_environment_error(exc) from exc
@@ -138,6 +143,7 @@ async def update_environment(
             preferred_env_manager=payload.preferred_env_manager,
             preferred_runtime_notes=payload.preferred_runtime_notes,
             task_harness_profile=payload.task_harness_profile,
+            code_server_path=payload.code_server_path,
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
@@ -154,11 +160,48 @@ async def delete_environment(environment_id: str, request: Request) -> None:
     return None
 
 
+@router.post(
+    "/{environment_id}/install-code-server", response_model=EnvironmentCodeServerInstallResponse
+)
+async def install_environment_code_server(
+    environment_id: str,
+    request: Request,
+) -> EnvironmentCodeServerInstallResponse:
+    service = _get_environment_service(request)
+    app_user_id = request.headers.get("X-AINRF-User-Id")
+    terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
+    try:
+        result = await install_code_server(
+            environment_id,
+            environment_service=service,
+            app_user_id=app_user_id,
+            terminal_session_manager=terminal_session_manager,
+        )
+    except Exception as exc:
+        raise _translate_environment_error(exc) from exc
+    return EnvironmentCodeServerInstallResponse(
+        environment=_serialize_environment(service, environment_id),
+        installed=not result.already_installed,
+        version=result.version,
+        install_dir=result.install_dir,
+        code_server_path=result.code_server_path,
+        execution_mode=result.execution_mode,
+        already_installed=result.already_installed,
+        detail=result.detail,
+    )
+
+
 @router.post("/{environment_id}/detect", response_model=EnvironmentResponse)
 async def detect_environment(environment_id: str, request: Request) -> EnvironmentResponse:
     service = _get_environment_service(request)
+    app_user_id = request.headers.get("X-AINRF-User-Id")
+    terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
     try:
-        service.detect_environment(environment_id)
+        await service.detect_environment(
+            environment_id,
+            app_user_id=app_user_id,
+            terminal_session_manager=terminal_session_manager,
+        )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
     return _serialize_environment(service, environment_id)

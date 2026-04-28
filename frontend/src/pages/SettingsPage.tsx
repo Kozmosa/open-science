@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
-import { getEnvironments } from '../api';
+import { getEnvironments, installEnvironmentCodeServer } from '../api';
 import { useT } from '../i18n';
 import {
   clampTerminalFontSize,
@@ -34,6 +34,14 @@ interface EnvironmentDefaultsCardProps {
   savedDefaults: EnvironmentTaskDefaults;
   onSave: (defaults: EnvironmentTaskDefaults) => void;
   onReset: () => void;
+}
+
+interface CodeServerInstallSectionProps {
+  environment: EnvironmentRecord | null;
+  isPending: boolean;
+  error: string | null;
+  successDetail: string | null;
+  onInstall: (environmentId: string) => void;
 }
 
 interface TaskConfigurationSectionProps {
@@ -176,6 +184,62 @@ function GeneralPreferencesSection({
             {t('common.saveChanges')}
           </button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function CodeServerInstallSection({
+  environment,
+  isPending,
+  error,
+  successDetail,
+  onInstall,
+}: CodeServerInstallSectionProps) {
+  const t = useT();
+  const installedPath = environment?.code_server_path ?? null;
+
+  return (
+    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h2
+            className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            {t('pages.settings.codeServerInstall.title')}
+          </h2>
+          <p className="max-w-2xl text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+            {t('pages.settings.codeServerInstall.description')}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => (environment ? onInstall(environment.id) : undefined)}
+          disabled={!environment || isPending}
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isPending
+            ? t('pages.settings.codeServerInstall.installing')
+            : t('pages.settings.codeServerInstall.installAction')}
+        </button>
+      </div>
+
+      <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px]">
+        <p className="text-[var(--text-secondary)]">
+          <span className="font-medium text-[var(--text)]">
+            {t('pages.settings.codeServerInstall.selectedEnvironment')}
+          </span>{' '}
+          {environment ? `${environment.alias} · ${environment.display_name}` : t('common.notSelected')}
+        </p>
+        <p className="break-all text-[var(--text-secondary)]">
+          <span className="font-medium text-[var(--text)]">
+            {t('pages.settings.codeServerInstall.installedPath')}
+          </span>{' '}
+          {installedPath ?? t('pages.settings.codeServerInstall.notInstalled')}
+        </p>
+        {successDetail ? <p className="text-[#34c759]">{successDetail}</p> : null}
+        {error ? <p className="text-[#ff3b30]">{error}</p> : null}
       </div>
     </section>
   );
@@ -600,6 +664,8 @@ function ProjectDefaultsSection({
 
 function SettingsPage() {
   const t = useT();
+  const queryClient = useQueryClient();
+  const [installSuccessDetail, setInstallSuccessDetail] = useState<string | null>(null);
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
     queryFn: getEnvironments,
@@ -623,6 +689,25 @@ function SettingsPage() {
     () => environmentsQuery.data?.items ?? [],
     [environmentsQuery.data]
   );
+  const selectedEnvironment =
+    environmentSelection.selectedEnvironmentId !== null
+      ? (environments.find(
+          (environment) => environment.id === environmentSelection.selectedEnvironmentId
+        ) ?? environmentSelection.selectedEnvironment)
+      : (environmentSelection.selectedEnvironment ?? environments[0] ?? null);
+  const installMutation = useMutation({
+    mutationFn: installEnvironmentCodeServer,
+    onSuccess: async (response) => {
+      setInstallSuccessDetail(response.detail);
+      queryClient.setQueryData(['environments'], { items: [response.environment] });
+      await queryClient.invalidateQueries({ queryKey: ['environments'] });
+    },
+    onError: () => {
+      setInstallSuccessDetail(null);
+    },
+  });
+  const installError =
+    installMutation.error instanceof Error ? installMutation.error.message : null;
   const environmentsError =
     environmentsQuery.error instanceof Error ? environmentsQuery.error.message : null;
 
@@ -658,6 +743,14 @@ function SettingsPage() {
         />
 
         <EnvironmentSelectorPanel {...environmentSelection} />
+
+        <CodeServerInstallSection
+          environment={selectedEnvironment}
+          isPending={installMutation.isPending}
+          error={installError}
+          successDetail={installSuccessDetail}
+          onInstall={(environmentId) => installMutation.mutate(environmentId)}
+        />
 
         <TaskConfigurationSection
           taskConfiguration={settings.taskConfiguration}

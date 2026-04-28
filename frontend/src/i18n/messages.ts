@@ -252,6 +252,16 @@ export const messages = {
           terminalFontSizeHelp:
             'Font size is clamped to a stable range of {{min}}-{{max}} px. Current save value: {{current}} px.',
         },
+        codeServerInstall: {
+          title: 'Code-server installer',
+          description:
+            'Install the latest Linux amd64 code-server package into the selected environment using SSH first, then personal tmux fallback when needed.',
+          selectedEnvironment: 'Selected environment:',
+          installedPath: 'Installed path:',
+          notInstalled: 'Not installed',
+          installAction: 'Install code-server',
+          installing: 'Installing…',
+        },
         project: {
           title: 'Project Defaults',
           description:
@@ -718,6 +728,16 @@ export const messages = {
           terminalFontSizeLabel: '终端字号',
           terminalFontSizeHelp:
             '字号会被限制在稳定区间 {{min}}-{{max}} px，当前保存值为 {{current}} px。',
+        },
+        codeServerInstall: {
+          title: 'code-server 安装器',
+          description:
+            '为当前所选环境安装最新 Linux amd64 code-server 包，优先使用 SSH，必要时回退到个人 tmux 会话。',
+          selectedEnvironment: '已选环境：',
+          installedPath: '安装路径：',
+          notInstalled: '未安装',
+          installAction: '安装 code-server',
+          installing: '安装中…',
         },
         project: {
           title: '项目默认值',

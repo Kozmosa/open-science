@@ -294,6 +294,7 @@ export interface EnvironmentRecord {
   preferred_env_manager: string | null;
   preferred_runtime_notes: string | null;
   task_harness_profile: string | null;
+  code_server_path: string | null;
   created_at: string | null;
   updated_at: string | null;
   latest_detection: EnvironmentDetection | null;
@@ -335,6 +336,18 @@ export interface EnvironmentCreateRequest {
   preferred_env_manager?: string | null;
   preferred_runtime_notes?: string | null;
   task_harness_profile?: string | null;
+  code_server_path?: string | null;
+}
+
+export interface EnvironmentCodeServerInstallResponse {
+  environment: EnvironmentRecord;
+  installed: boolean;
+  version: string;
+  install_dir: string;
+  code_server_path: string;
+  execution_mode: 'ssh' | 'personal_tmux_fallback';
+  already_installed: boolean;
+  detail: string;
 }
 
 export interface EnvironmentUpdateRequest {
@@ -355,6 +368,7 @@ export interface EnvironmentUpdateRequest {
   preferred_env_manager?: string | null;
   preferred_runtime_notes?: string | null;
   task_harness_profile?: string | null;
+  code_server_path?: string | null;
 }
 
 export interface ProjectEnvironmentReferenceCreateRequest {

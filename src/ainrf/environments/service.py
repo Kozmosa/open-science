@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from getpass import getuser
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.environments.models import (
@@ -15,6 +16,17 @@ from ainrf.environments.models import (
     ToolStatus,
     utc_now,
 )
+from ainrf.environments.probing import (
+    failed_missing_user_snapshot,
+    failed_tmux_snapshot,
+    probe_with_personal_tmux,
+    probe_with_ssh,
+)
+from ainrf.execution.errors import SSHConnectionError
+from ainrf.terminal.tmux import TmuxCommandError
+
+if TYPE_CHECKING:
+    from ainrf.terminal.sessions import SessionManager
 
 
 class EnvironmentNotFoundError(LookupError):
@@ -110,6 +122,7 @@ class InMemoryEnvironmentService:
         preferred_env_manager: str | None = None,
         preferred_runtime_notes: str | None = None,
         task_harness_profile: str | None = None,
+        code_server_path: str | None = None,
     ) -> EnvironmentRegistryEntry:
         self._ensure_alias_available(alias)
         now = utc_now()
@@ -133,6 +146,7 @@ class InMemoryEnvironmentService:
             preferred_env_manager=preferred_env_manager,
             preferred_runtime_notes=preferred_runtime_notes,
             task_harness_profile=task_harness_profile,
+            code_server_path=code_server_path,
             created_at=now,
             updated_at=now,
         )
@@ -160,6 +174,7 @@ class InMemoryEnvironmentService:
         preferred_env_manager: str | None = None,
         preferred_runtime_notes: str | None = None,
         task_harness_profile: str | None = None,
+        code_server_path: str | None = None,
     ) -> EnvironmentRegistryEntry:
         environment = self.get_environment(environment_id)
         if alias is not None and alias != environment.alias:
@@ -197,6 +212,8 @@ class InMemoryEnvironmentService:
             environment.preferred_runtime_notes = preferred_runtime_notes
         if task_harness_profile is not None:
             environment.task_harness_profile = task_harness_profile
+        if code_server_path is not None:
+            environment.code_server_path = code_server_path
         environment.updated_at = utc_now()
         return environment
 
@@ -210,7 +227,13 @@ class InMemoryEnvironmentService:
         del self._environments[environment.id]
         self._detections.pop(environment.id, None)
 
-    def detect_environment(self, environment_id: str) -> DetectionSnapshot:
+    async def detect_environment(
+        self,
+        environment_id: str,
+        *,
+        app_user_id: str | None = None,
+        terminal_session_manager: SessionManager | None = None,
+    ) -> DetectionSnapshot:
         environment = self.get_environment(environment_id)
         if environment.is_seed:
             snapshot = DetectionSnapshot(
@@ -238,30 +261,22 @@ class InMemoryEnvironmentService:
             )
             self._detections[environment.id].append(snapshot)
             return snapshot
-        preferred_python = environment.preferred_python or "python3"
-        snapshot = DetectionSnapshot(
-            environment_id=environment.id,
-            detected_at=utc_now(),
-            status=DetectionStatus.SUCCESS,
-            summary=f"Manual detection completed for {environment.alias}.",
-            ssh_ok=True,
-            hostname=environment.host,
-            os_info="linux",
-            arch="x86_64",
-            workdir_exists=bool(environment.default_workdir),
-            python=ToolStatus(
-                available=True, version=preferred_python, path=f"/usr/bin/{preferred_python}"
-            ),
-            conda=ToolStatus(available=False),
-            uv=ToolStatus(available=True, version="stub", path="/usr/bin/uv"),
-            pixi=ToolStatus(available=False),
-            torch=ToolStatus(available=False),
-            cuda=ToolStatus(available=False),
-            gpu_models=[],
-            gpu_count=0,
-            claude_cli=ToolStatus(available=True, version="stub", path="/usr/bin/claude"),
-            anthropic_env=AnthropicEnvStatus.UNKNOWN,
-        )
+        try:
+            outcome = await probe_with_ssh(environment)
+            snapshot = outcome.snapshot
+        except SSHConnectionError:
+            if app_user_id is None or terminal_session_manager is None:
+                snapshot = failed_missing_user_snapshot(environment)
+            else:
+                try:
+                    outcome = await probe_with_personal_tmux(
+                        environment=environment,
+                        app_user_id=app_user_id,
+                        session_manager=terminal_session_manager,
+                    )
+                    snapshot = outcome.snapshot
+                except (RuntimeError, TmuxCommandError) as exc:
+                    snapshot = failed_tmux_snapshot(environment, exc)
         self._detections[environment.id].append(snapshot)
         return snapshot
 
