@@ -17,6 +17,7 @@ from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.code_server import CodeServerSupervisor
 from ainrf.environments import InMemoryEnvironmentService
+from ainrf.runtime.readiness import check_runtime_readiness
 from ainrf.task_harness import TaskHarnessService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
@@ -57,6 +58,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.code_server_supervisor = manager
     try:
         await _run_sync_in_lifespan(workspace_service.initialize)
+        localhost = environment_service.get_environment("env-localhost")
+        app.state.runtime_readiness = check_runtime_readiness(
+            localhost.code_server_path
+        ).as_public_payload()
         await _run_sync_in_lifespan(terminal_session_manager.reconcile)
         await _run_sync_in_lifespan(task_harness_service.initialize)
         yield
@@ -67,11 +72,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app(config: ApiConfig | None = None) -> FastAPI:
     api_config = config or ApiConfig.from_env()
-    environment_service = InMemoryEnvironmentService()
+    runtime_paths = api_config.runtime_paths
+    default_workspace_dir = runtime_paths.ensure_default_workspace_dir()
+    environment_service = InMemoryEnvironmentService(str(default_workspace_dir))
     app = FastAPI(title="AINRF API", version="0.1.0", lifespan=lifespan)
     app.state.api_config = api_config
     app.state.environment_service = environment_service
-    app.state.workspace_service = WorkspaceRegistryService(api_config.state_root)
+    app.state.workspace_service = WorkspaceRegistryService(
+        api_config.state_root,
+        default_workspace_dir=default_workspace_dir,
+    )
     app.state.terminal_session_manager = SessionManager(
         state_root=api_config.state_root,
         environment_service=environment_service,

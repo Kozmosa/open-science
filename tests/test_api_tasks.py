@@ -171,7 +171,7 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
 
     assert listed.status_code == 200
     assert listed.json()["items"][0]["workspace_summary"]["workspace_id"] == "workspace-default"
-    assert detail["binding"]["resolved_workdir"] == str(Path.cwd())
+    assert detail["binding"]["resolved_workdir"] == str(Path.cwd() / "workspace" / "default")
     assert detail["prompt"]["layer_order"] == [
         "global_harness_system",
         "workspace",
@@ -461,7 +461,7 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
         detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED)
         output = await client.get(f"/tasks/{created['task_id']}/output", headers=API_HEADERS)
 
-    assert recorded["project_dir"] == str(Path.cwd())
+    assert recorded["project_dir"] == str(Path.cwd() / "workspace" / "default")
     assert detail["runtime"]["runner_kind"] == "ssh-process"
     assert detail["runtime"]["helper_path"] == "/remote/launch.sh"
     assert any(item["content"] == "remote hello\n" for item in output.json()["items"])

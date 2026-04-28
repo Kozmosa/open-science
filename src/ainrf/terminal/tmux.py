@@ -381,11 +381,11 @@ class TmuxAdapter:
         exit_marker = f"__AINRF_PROBE_EXIT_{token}__"
         end_marker = f"__AINRF_PROBE_END_{token}__"
         wrapped_command = (
-            f"printf %s\\n {start_marker}; "
+            f"printf '%s\\n' {shlex.quote(start_marker)}; "
             f"{command}; "
             f"__ainrf_probe_status=$?; "
-            f"printf %s\\n {exit_marker}:$__ainrf_probe_status; "
-            f"printf %s\\n {end_marker}"
+            f"printf '%s:%s\\n' {shlex.quote(exit_marker)} \"$__ainrf_probe_status\"; "
+            f"printf '%s\\n' {shlex.quote(end_marker)}"
         )
         session_target = self.session_target_for(session_name)
         self._send_session_keys(binding, environment, session_target, wrapped_command)
@@ -431,7 +431,7 @@ class TmuxAdapter:
         environment: EnvironmentRegistryEntry,
         session_target: str,
     ) -> str:
-        tmux_command = ("tmux", "capture-pane", "-p", "-t", session_target)
+        tmux_command = ("tmux", "capture-pane", "-J", "-p", "-t", session_target)
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
             result = self._run_local_command(tmux_command)
         else:

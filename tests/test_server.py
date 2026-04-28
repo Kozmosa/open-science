@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import signal
 import sys
 
 import pytest
 
-from ainrf.server import run_server_daemon
+from ainrf.server import _terminate_process, run_server_daemon
 
 
 class FakeProcess:
@@ -77,5 +78,38 @@ def test_run_server_daemon_cleans_up_pid_file_on_failed_health_probe(
     with pytest.raises(RuntimeError):
         run_server_daemon("127.0.0.1", 8765, tmp_path, pid_file, log_file)
 
+    assert terminated == [9876]
+    assert not pid_file.exists()
+
+
+def test_terminate_process_signals_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    signals: list[tuple[int, int]] = []
+
+    monkeypatch.setattr("ainrf.server.os.getpgid", lambda pid: 4321)
+    monkeypatch.setattr(
+        "ainrf.server.os.killpg",
+        lambda pgid, sig: signals.append((pgid, sig)),
+    )
+    monkeypatch.setattr("ainrf.server._process_exists", lambda pid: False)
+
+    _terminate_process(9876)
+
+    assert signals == [(4321, signal.SIGTERM)]
+
+
+def test_stop_server_daemon_terminates_pid_and_removes_pid_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ainrf.server import stop_server_daemon
+
+    pid_file = tmp_path / "runtime" / "ainrf-api.pid"
+    pid_file.parent.mkdir(parents=True)
+    pid_file.write_text("9876\n", encoding="utf-8")
+    terminated: list[int] = []
+
+    monkeypatch.setattr("ainrf.server._process_exists", lambda pid: True)
+    monkeypatch.setattr("ainrf.server._terminate_process", lambda pid: terminated.append(pid))
+
+    assert stop_server_daemon(pid_file) is True
     assert terminated == [9876]
     assert not pid_file.exists()

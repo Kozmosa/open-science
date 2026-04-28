@@ -58,8 +58,11 @@ class HealthResponse(BaseModel):
 
     status: ApiStatus
     state_root: str
+    startup_cwd: str
+    default_workspace_dir: str
     container_configured: bool
     container_health: dict[str, Any] | None = None
+    runtime_readiness: dict[str, object] | None = None
     detail: str | None = None
 
 
@@ -211,6 +214,10 @@ class EnvironmentCodeServerInstallResponse(BaseModel):
     execution_mode: str
     already_installed: bool
     detail: str
+    terminal_session_id: str | None = None
+    terminal_attachment_id: str | None = None
+    terminal_ws_url: str | None = None
+    terminal_attachment_expires_at: str | None = None
 
 
 class EnvironmentListResponse(BaseModel):

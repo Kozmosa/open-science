@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, type ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -14,6 +14,14 @@ interface ToastContextValue {
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+
+export function useToast() {
+  const context = useContext(ToastContext);
+  if (context === null) {
+    throw new Error('useToast must be used within ToastProvider');
+  }
+  return context;
+}
 
 interface ProviderProps {
   children: ReactNode;

@@ -276,6 +276,29 @@ describe('ContainersPage', () => {
     await waitFor(() => expect(mockDeleteEnvironment).toHaveBeenCalledWith('env-1'));
   });
 
+  it('shows a toast when detection falls back to personal tmux', async () => {
+    const fallbackEnvironment: EnvironmentRecord = {
+      ...detectedEnvironment,
+      latest_detection: {
+        ...detectedEnvironment.latest_detection!,
+        summary: 'Detection completed for gpu-lab via personal tmux fallback.',
+        ssh_ok: false,
+        warnings: ['ssh_unavailable', 'used_personal_tmux_fallback'],
+      },
+    };
+    mockGetEnvironments.mockResolvedValue({ items: [baseEnvironment] });
+    mockDetectEnvironment.mockResolvedValue(fallbackEnvironment);
+
+    renderWithProviders(<ContainersPage />);
+
+    expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Detect' }));
+
+    expect(
+      await screen.findByText('gpu-lab detection fell back to personal tmux after SSH was unavailable.')
+    ).toBeInTheDocument();
+  });
+
   it('shows a backend conflict when deleting a referenced environment', async () => {
     mockGetEnvironments.mockResolvedValue({ items: [baseEnvironment] });
     mockDeleteEnvironment.mockRejectedValue(

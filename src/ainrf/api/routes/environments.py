@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
 
@@ -21,6 +22,7 @@ from ainrf.environments import (
 )
 
 router = APIRouter(prefix="/environments", tags=["environments"])
+logger = logging.getLogger(__name__)
 
 
 def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
@@ -60,8 +62,10 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
         )
     if isinstance(exc, CodeServerInstallError):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    logger.exception("Unexpected environment error", exc_info=exc)
     return HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unexpected environment error"
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Unexpected environment error: {type(exc).__name__}: {exc}",
     )
 
 
@@ -170,12 +174,15 @@ async def install_environment_code_server(
     service = _get_environment_service(request)
     app_user_id = request.headers.get("X-AINRF-User-Id")
     terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
+    terminal_attachment_broker = getattr(request.app.state, "terminal_attachment_broker", None)
     try:
         result = await install_code_server(
             environment_id,
             environment_service=service,
             app_user_id=app_user_id,
             terminal_session_manager=terminal_session_manager,
+            terminal_attachment_broker=terminal_attachment_broker,
+            api_base_url=str(request.base_url),
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
@@ -188,6 +195,10 @@ async def install_environment_code_server(
         execution_mode=result.execution_mode,
         already_installed=result.already_installed,
         detail=result.detail,
+        terminal_session_id=result.terminal_session_id,
+        terminal_attachment_id=result.terminal_attachment_id,
+        terminal_ws_url=result.terminal_ws_url,
+        terminal_attachment_expires_at=result.terminal_attachment_expires_at,
     )
 
 

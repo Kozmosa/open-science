@@ -102,6 +102,10 @@ Important: never edit files under `.cache/html-notes/` or `site/` — they are g
 - Each changelog entry must include the timestamp, the completed slice label, a concise summary of what changed, and the validation result. If commits were produced in that slice, append the commit hash and subject in the same entry.
 - Do not treat the worklog as a transcript of commit messages or atomic slice labels; summarize the completed batch in higher-level changelog form.
 
+## Runtime Fallback Notes
+
+- Localhost environment detection is SSH-first: after 3 short failed SSH connection attempts, it must fall back to the user's personal tmux session and surface a toast warning in the WebUI. Keep the bounded tmux probe marker output newline-safe; an earlier `printf %s\n` wrapper emitted literal `n` characters, causing localhost tmux fallback parsing to time out.
+
 ## Git Maintenance
 
 - Worktree/branch cleanup: run `git fetch --prune origin`, inspect `git worktree list --porcelain`, `git branch -vv`, and only remove clean, audited worktrees or fully merged branches; preserve any dirty worktree.

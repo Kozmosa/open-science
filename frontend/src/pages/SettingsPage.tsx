@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
+import TerminalSessionConsole from '../components/terminal/TerminalSessionConsole';
 import { getEnvironments, installEnvironmentCodeServer } from '../api';
 import { useT } from '../i18n';
 import {
@@ -17,6 +18,12 @@ import type {
   WebUiSettingsDocument,
 } from '../settings';
 import type { EnvironmentRecord } from '../types';
+
+interface CodeServerInstallTerminalState {
+  sessionId: string | null;
+  attachmentId: string | null;
+  terminalWsUrl: string | null;
+}
 
 interface GeneralDraftState {
   defaultRoute: DefaultRoute;
@@ -41,6 +48,7 @@ interface CodeServerInstallSectionProps {
   isPending: boolean;
   error: string | null;
   successDetail: string | null;
+  terminalState: CodeServerInstallTerminalState | null;
   onInstall: (environmentId: string) => void;
 }
 
@@ -194,6 +202,7 @@ function CodeServerInstallSection({
   isPending,
   error,
   successDetail,
+  terminalState,
   onInstall,
 }: CodeServerInstallSectionProps) {
   const t = useT();
@@ -241,6 +250,24 @@ function CodeServerInstallSection({
         {successDetail ? <p className="text-[#34c759]">{successDetail}</p> : null}
         {error ? <p className="text-[#ff3b30]">{error}</p> : null}
       </div>
+
+      {terminalState?.attachmentId && terminalState.terminalWsUrl ? (
+        <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
+          <h3 className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.codeServerInstall.terminalOutput')}
+          </h3>
+          <div className="min-h-[260px] overflow-hidden rounded-lg border border-[var(--border)] bg-black">
+            <TerminalSessionConsole
+              sessionId={terminalState.sessionId ?? environment?.id ?? null}
+              attachmentId={terminalState.attachmentId}
+              terminalWsUrl={terminalState.terminalWsUrl}
+              status="running"
+              readonly
+              placeholderText={t('pages.settings.codeServerInstall.terminalPlaceholder')}
+            />
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -666,6 +693,8 @@ function SettingsPage() {
   const t = useT();
   const queryClient = useQueryClient();
   const [installSuccessDetail, setInstallSuccessDetail] = useState<string | null>(null);
+  const [installTerminalState, setInstallTerminalState] =
+    useState<CodeServerInstallTerminalState | null>(null);
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
     queryFn: getEnvironments,
@@ -697,13 +726,26 @@ function SettingsPage() {
       : (environmentSelection.selectedEnvironment ?? environments[0] ?? null);
   const installMutation = useMutation({
     mutationFn: installEnvironmentCodeServer,
+    onMutate: () => {
+      setInstallTerminalState(null);
+    },
     onSuccess: async (response) => {
       setInstallSuccessDetail(response.detail);
+      setInstallTerminalState(
+        response.terminal_attachment_id && response.terminal_ws_url
+          ? {
+              sessionId: response.terminal_session_id ?? null,
+              attachmentId: response.terminal_attachment_id,
+              terminalWsUrl: response.terminal_ws_url,
+            }
+          : null
+      );
       queryClient.setQueryData(['environments'], { items: [response.environment] });
       await queryClient.invalidateQueries({ queryKey: ['environments'] });
     },
     onError: () => {
       setInstallSuccessDetail(null);
+      setInstallTerminalState(null);
     },
   });
   const installError =
@@ -749,6 +791,7 @@ function SettingsPage() {
           isPending={installMutation.isPending}
           error={installError}
           successDetail={installSuccessDetail}
+          terminalState={installTerminalState}
           onInstall={(environmentId) => installMutation.mutate(environmentId)}
         />
 

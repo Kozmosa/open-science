@@ -229,6 +229,8 @@ export const messages = {
         title: 'Workspace Browser',
         description:
           'Open the managed code-server browser for the environment selected in Settings.',
+        readinessTitle: 'Runtime setup required',
+        readinessMissingDependency: 'A runtime dependency is missing.',
       },
       settings: {
         eyebrow: '设置',
@@ -261,6 +263,8 @@ export const messages = {
           notInstalled: 'Not installed',
           installAction: 'Install code-server',
           installing: 'Installing…',
+          terminalOutput: 'Install terminal output',
+          terminalPlaceholder: 'Install terminal output will appear here.',
         },
         project: {
           title: 'Project Defaults',
@@ -327,6 +331,8 @@ export const messages = {
         notDetected: 'Not detected yet',
         confirmDelete: 'Delete environment "{{alias}}"?',
         defaultEnvironmentLocked: 'The default localhost environment cannot be deleted.',
+        detectFallbackToast: '{{alias}} detection fell back to personal tmux after SSH was unavailable.',
+        detectFailedToast: 'Environment detection failed.',
         detectionStatus: {
           success: 'Success',
           partial: 'Partial',
@@ -707,6 +713,8 @@ export const messages = {
         eyebrow: 'WORKSPACE BROWSER',
         title: '工作区浏览器',
         description: '打开设置页所选环境的托管 code-server 工作区浏览器。',
+        readinessTitle: '需要完成运行时设置',
+        readinessMissingDependency: '缺少运行时依赖。',
       },
       settings: {
         eyebrow: 'SETTINGS',
@@ -738,6 +746,8 @@ export const messages = {
           notInstalled: '未安装',
           installAction: '安装 code-server',
           installing: '安装中…',
+          terminalOutput: '安装终端输出',
+          terminalPlaceholder: '安装终端输出会显示在这里。',
         },
         project: {
           title: '项目默认值',
@@ -799,6 +809,8 @@ export const messages = {
         notDetected: '尚未探测',
         confirmDelete: '删除环境「{{alias}}」？',
         defaultEnvironmentLocked: '默认的 localhost 环境不能删除。',
+        detectFallbackToast: '{{alias}} 探测在 SSH 不可用后已回退到个人 tmux 会话。',
+        detectFailedToast: '环境探测失败。',
         detectionStatus: {
           success: '成功',
           partial: '部分成功',

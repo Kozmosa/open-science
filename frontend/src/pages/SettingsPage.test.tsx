@@ -15,6 +15,20 @@ vi.mock('../components/environment/EnvironmentSelectorPanel', () => ({
   default: () => <div data-testid="environment-selector" />,
 }));
 
+vi.mock('../components/terminal/TerminalSessionConsole', () => ({
+  default: ({
+    attachmentId,
+    terminalWsUrl,
+  }: {
+    attachmentId: string | null;
+    terminalWsUrl: string | null;
+  }) => (
+    <div data-testid="terminal-session-console">
+      {attachmentId} {terminalWsUrl}
+    </div>
+  ),
+}));
+
 vi.mock('../api', () => ({
   getEnvironments: vi.fn(),
   installEnvironmentCodeServer: vi.fn(),
@@ -195,6 +209,10 @@ describe('SettingsPage', () => {
       execution_mode: 'ssh',
       already_installed: false,
       detail: 'code-server installed',
+      terminal_session_id: 'p-localhost',
+      terminal_attachment_id: 'attachment-1',
+      terminal_ws_url: 'ws://testserver/terminal/attachments/attachment-1/ws?token=token-1',
+      terminal_attachment_expires_at: '2026-04-28T21:00:00Z',
     });
     mockGetEnvironments
       .mockResolvedValueOnce({ items: [environment] })
@@ -222,6 +240,14 @@ describe('SettingsPage', () => {
         '~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server'
       )
     ).toBeInTheDocument();
+    expect(
+      within(installSection as HTMLElement).getByRole('heading', {
+        name: 'Install terminal output',
+      })
+    ).toBeInTheDocument();
+    expect(within(installSection as HTMLElement).getByTestId('terminal-session-console')).toHaveTextContent(
+      'attachment-1 ws://testserver/terminal/attachments/attachment-1/ws?token=token-1'
+    );
   });
 
   it('shows existing code-server path when already installed', async () => {

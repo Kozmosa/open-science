@@ -299,6 +299,113 @@ async def test_environment_detect_falls_back_to_personal_tmux_when_ssh_unavailab
 
 
 @pytest.mark.anyio
+async def test_localhost_environment_detect_uses_personal_tmux_directly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensured: list[tuple[str, str, str | None]] = []
+    tmux_commands: list[str] = []
+
+    async def fake_run_command(
+        self: object,
+        command: str,
+        timeout: float | None = None,
+        cwd: str | None = None,
+        env: object | None = None,
+    ) -> CommandResult:
+        _ = self, command, timeout, cwd, env
+        raise AssertionError("Localhost detection should use personal tmux directly")
+
+    def fake_ensure_personal_session(
+        app_user_id: str,
+        environment: EnvironmentRegistryEntry,
+        working_directory: str | None = None,
+    ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
+        ensured.append((app_user_id, environment.id, working_directory))
+        binding = UserEnvironmentBinding(
+            binding_id="binding-localhost",
+            user_id=app_user_id,
+            environment_id=environment.id,
+            remote_login_user=environment.user,
+            default_shell="/bin/bash",
+            default_workdir=working_directory,
+        )
+        monkeypatch.setattr(
+            app.state.terminal_session_manager,
+            "get_binding_by_id",
+            lambda binding_id: binding if binding_id == "binding-localhost" else None,
+        )
+        record = TerminalSessionRecord(
+            session_id="p-localhost",
+            provider="tmux",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            status=TerminalSessionStatus.RUNNING,
+            environment_id=environment.id,
+            environment_alias=environment.alias,
+            working_directory=working_directory,
+            binding_id="binding-localhost",
+            session_name="p-localhost",
+        )
+        target = TerminalAttachmentTarget(
+            binding_id="binding-localhost",
+            session_id="p-localhost",
+            session_name="p-localhost",
+            user_id=app_user_id,
+            environment_id=environment.id,
+            environment_alias=environment.alias,
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory=working_directory,
+            attach_command=("tmux", "attach-session", "-t", "p-localhost"),
+            spawn_working_directory=tmp_path,
+        )
+        return record, target
+
+    def fake_run_bounded_session_command(
+        binding: object,
+        environment: object,
+        session_name: str,
+        *,
+        command: str,
+        timeout_seconds: float = 10.0,
+        poll_interval_seconds: float = 0.05,
+    ) -> object:
+        _ = binding, environment, session_name, timeout_seconds, poll_interval_seconds
+        tmux_commands.append(command)
+        result = _probe_result(command.replace("/workspace/projects", "/workspace/project"))
+        return SimpleNamespace(
+            returncode=result.exit_code, stdout=result.stdout, stderr=result.stderr
+        )
+
+    monkeypatch.setattr("ainrf.environments.probing.SSHExecutor.run_command", fake_run_command)
+    app = make_app(tmp_path)
+    monkeypatch.setattr(
+        app.state.terminal_session_manager,
+        "ensure_personal_session",
+        fake_ensure_personal_session,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager.tmux_adapter,
+        "run_bounded_session_command",
+        fake_run_bounded_session_command,
+    )
+
+    async with make_client(app) as client:
+        response = await client.post(
+            "/v1/environments/env-localhost/detect",
+            headers=API_HEADERS,
+        )
+
+    assert response.status_code == 200
+    detection = response.json()["latest_detection"]
+    assert detection["status"] == "success"
+    assert detection["summary"] == "Detection completed for localhost via personal tmux fallback."
+    assert detection["ssh_ok"] is False
+    assert detection["warnings"] == ["ssh_unavailable", "used_personal_tmux_fallback"]
+    assert "localhost_seed_unreachable" not in detection["errors"]
+    assert ensured == [("browser-user", "env-localhost", str(Path.cwd() / "workspace" / "default"))]
+    assert tmux_commands
+
+
+@pytest.mark.anyio
 async def test_environment_detect_reports_missing_user_when_fallback_requires_personal_tmux(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -621,8 +728,12 @@ async def test_environment_install_code_server_updates_environment(
         environment_service: InMemoryEnvironmentService,
         app_user_id: str | None = None,
         terminal_session_manager: object | None = None,
+        terminal_attachment_broker: object | None = None,
+        api_base_url: str | None = None,
     ) -> CodeServerInstallResult:
         _ = app_user_id, terminal_session_manager
+        assert terminal_attachment_broker is not None
+        assert api_base_url == "http://testserver/"
         assert environment_id == environment.id
         app.state.environment_service.update_environment(
             environment_id,
@@ -635,6 +746,10 @@ async def test_environment_install_code_server_updates_environment(
             execution_mode="ssh",
             already_installed=False,
             detail="code-server installed",
+            terminal_session_id="p-localhost",
+            terminal_attachment_id="attachment-1",
+            terminal_ws_url="ws://testserver/terminal/attachments/attachment-1/ws?token=token-1",
+            terminal_attachment_expires_at="2026-04-28T21:00:00Z",
         )
 
     monkeypatch.setattr(
@@ -661,6 +776,12 @@ async def test_environment_install_code_server_updates_environment(
         "~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server"
     )
     assert data["environment"]["code_server_path"] == data["code_server_path"]
+    assert data["terminal_session_id"] == "p-localhost"
+    assert data["terminal_attachment_id"] == "attachment-1"
+    assert data["terminal_ws_url"] == (
+        "ws://testserver/terminal/attachments/attachment-1/ws?token=token-1"
+    )
+    assert data["terminal_attachment_expires_at"] == "2026-04-28T21:00:00Z"
     assert v1_response.status_code == 200
     assert v1_response.json()["environment"]["code_server_path"] == data["code_server_path"]
 
@@ -677,8 +798,10 @@ async def test_environment_install_code_server_missing_environment_returns_404(
         environment_service: InMemoryEnvironmentService,
         app_user_id: str | None = None,
         terminal_session_manager: object | None = None,
+        terminal_attachment_broker: object | None = None,
+        api_base_url: str | None = None,
     ) -> CodeServerInstallResult:
-        _ = app_user_id, terminal_session_manager
+        _ = app_user_id, terminal_session_manager, terminal_attachment_broker, api_base_url
         environment_service.get_environment(environment_id)
         raise AssertionError("unreachable")
 
@@ -713,8 +836,17 @@ async def test_environment_install_code_server_conflict_returns_409(
         environment_service: InMemoryEnvironmentService,
         app_user_id: str | None = None,
         terminal_session_manager: object | None = None,
+        terminal_attachment_broker: object | None = None,
+        api_base_url: str | None = None,
     ) -> CodeServerInstallResult:
-        _ = environment_id, environment_service, app_user_id, terminal_session_manager
+        _ = (
+            environment_id,
+            environment_service,
+            app_user_id,
+            terminal_session_manager,
+            terminal_attachment_broker,
+            api_base_url,
+        )
         from ainrf.code_server_installer import CodeServerInstallError
 
         raise CodeServerInstallError("personal tmux fallback requires a user id")
@@ -733,6 +865,54 @@ async def test_environment_install_code_server_conflict_returns_409(
     assert "personal tmux fallback requires a user id" in response.json()["detail"]
 
 
+@pytest.mark.anyio
+async def test_environment_install_code_server_unexpected_error_returns_diagnostic_detail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab-2",
+        display_name="GPU Lab 2",
+        host="gpu2.example.com",
+        user="researcher",
+    )
+
+    async def fake_install_code_server(
+        environment_id: str,
+        *,
+        environment_service: InMemoryEnvironmentService,
+        app_user_id: str | None = None,
+        terminal_session_manager: object | None = None,
+        terminal_attachment_broker: object | None = None,
+        api_base_url: str | None = None,
+    ) -> CodeServerInstallResult:
+        _ = (
+            environment_id,
+            environment_service,
+            app_user_id,
+            terminal_session_manager,
+            terminal_attachment_broker,
+            api_base_url,
+        )
+        raise AttributeError("'NoneType' object has no attribute 'attachment_id'")
+
+    monkeypatch.setattr(
+        "ainrf.api.routes.environments.install_code_server", fake_install_code_server
+    )
+
+    async with make_client(app) as client:
+        response = await client.post(
+            f"/environments/{environment.id}/install-code-server",
+            headers=API_HEADERS,
+        )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == (
+        "Unexpected environment error: AttributeError: "
+        "'NoneType' object has no attribute 'attachment_id'"
+    )
+
+
 def _probe_result(command: str) -> CommandResult:
     outputs = {
         "hostname": CommandResult(0, "gpu-lab\n", ""),
@@ -740,6 +920,7 @@ def _probe_result(command: str) -> CommandResult:
         "uname -m": CommandResult(0, "x86_64\n", ""),
         "test -d /workspace/project-a": CommandResult(0, "", ""),
         "test -d /workspace/project": CommandResult(0, "", ""),
+        f"test -d {Path.cwd() / 'workspace' / 'default'}": CommandResult(0, "", ""),
         "command -v python3": CommandResult(0, "/usr/bin/python3\n", ""),
         "python3 --version": CommandResult(0, "Python 3.13.0\n", ""),
         "command -v conda": CommandResult(1, "", ""),

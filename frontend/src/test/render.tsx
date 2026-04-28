@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render } from '@testing-library/react';
+import { ToastProvider } from '../components/common';
 import { LocaleProvider, type Locale } from '../i18n';
 import { appQueryClientDefaultOptions } from '../queryClient';
 import { SettingsProvider } from '../settings';
@@ -36,7 +37,9 @@ export function renderWithProviders(
       <LocaleProvider initialLocale={locale}>
         <SettingsProvider>
           <QueryClientProvider client={client}>
-            <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+            <ToastProvider>
+              <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+            </ToastProvider>
           </QueryClientProvider>
         </SettingsProvider>
       </LocaleProvider>

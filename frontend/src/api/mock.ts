@@ -33,6 +33,8 @@ const MOCK_APP_USER_ID = 'mock-browser-user';
 const mockHealth: SystemHealth = {
   status: 'ok',
   state_root: MOCK_STATE_ROOT,
+  startup_cwd: '/workspace/scholar-agent',
+  default_workspace_dir: '/workspace/scholar-agent/workspace/default',
   container_configured: true,
   container_health: {
     ssh_ok: true,
@@ -43,6 +45,18 @@ const mockHealth: SystemHealth = {
     cuda_version: 'mock',
     disk_free_bytes: 1024 * 1024 * 1024,
     warnings: [],
+  },
+  runtime_readiness: {
+    ready: false,
+    dependencies: {
+      tmux: { available: true, path: '/usr/bin/tmux', detail: null },
+      uv: { available: true, path: '/usr/bin/uv', detail: null },
+      code_server: {
+        available: false,
+        path: null,
+        detail: 'Install code-server from Settings before using the workspace browser.',
+      },
+    },
   },
   detail: null,
 };

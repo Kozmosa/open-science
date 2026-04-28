@@ -17,7 +17,7 @@ from ainrf.onboarding import (
     run_onboarding,
     save_runtime_config,
 )
-from ainrf.server import run_server, run_server_daemon
+from ainrf.server import run_server, run_server_daemon, stop_server_daemon
 from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 
@@ -91,6 +91,25 @@ def serve(
         typer.echo(f"AINRF API daemon started (pid={daemon_pid}, port={port})")
         return
     run_server(host, port, state_root)
+
+
+@app.command()
+def stop(
+    state_root: Annotated[
+        Path,
+        typer.Option(help="State root containing daemon runtime files."),
+    ] = default_state_root(),
+    pid_file: Annotated[
+        Path | None,
+        typer.Option(help="Optional pid file path for daemon mode."),
+    ] = None,
+) -> None:
+    runtime_dir = state_root / "runtime"
+    resolved_pid_file = pid_file or runtime_dir / "ainrf-api.pid"
+    if stop_server_daemon(resolved_pid_file):
+        typer.echo("AINRF API daemon stopped.")
+        return
+    typer.echo("AINRF API daemon is not running.")
 
 
 @container_app.command("add")

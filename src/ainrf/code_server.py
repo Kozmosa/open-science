@@ -8,12 +8,13 @@ from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import asyncssh
 import httpx
 
 from ainrf.environments import EnvironmentAuthKind, InMemoryEnvironmentService
+from ainrf.environments.local import is_localhost_environment
 from ainrf.environments.models import EnvironmentRegistryEntry
 
 _DEFAULT_PROJECT_ID = "default"
@@ -22,7 +23,20 @@ _READY_TIMEOUT_SECONDS = 10.0
 _PROCESS_CLOSE_TIMEOUT_SECONDS = 5.0
 _REMOTE_CODE_SERVER_HOST = "127.0.0.1"
 _REMOTE_CODE_SERVER_PORT = 18080
-_LOCAL_HOSTS = {"127.0.0.1", "localhost"}
+
+
+@runtime_checkable
+class SessionManagerLike(Protocol):
+    tmux_adapter: Any
+
+    def ensure_personal_session(
+        self,
+        app_user_id: str,
+        environment: EnvironmentRegistryEntry,
+        working_directory: str | None = None,
+    ) -> Any: ...
+
+    def get_binding_by_id(self, binding_id: str) -> Any | None: ...
 
 
 class UnsupportedWorkspaceEnvironmentError(ValueError):
@@ -54,6 +68,11 @@ class ActiveCodeServerSession:
     remote_connection: Any | None = None
     remote_process: Any | None = None
     tunnel: Any | None = None
+    tmux_binding: Any | None = None
+    tmux_adapter: Any | None = None
+    tmux_environment: EnvironmentRegistryEntry | None = None
+    tmux_session_name: str | None = None
+    tmux_pid_file: Path | None = None
 
 
 def build_code_server_command(
@@ -86,14 +105,6 @@ def build_remote_code_server_command(
         )
     )
     return f"bash -lc {shlex.quote(f'exec {code_server_command}')}"
-
-
-def _is_local_environment(environment: EnvironmentRegistryEntry) -> bool:
-    return (
-        environment.host in _LOCAL_HOSTS
-        and environment.proxy_jump is None
-        and environment.proxy_command is None
-    )
 
 
 def _resolve_local_workspace_dir(workspace_dir: str, state_root: Path) -> Path:
@@ -224,7 +235,13 @@ class EnvironmentCodeServerManager:
                 detail="code-server session not started",
             )
 
-    async def ensure(self, environment_id: str) -> CodeServerState:
+    async def ensure(
+        self,
+        environment_id: str,
+        *,
+        app_user_id: str | None = None,
+        terminal_session_manager: SessionManagerLike | None = None,
+    ) -> CodeServerState:
         async with self._lock:
             await self._refresh_state_locked()
             environment = self._environment_service.get_environment(environment_id)
@@ -261,8 +278,13 @@ class EnvironmentCodeServerManager:
             )
 
             try:
-                if _is_local_environment(environment):
-                    session = await self._start_local_session(environment, workspace_dir)
+                if is_localhost_environment(environment):
+                    session = await self._start_localhost_tmux_session(
+                        environment,
+                        workspace_dir,
+                        app_user_id=app_user_id,
+                        terminal_session_manager=terminal_session_manager,
+                    )
                 else:
                     session = await self._start_remote_session(environment, workspace_dir)
             except UnsupportedWorkspaceEnvironmentError:
@@ -328,6 +350,9 @@ class EnvironmentCodeServerManager:
                 tunnel.close()
                 await tunnel.wait_closed()
 
+            if session.tmux_binding is not None and session.tmux_environment is not None:
+                self._run_tmux_stop_command(session)
+
             remote_connection = session.remote_connection
             if remote_connection is not None:
                 remote_connection.close()
@@ -343,59 +368,127 @@ class EnvironmentCodeServerManager:
         )
         return self._state
 
-    async def _start_local_session(
+    async def _start_localhost_tmux_session(
         self,
         environment: EnvironmentRegistryEntry,
         workspace_dir: str,
+        *,
+        app_user_id: str | None,
+        terminal_session_manager: SessionManagerLike | None,
     ) -> ActiveCodeServerSession:
-        workspace_path = _resolve_local_workspace_dir(workspace_dir, self._state_root)
-        workspace_path.mkdir(parents=True, exist_ok=True)
-        if not workspace_path.is_dir():
-            raise RuntimeError(f"workspace path is not a directory: {workspace_path}")
+        if app_user_id is None or terminal_session_manager is None:
+            detail = "localhost code-server requires a user id and personal tmux session manager"
+            self._state = self._build_state(
+                status=CodeServerLifecycleStatus.UNAVAILABLE,
+                environment=environment,
+                workspace_dir=workspace_dir,
+                detail=detail,
+            )
+            raise UnsupportedWorkspaceEnvironmentError(detail)
 
         runtime_dir = self._state_root / "runtime"
         runtime_dir.mkdir(parents=True, exist_ok=True)
+        pid_file = runtime_dir / f"code-server-{environment.id}.pid"
         log_file = runtime_dir / f"code-server-{environment.id}.log"
-
-        try:
-            with log_file.open("a", encoding="utf-8") as handle:
-                process = subprocess.Popen(
-                    build_code_server_command(
-                        self._local_host,
-                        self._local_port,
-                        workspace_path,
-                        executable_path=environment.code_server_path or "code-server",
-                    ),
-                    stdin=subprocess.DEVNULL,
-                    stdout=handle,
-                    stderr=handle,
-                    start_new_session=True,
-                    text=True,
-                )
-        except OSError as exc:
-            raise RuntimeError(f"failed to start code-server: {exc}") from exc
-
+        command = " ".join(
+            shlex.quote(part)
+            for part in build_code_server_command(
+                self._local_host,
+                self._local_port,
+                workspace_dir,
+                executable_path=environment.code_server_path or "code-server",
+            )
+        )
+        start_command = (
+            f"mkdir -p {shlex.quote(str(runtime_dir))}; "
+            f"if [ -f {shlex.quote(str(pid_file))} ] && "
+            f"kill -0 $(cat {shlex.quote(str(pid_file))}) >/dev/null 2>&1; then exit 0; fi; "
+            f"nohup {command} >{shlex.quote(str(log_file))} 2>&1 & "
+            f"printf '%s\\n' \"$!\" > {shlex.quote(str(pid_file))}"
+        )
+        _record, target = terminal_session_manager.ensure_personal_session(
+            app_user_id,
+            environment,
+            workspace_dir,
+        )
+        binding = terminal_session_manager.get_binding_by_id(target.binding_id)
+        if binding is None:
+            raise RuntimeError("Personal terminal binding was not found")
+        result = await asyncio.to_thread(
+            terminal_session_manager.tmux_adapter.run_bounded_session_command,
+            binding,
+            environment,
+            target.session_name,
+            command=start_command,
+            timeout_seconds=10.0,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip())
         if not await _wait_until_ready(self._local_host, self._local_port):
-            detail = f"code-server failed to become ready on {self._local_host}:{self._local_port}"
-            if process.poll() is not None:
-                detail = (
-                    f"code-server exited with code {process.returncode} before becoming ready on "
-                    f"{self._local_host}:{self._local_port}"
+            self._run_tmux_stop_command(
+                ActiveCodeServerSession(
+                    state=self._build_state(
+                        status=CodeServerLifecycleStatus.STARTING,
+                        environment=environment,
+                        workspace_dir=workspace_dir,
+                    ),
+                    base_url=f"http://{self._local_host}:{self._local_port}",
+                    tmux_binding=binding,
+                    tmux_adapter=terminal_session_manager.tmux_adapter,
+                    tmux_environment=environment,
+                    tmux_session_name=target.session_name,
+                    tmux_pid_file=pid_file,
                 )
-            _terminate_process(process)
-            raise RuntimeError(detail)
+            )
+            raise RuntimeError(
+                f"code-server failed to become ready on {self._local_host}:{self._local_port}"
+            )
 
         return ActiveCodeServerSession(
             state=self._build_state(
                 status=CodeServerLifecycleStatus.READY,
                 environment=environment,
-                workspace_dir=str(workspace_path),
+                workspace_dir=workspace_dir,
                 detail=None,
-                pid=process.pid,
             ),
             base_url=f"http://{self._local_host}:{self._local_port}",
-            local_process=process,
+            tmux_binding=binding,
+            tmux_adapter=terminal_session_manager.tmux_adapter,
+            tmux_environment=environment,
+            tmux_session_name=target.session_name,
+            tmux_pid_file=pid_file,
         )
+
+    def _run_tmux_stop_command(self, session: ActiveCodeServerSession) -> None:
+        if (
+            session.tmux_binding is None
+            or session.tmux_adapter is None
+            or session.tmux_environment is None
+            or session.tmux_session_name is None
+            or session.tmux_pid_file is None
+        ):
+            return
+        pid_file = shlex.quote(str(session.tmux_pid_file))
+        stop_command = (
+            f"if [ -f {pid_file} ]; then "
+            f"pid=$(cat {pid_file}); "
+            'kill "$pid" >/dev/null 2>&1 || true; '
+            "for i in 1 2 3 4 5; do "
+            'kill -0 "$pid" >/dev/null 2>&1 || break; '
+            "sleep 0.2; "
+            "done; "
+            'kill -0 "$pid" >/dev/null 2>&1 && kill -9 "$pid" >/dev/null 2>&1 || true; '
+            f"rm -f {pid_file}; "
+            "fi"
+        )
+        with suppress(Exception):
+            session.tmux_adapter.run_bounded_session_command(
+                session.tmux_binding,
+                session.tmux_environment,
+                session.tmux_session_name,
+                command=stop_command,
+                timeout_seconds=5.0,
+            )
 
     async def _start_remote_session(
         self,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import errno
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,6 +13,13 @@ from ainrf.code_server import (
     build_remote_code_server_command,
 )
 from ainrf.environments import EnvironmentAuthKind, InMemoryEnvironmentService
+from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.terminal.models import (
+    TerminalAttachmentTarget,
+    TerminalSessionRecord,
+    TerminalSessionStatus,
+)
+from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND
 
 
 class FakeProcess:
@@ -105,6 +112,65 @@ class FakeConnection:
         return None
 
 
+class FakeSessionManager:
+    def __init__(self, tmp_path: Path) -> None:
+        self.tmp_path = tmp_path
+        self.ensure_calls: list[tuple[str, str, str | None]] = []
+        self.commands: list[str] = []
+        self.tmux_adapter = SimpleNamespace(
+            run_bounded_session_command=self.run_bounded_session_command
+        )
+
+    def ensure_personal_session(
+        self,
+        app_user_id: str,
+        environment: EnvironmentRegistryEntry,
+        working_directory: str | None = None,
+    ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
+        self.ensure_calls.append((app_user_id, environment.id, working_directory))
+        record = TerminalSessionRecord(
+            session_id="p-localhost",
+            provider="tmux",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            status=TerminalSessionStatus.RUNNING,
+            environment_id=environment.id,
+            environment_alias=environment.alias,
+            working_directory=working_directory,
+            binding_id="binding-localhost",
+            session_name="p-localhost",
+        )
+        target = TerminalAttachmentTarget(
+            binding_id="binding-localhost",
+            session_id="p-localhost",
+            session_name="p-localhost",
+            user_id=app_user_id,
+            environment_id=environment.id,
+            environment_alias=environment.alias,
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory=working_directory,
+            attach_command=("tmux", "attach-session", "-t", "p-localhost"),
+            spawn_working_directory=self.tmp_path,
+        )
+        return record, target
+
+    def get_binding_by_id(self, binding_id: str) -> object | None:
+        return object() if binding_id == "binding-localhost" else None
+
+    def run_bounded_session_command(
+        self,
+        binding: object,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+        *,
+        command: str,
+        timeout_seconds: float = 10.0,
+        poll_interval_seconds: float = 0.05,
+    ) -> object:
+        _ = binding, environment, session_name, timeout_seconds, poll_interval_seconds
+        self.commands.append(command)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+
 def _make_manager(
     tmp_path: Path,
 ) -> tuple[EnvironmentCodeServerManager, InMemoryEnvironmentService]:
@@ -166,7 +232,7 @@ def test_build_remote_code_server_command_uses_configured_executable() -> None:
 
 
 @pytest.mark.anyio
-async def test_manager_ensure_local_environment_reuses_existing_process(
+async def test_manager_ensure_local_environment_uses_personal_tmux(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -178,31 +244,39 @@ async def test_manager_ensure_local_environment_reuses_existing_process(
         default_workdir="workspace/project",
         code_server_path="/home/researcher/.local/ainrf/code-server/bin/code-server",
     )
-    popen_commands: list[list[str]] = []
-    popen_calls: list[FakeProcess] = []
+    session_manager = FakeSessionManager(tmp_path)
 
-    def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
-        _ = kwargs
-        popen_commands.append(command)
-        process = FakeProcess(pid=4321)
-        popen_calls.append(process)
-        return process
+    def fail_popen(*args: object, **kwargs: object) -> FakeProcess:
+        _ = args, kwargs
+        raise AssertionError("Localhost code-server should start through personal tmux")
 
     async def fake_wait_until_ready(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
-        _ = host, port, timeout_seconds
-        return True
+        _ = timeout_seconds
+        return host == "127.0.0.1" and port == 18080
 
-    monkeypatch.setattr("ainrf.code_server.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("ainrf.code_server.subprocess.Popen", fail_popen)
     monkeypatch.setattr("ainrf.code_server._wait_until_ready", fake_wait_until_ready)
 
-    first = await manager.ensure(environment.id)
-    second = await manager.ensure(environment.id)
+    first = await manager.ensure(
+        environment.id,
+        app_user_id="browser-user",
+        terminal_session_manager=session_manager,
+    )
+    second = await manager.ensure(
+        environment.id,
+        app_user_id="browser-user",
+        terminal_session_manager=session_manager,
+    )
 
-    assert len(popen_calls) == 1
-    assert popen_commands[0][0] == "/home/researcher/.local/ainrf/code-server/bin/code-server"
+    assert session_manager.ensure_calls == [("browser-user", environment.id, "workspace/project")]
+    assert len(session_manager.commands) == 1
+    assert (
+        "/home/researcher/.local/ainrf/code-server/bin/code-server" in session_manager.commands[0]
+    )
+    assert "--bind-addr 127.0.0.1:18080" in session_manager.commands[0]
     assert first.status is CodeServerLifecycleStatus.READY
     assert first.environment_id == environment.id
-    assert first.workspace_dir == str(tmp_path / "workspace" / "project")
+    assert first.workspace_dir == "workspace/project"
     assert second.status is CodeServerLifecycleStatus.READY
     assert manager.base_url == "http://127.0.0.1:18080"
 
@@ -272,31 +346,67 @@ async def test_manager_switching_environments_tears_down_previous_session(
         host="127.0.0.1",
         default_workdir="workspace/b",
     )
-    first_process = FakeProcess(pid=1001)
-    second_process = FakeProcess(pid=1002)
-    processes = [first_process, second_process]
-
-    def fake_popen(*args: object, **kwargs: object) -> FakeProcess:
-        _ = args, kwargs
-        return processes.pop(0)
+    session_manager = FakeSessionManager(tmp_path)
 
     async def fake_wait_until_ready(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
-        _ = host, port, timeout_seconds
-        return True
+        _ = timeout_seconds
+        return host == "127.0.0.1" and port == 18080
 
-    monkeypatch.setattr("ainrf.code_server.subprocess.Popen", fake_popen)
     monkeypatch.setattr("ainrf.code_server._wait_until_ready", fake_wait_until_ready)
 
-    first_state = await manager.ensure(first_environment.id)
-    second_state = await manager.ensure(second_environment.id)
+    first_state = await manager.ensure(
+        first_environment.id,
+        app_user_id="browser-user",
+        terminal_session_manager=session_manager,
+    )
+    second_state = await manager.ensure(
+        second_environment.id,
+        app_user_id="browser-user",
+        terminal_session_manager=session_manager,
+    )
 
     assert first_state.environment_id == first_environment.id
     assert second_state.environment_id == second_environment.id
-    assert processes == []
     assert first_state.status is CodeServerLifecycleStatus.READY
     assert second_state.status is CodeServerLifecycleStatus.READY
-    assert first_process.actions == ["terminate"]
-    assert second_process.actions == []
+    assert session_manager.ensure_calls == [
+        ("browser-user", first_environment.id, "workspace/a"),
+        ("browser-user", second_environment.id, "workspace/b"),
+    ]
+    assert len(session_manager.commands) >= 3
+    assert "workspace/a" in session_manager.commands[0]
+    assert "kill" in session_manager.commands[1]
+    assert "workspace/b" in session_manager.commands[-1]
+
+
+@pytest.mark.anyio
+async def test_tmux_code_server_stop_escalates_to_kill(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, service = _make_manager(tmp_path)
+    environment = service.create_environment(
+        alias="local-a",
+        display_name="Local A",
+        host="127.0.0.1",
+        default_workdir="workspace/a",
+    )
+    session_manager = FakeSessionManager(tmp_path)
+
+    async def fake_wait_until_ready(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
+        _ = timeout_seconds
+        return host == "127.0.0.1" and port == 18080
+
+    monkeypatch.setattr("ainrf.code_server._wait_until_ready", fake_wait_until_ready)
+
+    await manager.ensure(
+        environment.id,
+        app_user_id="browser-user",
+        terminal_session_manager=session_manager,
+    )
+    await manager.stop()
+
+    assert any("kill -9" in command for command in session_manager.commands)
 
 
 @pytest.mark.anyio
@@ -320,9 +430,8 @@ async def test_manager_rejects_password_authenticated_workspace(
 
 
 @pytest.mark.anyio
-async def test_manager_reports_start_failure_when_local_spawn_errors(
+async def test_manager_reports_missing_personal_tmux_context_for_localhost(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager, service = _make_manager(tmp_path)
     environment = service.create_environment(
@@ -332,13 +441,9 @@ async def test_manager_reports_start_failure_when_local_spawn_errors(
         default_workdir="workspace/a",
     )
 
-    def raise_spawn_error(*args: object, **kwargs: object) -> FakeProcess:
-        _ = args, kwargs
-        raise OSError(errno.ENOENT, "code-server not found")
+    with pytest.raises(UnsupportedWorkspaceEnvironmentError, match="personal tmux"):
+        await manager.ensure(environment.id)
 
-    monkeypatch.setattr("ainrf.code_server.subprocess.Popen", raise_spawn_error)
-
-    state = await manager.ensure(environment.id)
-
+    state = await manager.status(environment.id)
     assert state.status is CodeServerLifecycleStatus.UNAVAILABLE
-    assert "failed to start code-server" in (state.detail or "")
+    assert "personal tmux" in (state.detail or "")

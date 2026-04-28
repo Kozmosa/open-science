@@ -10,6 +10,7 @@ import typer
 
 from ainrf.api.config import hash_api_key
 from ainrf.runtime import build_default_runtime_config, normalize_runtime_config
+from ainrf.runtime.readiness import RuntimeReadinessPayload, check_runtime_readiness
 
 
 def config_path_for(state_root: Path) -> Path:
@@ -70,11 +71,36 @@ def prompt_optional_container_profile() -> tuple[str, dict[str, str | int | None
     return build_container_profile(name, ssh_command, project_dir, password)
 
 
+def echo_runtime_readiness(payload: RuntimeReadinessPayload) -> None:
+    if payload.get("ready") is True:
+        typer.echo("Runtime dependencies are ready.")
+        return
+    dependencies = payload.get("dependencies")
+    if not isinstance(dependencies, dict):
+        return
+    missing = [
+        (name, dependency)
+        for name, dependency in dependencies.items()
+        if isinstance(dependency, dict) and dependency.get("available") is False
+    ]
+    if not missing:
+        return
+    typer.echo("Runtime dependency setup needed:")
+    for name, dependency in missing:
+        detail = dependency.get("detail")
+        typer.echo(
+            f"- {name}: {detail if isinstance(detail, str) else 'Dependency is unavailable.'}"
+        )
+
+
 def onboard_state_root(state_root: Path, *, reset_existing: bool = False) -> Path:
     config_path = config_path_for(state_root)
     payload = build_default_runtime_config() if reset_existing else load_runtime_config(config_path)
     payload = normalize_runtime_config(payload)
     payload["api_key_hashes"] = [hash_api_key(prompt_api_key())]
+    runtime_readiness = check_runtime_readiness().as_public_payload()
+    payload["runtime_readiness"] = runtime_readiness
+    echo_runtime_readiness(runtime_readiness)
 
     container_profile = prompt_optional_container_profile()
     if container_profile is not None:

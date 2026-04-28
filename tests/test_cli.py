@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from types import SimpleNamespace
 import sys
 
 import pytest
@@ -75,6 +76,22 @@ def test_serve_help_lists_expected_flags() -> None:
     assert "--port" in result.stdout
     assert "--daemon" in result.stdout
     assert "--state-root" in result.stdout
+
+
+def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_stop_server_daemon(pid_file: Path) -> bool:
+        captured["pid_file"] = pid_file
+        return True
+
+    monkeypatch.setattr("ainrf.cli.stop_server_daemon", fake_stop_server_daemon)
+
+    result = runner.invoke(app, ["stop", "--state-root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "AINRF API daemon stopped" in result.stdout
+    assert captured["pid_file"] == tmp_path / "runtime" / "ainrf-api.pid"
 
 
 def test_serve_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -273,6 +290,64 @@ def test_onboard_state_root_minimal_writes_config(
     assert payload["api_key_hashes"] == [hash_api_key("bootstrap-secret")]
     assert payload["default_container_profile"] == "localhost"
     assert payload["container_profiles"]["localhost"]["host"] == "127.0.0.1"
+
+
+def test_onboard_state_root_records_runtime_readiness(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("ainrf.onboarding.typer.prompt", lambda *args, **kwargs: "bootstrap-secret")
+    monkeypatch.setattr("ainrf.onboarding.typer.confirm", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        "ainrf.onboarding.check_runtime_readiness",
+        lambda: SimpleNamespace(
+            as_public_payload=lambda: {
+                "ready": False,
+                "dependencies": {
+                    "tmux": {"available": False, "path": None, "detail": "Install tmux."}
+                },
+            }
+        ),
+    )
+    messages: list[str] = []
+    monkeypatch.setattr("ainrf.onboarding.typer.echo", messages.append)
+
+    config_path = onboard_state_root(tmp_path)
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert payload["runtime_readiness"]["ready"] is False
+    assert payload["runtime_readiness"]["dependencies"]["tmux"]["available"] is False
+    assert "Runtime dependency setup needed:" in messages
+    assert "- tmux: Install tmux." in messages
+
+
+def test_onboard_state_root_reports_ready_runtime(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("ainrf.onboarding.typer.prompt", lambda *args, **kwargs: "bootstrap-secret")
+    monkeypatch.setattr("ainrf.onboarding.typer.confirm", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        "ainrf.onboarding.check_runtime_readiness",
+        lambda: SimpleNamespace(
+            as_public_payload=lambda: {
+                "ready": True,
+                "dependencies": {
+                    "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
+                    "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
+                    "code_server": {
+                        "available": True,
+                        "path": "/usr/bin/code-server",
+                        "detail": None,
+                    },
+                },
+            }
+        ),
+    )
+    messages: list[str] = []
+    monkeypatch.setattr("ainrf.onboarding.typer.echo", messages.append)
+
+    onboard_state_root(tmp_path)
+
+    assert "Runtime dependencies are ready." in messages
 
 
 def test_ensure_onboarded_returns_existing_config_path(tmp_path: Path) -> None:

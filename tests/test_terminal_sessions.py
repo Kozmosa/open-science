@@ -534,13 +534,14 @@ def test_tmux_adapter_runs_bounded_command_in_personal_session(
             "send-keys",
             "-t",
             tmux_session_target("p-abc123def4"),
-            "printf %s\\n __AINRF_PROBE_START_probe1__; printf hello; __ainrf_probe_status=$?; "
-            "printf %s\\n __AINRF_PROBE_EXIT_probe1__:$__ainrf_probe_status; "
-            "printf %s\\n __AINRF_PROBE_END_probe1__",
+            "printf '%s\\n' __AINRF_PROBE_START_probe1__; printf hello; "
+            "__ainrf_probe_status=$?; "
+            "printf '%s:%s\\n' __AINRF_PROBE_EXIT_probe1__ \"$__ainrf_probe_status\"; "
+            "printf '%s\\n' __AINRF_PROBE_END_probe1__",
             "Enter",
         ),
-        ("tmux", "capture-pane", "-p", "-t", tmux_session_target("p-abc123def4")),
-        ("tmux", "capture-pane", "-p", "-t", tmux_session_target("p-abc123def4")),
+        ("tmux", "capture-pane", "-J", "-p", "-t", tmux_session_target("p-abc123def4")),
+        ("tmux", "capture-pane", "-J", "-p", "-t", tmux_session_target("p-abc123def4")),
     ]
 
 
@@ -614,6 +615,74 @@ def test_tmux_adapter_bounded_command_times_out_without_end_marker(
         )
 
 
+def test_tmux_adapter_capture_pane_joins_wrapped_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+    )
+    binding = manager_binding(environment.id)
+    captured: list[tuple[str, ...]] = []
+
+    def fake_run_local(command: tuple[str, ...]) -> SimpleNamespace:
+        captured.append(command)
+        if command[:2] == ("tmux", "capture-pane"):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "__AINRF_PROBE_START_probe6__\n"
+                    '__AINRF_CODE_SERVER_INSTALL_RESULT__ {"version":"4.117.0"}\n'
+                    "__AINRF_PROBE_EXIT_probe6__:0\n"
+                    "__AINRF_PROBE_END_probe6__\n"
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
+    monkeypatch.setattr("ainrf.terminal.tmux.uuid4", lambda: SimpleNamespace(hex="probe6"))
+
+    adapter.run_bounded_session_command(
+        binding,
+        environment,
+        "p-abc123def4",
+        command="install-code-server",
+    )
+
+    assert (
+        "tmux",
+        "capture-pane",
+        "-J",
+        "-p",
+        "-t",
+        tmux_session_target("p-abc123def4"),
+    ) in captured
+
+
+def test_tmux_adapter_ignores_echoed_bounded_command_markers() -> None:
+    output = (
+        "printf '%s\\n' __AINRF_PROBE_START_probe5__; "
+        "bash -lc 'printf \"__AINRF_CODE_SERVER_INSTALL_RESULT__ hidden\\n\"'; "
+        "__ainrf_probe_status=$?; "
+        "printf '%s:%s\\n' __AINRF_PROBE_EXIT_probe5__ \"$__ainrf_probe_status\"; "
+        "printf '%s\\n' __AINRF_PROBE_END_probe5__\n"
+        "__AINRF_PROBE_EXIT_probe5__:0\n"
+        "__AINRF_PROBE_END_probe5__\n"
+    )
+
+    parsed = TmuxAdapter._parse_bounded_session_output(
+        output,
+        start_marker="__AINRF_PROBE_START_probe5__",
+        exit_marker="__AINRF_PROBE_EXIT_probe5__",
+        end_marker="__AINRF_PROBE_END_probe5__",
+    )
+
+    assert parsed is None
+
+
 def test_tmux_adapter_bounded_command_uses_remote_tmux_wrapper(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -661,14 +730,14 @@ def test_tmux_adapter_bounded_command_uses_remote_tmux_wrapper(
             "researcher",
             "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
             "tmux send-keys -t p-abc123def4 "
-            "'printf %s\\n __AINRF_PROBE_START_probe4__; hostname; __ainrf_probe_status=$?; "
-            "printf %s\\n __AINRF_PROBE_EXIT_probe4__:$__ainrf_probe_status; "
-            "printf %s\\n __AINRF_PROBE_END_probe4__' Enter",
+            "'printf '\"'\"'%s\\n'\"'\"' __AINRF_PROBE_START_probe4__; hostname; __ainrf_probe_status=$?; "
+            "printf '\"'\"'%s:%s\\n'\"'\"' __AINRF_PROBE_EXIT_probe4__ \"$__ainrf_probe_status\"; "
+            "printf '\"'\"'%s\\n'\"'\"' __AINRF_PROBE_END_probe4__' Enter",
         ),
         (
             "researcher",
             "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
-            "tmux capture-pane -p -t p-abc123def4",
+            "tmux capture-pane -J -p -t p-abc123def4",
         ),
     ]
 
@@ -702,6 +771,54 @@ def test_detach_only_closes_bridge_runtime(tmp_path: Path, monkeypatch: pytest.M
 
     assert detached is not None
     assert stopped == [runtime]
+
+
+def test_attachment_disconnect_preserves_personal_tmux_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+        default_workdir="/workspace/project",
+    )
+    adapter = manager._tmux_adapter
+    killed_sessions: list[str] = []
+    stopped: list[object] = []
+
+    monkeypatch.setattr(adapter, "ensure_personal_session", lambda *args, **kwargs: None)
+    monkeypatch.setattr(adapter, "has_session", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        adapter,
+        "build_attach_command",
+        lambda *args, **kwargs: ("tmux", "attach-session"),
+    )
+    monkeypatch.setattr(
+        adapter,
+        "kill_session",
+        lambda *args, **kwargs: killed_sessions.append(args[-1]),
+    )
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.stop_terminal_bridge",
+        lambda current_runtime: stopped.append(current_runtime),
+    )
+
+    session, target = manager.ensure_personal_session(
+        "browser-user", environment, "/workspace/project"
+    )
+    broker = TerminalAttachmentBroker()
+    attachment = broker.create_attachment("http://testserver/", target)
+    runtime = object()
+    broker._runtimes[attachment.attachment_id] = runtime  # type: ignore[assignment]
+
+    broker.close_runtime(attachment.attachment_id)
+    record = manager.get_session_record("browser-user", environment, "/workspace/project")
+
+    assert stopped == [runtime]
+    assert killed_sessions == []
+    assert record.status is TerminalSessionStatus.RUNNING
+    assert record.session_name == session.session_name
 
 
 def test_reset_kills_and_recreates_personal_session(

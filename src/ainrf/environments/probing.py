@@ -4,8 +4,10 @@ import asyncio
 import shlex
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ainrf.environments.local import is_localhost_environment
 from ainrf.environments.models import (
     AnthropicEnvStatus,
     DetectionSnapshot,
@@ -31,21 +33,39 @@ class EnvironmentProbeOutcome:
     ssh_unavailable: bool = False
 
 
-async def probe_with_ssh(environment: EnvironmentRegistryEntry) -> EnvironmentProbeOutcome:
-    container = ContainerConfig(
+_LOCALHOST_SSH_ATTEMPTS = 3
+_LOCALHOST_SSH_CONNECT_TIMEOUT_SECONDS = 1
+_PROBE_COMMAND_TIMEOUT_SECONDS = 30.0
+
+
+def _environment_workdir(environment: EnvironmentRegistryEntry) -> str:
+    if environment.default_workdir:
+        return environment.default_workdir
+    raise ValueError(f"Environment {environment.alias} does not define a working directory")
+
+
+def _ssh_container_for(environment: EnvironmentRegistryEntry) -> ContainerConfig:
+    return ContainerConfig(
         host=environment.host,
         port=environment.port,
         user=environment.user,
         ssh_key_path=environment.identity_file,
-        project_dir=environment.default_workdir or "/workspace/projects",
+        project_dir=_environment_workdir(environment),
         connect_timeout=5,
         command_timeout=30,
     )
+
+
+async def probe_with_ssh(environment: EnvironmentRegistryEntry) -> EnvironmentProbeOutcome:
+    if is_localhost_environment(environment):
+        return await _probe_localhost_with_ssh(environment)
+
+    container = _ssh_container_for(environment)
     executor = SSHExecutor(container)
     try:
         snapshot = await build_detection_snapshot(
             environment,
-            lambda command: executor.run_command(command, timeout=30),
+            lambda command: executor.run_command(command, timeout=_PROBE_COMMAND_TIMEOUT_SECONDS),
             ssh_ok=True,
             summary=f"Detection completed for {environment.alias} via SSH.",
         )
@@ -56,16 +76,47 @@ async def probe_with_ssh(environment: EnvironmentRegistryEntry) -> EnvironmentPr
         await executor.close()
 
 
+async def _probe_localhost_with_ssh(
+    environment: EnvironmentRegistryEntry,
+) -> EnvironmentProbeOutcome:
+    last_error: SSHConnectionError | None = None
+    for _attempt in range(_LOCALHOST_SSH_ATTEMPTS):
+        container = _ssh_container_for(environment)
+        container.connect_timeout = _LOCALHOST_SSH_CONNECT_TIMEOUT_SECONDS
+        executor = SSHExecutor(container)
+        try:
+            snapshot = await build_detection_snapshot(
+                environment,
+                lambda command: executor.run_command(
+                    command,
+                    timeout=_LOCALHOST_SSH_CONNECT_TIMEOUT_SECONDS,
+                ),
+                ssh_ok=True,
+                summary=f"Detection completed for {environment.alias} via SSH.",
+            )
+            return EnvironmentProbeOutcome(snapshot=snapshot)
+        except SSHConnectionError as exc:
+            last_error = exc
+        finally:
+            await executor.close()
+    raise last_error or SSHConnectionError("localhost SSH unavailable")
+
+
 async def probe_with_personal_tmux(
     *,
     environment: EnvironmentRegistryEntry,
     app_user_id: str,
     session_manager: SessionManager,
 ) -> EnvironmentProbeOutcome:
+    working_directory = environment.default_workdir
+    if is_localhost_environment(environment) and working_directory is not None:
+        workdir_check = await asyncio.to_thread(Path(working_directory).is_dir)
+        if not workdir_check:
+            working_directory = None
     _record, target = session_manager.ensure_personal_session(
         app_user_id,
         environment,
-        environment.default_workdir,
+        working_directory,
     )
     binding = session_manager.get_binding_by_id(target.binding_id)
     if binding is None:
@@ -105,7 +156,7 @@ async def build_detection_snapshot(
     hostname = (await run_command("hostname")).stdout.strip() or environment.host
     os_info = (await run_command("uname -s")).stdout.strip() or None
     arch = (await run_command("uname -m")).stdout.strip() or None
-    workdir = environment.default_workdir or "/workspace/projects"
+    workdir = _environment_workdir(environment)
     workdir_result = await run_command(f"test -d {shlex.quote(workdir)}")
     python = await _probe_tool(run_command, preferred_python, f"{preferred_python} --version")
     conda = await _probe_tool(run_command, "conda", "conda --version")

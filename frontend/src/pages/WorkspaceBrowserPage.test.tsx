@@ -1,8 +1,9 @@
+import { QueryClient } from '@tanstack/react-query';
 import { screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import WorkspaceBrowserPage from './WorkspaceBrowserPage';
-import { renderWithProviders } from '../test/render';
-import type { EnvironmentRecord } from '../types';
+import { createTestQueryClient, renderWithProviders } from '../test/render';
+import type { EnvironmentRecord, SystemHealth } from '../types';
 
 const selectedEnvironment: EnvironmentRecord = {
   id: 'env-1',
@@ -45,15 +46,43 @@ vi.mock('../components', () => ({
 }));
 
 describe('WorkspaceBrowserPage', () => {
-  it('renders the workspace browser page around the code-server card without another environment selector', async () => {
+  it('shows runtime readiness blockers before the workspace browser is opened', async () => {
+    const client: QueryClient = createTestQueryClient();
+    const health: SystemHealth = {
+      status: 'ok',
+      state_root: '.ainrf',
+      startup_cwd: '/repo',
+      default_workspace_dir: '/repo/workspace/default',
+      container_configured: false,
+      container_health: null,
+      runtime_readiness: {
+        ready: false,
+        dependencies: {
+          tmux: {
+            available: false,
+            path: null,
+            detail: 'Install tmux to use localhost terminals and workspace browser.',
+          },
+          uv: { available: true, path: '/usr/bin/uv', detail: null },
+          code_server: {
+            available: false,
+            path: null,
+            detail: 'Install code-server from Settings before using the workspace browser.',
+          },
+        },
+      },
+      detail: null,
+    };
+    client.setQueryData(['health'], health);
+
     renderWithProviders(<WorkspaceBrowserPage />, {
       route: '/workspace-browser',
       locale: 'en',
+      client,
     });
 
-    expect(await screen.findByRole('heading', { name: 'Workspace Browser' })).toBeInTheDocument();
-    expect(screen.getByText('工作区浏览器')).toBeInTheDocument();
-    expect(screen.getByTestId('code-server-card')).toBeInTheDocument();
-    expect(screen.queryByTestId('environment-selector')).not.toBeInTheDocument();
+    expect(await screen.findByText('Runtime setup required')).toBeInTheDocument();
+    expect(screen.getByText('Install tmux to use localhost terminals and workspace browser.')).toBeInTheDocument();
+    expect(screen.getByText('Install code-server from Settings before using the workspace browser.')).toBeInTheDocument();
   });
 });

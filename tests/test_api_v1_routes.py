@@ -100,6 +100,72 @@ async def test_lifespan_attaches_environment_aware_code_server_manager(tmp_path:
 
 
 @pytest.mark.anyio
+async def test_lifespan_records_startup_runtime_readiness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+        )
+    )
+    monkeypatch.setattr(
+        "ainrf.api.app.check_runtime_readiness",
+        lambda code_server_path=None: type(
+            "FakeReadiness",
+            (),
+            {
+                "as_public_payload": lambda self: {
+                    "ready": False,
+                    "dependencies": {
+                        "tmux": {
+                            "available": False,
+                            "path": None,
+                            "detail": "Install tmux.",
+                        }
+                    },
+                }
+            },
+        )(),
+    )
+
+    async with app.router.lifespan_context(app):
+        assert app.state.runtime_readiness == {
+            "ready": False,
+            "dependencies": {"tmux": {"available": False, "path": None, "detail": "Install tmux."}},
+        }
+
+
+@pytest.mark.anyio
+async def test_health_uses_startup_runtime_readiness_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+        )
+    )
+    app.state.runtime_readiness = {
+        "ready": False,
+        "dependencies": {"tmux": {"available": False, "path": None, "detail": "Install tmux."}},
+    }
+    monkeypatch.setattr(
+        "ainrf.api.routes.health.check_runtime_readiness",
+        lambda code_server_path=None: pytest.fail("health should reuse startup readiness snapshot"),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["runtime_readiness"] == app.state.runtime_readiness
+
+
+@pytest.mark.anyio
 async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
         create_response = await client.post(

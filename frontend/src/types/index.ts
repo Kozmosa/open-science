@@ -1,6 +1,23 @@
+export interface RuntimeDependencyStatus {
+  available: boolean;
+  path: string | null;
+  detail: string | null;
+}
+
+export interface RuntimeReadiness {
+  ready: boolean;
+  dependencies: {
+    tmux: RuntimeDependencyStatus;
+    uv: RuntimeDependencyStatus;
+    code_server: RuntimeDependencyStatus;
+  };
+}
+
 export interface SystemHealth {
   status: 'ok' | 'degraded';
   state_root: string;
+  startup_cwd: string;
+  default_workspace_dir: string;
   container_configured: boolean;
   container_health?: {
     ssh_ok: boolean;
@@ -12,6 +29,7 @@ export interface SystemHealth {
     disk_free_bytes: number | null;
     warnings: string[];
   } | null;
+  runtime_readiness?: RuntimeReadiness | null;
   detail?: string | null;
 }
 
@@ -348,6 +366,10 @@ export interface EnvironmentCodeServerInstallResponse {
   execution_mode: 'ssh' | 'personal_tmux_fallback';
   already_installed: boolean;
   detail: string;
+  terminal_session_id?: string | null;
+  terminal_attachment_id?: string | null;
+  terminal_ws_url?: string | null;
+  terminal_attachment_expires_at?: string | null;
 }
 
 export interface EnvironmentUpdateRequest {

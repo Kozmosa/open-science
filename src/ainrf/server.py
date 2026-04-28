@@ -66,6 +66,20 @@ def run_server_daemon(
     raise RuntimeError(f"AINRF API daemon failed to become healthy on {host}:{port}")
 
 
+def stop_server_daemon(pid_file: Path) -> bool:
+    if not pid_file.exists():
+        return False
+    raw_value = pid_file.read_text(encoding="utf-8").strip()
+    if not raw_value.isdigit():
+        pid_file.unlink(missing_ok=True)
+        return False
+    pid = int(raw_value)
+    if _process_exists(pid):
+        _terminate_process(pid)
+    pid_file.unlink(missing_ok=True)
+    return True
+
+
 def _wait_until_healthy(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
     deadline = time.monotonic() + timeout_seconds
     url = f"http://{host}:{port}/health"
@@ -102,6 +116,19 @@ def _process_exists(pid: int) -> bool:
 
 def _terminate_process(pid: int) -> None:
     try:
-        os.kill(pid, signal.SIGTERM)
+        pgid = os.getpgid(pid)
+    except ProcessLookupError:
+        return
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if not _process_exists(pid):
+            return
+        time.sleep(0.1)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
         return

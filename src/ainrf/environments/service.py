@@ -6,14 +6,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from ainrf.environments.local import is_localhost_environment
 from ainrf.environments.models import (
-    AnthropicEnvStatus,
     DetectionSnapshot,
-    DetectionStatus,
     EnvironmentAuthKind,
     EnvironmentRegistryEntry,
     ProjectEnvironmentReference,
-    ToolStatus,
     utc_now,
 )
 from ainrf.environments.probing import (
@@ -61,7 +59,7 @@ def _current_system_user() -> str:
     return user or "root"
 
 
-def _build_seed_environment() -> EnvironmentRegistryEntry:
+def _build_seed_environment(default_workdir: str | None = None) -> EnvironmentRegistryEntry:
     now = utc_now()
     return EnvironmentRegistryEntry(
         id="env-localhost",
@@ -75,7 +73,7 @@ def _build_seed_environment() -> EnvironmentRegistryEntry:
         user=_current_system_user(),
         auth_kind=EnvironmentAuthKind.SSH_KEY,
         ssh_options={},
-        default_workdir="/workspace/projects",
+        default_workdir=default_workdir,
         task_harness_profile=(
             "You are running in the default localhost task harness environment.\n"
             "Prefer repository-local tools and keep changes scoped to the requested task."
@@ -86,11 +84,12 @@ def _build_seed_environment() -> EnvironmentRegistryEntry:
 
 
 class InMemoryEnvironmentService:
-    def __init__(self) -> None:
+    def __init__(self, default_local_workdir: str | None = None) -> None:
+        self._default_local_workdir = default_local_workdir
         self._environments: dict[str, EnvironmentRegistryEntry] = {}
         self._detections: dict[str, list[DetectionSnapshot]] = defaultdict(list)
         self._project_refs: dict[str, dict[str, ProjectEnvironmentReference]] = defaultdict(dict)
-        seed = _build_seed_environment()
+        seed = _build_seed_environment(default_local_workdir)
         self._environments[seed.id] = seed
 
     def list_environments(self) -> list[EnvironmentRegistryEntry]:
@@ -235,32 +234,22 @@ class InMemoryEnvironmentService:
         terminal_session_manager: SessionManager | None = None,
     ) -> DetectionSnapshot:
         environment = self.get_environment(environment_id)
-        if environment.is_seed:
-            snapshot = DetectionSnapshot(
-                environment_id=environment.id,
-                detected_at=utc_now(),
-                status=DetectionStatus.FAILED,
-                summary="Localhost seed profile requires a reachable SSH service.",
-                errors=["localhost_seed_unreachable"],
-                warnings=["localhost_seed_unreachable"],
-                ssh_ok=False,
-                hostname=environment.host,
-                os_info="linux",
-                arch="x86_64",
-                workdir_exists=bool(environment.default_workdir),
-                python=ToolStatus(available=False),
-                conda=ToolStatus(available=False),
-                uv=ToolStatus(available=False),
-                pixi=ToolStatus(available=False),
-                torch=ToolStatus(available=False),
-                cuda=ToolStatus(available=False),
-                gpu_models=[],
-                gpu_count=0,
-                claude_cli=ToolStatus(available=False),
-                anthropic_env=AnthropicEnvStatus.UNKNOWN,
-            )
+        if is_localhost_environment(environment):
+            if app_user_id is None or terminal_session_manager is None:
+                snapshot = failed_missing_user_snapshot(environment)
+            else:
+                try:
+                    outcome = await probe_with_personal_tmux(
+                        environment=environment,
+                        app_user_id=app_user_id,
+                        session_manager=terminal_session_manager,
+                    )
+                    snapshot = outcome.snapshot
+                except (RuntimeError, TmuxCommandError) as exc:
+                    snapshot = failed_tmux_snapshot(environment, exc)
             self._detections[environment.id].append(snapshot)
             return snapshot
+
         try:
             outcome = await probe_with_ssh(environment)
             snapshot = outcome.snapshot
@@ -375,6 +364,8 @@ class InMemoryEnvironmentService:
         environment = self.get_environment(environment_id)
         if environment.default_workdir:
             return environment.default_workdir
+        if is_localhost_environment(environment) and self._default_local_workdir is not None:
+            return self._default_local_workdir
         return str(fallback_root)
 
     def _ensure_alias_available(self, alias: str) -> None:

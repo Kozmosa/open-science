@@ -164,6 +164,30 @@ def test_open_connection_passes_password_when_configured(monkeypatch: pytest.Mon
     assert captured["password"] == "secret-pass"
 
 
+def test_run_command_limits_connection_retries_to_connect_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    async def fake_connect(**_: object) -> FakeConnection:
+        nonlocal attempts
+        attempts += 1
+        raise OSError("connection refused")
+
+    async def fake_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(ssh_module.asyncssh, "connect", fake_connect)
+    monkeypatch.setattr(ssh_module.asyncio, "sleep", fake_sleep)
+
+    executor = SSHExecutor(ContainerConfig(host="127.0.0.1", connect_timeout=1))
+
+    with pytest.raises(Exception):
+        asyncio.run(executor.run_command("hostname", timeout=30))
+
+    assert attempts <= 3
+
+
 def test_run_command_reconnects_after_connection_loss(monkeypatch: pytest.MonkeyPatch) -> None:
     first_connection = FakeConnection(lambda _command: OSError("connection lost"))
     second_connection = FakeConnection(lambda _command: FakeProcess(stdout="recovered\n"))

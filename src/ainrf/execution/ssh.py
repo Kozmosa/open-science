@@ -87,6 +87,7 @@ class SSHExecutor:
         env: Mapping[str, str] | None = None,
     ) -> CommandResult:
         effective_timeout = timeout or self._container.command_timeout
+        await self.connect()
 
         async def operation(connection: asyncssh.SSHClientConnection) -> CommandResult:
             return await self._run_command_once(connection, cmd, effective_timeout, cwd, env)
@@ -289,6 +290,8 @@ class SSHExecutor:
                     if remaining <= 0:
                         break
                     sleep_for = min(2 ** (attempt - 1), _MAX_BACKOFF_SECONDS, remaining)
+                    if sleep_for >= remaining:
+                        break
                     if backoff_budget is not None:
                         sleep_for = min(sleep_for, backoff_budget)
                     await asyncio.sleep(sleep_for)

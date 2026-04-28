@@ -19,6 +19,7 @@ import type {
 } from '../types';
 import { useLocale, useT } from '../i18n';
 import { useEnvironmentSelection } from '../components';
+import { useToast } from '../components/common';
 import {
   buildEnvironmentRequest,
   buildProjectReferenceCreateRequest,
@@ -641,6 +642,7 @@ function ContainersPage() {
   const t = useT();
   const locale = useLocale();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const environmentSelection = useEnvironmentSelection();
   const [editorMode, setEditorMode] = useState<EnvironmentEditorMode>('create');
   const [editorEnvironmentId, setEditorEnvironmentId] = useState<string | null>(null);
@@ -716,6 +718,15 @@ function ContainersPage() {
     onSuccess: (environment) => {
       const current = queryClient.getQueryData<EnvironmentListResponse>(environmentsQueryKey);
       syncEnvironmentList(mergeEnvironmentList(current, environment));
+      const detection = environment.latest_detection;
+      if (detection?.warnings.includes('used_personal_tmux_fallback')) {
+        showToast(t('pages.containers.detectFallbackToast', { alias: environment.alias }), 'warning');
+      } else if (detection?.status === 'failed') {
+        showToast(detection.summary, 'error');
+      }
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : t('pages.containers.detectFailedToast'), 'error');
     },
   });
 

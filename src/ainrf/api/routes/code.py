@@ -15,6 +15,7 @@ from ainrf.api.schemas import (
 from ainrf.code_server import (
     CodeServerState,
     EnvironmentCodeServerManager,
+    SessionManagerLike,
     UnsupportedWorkspaceEnvironmentError,
 )
 from ainrf.environments import EnvironmentNotFoundError
@@ -78,8 +79,15 @@ async def _call_manager_status(
 async def _call_manager_ensure(
     manager: EnvironmentCodeServerManager,
     environment_id: str,
+    *,
+    app_user_id: str | None = None,
+    terminal_session_manager: SessionManagerLike | None = None,
 ) -> CodeServerState:
-    result = manager.ensure(environment_id)
+    result = manager.ensure(
+        environment_id,
+        app_user_id=app_user_id,
+        terminal_session_manager=terminal_session_manager,
+    )
     if inspect.isawaitable(result):
         return await result
     return result
@@ -125,7 +133,12 @@ async def ensure_code_server_session(
         raise HTTPException(status_code=500, detail="code-server supervisor not initialized")
 
     try:
-        state = await _call_manager_ensure(manager, payload.environment_id)
+        state = await _call_manager_ensure(
+            manager,
+            payload.environment_id,
+            app_user_id=request.headers.get("X-AINRF-User-Id"),
+            terminal_session_manager=getattr(request.app.state, "terminal_session_manager", None),
+        )
     except Exception as exc:
         raise _translate_code_server_error(exc) from exc
     return _serialize_code_server_state(state)

@@ -20,8 +20,9 @@ class WorkspaceDeletionError(ValueError):
 
 
 class WorkspaceRegistryService:
-    def __init__(self, state_root: Path) -> None:
+    def __init__(self, state_root: Path, default_workspace_dir: Path | None = None) -> None:
         self._state_root = state_root
+        self._default_workspace_dir = default_workspace_dir
         self._runtime_root = state_root / "runtime"
         self._registry_path = self._runtime_root / "workspaces.json"
         self._lock = Lock()
@@ -131,16 +132,17 @@ class WorkspaceRegistryService:
 
     def _build_seed_workspace(self) -> WorkspaceRecord:
         now = utc_now()
-        # The seed workspace intentionally binds new state roots to the process checkout.
-        default_workdir = str(Path.cwd())
+        default_workdir_path = self._default_workspace_dir or Path.cwd() / "workspace" / "default"
+        default_workdir_path.mkdir(parents=True, exist_ok=True)
+        default_workdir = str(default_workdir_path)
         return WorkspaceRecord(
             workspace_id="workspace-default",
             label="Repository Default",
-            description="Seed workspace bound to the current repository checkout.",
+            description="Seed workspace bound to the default local workspace directory.",
             default_workdir=default_workdir,
             workspace_prompt=(
-                "Treat this workspace as the default repository context for the task.\n"
-                f"Repository root: {default_workdir}"
+                "Treat this workspace as the default local workspace context for the task.\n"
+                f"Workspace directory: {default_workdir}"
             ),
             created_at=now,
             updated_at=now,
