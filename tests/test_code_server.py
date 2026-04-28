@@ -126,11 +126,41 @@ def test_build_code_server_command_uses_workspace_and_loopback(tmp_path: Path) -
     ]
 
 
+def test_build_code_server_command_uses_configured_executable(tmp_path: Path) -> None:
+    command = build_code_server_command(
+        "127.0.0.1",
+        18080,
+        tmp_path,
+        executable_path="/home/researcher/.local/ainrf/code-server/bin/code-server",
+    )
+
+    assert command == [
+        "/home/researcher/.local/ainrf/code-server/bin/code-server",
+        "--bind-addr",
+        "127.0.0.1:18080",
+        "--auth",
+        "none",
+        str(tmp_path),
+    ]
+
+
 def test_build_remote_code_server_command_wraps_bash_login_shell() -> None:
     command = build_remote_code_server_command("/workspace/project")
 
     assert "bash -lc" in command
     assert "code-server" in command
+    assert "127.0.0.1:18080" in command
+    assert "/workspace/project" in command
+
+
+def test_build_remote_code_server_command_uses_configured_executable() -> None:
+    command = build_remote_code_server_command(
+        "/workspace/project",
+        executable_path="/home/researcher/.local/ainrf/code-server/bin/code-server",
+    )
+
+    assert "bash -lc" in command
+    assert "/home/researcher/.local/ainrf/code-server/bin/code-server" in command
     assert "127.0.0.1:18080" in command
     assert "/workspace/project" in command
 
@@ -146,11 +176,14 @@ async def test_manager_ensure_local_environment_reuses_existing_process(
         display_name="Localhost 2",
         host="127.0.0.1",
         default_workdir="workspace/project",
+        code_server_path="/home/researcher/.local/ainrf/code-server/bin/code-server",
     )
+    popen_commands: list[list[str]] = []
     popen_calls: list[FakeProcess] = []
 
-    def fake_popen(*args: object, **kwargs: object) -> FakeProcess:
-        _ = args, kwargs
+    def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
+        _ = kwargs
+        popen_commands.append(command)
         process = FakeProcess(pid=4321)
         popen_calls.append(process)
         return process
@@ -166,6 +199,7 @@ async def test_manager_ensure_local_environment_reuses_existing_process(
     second = await manager.ensure(environment.id)
 
     assert len(popen_calls) == 1
+    assert popen_commands[0][0] == "/home/researcher/.local/ainrf/code-server/bin/code-server"
     assert first.status is CodeServerLifecycleStatus.READY
     assert first.environment_id == environment.id
     assert first.workspace_dir == str(tmp_path / "workspace" / "project")
@@ -187,6 +221,7 @@ async def test_manager_ensure_remote_environment_starts_tunnel(
         user="researcher",
         identity_file="/keys/id_ed25519",
         default_workdir="/workspace/project",
+        code_server_path="/home/researcher/.local/ainrf/code-server/bin/code-server",
     )
     remote_process = FakeRemoteProcess()
     tunnel = FakeTunnel(port=19090)
@@ -215,7 +250,7 @@ async def test_manager_ensure_remote_environment_starts_tunnel(
     assert captured_connect_kwargs["client_keys"] == ["/keys/id_ed25519"]
     assert connection.forward_calls == [("127.0.0.1", 0, "127.0.0.1", 18080)]
     assert connection.commands
-    assert "code-server" in connection.commands[0]
+    assert "/home/researcher/.local/ainrf/code-server/bin/code-server" in connection.commands[0]
     assert manager.base_url == "http://127.0.0.1:19090"
 
 

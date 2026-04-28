@@ -56,9 +56,15 @@ class ActiveCodeServerSession:
     tunnel: Any | None = None
 
 
-def build_code_server_command(host: str, port: int, workspace_dir: str | Path) -> list[str]:
+def build_code_server_command(
+    host: str,
+    port: int,
+    workspace_dir: str | Path,
+    *,
+    executable_path: str = "code-server",
+) -> list[str]:
     return [
-        "code-server",
+        executable_path,
         "--bind-addr",
         f"{host}:{port}",
         "--auth",
@@ -67,13 +73,16 @@ def build_code_server_command(host: str, port: int, workspace_dir: str | Path) -
     ]
 
 
-def build_remote_code_server_command(workspace_dir: str) -> str:
+def build_remote_code_server_command(
+    workspace_dir: str, *, executable_path: str = "code-server"
+) -> str:
     code_server_command = " ".join(
         shlex.quote(part)
         for part in build_code_server_command(
             _REMOTE_CODE_SERVER_HOST,
             _REMOTE_CODE_SERVER_PORT,
             workspace_dir,
+            executable_path=executable_path,
         )
     )
     return f"bash -lc {shlex.quote(f'exec {code_server_command}')}"
@@ -351,7 +360,12 @@ class EnvironmentCodeServerManager:
         try:
             with log_file.open("a", encoding="utf-8") as handle:
                 process = subprocess.Popen(
-                    build_code_server_command(self._local_host, self._local_port, workspace_path),
+                    build_code_server_command(
+                        self._local_host,
+                        self._local_port,
+                        workspace_path,
+                        executable_path=environment.code_server_path or "code-server",
+                    ),
                     stdin=subprocess.DEVNULL,
                     stdout=handle,
                     stderr=handle,
@@ -394,7 +408,10 @@ class EnvironmentCodeServerManager:
 
         try:
             remote_process = await connection.create_process(
-                build_remote_code_server_command(workspace_dir),
+                build_remote_code_server_command(
+                    workspace_dir,
+                    executable_path=environment.code_server_path or "code-server",
+                ),
                 stdin=asyncssh.DEVNULL,
                 stdout=asyncssh.DEVNULL,
                 stderr=asyncssh.DEVNULL,

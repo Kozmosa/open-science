@@ -2,6 +2,9 @@ import type {
   DefaultProjectSettings,
   DefaultRoute,
   EnvironmentTaskDefaults,
+  ResearchAgentProfileSettings,
+  TaskConfigurationPreset,
+  TaskConfigurationSettings,
   WebUiSettingsDocument,
 } from './types';
 
@@ -9,14 +12,14 @@ export const settingsStorageKey = 'scholar-agent:webui-settings';
 export const defaultTerminalFontSize = 13;
 export const minTerminalFontSize = 11;
 export const maxTerminalFontSize = 18;
+export const defaultResearchAgentProfileId = 'claude-code-default';
+export const rawPromptTaskConfigurationId = 'raw-prompt';
+export const structuredResearchTaskConfigurationId = 'structured-research-default';
 
 const supportedDefaultRoutes: DefaultRoute[] = ['terminal', 'tasks', 'workspaces', 'containers'];
 
 export function isDefaultRoute(value: unknown): value is DefaultRoute {
-  return (
-    typeof value === 'string' &&
-    supportedDefaultRoutes.includes(value as DefaultRoute)
-  );
+  return typeof value === 'string' && supportedDefaultRoutes.includes(value as DefaultRoute);
 }
 
 export function clampTerminalFontSize(value: unknown): number {
@@ -28,10 +31,47 @@ export function clampTerminalFontSize(value: unknown): number {
   return Math.min(maxTerminalFontSize, Math.max(minTerminalFontSize, rounded));
 }
 
+export function createDefaultResearchAgentProfile(): ResearchAgentProfileSettings {
+  return {
+    profileId: defaultResearchAgentProfileId,
+    label: 'Claude Code Default',
+    systemPrompt: '',
+    skillsPrompt: '',
+    settingsJson: '{\n  "permissions": {\n    "allow": ["Read", "Grep"]\n  }\n}',
+  };
+}
+
+export function createDefaultTaskConfigurations(): TaskConfigurationPreset[] {
+  return [
+    {
+      configId: rawPromptTaskConfigurationId,
+      label: 'Raw Prompt',
+      mode: 'raw_prompt',
+    },
+    {
+      configId: structuredResearchTaskConfigurationId,
+      label: 'Structured Research',
+      mode: 'structured_research',
+    },
+  ];
+}
+
+export function createDefaultTaskConfigurationSettings(): TaskConfigurationSettings {
+  return {
+    defaultExecutionEngineId: 'claude-code',
+    researchAgentProfiles: [createDefaultResearchAgentProfile()],
+    taskConfigurations: createDefaultTaskConfigurations(),
+    defaultResearchAgentProfileId,
+    defaultTaskConfigurationId: rawPromptTaskConfigurationId,
+  };
+}
+
 export function createEmptyEnvironmentTaskDefaults(): EnvironmentTaskDefaults {
   return {
     titleTemplate: '',
     taskInputTemplate: '',
+    researchAgentProfileId: defaultResearchAgentProfileId,
+    taskConfigurationId: rawPromptTaskConfigurationId,
   };
 }
 
@@ -47,13 +87,14 @@ export function createDefaultProjectSettings(): DefaultProjectSettings {
 
 export function createDefaultWebUiSettings(): WebUiSettingsDocument {
   return {
-    version: 1,
+    version: 2,
     general: {
       defaultRoute: 'terminal',
       terminal: {
         fontSize: defaultTerminalFontSize,
       },
     },
+    taskConfiguration: createDefaultTaskConfigurationSettings(),
     projectDefaults: {
       default: createDefaultProjectSettings(),
     },

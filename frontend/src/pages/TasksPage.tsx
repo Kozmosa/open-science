@@ -112,6 +112,8 @@ function TasksPage() {
     return {
       title: environmentDefaults.titleTemplate,
       task_input: environmentDefaults.taskInputTemplate,
+      researchAgentProfileId: environmentDefaults.researchAgentProfileId,
+      taskConfigurationId: environmentDefaults.taskConfigurationId,
     };
   }, [environmentSelection.selectedEnvironmentId, settings.projectDefaults.default.environmentDefaults]);
 
@@ -270,6 +272,8 @@ function TasksPage() {
               selectedWorkspace={selectedWorkspace}
               selectedEnvironment={selectedEnvironment}
               draftDefaults={draftDefaults}
+              researchAgentProfiles={settings.taskConfiguration.researchAgentProfiles}
+              taskConfigurations={settings.taskConfiguration.taskConfigurations}
               isSubmitting={createMutation.isPending}
               createError={createError}
               onSelectWorkspace={setSelectedWorkspaceId}

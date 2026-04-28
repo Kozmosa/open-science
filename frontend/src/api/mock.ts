@@ -1,6 +1,7 @@
 import type {
   AnthropicEnvStatus,
   CodeServerStatus,
+  EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
@@ -87,6 +88,7 @@ function createSeedEnvironment(): EnvironmentRecord {
     preferred_runtime_notes: null,
     task_harness_profile:
       'You are running in the default localhost task harness environment. Prefer repository-local tools.',
+    code_server_path: null,
     created_at: timestamp,
     updated_at: timestamp,
     latest_detection: null,
@@ -377,8 +379,8 @@ function createMockEnvironment(
     preferred_python: payload.preferred_python ?? existing?.preferred_python ?? null,
     preferred_env_manager: payload.preferred_env_manager ?? existing?.preferred_env_manager ?? null,
     preferred_runtime_notes: payload.preferred_runtime_notes ?? existing?.preferred_runtime_notes ?? null,
-    task_harness_profile:
-      payload.task_harness_profile ?? existing?.task_harness_profile ?? null,
+    task_harness_profile: payload.task_harness_profile ?? existing?.task_harness_profile ?? null,
+    code_server_path: payload.code_server_path ?? existing?.code_server_path ?? null,
     is_seed: existing?.is_seed ?? false,
     created_at: existing?.created_at ?? timestamp,
     updated_at: timestamp,
@@ -865,6 +867,34 @@ export function mockDetectEnvironment(environmentId: string): EnvironmentRecord 
     environment.id === environmentId ? updated : environment
   );
   return cloneEnvironment(updated);
+}
+
+export function mockInstallEnvironmentCodeServer(
+  environmentId: string
+): EnvironmentCodeServerInstallResponse {
+  const current = findEnvironment(environmentId);
+  const version = '4.117.0';
+  const installDir = `~/.local/ainrf/code-server/code-server-${version}-linux-amd64`;
+  const codeServerPath = `${installDir}/bin/code-server`;
+  const alreadyInstalled = current.code_server_path === codeServerPath;
+  const updated: EnvironmentRecord = {
+    ...current,
+    code_server_path: codeServerPath,
+    updated_at: nowIso(),
+  };
+  mockEnvironments = mockEnvironments.map((environment) =>
+    environment.id === environmentId ? updated : environment
+  );
+  return {
+    environment: cloneEnvironment(updated),
+    installed: !alreadyInstalled,
+    version,
+    install_dir: installDir,
+    code_server_path: codeServerPath,
+    execution_mode: 'ssh',
+    already_installed: alreadyInstalled,
+    detail: alreadyInstalled ? 'code-server already installed' : 'code-server installed',
+  };
 }
 
 export function mockGetProjectEnvironmentReferences(

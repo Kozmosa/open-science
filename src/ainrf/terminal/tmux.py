@@ -4,9 +4,11 @@ import json
 import re
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass
 from hashlib import blake2s
 from pathlib import Path
+from uuid import uuid4
 
 from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.tasks.runtime import build_runtime_control_invocation
@@ -19,6 +21,10 @@ _TMUX_UNSAFE_SESSION_TARGET_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 class TmuxCommandError(RuntimeError):
+    pass
+
+
+class TmuxProbeTimeoutError(TmuxCommandError):
     pass
 
 
@@ -359,6 +365,120 @@ class TmuxAdapter:
             binding.remote_login_user,
             shlex.join(command),
         )
+
+    def run_bounded_session_command(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+        *,
+        command: str,
+        timeout_seconds: float = 10.0,
+        poll_interval_seconds: float = 0.05,
+    ) -> _CommandResult:
+        token = uuid4().hex
+        start_marker = f"__AINRF_PROBE_START_{token}__"
+        exit_marker = f"__AINRF_PROBE_EXIT_{token}__"
+        end_marker = f"__AINRF_PROBE_END_{token}__"
+        wrapped_command = (
+            f"printf %s\\n {start_marker}; "
+            f"{command}; "
+            f"__ainrf_probe_status=$?; "
+            f"printf %s\\n {exit_marker}:$__ainrf_probe_status; "
+            f"printf %s\\n {end_marker}"
+        )
+        session_target = self.session_target_for(session_name)
+        self._send_session_keys(binding, environment, session_target, wrapped_command)
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            captured = self._capture_pane(binding, environment, session_target)
+            parsed = self._parse_bounded_session_output(
+                captured,
+                start_marker=start_marker,
+                exit_marker=exit_marker,
+                end_marker=end_marker,
+            )
+            if parsed is not None:
+                return parsed
+            if time.monotonic() >= deadline:
+                raise TmuxProbeTimeoutError(
+                    f"tmux probe command timed out after {timeout_seconds:g}s"
+                )
+            time.sleep(poll_interval_seconds)
+
+    def _send_session_keys(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_target: str,
+        command: str,
+    ) -> None:
+        tmux_command = ("tmux", "send-keys", "-t", session_target, command, "Enter")
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            result = self._run_local_command(tmux_command)
+        else:
+            result = self._run_remote_command(
+                environment,
+                binding.remote_login_user,
+                self._wrap_remote_tmux_check(shlex.join(tmux_command)),
+            )
+        if result.returncode != 0:
+            self._raise_command_error(result, environment)
+
+    def _capture_pane(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_target: str,
+    ) -> str:
+        tmux_command = ("tmux", "capture-pane", "-p", "-t", session_target)
+        if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
+            result = self._run_local_command(tmux_command)
+        else:
+            result = self._run_remote_command(
+                environment,
+                binding.remote_login_user,
+                self._wrap_remote_tmux_check(shlex.join(tmux_command)),
+            )
+        if result.returncode != 0:
+            self._raise_command_error(result, environment)
+        return result.stdout
+
+    @staticmethod
+    def _parse_bounded_session_output(
+        output: str,
+        *,
+        start_marker: str,
+        exit_marker: str,
+        end_marker: str,
+    ) -> _CommandResult | None:
+        start_index = output.rfind(start_marker)
+        if start_index < 0:
+            return None
+        end_index = output.find(end_marker, start_index)
+        if end_index < 0:
+            return None
+        block = output[start_index + len(start_marker) : end_index]
+        lines = block.splitlines()
+        exit_status: int | None = None
+        output_lines: list[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith(f"{exit_marker}:"):
+                try:
+                    exit_status = int(stripped.split(":", 1)[1])
+                except ValueError as exc:
+                    raise TmuxCommandError(
+                        "tmux probe command returned an invalid exit marker"
+                    ) from exc
+                continue
+            output_lines.append(line)
+        if exit_status is None:
+            return None
+        stdout = "\n".join(output_lines).strip("\n")
+        if stdout:
+            stdout += "\n"
+        return _CommandResult(returncode=exit_status, stdout=stdout, stderr="")
 
     def run_task_runtime_control(
         self,

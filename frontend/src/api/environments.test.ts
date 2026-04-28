@@ -12,7 +12,7 @@ describe('environment endpoints', () => {
   it('uses the mock transport when VITE_USE_MOCK is true', async () => {
     vi.stubEnv('VITE_USE_MOCK', 'true');
 
-    const { createEnvironment, deleteEnvironment, detectEnvironment, getEnvironments } =
+    const { createEnvironment, deleteEnvironment, detectEnvironment, getEnvironments, installEnvironmentCodeServer } =
       await import('./endpoints');
 
     await expect(getEnvironments()).resolves.toEqual({
@@ -36,6 +36,10 @@ describe('environment endpoints', () => {
     const detected = await detectEnvironment(created.id);
     expect(detected.latest_detection?.status).toBe('success');
     expect(detected.latest_detection?.summary).toContain('gpu-lab');
+
+    const installed = await installEnvironmentCodeServer(created.id);
+    expect(installed.environment.code_server_path).toContain('/bin/code-server');
+    expect(installed.code_server_path).toBe(installed.environment.code_server_path);
 
     await expect(deleteEnvironment(created.id)).resolves.toBeUndefined();
     await expect(getEnvironments()).resolves.toEqual({
@@ -61,13 +65,18 @@ describe('environment endpoints', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { updateEnvironment } = await import('./endpoints');
+    const { installEnvironmentCodeServer, updateEnvironment } = await import('./endpoints');
     await expect(updateEnvironment('env-1', { display_name: 'GPU Lab Updated' })).resolves.toEqual({
       id: 'env-1',
       alias: 'gpu-lab',
     });
+    await installEnvironmentCodeServer('env-1');
 
     expect(fetchMock).toHaveBeenCalledWith('/api/environments/env-1', expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/environments/env-1/install-code-server',
+      expect.any(Object)
+    );
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(init?.method).toBe('PATCH');
   });

@@ -51,6 +51,7 @@ class EnvironmentRegistryEntry:
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
+    code_server_path: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

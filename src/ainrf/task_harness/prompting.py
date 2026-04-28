@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ainrf.environments.models import EnvironmentRegistryEntry
-from ainrf.task_harness.models import TaskPromptLayer
+from ainrf.task_harness.models import ResearchAgentProfileSnapshot, TaskPromptLayer
 from ainrf.workspaces.models import WorkspaceRecord
 
 GLOBAL_HARNESS_PROMPT = (
@@ -39,6 +39,7 @@ def compose_task_prompt(
     environment: EnvironmentRegistryEntry,
     task_profile: str,
     task_input: str,
+    research_agent_profile: ResearchAgentProfileSnapshot | None = None,
 ) -> PromptComposition:
     task_profile_prompt = TASK_PROFILE_PROMPTS.get(task_profile)
     if task_profile_prompt is None:
@@ -54,8 +55,25 @@ def compose_task_prompt(
         ("workspace", "Workspace", workspace.workspace_prompt.strip()),
         ("environment", "Environment", environment_prompt),
         ("task_profile", "Task profile", task_profile_prompt.strip()),
-        ("task_input", "Task input", task_input.strip()),
     ]
+    if research_agent_profile is not None:
+        if research_agent_profile.system_prompt and research_agent_profile.system_prompt.strip():
+            raw_layers.append(
+                (
+                    "research_agent_system",
+                    "Research agent system prompt",
+                    research_agent_profile.system_prompt.strip(),
+                )
+            )
+        if research_agent_profile.skills_prompt and research_agent_profile.skills_prompt.strip():
+            raw_layers.append(
+                (
+                    "research_agent_skills",
+                    "Research agent skills/config notes",
+                    research_agent_profile.skills_prompt.strip(),
+                )
+            )
+    raw_layers.append(("task_input", "Task input", task_input.strip()))
     layers = [
         TaskPromptLayer(
             position=index,

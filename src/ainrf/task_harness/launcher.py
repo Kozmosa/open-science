@@ -72,8 +72,12 @@ def build_local_launcher(
     working_directory: str,
     prompt_file: Path,
     rendered_prompt: str,
+    settings_path: str | None = None,
 ) -> tuple[LaunchPayload, Any]:
-    command = [*_CLAUDE_COMMAND, rendered_prompt]
+    command = [*_CLAUDE_COMMAND]
+    if settings_path is not None:
+        command.extend(["--settings", settings_path])
+    command.append(rendered_prompt)
     payload = LaunchPayload(
         runner_kind="local-process",
         working_directory=working_directory,
@@ -127,35 +131,41 @@ async def build_remote_launcher(
     local_task_dir: Path,
     working_directory: str,
     prompt_file: Path,
+    settings_path: Path | None = None,
 ) -> tuple[LaunchPayload, Any]:
     home_result = await executor.run_command('printf %s "$HOME"', timeout=30)
     if home_result.exit_code != 0 or not home_result.stdout.strip():
         raise TaskLaunchError("startup failure: unable to resolve remote home directory")
     remote_root = f"{home_result.stdout.strip()}/.ainrf/task-harness/{task_id}"
     remote_prompt = f"{remote_root}/prompt.txt"
+    remote_settings = f"{remote_root}/claude-settings.json" if settings_path is not None else None
     remote_helper = f"{remote_root}/launch.sh"
     helper_path = remote_launch_path(local_task_dir)
-    helper_path.write_text(
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                "set -euo pipefail",
-                'PROMPT_FILE="$1"',
-                'WORKDIR="$2"',
-                'PROMPT_CONTENT="$(cat "$PROMPT_FILE")"',
-                'cd "$WORKDIR"',
-                'exec claude -p --no-session-persistence --permission-mode bypassPermissions "$PROMPT_CONTENT"',
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    helper_lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        'PROMPT_FILE="$1"',
+        'WORKDIR="$2"',
+        'SETTINGS_FILE="${3:-}"',
+        'PROMPT_CONTENT="$(cat "$PROMPT_FILE")"',
+        'cd "$WORKDIR"',
+        'if [[ -n "$SETTINGS_FILE" ]]; then',
+        '  exec claude -p --no-session-persistence --permission-mode bypassPermissions --settings "$SETTINGS_FILE" "$PROMPT_CONTENT"',
+        "fi",
+        'exec claude -p --no-session-persistence --permission-mode bypassPermissions "$PROMPT_CONTENT"',
+        "",
+    ]
+    helper_path.write_text("\n".join(helper_lines), encoding="utf-8")
     await executor.upload(prompt_file, remote_prompt)
+    if settings_path is not None and remote_settings is not None:
+        await executor.upload(settings_path, remote_settings)
     await executor.upload(helper_path, remote_helper)
     chmod_result = await executor.run_command(f"chmod +x {shlex.quote(remote_helper)}", timeout=30)
     if chmod_result.exit_code != 0:
         raise TaskLaunchError("startup failure: unable to chmod remote helper script")
     command = [remote_helper, remote_prompt, working_directory]
+    if remote_settings is not None:
+        command.append(remote_settings)
     payload = LaunchPayload(
         runner_kind="ssh-process",
         working_directory=working_directory,

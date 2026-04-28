@@ -1,7 +1,12 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getEnvironments } from '../api';
-import { createDefaultWebUiSettings, settingsStorageKey } from '../settings';
+import { getEnvironments, installEnvironmentCodeServer } from '../api';
+import {
+  createDefaultWebUiSettings,
+  defaultResearchAgentProfileId,
+  rawPromptTaskConfigurationId,
+  settingsStorageKey,
+} from '../settings';
 import { renderWithProviders } from '../test/render';
 import type { EnvironmentRecord } from '../types';
 import SettingsPage from './SettingsPage';
@@ -12,9 +17,11 @@ vi.mock('../components/environment/EnvironmentSelectorPanel', () => ({
 
 vi.mock('../api', () => ({
   getEnvironments: vi.fn(),
+  installEnvironmentCodeServer: vi.fn(),
 }));
 
 const mockGetEnvironments = vi.mocked(getEnvironments);
+const mockInstallEnvironmentCodeServer = vi.mocked(installEnvironmentCodeServer);
 
 const environment: EnvironmentRecord = {
   id: 'env-1',
@@ -36,6 +43,7 @@ const environment: EnvironmentRecord = {
   preferred_env_manager: 'uv',
   preferred_runtime_notes: 'Use CUDA 12 image',
   task_harness_profile: 'Use the configured environment profile.',
+  code_server_path: null,
   created_at: '2026-04-21T00:00:00Z',
   updated_at: '2026-04-21T00:00:00Z',
   latest_detection: null,
@@ -44,6 +52,7 @@ const environment: EnvironmentRecord = {
 beforeEach(() => {
   window.localStorage.clear();
   mockGetEnvironments.mockReset();
+  mockInstallEnvironmentCodeServer.mockReset();
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
 });
 
@@ -165,7 +174,78 @@ describe('SettingsPage', () => {
       expect(storedSettings.projectDefaults.default.environmentDefaults['env-1']).toEqual({
         titleTemplate: 'GPU daily check',
         taskInputTemplate: 'Check CUDA, torch, and disk status.',
+        researchAgentProfileId: defaultResearchAgentProfileId,
+        taskConfigurationId: rawPromptTaskConfigurationId,
       });
     });
+  });
+
+  it('renders code-server install state and installs for the selected environment', async () => {
+    const installedEnvironment: EnvironmentRecord = {
+      ...environment,
+      code_server_path:
+        '~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server',
+    };
+    mockInstallEnvironmentCodeServer.mockResolvedValue({
+      environment: installedEnvironment,
+      installed: true,
+      version: '4.117.0',
+      install_dir: '~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64',
+      code_server_path: installedEnvironment.code_server_path as string,
+      execution_mode: 'ssh',
+      already_installed: false,
+      detail: 'code-server installed',
+    });
+    mockGetEnvironments
+      .mockResolvedValueOnce({ items: [environment] })
+      .mockResolvedValueOnce({ items: [installedEnvironment] });
+
+    renderWithProviders(<SettingsPage />);
+
+    const installSection = (
+      await screen.findByRole('heading', { name: 'Code-server installer' })
+    ).closest('section');
+    expect(installSection).not.toBeNull();
+    await within(installSection as HTMLElement).findByText('gpu-lab · GPU Lab');
+    expect(within(installSection as HTMLElement).getByText('Not installed')).toBeInTheDocument();
+
+    fireEvent.click(
+      within(installSection as HTMLElement).getByRole('button', { name: 'Install code-server' })
+    );
+
+    await waitFor(() => {
+      expect(mockInstallEnvironmentCodeServer).toHaveBeenCalled();
+    });
+    expect(mockInstallEnvironmentCodeServer.mock.calls[0]?.[0]).toBe('env-1');
+    expect(
+      await within(installSection as HTMLElement).findByText(
+        '~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('shows existing code-server path when already installed', async () => {
+    mockGetEnvironments.mockResolvedValue({
+      items: [
+        {
+          ...environment,
+          code_server_path:
+            '~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server',
+        },
+      ],
+    });
+
+    renderWithProviders(<SettingsPage />);
+
+    const installSection = (
+      await screen.findByRole('heading', { name: 'Code-server installer' })
+    ).closest('section');
+    expect(installSection).not.toBeNull();
+    await within(installSection as HTMLElement).findByText('gpu-lab · GPU Lab');
+    expect(
+      within(installSection as HTMLElement).getByText(
+        '~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server'
+      )
+    ).toBeInTheDocument();
   });
 });

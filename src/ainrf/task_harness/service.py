@@ -12,19 +12,28 @@ from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentServ
 from ainrf.environments.models import EnvironmentRegistryEntry, utc_now
 from ainrf.task_harness.artifacts import (
     binding_snapshot_path,
+    claude_settings_path,
     dump_json,
     environment_summary,
     environment_summary_from_json,
     launch_payload_path,
     prompt_manifest_path,
+    raw_prompt_configuration,
     read_binding_summary,
     read_prompt_summary,
     read_runtime_summary,
+    research_agent_profile_from_payload,
+    research_agent_profile_path,
+    task_configuration_from_payload,
+    task_configuration_snapshot_path,
     workspace_summary,
     workspace_summary_from_json,
     write_binding_snapshot,
+    write_claude_settings_artifact,
     write_launch_payload,
     write_prompt_artifacts,
+    write_research_agent_profile_snapshot,
+    write_task_configuration_snapshot,
 )
 from ainrf.task_harness.launcher import (
     TaskLaunchError,
@@ -34,6 +43,9 @@ from ainrf.task_harness.launcher import (
     is_local_environment,
 )
 from ainrf.task_harness.models import (
+    ResearchAgentProfileSnapshot,
+    TaskConfigurationMode,
+    TaskConfigurationSnapshot,
     TaskDetail,
     TaskHarnessStatus,
     TaskListItem,
@@ -51,6 +63,7 @@ from ainrf.workspaces.models import WorkspaceRecord
 
 _FINAL_STATUSES = {TaskHarnessStatus.SUCCEEDED, TaskHarnessStatus.FAILED}
 _TASK_PROFILE = "claude-code"
+_EXECUTION_ENGINE = "claude-code"
 _HARNESS_RESTART_REASON = (
     "startup failure: harness restart prevented Task Harness v1 from resuming this task"
 )
@@ -143,18 +156,40 @@ class TaskHarnessService:
         task_profile: str,
         task_input: str,
         title: str | None = None,
+        execution_engine: str | None = None,
+        research_agent_profile: dict[str, object] | None = None,
+        task_configuration: dict[str, object] | None = None,
     ) -> TaskListItem:
         self.initialize()
         if task_profile != _TASK_PROFILE:
             raise TaskHarnessError(f"Unsupported task profile: {task_profile}")
+        resolved_execution_engine = execution_engine or _EXECUTION_ENGINE
+        if resolved_execution_engine != _EXECUTION_ENGINE:
+            raise TaskHarnessError(f"Unsupported execution engine: {resolved_execution_engine}")
         workspace = self._workspace_service.get_workspace(workspace_id)
         environment = self._environment_service.get_environment(environment_id)
-        resolved_title = (
-            title.strip() if title is not None and title.strip() else derive_task_title(task_input)
+        task_dir = self.task_directory(uuid4().hex)
+        profile_snapshot = _normalize_research_agent_profile(research_agent_profile)
+        settings_artifact_path = write_claude_settings_artifact(
+            claude_settings_path(task_dir), profile_snapshot.settings_json
         )
-        task_id = uuid4().hex
-        task_dir = self.task_directory(task_id)
+        if settings_artifact_path is not None:
+            profile_snapshot.settings_artifact_path = settings_artifact_path
+        configuration_snapshot = _normalize_task_configuration(task_input, task_configuration)
+        resolved_task_input = configuration_snapshot.rendered_task_input
+        resolved_title = (
+            title.strip()
+            if title is not None and title.strip()
+            else derive_task_title(resolved_task_input)
+        )
+        task_id = task_dir.name
         task_dir.mkdir(parents=True, exist_ok=True)
+        write_task_configuration_snapshot(
+            task_configuration_snapshot_path(task_dir), configuration_snapshot
+        )
+        write_research_agent_profile_snapshot(
+            research_agent_profile_path(task_dir), profile_snapshot
+        )
         now = utc_now()
         workspace_summary_value = workspace_summary(workspace)
         environment_summary_value = environment_summary(environment)
@@ -184,7 +219,7 @@ class TaskHarnessService:
                     environment_id,
                     task_profile,
                     resolved_title,
-                    task_input,
+                    resolved_task_input,
                     TaskHarnessStatus.QUEUED.value,
                     now.isoformat(),
                     now.isoformat(),
@@ -201,7 +236,10 @@ class TaskHarnessService:
             TaskOutputKind.LIFECYCLE,
             "Task queued in Task Harness v1",
         )
-        self._schedule_task(task_id)
+        try:
+            self._schedule_task(task_id)
+        except TaskHarnessError:
+            pass
         return self._load_list_item(task_id)
 
     def list_tasks(self) -> list[TaskListItem]:
@@ -219,6 +257,27 @@ class TaskHarnessService:
         self.initialize()
         row = self._load_task_row(task_id)
         binding = read_binding_summary(row["binding_snapshot_path"])
+        if binding is None:
+            task_dir = self.task_directory(row["task_id"])
+            profile_snapshot = _load_research_agent_profile(task_dir)
+            configuration_snapshot = _load_task_configuration(task_dir, row["task_input"])
+            execution_engine = _EXECUTION_ENGINE
+            binding = write_binding_snapshot(
+                Path(row["binding_snapshot_path"]),
+                workspace=self._workspace_service.get_workspace(row["workspace_id"]),
+                environment=self._environment_service.get_environment(row["environment_id"]),
+                task_profile=row["task_profile"],
+                title=row["title"],
+                task_input=row["task_input"],
+                resolved_workdir=row["resolved_workdir"] or "",
+                execution_engine=execution_engine,
+                research_agent_profile=profile_snapshot,
+                task_configuration=configuration_snapshot,
+            )
+        else:
+            profile_snapshot = binding.research_agent_profile
+            configuration_snapshot = binding.task_configuration
+            execution_engine = binding.execution_engine
         prompt = read_prompt_summary(row["prompt_manifest_path"])
         runtime = read_runtime_summary(row["launch_payload_path"])
         return TaskDetail(
@@ -243,6 +302,9 @@ class TaskHarnessService:
                 error_summary=row["error_summary"],
                 completed_at=_parse_datetime(row["completed_at"]),
             ),
+            execution_engine=execution_engine,
+            research_agent_profile=profile_snapshot,
+            task_configuration=configuration_snapshot,
         )
 
     def get_output(self, task_id: str, *, after_seq: int = 0) -> TaskOutputPage:
@@ -303,6 +365,9 @@ class TaskHarnessService:
         try:
             workspace = self._workspace_service.get_workspace(row["workspace_id"])
             environment = self._environment_service.get_environment(row["environment_id"])
+            task_dir = self.task_directory(task_id)
+            profile_snapshot = _load_research_agent_profile(task_dir)
+            configuration_snapshot = _load_task_configuration(task_dir, row["task_input"])
             resolved_workdir = _resolve_workdir(workspace, environment)
             write_binding_snapshot(
                 Path(row["binding_snapshot_path"]),
@@ -312,6 +377,9 @@ class TaskHarnessService:
                 title=row["title"],
                 task_input=row["task_input"],
                 resolved_workdir=resolved_workdir,
+                execution_engine=_EXECUTION_ENGINE,
+                research_agent_profile=profile_snapshot,
+                task_configuration=configuration_snapshot,
             )
             prompt_file, prompt_summary = write_prompt_artifacts(
                 self.task_directory(task_id),
@@ -320,6 +388,12 @@ class TaskHarnessService:
                 environment=environment,
                 task_profile=row["task_profile"],
                 task_input=row["task_input"],
+                research_agent_profile=profile_snapshot,
+            )
+            settings_path = (
+                Path(profile_snapshot.settings_artifact_path)
+                if profile_snapshot.settings_artifact_path is not None
+                else None
             )
 
             if is_local_environment(environment):
@@ -327,6 +401,7 @@ class TaskHarnessService:
                     working_directory=resolved_workdir,
                     prompt_file=prompt_file,
                     rendered_prompt=prompt_summary.rendered_prompt,
+                    settings_path=str(settings_path) if settings_path is not None else None,
                 )
             else:
                 executor = build_ssh_executor(environment, project_dir=resolved_workdir)
@@ -337,6 +412,7 @@ class TaskHarnessService:
                         local_task_dir=self.task_directory(task_id),
                         working_directory=resolved_workdir,
                         prompt_file=prompt_file,
+                        settings_path=settings_path,
                     )
                 except Exception:
                     await executor.close()
@@ -646,6 +722,97 @@ class TaskHarnessService:
         connection = sqlite3.connect(self._db_path)
         connection.row_factory = sqlite3.Row
         return connection
+
+
+def _load_research_agent_profile(task_dir: Path) -> ResearchAgentProfileSnapshot:
+    path = research_agent_profile_path(task_dir)
+    if not path.exists():
+        return _normalize_research_agent_profile(None)
+    return research_agent_profile_from_payload(_load_json(path))
+
+
+def _load_task_configuration(task_dir: Path, task_input: str) -> TaskConfigurationSnapshot:
+    path = task_configuration_snapshot_path(task_dir)
+    if not path.exists():
+        return raw_prompt_configuration(task_input)
+    return task_configuration_from_payload(_load_json(path))
+
+
+def _load_json(path: Path) -> dict[str, object]:
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _normalize_research_agent_profile(
+    payload: dict[str, object] | None,
+) -> ResearchAgentProfileSnapshot:
+    if payload is None:
+        return ResearchAgentProfileSnapshot(
+            profile_id="claude-code-default",
+            label="Claude Code Default",
+            system_prompt=None,
+            skills_prompt=None,
+            settings_json=None,
+        )
+    settings_json = payload.get("settings_json")
+    normalized_settings: dict[str, object] | None = None
+    if isinstance(settings_json, dict):
+        normalized_settings = {str(key): value for key, value in settings_json.items()}
+    return ResearchAgentProfileSnapshot(
+        profile_id=str(payload.get("profile_id", "claude-code-custom")),
+        label=str(payload.get("label", "Claude Code Custom")),
+        system_prompt=_optional_str(payload.get("system_prompt")),
+        skills_prompt=_optional_str(payload.get("skills_prompt")),
+        settings_json=normalized_settings,
+    )
+
+
+def _normalize_task_configuration(
+    legacy_task_input: str,
+    payload: dict[str, object] | None,
+) -> TaskConfigurationSnapshot:
+    if payload is None:
+        return raw_prompt_configuration(legacy_task_input)
+    mode = TaskConfigurationMode(str(payload.get("mode", TaskConfigurationMode.RAW_PROMPT.value)))
+    if mode == TaskConfigurationMode.RAW_PROMPT:
+        raw_prompt = str(payload.get("raw_prompt") or legacy_task_input)
+        return raw_prompt_configuration(raw_prompt)
+    template_vars_value = payload.get("template_vars")
+    template_vars: dict[str, object] = {}
+    if isinstance(template_vars_value, dict):
+        template_vars = {str(key): value for key, value in template_vars_value.items()}
+    rendered_task_input = _render_structured_research_prompt(template_vars)
+    return TaskConfigurationSnapshot(
+        mode=TaskConfigurationMode.STRUCTURED_RESEARCH,
+        template_id=_optional_str(payload.get("template_id")) or "structured-research-default",
+        template_vars=template_vars,
+        raw_prompt=None,
+        rendered_task_input=rendered_task_input,
+    )
+
+
+def _render_structured_research_prompt(template_vars: dict[str, object]) -> str:
+    labels = [
+        ("research_goal", "Research goal"),
+        ("context", "Context"),
+        ("constraints", "Constraints"),
+        ("deliverables", "Expected deliverables"),
+        ("validation_plan", "Validation plan"),
+    ]
+    sections = ["Structured research task"]
+    for key, label in labels:
+        value = str(template_vars.get(key, "")).strip()
+        if value:
+            sections.append(f"{label}:\n{value}")
+    return "\n\n".join(sections)
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
 
 
 def _parse_datetime(value: str | None) -> datetime | None:

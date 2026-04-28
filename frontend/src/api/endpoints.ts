@@ -1,6 +1,7 @@
 import { api } from './client';
 import type {
   CodeServerStatus,
+  EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
@@ -48,6 +49,7 @@ import {
   mockGetWorkspace,
   mockResetTerminalSession,
   mockGetSessionPairs,
+  mockInstallEnvironmentCodeServer,
   mockUpdateEnvironment,
   mockUpdateProjectEnvironmentReference,
   mockUpdateWorkspace,
@@ -220,6 +222,16 @@ export const detectEnvironment = (environmentId: string): Promise<EnvironmentRec
   USE_MOCK
     ? Promise.resolve(mockDetectEnvironment(environmentId))
     : api.post<EnvironmentRecord>(`/environments/${environmentId}/detect`, {});
+
+export const installEnvironmentCodeServer = (
+  environmentId: string
+): Promise<EnvironmentCodeServerInstallResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockInstallEnvironmentCodeServer(environmentId))
+    : api.post<EnvironmentCodeServerInstallResponse>(
+        `/environments/${environmentId}/install-code-server`,
+        {}
+      );
 
 export const getProjectEnvironmentReferences = (
   projectId: string = DEFAULT_PROJECT_ID

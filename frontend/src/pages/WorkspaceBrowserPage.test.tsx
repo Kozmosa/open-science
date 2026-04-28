@@ -26,6 +26,7 @@ const selectedEnvironment: EnvironmentRecord = {
   task_harness_profile: 'Use the configured GPU environment.',
   created_at: '2026-04-23T08:00:00Z',
   updated_at: '2026-04-23T08:00:00Z',
+  code_server_path: null,
   latest_detection: null,
 };
 

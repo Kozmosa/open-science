@@ -150,10 +150,18 @@ export const messages = {
         workspaceLabel: 'Workspace',
         environmentLabel: 'Environment',
         profileLabel: 'Task profile',
+        researchAgentLabel: 'Research Agent',
+        taskConfigurationLabel: 'Task configuration',
         titleLabel: 'Title',
         optionalPlaceholder: 'Optional',
         taskInputLabel: 'Task input',
         taskInputPlaceholder: 'Describe the task for the agent.',
+        structuredResearchGoal: 'Research goal',
+        structuredResearchContext: 'Context',
+        structuredResearchConstraints: 'Constraints',
+        structuredResearchDeliverables: 'Expected deliverables',
+        structuredResearchValidationPlan: 'Validation plan',
+        generatedPromptPreview: 'Generated prompt preview',
         defaultWorkdir: 'Default workdir:',
         resetDraft: 'Reset draft',
         createAction: 'Create task',
@@ -244,6 +252,16 @@ export const messages = {
           terminalFontSizeHelp:
             'Font size is clamped to a stable range of {{min}}-{{max}} px. Current save value: {{current}} px.',
         },
+        codeServerInstall: {
+          title: 'Code-server installer',
+          description:
+            'Install the latest Linux amd64 code-server package into the selected environment using SSH first, then personal tmux fallback when needed.',
+          selectedEnvironment: 'Selected environment:',
+          installedPath: 'Installed path:',
+          notInstalled: 'Not installed',
+          installAction: 'Install code-server',
+          installing: 'Installing…',
+        },
         project: {
           title: 'Project Defaults',
           description:
@@ -261,6 +279,20 @@ export const messages = {
           taskInputTemplateLabel: 'Task input template',
           taskInputTemplatePlaceholder:
             'Describe the default task input to preload for this environment.',
+          researchAgentDefaultLabel: 'Research Agent default',
+          taskConfigurationDefaultLabel: 'Task configuration default',
+        },
+        taskConfiguration: {
+          title: 'Task Configuration',
+          description:
+            'Configure the three task creation layers: Claude Code execution engine, Research Agent profile, and task input mode.',
+          executionEngineLabel: 'Execution engine',
+          defaultResearchAgentLabel: 'Default Research Agent',
+          defaultTaskConfigurationLabel: 'Default task configuration',
+          profileLabel: 'Research Agent label',
+          systemPromptLabel: 'System prompt',
+          skillsPromptLabel: 'Skills/config notes',
+          settingsJsonLabel: 'Claude settings JSON',
         },
       },
       placeholder: {
@@ -599,10 +631,18 @@ export const messages = {
         workspaceLabel: '工作区',
         environmentLabel: '环境',
         profileLabel: '任务配置',
+        researchAgentLabel: '研究代理',
+        taskConfigurationLabel: '任务配置模式',
         titleLabel: '标题',
         optionalPlaceholder: '可选',
         taskInputLabel: '任务输入',
         taskInputPlaceholder: '描述要交给 Agent 的任务。',
+        structuredResearchGoal: '研究目标',
+        structuredResearchContext: '上下文',
+        structuredResearchConstraints: '约束',
+        structuredResearchDeliverables: '预期交付物',
+        structuredResearchValidationPlan: '验证计划',
+        generatedPromptPreview: '生成提示词预览',
         defaultWorkdir: '默认工作目录：',
         resetDraft: '重置草稿',
         createAction: '创建任务',
@@ -689,6 +729,16 @@ export const messages = {
           terminalFontSizeHelp:
             '字号会被限制在稳定区间 {{min}}-{{max}} px，当前保存值为 {{current}} px。',
         },
+        codeServerInstall: {
+          title: 'code-server 安装器',
+          description:
+            '为当前所选环境安装最新 Linux amd64 code-server 包，优先使用 SSH，必要时回退到个人 tmux 会话。',
+          selectedEnvironment: '已选环境：',
+          installedPath: '安装路径：',
+          notInstalled: '未安装',
+          installAction: '安装 code-server',
+          installing: '安装中…',
+        },
         project: {
           title: '项目默认值',
           description: '当前项目的默认配置，仅保存在当前浏览器中。',
@@ -703,6 +753,20 @@ export const messages = {
           titleTemplatePlaceholder: '可选的任务标题预设',
           taskInputTemplateLabel: '任务输入模板',
           taskInputTemplatePlaceholder: '填写该环境下默认预载入的任务输入。',
+          researchAgentDefaultLabel: '默认研究代理',
+          taskConfigurationDefaultLabel: '默认任务配置',
+        },
+        taskConfiguration: {
+          title: '任务配置',
+          description:
+            '配置创建任务时的三层结构：Claude Code 执行引擎、Research Agent 配置和任务输入模式。',
+          executionEngineLabel: '执行引擎',
+          defaultResearchAgentLabel: '默认研究代理',
+          defaultTaskConfigurationLabel: '默认任务配置',
+          profileLabel: 'Research Agent 标签',
+          systemPromptLabel: '系统提示词',
+          skillsPromptLabel: 'Skills / 配置说明',
+          settingsJsonLabel: 'Claude settings JSON',
         },
       },
       placeholder: {

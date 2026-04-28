@@ -15,7 +15,7 @@ from ainrf.task_harness.artifacts import (
     write_prompt_artifacts,
 )
 from ainrf.task_harness.launcher import LaunchPayload
-from ainrf.task_harness.models import TaskHarnessStatus
+from ainrf.task_harness.models import TaskHarnessStatus, TaskConfigurationMode
 from ainrf.task_harness.service import TaskHarnessService
 from ainrf.workspaces.service import WorkspaceRegistryService
 
@@ -222,3 +222,62 @@ def test_task_harness_persists_and_reloads_known_artifacts(tmp_path: Path) -> No
     assert task.prompt.manifest_path == str(manifest_path)
     assert task.prompt.rendered_prompt == prompt_summary.rendered_prompt
     assert task.runtime.launch_payload_path == str(launch_path)
+
+
+def test_task_harness_normalizes_three_layer_task_configuration(tmp_path: Path) -> None:
+    environment_service = InMemoryEnvironmentService()
+    environment = environment_service.create_environment(
+        alias="profile-lab",
+        display_name="Profile Lab",
+        host="127.0.0.1",
+        user="root",
+        auth_kind=EnvironmentAuthKind.SSH_KEY,
+        default_workdir=str(tmp_path),
+        task_harness_profile="Use the profile lab runtime.",
+    )
+    workspace_service = WorkspaceRegistryService(tmp_path)
+    service = TaskHarnessService(
+        state_root=tmp_path,
+        environment_service=environment_service,
+        workspace_service=workspace_service,
+    )
+    service.initialize()
+
+    task = service.create_task(
+        workspace_id="workspace-default",
+        environment_id=environment.id,
+        task_profile="claude-code",
+        task_input="ignored legacy input",
+        title="Structured task",
+        execution_engine="claude-code",
+        research_agent_profile={
+            "profile_id": "agent-literature",
+            "label": "Literature Agent",
+            "system_prompt": "Prefer careful literature synthesis.",
+            "skills_prompt": "Use citation and repo-inspection skills.",
+            "settings_json": {"permissions": {"allow": ["Read", "Grep"]}},
+        },
+        task_configuration={
+            "mode": "structured_research",
+            "template_id": "structured-research-default",
+            "template_vars": {
+                "research_goal": "Compare task harness designs",
+                "context": "AINRF runtime refactor",
+                "constraints": "Keep Claude Code as the only enabled engine",
+                "deliverables": "Architecture notes and implementation steps",
+                "validation_plan": "Run unit tests and build",
+            },
+        },
+    )
+
+    detail = service.get_task(task.task_id)
+
+    assert detail.execution_engine == "claude-code"
+    assert detail.research_agent_profile is not None
+    assert detail.research_agent_profile.profile_id == "agent-literature"
+    assert detail.research_agent_profile.settings_artifact_path is not None
+    assert detail.task_configuration is not None
+    assert detail.task_configuration.mode == TaskConfigurationMode.STRUCTURED_RESEARCH
+    assert "Compare task harness designs" in detail.task_configuration.rendered_task_input
+    assert detail.binding is not None
+    assert detail.binding.task_input == detail.task_configuration.rendered_task_input

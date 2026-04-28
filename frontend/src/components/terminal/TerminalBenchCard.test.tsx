@@ -102,6 +102,7 @@ const selectedEnvironment: EnvironmentRecord = {
   task_harness_profile: null,
   created_at: '2026-04-21T00:00:00Z',
   updated_at: '2026-04-21T00:00:00Z',
+  code_server_path: null,
   latest_detection: null,
 };
 

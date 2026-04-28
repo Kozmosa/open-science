@@ -194,9 +194,23 @@ class EnvironmentResponse(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
+    code_server_path: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     latest_detection: EnvironmentDetectionResponse | None = None
+
+
+class EnvironmentCodeServerInstallResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    environment: EnvironmentResponse
+    installed: bool
+    version: str
+    install_dir: str
+    code_server_path: str
+    execution_mode: str
+    already_installed: bool
+    detail: str
 
 
 class EnvironmentListResponse(BaseModel):
@@ -243,6 +257,7 @@ class EnvironmentCreateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
+    code_server_path: str | None = None
 
 
 class EnvironmentUpdateRequest(BaseModel):
@@ -265,6 +280,7 @@ class EnvironmentUpdateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
+    code_server_path: str | None = None
 
 
 class ProjectEnvironmentReferenceCreateRequest(BaseModel):
@@ -301,6 +317,25 @@ class TerminalSessionResetRequest(BaseModel):
     attachment_id: str | None = None
 
 
+class ResearchAgentProfileSnapshotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: str
+    label: str
+    system_prompt: str | None = None
+    skills_prompt: str | None = None
+    settings_json: dict[str, Any] | None = None
+
+
+class TaskConfigurationSnapshotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str
+    template_id: str | None = None
+    template_vars: dict[str, Any] = Field(default_factory=dict)
+    raw_prompt: str | None = None
+
+
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -309,6 +344,9 @@ class TaskCreateRequest(BaseModel):
     task_profile: str = Field(default="claude-code", min_length=1)
     task_input: str = Field(min_length=1)
     title: str | None = None
+    execution_engine: str | None = None
+    research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
+    task_configuration: TaskConfigurationSnapshotRequest | None = None
 
 
 class WorkspaceResponse(BaseModel):
@@ -371,6 +409,27 @@ class TaskListResponse(BaseModel):
     items: list[TaskSummaryResponse]
 
 
+class ResearchAgentProfileSnapshotResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: str
+    label: str
+    system_prompt: str | None = None
+    skills_prompt: str | None = None
+    settings_json: dict[str, Any] | None = None
+    settings_artifact_path: str | None = None
+
+
+class TaskConfigurationSnapshotResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str
+    template_id: str | None = None
+    template_vars: dict[str, Any] = Field(default_factory=dict)
+    raw_prompt: str | None = None
+    rendered_task_input: str
+
+
 class TaskBindingResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -381,6 +440,9 @@ class TaskBindingResponse(BaseModel):
     task_input: str
     resolved_workdir: str
     snapshot_path: str
+    execution_engine: str = "claude-code"
+    research_agent_profile: ResearchAgentProfileSnapshotResponse | None = None
+    task_configuration: TaskConfigurationSnapshotResponse | None = None
 
 
 class TaskPromptLayerResponse(BaseModel):
@@ -441,6 +503,9 @@ class TaskDetailResponse(BaseModel):
     prompt: TaskPromptResponse | None = None
     runtime: TaskRuntimeResponse | None = None
     result: TaskResultResponse
+    execution_engine: str = "claude-code"
+    research_agent_profile: ResearchAgentProfileSnapshotResponse | None = None
+    task_configuration: TaskConfigurationSnapshotResponse | None = None
 
 
 class TaskOutputEventResponse(BaseModel):

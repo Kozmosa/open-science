@@ -69,6 +69,7 @@ const environment: EnvironmentRecord = {
   task_harness_profile: 'Use the configured GPU environment.',
   created_at: '2026-04-23T08:00:00Z',
   updated_at: '2026-04-23T08:00:00Z',
+  code_server_path: null,
   latest_detection: null,
 };
 
@@ -327,15 +328,26 @@ describe('TasksPage', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
-    await waitFor(() =>
-      expect(mockCreateTask).toHaveBeenCalledWith({
+    await waitFor(() => {
+      const payload = mockCreateTask.mock.calls[0]?.[0];
+      expect(payload).toMatchObject({
         workspace_id: 'workspace-default',
         environment_id: 'env-1',
         task_profile: 'claude-code',
         task_input: 'Implement harness\nMake it stream output.',
         title: undefined,
-      })
-    );
+        execution_engine: 'claude-code',
+        research_agent_profile: {
+          profile_id: 'claude-code-default',
+          label: 'Claude Code Default',
+        },
+        task_configuration: {
+          mode: 'raw_prompt',
+          template_id: 'raw-prompt',
+          raw_prompt: 'Implement harness\nMake it stream output.',
+        },
+      });
+    });
     expect(await screen.findByRole('heading', { name: 'Implement harness' })).toBeInTheDocument();
     expect((await screen.findAllByText('/workspace/created')).length).toBeGreaterThan(0);
     expect(await screen.findByText('created line')).toBeInTheDocument();
@@ -599,10 +611,14 @@ describe('TasksPage', () => {
     settings.projectDefaults.default.environmentDefaults['env-1'] = {
       titleTemplate: 'GPU batch',
       taskInputTemplate: 'Run the GPU validation checklist.',
+      researchAgentProfileId: 'claude-code-default',
+      taskConfigurationId: 'raw-prompt',
     };
     settings.projectDefaults.default.environmentDefaults['env-2'] = {
       titleTemplate: 'CPU fallback',
       taskInputTemplate: 'Run the CPU fallback checklist.',
+      researchAgentProfileId: 'claude-code-default',
+      taskConfigurationId: 'raw-prompt',
     };
     window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
     mockGetEnvironments.mockResolvedValue({ items: [environment, secondaryEnvironment] });

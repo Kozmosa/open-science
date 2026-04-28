@@ -26,7 +26,7 @@ from ainrf.terminal.models import (
 )
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND
 from ainrf.terminal.sessions import SessionManager
-from ainrf.terminal.tmux import TmuxAdapter, TmuxCommandError
+from ainrf.terminal.tmux import TmuxAdapter, TmuxCommandError, TmuxProbeTimeoutError
 
 
 def make_manager(
@@ -485,6 +485,191 @@ def test_tmux_adapter_kill_window_is_idempotent_remotely(
             "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
             "tmux kill-window -t @9",
         )
+    ]
+
+
+def test_tmux_adapter_runs_bounded_command_in_personal_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+    )
+    binding = manager_binding(environment.id)
+    captured: list[tuple[str, ...]] = []
+    panes = iter(
+        (
+            "",
+            "stale prompt\n__AINRF_PROBE_START_probe1__\nhello\n__AINRF_PROBE_EXIT_probe1__:0\n__AINRF_PROBE_END_probe1__\n$ ",
+        )
+    )
+
+    def fake_run_local(command: tuple[str, ...]) -> SimpleNamespace:
+        captured.append(command)
+        if command[:2] == ("tmux", "capture-pane"):
+            return SimpleNamespace(returncode=0, stdout=next(panes), stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
+    monkeypatch.setattr("ainrf.terminal.tmux.uuid4", lambda: SimpleNamespace(hex="probe1"))
+    monkeypatch.setattr("ainrf.terminal.tmux.time.monotonic", iter((0.0, 0.1, 0.2)).__next__)
+    monkeypatch.setattr("ainrf.terminal.tmux.time.sleep", lambda _seconds: None)
+
+    result = adapter.run_bounded_session_command(
+        binding,
+        environment,
+        "p-abc123def4",
+        command="printf hello",
+        timeout_seconds=1.0,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "hello\n"
+    assert result.stderr == ""
+    assert captured == [
+        (
+            "tmux",
+            "send-keys",
+            "-t",
+            tmux_session_target("p-abc123def4"),
+            "printf %s\\n __AINRF_PROBE_START_probe1__; printf hello; __ainrf_probe_status=$?; "
+            "printf %s\\n __AINRF_PROBE_EXIT_probe1__:$__ainrf_probe_status; "
+            "printf %s\\n __AINRF_PROBE_END_probe1__",
+            "Enter",
+        ),
+        ("tmux", "capture-pane", "-p", "-t", tmux_session_target("p-abc123def4")),
+        ("tmux", "capture-pane", "-p", "-t", tmux_session_target("p-abc123def4")),
+    ]
+
+
+def test_tmux_adapter_parses_nonzero_bounded_command_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+    )
+    binding = manager_binding(environment.id)
+
+    def fake_run_local(command: tuple[str, ...]) -> SimpleNamespace:
+        if command[:2] == ("tmux", "capture-pane"):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "__AINRF_PROBE_START_probe2__\n"
+                    "missing tool\n"
+                    "__AINRF_PROBE_EXIT_probe2__:127\n"
+                    "__AINRF_PROBE_END_probe2__\n"
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
+    monkeypatch.setattr("ainrf.terminal.tmux.uuid4", lambda: SimpleNamespace(hex="probe2"))
+
+    result = adapter.run_bounded_session_command(
+        binding,
+        environment,
+        "p-abc123def4",
+        command="missing-tool",
+    )
+
+    assert result.returncode == 127
+    assert result.stdout == "missing tool\n"
+
+
+def test_tmux_adapter_bounded_command_times_out_without_end_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="localhost-2",
+        display_name="Localhost 2",
+        host="127.0.0.1",
+    )
+    binding = manager_binding(environment.id)
+
+    def fake_run_local(command: tuple[str, ...]) -> SimpleNamespace:
+        if command[:2] == ("tmux", "capture-pane"):
+            return SimpleNamespace(returncode=0, stdout="still running", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
+    monkeypatch.setattr("ainrf.terminal.tmux.uuid4", lambda: SimpleNamespace(hex="probe3"))
+    monkeypatch.setattr("ainrf.terminal.tmux.time.monotonic", iter((0.0, 0.2, 0.4, 0.6)).__next__)
+    monkeypatch.setattr("ainrf.terminal.tmux.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(TmuxProbeTimeoutError):
+        adapter.run_bounded_session_command(
+            binding,
+            environment,
+            "p-abc123def4",
+            command="sleep 10",
+            timeout_seconds=0.5,
+        )
+
+
+def test_tmux_adapter_bounded_command_uses_remote_tmux_wrapper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = TmuxAdapter(tmp_path)
+    environment = InMemoryEnvironmentService().create_environment(
+        alias="remote-lab",
+        display_name="Remote Lab",
+        host="gpu.example.com",
+        user="researcher",
+    )
+    binding = manager_binding(environment.id, remote_login_user="researcher")
+    captured: list[tuple[str, str]] = []
+
+    def fake_run_remote(
+        env: object, remote_login_user: str, remote_command: str
+    ) -> SimpleNamespace:
+        _ = env
+        captured.append((remote_login_user, remote_command))
+        if "capture-pane" in remote_command:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "__AINRF_PROBE_START_probe4__\n"
+                    "remote ok\n"
+                    "__AINRF_PROBE_EXIT_probe4__:0\n"
+                    "__AINRF_PROBE_END_probe4__\n"
+                ),
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(adapter, "_run_remote_command", fake_run_remote)
+    monkeypatch.setattr("ainrf.terminal.tmux.uuid4", lambda: SimpleNamespace(hex="probe4"))
+
+    result = adapter.run_bounded_session_command(
+        binding,
+        environment,
+        "p-abc123def4",
+        command="hostname",
+    )
+
+    assert result.stdout == "remote ok\n"
+    assert captured == [
+        (
+            "researcher",
+            "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
+            "tmux send-keys -t p-abc123def4 "
+            "'printf %s\\n __AINRF_PROBE_START_probe4__; hostname; __ainrf_probe_status=$?; "
+            "printf %s\\n __AINRF_PROBE_EXIT_probe4__:$__ainrf_probe_status; "
+            "printf %s\\n __AINRF_PROBE_END_probe4__' Enter",
+        ),
+        (
+            "researcher",
+            "command -v tmux >/dev/null 2>&1 || { echo __AINRF_REMOTE_TMUX_MISSING__; exit 127; }; "
+            "tmux capture-pane -p -t p-abc123def4",
+        ),
     ]
 
 

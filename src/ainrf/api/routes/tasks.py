@@ -101,6 +101,13 @@ def _serialize_task_detail(task: TaskDetail) -> dict[str, Any]:
         if task.result.completed_at is not None
         else None,
     }
+    payload["execution_engine"] = task.execution_engine
+    payload["research_agent_profile"] = (
+        asdict(task.research_agent_profile) if task.research_agent_profile is not None else None
+    )
+    payload["task_configuration"] = (
+        asdict(task.task_configuration) if task.task_configuration is not None else None
+    )
     return payload
 
 
@@ -146,6 +153,13 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
             task_profile=payload.task_profile,
             task_input=payload.task_input,
             title=payload.title,
+            execution_engine=payload.execution_engine,
+            research_agent_profile=payload.research_agent_profile.model_dump()
+            if payload.research_agent_profile is not None
+            else None,
+            task_configuration=payload.task_configuration.model_dump()
+            if payload.task_configuration is not None
+            else None,
         )
     except Exception as exc:
         raise _translate_task_error(exc) from exc
