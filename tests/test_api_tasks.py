@@ -121,8 +121,9 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
         working_directory: str,
         prompt_file: Path,
         rendered_prompt: str,
+        settings_path: str | None = None,
     ) -> tuple[LaunchPayload, object]:
-        _ = prompt_file, rendered_prompt
+        _ = prompt_file, rendered_prompt, settings_path
         payload = LaunchPayload(
             runner_kind="local-process",
             working_directory=working_directory,
@@ -195,9 +196,95 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
 
 
 @pytest.mark.anyio
-async def test_task_harness_startup_failure_when_environment_profile_is_empty(
+async def test_task_harness_route_accepts_three_layer_task_payload(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="profile-lab",
+        display_name="Profile Lab",
+        host="127.0.0.1",
+        default_workdir="/workspace/project",
+        task_harness_profile="Use the configured profile lab environment.",
+    )
+    recorded: dict[str, str] = {}
+
+    def fake_build_local_launcher(
+        *,
+        working_directory: str,
+        prompt_file: Path,
+        rendered_prompt: str,
+        settings_path: str,
+    ) -> tuple[LaunchPayload, object]:
+        _ = prompt_file, rendered_prompt
+        recorded["settings_path"] = settings_path
+        payload = LaunchPayload(
+            runner_kind="local-process",
+            working_directory=working_directory,
+            command=["claude", "--settings", settings_path],
+            prompt_file=str(prompt_file),
+        )
+
+        async def launch() -> FakeRunningProcess:
+            return FakeRunningProcess(stdout_chunks=["structured hello\n"])
+
+        return payload, launch
+
+    monkeypatch.setattr(
+        "ainrf.task_harness.service.build_local_launcher",
+        fake_build_local_launcher,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        create_response = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": "ignored legacy input",
+                "title": "Structured API task",
+                "execution_engine": "claude-code",
+                "research_agent_profile": {
+                    "profile_id": "agent-literature",
+                    "label": "Literature Agent",
+                    "system_prompt": "Prefer careful literature synthesis.",
+                    "skills_prompt": "Use citation and repo-inspection skills.",
+                    "settings_json": {"permissions": {"allow": ["Read", "Grep"]}},
+                },
+                "task_configuration": {
+                    "mode": "structured_research",
+                    "template_id": "structured-research-default",
+                    "template_vars": {
+                        "research_goal": "Compare task harness designs",
+                        "context": "AINRF runtime refactor",
+                        "constraints": "Keep Claude Code as the only enabled engine",
+                        "deliverables": "Architecture notes and implementation steps",
+                        "validation_plan": "Run unit tests and build",
+                    },
+                },
+            },
+        )
+
+        assert create_response.status_code == 201
+        detail = await wait_for_status(
+            client, create_response.json()["task_id"], TaskHarnessStatus.SUCCEEDED
+        )
+
+    assert recorded["settings_path"] == detail["research_agent_profile"]["settings_artifact_path"]
+    assert detail["execution_engine"] == "claude-code"
+    assert detail["research_agent_profile"]["profile_id"] == "agent-literature"
+    assert detail["task_configuration"]["mode"] == "structured_research"
+    assert "Compare task harness designs" in detail["task_configuration"]["rendered_task_input"]
+    assert detail["binding"]["task_input"] == detail["task_configuration"]["rendered_task_input"]
+    assert "research_agent_system" in detail["prompt"]["layer_order"]
+    assert "research_agent_skills" in detail["prompt"]["layer_order"]
+    assert detail["runtime"]["command"] == ["claude", "--settings", recorded["settings_path"]]
     app = make_app(tmp_path)
     environment = app.state.environment_service.create_environment(
         alias="cpu-lab",
@@ -250,8 +337,9 @@ async def test_task_harness_stream_endpoint_emits_new_events(
         working_directory: str,
         prompt_file: Path,
         rendered_prompt: str,
+        settings_path: str | None = None,
     ) -> tuple[LaunchPayload, object]:
-        _ = prompt_file, rendered_prompt
+        _ = prompt_file, rendered_prompt, settings_path
         payload = LaunchPayload(
             runner_kind="local-process",
             working_directory=working_directory,
@@ -328,7 +416,9 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
         local_task_dir: Path,
         working_directory: str,
         prompt_file: Path,
+        settings_path: Path | None = None,
     ) -> tuple[LaunchPayload, object]:
+        _ = settings_path
         assert executor is fake_executor
         assert task_id
         assert local_task_dir.exists()

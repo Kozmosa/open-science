@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,10 @@ from ainrf.workspaces.models import WorkspaceRecord
 
 
 class WorkspaceNotFoundError(LookupError):
+    pass
+
+
+class WorkspaceDeletionError(ValueError):
     pass
 
 
@@ -60,6 +65,69 @@ class WorkspaceRegistryService:
             return self._workspaces[workspace_id]
         except KeyError as exc:
             raise WorkspaceNotFoundError(workspace_id) from exc
+
+    def create_workspace(
+        self,
+        *,
+        label: str,
+        description: str | None,
+        default_workdir: str | None,
+        workspace_prompt: str,
+    ) -> WorkspaceRecord:
+        self.initialize()
+        with self._lock:
+            now = utc_now()
+            workspace_id = f"workspace-{uuid.uuid4().hex[:12]}"
+            workspace = WorkspaceRecord(
+                workspace_id=workspace_id,
+                label=label,
+                description=description,
+                default_workdir=default_workdir,
+                workspace_prompt=workspace_prompt,
+                created_at=now,
+                updated_at=now,
+            )
+            self._workspaces[workspace_id] = workspace
+            self._persist()
+            return workspace
+
+    def update_workspace(
+        self,
+        workspace_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+        default_workdir: str | None = None,
+        workspace_prompt: str | None = None,
+    ) -> WorkspaceRecord:
+        self.initialize()
+        with self._lock:
+            current = self.get_workspace(workspace_id)
+            workspace = WorkspaceRecord(
+                workspace_id=current.workspace_id,
+                label=current.label if label is None else label,
+                description=description,
+                default_workdir=default_workdir,
+                workspace_prompt=(
+                    current.workspace_prompt if workspace_prompt is None else workspace_prompt
+                ),
+                created_at=current.created_at,
+                updated_at=utc_now(),
+            )
+            self._workspaces[workspace_id] = workspace
+            self._persist()
+            return workspace
+
+    def delete_workspace(self, workspace_id: str) -> None:
+        self.initialize()
+        with self._lock:
+            self.get_workspace(workspace_id)
+            if workspace_id == "workspace-default":
+                raise WorkspaceDeletionError("Default workspace cannot be deleted")
+            if len(self._workspaces) == 1:
+                raise WorkspaceDeletionError("Last workspace cannot be deleted")
+            del self._workspaces[workspace_id]
+            self._persist()
 
     def _build_seed_workspace(self) -> WorkspaceRecord:
         now = utc_now()

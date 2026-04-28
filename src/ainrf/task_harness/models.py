@@ -20,6 +20,30 @@ class TaskOutputKind(StrEnum):
     LIFECYCLE = "lifecycle"
 
 
+class TaskConfigurationMode(StrEnum):
+    RAW_PROMPT = "raw_prompt"
+    STRUCTURED_RESEARCH = "structured_research"
+
+
+@dataclass(slots=True)
+class ResearchAgentProfileSnapshot:
+    profile_id: str
+    label: str
+    system_prompt: str | None
+    skills_prompt: str | None
+    settings_json: dict[str, object] | None
+    settings_artifact_path: str | None = None
+
+
+@dataclass(slots=True)
+class TaskConfigurationSnapshot:
+    mode: TaskConfigurationMode
+    template_id: str | None
+    template_vars: dict[str, object]
+    raw_prompt: str | None
+    rendered_task_input: str
+
+
 @dataclass(slots=True)
 class WorkspaceSummary:
     workspace_id: str
@@ -62,6 +86,9 @@ class TaskBindingSummary:
     task_input: str
     resolved_workdir: str
     snapshot_path: str
+    execution_engine: str
+    research_agent_profile: ResearchAgentProfileSnapshot
+    task_configuration: TaskConfigurationSnapshot
 
 
 @dataclass(slots=True)
@@ -117,6 +144,9 @@ class TaskDetail:
     prompt: TaskPromptSummary | None
     runtime: TaskRuntimeSummary | None
     result: TaskResultSummary
+    execution_engine: str
+    research_agent_profile: ResearchAgentProfileSnapshot | None
+    task_configuration: TaskConfigurationSnapshot | None
 
 
 @dataclass(slots=True)

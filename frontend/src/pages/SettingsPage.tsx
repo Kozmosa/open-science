@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import { getEnvironments } from '../api';
 import { useT } from '../i18n';
 import {
@@ -8,7 +9,13 @@ import {
   minTerminalFontSize,
   useSettings,
 } from '../settings';
-import type { DefaultRoute, EnvironmentTaskDefaults, WebUiSettingsDocument } from '../settings';
+import type {
+  DefaultRoute,
+  EnvironmentTaskDefaults,
+  ResearchAgentProfileSettings,
+  TaskConfigurationSettings,
+  WebUiSettingsDocument,
+} from '../settings';
 import type { EnvironmentRecord } from '../types';
 
 interface GeneralDraftState {
@@ -29,8 +36,16 @@ interface EnvironmentDefaultsCardProps {
   onReset: () => void;
 }
 
+interface TaskConfigurationSectionProps {
+  taskConfiguration: TaskConfigurationSettings;
+  onSaveResearchAgentProfile: (profile: ResearchAgentProfileSettings) => void;
+  onSaveTaskConfigurationSettings: (settings: TaskConfigurationSettings) => void;
+  onResetTaskConfigurationSettings: () => void;
+}
+
 interface ProjectDefaultsSectionProps {
   environments: EnvironmentRecord[];
+  taskConfiguration: TaskConfigurationSettings;
   savedDefaultEnvironmentId: string | null;
   isLoading: boolean;
   loadError: string | null;
@@ -49,7 +64,9 @@ function hasEnvironmentDefaultChanges(
 ): boolean {
   return (
     left.titleTemplate !== right.titleTemplate ||
-    left.taskInputTemplate !== right.taskInputTemplate
+    left.taskInputTemplate !== right.taskInputTemplate ||
+    left.researchAgentProfileId !== right.researchAgentProfileId ||
+    left.taskConfigurationId !== right.taskConfigurationId
   );
 }
 
@@ -164,12 +181,194 @@ function GeneralPreferencesSection({
   );
 }
 
+function TaskConfigurationSection({
+  taskConfiguration,
+  onSaveResearchAgentProfile,
+  onSaveTaskConfigurationSettings,
+  onResetTaskConfigurationSettings,
+}: TaskConfigurationSectionProps) {
+  const t = useT();
+  const [profileDraft, setProfileDraft] = useState<ResearchAgentProfileSettings>(
+    taskConfiguration.researchAgentProfiles[0] ?? {
+      profileId: 'claude-code-default',
+      label: 'Claude Code Default',
+      systemPrompt: '',
+      skillsPrompt: '',
+      settingsJson: '',
+    }
+  );
+  const [defaultProfileId, setDefaultProfileId] = useState(
+    taskConfiguration.defaultResearchAgentProfileId
+  );
+  const [defaultConfigId, setDefaultConfigId] = useState(taskConfiguration.defaultTaskConfigurationId);
+
+  return (
+    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+      <div className="space-y-1">
+        <h2
+          className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {t('pages.settings.taskConfiguration.title')}
+        </h2>
+        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
+          {t('pages.settings.taskConfiguration.description')}
+        </p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <label className="space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.taskConfiguration.executionEngineLabel')}
+          </span>
+          <select
+            aria-label={t('pages.settings.taskConfiguration.executionEngineLabel')}
+            value={taskConfiguration.defaultExecutionEngineId}
+            disabled
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)]"
+          >
+            <option value="claude-code">Claude Code</option>
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.taskConfiguration.defaultTaskConfigurationLabel')}
+          </span>
+          <select
+            aria-label={t('pages.settings.taskConfiguration.defaultTaskConfigurationLabel')}
+            value={defaultConfigId}
+            onChange={(event) => setDefaultConfigId(event.target.value)}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          >
+            {taskConfiguration.taskConfigurations.map((config) => (
+              <option key={config.configId} value={config.configId}>
+                {config.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
+        <label className="space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.taskConfiguration.defaultResearchAgentLabel')}
+          </span>
+          <select
+            aria-label={t('pages.settings.taskConfiguration.defaultResearchAgentLabel')}
+            value={defaultProfileId}
+            onChange={(event) => {
+              const nextId = event.target.value;
+              setDefaultProfileId(nextId);
+              const nextProfile = taskConfiguration.researchAgentProfiles.find(
+                (profile) => profile.profileId === nextId
+              );
+              if (nextProfile) {
+                setProfileDraft(nextProfile);
+              }
+            }}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          >
+            {taskConfiguration.researchAgentProfiles.map((profile) => (
+              <option key={profile.profileId} value={profile.profileId}>
+                {profile.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.taskConfiguration.profileLabel')}
+          </span>
+          <input
+            aria-label={t('pages.settings.taskConfiguration.profileLabel')}
+            value={profileDraft.label}
+            onChange={(event) =>
+              setProfileDraft((current) => ({ ...current, label: event.target.value }))
+            }
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          />
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.taskConfiguration.systemPromptLabel')}
+          </span>
+          <textarea
+            aria-label={t('pages.settings.taskConfiguration.systemPromptLabel')}
+            value={profileDraft.systemPrompt}
+            onChange={(event) =>
+              setProfileDraft((current) => ({ ...current, systemPrompt: event.target.value }))
+            }
+            className="min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          />
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.taskConfiguration.skillsPromptLabel')}
+          </span>
+          <textarea
+            aria-label={t('pages.settings.taskConfiguration.skillsPromptLabel')}
+            value={profileDraft.skillsPrompt}
+            onChange={(event) =>
+              setProfileDraft((current) => ({ ...current, skillsPrompt: event.target.value }))
+            }
+            className="min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          />
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.settings.taskConfiguration.settingsJsonLabel')}
+          </span>
+          <textarea
+            aria-label={t('pages.settings.taskConfiguration.settingsJsonLabel')}
+            value={profileDraft.settingsJson}
+            onChange={(event) =>
+              setProfileDraft((current) => ({ ...current, settingsJson: event.target.value }))
+            }
+            className="min-h-28 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 font-mono text-xs tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          />
+        </label>
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-3">
+        <button
+          type="button"
+          onClick={onResetTaskConfigurationSettings}
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
+        >
+          {t('common.reset')}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSaveResearchAgentProfile(profileDraft);
+            onSaveTaskConfigurationSettings({
+              ...taskConfiguration,
+              defaultResearchAgentProfileId: defaultProfileId,
+              defaultTaskConfigurationId: defaultConfigId,
+            });
+          }}
+          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)]"
+        >
+          {t('common.saveChanges')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function EnvironmentDefaultsCard({
   environment,
   savedDefaults,
+  taskConfiguration,
   onSave,
   onReset,
-}: EnvironmentDefaultsCardProps) {
+}: EnvironmentDefaultsCardProps & { taskConfiguration: TaskConfigurationSettings }) {
   const t = useT();
   const [draft, setDraft] = useState<EnvironmentTaskDefaults>(savedDefaults);
   const hasChanges = hasEnvironmentDefaultChanges(draft, savedDefaults);
@@ -224,6 +423,52 @@ function EnvironmentDefaultsCard({
         />
       </label>
 
+      <label className="block space-y-2">
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+          {t('pages.settings.project.researchAgentDefaultLabel')}
+        </span>
+        <select
+          aria-label={`${environment.alias} ${t('pages.settings.project.researchAgentDefaultLabel')}`}
+          value={draft.researchAgentProfileId}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              researchAgentProfileId: event.target.value,
+            }))
+          }
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+        >
+          {taskConfiguration.researchAgentProfiles.map((profile) => (
+            <option key={profile.profileId} value={profile.profileId}>
+              {profile.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+          {t('pages.settings.project.taskConfigurationDefaultLabel')}
+        </span>
+        <select
+          aria-label={`${environment.alias} ${t('pages.settings.project.taskConfigurationDefaultLabel')}`}
+          value={draft.taskConfigurationId}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              taskConfigurationId: event.target.value,
+            }))
+          }
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+        >
+          {taskConfiguration.taskConfigurations.map((config) => (
+            <option key={config.configId} value={config.configId}>
+              {config.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div className="flex flex-wrap justify-end gap-3">
         <button
           type="button"
@@ -247,6 +492,7 @@ function EnvironmentDefaultsCard({
 
 function ProjectDefaultsSection({
   environments,
+  taskConfiguration,
   savedDefaultEnvironmentId,
   isLoading,
   loadError,
@@ -338,9 +584,10 @@ function ProjectDefaultsSection({
           const savedDefaults = getProjectEnvironmentDefaults(environment.id);
           return (
             <EnvironmentDefaultsCard
-              key={`${environment.id}:${savedDefaults.titleTemplate}:${savedDefaults.taskInputTemplate}`}
+              key={`${environment.id}:${savedDefaults.titleTemplate}:${savedDefaults.taskInputTemplate}:${savedDefaults.researchAgentProfileId}:${savedDefaults.taskConfigurationId}`}
               environment={environment}
               savedDefaults={savedDefaults}
+              taskConfiguration={taskConfiguration}
               onSave={(defaults) => saveProjectEnvironmentDefaults(environment.id, defaults)}
               onReset={() => resetProjectEnvironmentDefaults(environment.id)}
             />
@@ -362,11 +609,15 @@ function SettingsPage() {
     recoveryReason,
     saveGeneralPreferences,
     resetGeneralPreferences,
+    saveTaskConfigurationSettings,
+    resetTaskConfigurationSettings,
+    saveResearchAgentProfile,
     saveProjectDefaultEnvironment,
     saveProjectEnvironmentDefaults,
     resetProjectEnvironmentDefaults,
     getProjectEnvironmentDefaults,
   } = useSettings();
+  const environmentSelection = useEnvironmentSelection();
 
   const environments = useMemo(
     () => environmentsQuery.data?.items ?? [],
@@ -406,9 +657,19 @@ function SettingsPage() {
           onReset={resetGeneralPreferences}
         />
 
+        <EnvironmentSelectorPanel {...environmentSelection} />
+
+        <TaskConfigurationSection
+          taskConfiguration={settings.taskConfiguration}
+          onSaveResearchAgentProfile={saveResearchAgentProfile}
+          onSaveTaskConfigurationSettings={saveTaskConfigurationSettings}
+          onResetTaskConfigurationSettings={resetTaskConfigurationSettings}
+        />
+
         <ProjectDefaultsSection
           key={`project-default:${settings.projectDefaults.default.defaultEnvironmentId ?? 'none'}`}
           environments={environments}
+          taskConfiguration={settings.taskConfiguration}
           savedDefaultEnvironmentId={settings.projectDefaults.default.defaultEnvironmentId}
           isLoading={environmentsQuery.isLoading}
           loadError={environmentsError}

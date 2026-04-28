@@ -67,7 +67,7 @@ describe('TerminalPage', () => {
     expect(screen.getByText('TERMINAL')).toBeInTheDocument();
   });
 
-  it('renders the simplified Chinese terminal header and keeps the bench card above the selector', async () => {
+  it('renders the simplified Chinese terminal header and only keeps the terminal session card', async () => {
     renderWithProviders(<TerminalPage />, {
       route: '/terminal?environment_id=env-1&task_id=task-1&intent=takeover',
       locale: 'zh',
@@ -79,10 +79,8 @@ describe('TerminalPage', () => {
     expect(screen.queryByText(/task attach intent/)).not.toBeInTheDocument();
 
     const terminalBenchCard = screen.getByTestId('terminal-bench-card');
-    const environmentSelector = screen.getByTestId('environment-selector');
 
-    expect(terminalBenchCard.compareDocumentPosition(environmentSelector) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
+    expect(terminalBenchCard).toBeInTheDocument();
+    expect(screen.queryByTestId('environment-selector')).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import {
   clampTerminalFontSize,
+  createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
   createEmptyEnvironmentTaskDefaults,
   isDefaultRoute,
@@ -9,7 +10,9 @@ import {
 import { readStoredSettings, resolveProjectEnvironmentDefaults, writeStoredSettings } from './storage';
 import type {
   EnvironmentTaskDefaults,
+  ResearchAgentProfileSettings,
   SettingsRecoveryReason,
+  TaskConfigurationSettings,
   WebUiSettingsDocument,
 } from './types';
 
@@ -18,6 +21,9 @@ interface SettingsContextValue {
   recoveryReason: SettingsRecoveryReason | null;
   saveGeneralPreferences: (general: WebUiSettingsDocument['general']) => void;
   resetGeneralPreferences: () => void;
+  saveTaskConfigurationSettings: (taskConfiguration: TaskConfigurationSettings) => void;
+  resetTaskConfigurationSettings: () => void;
+  saveResearchAgentProfile: (profile: ResearchAgentProfileSettings) => void;
   saveProjectDefaultEnvironment: (environmentId: string | null) => void;
   saveProjectEnvironmentDefaults: (
     environmentId: string,
@@ -41,7 +47,7 @@ interface SettingsState {
 
 function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocument {
   return {
-    version: 1,
+    version: 2,
     general: {
       defaultRoute: isDefaultRoute(settings.general.defaultRoute)
         ? settings.general.defaultRoute
@@ -50,6 +56,7 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
         fontSize: clampTerminalFontSize(settings.general.terminal.fontSize),
       },
     },
+    taskConfiguration: settings.taskConfiguration,
     projectDefaults: {
       default: {
         defaultEnvironmentId: settings.projectDefaults.default.defaultEnvironmentId,
@@ -96,6 +103,31 @@ export function SettingsProvider({ children }: ProviderProps) {
           general: defaults.general,
         });
       },
+      saveTaskConfigurationSettings: (taskConfiguration) => {
+        commitSettings({
+          ...state.settings,
+          taskConfiguration,
+        });
+      },
+      resetTaskConfigurationSettings: () => {
+        commitSettings({
+          ...state.settings,
+          taskConfiguration: createDefaultTaskConfigurationSettings(),
+        });
+      },
+      saveResearchAgentProfile: (profile) => {
+        const profiles = state.settings.taskConfiguration.researchAgentProfiles;
+        const profileExists = profiles.some((item) => item.profileId === profile.profileId);
+        commitSettings({
+          ...state.settings,
+          taskConfiguration: {
+            ...state.settings.taskConfiguration,
+            researchAgentProfiles: profileExists
+              ? profiles.map((item) => (item.profileId === profile.profileId ? profile : item))
+              : [...profiles, profile],
+          },
+        });
+      },
       saveProjectDefaultEnvironment: (environmentId) => {
         commitSettings({
           ...state.settings,
@@ -118,6 +150,8 @@ export function SettingsProvider({ children }: ProviderProps) {
                 [environmentId]: {
                   titleTemplate: defaults.titleTemplate,
                   taskInputTemplate: defaults.taskInputTemplate,
+                  researchAgentProfileId: defaults.researchAgentProfileId,
+                  taskConfigurationId: defaults.taskConfigurationId,
                 },
               },
             },

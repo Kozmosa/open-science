@@ -1,7 +1,12 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
-import type { EnvironmentRecord, TaskCreateRequest, WorkspaceRecord } from '../../types';
+import type {
+  EnvironmentRecord,
+  TaskCreateRequest,
+  WorkspaceRecord,
+} from '../../types';
+import type { ResearchAgentProfileSettings, TaskConfigurationPreset } from '../../settings';
 
 interface TaskCreateFormProps {
   workspaces: WorkspaceRecord[];
@@ -13,7 +18,11 @@ interface TaskCreateFormProps {
   draftDefaults: {
     title: string;
     task_input: string;
+    researchAgentProfileId: string;
+    taskConfigurationId: string;
   };
+  researchAgentProfiles: ResearchAgentProfileSettings[];
+  taskConfigurations: TaskConfigurationPreset[];
   isSubmitting: boolean;
   createError: string | null;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -30,6 +39,8 @@ export default function TaskCreateForm({
   selectedWorkspace,
   selectedEnvironment,
   draftDefaults,
+  researchAgentProfiles,
+  taskConfigurations,
   isSubmitting,
   createError,
   onSelectWorkspace,
@@ -42,6 +53,13 @@ export default function TaskCreateForm({
     title: draftDefaults.title,
     task_input: draftDefaults.task_input,
     task_profile: 'claude-code',
+    researchAgentProfileId: draftDefaults.researchAgentProfileId,
+    taskConfigurationId: draftDefaults.taskConfigurationId,
+    researchGoal: '',
+    context: '',
+    constraints: '',
+    deliverables: '',
+    validationPlan: '',
   });
   const taskInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -49,10 +67,30 @@ export default function TaskCreateForm({
     taskInputRef.current?.focus();
   }, []);
 
+  const selectedTaskConfiguration = taskConfigurations.find(
+    (configuration) => configuration.configId === draft.taskConfigurationId
+  );
+  const selectedResearchAgentProfile = researchAgentProfiles.find(
+    (profile) => profile.profileId === draft.researchAgentProfileId
+  );
+  const structuredPrompt = [
+    ['Research goal', draft.researchGoal],
+    ['Context', draft.context],
+    ['Constraints', draft.constraints],
+    ['Expected deliverables', draft.deliverables],
+    ['Validation plan', draft.validationPlan],
+  ]
+    .filter(([, value]) => value.trim().length > 0)
+    .map(([label, value]) => `${label}:\n${value.trim()}`)
+    .join('\n\n');
+  const effectiveTaskInput =
+    selectedTaskConfiguration?.mode === 'structured_research'
+      ? structuredPrompt || draft.task_input
+      : draft.task_input;
   const canCreate =
     selectedWorkspace !== null &&
     selectedEnvironment !== null &&
-    draft.task_input.trim().length > 0 &&
+    effectiveTaskInput.trim().length > 0 &&
     !isSubmitting;
 
   return (
@@ -64,12 +102,43 @@ export default function TaskCreateForm({
           return;
         }
 
+        const settings_json = selectedResearchAgentProfile?.settingsJson.trim()
+          ? (JSON.parse(selectedResearchAgentProfile.settingsJson) as Record<string, unknown>)
+          : null;
         onSubmit({
           workspace_id: selectedWorkspace.workspace_id,
           environment_id: selectedEnvironment.id,
           task_profile: draft.task_profile,
-          task_input: draft.task_input.trim(),
+          task_input: effectiveTaskInput.trim(),
           title: draft.title.trim() || undefined,
+          execution_engine: 'claude-code',
+          research_agent_profile: selectedResearchAgentProfile
+            ? {
+                profile_id: selectedResearchAgentProfile.profileId,
+                label: selectedResearchAgentProfile.label,
+                system_prompt: selectedResearchAgentProfile.systemPrompt || null,
+                skills_prompt: selectedResearchAgentProfile.skillsPrompt || null,
+                settings_json,
+              }
+            : null,
+          task_configuration:
+            selectedTaskConfiguration?.mode === 'structured_research'
+              ? {
+                  mode: 'structured_research',
+                  template_id: selectedTaskConfiguration.configId,
+                  template_vars: {
+                    research_goal: draft.researchGoal,
+                    context: draft.context,
+                    constraints: draft.constraints,
+                    deliverables: draft.deliverables,
+                    validation_plan: draft.validationPlan,
+                  },
+                }
+              : {
+                  mode: 'raw_prompt',
+                  template_id: selectedTaskConfiguration?.configId ?? null,
+                  raw_prompt: draft.task_input.trim(),
+                },
         });
       }}
     >
@@ -148,6 +217,48 @@ export default function TaskCreateForm({
         </select>
       </label>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block space-y-2">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+            {t('pages.tasks.researchAgentLabel')}
+          </span>
+          <select
+            aria-label={t('pages.tasks.researchAgentLabel')}
+            value={draft.researchAgentProfileId}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, researchAgentProfileId: event.target.value }))
+            }
+            className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
+          >
+            {researchAgentProfiles.map((profile) => (
+              <option key={profile.profileId} value={profile.profileId}>
+                {profile.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+            {t('pages.tasks.taskConfigurationLabel')}
+          </span>
+          <select
+            aria-label={t('pages.tasks.taskConfigurationLabel')}
+            value={draft.taskConfigurationId}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, taskConfigurationId: event.target.value }))
+            }
+            className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
+          >
+            {taskConfigurations.map((configuration) => (
+              <option key={configuration.configId} value={configuration.configId}>
+                {configuration.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <label className="block space-y-2">
         <span className="text-xs font-medium text-[var(--muted-foreground)]">
           {t('pages.tasks.titleLabel')}
@@ -161,21 +272,53 @@ export default function TaskCreateForm({
         />
       </label>
 
-      <label className="block space-y-2">
-        <span className="text-xs font-medium text-[var(--muted-foreground)]">
-          {t('pages.tasks.taskInputLabel')}
-        </span>
-        <textarea
-          ref={taskInputRef}
-          aria-label={t('pages.tasks.taskInputLabel')}
-          value={draft.task_input}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, task_input: event.target.value }))
-          }
-          className="min-h-44 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 py-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
-          placeholder={t('pages.tasks.taskInputPlaceholder')}
-        />
-      </label>
+      {selectedTaskConfiguration?.mode === 'structured_research' ? (
+        <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3">
+          {[
+            ['researchGoal', 'structuredResearchGoal'],
+            ['context', 'structuredResearchContext'],
+            ['constraints', 'structuredResearchConstraints'],
+            ['deliverables', 'structuredResearchDeliverables'],
+            ['validationPlan', 'structuredResearchValidationPlan'],
+          ].map(([field, labelKey]) => (
+            <label key={field} className="block space-y-2">
+              <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                {t(`pages.tasks.${labelKey}` as Parameters<typeof t>[0])}
+              </span>
+              <textarea
+                aria-label={t(`pages.tasks.${labelKey}` as Parameters<typeof t>[0])}
+                value={String(draft[field as keyof typeof draft])}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, [field]: event.target.value }))
+                }
+                className="min-h-20 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 py-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
+              />
+            </label>
+          ))}
+          <div className="rounded-lg bg-[var(--background)] p-3 text-xs text-[var(--muted-foreground)]">
+            <p className="mb-2 font-medium text-[var(--foreground)]">
+              {t('pages.tasks.generatedPromptPreview')}
+            </p>
+            <pre className="whitespace-pre-wrap font-mono">{structuredPrompt}</pre>
+          </div>
+        </div>
+      ) : (
+        <label className="block space-y-2">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+            {t('pages.tasks.taskInputLabel')}
+          </span>
+          <textarea
+            ref={taskInputRef}
+            aria-label={t('pages.tasks.taskInputLabel')}
+            value={draft.task_input}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, task_input: event.target.value }))
+            }
+            className="min-h-44 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 py-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
+            placeholder={t('pages.tasks.taskInputPlaceholder')}
+          />
+        </label>
+      )}
 
       {selectedWorkspace ? (
         <p className="rounded-lg bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
@@ -196,6 +339,13 @@ export default function TaskCreateForm({
               title: draftDefaults.title,
               task_input: draftDefaults.task_input,
               task_profile: 'claude-code',
+              researchAgentProfileId: draftDefaults.researchAgentProfileId,
+              taskConfigurationId: draftDefaults.taskConfigurationId,
+              researchGoal: '',
+              context: '',
+              constraints: '',
+              deliverables: '',
+              validationPlan: '',
             })
           }
         >

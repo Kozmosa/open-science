@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING, Any
 from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.task_harness.models import (
     EnvironmentSummary,
+    ResearchAgentProfileSnapshot,
     TaskBindingSummary,
+    TaskConfigurationMode,
+    TaskConfigurationSnapshot,
     TaskPromptLayer,
     TaskPromptSummary,
     TaskRuntimeSummary,
@@ -25,7 +28,18 @@ BINDING_SNAPSHOT_FILENAME = "binding_snapshot.json"
 PROMPT_MANIFEST_FILENAME = "prompt_layer_manifest.json"
 RENDERED_PROMPT_FILENAME = "rendered_prompt.txt"
 LAUNCH_PAYLOAD_FILENAME = "resolved_launch_payload.json"
+TASK_CONFIG_SNAPSHOT_FILENAME = "task_configuration_snapshot.json"
+RESEARCH_AGENT_PROFILE_FILENAME = "research_agent_profile.json"
+CLAUDE_SETTINGS_FILENAME = "claude-settings.json"
 REMOTE_LAUNCH_FILENAME = "remote-launch.sh"
+DEFAULT_EXECUTION_ENGINE = "claude-code"
+DEFAULT_RESEARCH_AGENT_PROFILE = ResearchAgentProfileSnapshot(
+    profile_id="claude-code-default",
+    label="Claude Code Default",
+    system_prompt=None,
+    skills_prompt=None,
+    settings_json=None,
+)
 
 
 def binding_snapshot_path(task_dir: Path) -> Path:
@@ -44,6 +58,18 @@ def launch_payload_path(task_dir: Path) -> Path:
     return task_dir / LAUNCH_PAYLOAD_FILENAME
 
 
+def task_configuration_snapshot_path(task_dir: Path) -> Path:
+    return task_dir / TASK_CONFIG_SNAPSHOT_FILENAME
+
+
+def research_agent_profile_path(task_dir: Path) -> Path:
+    return task_dir / RESEARCH_AGENT_PROFILE_FILENAME
+
+
+def claude_settings_path(task_dir: Path) -> Path:
+    return task_dir / CLAUDE_SETTINGS_FILENAME
+
+
 def remote_launch_path(task_dir: Path) -> Path:
     return task_dir / REMOTE_LAUNCH_FILENAME
 
@@ -57,7 +83,12 @@ def write_binding_snapshot(
     title: str,
     task_input: str,
     resolved_workdir: str,
+    execution_engine: str = DEFAULT_EXECUTION_ENGINE,
+    research_agent_profile: ResearchAgentProfileSnapshot | None = None,
+    task_configuration: TaskConfigurationSnapshot | None = None,
 ) -> TaskBindingSummary:
+    profile = research_agent_profile or DEFAULT_RESEARCH_AGENT_PROFILE
+    configuration = task_configuration or raw_prompt_configuration(task_input)
     binding = TaskBindingSummary(
         workspace=_workspace_summary(workspace),
         environment=_environment_summary(environment),
@@ -66,6 +97,9 @@ def write_binding_snapshot(
         task_input=task_input,
         resolved_workdir=resolved_workdir,
         snapshot_path=str(path),
+        execution_engine=execution_engine,
+        research_agent_profile=profile,
+        task_configuration=configuration,
     )
     write_json(path, binding_snapshot_payload(binding, workspace, environment))
     return binding
@@ -79,12 +113,14 @@ def write_prompt_artifacts(
     environment: EnvironmentRegistryEntry,
     task_profile: str,
     task_input: str,
+    research_agent_profile: ResearchAgentProfileSnapshot | None = None,
 ) -> tuple[Path, TaskPromptSummary]:
     prompt_composition = compose_task_prompt(
         workspace=workspace,
         environment=environment,
         task_profile=task_profile,
         task_input=task_input,
+        research_agent_profile=research_agent_profile,
     )
     prompt_file = rendered_prompt_path(task_dir)
     prompt_file.write_text(prompt_composition.rendered_prompt, encoding="utf-8")
@@ -102,6 +138,27 @@ def write_launch_payload(path: Path, payload: LaunchPayload) -> None:
     write_json(path, asdict(payload))
 
 
+def write_task_configuration_snapshot(
+    path: Path, task_configuration: TaskConfigurationSnapshot
+) -> None:
+    write_json(path, task_configuration_payload(task_configuration))
+
+
+def write_research_agent_profile_snapshot(
+    path: Path, research_agent_profile: ResearchAgentProfileSnapshot
+) -> None:
+    write_json(path, research_agent_profile_payload(research_agent_profile))
+
+
+def write_claude_settings_artifact(
+    path: Path, settings_json: dict[str, object] | None
+) -> str | None:
+    if settings_json is None:
+        return None
+    write_json(path, settings_json)
+    return str(path)
+
+
 def read_binding_summary(snapshot_path: str) -> TaskBindingSummary | None:
     path = Path(snapshot_path)
     if not path.exists():
@@ -115,6 +172,19 @@ def read_binding_summary(snapshot_path: str) -> TaskBindingSummary | None:
         task_input=str(payload["task_input"]),
         resolved_workdir=str(payload["resolved_workdir"]),
         snapshot_path=str(payload["snapshot_path"]),
+        execution_engine=str(payload.get("execution_engine", DEFAULT_EXECUTION_ENGINE)),
+        research_agent_profile=research_agent_profile_from_payload(
+            payload.get(
+                "research_agent_profile",
+                research_agent_profile_payload(DEFAULT_RESEARCH_AGENT_PROFILE),
+            )
+        ),
+        task_configuration=task_configuration_from_payload(
+            payload.get(
+                "task_configuration",
+                task_configuration_payload(raw_prompt_configuration(str(payload["task_input"]))),
+            )
+        ),
     )
 
 
@@ -140,6 +210,20 @@ def read_runtime_summary(launch_payload_path: str) -> TaskRuntimeSummary | None:
     )
 
 
+def read_task_configuration_snapshot(snapshot_path: str) -> TaskConfigurationSnapshot | None:
+    path = Path(snapshot_path)
+    if not path.exists():
+        return None
+    return task_configuration_from_payload(json.loads(path.read_text(encoding="utf-8")))
+
+
+def read_research_agent_profile_snapshot(snapshot_path: str) -> ResearchAgentProfileSnapshot | None:
+    path = Path(snapshot_path)
+    if not path.exists():
+        return None
+    return research_agent_profile_from_payload(json.loads(path.read_text(encoding="utf-8")))
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -163,6 +247,59 @@ def prompt_summary_from_payload(payload: dict[str, Any]) -> TaskPromptSummary:
             for item in payload["layers"]
         ],
         manifest_path=str(payload["manifest_path"]),
+    )
+
+
+def raw_prompt_configuration(task_input: str) -> TaskConfigurationSnapshot:
+    return TaskConfigurationSnapshot(
+        mode=TaskConfigurationMode.RAW_PROMPT,
+        template_id=None,
+        template_vars={},
+        raw_prompt=task_input,
+        rendered_task_input=task_input,
+    )
+
+
+def task_configuration_payload(configuration: TaskConfigurationSnapshot) -> dict[str, Any]:
+    return {
+        "mode": configuration.mode.value,
+        "template_id": configuration.template_id,
+        "template_vars": configuration.template_vars,
+        "raw_prompt": configuration.raw_prompt,
+        "rendered_task_input": configuration.rendered_task_input,
+    }
+
+
+def task_configuration_from_payload(payload: dict[str, Any]) -> TaskConfigurationSnapshot:
+    return TaskConfigurationSnapshot(
+        mode=TaskConfigurationMode(str(payload["mode"])),
+        template_id=payload.get("template_id"),
+        template_vars=dict(payload.get("template_vars", {})),
+        raw_prompt=payload.get("raw_prompt"),
+        rendered_task_input=str(payload["rendered_task_input"]),
+    )
+
+
+def research_agent_profile_payload(profile: ResearchAgentProfileSnapshot) -> dict[str, Any]:
+    return {
+        "profile_id": profile.profile_id,
+        "label": profile.label,
+        "system_prompt": profile.system_prompt,
+        "skills_prompt": profile.skills_prompt,
+        "settings_json": profile.settings_json,
+        "settings_artifact_path": profile.settings_artifact_path,
+    }
+
+
+def research_agent_profile_from_payload(payload: dict[str, Any]) -> ResearchAgentProfileSnapshot:
+    settings_json = payload.get("settings_json")
+    return ResearchAgentProfileSnapshot(
+        profile_id=str(payload["profile_id"]),
+        label=str(payload["label"]),
+        system_prompt=payload.get("system_prompt"),
+        skills_prompt=payload.get("skills_prompt"),
+        settings_json=dict(settings_json) if isinstance(settings_json, dict) else None,
+        settings_artifact_path=payload.get("settings_artifact_path"),
     )
 
 
@@ -226,6 +363,9 @@ def binding_snapshot_payload(
         "task_input": binding.task_input,
         "resolved_workdir": binding.resolved_workdir,
         "snapshot_path": binding.snapshot_path,
+        "execution_engine": binding.execution_engine,
+        "research_agent_profile": research_agent_profile_payload(binding.research_agent_profile),
+        "task_configuration": task_configuration_payload(binding.task_configuration),
     }
 
 

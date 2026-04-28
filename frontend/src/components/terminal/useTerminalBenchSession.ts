@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createTerminalSession,
@@ -68,7 +68,6 @@ export function useTerminalBenchSession(
   const selectedEnvironmentId = selectedEnvironment?.id ?? null;
   const previousEnvironmentIdRef = useRef<string | null>(selectedEnvironmentId);
   const attachRequestKeyRef = useRef<string | null>(null);
-  const [detachedEnvironmentId, setDetachedEnvironmentId] = useState<string | null>(null);
 
   const terminalQuery = useQuery({
     queryKey: [...terminalSessionQueryKey, selectedEnvironmentId],
@@ -125,9 +124,6 @@ export function useTerminalBenchSession(
     }
     previousEnvironmentIdRef.current = selectedEnvironmentId;
     attachRequestKeyRef.current = null;
-    queueMicrotask(() => {
-      setDetachedEnvironmentId(null);
-    });
   }, [selectedEnvironmentId]);
 
   const requestAttach = useCallback(
@@ -146,23 +142,6 @@ export function useTerminalBenchSession(
   );
 
   const session = terminalQuery.data;
-  const shouldAutoAttach =
-    selectedEnvironmentId !== null &&
-    !terminalQuery.isLoading &&
-    !attachMutation.isPending &&
-    !detachMutation.isPending &&
-    !resetMutation.isPending &&
-    detachedEnvironmentId !== selectedEnvironmentId &&
-    session?.status === 'running' &&
-    session.attachment_id === null;
-
-  useEffect(() => {
-    if (!shouldAutoAttach || selectedEnvironmentId === null || session === undefined) {
-      return;
-    }
-    requestAttach(selectedEnvironmentId, session);
-  }, [requestAttach, selectedEnvironmentId, session, shouldAutoAttach]);
-
   const status = session?.status ?? 'idle';
   const loadError = getErrorMessage(terminalQuery.error);
   const mutationError =
@@ -208,7 +187,6 @@ export function useTerminalBenchSession(
       if (selectedEnvironmentId === null) {
         return;
       }
-      setDetachedEnvironmentId(null);
       requestAttach(selectedEnvironmentId, session);
     },
     onDetach: () => {
@@ -217,7 +195,6 @@ export function useTerminalBenchSession(
         return;
       }
       attachRequestKeyRef.current = null;
-      setDetachedEnvironmentId(selectedEnvironmentId);
       detachMutation.mutate({
         environmentId: selectedEnvironmentId,
         attachmentId: currentAttachmentId,
@@ -228,7 +205,6 @@ export function useTerminalBenchSession(
         return;
       }
       attachRequestKeyRef.current = null;
-      setDetachedEnvironmentId(null);
       resetMutation.mutate({
         environmentId: selectedEnvironmentId,
         attachmentId: session?.attachment_id ?? null,

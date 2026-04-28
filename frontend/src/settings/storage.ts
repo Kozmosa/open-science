@@ -1,15 +1,22 @@
 import {
   clampTerminalFontSize,
   createDefaultProjectSettings,
+  createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
   createEmptyEnvironmentTaskDefaults,
+  defaultResearchAgentProfileId,
   isDefaultRoute,
+  rawPromptTaskConfigurationId,
   settingsStorageKey,
 } from './defaults';
 import type {
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
+  ResearchAgentProfileSettings,
   SettingsRecoveryReason,
+  TaskConfigurationMode,
+  TaskConfigurationPreset,
+  TaskConfigurationSettings,
   WebUiSettingsDocument,
 } from './types';
 
@@ -54,10 +61,90 @@ function normalizeEnvironmentDefaults(
     environmentDefaults[environmentId] = {
       titleTemplate,
       taskInputTemplate,
+      researchAgentProfileId:
+        typeof item.researchAgentProfileId === 'string'
+          ? item.researchAgentProfileId
+          : defaultResearchAgentProfileId,
+      taskConfigurationId:
+        typeof item.taskConfigurationId === 'string'
+          ? item.taskConfigurationId
+          : rawPromptTaskConfigurationId,
     };
   }
 
   return { environmentDefaults, hadFallback };
+}
+
+function normalizeTaskConfigurationSettings(
+  value: unknown
+): { taskConfiguration: TaskConfigurationSettings; hadFallback: boolean } {
+  const defaults = createDefaultTaskConfigurationSettings();
+  if (!isRecord(value)) {
+    return { taskConfiguration: defaults, hadFallback: true };
+  }
+
+  let hadFallback = false;
+  const researchAgentProfiles = Array.isArray(value.researchAgentProfiles)
+    ? value.researchAgentProfiles.flatMap((item): ResearchAgentProfileSettings[] => {
+        if (!isRecord(item) || typeof item.profileId !== 'string' || typeof item.label !== 'string') {
+          hadFallback = true;
+          return [];
+        }
+        return [
+          {
+            profileId: item.profileId,
+            label: item.label,
+            systemPrompt: typeof item.systemPrompt === 'string' ? item.systemPrompt : '',
+            skillsPrompt: typeof item.skillsPrompt === 'string' ? item.skillsPrompt : '',
+            settingsJson: typeof item.settingsJson === 'string' ? item.settingsJson : '',
+          },
+        ];
+      })
+    : defaults.researchAgentProfiles;
+  if (!Array.isArray(value.researchAgentProfiles)) {
+    hadFallback = true;
+  }
+
+  const taskConfigurations = Array.isArray(value.taskConfigurations)
+    ? value.taskConfigurations.flatMap((item): TaskConfigurationPreset[] => {
+        if (
+          !isRecord(item) ||
+          typeof item.configId !== 'string' ||
+          typeof item.label !== 'string' ||
+          (item.mode !== 'raw_prompt' && item.mode !== 'structured_research')
+        ) {
+          hadFallback = true;
+          return [];
+        }
+        return [
+          {
+            configId: item.configId,
+            label: item.label,
+            mode: item.mode as TaskConfigurationMode,
+          },
+        ];
+      })
+    : defaults.taskConfigurations;
+  if (!Array.isArray(value.taskConfigurations)) {
+    hadFallback = true;
+  }
+
+  return {
+    taskConfiguration: {
+      defaultExecutionEngineId: 'claude-code',
+      researchAgentProfiles: researchAgentProfiles.length > 0 ? researchAgentProfiles : defaults.researchAgentProfiles,
+      taskConfigurations: taskConfigurations.length > 0 ? taskConfigurations : defaults.taskConfigurations,
+      defaultResearchAgentProfileId:
+        typeof value.defaultResearchAgentProfileId === 'string'
+          ? value.defaultResearchAgentProfileId
+          : defaults.defaultResearchAgentProfileId,
+      defaultTaskConfigurationId:
+        typeof value.defaultTaskConfigurationId === 'string'
+          ? value.defaultTaskConfigurationId
+          : defaults.defaultTaskConfigurationId,
+    },
+    hadFallback,
+  };
 }
 
 function normalizeDefaultProjectSettings(
@@ -126,7 +213,7 @@ export function readStoredSettings(): SettingsLoadResult {
     return { settings: defaults, recoveryReason: 'invalid_document' };
   }
 
-  if (parsed.version !== 1) {
+  if (parsed.version !== 1 && parsed.version !== 2) {
     return { settings: defaults, recoveryReason: 'unsupported_version' };
   }
 
@@ -137,6 +224,12 @@ export function readStoredSettings(): SettingsLoadResult {
   }
 
   const { projectSettings, hadFallback } = normalizeDefaultProjectSettings(projectDefaults.default);
+  const {
+    taskConfiguration,
+    hadFallback: hadTaskConfigurationFallback,
+  } = normalizeTaskConfigurationSettings(
+    parsed.version === 2 ? parsed.taskConfiguration : createDefaultTaskConfigurationSettings()
+  );
 
   const defaultRoute = isDefaultRoute(general.defaultRoute)
     ? general.defaultRoute
@@ -153,19 +246,21 @@ export function readStoredSettings(): SettingsLoadResult {
 
   return {
     settings: {
-      version: 1,
+      version: 2,
       general: {
         defaultRoute,
         terminal: {
           fontSize,
         },
       },
+      taskConfiguration,
       projectDefaults: {
         default: projectSettings,
       },
     },
     recoveryReason:
       hadFallback ||
+      hadTaskConfigurationFallback ||
       missingDefaultRoute ||
       invalidDefaultRoute ||
       missingTerminalSettings ||

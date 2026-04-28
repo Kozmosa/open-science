@@ -125,6 +125,18 @@ describe('App routes', () => {
     expect(screen.getByRole('main')).toHaveClass('px-6', 'py-8');
   });
 
+  it('keeps the sidebar fixed while page content scrolls independently', async () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    expect(screen.getByRole('complementary')).toHaveClass('sticky', 'top-0', 'h-screen');
+    expect(screen.getByRole('main')).toHaveClass('overflow-y-auto');
+  });
+
   it('renders a collapsed sidebar by default and live task status summary', async () => {
     mockGetTasks.mockResolvedValue({
       items: [
