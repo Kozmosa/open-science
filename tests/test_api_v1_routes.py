@@ -164,7 +164,7 @@ async def test_lifespan_records_startup_runtime_readiness(
 
 
 @pytest.mark.anyio
-async def test_lifespan_rejects_missing_code_server(
+async def test_lifespan_records_readiness_even_when_code_server_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = create_app(
@@ -195,9 +195,13 @@ async def test_lifespan_rejects_missing_code_server(
         )(),
     )
 
-    with pytest.raises(RuntimeError, match="code-server"):
-        async with app.router.lifespan_context(app):
-            pass
+    async with app.router.lifespan_context(app):
+        assert app.state.runtime_readiness["ready"] is False
+        assert app.state.runtime_readiness["dependencies"]["code_server"] == {
+            "available": False,
+            "path": None,
+            "detail": "Install code-server.",
+        }
 
 
 @pytest.mark.anyio

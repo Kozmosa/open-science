@@ -27,3 +27,9 @@ test/Mode1/*.h5
 
 # ref-repos
 kimi-cli/
+
+# runtime workspace files
+workspace/
+
+# export artifacts
+kimi-export-*.md

@@ -10,12 +10,14 @@ from ainrf.api.config import ApiConfig
 from ainrf.api.middleware import build_api_key_middleware
 from ainrf.api.routes.code import router as code_router
 from ainrf.api.routes.environments import router as environments_router
+from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
 from ainrf.api.routes.projects import router as projects_router
 from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.code_server import CodeServerSupervisor
+from ainrf.files import FileBrowserService
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.runtime.readiness import check_runtime_readiness
 from ainrf.task_harness import TaskHarnessService
@@ -33,6 +35,7 @@ def _run_sync_in_lifespan(callback: Callable[[], None]) -> Awaitable[None]:
 ROUTERS: tuple[APIRouter, ...] = (
     health_router,
     environments_router,
+    files_router,
     projects_router,
     workspaces_router,
     terminal_router,
@@ -62,12 +65,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.runtime_readiness = check_runtime_readiness(
             localhost.code_server_path
         ).as_public_payload()
-        code_server = app.state.runtime_readiness["dependencies"].get("code_server")
-        if code_server is None or not code_server["available"]:
-            detail = (
-                code_server["detail"] if code_server is not None else "code-server is unavailable"
-            )
-            raise RuntimeError(f"code-server runtime dependency is not ready: {detail}")
         await _run_sync_in_lifespan(terminal_session_manager.reconcile)
         await _run_sync_in_lifespan(task_harness_service.initialize)
         yield
@@ -95,6 +92,9 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
         default_shell=api_config.terminal_command[0] if api_config.terminal_command else None,
     )
     app.state.terminal_attachment_broker = TerminalAttachmentBroker()
+    app.state.file_browser_service = FileBrowserService(
+        environment_service=environment_service,
+    )
     app.state.task_harness_service = TaskHarnessService(
         state_root=api_config.state_root,
         environment_service=environment_service,

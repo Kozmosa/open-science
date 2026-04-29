@@ -537,3 +537,31 @@ class CodeServerSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     environment_id: str
+
+
+class FileEntryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    path: str
+    kind: str
+    size: int | None = None
+    modified_at: str | None = None
+
+
+class FileListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    entries: list[FileEntryResponse]
+
+
+class FileReadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    content: str
+    is_binary: bool
+    size: int
+    language: str | None = None
+    mime_type: str | None = None

@@ -6,6 +6,8 @@ import type {
   EnvironmentListResponse,
   EnvironmentRecord,
   EnvironmentUpdateRequest,
+  FileListResponse,
+  FileReadResponse,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
@@ -50,6 +52,8 @@ import {
   mockResetTerminalSession,
   mockGetSessionPairs,
   mockInstallEnvironmentCodeServer,
+  mockListFiles,
+  mockReadFile,
   mockUpdateEnvironment,
   mockUpdateProjectEnvironmentReference,
   mockUpdateWorkspace,
@@ -267,3 +271,17 @@ export const deleteProjectEnvironmentReference = (
   USE_MOCK
     ? Promise.resolve(mockDeleteProjectEnvironmentReference(projectId, environmentId))
     : api.delete<void>(`/projects/${projectId}/environment-refs/${environmentId}`);
+
+export const listFiles = (environmentId: string, path: string = ''): Promise<FileListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockListFiles(environmentId, path))
+    : api.get<FileListResponse>(
+        `/files/list?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}`
+      );
+
+export const readFile = (environmentId: string, path: string): Promise<FileReadResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockReadFile(environmentId, path))
+    : api.get<FileReadResponse>(
+        `/files/read?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}`
+      );

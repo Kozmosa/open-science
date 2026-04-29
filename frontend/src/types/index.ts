@@ -410,3 +410,27 @@ export interface ProjectEnvironmentReferenceUpdateRequest {
   override_env_manager?: string | null;
   override_runtime_notes?: string | null;
 }
+
+export type FileKind = 'file' | 'directory' | 'symlink';
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  kind: FileKind;
+  size: number | null;
+  modified_at: string | null;
+}
+
+export interface FileListResponse {
+  path: string;
+  entries: FileEntry[];
+}
+
+export interface FileReadResponse {
+  path: string;
+  content: string;
+  is_binary: boolean;
+  size: number;
+  language: string | null;
+  mime_type: string | null;
+}

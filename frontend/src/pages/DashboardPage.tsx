@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getHealth } from '../api';
 import {
-  CodeServerCard,
   EnvironmentSelectorPanel,
   HealthStatusBar,
   TerminalBenchCard,
@@ -71,7 +70,6 @@ function DashboardPage() {
         <HealthStatusBar health={healthQuery.data} isLoading={healthQuery.isLoading} />
         <EnvironmentSelectorPanel {...environmentSelection} />
         <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
-        <CodeServerCard selectedEnvironment={environmentSelection.selectedEnvironment} />
       </section>
     </div>
   );

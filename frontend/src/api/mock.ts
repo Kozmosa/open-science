@@ -6,6 +6,8 @@ import type {
   EnvironmentListResponse,
   EnvironmentRecord,
   EnvironmentUpdateRequest,
+  FileListResponse,
+  FileReadResponse,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
@@ -1014,4 +1016,46 @@ export function resetMockTaskState(): TaskListResponse {
   mockTasks = {};
   mockTaskOutputs = {};
   return mockGetTasks();
+}
+
+export function mockListFiles(_environmentId: string, path: string = ''): FileListResponse {
+  const rootPath = path || '/workspace/project';
+  return {
+    path: rootPath,
+    entries: [
+      { name: 'src', path: `${rootPath}/src`, kind: 'directory', size: null, modified_at: null },
+      { name: 'tests', path: `${rootPath}/tests`, kind: 'directory', size: null, modified_at: null },
+      { name: 'README.md', path: `${rootPath}/README.md`, kind: 'file', size: 1240, modified_at: '2026-04-29T10:00:00Z' },
+      { name: 'package.json', path: `${rootPath}/package.json`, kind: 'file', size: 850, modified_at: '2026-04-29T10:00:00Z' },
+      { name: '.gitignore', path: `${rootPath}/.gitignore`, kind: 'file', size: 120, modified_at: '2026-04-29T10:00:00Z' },
+    ],
+  };
+}
+
+export function mockReadFile(_environmentId: string, path: string): FileReadResponse {
+  const name = path.split('/').pop() || '';
+  if (name.endsWith('.png') || name.endsWith('.jpg')) {
+    return {
+      path,
+      content: 'iVBORw0KGgo=', // dummy base64
+      is_binary: true,
+      size: 1024,
+      language: null,
+      mime_type: name.endsWith('.png') ? 'image/png' : 'image/jpeg',
+    };
+  }
+  const language = name.endsWith('.py') ? 'python'
+    : name.endsWith('.js') ? 'javascript'
+    : name.endsWith('.ts') ? 'typescript'
+    : name.endsWith('.json') ? 'json'
+    : name.endsWith('.md') ? 'markdown'
+    : null;
+  return {
+    path,
+    content: `// Content of ${name}\nconsole.log('hello');`,
+    is_binary: false,
+    size: 64,
+    language,
+    mime_type: null,
+  };
 }

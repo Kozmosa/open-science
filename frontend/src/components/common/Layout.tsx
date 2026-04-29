@@ -3,8 +3,8 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderKanban,
+  FolderOpen,
   ListChecks,
-  MonitorCog,
   Settings,
   SquareTerminal,
 } from 'lucide-react';
@@ -84,7 +84,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
       label: t('navigation.workspaceBrowser.label'),
       to: '/workspace-browser',
       description: t('navigation.workspaceBrowser.description'),
-      icon: MonitorCog,
+      icon: FolderOpen,
     },
     {
       label: t('navigation.containers.label'),
