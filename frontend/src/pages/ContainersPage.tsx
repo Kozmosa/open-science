@@ -715,17 +715,38 @@ function ContainersPage() {
 
   const detectMutation = useMutation({
     mutationFn: async (environmentId: string) => detectEnvironment(environmentId),
+    onMutate: (environmentId) => {
+      const environment = environments.find((item) => item.id === environmentId) ?? null;
+      console.info('environment detect requested', {
+        environmentId,
+        alias: environment?.alias ?? null,
+      });
+    },
     onSuccess: (environment) => {
       const current = queryClient.getQueryData<EnvironmentListResponse>(environmentsQueryKey);
       syncEnvironmentList(mergeEnvironmentList(current, environment));
       const detection = environment.latest_detection;
+      console.info('environment detect succeeded', {
+        environmentId: environment.id,
+        alias: environment.alias,
+        status: detection?.status ?? null,
+        warnings: detection?.warnings ?? [],
+        errors: detection?.errors ?? [],
+        codeServerPath: detection?.code_server?.path ?? null,
+      });
       if (detection?.warnings.includes('used_personal_tmux_fallback')) {
         showToast(t('pages.containers.detectFallbackToast', { alias: environment.alias }), 'warning');
       } else if (detection?.status === 'failed') {
         showToast(detection.summary, 'error');
       }
     },
-    onError: (error) => {
+    onError: (error, environmentId) => {
+      const environment = environments.find((item) => item.id === environmentId) ?? null;
+      console.error('environment detect failed', {
+        environmentId,
+        alias: environment?.alias ?? null,
+        error: error instanceof Error ? error.message : error,
+      });
       showToast(error instanceof Error ? error.message : t('pages.containers.detectFailedToast'), 'error');
     },
   });

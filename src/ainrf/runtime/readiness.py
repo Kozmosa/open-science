@@ -4,6 +4,8 @@ import shutil
 from dataclasses import dataclass
 from typing import TypedDict
 
+from ainrf.code_server_binary import resolve_local_code_server_binary
+
 
 class DependencyStatusPayload(TypedDict):
     available: bool
@@ -66,21 +68,12 @@ def _check_binary(name: str, missing_detail: str) -> DependencyStatus:
 
 
 def _check_code_server(code_server_path: str | None) -> DependencyStatus:
-    if code_server_path:
-        return DependencyStatus(
-            name="code_server",
-            available=True,
-            path=code_server_path,
-        )
-    status = _check_binary(
-        "code-server",
-        "Install code-server from Settings before using the workspace browser, or call POST /environments/env-localhost/install-code-server.",
-    )
+    resolution = resolve_local_code_server_binary(code_server_path)
     return DependencyStatus(
         name="code_server",
-        available=status.available,
-        path=status.path,
-        detail=status.detail,
+        available=resolution.available,
+        path=resolution.path,
+        detail=resolution.detail,
     )
 
 

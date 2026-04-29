@@ -9,9 +9,11 @@ from uuid import uuid4
 from ainrf.environments.local import is_localhost_environment
 from ainrf.environments.models import (
     DetectionSnapshot,
+    DetectionStatus,
     EnvironmentAuthKind,
     EnvironmentRegistryEntry,
     ProjectEnvironmentReference,
+    ToolStatus,
     utc_now,
 )
 from ainrf.environments.probing import (
@@ -49,6 +51,16 @@ class ProjectReferenceNotFoundError(LookupError):
 
 class ProjectReferenceConflictError(ValueError):
     pass
+
+
+def _detected_env_manager(uv: ToolStatus, pixi: ToolStatus, conda: ToolStatus) -> str | None:
+    if uv.available:
+        return "uv"
+    if pixi.available:
+        return "pixi"
+    if conda.available:
+        return "conda"
+    return None
 
 
 def _current_system_user() -> str:
@@ -248,6 +260,7 @@ class InMemoryEnvironmentService:
                 except (RuntimeError, TmuxCommandError) as exc:
                     snapshot = failed_tmux_snapshot(environment, exc)
             self._detections[environment.id].append(snapshot)
+            self._write_back_detected_runtime_config(environment, snapshot)
             return snapshot
 
         try:
@@ -267,6 +280,7 @@ class InMemoryEnvironmentService:
                 except (RuntimeError, TmuxCommandError) as exc:
                     snapshot = failed_tmux_snapshot(environment, exc)
         self._detections[environment.id].append(snapshot)
+        self._write_back_detected_runtime_config(environment, snapshot)
         return snapshot
 
     def get_latest_detection(self, environment_id: str) -> DetectionSnapshot | None:
@@ -367,6 +381,36 @@ class InMemoryEnvironmentService:
         if is_localhost_environment(environment) and self._default_local_workdir is not None:
             return self._default_local_workdir
         return str(fallback_root)
+
+    def _write_back_detected_runtime_config(
+        self,
+        environment: EnvironmentRegistryEntry,
+        snapshot: DetectionSnapshot,
+    ) -> None:
+        if snapshot.status is not DetectionStatus.SUCCESS:
+            return
+
+        updated = False
+        if environment.preferred_python is None and snapshot.python.available:
+            environment.preferred_python = snapshot.python.path or "python3"
+            updated = True
+
+        if environment.preferred_env_manager is None:
+            env_manager = _detected_env_manager(snapshot.uv, snapshot.pixi, snapshot.conda)
+            if env_manager is not None:
+                environment.preferred_env_manager = env_manager
+                updated = True
+
+        if snapshot.code_server.available and snapshot.code_server.path is not None:
+            if (
+                not environment.code_server_path
+                or environment.code_server_path != snapshot.code_server.path
+            ):
+                environment.code_server_path = snapshot.code_server.path
+                updated = True
+
+        if updated:
+            environment.updated_at = utc_now()
 
     def _ensure_alias_available(self, alias: str) -> None:
         for environment in self._environments.values():

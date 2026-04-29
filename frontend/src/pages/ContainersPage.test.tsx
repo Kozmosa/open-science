@@ -80,6 +80,7 @@ const detectedEnvironment: EnvironmentRecord = {
     conda: { available: false, version: null, path: null },
     uv: { available: true, version: 'mock', path: '/usr/bin/uv' },
     pixi: { available: false, version: null, path: null },
+    code_server: { available: true, version: '4.99.0', path: '/usr/bin/code-server' },
     torch: { available: false, version: null, path: null },
     cuda: { available: false, version: null, path: null },
     gpu_models: [],

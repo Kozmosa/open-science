@@ -284,6 +284,7 @@ export interface EnvironmentDetection {
   conda: ToolStatus;
   uv: ToolStatus;
   pixi: ToolStatus;
+  code_server: ToolStatus;
   torch: ToolStatus;
   cuda: ToolStatus;
   gpu_models: string[];

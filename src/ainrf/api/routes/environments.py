@@ -176,6 +176,10 @@ async def install_environment_code_server(
     terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
     terminal_attachment_broker = getattr(request.app.state, "terminal_attachment_broker", None)
     try:
+        logger.info(
+            "code_server_install_requested",
+            extra={"environment_id": environment_id, "has_app_user_id": app_user_id is not None},
+        )
         result = await install_code_server(
             environment_id,
             environment_service=service,
@@ -184,7 +188,20 @@ async def install_environment_code_server(
             terminal_attachment_broker=terminal_attachment_broker,
             api_base_url=str(request.base_url),
         )
+        logger.info(
+            "code_server_install_succeeded",
+            extra={
+                "environment_id": environment_id,
+                "execution_mode": result.execution_mode,
+                "already_installed": result.already_installed,
+                "code_server_path": result.code_server_path,
+            },
+        )
     except Exception as exc:
+        logger.exception(
+            "code_server_install_failed",
+            extra={"environment_id": environment_id, "has_app_user_id": app_user_id is not None},
+        )
         raise _translate_environment_error(exc) from exc
     return EnvironmentCodeServerInstallResponse(
         environment=_serialize_environment(service, environment_id),
@@ -208,11 +225,29 @@ async def detect_environment(environment_id: str, request: Request) -> Environme
     app_user_id = request.headers.get("X-AINRF-User-Id")
     terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
     try:
-        await service.detect_environment(
+        logger.info(
+            "environment_detect_requested",
+            extra={"environment_id": environment_id, "has_app_user_id": app_user_id is not None},
+        )
+        snapshot = await service.detect_environment(
             environment_id,
             app_user_id=app_user_id,
             terminal_session_manager=terminal_session_manager,
         )
+        logger.info(
+            "environment_detect_completed",
+            extra={
+                "environment_id": environment_id,
+                "status": snapshot.status,
+                "warnings": snapshot.warnings,
+                "errors": snapshot.errors,
+                "code_server_path": snapshot.code_server.path,
+            },
+        )
     except Exception as exc:
+        logger.exception(
+            "environment_detect_failed",
+            extra={"environment_id": environment_id, "has_app_user_id": app_user_id is not None},
+        )
         raise _translate_environment_error(exc) from exc
     return _serialize_environment(service, environment_id)

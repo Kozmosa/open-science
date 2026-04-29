@@ -254,6 +254,14 @@ async def test_manager_ensure_local_environment_uses_personal_tmux(
         _ = timeout_seconds
         return host == "127.0.0.1" and port == 18080
 
+    monkeypatch.setattr(
+        "ainrf.code_server.resolve_local_code_server_binary",
+        lambda configured_path=None: SimpleNamespace(
+            available=True,
+            path=configured_path,
+            detail=None,
+        ),
+    )
     monkeypatch.setattr("ainrf.code_server.subprocess.Popen", fail_popen)
     monkeypatch.setattr("ainrf.code_server._wait_until_ready", fake_wait_until_ready)
 
@@ -352,6 +360,14 @@ async def test_manager_switching_environments_tears_down_previous_session(
         _ = timeout_seconds
         return host == "127.0.0.1" and port == 18080
 
+    monkeypatch.setattr(
+        "ainrf.code_server.resolve_local_code_server_binary",
+        lambda configured_path=None: SimpleNamespace(
+            available=True,
+            path="/opt/managed/code-server/bin/code-server",
+            detail=None,
+        ),
+    )
     monkeypatch.setattr("ainrf.code_server._wait_until_ready", fake_wait_until_ready)
 
     first_state = await manager.ensure(
@@ -374,6 +390,7 @@ async def test_manager_switching_environments_tears_down_previous_session(
         ("browser-user", second_environment.id, "workspace/b"),
     ]
     assert len(session_manager.commands) >= 3
+    assert "/opt/managed/code-server/bin/code-server" in session_manager.commands[0]
     assert "workspace/a" in session_manager.commands[0]
     assert "kill" in session_manager.commands[1]
     assert "workspace/b" in session_manager.commands[-1]
@@ -397,6 +414,14 @@ async def test_tmux_code_server_stop_escalates_to_kill(
         _ = timeout_seconds
         return host == "127.0.0.1" and port == 18080
 
+    monkeypatch.setattr(
+        "ainrf.code_server.resolve_local_code_server_binary",
+        lambda configured_path=None: SimpleNamespace(
+            available=True,
+            path="/opt/managed/code-server/bin/code-server",
+            detail=None,
+        ),
+    )
     monkeypatch.setattr("ainrf.code_server._wait_until_ready", fake_wait_until_ready)
 
     await manager.ensure(
@@ -407,6 +432,65 @@ async def test_tmux_code_server_stop_escalates_to_kill(
     await manager.stop()
 
     assert any("kill -9" in command for command in session_manager.commands)
+
+
+@pytest.mark.anyio
+async def test_manager_reports_missing_local_code_server_binary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, service = _make_manager(tmp_path)
+    environment = service.create_environment(
+        alias="local-a",
+        display_name="Local A",
+        host="127.0.0.1",
+        default_workdir="workspace/a",
+    )
+    session_manager = FakeSessionManager(tmp_path)
+    monkeypatch.setattr(
+        "ainrf.code_server.resolve_local_code_server_binary",
+        lambda configured_path=None: SimpleNamespace(
+            available=False,
+            path=None,
+            detail="Install code-server.",
+        ),
+    )
+
+    state = await manager.ensure(
+        environment.id,
+        app_user_id="browser-user",
+        terminal_session_manager=session_manager,
+    )
+
+    assert state.status is CodeServerLifecycleStatus.UNAVAILABLE
+    assert state.detail == "Install code-server."
+    assert session_manager.ensure_calls == []
+    assert session_manager.commands == []
+
+
+@pytest.mark.anyio
+async def test_manager_reports_missing_remote_code_server_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, service = _make_manager(tmp_path)
+    environment = service.create_environment(
+        alias="remote-lab",
+        display_name="Remote Lab",
+        host="gpu.example.com",
+        default_workdir="/workspace/project",
+    )
+
+    async def fail_connect(**kwargs: object) -> None:
+        _ = kwargs
+        raise AssertionError("remote code-server should not start without a resolved path")
+
+    monkeypatch.setattr("ainrf.code_server.asyncssh.connect", fail_connect)
+
+    state = await manager.ensure(environment.id)
+
+    assert state.status is CodeServerLifecycleStatus.UNAVAILABLE
+    assert state.detail == "Remote workspace does not have a configured code-server path"
 
 
 @pytest.mark.anyio

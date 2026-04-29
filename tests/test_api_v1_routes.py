@@ -85,7 +85,30 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
 
 
 @pytest.mark.anyio
-async def test_lifespan_attaches_environment_aware_code_server_manager(tmp_path: Path) -> None:
+async def test_lifespan_attaches_environment_aware_code_server_manager(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "ainrf.api.app.check_runtime_readiness",
+        lambda code_server_path=None: type(
+            "FakeReadiness",
+            (),
+            {
+                "as_public_payload": lambda self: {
+                    "ready": True,
+                    "dependencies": {
+                        "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
+                        "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
+                        "code_server": {
+                            "available": True,
+                            "path": "/usr/bin/code-server",
+                            "detail": None,
+                        },
+                    },
+                }
+            },
+        )(),
+    )
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -116,13 +139,15 @@ async def test_lifespan_records_startup_runtime_readiness(
             (),
             {
                 "as_public_payload": lambda self: {
-                    "ready": False,
+                    "ready": True,
                     "dependencies": {
-                        "tmux": {
-                            "available": False,
-                            "path": None,
-                            "detail": "Install tmux.",
-                        }
+                        "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
+                        "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
+                        "code_server": {
+                            "available": True,
+                            "path": "/usr/bin/code-server",
+                            "detail": None,
+                        },
                     },
                 }
             },
@@ -130,10 +155,49 @@ async def test_lifespan_records_startup_runtime_readiness(
     )
 
     async with app.router.lifespan_context(app):
-        assert app.state.runtime_readiness == {
-            "ready": False,
-            "dependencies": {"tmux": {"available": False, "path": None, "detail": "Install tmux."}},
+        assert app.state.runtime_readiness["ready"] is True
+        assert app.state.runtime_readiness["dependencies"]["code_server"] == {
+            "available": True,
+            "path": "/usr/bin/code-server",
+            "detail": None,
         }
+
+
+@pytest.mark.anyio
+async def test_lifespan_rejects_missing_code_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+        )
+    )
+    monkeypatch.setattr(
+        "ainrf.api.app.check_runtime_readiness",
+        lambda code_server_path=None: type(
+            "FakeReadiness",
+            (),
+            {
+                "as_public_payload": lambda self: {
+                    "ready": False,
+                    "dependencies": {
+                        "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
+                        "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
+                        "code_server": {
+                            "available": False,
+                            "path": None,
+                            "detail": "Install code-server.",
+                        },
+                    },
+                }
+            },
+        )(),
+    )
+
+    with pytest.raises(RuntimeError, match="code-server"):
+        async with app.router.lifespan_context(app):
+            pass
 
 
 @pytest.mark.anyio

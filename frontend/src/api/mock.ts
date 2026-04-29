@@ -137,6 +137,7 @@ function cloneEnvironment(environment: EnvironmentRecord): EnvironmentRecord {
           conda: { ...environment.latest_detection.conda },
           uv: { ...environment.latest_detection.uv },
           pixi: { ...environment.latest_detection.pixi },
+          code_server: { ...environment.latest_detection.code_server },
           torch: { ...environment.latest_detection.torch },
           cuda: { ...environment.latest_detection.cuda },
           claude_cli: { ...environment.latest_detection.claude_cli },
@@ -430,6 +431,11 @@ function createMockDetection(environment: EnvironmentRecord): EnvironmentRecord[
       environment.is_seed ? null : '/usr/bin/uv'
     ),
     pixi: createToolStatus(false),
+    code_server: createToolStatus(
+      Boolean(environment.code_server_path),
+      environment.code_server_path ? 'mock' : null,
+      environment.code_server_path
+    ),
     torch: createToolStatus(false),
     cuda: createToolStatus(false),
     gpu_models: [],

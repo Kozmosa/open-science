@@ -62,6 +62,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.runtime_readiness = check_runtime_readiness(
             localhost.code_server_path
         ).as_public_payload()
+        code_server = app.state.runtime_readiness["dependencies"].get("code_server")
+        if code_server is None or not code_server["available"]:
+            detail = (
+                code_server["detail"] if code_server is not None else "code-server is unavailable"
+            )
+            raise RuntimeError(f"code-server runtime dependency is not ready: {detail}")
         await _run_sync_in_lifespan(terminal_session_manager.reconcile)
         await _run_sync_in_lifespan(task_harness_service.initialize)
         yield

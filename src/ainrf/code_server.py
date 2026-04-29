@@ -13,6 +13,7 @@ from typing import Any, Protocol, runtime_checkable
 import asyncssh
 import httpx
 
+from ainrf.code_server_binary import resolve_local_code_server_binary
 from ainrf.environments import EnvironmentAuthKind, InMemoryEnvironmentService
 from ainrf.environments.local import is_localhost_environment
 from ainrf.environments.models import EnvironmentRegistryEntry
@@ -112,6 +113,19 @@ def _resolve_local_workspace_dir(workspace_dir: str, state_root: Path) -> Path:
     if candidate.is_absolute():
         return candidate
     return state_root / candidate
+
+
+def _resolve_local_code_server_executable(environment: EnvironmentRegistryEntry) -> str:
+    resolution = resolve_local_code_server_binary(environment.code_server_path)
+    if resolution.available and resolution.path is not None:
+        return resolution.path
+    raise RuntimeError(resolution.detail or "code-server binary is unavailable")
+
+
+def _resolve_remote_code_server_executable(environment: EnvironmentRegistryEntry) -> str:
+    if environment.code_server_path:
+        return environment.code_server_path
+    raise RuntimeError("Remote workspace does not have a configured code-server path")
 
 
 def _build_asyncssh_connect_kwargs(environment: EnvironmentRegistryEntry) -> dict[str, object]:
@@ -390,13 +404,14 @@ class EnvironmentCodeServerManager:
         runtime_dir.mkdir(parents=True, exist_ok=True)
         pid_file = runtime_dir / f"code-server-{environment.id}.pid"
         log_file = runtime_dir / f"code-server-{environment.id}.log"
+        executable_path = _resolve_local_code_server_executable(environment)
         command = " ".join(
             shlex.quote(part)
             for part in build_code_server_command(
                 self._local_host,
                 self._local_port,
                 workspace_dir,
-                executable_path=environment.code_server_path or "code-server",
+                executable_path=executable_path,
             )
         )
         start_command = (
@@ -495,6 +510,7 @@ class EnvironmentCodeServerManager:
         environment: EnvironmentRegistryEntry,
         workspace_dir: str,
     ) -> ActiveCodeServerSession:
+        executable_path = _resolve_remote_code_server_executable(environment)
         connection = await asyncssh.connect(**_build_asyncssh_connect_kwargs(environment))
         remote_process: Any | None = None
         tunnel: Any | None = None
@@ -503,7 +519,7 @@ class EnvironmentCodeServerManager:
             remote_process = await connection.create_process(
                 build_remote_code_server_command(
                     workspace_dir,
-                    executable_path=environment.code_server_path or "code-server",
+                    executable_path=executable_path,
                 ),
                 stdin=asyncssh.DEVNULL,
                 stdout=asyncssh.DEVNULL,

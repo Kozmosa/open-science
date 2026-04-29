@@ -726,10 +726,22 @@ function SettingsPage() {
       : (environmentSelection.selectedEnvironment ?? environments[0] ?? null);
   const installMutation = useMutation({
     mutationFn: installEnvironmentCodeServer,
-    onMutate: () => {
+    onMutate: (environmentId) => {
+      const environment = environments.find((item) => item.id === environmentId) ?? null;
+      console.info('code-server install requested', {
+        environmentId,
+        alias: environment?.alias ?? null,
+      });
       setInstallTerminalState(null);
     },
     onSuccess: async (response) => {
+      console.info('code-server install succeeded', {
+        environmentId: response.environment.id,
+        alias: response.environment.alias,
+        executionMode: response.execution_mode,
+        alreadyInstalled: response.already_installed,
+        codeServerPath: response.code_server_path,
+      });
       setInstallSuccessDetail(response.detail);
       setInstallTerminalState(
         response.terminal_attachment_id && response.terminal_ws_url
@@ -743,7 +755,13 @@ function SettingsPage() {
       queryClient.setQueryData(['environments'], { items: [response.environment] });
       await queryClient.invalidateQueries({ queryKey: ['environments'] });
     },
-    onError: () => {
+    onError: (error, environmentId) => {
+      const environment = environments.find((item) => item.id === environmentId) ?? null;
+      console.error('code-server install failed', {
+        environmentId,
+        alias: environment?.alias ?? null,
+        error: error instanceof Error ? error.message : error,
+      });
       setInstallSuccessDetail(null);
       setInstallTerminalState(null);
     },

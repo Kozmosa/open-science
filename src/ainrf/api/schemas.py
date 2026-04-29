@@ -167,6 +167,7 @@ class EnvironmentDetectionResponse(BaseModel):
     conda: ToolStatusResponse
     uv: ToolStatusResponse
     pixi: ToolStatusResponse
+    code_server: ToolStatusResponse
     torch: ToolStatusResponse
     cuda: ToolStatusResponse
     gpu_models: list[str] = Field(default_factory=list)
