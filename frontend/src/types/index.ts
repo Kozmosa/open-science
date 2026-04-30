@@ -223,6 +223,7 @@ export interface TaskCreateRequest {
     profile_id: string;
     label: string;
     system_prompt?: string | null;
+    skills?: string[];
     skills_prompt?: string | null;
     settings_json?: Record<string, unknown> | null;
   } | null;
@@ -433,4 +434,14 @@ export interface FileReadResponse {
   size: number;
   language: string | null;
   mime_type: string | null;
+}
+
+export interface SkillItem {
+  skill_id: string;
+  label: string;
+  description: string | null;
+}
+
+export interface SkillListResponse {
+  items: SkillItem[];
 }

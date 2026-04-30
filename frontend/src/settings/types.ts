@@ -7,6 +7,7 @@ export interface ResearchAgentProfileSettings {
   profileId: string;
   label: string;
   systemPrompt: string;
+  skills: string[];
   skillsPrompt: string;
   settingsJson: string;
 }
@@ -26,10 +27,12 @@ export interface EnvironmentTaskDefaults {
 
 export interface DefaultProjectSelectionState {
   lastEnvironmentId: string | null;
+  lastWorkspaceId: string | null;
 }
 
 export interface DefaultProjectSettings {
   defaultEnvironmentId: string | null;
+  defaultWorkspaceId: string | null;
   selection: DefaultProjectSelectionState;
   environmentDefaults: Record<string, EnvironmentTaskDefaults>;
 }

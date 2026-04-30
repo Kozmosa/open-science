@@ -15,6 +15,7 @@ from ainrf.files.models import DirectoryListing, FileContent, FileEntry
 if TYPE_CHECKING:
     from ainrf.environments.models import EnvironmentRegistryEntry
     from ainrf.environments.service import InMemoryEnvironmentService
+    from ainrf.workspaces.service import WorkspaceRegistryService
 
 _MAX_FILE_SIZE_BYTES = 1_048_576
 _MAX_DIRECTORY_ENTRIES = 1_000
@@ -34,12 +35,23 @@ class FileTooLargeError(FileBrowserError):
 
 
 class _EnvironmentResolver:
-    def __init__(self, environment_service: InMemoryEnvironmentService) -> None:
+    def __init__(
+        self,
+        environment_service: InMemoryEnvironmentService,
+        workspace_service: WorkspaceRegistryService | None = None,
+    ) -> None:
         self._environment_service = environment_service
+        self._workspace_service = workspace_service
 
-    def resolve(self, environment_id: str) -> tuple[EnvironmentRegistryEntry, str]:
+    def resolve(
+        self, environment_id: str, workspace_id: str | None = None
+    ) -> tuple[EnvironmentRegistryEntry, str]:
         environment = self._environment_service.get_environment(environment_id)
-        workdir = environment.default_workdir or "/"
+        if workspace_id is not None and self._workspace_service is not None:
+            workspace = self._workspace_service.get_workspace(workspace_id)
+            workdir = workspace.default_workdir or environment.default_workdir or "/"
+        else:
+            workdir = environment.default_workdir or "/"
         return environment, workdir
 
 
@@ -72,18 +84,21 @@ class FileBrowserService:
     def __init__(
         self,
         environment_service: InMemoryEnvironmentService,
+        workspace_service: WorkspaceRegistryService | None = None,
         cache_ttl_seconds: float = 60.0,
         max_file_size_bytes: int = _MAX_FILE_SIZE_BYTES,
     ) -> None:
         self._environment_service = environment_service
         self._cache = FileTreeCache(ttl_seconds=cache_ttl_seconds)
         self._max_file_size = max_file_size_bytes
-        self._resolver = _EnvironmentResolver(environment_service)
+        self._resolver = _EnvironmentResolver(environment_service, workspace_service)
 
-    async def list_directory(self, environment_id: str, path: str) -> DirectoryListing:
-        environment, workdir = self._resolver.resolve(environment_id)
+    async def list_directory(
+        self, environment_id: str, path: str, workspace_id: str | None = None
+    ) -> DirectoryListing:
+        environment, workdir = self._resolver.resolve(environment_id, workspace_id)
         resolved_path = _resolve_path(workdir, path)
-        cache_key = f"{environment_id}:{resolved_path}"
+        cache_key = f"{environment_id}:{workspace_id or ''}:{resolved_path}"
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
@@ -96,8 +111,10 @@ class FileBrowserService:
         self._cache.set(cache_key, listing)
         return listing
 
-    async def read_file(self, environment_id: str, path: str) -> FileContent:
-        environment, workdir = self._resolver.resolve(environment_id)
+    async def read_file(
+        self, environment_id: str, path: str, workspace_id: str | None = None
+    ) -> FileContent:
+        environment, workdir = self._resolver.resolve(environment_id, workspace_id)
         resolved_path = _resolve_path(workdir, path)
 
         if is_localhost_environment(environment):

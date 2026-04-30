@@ -125,12 +125,17 @@ function EnvironmentEditor({
   };
 
   return (
-    <SectionCard>
-      <SectionHeader
-        eyebrow={t('components.environmentEditor.eyebrow')}
-        title={title}
-        description={t('components.environmentEditor.description')}
-      />
+    <SectionCard
+      collapsible
+      defaultExpanded={false}
+      header={
+        <SectionHeader
+          eyebrow={t('components.environmentEditor.eyebrow')}
+          title={title}
+          description={t('components.environmentEditor.description')}
+        />
+      }
+    >
 
       {activeEnvironment ? (
         <div
@@ -363,11 +368,16 @@ function ProjectReferenceEditor({
 
   if (selectedEnvironment === null) {
     return (
-      <SectionCard>
-        <SectionHeader
-          title={t('pages.containers.projectReferenceTitle')}
-          description={t('pages.containers.projectReferenceDescription')}
-        />
+      <SectionCard
+        collapsible
+        defaultExpanded={false}
+        header={
+          <SectionHeader
+            title={t('pages.containers.projectReferenceTitle')}
+            description={t('pages.containers.projectReferenceDescription')}
+          />
+        }
+      >
         <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
           {t('pages.containers.projectReferenceNoSelection')}
         </p>
@@ -376,18 +386,22 @@ function ProjectReferenceEditor({
   }
 
   return (
-    <SectionCard>
-      <div className="space-y-1">
-        <SectionHeader
-          title={t('pages.containers.projectReferenceTitle')}
-          description={t('pages.containers.projectReferenceDescription')}
-        />
-        <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
-          <span className="font-medium text-[var(--text)]">{selectedEnvironment.alias}</span>
-          <span className="ml-2 text-[var(--text-tertiary)]">({selectedEnvironment.display_name})</span>
-        </p>
-      </div>
-
+    <SectionCard
+      collapsible
+      defaultExpanded={false}
+      header={
+        <div className="space-y-1">
+          <SectionHeader
+            title={t('pages.containers.projectReferenceTitle')}
+            description={t('pages.containers.projectReferenceDescription')}
+          />
+          <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+            <span className="font-medium text-[var(--text)]">{selectedEnvironment.alias}</span>
+            <span className="ml-2 text-[var(--text-tertiary)]">({selectedEnvironment.display_name})</span>
+          </p>
+        </div>
+      }
+    >
       <div className="flex flex-wrap gap-2">
         {projectReference ? (
           <Badge>{t('pages.containers.projectReferencedBadge')}</Badge>

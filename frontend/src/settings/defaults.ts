@@ -36,6 +36,7 @@ export function createDefaultResearchAgentProfile(): ResearchAgentProfileSetting
     profileId: defaultResearchAgentProfileId,
     label: 'Claude Code Default',
     systemPrompt: '',
+    skills: [],
     skillsPrompt: '',
     settingsJson: '{\n  "permissions": {\n    "allow": ["Read", "Grep"]\n  }\n}',
   };
@@ -78,8 +79,10 @@ export function createEmptyEnvironmentTaskDefaults(): EnvironmentTaskDefaults {
 export function createDefaultProjectSettings(): DefaultProjectSettings {
   return {
     defaultEnvironmentId: null,
+    defaultWorkspaceId: null,
     selection: {
       lastEnvironmentId: null,
+      lastWorkspaceId: null,
     },
     environmentDefaults: {},
   };

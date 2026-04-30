@@ -157,13 +157,23 @@ function TerminalBenchCardView({
         ) : null}
       </div>
 
-      <TerminalSessionConsole
-        sessionId={sessionId}
-        attachmentId={attachmentId}
-        terminalWsUrl={terminalWsUrl}
-        status={status}
-        onDisconnected={onTerminalDisconnected}
-      />
+      <SectionCard
+        collapsible
+        defaultExpanded={false}
+        header={
+          <div className="text-sm font-medium text-[var(--text)]">
+            终端控制台
+          </div>
+        }
+      >
+        <TerminalSessionConsole
+          sessionId={sessionId}
+          attachmentId={attachmentId}
+          terminalWsUrl={terminalWsUrl}
+          status={status}
+          onDisconnected={onTerminalDisconnected}
+        />
+      </SectionCard>
     </SectionCard>
   );
 }

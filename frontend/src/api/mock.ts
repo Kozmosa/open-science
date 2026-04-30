@@ -12,6 +12,8 @@ import type {
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
+  SkillItem,
+  SkillListResponse,
   SystemHealth,
   TaskCreateRequest,
   TaskListResponse,
@@ -1016,6 +1018,19 @@ export function resetMockTaskState(): TaskListResponse {
   mockTasks = {};
   mockTaskOutputs = {};
   return mockGetTasks();
+}
+
+const mockSkills: SkillItem[] = [
+  { skill_id: 'web-search', label: '网络搜索', description: '使用网络搜索获取实时信息' },
+  { skill_id: 'code-analysis', label: '代码分析', description: '分析代码结构和质量' },
+  { skill_id: 'citation', label: '引用管理', description: '管理学术引用和参考文献' },
+  { skill_id: 'repo-inspection', label: '仓库检查', description: '检查代码仓库结构和状态' },
+  { skill_id: 'paper-reading', label: '论文阅读', description: '阅读和理解学术论文' },
+  { skill_id: 'writing', label: '学术写作', description: '协助学术写作和润色' },
+];
+
+export function mockGetSkills(): SkillListResponse {
+  return { items: mockSkills.map((skill) => ({ ...skill })) };
 }
 
 export function mockListFiles(_environmentId: string, path: string = ''): FileListResponse {

@@ -37,6 +37,7 @@ DEFAULT_RESEARCH_AGENT_PROFILE = ResearchAgentProfileSnapshot(
     profile_id="claude-code-default",
     label="Claude Code Default",
     system_prompt=None,
+    skills=[],
     skills_prompt=None,
     settings_json=None,
 )
@@ -285,6 +286,7 @@ def research_agent_profile_payload(profile: ResearchAgentProfileSnapshot) -> dic
         "profile_id": profile.profile_id,
         "label": profile.label,
         "system_prompt": profile.system_prompt,
+        "skills": profile.skills,
         "skills_prompt": profile.skills_prompt,
         "settings_json": profile.settings_json,
         "settings_artifact_path": profile.settings_artifact_path,
@@ -293,10 +295,13 @@ def research_agent_profile_payload(profile: ResearchAgentProfileSnapshot) -> dic
 
 def research_agent_profile_from_payload(payload: dict[str, Any]) -> ResearchAgentProfileSnapshot:
     settings_json = payload.get("settings_json")
+    skills_raw = payload.get("skills", [])
+    skills = [str(s) for s in skills_raw] if isinstance(skills_raw, list) else []
     return ResearchAgentProfileSnapshot(
         profile_id=str(payload["profile_id"]),
         label=str(payload["label"]),
         system_prompt=payload.get("system_prompt"),
+        skills=skills,
         skills_prompt=payload.get("skills_prompt"),
         settings_json=dict(settings_json) if isinstance(settings_json, dict) else None,
         settings_artifact_path=payload.get("settings_artifact_path"),

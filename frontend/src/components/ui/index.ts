@@ -8,5 +8,6 @@ export { default as PageHeader } from './PageHeader';
 export { default as SectionCard } from './SectionCard';
 export { default as SectionHeader } from './SectionHeader';
 export { default as Select } from './Select';
+export { default as SkillToggleGroup } from './SkillToggleGroup';
 export { default as StatusDot } from './StatusDot';
 export { default as Textarea } from './Textarea';

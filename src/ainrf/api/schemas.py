@@ -331,6 +331,7 @@ class ResearchAgentProfileSnapshotRequest(BaseModel):
     profile_id: str
     label: str
     system_prompt: str | None = None
+    skills: list[str] = Field(default_factory=list)
     skills_prompt: str | None = None
     settings_json: dict[str, Any] | None = None
 
@@ -373,6 +374,20 @@ class WorkspaceListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[WorkspaceResponse]
+
+
+class SkillItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skill_id: str
+    label: str
+    description: str | None = None
+
+
+class SkillListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[SkillItemResponse]
 
 
 class WorkspaceSummaryResponse(BaseModel):
@@ -423,6 +438,7 @@ class ResearchAgentProfileSnapshotResponse(BaseModel):
     profile_id: str
     label: str
     system_prompt: str | None = None
+    skills: list[str] = Field(default_factory=list)
     skills_prompt: str | None = None
     settings_json: dict[str, Any] | None = None
     settings_artifact_path: str | None = None

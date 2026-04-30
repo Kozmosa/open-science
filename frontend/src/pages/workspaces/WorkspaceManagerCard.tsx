@@ -107,22 +107,25 @@ export default function WorkspaceManagerCard() {
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   return (
-    <SectionCard>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SectionHeader
-          title={t('pages.workspaces.managerTitle')}
-          description={t('pages.workspaces.managerDescription')}
-        />
-        <Button
-          onClick={() => {
-            setIsCreating(true);
-            setSelectedWorkspaceId(null);
-          }}
-        >
-          {t('pages.workspaces.newWorkspace')}
-        </Button>
-      </div>
-
+    <SectionCard
+      collapsible
+      header={
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <SectionHeader
+            title={t('pages.workspaces.managerTitle')}
+            description={t('pages.workspaces.managerDescription')}
+          />
+          <Button
+            onClick={() => {
+              setIsCreating(true);
+              setSelectedWorkspaceId(null);
+            }}
+          >
+            {t('pages.workspaces.newWorkspace')}
+          </Button>
+        </div>
+      }
+    >
       {workspacesQuery.isLoading ? (
         <p className="text-sm text-[var(--text-tertiary)]">{t('common.loading')}</p>
       ) : null}

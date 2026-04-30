@@ -13,6 +13,7 @@ from ainrf.api.routes.environments import router as environments_router
 from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
 from ainrf.api.routes.projects import router as projects_router
+from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
@@ -20,6 +21,7 @@ from ainrf.code_server import CodeServerSupervisor
 from ainrf.files import FileBrowserService
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.runtime.readiness import check_runtime_readiness
+from ainrf.skills import SkillsDiscoveryService
 from ainrf.task_harness import TaskHarnessService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
@@ -37,6 +39,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     environments_router,
     files_router,
     projects_router,
+    skills_router,
     workspaces_router,
     terminal_router,
     tasks_router,
@@ -94,6 +97,10 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
     app.state.terminal_attachment_broker = TerminalAttachmentBroker()
     app.state.file_browser_service = FileBrowserService(
         environment_service=environment_service,
+        workspace_service=app.state.workspace_service,
+    )
+    app.state.skills_discovery_service = SkillsDiscoveryService(
+        scan_roots=[default_workspace_dir],
     )
     app.state.task_harness_service = TaskHarnessService(
         state_root=api_config.state_root,

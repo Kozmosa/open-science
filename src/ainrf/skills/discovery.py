@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from ainrf.skills.models import SkillItem
+
+_BUILTIN_SKILLS: list[SkillItem] = [
+    SkillItem("web-search", "Web Search", "Search the web for information"),
+    SkillItem("code-analysis", "Code Analysis", "Analyze and understand code"),
+    SkillItem("citation", "Citation", "Manage citations and references"),
+    SkillItem("repo-inspection", "Repo Inspection", "Inspect repository structure and history"),
+    SkillItem("paper-reading", "Paper Reading", "Read and summarize academic papers"),
+    SkillItem("writing", "Academic Writing", "Write academic content"),
+]
+
+_SKILL_DIRS = (".codex/skills", ".claude/skills", "skills")
+
+
+def _scan_directory_skills(directory: Path) -> list[SkillItem]:
+    skills: list[SkillItem] = []
+    for skill_dir_name in _SKILL_DIRS:
+        skill_dir = directory / skill_dir_name
+        if not skill_dir.is_dir():
+            continue
+        for entry in skill_dir.iterdir():
+            if entry.is_dir():
+                skill_id = entry.name
+                label = skill_id.replace("-", " ").replace("_", " ").title()
+                manifest = entry / "skill.json"
+                description: str | None = None
+                if manifest.is_file():
+                    try:
+                        data = json.loads(manifest.read_text(encoding="utf-8"))
+                        if isinstance(data, dict):
+                            label = data.get("label", label)
+                            description = data.get("description")
+                    except (json.JSONDecodeError, OSError):
+                        pass
+                skills.append(SkillItem(skill_id, label, description))
+            elif entry.suffix == ".json" and entry.name != "skills.json":
+                skill_id = entry.stem
+                label = skill_id.replace("-", " ").replace("_", " ").title()
+                description: str | None = None
+                try:
+                    data = json.loads(entry.read_text(encoding="utf-8"))
+                    if isinstance(data, dict):
+                        label = data.get("label", label)
+                        description = data.get("description")
+                except (json.JSONDecodeError, OSError):
+                    pass
+                skills.append(SkillItem(skill_id, label, description))
+    return skills
+
+
+def _scan_skills_json(directory: Path) -> list[SkillItem]:
+    skills: list[SkillItem] = []
+    for skills_json in directory.rglob("skills.json"):
+        try:
+            data = json.loads(skills_json.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict) and "skill_id" in item:
+                        skills.append(
+                            SkillItem(
+                                skill_id=item["skill_id"],
+                                label=item.get("label", item["skill_id"]),
+                                description=item.get("description"),
+                            )
+                        )
+            elif isinstance(data, dict) and "skills" in data:
+                for item in data["skills"]:
+                    if isinstance(item, dict) and "skill_id" in item:
+                        skills.append(
+                            SkillItem(
+                                skill_id=item["skill_id"],
+                                label=item.get("label", item["skill_id"]),
+                                description=item.get("description"),
+                            )
+                        )
+        except (json.JSONDecodeError, OSError):
+            continue
+    return skills
+
+
+class SkillsDiscoveryService:
+    def __init__(self, scan_roots: list[Path] | None = None) -> None:
+        self._scan_roots = scan_roots or []
+
+    def discover(self) -> list[SkillItem]:
+        seen: set[str] = set()
+        skills: list[SkillItem] = []
+
+        for skill in _BUILTIN_SKILLS:
+            if skill.skill_id not in seen:
+                seen.add(skill.skill_id)
+                skills.append(skill)
+
+        for root in self._scan_roots:
+            if root.is_dir():
+                for skill in _scan_directory_skills(root):
+                    if skill.skill_id not in seen:
+                        seen.add(skill.skill_id)
+                        skills.append(skill)
+                for skill in _scan_skills_json(root):
+                    if skill.skill_id not in seen:
+                        seen.add(skill.skill_id)
+                        skills.append(skill)
+
+        return skills

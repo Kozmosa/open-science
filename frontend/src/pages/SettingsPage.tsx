@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Button,
@@ -9,11 +9,11 @@ import {
   SectionCard,
   SectionHeader,
   Select,
+  SkillToggleGroup,
   Textarea,
 } from '../components/ui';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
-import TerminalSessionConsole from '../components/terminal/TerminalSessionConsole';
-import { getEnvironments, installEnvironmentCodeServer } from '../api';
+import { getEnvironments, getSkills, getWorkspaces } from '../api';
 import { useT } from '../i18n';
 import {
   clampTerminalFontSize,
@@ -28,13 +28,7 @@ import type {
   TaskConfigurationSettings,
   WebUiSettingsDocument,
 } from '../settings';
-import type { EnvironmentRecord } from '../types';
-
-interface CodeServerInstallTerminalState {
-  sessionId: string | null;
-  attachmentId: string | null;
-  terminalWsUrl: string | null;
-}
+import type { EnvironmentRecord, SkillItem } from '../types';
 
 interface GeneralDraftState {
   defaultRoute: DefaultRoute;
@@ -54,17 +48,9 @@ interface EnvironmentDefaultsCardProps {
   onReset: () => void;
 }
 
-interface CodeServerInstallSectionProps {
-  environment: EnvironmentRecord | null;
-  isPending: boolean;
-  error: string | null;
-  successDetail: string | null;
-  terminalState: CodeServerInstallTerminalState | null;
-  onInstall: (environmentId: string) => void;
-}
-
 interface TaskConfigurationSectionProps {
   taskConfiguration: TaskConfigurationSettings;
+  availableSkills: SkillItem[];
   onSaveResearchAgentProfile: (profile: ResearchAgentProfileSettings) => void;
   onSaveTaskConfigurationSettings: (settings: TaskConfigurationSettings) => void;
   onResetTaskConfigurationSettings: () => void;
@@ -113,11 +99,15 @@ function GeneralPreferencesSection({
     clampedFontSize !== savedGeneral.terminal.fontSize;
 
   return (
-    <SectionCard>
-      <SectionHeader
-        title={t('pages.settings.general.title')}
-        description={t('pages.settings.general.description')}
-      />
+    <SectionCard
+      collapsible
+      header={
+        <SectionHeader
+          title={t('pages.settings.general.title')}
+          description={t('pages.settings.general.description')}
+        />
+      }
+    >
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FormField label={t('pages.settings.general.defaultRouteLabel')}>
@@ -187,74 +177,9 @@ function GeneralPreferencesSection({
   );
 }
 
-function CodeServerInstallSection({
-  environment,
-  isPending,
-  error,
-  successDetail,
-  terminalState,
-  onInstall,
-}: CodeServerInstallSectionProps) {
-  const t = useT();
-  const installedPath = environment?.code_server_path ?? null;
-
-  return (
-    <SectionCard>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <SectionHeader
-          title={t('pages.settings.codeServerInstall.title')}
-          description={t('pages.settings.codeServerInstall.description')}
-        />
-        <Button
-          onClick={() => (environment ? onInstall(environment.id) : undefined)}
-          disabled={!environment || isPending}
-        >
-          {isPending
-            ? t('pages.settings.codeServerInstall.installing')
-            : t('pages.settings.codeServerInstall.installAction')}
-        </Button>
-      </div>
-
-      <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px]">
-        <p className="text-[var(--text-secondary)]">
-          <span className="font-medium text-[var(--text)]">
-            {t('pages.settings.codeServerInstall.selectedEnvironment')}
-          </span>{' '}
-          {environment ? `${environment.alias} · ${environment.display_name}` : t('common.notSelected')}
-        </p>
-        <p className="break-all text-[var(--text-secondary)]">
-          <span className="font-medium text-[var(--text)]">
-            {t('pages.settings.codeServerInstall.installedPath')}
-          </span>{' '}
-          {installedPath ?? t('pages.settings.codeServerInstall.notInstalled')}
-        </p>
-        {successDetail ? <p className="text-[#34c759]">{successDetail}</p> : null}
-        {error ? <p className="text-[#ff3b30]">{error}</p> : null}
-      </div>
-
-      {terminalState?.attachmentId && terminalState.terminalWsUrl ? (
-        <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
-          <h3 className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.codeServerInstall.terminalOutput')}
-          </h3>
-          <div className="min-h-[260px] overflow-hidden rounded-lg border border-[var(--border)] bg-black">
-            <TerminalSessionConsole
-              sessionId={terminalState.sessionId ?? environment?.id ?? null}
-              attachmentId={terminalState.attachmentId}
-              terminalWsUrl={terminalState.terminalWsUrl}
-              status="running"
-              readonly
-              placeholderText={t('pages.settings.codeServerInstall.terminalPlaceholder')}
-            />
-          </div>
-        </div>
-      ) : null}
-    </SectionCard>
-  );
-}
-
 function TaskConfigurationSection({
   taskConfiguration,
+  availableSkills,
   onSaveResearchAgentProfile,
   onSaveTaskConfigurationSettings,
   onResetTaskConfigurationSettings,
@@ -265,6 +190,7 @@ function TaskConfigurationSection({
       profileId: 'claude-code-default',
       label: 'Claude Code Default',
       systemPrompt: '',
+      skills: [],
       skillsPrompt: '',
       settingsJson: '',
     }
@@ -275,11 +201,15 @@ function TaskConfigurationSection({
   const [defaultConfigId, setDefaultConfigId] = useState(taskConfiguration.defaultTaskConfigurationId);
 
   return (
-    <SectionCard>
-      <SectionHeader
-        title={t('pages.settings.taskConfiguration.title')}
-        description={t('pages.settings.taskConfiguration.description')}
-      />
+    <SectionCard
+      collapsible
+      header={
+        <SectionHeader
+          title={t('pages.settings.taskConfiguration.title')}
+          description={t('pages.settings.taskConfiguration.description')}
+        />
+      }
+    >
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FormField label={t('pages.settings.taskConfiguration.executionEngineLabel')}>
@@ -352,6 +282,22 @@ function TaskConfigurationSection({
           />
         </FormField>
 
+        {availableSkills.length > 0 ? (
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-[var(--text-secondary)]">
+              {t('pages.settings.taskConfiguration.skillsLabel')}
+            </span>
+            <SkillToggleGroup
+              skills={availableSkills}
+              selected={profileDraft.skills}
+              onChange={(skills) => setProfileDraft((current) => ({ ...current, skills }))}
+            />
+            <p className="text-xs text-[var(--text-tertiary)]">
+              {t('pages.settings.taskConfiguration.skillsDescription')}
+            </p>
+          </div>
+        ) : null}
+
         <FormField label={t('pages.settings.taskConfiguration.skillsPromptLabel')}>
           <Textarea
             aria-label={t('pages.settings.taskConfiguration.skillsPromptLabel')}
@@ -359,7 +305,7 @@ function TaskConfigurationSection({
             onChange={(event) =>
               setProfileDraft((current) => ({ ...current, skillsPrompt: event.target.value }))
             }
-            className="min-h-24"
+            className="min-h-16"
           />
         </FormField>
 
@@ -408,12 +354,18 @@ function EnvironmentDefaultsCard({
   const hasChanges = hasEnvironmentDefaultChanges(draft, savedDefaults);
 
   return (
-    <SectionCard className="space-y-4 p-5">
-      <SectionHeader
-        title={`${environment.alias} · ${environment.display_name}`}
-        description={t('pages.settings.project.environmentCardDescription')}
-        size="sm"
-      />
+    <SectionCard
+      collapsible
+      defaultExpanded={false}
+      header={
+        <SectionHeader
+          title={`${environment.alias} · ${environment.display_name}`}
+          description={t('pages.settings.project.environmentCardDescription')}
+          size="sm"
+        />
+      }
+      className="space-y-4 p-5"
+    >
 
       <FormField label={t('pages.settings.project.titleTemplateLabel')}>
         <Input
@@ -513,11 +465,15 @@ function ProjectDefaultsSection({
   const hasProjectDefaultChanges = defaultEnvironmentDraft !== persistedProjectDefaultEnvironmentId;
 
   return (
-    <SectionCard>
-      <SectionHeader
-        title={t('pages.settings.project.title')}
-        description={t('pages.settings.project.description')}
-      />
+    <SectionCard
+      collapsible
+      header={
+        <SectionHeader
+          title={t('pages.settings.project.title')}
+          description={t('pages.settings.project.description')}
+        />
+      }
+    >
 
       <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
         <FormField label={t('pages.settings.project.defaultEnvironmentLabel')}>
@@ -587,13 +543,17 @@ function ProjectDefaultsSection({
 
 function SettingsPage() {
   const t = useT();
-  const queryClient = useQueryClient();
-  const [installSuccessDetail, setInstallSuccessDetail] = useState<string | null>(null);
-  const [installTerminalState, setInstallTerminalState] =
-    useState<CodeServerInstallTerminalState | null>(null);
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
     queryFn: getEnvironments,
+  });
+  const workspacesQuery = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: getWorkspaces,
+  });
+  const skillsQuery = useQuery({
+    queryKey: ['skills'],
+    queryFn: getSkills,
   });
   const {
     settings,
@@ -604,6 +564,7 @@ function SettingsPage() {
     resetTaskConfigurationSettings,
     saveResearchAgentProfile,
     saveProjectDefaultEnvironment,
+    saveProjectDefaultWorkspace,
     saveProjectEnvironmentDefaults,
     resetProjectEnvironmentDefaults,
     getProjectEnvironmentDefaults,
@@ -614,56 +575,14 @@ function SettingsPage() {
     () => environmentsQuery.data?.items ?? [],
     [environmentsQuery.data]
   );
-  const selectedEnvironment =
-    environmentSelection.selectedEnvironmentId !== null
-      ? (environments.find(
-          (environment) => environment.id === environmentSelection.selectedEnvironmentId
-        ) ?? environmentSelection.selectedEnvironment)
-      : (environmentSelection.selectedEnvironment ?? environments[0] ?? null);
-  const installMutation = useMutation({
-    mutationFn: installEnvironmentCodeServer,
-    onMutate: (environmentId) => {
-      const environment = environments.find((item) => item.id === environmentId) ?? null;
-      console.info('code-server install requested', {
-        environmentId,
-        alias: environment?.alias ?? null,
-      });
-      setInstallTerminalState(null);
-    },
-    onSuccess: async (response) => {
-      console.info('code-server install succeeded', {
-        environmentId: response.environment.id,
-        alias: response.environment.alias,
-        executionMode: response.execution_mode,
-        alreadyInstalled: response.already_installed,
-        codeServerPath: response.code_server_path,
-      });
-      setInstallSuccessDetail(response.detail);
-      setInstallTerminalState(
-        response.terminal_attachment_id && response.terminal_ws_url
-          ? {
-              sessionId: response.terminal_session_id ?? null,
-              attachmentId: response.terminal_attachment_id,
-              terminalWsUrl: response.terminal_ws_url,
-            }
-          : null
-      );
-      queryClient.setQueryData(['environments'], { items: [response.environment] });
-      await queryClient.invalidateQueries({ queryKey: ['environments'] });
-    },
-    onError: (error, environmentId) => {
-      const environment = environments.find((item) => item.id === environmentId) ?? null;
-      console.error('code-server install failed', {
-        environmentId,
-        alias: environment?.alias ?? null,
-        error: error instanceof Error ? error.message : error,
-      });
-      setInstallSuccessDetail(null);
-      setInstallTerminalState(null);
-    },
-  });
-  const installError =
-    installMutation.error instanceof Error ? installMutation.error.message : null;
+  const workspaces = useMemo(
+    () => workspacesQuery.data?.items ?? [],
+    [workspacesQuery.data]
+  );
+  const availableSkills = useMemo(
+    () => skillsQuery.data?.items ?? [],
+    [skillsQuery.data]
+  );
   const environmentsError =
     environmentsQuery.error instanceof Error ? environmentsQuery.error.message : null;
 
@@ -689,17 +608,39 @@ function SettingsPage() {
 
         <EnvironmentSelectorPanel {...environmentSelection} />
 
-        <CodeServerInstallSection
-          environment={selectedEnvironment}
-          isPending={installMutation.isPending}
-          error={installError}
-          successDetail={installSuccessDetail}
-          terminalState={installTerminalState}
-          onInstall={(environmentId) => installMutation.mutate(environmentId)}
-        />
+        <SectionCard
+          collapsible
+          header={
+            <SectionHeader
+              title="Default Workspace"
+              description="Select the default workspace for task creation and file browsing."
+            />
+          }
+        >
+          <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
+            <FormField label="Default workspace">
+              <Select
+                aria-label="Default workspace"
+                value={settings.projectDefaults.default.defaultWorkspaceId ?? ''}
+                onChange={(event) =>
+                  saveProjectDefaultWorkspace(event.target.value || null)
+                }
+                disabled={workspaces.length === 0}
+              >
+                <option value="">No default workspace</option>
+                {workspaces.map((workspace) => (
+                  <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                    {workspace.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+        </SectionCard>
 
         <TaskConfigurationSection
           taskConfiguration={settings.taskConfiguration}
+          availableSkills={availableSkills}
           onSaveResearchAgentProfile={saveResearchAgentProfile}
           onSaveTaskConfigurationSettings={saveTaskConfigurationSettings}
           onResetTaskConfigurationSettings={resetTaskConfigurationSettings}

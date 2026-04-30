@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { createTask, getTask, getTasks, getWorkspaces } from '../api';
+import { createTask, getSkills, getTask, getTasks, getWorkspaces } from '../api';
 import { Button } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
@@ -29,6 +29,7 @@ function TasksPage() {
   const environmentSelection = useEnvironmentSelection();
   const { settings } = useSettings();
   const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: getWorkspaces });
+  const skillsQuery = useQuery({ queryKey: ['skills'], queryFn: getSkills });
   const tasksQuery = useQuery({
     queryKey: ['tasks'],
     queryFn: getTasks,
@@ -38,8 +39,13 @@ function TasksPage() {
   const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
   const environments = environmentSelection.environments;
   const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
+  const availableSkills = useMemo(() => skillsQuery.data?.items ?? [], [skillsQuery.data]);
 
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(
+    settings.projectDefaults.default.defaultWorkspaceId ??
+      settings.projectDefaults.default.selection.lastWorkspaceId ??
+      ''
+  );
   const [draftResetVersion, setDraftResetVersion] = useState(0);
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
@@ -275,6 +281,7 @@ function TasksPage() {
               draftDefaults={draftDefaults}
               researchAgentProfiles={settings.taskConfiguration.researchAgentProfiles}
               taskConfigurations={settings.taskConfiguration.taskConfigurations}
+              availableSkills={availableSkills}
               isSubmitting={createMutation.isPending}
               createError={createError}
               onSelectWorkspace={setSelectedWorkspaceId}

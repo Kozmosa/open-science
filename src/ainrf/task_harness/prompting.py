@@ -65,12 +65,17 @@ def compose_task_prompt(
                     research_agent_profile.system_prompt.strip(),
                 )
             )
+        skills_lines: list[str] = []
+        if research_agent_profile.skills:
+            skills_lines.append("Enabled skills: " + ", ".join(research_agent_profile.skills))
         if research_agent_profile.skills_prompt and research_agent_profile.skills_prompt.strip():
+            skills_lines.append(research_agent_profile.skills_prompt.strip())
+        if skills_lines:
             raw_layers.append(
                 (
                     "research_agent_skills",
                     "Research agent skills/config notes",
-                    research_agent_profile.skills_prompt.strip(),
+                    "\n\n".join(skills_lines),
                 )
             )
     raw_layers.append(("task_input", "Task input", task_input.strip()))

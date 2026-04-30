@@ -752,6 +752,7 @@ def _normalize_research_agent_profile(
             profile_id="claude-code-default",
             label="Claude Code Default",
             system_prompt=None,
+            skills=[],
             skills_prompt=None,
             settings_json=None,
         )
@@ -759,10 +760,13 @@ def _normalize_research_agent_profile(
     normalized_settings: dict[str, object] | None = None
     if isinstance(settings_json, dict):
         normalized_settings = {str(key): value for key, value in settings_json.items()}
+    skills_raw = payload.get("skills", [])
+    skills = [str(s) for s in skills_raw] if isinstance(skills_raw, list) else []
     return ResearchAgentProfileSnapshot(
         profile_id=str(payload.get("profile_id", "claude-code-custom")),
         label=str(payload.get("label", "Claude Code Custom")),
         system_prompt=_optional_str(payload.get("system_prompt")),
+        skills=skills,
         skills_prompt=_optional_str(payload.get("skills_prompt")),
         settings_json=normalized_settings,
     )

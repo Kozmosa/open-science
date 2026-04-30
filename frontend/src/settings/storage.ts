@@ -90,12 +90,24 @@ function normalizeTaskConfigurationSettings(
           hadFallback = true;
           return [];
         }
+        const skillsPrompt = typeof item.skillsPrompt === 'string' ? item.skillsPrompt : '';
+        let skills: string[] = [];
+        if (Array.isArray(item.skills)) {
+          skills = item.skills.filter((s): s is string => typeof s === 'string');
+        } else if (skillsPrompt.trim()) {
+          // Backward compatibility: parse skillsPrompt into skills array
+          skills = skillsPrompt
+            .split(/[,\n]+/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+        }
         return [
           {
             profileId: item.profileId,
             label: item.label,
             systemPrompt: typeof item.systemPrompt === 'string' ? item.systemPrompt : '',
-            skillsPrompt: typeof item.skillsPrompt === 'string' ? item.skillsPrompt : '',
+            skills,
+            skillsPrompt,
             settingsJson: typeof item.settingsJson === 'string' ? item.settingsJson : '',
           },
         ];
@@ -171,16 +183,28 @@ function normalizeDefaultProjectSettings(
     hadFallback = true;
   }
 
+  const defaultWorkspaceId = readStringOrNull(value.defaultWorkspaceId);
+  if (value.defaultWorkspaceId !== null && defaultWorkspaceId === null) {
+    hadFallback = true;
+  }
+
   const lastEnvironmentId = selection ? readStringOrNull(selection.lastEnvironmentId) : null;
   if (selection?.lastEnvironmentId !== null && lastEnvironmentId === null) {
+    hadFallback = true;
+  }
+
+  const lastWorkspaceId = selection ? readStringOrNull(selection.lastWorkspaceId) : null;
+  if (selection?.lastWorkspaceId !== null && lastWorkspaceId === null) {
     hadFallback = true;
   }
 
   return {
     projectSettings: {
       defaultEnvironmentId,
+      defaultWorkspaceId,
       selection: {
         lastEnvironmentId,
+        lastWorkspaceId,
       },
       environmentDefaults,
     },

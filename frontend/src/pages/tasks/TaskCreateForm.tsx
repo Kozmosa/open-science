@@ -1,9 +1,10 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Input, Select, Textarea } from '../../components/ui';
+import { Button, Input, Select, SkillToggleGroup, Textarea } from '../../components/ui';
 import { useT } from '../../i18n';
 import type {
   EnvironmentRecord,
+  SkillItem,
   TaskCreateRequest,
   WorkspaceRecord,
 } from '../../types';
@@ -24,6 +25,7 @@ interface Props {
   };
   researchAgentProfiles: ResearchAgentProfileSettings[];
   taskConfigurations: TaskConfigurationPreset[];
+  availableSkills: SkillItem[];
   isSubmitting: boolean;
   createError: string | null;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -42,6 +44,7 @@ export default function TaskCreateForm({
   draftDefaults,
   researchAgentProfiles,
   taskConfigurations,
+  availableSkills,
   isSubmitting,
   createError,
   onSelectWorkspace,
@@ -50,12 +53,16 @@ export default function TaskCreateForm({
   onClose,
 }: Props) {
   const t = useT();
+  const defaultProfile = researchAgentProfiles.find(
+    (profile) => profile.profileId === draftDefaults.researchAgentProfileId
+  );
   const [draft, setDraft] = useState({
     title: draftDefaults.title,
     task_input: draftDefaults.task_input,
     task_profile: 'claude-code',
     researchAgentProfileId: draftDefaults.researchAgentProfileId,
     taskConfigurationId: draftDefaults.taskConfigurationId,
+    selectedSkills: defaultProfile?.skills ?? [],
     researchGoal: '',
     context: '',
     constraints: '',
@@ -118,6 +125,7 @@ export default function TaskCreateForm({
                 profile_id: selectedResearchAgentProfile.profileId,
                 label: selectedResearchAgentProfile.label,
                 system_prompt: selectedResearchAgentProfile.systemPrompt || null,
+                skills: draft.selectedSkills,
                 skills_prompt: selectedResearchAgentProfile.skillsPrompt || null,
                 settings_json,
               }
@@ -224,9 +232,17 @@ export default function TaskCreateForm({
           <Select
             aria-label={t('pages.tasks.researchAgentLabel')}
             value={draft.researchAgentProfileId}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, researchAgentProfileId: event.target.value }))
-            }
+            onChange={(event) => {
+              const nextId = event.target.value;
+              const nextProfile = researchAgentProfiles.find(
+                (profile) => profile.profileId === nextId
+              );
+              setDraft((current) => ({
+                ...current,
+                researchAgentProfileId: nextId,
+                selectedSkills: nextProfile?.skills ?? [],
+              }));
+            }}
           >
             {researchAgentProfiles.map((profile) => (
               <option key={profile.profileId} value={profile.profileId}>
@@ -255,6 +271,19 @@ export default function TaskCreateForm({
           </Select>
         </label>
       </div>
+
+      {availableSkills.length > 0 ? (
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
+            {t('pages.tasks.skillsLabel')}
+          </span>
+          <SkillToggleGroup
+            skills={availableSkills}
+            selected={draft.selectedSkills}
+            onChange={(selected) => setDraft((current) => ({ ...current, selectedSkills: selected }))}
+          />
+        </div>
+      ) : null}
 
       <label className="block space-y-2">
         <span className="text-xs font-medium text-[var(--text-secondary)]">
@@ -337,6 +366,7 @@ export default function TaskCreateForm({
               task_profile: 'claude-code',
               researchAgentProfileId: draftDefaults.researchAgentProfileId,
               taskConfigurationId: draftDefaults.taskConfigurationId,
+              selectedSkills: defaultProfile?.skills ?? [],
               researchGoal: '',
               context: '',
               constraints: '',

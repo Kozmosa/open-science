@@ -25,12 +25,14 @@ interface SettingsContextValue {
   resetTaskConfigurationSettings: () => void;
   saveResearchAgentProfile: (profile: ResearchAgentProfileSettings) => void;
   saveProjectDefaultEnvironment: (environmentId: string | null) => void;
+  saveProjectDefaultWorkspace: (workspaceId: string | null) => void;
   saveProjectEnvironmentDefaults: (
     environmentId: string,
     defaults: EnvironmentTaskDefaults
   ) => void;
   resetProjectEnvironmentDefaults: (environmentId: string) => void;
   rememberSelectedEnvironment: (environmentId: string | null) => void;
+  rememberSelectedWorkspace: (workspaceId: string | null) => void;
   getProjectEnvironmentDefaults: (environmentId: string | null) => EnvironmentTaskDefaults;
 }
 
@@ -60,8 +62,10 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
     projectDefaults: {
       default: {
         defaultEnvironmentId: settings.projectDefaults.default.defaultEnvironmentId,
+        defaultWorkspaceId: settings.projectDefaults.default.defaultWorkspaceId,
         selection: {
           lastEnvironmentId: settings.projectDefaults.default.selection.lastEnvironmentId,
+          lastWorkspaceId: settings.projectDefaults.default.selection.lastWorkspaceId,
         },
         environmentDefaults: settings.projectDefaults.default.environmentDefaults,
       },
@@ -139,6 +143,17 @@ export function SettingsProvider({ children }: ProviderProps) {
           },
         });
       },
+      saveProjectDefaultWorkspace: (workspaceId) => {
+        commitSettings({
+          ...state.settings,
+          projectDefaults: {
+            default: {
+              ...state.settings.projectDefaults.default,
+              defaultWorkspaceId: workspaceId,
+            },
+          },
+        });
+      },
       saveProjectEnvironmentDefaults: (environmentId, defaults) => {
         commitSettings({
           ...state.settings,
@@ -181,7 +196,22 @@ export function SettingsProvider({ children }: ProviderProps) {
             default: {
               ...state.settings.projectDefaults.default,
               selection: {
+                ...state.settings.projectDefaults.default.selection,
                 lastEnvironmentId: environmentId,
+              },
+            },
+          },
+        });
+      },
+      rememberSelectedWorkspace: (workspaceId) => {
+        commitSettings({
+          ...state.settings,
+          projectDefaults: {
+            default: {
+              ...state.settings.projectDefaults.default,
+              selection: {
+                ...state.settings.projectDefaults.default.selection,
+                lastWorkspaceId: workspaceId,
               },
             },
           },

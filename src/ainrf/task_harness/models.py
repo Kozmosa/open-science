@@ -30,6 +30,7 @@ class ResearchAgentProfileSnapshot:
     profile_id: str
     label: str
     system_prompt: str | None
+    skills: list[str]
     skills_prompt: str | None
     settings_json: dict[str, object] | None
     settings_artifact_path: str | None = None

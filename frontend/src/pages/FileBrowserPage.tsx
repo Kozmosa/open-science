@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { FolderOpen, RefreshCw } from 'lucide-react';
-import { listFiles, readFile } from '../api';
+import { listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { PageHeader, useEnvironmentSelection } from '../components';
+import { Select } from '../components/ui';
 import { useT } from '../i18n';
 import type { FileEntry, FileReadResponse } from '../types';
 
@@ -14,23 +15,39 @@ export default function FileBrowserPage() {
   const selectedEnvironment = environmentSelection.selectedEnvironment;
   const environmentId = selectedEnvironment?.id ?? null;
 
+  const workspacesQuery = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: getWorkspaces,
+  });
+  const workspaces = workspacesQuery.data?.items ?? [];
+
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
+  const effectiveWorkspaceId = selectedWorkspaceId || workspaces[0]?.workspace_id || '';
+
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<FileReadResponse | null>(null);
   const [isFileLoading, setIsFileLoading] = useState(false);
 
   const rootQuery = useQuery({
-    queryKey: ['files', environmentId, ''],
-    queryFn: () => (environmentId ? listFiles(environmentId, '') : Promise.resolve({ path: '', entries: [] })),
+    queryKey: ['files', environmentId, effectiveWorkspaceId, ''],
+    queryFn: () =>
+      environmentId
+        ? listFiles(environmentId, '', effectiveWorkspaceId || undefined)
+        : Promise.resolve({ path: '', entries: [] }),
     enabled: !!environmentId,
   });
 
   const handleLoadDirectory = useCallback(
     async (path: string): Promise<FileEntry[]> => {
       if (!environmentId) return [];
-      const result = await listFiles(environmentId, path);
+      const result = await listFiles(
+        environmentId,
+        path,
+        effectiveWorkspaceId || undefined
+      );
       return result.entries;
     },
-    [environmentId]
+    [environmentId, effectiveWorkspaceId]
   );
 
   const handleSelectFile = useCallback(
@@ -43,7 +60,11 @@ export default function FileBrowserPage() {
 
       setIsFileLoading(true);
       try {
-        const file = await readFile(environmentId, path);
+        const file = await readFile(
+          environmentId,
+          path,
+          effectiveWorkspaceId || undefined
+        );
         setCurrentFile(file);
       } catch {
         setCurrentFile(null);
@@ -51,15 +72,17 @@ export default function FileBrowserPage() {
         setIsFileLoading(false);
       }
     },
-    [environmentId, rootQuery.data]
+    [environmentId, effectiveWorkspaceId, rootQuery.data]
   );
 
   const handleRefresh = useCallback(() => {
     if (!environmentId) return;
-    queryClient.invalidateQueries({ queryKey: ['files', environmentId] });
+    queryClient.invalidateQueries({
+      queryKey: ['files', environmentId, effectiveWorkspaceId],
+    });
     setSelectedPath(null);
     setCurrentFile(null);
-  }, [environmentId, queryClient]);
+  }, [environmentId, effectiveWorkspaceId, queryClient]);
 
   const breadcrumb = selectedPath
     ? selectedPath.split('/').filter(Boolean)
@@ -72,9 +95,30 @@ export default function FileBrowserPage() {
         title={t('pages.workspaceBrowser.title')}
       />
 
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-2">
+          <span className="text-sm font-medium text-[var(--text-secondary)]">
+            Workspace
+          </span>
+          <Select
+            value={effectiveWorkspaceId}
+            onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+            disabled={workspaces.length === 0}
+          >
+            {workspaces.map((workspace) => (
+              <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                {workspace.label}
+              </option>
+            ))}
+          </Select>
+        </label>
+      </div>
+
       {!selectedEnvironment ? (
         <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-secondary)]">
-          <p className="text-sm text-[var(--text-tertiary)]">Select an environment to browse files</p>
+          <p className="text-sm text-[var(--text-tertiary)]">
+            Select an environment to browse files
+          </p>
         </div>
       ) : rootQuery.isLoading ? (
         <div className="flex flex-1 items-center justify-center">
@@ -114,8 +158,16 @@ export default function FileBrowserPage() {
               {breadcrumb.length > 0 ? (
                 breadcrumb.map((segment, index) => (
                   <span key={index} className="flex items-center gap-1">
-                    {index > 0 && <span className="text-[var(--text-tertiary)]">/</span>}
-                    <span className={index === breadcrumb.length - 1 ? 'font-medium text-[var(--text)]' : ''}>
+                    {index > 0 && (
+                      <span className="text-[var(--text-tertiary)]">/</span>
+                    )}
+                    <span
+                      className={
+                        index === breadcrumb.length - 1
+                          ? 'font-medium text-[var(--text)]'
+                          : ''
+                      }
+                    >
                       {segment}
                     </span>
                   </span>

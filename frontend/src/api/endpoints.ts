@@ -12,6 +12,7 @@ import type {
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
+  SkillListResponse,
   SystemHealth,
   TaskCreateRequest,
   TaskListResponse,
@@ -51,6 +52,7 @@ import {
   mockGetWorkspace,
   mockResetTerminalSession,
   mockGetSessionPairs,
+  mockGetSkills,
   mockInstallEnvironmentCodeServer,
   mockListFiles,
   mockReadFile,
@@ -89,6 +91,9 @@ function withTerminalDetachQuery(
   const query = search.toString();
   return query ? `${path}?${query}` : path;
 }
+
+export const getSkills = (): Promise<SkillListResponse> =>
+  USE_MOCK ? Promise.resolve(mockGetSkills()) : api.get<SkillListResponse>('/skills');
 
 export const getHealth = (): Promise<SystemHealth> =>
   USE_MOCK ? Promise.resolve(mockGetHealth()) : api.get<SystemHealth>('/health');
@@ -272,16 +277,28 @@ export const deleteProjectEnvironmentReference = (
     ? Promise.resolve(mockDeleteProjectEnvironmentReference(projectId, environmentId))
     : api.delete<void>(`/projects/${projectId}/environment-refs/${environmentId}`);
 
-export const listFiles = (environmentId: string, path: string = ''): Promise<FileListResponse> =>
+export const listFiles = (
+  environmentId: string,
+  path: string = '',
+  workspaceId?: string
+): Promise<FileListResponse> =>
   USE_MOCK
     ? Promise.resolve(mockListFiles(environmentId, path))
     : api.get<FileListResponse>(
-        `/files/list?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}`
+        `/files/list?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
+          workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
+        }`
       );
 
-export const readFile = (environmentId: string, path: string): Promise<FileReadResponse> =>
+export const readFile = (
+  environmentId: string,
+  path: string,
+  workspaceId?: string
+): Promise<FileReadResponse> =>
   USE_MOCK
     ? Promise.resolve(mockReadFile(environmentId, path))
     : api.get<FileReadResponse>(
-        `/files/read?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}`
+        `/files/read?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
+          workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
+        }`
       );
