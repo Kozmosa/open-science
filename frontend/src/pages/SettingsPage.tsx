@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Alert,
+  Button,
+  FormField,
+  Input,
+  PageHeader,
+  SectionCard,
+  SectionHeader,
+  Select,
+  Textarea,
+} from '../components/ui';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import TerminalSessionConsole from '../components/terminal/TerminalSessionConsole';
 import { getEnvironments, installEnvironmentCodeServer } from '../api';
@@ -102,25 +113,15 @@ function GeneralPreferencesSection({
     clampedFontSize !== savedGeneral.terminal.fontSize;
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
-      <div className="space-y-1">
-        <h2
-          className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.settings.general.title')}
-        </h2>
-        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-          {t('pages.settings.general.description')}
-        </p>
-      </div>
+    <SectionCard>
+      <SectionHeader
+        title={t('pages.settings.general.title')}
+        description={t('pages.settings.general.description')}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.general.defaultRouteLabel')}
-          </span>
-          <select
+        <FormField label={t('pages.settings.general.defaultRouteLabel')}>
+          <Select
             aria-label={t('pages.settings.general.defaultRouteLabel')}
             value={draft.defaultRoute}
             onChange={(event) =>
@@ -129,20 +130,16 @@ function GeneralPreferencesSection({
                 defaultRoute: event.target.value as DefaultRoute,
               }))
             }
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           >
             <option value="terminal">{t('pages.settings.routes.terminal')}</option>
             <option value="tasks">{t('pages.settings.routes.tasks')}</option>
             <option value="workspaces">{t('pages.settings.routes.workspaces')}</option>
             <option value="containers">{t('pages.settings.routes.containers')}</option>
-          </select>
-        </label>
+          </Select>
+        </FormField>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.general.terminalFontSizeLabel')}
-          </span>
-          <input
+        <FormField label={t('pages.settings.general.terminalFontSizeLabel')}>
+          <Input
             aria-label={t('pages.settings.general.terminalFontSizeLabel')}
             type="number"
             min={minTerminalFontSize}
@@ -155,9 +152,8 @@ function GeneralPreferencesSection({
                 terminalFontSize: event.target.value,
               }))
             }
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           />
-        </label>
+        </FormField>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--bg-secondary)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
@@ -169,15 +165,10 @@ function GeneralPreferencesSection({
           })}
         </p>
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={onReset}
-            className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
-          >
+          <Button variant="secondary" onClick={onReset}>
             {t('common.reset')}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={() =>
               onSave({
                 defaultRoute: draft.defaultRoute,
@@ -187,13 +178,12 @@ function GeneralPreferencesSection({
               })
             }
             disabled={!hasChanges}
-            className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('common.saveChanges')}
-          </button>
+          </Button>
         </div>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -209,29 +199,20 @@ function CodeServerInstallSection({
   const installedPath = environment?.code_server_path ?? null;
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+    <SectionCard>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2
-            className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            {t('pages.settings.codeServerInstall.title')}
-          </h2>
-          <p className="max-w-2xl text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-            {t('pages.settings.codeServerInstall.description')}
-          </p>
-        </div>
-        <button
-          type="button"
+        <SectionHeader
+          title={t('pages.settings.codeServerInstall.title')}
+          description={t('pages.settings.codeServerInstall.description')}
+        />
+        <Button
           onClick={() => (environment ? onInstall(environment.id) : undefined)}
           disabled={!environment || isPending}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isPending
             ? t('pages.settings.codeServerInstall.installing')
             : t('pages.settings.codeServerInstall.installAction')}
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4 text-sm tracking-[-0.224px]">
@@ -268,7 +249,7 @@ function CodeServerInstallSection({
           </div>
         </div>
       ) : null}
-    </section>
+    </SectionCard>
   );
 }
 
@@ -294,59 +275,41 @@ function TaskConfigurationSection({
   const [defaultConfigId, setDefaultConfigId] = useState(taskConfiguration.defaultTaskConfigurationId);
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
-      <div className="space-y-1">
-        <h2
-          className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.settings.taskConfiguration.title')}
-        </h2>
-        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-          {t('pages.settings.taskConfiguration.description')}
-        </p>
-      </div>
+    <SectionCard>
+      <SectionHeader
+        title={t('pages.settings.taskConfiguration.title')}
+        description={t('pages.settings.taskConfiguration.description')}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.taskConfiguration.executionEngineLabel')}
-          </span>
-          <select
+        <FormField label={t('pages.settings.taskConfiguration.executionEngineLabel')}>
+          <Select
             aria-label={t('pages.settings.taskConfiguration.executionEngineLabel')}
             value={taskConfiguration.defaultExecutionEngineId}
             disabled
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)]"
           >
             <option value="claude-code">Claude Code</option>
-          </select>
-        </label>
+          </Select>
+        </FormField>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.taskConfiguration.defaultTaskConfigurationLabel')}
-          </span>
-          <select
+        <FormField label={t('pages.settings.taskConfiguration.defaultTaskConfigurationLabel')}>
+          <Select
             aria-label={t('pages.settings.taskConfiguration.defaultTaskConfigurationLabel')}
             value={defaultConfigId}
             onChange={(event) => setDefaultConfigId(event.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           >
             {taskConfiguration.taskConfigurations.map((config) => (
               <option key={config.configId} value={config.configId}>
                 {config.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </FormField>
       </div>
 
       <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.taskConfiguration.defaultResearchAgentLabel')}
-          </span>
-          <select
+        <FormField label={t('pages.settings.taskConfiguration.defaultResearchAgentLabel')}>
+          <Select
             aria-label={t('pages.settings.taskConfiguration.defaultResearchAgentLabel')}
             value={defaultProfileId}
             onChange={(event) => {
@@ -359,83 +322,64 @@ function TaskConfigurationSection({
                 setProfileDraft(nextProfile);
               }
             }}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           >
             {taskConfiguration.researchAgentProfiles.map((profile) => (
               <option key={profile.profileId} value={profile.profileId}>
                 {profile.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </FormField>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.taskConfiguration.profileLabel')}
-          </span>
-          <input
+        <FormField label={t('pages.settings.taskConfiguration.profileLabel')}>
+          <Input
             aria-label={t('pages.settings.taskConfiguration.profileLabel')}
             value={profileDraft.label}
             onChange={(event) =>
               setProfileDraft((current) => ({ ...current, label: event.target.value }))
             }
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           />
-        </label>
+        </FormField>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.taskConfiguration.systemPromptLabel')}
-          </span>
-          <textarea
+        <FormField label={t('pages.settings.taskConfiguration.systemPromptLabel')}>
+          <Textarea
             aria-label={t('pages.settings.taskConfiguration.systemPromptLabel')}
             value={profileDraft.systemPrompt}
             onChange={(event) =>
               setProfileDraft((current) => ({ ...current, systemPrompt: event.target.value }))
             }
-            className="min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+            className="min-h-24"
           />
-        </label>
+        </FormField>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.taskConfiguration.skillsPromptLabel')}
-          </span>
-          <textarea
+        <FormField label={t('pages.settings.taskConfiguration.skillsPromptLabel')}>
+          <Textarea
             aria-label={t('pages.settings.taskConfiguration.skillsPromptLabel')}
             value={profileDraft.skillsPrompt}
             onChange={(event) =>
               setProfileDraft((current) => ({ ...current, skillsPrompt: event.target.value }))
             }
-            className="min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+            className="min-h-24"
           />
-        </label>
+        </FormField>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.taskConfiguration.settingsJsonLabel')}
-          </span>
-          <textarea
+        <FormField label={t('pages.settings.taskConfiguration.settingsJsonLabel')}>
+          <Textarea
             aria-label={t('pages.settings.taskConfiguration.settingsJsonLabel')}
             value={profileDraft.settingsJson}
             onChange={(event) =>
               setProfileDraft((current) => ({ ...current, settingsJson: event.target.value }))
             }
-            className="min-h-28 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 font-mono text-xs tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+            className="min-h-28 font-mono text-xs"
           />
-        </label>
+        </FormField>
       </div>
 
       <div className="flex flex-wrap justify-end gap-3">
-        <button
-          type="button"
-          onClick={onResetTaskConfigurationSettings}
-          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
-        >
+        <Button variant="secondary" onClick={onResetTaskConfigurationSettings}>
           {t('common.reset')}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           onClick={() => {
             onSaveResearchAgentProfile(profileDraft);
             onSaveTaskConfigurationSettings({
@@ -444,12 +388,11 @@ function TaskConfigurationSection({
               defaultTaskConfigurationId: defaultConfigId,
             });
           }}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)]"
         >
           {t('common.saveChanges')}
-        </button>
+        </Button>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -465,24 +408,15 @@ function EnvironmentDefaultsCard({
   const hasChanges = hasEnvironmentDefaultChanges(draft, savedDefaults);
 
   return (
-    <section className="space-y-4 rounded-xl bg-[var(--surface)] p-5 shadow-sm">
-      <div className="space-y-1">
-        <h3
-          className="text-base font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {environment.alias} · {environment.display_name}
-        </h3>
-        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-          {t('pages.settings.project.environmentCardDescription')}
-        </p>
-      </div>
+    <SectionCard className="space-y-4 p-5">
+      <SectionHeader
+        title={`${environment.alias} · ${environment.display_name}`}
+        description={t('pages.settings.project.environmentCardDescription')}
+        size="sm"
+      />
 
-      <label className="block space-y-2">
-        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-          {t('pages.settings.project.titleTemplateLabel')}
-        </span>
-        <input
+      <FormField label={t('pages.settings.project.titleTemplateLabel')}>
+        <Input
           aria-label={`${environment.alias} ${t('pages.settings.project.titleTemplateLabel')}`}
           value={draft.titleTemplate}
           onChange={(event) =>
@@ -491,16 +425,12 @@ function EnvironmentDefaultsCard({
               titleTemplate: event.target.value,
             }))
           }
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
           placeholder={t('pages.settings.project.titleTemplatePlaceholder')}
         />
-      </label>
+      </FormField>
 
-      <label className="block space-y-2">
-        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-          {t('pages.settings.project.taskInputTemplateLabel')}
-        </span>
-        <textarea
+      <FormField label={t('pages.settings.project.taskInputTemplateLabel')}>
+        <Textarea
           aria-label={`${environment.alias} ${t('pages.settings.project.taskInputTemplateLabel')}`}
           value={draft.taskInputTemplate}
           onChange={(event) =>
@@ -509,16 +439,13 @@ function EnvironmentDefaultsCard({
               taskInputTemplate: event.target.value,
             }))
           }
-          className="min-h-32 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          className="min-h-32"
           placeholder={t('pages.settings.project.taskInputTemplatePlaceholder')}
         />
-      </label>
+      </FormField>
 
-      <label className="block space-y-2">
-        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-          {t('pages.settings.project.researchAgentDefaultLabel')}
-        </span>
-        <select
+      <FormField label={t('pages.settings.project.researchAgentDefaultLabel')}>
+        <Select
           aria-label={`${environment.alias} ${t('pages.settings.project.researchAgentDefaultLabel')}`}
           value={draft.researchAgentProfileId}
           onChange={(event) =>
@@ -527,21 +454,17 @@ function EnvironmentDefaultsCard({
               researchAgentProfileId: event.target.value,
             }))
           }
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
         >
           {taskConfiguration.researchAgentProfiles.map((profile) => (
             <option key={profile.profileId} value={profile.profileId}>
               {profile.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </FormField>
 
-      <label className="block space-y-2">
-        <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-          {t('pages.settings.project.taskConfigurationDefaultLabel')}
-        </span>
-        <select
+      <FormField label={t('pages.settings.project.taskConfigurationDefaultLabel')}>
+        <Select
           aria-label={`${environment.alias} ${t('pages.settings.project.taskConfigurationDefaultLabel')}`}
           value={draft.taskConfigurationId}
           onChange={(event) =>
@@ -550,34 +473,24 @@ function EnvironmentDefaultsCard({
               taskConfigurationId: event.target.value,
             }))
           }
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
         >
           {taskConfiguration.taskConfigurations.map((config) => (
             <option key={config.configId} value={config.configId}>
               {config.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </FormField>
 
       <div className="flex flex-wrap justify-end gap-3">
-        <button
-          type="button"
-          onClick={onReset}
-          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
-        >
+        <Button variant="secondary" onClick={onReset}>
           {t('common.reset')}
-        </button>
-        <button
-          type="button"
-          onClick={() => onSave(draft)}
-          disabled={!hasChanges}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
-        >
+        </Button>
+        <Button onClick={() => onSave(draft)} disabled={!hasChanges}>
           {t('common.saveChanges')}
-        </button>
+        </Button>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -600,30 +513,19 @@ function ProjectDefaultsSection({
   const hasProjectDefaultChanges = defaultEnvironmentDraft !== persistedProjectDefaultEnvironmentId;
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
-      <div className="space-y-1">
-        <h2
-          className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.settings.project.title')}
-        </h2>
-        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-          {t('pages.settings.project.description')}
-        </p>
-      </div>
+    <SectionCard>
+      <SectionHeader
+        title={t('pages.settings.project.title')}
+        description={t('pages.settings.project.description')}
+      />
 
       <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.settings.project.defaultEnvironmentLabel')}
-          </span>
-          <select
+        <FormField label={t('pages.settings.project.defaultEnvironmentLabel')}>
+          <Select
             aria-label={t('pages.settings.project.defaultEnvironmentLabel')}
             value={defaultEnvironmentDraft}
             onChange={(event) => setDefaultEnvironmentDraft(event.target.value)}
             disabled={environments.length === 0}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15 disabled:cursor-not-allowed disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)]"
           >
             <option value="">{t('pages.settings.project.defaultEnvironmentEmpty')}</option>
             {environments.map((environment) => (
@@ -631,29 +533,23 @@ function ProjectDefaultsSection({
                 {environment.alias} · {environment.display_name}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </FormField>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
             {t('pages.settings.project.defaultEnvironmentHelp')}
           </p>
           <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => saveProjectDefaultEnvironment(null)}
-              className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
-            >
+            <Button variant="secondary" onClick={() => saveProjectDefaultEnvironment(null)}>
               {t('common.reset')}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={() => saveProjectDefaultEnvironment(defaultEnvironmentDraft || null)}
               disabled={!hasProjectDefaultChanges}
-              className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {t('common.saveChanges')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -685,7 +581,7 @@ function ProjectDefaultsSection({
           );
         })}
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -773,26 +669,15 @@ function SettingsPage() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-          {t('pages.settings.eyebrow')}
-        </p>
-        <h1
-          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.settings.title')}
-        </h1>
-        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
-          {t('pages.settings.description')}
-        </p>
-      </section>
+      <PageHeader
+        eyebrow={t('pages.settings.eyebrow')}
+        title={t('pages.settings.title')}
+        description={t('pages.settings.description')}
+      />
 
       <div className="space-y-6">
         {recoveryReason !== null ? (
-          <section className="rounded-lg border border-[#ffb74d]/30 bg-[#fff8e1] px-4 py-3 text-sm tracking-[-0.224px] text-[#e65100]">
-            {t('pages.settings.recoveryNotice')}
-          </section>
+          <Alert variant="warning">{t('pages.settings.recoveryNotice')}</Alert>
         ) : null}
 
         <GeneralPreferencesSection

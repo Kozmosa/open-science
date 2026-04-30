@@ -3,6 +3,9 @@ import { getHealth } from '../api';
 import {
   EnvironmentSelectorPanel,
   HealthStatusBar,
+  PageHeader,
+  SectionCard,
+  SectionHeader,
   TerminalBenchCard,
   useEnvironmentSelection,
 } from '../components';
@@ -15,29 +18,15 @@ function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-          {t('pages.dashboard.eyebrow')}
-        </p>
-        <h1
-          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.dashboard.title')}
-        </h1>
-        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
-          {t('pages.dashboard.description')}
-        </p>
-      </section>
+      <PageHeader
+        eyebrow={t('pages.dashboard.eyebrow')}
+        title={t('pages.dashboard.title')}
+        description={t('pages.dashboard.description')}
+      />
 
-      <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+      <SectionCard>
         <div className="space-y-1">
-          <h2
-            className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            {t('pages.dashboard.surfaceTitle')}
-          </h2>
+          <SectionHeader title={t('pages.dashboard.surfaceTitle')} />
           <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
             {t('pages.dashboard.endpointsLabel')}{' '}
             <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">/health</code>,{' '}
@@ -70,7 +59,7 @@ function DashboardPage() {
         <HealthStatusBar health={healthQuery.data} isLoading={healthQuery.isLoading} />
         <EnvironmentSelectorPanel {...environmentSelection} />
         <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
-      </section>
+      </SectionCard>
     </div>
   );
 }

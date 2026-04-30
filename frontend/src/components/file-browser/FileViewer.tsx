@@ -3,12 +3,12 @@ import type { FileReadResponse } from '../../types';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
-interface FileViewerProps {
+interface Props {
   file: FileReadResponse | null;
   isLoading: boolean;
 }
 
-export default function FileViewer({ file, isLoading }: FileViewerProps) {
+export default function FileViewer({ file, isLoading }: Props) {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">

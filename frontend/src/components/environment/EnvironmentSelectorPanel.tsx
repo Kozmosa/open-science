@@ -1,3 +1,4 @@
+import { Badge, SectionCard, SectionHeader, Select, StatusDot } from '../ui';
 import type { EnvironmentRecord } from '../../types';
 import { useT } from '../../i18n';
 
@@ -23,40 +24,27 @@ function EnvironmentSelectorPanel({
   const t = useT();
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+    <SectionCard>
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-          {t('components.environmentSelector.eyebrow')}
-        </p>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h2
-              className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              {t('components.environmentSelector.title')}
-            </h2>
-            <p className="max-w-xl text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-              {t('components.environmentSelector.description')}
-            </p>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-tertiary)] px-3 py-1.5 text-sm font-medium text-[var(--text)]">
-            {selectedEnvironment ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#34c759]" />
-                <span>{selectedEnvironment.alias}</span>
-                {selectedEnvironment.is_seed ? (
-                  <span className="rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]">
-                    {t('common.default')}
-                  </span>
-                ) : null}
-              </span>
-            ) : (
-              <span className="text-[var(--text-tertiary)]">
-                {t('components.environmentSelector.selectedNone')}
-              </span>
-            )}
-          </div>
+        <SectionHeader
+          title={t('components.environmentSelector.title')}
+          description={t('components.environmentSelector.description')}
+          size="md"
+        />
+        <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-tertiary)] px-3 py-1.5 text-sm font-medium text-[var(--text)]">
+          {selectedEnvironment ? (
+            <span className="inline-flex items-center gap-2">
+              <StatusDot status="success" />
+              <span>{selectedEnvironment.alias}</span>
+              {selectedEnvironment.is_seed ? (
+                <Badge>{t('common.default')}</Badge>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-[var(--text-tertiary)]">
+              {t('components.environmentSelector.selectedNone')}
+            </span>
+          )}
         </div>
       </div>
 
@@ -65,11 +53,11 @@ function EnvironmentSelectorPanel({
           <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('components.environmentSelector.activeLabel')}
           </span>
-          <select
+          <Select
             value={selectedEnvironmentId ?? ''}
             onChange={(event) => onSelectEnvironment(event.target.value)}
             disabled={!hasEnvironments || isLoading}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15 disabled:cursor-not-allowed disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)]"
+            className="disabled:cursor-not-allowed disabled:bg-[var(--bg-tertiary)] disabled:text-[var(--text-tertiary)]"
           >
             {!hasEnvironments ? (
               <option value="">{t('components.environmentSelector.noAvailable')}</option>
@@ -79,7 +67,7 @@ function EnvironmentSelectorPanel({
                 {environment.alias} · {environment.display_name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4">
@@ -132,7 +120,7 @@ function EnvironmentSelectorPanel({
           )}
         </div>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 

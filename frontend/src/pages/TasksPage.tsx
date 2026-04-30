@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { createTask, getTask, getTasks, getWorkspaces } from '../api';
+import { Button } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
 import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
+import { extractErrorMessage } from '../utils/error';
 import type { TaskCreateRequest, TaskSummary } from '../types';
 import TaskCreateForm from './tasks/TaskCreateForm';
 import TaskDetail from './tasks/TaskDetail';
@@ -117,9 +119,9 @@ function TasksPage() {
     };
   }, [environmentSelection.selectedEnvironmentId, settings.projectDefaults.default.environmentDefaults]);
 
-  const createError = createMutation.error instanceof Error ? createMutation.error.message : null;
-  const tasksError = tasksQuery.error instanceof Error ? tasksQuery.error.message : null;
-  const detailError = selectedTaskQuery.error instanceof Error ? selectedTaskQuery.error.message : null;
+  const createError = extractErrorMessage(createMutation.error);
+  const tasksError = extractErrorMessage(tasksQuery.error);
+  const detailError = extractErrorMessage(selectedTaskQuery.error);
 
   const closeCreateDialog = useCallback(() => {
     setCreateDialogOpen(false);
@@ -183,8 +185,8 @@ function TasksPage() {
   }, []);
 
   return (
-    <div className="flex min-h-0 flex-1 bg-[var(--background)] p-4">
-      <div className="flex min-h-0 w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-pane)]">
+    <div className="flex min-h-0 flex-1 bg-[var(--bg)] p-4">
+      <div className="flex min-h-0 w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <aside
           data-testid="task-sidebar"
           className="flex shrink-0 flex-col bg-[var(--sidebar)] p-3"
@@ -192,25 +194,24 @@ function TasksPage() {
         >
           <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
                 {t('pages.tasks.sidebarEyebrow')}
               </p>
               <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
                 {t('pages.tasks.sidebarTitle')}
               </h1>
-              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">
                 {t('pages.tasks.sidebarCount', { count: tasks.length })}
               </p>
             </div>
-            <button
+            <Button
               ref={createButtonRef}
-              type="button"
               onClick={() => setCreateDialogOpen(true)}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[var(--shadow-toolbar)] transition hover:opacity-90"
+              className="inline-flex h-9 items-center gap-2 px-3 shadow-sm"
             >
               <Plus size={15} />
               {t('pages.tasks.newTask')}
-            </button>
+            </Button>
           </div>
 
           <TaskList
@@ -233,12 +234,12 @@ function TasksPage() {
           tabIndex={0}
           onPointerDown={handleSplitterPointerDown}
           onKeyDown={handleSplitterKeyDown}
-          className="group flex w-2 shrink-0 cursor-col-resize items-stretch justify-center bg-[var(--card)] outline-none transition hover:bg-[var(--muted)] focus:bg-[var(--muted)]"
+          className="group flex w-2 shrink-0 cursor-col-resize items-stretch justify-center bg-[var(--surface)] outline-none transition hover:bg-[var(--bg-secondary)] focus:bg-[var(--bg-secondary)]"
         >
-          <span className="my-3 w-px rounded-full bg-[var(--border)] transition group-hover:bg-[var(--accent)] group-focus:bg-[var(--accent)]" />
+          <span className="my-3 w-px rounded-full bg-[var(--border)] transition group-hover:bg-[var(--apple-blue)] group-focus:bg-[var(--apple-blue)]" />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col bg-[var(--background)] p-4">
+        <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] p-4">
           <TaskDetail
             selectedTask={selectedTask}
             detailError={detailError}
@@ -261,7 +262,7 @@ function TasksPage() {
                 closeCreateDialog();
               }
             }}
-            className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl"
           >
             <TaskCreateForm
               key={`${effectiveEnvironmentId}:${draftResetVersion}`}

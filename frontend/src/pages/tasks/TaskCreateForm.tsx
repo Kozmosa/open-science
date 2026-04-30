@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Button, Input, Select, Textarea } from '../../components/ui';
 import { useT } from '../../i18n';
 import type {
   EnvironmentRecord,
@@ -8,7 +9,7 @@ import type {
 } from '../../types';
 import type { ResearchAgentProfileSettings, TaskConfigurationPreset } from '../../settings';
 
-interface TaskCreateFormProps {
+interface Props {
   workspaces: WorkspaceRecord[];
   environments: EnvironmentRecord[];
   selectedWorkspaceId: string;
@@ -47,7 +48,7 @@ export default function TaskCreateForm({
   onSelectEnvironment,
   onSubmit,
   onClose,
-}: TaskCreateFormProps) {
+}: Props) {
   const t = useT();
   const [draft, setDraft] = useState({
     title: draftDefaults.title,
@@ -144,136 +145,131 @@ export default function TaskCreateForm({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-[var(--foreground)]">
+          <h2 className="text-base font-semibold tracking-tight text-[var(--text)]">
             {t('pages.tasks.createTitle')}
           </h2>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             {t('pages.tasks.createDescription')}
           </p>
         </div>
         {onClose ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted-foreground)] transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+            className="h-8 w-8 p-0 inline-flex items-center justify-center rounded-md"
             aria-label={t('pages.tasks.closeCreate')}
           >
             <X size={16} />
-          </button>
+          </Button>
         ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-2">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
             {t('pages.tasks.workspaceLabel')}
           </span>
-          <select
+          <Select
             aria-label={t('pages.tasks.workspaceLabel')}
             value={selectedWorkspaceId}
             onChange={(event) => onSelectWorkspace(event.target.value)}
-            className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
           >
             {workspaces.map((workspace) => (
               <option key={workspace.workspace_id} value={workspace.workspace_id}>
                 {workspace.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="block space-y-2">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
             {t('pages.tasks.environmentLabel')}
           </span>
-          <select
+          <Select
             aria-label={t('pages.tasks.environmentLabel')}
             value={selectedEnvironmentId}
             onChange={(event) => onSelectEnvironment(event.target.value)}
-            className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
           >
             {environments.map((environment) => (
               <option key={environment.id} value={environment.id}>
                 {environment.alias} · {environment.display_name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
       <label className="block space-y-2">
-        <span className="text-xs font-medium text-[var(--muted-foreground)]">
+        <span className="text-xs font-medium text-[var(--text-secondary)]">
           {t('pages.tasks.profileLabel')}
         </span>
-        <select
+        <Select
           aria-label={t('pages.tasks.profileLabel')}
           value={draft.task_profile}
           onChange={(event) =>
             setDraft((current) => ({ ...current, task_profile: event.target.value }))
           }
-          className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
         >
           <option value="claude-code">claude-code</option>
-        </select>
+        </Select>
       </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-2">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
             {t('pages.tasks.researchAgentLabel')}
           </span>
-          <select
+          <Select
             aria-label={t('pages.tasks.researchAgentLabel')}
             value={draft.researchAgentProfileId}
             onChange={(event) =>
               setDraft((current) => ({ ...current, researchAgentProfileId: event.target.value }))
             }
-            className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
           >
             {researchAgentProfiles.map((profile) => (
               <option key={profile.profileId} value={profile.profileId}>
                 {profile.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="block space-y-2">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
             {t('pages.tasks.taskConfigurationLabel')}
           </span>
-          <select
+          <Select
             aria-label={t('pages.tasks.taskConfigurationLabel')}
             value={draft.taskConfigurationId}
             onChange={(event) =>
               setDraft((current) => ({ ...current, taskConfigurationId: event.target.value }))
             }
-            className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
           >
             {taskConfigurations.map((configuration) => (
               <option key={configuration.configId} value={configuration.configId}>
                 {configuration.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
       <label className="block space-y-2">
-        <span className="text-xs font-medium text-[var(--muted-foreground)]">
+        <span className="text-xs font-medium text-[var(--text-secondary)]">
           {t('pages.tasks.titleLabel')}
         </span>
-        <input
+        <Input
           aria-label={t('pages.tasks.titleLabel')}
           value={draft.title}
           onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-          className="h-10 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
           placeholder={t('pages.tasks.optionalPlaceholder')}
         />
       </label>
 
       {selectedTaskConfiguration?.mode === 'structured_research' ? (
-        <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3">
+        <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]/40 p-3">
           {[
             ['researchGoal', 'structuredResearchGoal'],
             ['context', 'structuredResearchContext'],
@@ -282,21 +278,21 @@ export default function TaskCreateForm({
             ['validationPlan', 'structuredResearchValidationPlan'],
           ].map(([field, labelKey]) => (
             <label key={field} className="block space-y-2">
-              <span className="text-xs font-medium text-[var(--muted-foreground)]">
+              <span className="text-xs font-medium text-[var(--text-secondary)]">
                 {t(`pages.tasks.${labelKey}` as Parameters<typeof t>[0])}
               </span>
-              <textarea
+              <Textarea
                 aria-label={t(`pages.tasks.${labelKey}` as Parameters<typeof t>[0])}
                 value={String(draft[field as keyof typeof draft])}
                 onChange={(event) =>
                   setDraft((current) => ({ ...current, [field]: event.target.value }))
                 }
-                className="min-h-20 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 py-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
+                className="min-h-20"
               />
             </label>
           ))}
-          <div className="rounded-lg bg-[var(--background)] p-3 text-xs text-[var(--muted-foreground)]">
-            <p className="mb-2 font-medium text-[var(--foreground)]">
+          <div className="rounded-lg bg-[var(--bg)] p-3 text-xs text-[var(--text-secondary)]">
+            <p className="mb-2 font-medium text-[var(--text)]">
               {t('pages.tasks.generatedPromptPreview')}
             </p>
             <pre className="whitespace-pre-wrap font-mono">{structuredPrompt}</pre>
@@ -304,36 +300,36 @@ export default function TaskCreateForm({
         </div>
       ) : (
         <label className="block space-y-2">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
             {t('pages.tasks.taskInputLabel')}
           </span>
-          <textarea
+          <Textarea
             ref={taskInputRef}
             aria-label={t('pages.tasks.taskInputLabel')}
             value={draft.task_input}
             onChange={(event) =>
               setDraft((current) => ({ ...current, task_input: event.target.value }))
             }
-            className="min-h-44 w-full rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 py-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring)]"
+            className="min-h-44"
             placeholder={t('pages.tasks.taskInputPlaceholder')}
           />
         </label>
       )}
 
       {selectedWorkspace ? (
-        <p className="rounded-lg bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+        <p className="rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
           {t('pages.tasks.defaultWorkdir')}{' '}
-          <code className="rounded bg-[var(--code-background)] px-1.5 py-0.5 text-[var(--code-foreground)]">
+          <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-[var(--text)]">
             {selectedWorkspace.default_workdir ?? t('pages.tasks.unavailable')}
           </code>
         </p>
       ) : null}
-      {createError ? <p className="text-sm text-[var(--destructive)]">{createError}</p> : null}
+      {createError ? <p className="text-sm text-[#ff3b30]">{createError}</p> : null}
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[var(--border)] pt-4">
-        <button
+        <Button
           type="button"
-          className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--muted)]"
+          variant="secondary"
           onClick={() =>
             setDraft({
               title: draftDefaults.title,
@@ -350,15 +346,11 @@ export default function TaskCreateForm({
           }
         >
           {t('pages.tasks.resetDraft')}
-        </button>
+        </Button>
 
-        <button
-          type="submit"
-          disabled={!canCreate}
-          className="rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
+        <Button type="submit" disabled={!canCreate}>
           {isSubmitting ? t('pages.tasks.creatingAction') : t('pages.tasks.createAction')}
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -1,3 +1,4 @@
+import { PageHeader } from '../components';
 import { useT } from '../i18n';
 import WorkspaceManagerCard from './workspaces/WorkspaceManagerCard';
 
@@ -6,20 +7,11 @@ function WorkspacesPage() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-          {t('pages.workspaces.eyebrow')}
-        </p>
-        <h1
-          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.workspaces.title')}
-        </h1>
-        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
-          {t('pages.workspaces.description')}
-        </p>
-      </section>
+      <PageHeader
+        eyebrow={t('pages.workspaces.eyebrow')}
+        title={t('pages.workspaces.title')}
+        description={t('pages.workspaces.description')}
+      />
 
       <WorkspaceManagerCard />
     </div>

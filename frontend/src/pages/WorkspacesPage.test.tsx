@@ -20,6 +20,12 @@ vi.mock('../api', () => ({
 vi.mock('../components', () => ({
   CodeServerCard: () => <div data-testid="code-server-card" />,
   EnvironmentSelectorPanel: () => <div data-testid="environment-selector" />,
+  PageHeader: ({ eyebrow, title }: { eyebrow: string; title: string }) => (
+    <div>
+      <p>{eyebrow}</p>
+      <h1>{title}</h1>
+    </div>
+  ),
   useEnvironmentSelection: () => ({
     selectedEnvironment: null,
     selectedEnvironmentId: null,

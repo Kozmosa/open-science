@@ -33,6 +33,12 @@ const selectedEnvironment: EnvironmentRecord = {
 vi.mock('../components', () => ({
   EnvironmentSelectorPanel: () => <div data-testid="environment-selector" />,
   TerminalBenchCard: () => <div data-testid="terminal-bench-card" />,
+  PageHeader: ({ eyebrow, title }: { eyebrow: string; title: string }) => (
+    <div>
+      <p>{eyebrow}</p>
+      <h1>{title}</h1>
+    </div>
+  ),
   useEnvironmentSelection: () => ({
     selectedEnvironment,
     selectedEnvironmentId: selectedEnvironment.id,

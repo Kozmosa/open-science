@@ -1,6 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
 import {
+  Alert,
+  Badge,
+  Button,
+  FormField,
+  Input,
+  PageHeader,
+  SectionCard,
+  SectionHeader,
+  Select,
+  Textarea,
+} from '../components/ui';
+import {
   createProjectEnvironmentReference,
   createEnvironment,
   deleteProjectEnvironmentReference,
@@ -113,21 +125,12 @@ function EnvironmentEditor({
   };
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-          {t('components.environmentEditor.eyebrow')}
-        </p>
-        <h2
-          className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {title}
-        </h2>
-        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-          {t('components.environmentEditor.description')}
-        </p>
-      </div>
+    <SectionCard>
+      <SectionHeader
+        eyebrow={t('components.environmentEditor.eyebrow')}
+        title={title}
+        description={t('components.environmentEditor.description')}
+      />
 
       {activeEnvironment ? (
         <div
@@ -146,261 +149,184 @@ function EnvironmentEditor({
 
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.alias')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.alias')}>
+            <Input
               required
               value={values.alias}
               onChange={(event) => updateField('alias', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.alias}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.displayName')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.displayName')}>
+            <Input
               required
               value={values.display_name}
               onChange={(event) => updateField('display_name', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.displayName}
             />
-          </label>
+          </FormField>
         </div>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('components.environmentEditor.descriptionField')}
-          </span>
-          <textarea
+        <FormField label={t('components.environmentEditor.descriptionField')}>
+          <Textarea
             value={values.description}
             onChange={(event) => updateField('description', event.target.value)}
             rows={3}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.description}
           />
-        </label>
+        </FormField>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.host')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.host')}>
+            <Input
               required
               value={values.host}
               onChange={(event) => updateField('host', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.host}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.port')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.port')}>
+            <Input
               required
               type="number"
               min={1}
               max={65535}
               value={values.port}
               onChange={(event) => updateField('port', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.port}
             />
-          </label>
+          </FormField>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.user')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.user')}>
+            <Input
               value={values.user}
               onChange={(event) => updateField('user', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.user}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.authKindLabel')}
-            </span>
-            <select
+          <FormField label={t('components.environmentEditor.authKindLabel')}>
+            <Select
               value={values.auth_kind}
               onChange={(event) => updateField('auth_kind', event.target.value as EnvironmentAuthKind)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             >
               <option value="ssh_key">{authKindLabels.ssh_key}</option>
               <option value="password">{authKindLabels.password}</option>
               <option value="agent">{authKindLabels.agent}</option>
-            </select>
-          </label>
+            </Select>
+          </FormField>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.identityFile')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.identityFile')}>
+            <Input
               value={values.identity_file}
               onChange={(event) => updateField('identity_file', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.identityFile}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.proxyJump')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.proxyJump')}>
+            <Input
               value={values.proxy_jump}
               onChange={(event) => updateField('proxy_jump', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.proxyJump}
             />
-          </label>
+          </FormField>
         </div>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('components.environmentEditor.proxyCommand')}
-          </span>
-          <input
+        <FormField label={t('components.environmentEditor.proxyCommand')}>
+          <Input
             value={values.proxy_command}
             onChange={(event) => updateField('proxy_command', event.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.proxyCommand}
           />
-        </label>
+        </FormField>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.tags')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.tags')}>
+            <Input
               value={values.tags}
               onChange={(event) => updateField('tags', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.tags}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.defaultWorkdir')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.defaultWorkdir')}>
+            <Input
               value={values.default_workdir}
               onChange={(event) => updateField('default_workdir', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.defaultWorkdir}
             />
-          </label>
+          </FormField>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.preferredPython')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.preferredPython')}>
+            <Input
               value={values.preferred_python}
               onChange={(event) => updateField('preferred_python', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.preferredPython}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('components.environmentEditor.preferredEnvManager')}
-            </span>
-            <input
+          <FormField label={t('components.environmentEditor.preferredEnvManager')}>
+            <Input
               value={values.preferred_env_manager}
               onChange={(event) => updateField('preferred_env_manager', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={placeholders.preferredEnvManager}
             />
-          </label>
+          </FormField>
         </div>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('components.environmentEditor.preferredRuntimeNotes')}
-          </span>
-          <textarea
+        <FormField label={t('components.environmentEditor.preferredRuntimeNotes')}>
+          <Textarea
             value={values.preferred_runtime_notes}
             onChange={(event) => updateField('preferred_runtime_notes', event.target.value)}
             rows={3}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.preferredRuntimeNotes}
           />
-        </label>
+        </FormField>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            Task harness profile
-          </span>
-          <textarea
+        <FormField label="Task harness profile">
+          <Textarea
             value={values.task_harness_profile}
             onChange={(event) => updateField('task_harness_profile', event.target.value)}
             rows={5}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={placeholders.taskHarnessProfile}
           />
-        </label>
+        </FormField>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('components.environmentEditor.sshOptionsJson')}
-          </span>
-          <textarea
+        <FormField label={t('components.environmentEditor.sshOptionsJson')}>
+          <Textarea
             value={values.ssh_options}
             onChange={(event) => updateField('ssh_options', event.target.value)}
             rows={4}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 font-mono text-sm tracking-[-0.12px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+            className="font-mono text-sm tracking-[-0.12px]"
             placeholder={placeholders.sshOptionsJson}
           />
-        </label>
+        </FormField>
 
         {formError ? (
-          <p className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-3 py-2 text-sm text-[#c62828]">
-            {formError}
-          </p>
+          <Alert variant="error">{formError}</Alert>
         ) : null}
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <Button type="submit" disabled={isSaving}>
             {isSaving ? t('components.environmentEditor.saving') : submitLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
-          >
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>
             {mode === 'create'
               ? t('components.environmentEditor.reset')
               : t('components.environmentEditor.cancelEdit')}
-          </button>
+          </Button>
         </div>
       </form>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -437,37 +363,25 @@ function ProjectReferenceEditor({
 
   if (selectedEnvironment === null) {
     return (
-      <section className="space-y-4 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
-        <div className="space-y-1">
-          <h2
-            className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            {t('pages.containers.projectReferenceTitle')}
-          </h2>
-          <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-            {t('pages.containers.projectReferenceDescription')}
-          </p>
-        </div>
+      <SectionCard>
+        <SectionHeader
+          title={t('pages.containers.projectReferenceTitle')}
+          description={t('pages.containers.projectReferenceDescription')}
+        />
         <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
           {t('pages.containers.projectReferenceNoSelection')}
         </p>
-      </section>
+      </SectionCard>
     );
   }
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+    <SectionCard>
       <div className="space-y-1">
-        <h2
-          className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.containers.projectReferenceTitle')}
-        </h2>
-        <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-          {t('pages.containers.projectReferenceDescription')}
-        </p>
+        <SectionHeader
+          title={t('pages.containers.projectReferenceTitle')}
+          description={t('pages.containers.projectReferenceDescription')}
+        />
         <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
           <span className="font-medium text-[var(--text)]">{selectedEnvironment.alias}</span>
           <span className="ml-2 text-[var(--text-tertiary)]">({selectedEnvironment.display_name})</span>
@@ -476,24 +390,17 @@ function ProjectReferenceEditor({
 
       <div className="flex flex-wrap gap-2">
         {projectReference ? (
-          <span className="rounded-full bg-[var(--apple-blue)]/10 px-3 py-1 text-xs font-semibold text-[var(--apple-blue)]">
-            {t('pages.containers.projectReferencedBadge')}
-          </span>
+          <Badge>{t('pages.containers.projectReferencedBadge')}</Badge>
         ) : (
-          <span className="rounded-full bg-[var(--bg-secondary)] px-3 py-1 text-xs font-semibold text-[var(--text-tertiary)]">
-            {t('pages.containers.projectUnreferencedBadge')}
-          </span>
+          <Badge variant="secondary">{t('pages.containers.projectUnreferencedBadge')}</Badge>
         )}
         {projectReference?.is_default ? (
-          <span className="rounded-full bg-[var(--apple-blue)]/10 px-3 py-1 text-xs font-semibold text-[var(--apple-blue)]">
-            {t('pages.containers.projectDefaultBadge')}
-          </span>
+          <Badge>{t('pages.containers.projectDefaultBadge')}</Badge>
         ) : null}
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
+        <Button
           onClick={async () => {
             try {
               setFormError(null);
@@ -505,15 +412,14 @@ function ProjectReferenceEditor({
             }
           }}
           disabled={isSaving || isRemoving || projectReference?.is_default === true}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {projectReference?.is_default
             ? t('pages.containers.setProjectDefaultDisabled')
             : t('pages.containers.setProjectDefault')}
-        </button>
+        </Button>
         {projectReference?.is_default ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={async () => {
               try {
                 setFormError(null);
@@ -525,14 +431,13 @@ function ProjectReferenceEditor({
               }
             }}
             disabled={isSaving || isRemoving}
-            className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('pages.containers.clearProjectDefault')}
-          </button>
+          </Button>
         ) : null}
         {projectReference ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={async () => {
               try {
                 setFormError(null);
@@ -544,10 +449,10 @@ function ProjectReferenceEditor({
               }
             }}
             disabled={isSaving || isRemoving}
-            className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-4 py-2 text-sm font-medium text-[#c62828] transition hover:bg-[#ffcdd2] disabled:cursor-not-allowed disabled:opacity-40"
+            className="border-[#ff3b30]/20 bg-[#ffebee] text-[#c62828] hover:bg-[#ffcdd2] hover:text-[#c62828]"
           >
             {t('pages.containers.removeProjectReference')}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -565,76 +470,54 @@ function ProjectReferenceEditor({
           }
         }}
       >
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.containers.projectOverrideWorkdir')}
-          </span>
-          <input
+        <FormField label={t('pages.containers.projectOverrideWorkdir')}>
+          <Input
             value={values.override_workdir}
             onChange={(event) => updateField('override_workdir', event.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={t('pages.containers.projectOverrideWorkdirPlaceholder')}
           />
-        </label>
+        </FormField>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('pages.containers.projectOverrideEnvName')}
-            </span>
-            <input
+          <FormField label={t('pages.containers.projectOverrideEnvName')}>
+            <Input
               value={values.override_env_name}
               onChange={(event) => updateField('override_env_name', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={t('pages.containers.projectOverrideEnvNamePlaceholder')}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-              {t('pages.containers.projectOverrideEnvManager')}
-            </span>
-            <input
+          <FormField label={t('pages.containers.projectOverrideEnvManager')}>
+            <Input
               value={values.override_env_manager}
               onChange={(event) => updateField('override_env_manager', event.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
               placeholder={t('pages.containers.projectOverrideEnvManagerPlaceholder')}
             />
-          </label>
+          </FormField>
         </div>
 
-        <label className="space-y-2">
-          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.containers.projectOverrideRuntimeNotes')}
-          </span>
-          <textarea
+        <FormField label={t('pages.containers.projectOverrideRuntimeNotes')}>
+          <Textarea
             value={values.override_runtime_notes}
             onChange={(event) => updateField('override_runtime_notes', event.target.value)}
             rows={4}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
             placeholder={t('pages.containers.projectOverrideRuntimeNotesPlaceholder')}
           />
-        </label>
+        </FormField>
 
         {formError ? (
-          <p className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-3 py-2 text-sm text-[#c62828]">
-            {formError}
-          </p>
+          <Alert variant="error">{formError}</Alert>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={isSaving || isRemoving}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
-        >
+        <Button type="submit" disabled={isSaving || isRemoving}>
           {isSaving
             ? t('pages.containers.projectReferenceSaving')
             : projectReference
               ? t('pages.containers.updateProjectReference')
               : t('pages.containers.attachProjectReference')}
-        </button>
+        </Button>
       </form>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -824,22 +707,13 @@ function ContainersPage() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-          {t('pages.containers.eyebrow')}
-        </p>
-        <h1
-          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.containers.title')}
-        </h1>
-        <p className="max-w-3xl text-base leading-relaxed tracking-[-0.374px] text-[var(--text-secondary)]">
-          {t('pages.containers.description')}
-        </p>
-      </section>
+      <PageHeader
+        eyebrow={t('pages.containers.eyebrow')}
+        title={t('pages.containers.title')}
+        description={t('pages.containers.description')}
+      />
 
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--surface)] p-5 shadow-sm">
+      <SectionCard className="flex flex-wrap items-center justify-between gap-3 p-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
             {t('pages.containers.currentSelection')}
@@ -848,28 +722,17 @@ function ContainersPage() {
             {activeEnvironmentSummary}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleCreate}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)]"
-        >
+        <Button onClick={handleCreate}>
           {t('pages.containers.addEnvironment')}
-        </button>
-      </section>
+        </Button>
+      </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <section className="space-y-4 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
-          <div className="space-y-1">
-            <h2
-              className="text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              {t('pages.containers.listTitle')}
-            </h2>
-            <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-              {t('pages.containers.listDescription')}
-            </p>
-          </div>
+        <SectionCard className="space-y-4">
+          <SectionHeader
+            title={t('pages.containers.listTitle')}
+            description={t('pages.containers.listDescription')}
+          />
 
           {environmentSelection.isLoading ? (
             <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
@@ -877,8 +740,8 @@ function ContainersPage() {
             </p>
           ) : null}
 
-          {requestError ? <p className="text-sm text-[#ff3b30]">{requestError}</p> : null}
-          {mutationError ? <p className="text-sm text-[#ff3b30]">{mutationError}</p> : null}
+          {requestError ? <Alert variant="error">{requestError}</Alert> : null}
+          {mutationError ? <Alert variant="error">{mutationError}</Alert> : null}
 
           {!environmentSelection.isLoading && environments.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-6 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
@@ -927,24 +790,18 @@ function ContainersPage() {
                             <p className="font-medium text-[var(--text)]">
                               {environment.display_name}
                               {environment.is_seed ? (
-                                <span className="ml-2 rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]">
-                                  {t('common.default')}
-                                </span>
+                                <Badge className="ml-2">{t('common.default')}</Badge>
                               ) : null}
                               {projectReference ? (
-                                <span className="ml-2 rounded-full bg-[var(--bg-secondary)] px-2 py-0.5 text-xs font-semibold text-[var(--text-tertiary)]">
+                                <Badge variant="secondary" className="ml-2">
                                   {t('pages.containers.projectReferencedBadge')}
-                                </span>
+                                </Badge>
                               ) : null}
                               {projectReference?.is_default ? (
-                                <span className="ml-2 rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]">
-                                  {t('pages.containers.projectDefaultBadge')}
-                                </span>
+                                <Badge className="ml-2">{t('pages.containers.projectDefaultBadge')}</Badge>
                               ) : null}
                               {isActive ? (
-                                <span className="ml-2 rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]">
-                                  {t('pages.containers.activeBadge')}
-                                </span>
+                                <Badge className="ml-2">{t('pages.containers.activeBadge')}</Badge>
                               ) : null}
                             </p>
                             <p className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
@@ -996,35 +853,37 @@ function ContainersPage() {
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => environmentSelection.onSelectEnvironment(environment.id)}
-                              className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
                             >
                               {t('common.use')}
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => {
                                 setEditorMode('edit');
                                 setEditorEnvironmentId(environment.id);
                               }}
-                              className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
                             >
                               {t('common.edit')}
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => {
                                 detectMutation.mutate(environment.id);
                               }}
                               disabled={detectMutation.isPending}
-                              className="rounded-lg border border-[var(--apple-blue)]/20 bg-[var(--apple-blue)]/10 px-3 py-1.5 text-xs font-medium text-[var(--apple-blue)] transition hover:bg-[var(--apple-blue)]/15 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="border-[var(--apple-blue)]/20 bg-[var(--apple-blue)]/10 text-[var(--apple-blue)] hover:bg-[var(--apple-blue)]/15 hover:text-[var(--apple-blue)]"
                             >
                               {t('common.detect')}
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => {
                                 if (
                                   window.confirm(
@@ -1040,10 +899,10 @@ function ContainersPage() {
                                   ? t('pages.containers.defaultEnvironmentLocked')
                                   : undefined
                               }
-                              className="rounded-lg border border-[#ff3b30]/20 bg-[#ffebee] px-3 py-1.5 text-xs font-medium text-[#c62828] transition hover:bg-[#ffcdd2] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="border-[#ff3b30]/20 bg-[#ffebee] text-[#c62828] hover:bg-[#ffcdd2] hover:text-[#c62828]"
                             >
                               {t('common.delete')}
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -1053,7 +912,7 @@ function ContainersPage() {
               </table>
             </div>
           ) : null}
-        </section>
+        </SectionCard>
 
         <div className="space-y-6">
           <EnvironmentEditor

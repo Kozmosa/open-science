@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from '../../api';
 import { useT } from '../../i18n';
 import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '../../types';
+import { SectionCard, SectionHeader, Button, FormField, Input, Textarea, Alert } from '../../components/ui';
 
 interface WorkspaceDraft {
   label: string;
@@ -106,36 +107,27 @@ export default function WorkspaceManagerCard() {
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+    <SectionCard>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2
-            className="text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            {t('pages.workspaces.managerTitle')}
-          </h2>
-          <p className="text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-            {t('pages.workspaces.managerDescription')}
-          </p>
-        </div>
-        <button
-          type="button"
+        <SectionHeader
+          title={t('pages.workspaces.managerTitle')}
+          description={t('pages.workspaces.managerDescription')}
+        />
+        <Button
           onClick={() => {
             setIsCreating(true);
             setSelectedWorkspaceId(null);
           }}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)]"
         >
           {t('pages.workspaces.newWorkspace')}
-        </button>
+        </Button>
       </div>
 
       {workspacesQuery.isLoading ? (
         <p className="text-sm text-[var(--text-tertiary)]">{t('common.loading')}</p>
       ) : null}
       {workspacesQuery.error instanceof Error ? (
-        <p className="text-sm text-[#ff3b30]">{workspacesQuery.error.message}</p>
+        <Alert variant="error">{workspacesQuery.error.message}</Alert>
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(220px,320px)_1fr]">
@@ -179,93 +171,75 @@ export default function WorkspaceManagerCard() {
             }
           }}
         >
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-[var(--text)]">
-              {t('pages.workspaces.labelField')}
-            </span>
-            <input
+          <FormField label={t('pages.workspaces.labelField')}>
+            <Input
               aria-label={t('pages.workspaces.labelField')}
               required
               value={draft.label}
               onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:border-[var(--apple-blue)]"
             />
-          </label>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-[var(--text)]">
-              {t('pages.workspaces.descriptionField')}
-            </span>
-            <input
+          </FormField>
+          <FormField label={t('pages.workspaces.descriptionField')}>
+            <Input
               aria-label={t('pages.workspaces.descriptionField')}
               value={draft.description}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, description: event.target.value }))
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:border-[var(--apple-blue)]"
             />
-          </label>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-[var(--text)]">
-              {t('pages.workspaces.defaultWorkdirField')}
-            </span>
-            <input
+          </FormField>
+          <FormField label={t('pages.workspaces.defaultWorkdirField')}>
+            <Input
               aria-label={t('pages.workspaces.defaultWorkdirField')}
               value={draft.default_workdir}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, default_workdir: event.target.value }))
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:border-[var(--apple-blue)]"
             />
-          </label>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-[var(--text)]">
-              {t('pages.workspaces.promptField')}
-            </span>
-            <textarea
+          </FormField>
+          <FormField label={t('pages.workspaces.promptField')}>
+            <Textarea
               aria-label={t('pages.workspaces.promptField')}
               required
               value={draft.workspace_prompt}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, workspace_prompt: event.target.value }))
               }
-              className="min-h-32 w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:border-[var(--apple-blue)]"
+              className="min-h-32"
             />
-          </label>
+          </FormField>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-3">
               {!isCreating && canDelete ? (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => setIsConfirmingDelete((current) => !current)}
-                  className="rounded-lg border border-[#ff3b30]/40 bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[#ff3b30] transition hover:bg-[#ff3b30]/10"
+                  className="border-[#ff3b30]/40 text-[#ff3b30] hover:bg-[#ff3b30]/10 hover:text-[#ff3b30]"
                 >
                   {t('pages.workspaces.deleteWorkspace')}
-                </button>
+                </Button>
               ) : null}
               {isConfirmingDelete && selectedWorkspace ? (
-                <button
+                <Button
                   type="button"
+                  variant="danger"
                   onClick={() => deleteMutation.mutate(selectedWorkspace.workspace_id)}
                   disabled={isBusy}
-                  className="rounded-lg bg-[#ff3b30] px-4 py-2 text-sm font-medium text-white transition disabled:opacity-40"
                 >
                   {t('pages.workspaces.confirmDelete')}
-                </button>
+                </Button>
               ) : null}
             </div>
-            <button
-              type="submit"
-              disabled={isBusy}
-              className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:opacity-40"
-            >
+            <Button type="submit" disabled={isBusy}>
               {isCreating
                 ? t('pages.workspaces.createWorkspace')
                 : t('pages.workspaces.saveWorkspace')}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
-    </section>
+    </SectionCard>
   );
 }

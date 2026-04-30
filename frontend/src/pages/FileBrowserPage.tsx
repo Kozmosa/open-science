@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { FolderOpen, RefreshCw } from 'lucide-react';
 import { listFiles, readFile } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
-import { useEnvironmentSelection } from '../components';
+import { PageHeader, useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
 import type { FileEntry, FileReadResponse } from '../types';
 
@@ -67,17 +67,10 @@ export default function FileBrowserPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
-      <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-          {t('pages.workspaceBrowser.eyebrow')}
-        </p>
-        <h1
-          className="text-[28px] font-normal leading-tight tracking-[0.196px] text-[var(--text)]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {t('pages.workspaceBrowser.title')}
-        </h1>
-      </section>
+      <PageHeader
+        eyebrow={t('pages.workspaceBrowser.eyebrow')}
+        title={t('pages.workspaceBrowser.title')}
+      />
 
       {!selectedEnvironment ? (
         <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-secondary)]">

@@ -1,3 +1,4 @@
+import { Button, SectionCard, SectionHeader, StatusDot } from '../ui';
 import TerminalSessionConsole from './TerminalSessionConsole';
 import type { TerminalSessionStatus } from '../../types';
 import { useT } from '../../i18n';
@@ -55,65 +56,56 @@ function TerminalBenchCardView({
   };
   const hasRuntimeError = loadError !== null || detail !== null;
 
-  const statusColor =
-    status === 'running'
-      ? 'bg-[#34c759]'
-      : status === 'failed'
-        ? 'bg-[#ff3b30]'
-        : status === 'starting' || status === 'stopping'
-          ? 'bg-[#ff9500]'
-          : 'bg-[var(--text-tertiary)]';
+  const statusMap: Record<TerminalSessionStatus, 'success' | 'error' | 'warning' | 'idle'> = {
+    idle: 'idle',
+    starting: 'warning',
+    running: 'success',
+    stopping: 'warning',
+    failed: 'error',
+  };
 
   return (
-    <section className="space-y-5 rounded-xl bg-[var(--surface)] p-6 shadow-sm">
+    <SectionCard>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-              {t('components.terminalBench.eyebrow')}
-            </p>
-            <h2
-              className="mt-1 text-xl font-semibold leading-tight tracking-[0.231px] text-[var(--text)]"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              {t('components.terminalBench.title')}
-            </h2>
-          </div>
+          <SectionHeader
+            eyebrow={t('components.terminalBench.eyebrow')}
+            title={t('components.terminalBench.title')}
+            description={t('components.terminalBench.description')}
+            size="md"
+          />
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-tertiary)] px-3 py-1.5 text-sm font-medium text-[var(--text)]">
-            <span className={`h-2 w-2 rounded-full ${statusColor}`} />
+            <StatusDot status={statusMap[status]} />
             {t('components.terminalBench.statusPrefix')} {statusLabel[status]}
           </div>
         </div>
-        <p className="max-w-3xl text-sm leading-relaxed tracking-[-0.224px] text-[var(--text-secondary)]">
-          {t('components.terminalBench.description')}
-        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={onAttach}
           disabled={!canAttach}
-          className="rounded-lg bg-[var(--apple-blue)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--apple-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+          isLoading={isAttaching}
         >
           {isAttaching ? t('components.terminalBench.attaching') : t('components.terminalBench.attach')}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={onDetach}
           disabled={!canDetach}
-          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+          isLoading={isDetaching}
         >
           {isDetaching ? t('components.terminalBench.detaching') : t('components.terminalBench.detach')}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={onReset}
           disabled={!canReset}
-          className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+          isLoading={isResetting}
         >
           {isResetting ? t('components.terminalBench.resetting') : t('components.terminalBench.resetSession')}
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4">
@@ -172,7 +164,7 @@ function TerminalBenchCardView({
         status={status}
         onDisconnected={onTerminalDisconnected}
       />
-    </section>
+    </SectionCard>
   );
 }
 

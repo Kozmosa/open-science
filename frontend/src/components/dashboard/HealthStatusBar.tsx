@@ -1,17 +1,10 @@
+import { Alert, StatusDot } from '../ui';
 import type { SystemHealth } from '../../types';
 import { useT } from '../../i18n';
 
 interface Props {
   health: SystemHealth | undefined;
   isLoading: boolean;
-}
-
-function StatusDot({ active }: { active: boolean; color?: string }) {
-  return (
-    <span
-      className={`inline-block h-2 w-2 rounded-full ${active ? 'bg-[#34c759]' : 'bg-[#ff3b30]'}`}
-    />
-  );
 }
 
 function StatusItem({
@@ -25,7 +18,7 @@ function StatusItem({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <StatusDot active={active} />
+      <StatusDot status={active ? 'success' : 'error'} />
       <span className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
         {label} <span className="font-medium text-[var(--text)]">{text}</span>
       </span>
@@ -46,10 +39,12 @@ function HealthStatusBar({ health, isLoading }: Props) {
 
   if (!health) {
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-[#ffebee] px-4 py-3 text-sm text-[#c62828]">
-        <span className="inline-block h-2 w-2 rounded-full bg-[#ff3b30]" />
-        {t('components.healthStatusBar.unable')}
-      </div>
+      <Alert variant="error">
+        <div className="flex items-center gap-2">
+          <StatusDot status="error" />
+          {t('components.healthStatusBar.unable')}
+        </div>
+      </Alert>
     );
   }
 

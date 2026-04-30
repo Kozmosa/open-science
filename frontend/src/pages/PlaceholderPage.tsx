@@ -1,11 +1,11 @@
-interface PlaceholderPageProps {
+interface Props {
   eyebrow: string;
   title: string;
   description: string;
   badgeLabel: string;
 }
 
-function PlaceholderPage({ eyebrow, title, description, badgeLabel }: PlaceholderPageProps) {
+function PlaceholderPage({ eyebrow, title, description, badgeLabel }: Props) {
   return (
     <div className="px-4 py-8 sm:px-6 lg:px-8">
       <section className="rounded-2xl border border-dashed border-gray-300 bg-white/80 p-8 shadow-sm">
