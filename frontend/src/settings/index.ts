@@ -1,17 +1,22 @@
 export {
+  clampEditorFontSize,
   clampTerminalFontSize,
   createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
   createEmptyEnvironmentTaskDefaults,
+  defaultEditorFontFamily,
+  defaultEditorFontSize,
   defaultResearchAgentProfileId,
   defaultTerminalFontSize,
+  maxEditorFontSize,
   maxTerminalFontSize,
+  minEditorFontSize,
   minTerminalFontSize,
   rawPromptTaskConfigurationId,
   settingsStorageKey,
   structuredResearchTaskConfigurationId,
 } from './defaults';
-export { SettingsProvider, useSettings, useTerminalFontSize } from './context';
+export { SettingsProvider, useEditorSettings, useSettings, useTerminalFontSize } from './context';
 export { readStoredSettings, resolveProjectEnvironmentDefaults } from './storage';
 export type {
   DefaultRoute,

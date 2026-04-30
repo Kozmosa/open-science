@@ -1,7 +1,31 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { FileReadResponse } from '../../types';
+import { useEditorSettings } from '../../settings';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
+
+function useSystemColorScheme(): 'light' | 'dark' {
+  const [scheme, setScheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return 'light';
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return;
+    }
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (event: MediaQueryListEvent) => {
+      setScheme(event.matches ? 'dark' : 'light');
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  return scheme;
+}
 
 interface Props {
   file: FileReadResponse | null;
@@ -9,6 +33,9 @@ interface Props {
 }
 
 export default function FileViewer({ file, isLoading }: Props) {
+  const colorScheme = useSystemColorScheme();
+  const editorSettings = useEditorSettings();
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
@@ -63,11 +90,13 @@ export default function FileViewer({ file, isLoading }: Props) {
           height="100%"
           language={file.language || 'plaintext'}
           value={file.content}
+          theme={colorScheme === 'dark' ? 'vs-dark' : 'vs'}
           options={{
             readOnly: true,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
-            fontSize: 13,
+            fontSize: editorSettings.fontSize,
+            fontFamily: editorSettings.fontFamily,
             wordWrap: 'on',
           }}
         />

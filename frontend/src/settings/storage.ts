@@ -1,9 +1,11 @@
 import {
+  clampEditorFontSize,
   clampTerminalFontSize,
   createDefaultProjectSettings,
   createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
   createEmptyEnvironmentTaskDefaults,
+  defaultEditorFontFamily,
   defaultResearchAgentProfileId,
   isDefaultRoute,
   rawPromptTaskConfigurationId,
@@ -259,7 +261,13 @@ export function readStoredSettings(): SettingsLoadResult {
     ? general.defaultRoute
     : defaults.general.defaultRoute;
   const terminalSettings = isRecord(general.terminal) ? general.terminal : null;
-  const fontSize = clampTerminalFontSize(terminalSettings?.fontSize);
+  const terminalFontSize = clampTerminalFontSize(terminalSettings?.fontSize);
+  const editorSettings = isRecord(general.editor) ? general.editor : null;
+  const editorFontSize = clampEditorFontSize(editorSettings?.fontSize);
+  const editorFontFamily =
+    typeof editorSettings?.fontFamily === 'string' && editorSettings.fontFamily.length > 0
+      ? editorSettings.fontFamily
+      : defaultEditorFontFamily;
 
   const missingDefaultRoute = general.defaultRoute === undefined;
   const invalidDefaultRoute = general.defaultRoute !== undefined && !isDefaultRoute(general.defaultRoute);
@@ -267,6 +275,11 @@ export function readStoredSettings(): SettingsLoadResult {
   const invalidTerminalFontSize =
     terminalSettings?.fontSize !== undefined &&
     clampTerminalFontSize(terminalSettings.fontSize) !== terminalSettings.fontSize;
+  const missingEditorSettings =
+    parsed.version === 2 && (editorSettings === null || editorSettings.fontSize === undefined);
+  const invalidEditorFontSize =
+    editorSettings?.fontSize !== undefined &&
+    clampEditorFontSize(editorSettings.fontSize) !== editorSettings.fontSize;
 
   return {
     settings: {
@@ -274,7 +287,11 @@ export function readStoredSettings(): SettingsLoadResult {
       general: {
         defaultRoute,
         terminal: {
-          fontSize,
+          fontSize: terminalFontSize,
+        },
+        editor: {
+          fontSize: editorFontSize,
+          fontFamily: editorFontFamily,
         },
       },
       taskConfiguration,
@@ -288,7 +305,9 @@ export function readStoredSettings(): SettingsLoadResult {
       missingDefaultRoute ||
       invalidDefaultRoute ||
       missingTerminalSettings ||
-      invalidTerminalFontSize
+      invalidTerminalFontSize ||
+      missingEditorSettings ||
+      invalidEditorFontSize
         ? 'invalid_document'
         : null,
   };

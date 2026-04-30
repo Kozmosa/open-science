@@ -254,6 +254,10 @@ export const messages = {
           terminalFontSizeLabel: 'Terminal font size',
           terminalFontSizeHelp:
             'Font size is clamped to a stable range of {{min}}-{{max}} px. Current save value: {{current}} px.',
+          editorFontSizeLabel: 'Editor font size',
+          editorFontFamilyLabel: 'Editor font family',
+          editorFontSizeHelp:
+            'Editor font size is clamped to {{min}}-{{max}} px. Current save value: {{current}} px.',
         },
         codeServerInstall: {
           title: 'Code-server installer',
@@ -740,6 +744,10 @@ export const messages = {
           terminalFontSizeLabel: '终端字号',
           terminalFontSizeHelp:
             '字号会被限制在稳定区间 {{min}}-{{max}} px，当前保存值为 {{current}} px。',
+          editorFontSizeLabel: '编辑器字号',
+          editorFontFamilyLabel: '编辑器字体',
+          editorFontSizeHelp:
+            '编辑器字号会被限制在 {{min}}-{{max}} px，当前保存值为 {{current}} px。',
         },
         codeServerInstall: {
           title: 'code-server 安装器',

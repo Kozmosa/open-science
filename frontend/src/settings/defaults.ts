@@ -12,6 +12,10 @@ export const settingsStorageKey = 'scholar-agent:webui-settings';
 export const defaultTerminalFontSize = 13;
 export const minTerminalFontSize = 11;
 export const maxTerminalFontSize = 18;
+export const defaultEditorFontSize = 14;
+export const minEditorFontSize = 10;
+export const maxEditorFontSize = 24;
+export const defaultEditorFontFamily = 'monospace';
 export const defaultResearchAgentProfileId = 'claude-code-default';
 export const rawPromptTaskConfigurationId = 'raw-prompt';
 export const structuredResearchTaskConfigurationId = 'structured-research-default';
@@ -29,6 +33,15 @@ export function clampTerminalFontSize(value: unknown): number {
 
   const rounded = Math.round(value);
   return Math.min(maxTerminalFontSize, Math.max(minTerminalFontSize, rounded));
+}
+
+export function clampEditorFontSize(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return defaultEditorFontSize;
+  }
+
+  const rounded = Math.round(value);
+  return Math.min(maxEditorFontSize, Math.max(minEditorFontSize, rounded));
 }
 
 export function createDefaultResearchAgentProfile(): ResearchAgentProfileSettings {
@@ -95,6 +108,10 @@ export function createDefaultWebUiSettings(): WebUiSettingsDocument {
       defaultRoute: 'terminal',
       terminal: {
         fontSize: defaultTerminalFontSize,
+      },
+      editor: {
+        fontSize: defaultEditorFontSize,
+        fontFamily: defaultEditorFontFamily,
       },
     },
     taskConfiguration: createDefaultTaskConfigurationSettings(),

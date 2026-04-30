@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import {
+  clampEditorFontSize,
   clampTerminalFontSize,
   createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
@@ -48,6 +49,12 @@ interface SettingsState {
 }
 
 function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocument {
+  const editorFontSize = clampEditorFontSize(settings.general.editor?.fontSize);
+  const editorFontFamily =
+    typeof settings.general.editor?.fontFamily === 'string' &&
+    settings.general.editor.fontFamily.length > 0
+      ? settings.general.editor.fontFamily
+      : 'monospace';
   return {
     version: 2,
     general: {
@@ -56,6 +63,10 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
         : 'terminal',
       terminal: {
         fontSize: clampTerminalFontSize(settings.general.terminal.fontSize),
+      },
+      editor: {
+        fontSize: editorFontSize,
+        fontFamily: editorFontFamily,
       },
     },
     taskConfiguration: settings.taskConfiguration,
@@ -96,6 +107,10 @@ export function SettingsProvider({ children }: ProviderProps) {
             defaultRoute: general.defaultRoute,
             terminal: {
               fontSize: general.terminal.fontSize,
+            },
+            editor: {
+              fontSize: general.editor.fontSize,
+              fontFamily: general.editor.fontFamily,
             },
           },
         });
@@ -236,6 +251,14 @@ export function useSettings(): SettingsContextValue {
 
 export function useTerminalFontSize(): number {
   return useSettings().settings.general.terminal.fontSize;
+}
+
+export function useEditorSettings(): { fontSize: number; fontFamily: string } {
+  const { settings } = useSettings();
+  return {
+    fontSize: settings.general.editor.fontSize,
+    fontFamily: settings.general.editor.fontFamily,
+  };
 }
 
 export function useProjectEnvironmentDefaults(environmentId: string | null): EnvironmentTaskDefaults {

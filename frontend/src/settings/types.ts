@@ -52,6 +52,10 @@ export interface WebUiSettingsDocument {
     terminal: {
       fontSize: number;
     };
+    editor: {
+      fontSize: number;
+      fontFamily: string;
+    };
   };
   taskConfiguration: TaskConfigurationSettings;
   projectDefaults: {

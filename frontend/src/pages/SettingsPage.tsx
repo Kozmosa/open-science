@@ -16,8 +16,11 @@ import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components
 import { getEnvironments, getSkills, getWorkspaces } from '../api';
 import { useT } from '../i18n';
 import {
+  clampEditorFontSize,
   clampTerminalFontSize,
+  maxEditorFontSize,
   maxTerminalFontSize,
+  minEditorFontSize,
   minTerminalFontSize,
   useSettings,
 } from '../settings';
@@ -33,6 +36,8 @@ import type { EnvironmentRecord, SkillItem } from '../types';
 interface GeneralDraftState {
   defaultRoute: DefaultRoute;
   terminalFontSize: string;
+  editorFontSize: string;
+  editorFontFamily: string;
 }
 
 interface GeneralPreferencesSectionProps {
@@ -92,11 +97,16 @@ function GeneralPreferencesSection({
   const [draft, setDraft] = useState<GeneralDraftState>({
     defaultRoute: savedGeneral.defaultRoute,
     terminalFontSize: String(savedGeneral.terminal.fontSize),
+    editorFontSize: String(savedGeneral.editor.fontSize),
+    editorFontFamily: savedGeneral.editor.fontFamily,
   });
-  const clampedFontSize = clampTerminalFontSize(Number.parseInt(draft.terminalFontSize, 10));
+  const clampedTerminalFontSize = clampTerminalFontSize(Number.parseInt(draft.terminalFontSize, 10));
+  const clampedEditorFontSize = clampEditorFontSize(Number.parseInt(draft.editorFontSize, 10));
   const hasChanges =
     draft.defaultRoute !== savedGeneral.defaultRoute ||
-    clampedFontSize !== savedGeneral.terminal.fontSize;
+    clampedTerminalFontSize !== savedGeneral.terminal.fontSize ||
+    clampedEditorFontSize !== savedGeneral.editor.fontSize ||
+    draft.editorFontFamily !== savedGeneral.editor.fontFamily;
 
   return (
     <SectionCard
@@ -144,6 +154,37 @@ function GeneralPreferencesSection({
             }
           />
         </FormField>
+
+        <FormField label={t('pages.settings.general.editorFontSizeLabel')}>
+          <Input
+            aria-label={t('pages.settings.general.editorFontSizeLabel')}
+            type="number"
+            min={minEditorFontSize}
+            max={maxEditorFontSize}
+            step={1}
+            value={draft.editorFontSize}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                editorFontSize: event.target.value,
+              }))
+            }
+          />
+        </FormField>
+
+        <FormField label={t('pages.settings.general.editorFontFamilyLabel')}>
+          <Input
+            aria-label={t('pages.settings.general.editorFontFamilyLabel')}
+            type="text"
+            value={draft.editorFontFamily}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                editorFontFamily: event.target.value,
+              }))
+            }
+          />
+        </FormField>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--bg-secondary)] px-4 py-3 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
@@ -151,7 +192,13 @@ function GeneralPreferencesSection({
           {t('pages.settings.general.terminalFontSizeHelp', {
             min: minTerminalFontSize,
             max: maxTerminalFontSize,
-            current: clampedFontSize,
+            current: clampedTerminalFontSize,
+          })}
+          {' / '}
+          {t('pages.settings.general.editorFontSizeHelp', {
+            min: minEditorFontSize,
+            max: maxEditorFontSize,
+            current: clampedEditorFontSize,
           })}
         </p>
         <div className="flex flex-wrap gap-3">
@@ -163,7 +210,11 @@ function GeneralPreferencesSection({
               onSave({
                 defaultRoute: draft.defaultRoute,
                 terminal: {
-                  fontSize: clampedFontSize,
+                  fontSize: clampedTerminalFontSize,
+                },
+                editor: {
+                  fontSize: clampedEditorFontSize,
+                  fontFamily: draft.editorFontFamily || 'monospace',
                 },
               })
             }
