@@ -33,7 +33,7 @@ Dependencies are managed by `uv` (see `pyproject.toml`). No separate install ste
 ## Development Commands
 
 ```bash
-# Run tests
+# Run backend tests
 uv run pytest
 
 # Run linting and formatting checks
@@ -51,7 +51,26 @@ uv run pre-commit install
 uv run ainrf --version
 uv run ainrf serve
 uv run ainrf run
+
+# Frontend type-check (must be run from frontend/ directory)
+cd frontend && node_modules/.bin/tsc -b
+
+# Frontend tests
+cd frontend && npm run test:run
+
+# Frontend build
+cd frontend && npm run build
 ```
+
+**Important:** `npx tsc -p tsconfig.app.json --noEmit` does NOT work in this project — the frontend uses project references (`tsc -b`). Running plain `tsc` without `-b` from the repo root will pick up the wrong (or no) tsconfig. Always use `tsc -b` from the `frontend/` directory.
+
+When checking frontend types, use:
+
+```bash
+cd frontend && node_modules/.bin/tsc -b
+```
+
+Do NOT use `npx tsc --noEmit`, `npx tsc -p tsconfig.app.json`, or run tsc from the repo root.
 
 ## Architecture
 

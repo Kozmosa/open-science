@@ -1,4 +1,4 @@
-import { Archive, Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { TaskSummary } from '../../types';
 import { statusClassName } from './status';
