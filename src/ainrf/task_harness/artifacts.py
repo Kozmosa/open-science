@@ -320,6 +320,7 @@ def workspace_summary_from_json(value: str) -> WorkspaceSummary:
     payload = json.loads(value)
     return WorkspaceSummary(
         workspace_id=str(payload["workspace_id"]),
+        project_id=str(payload.get("project_id", "default")),
         label=str(payload["label"]),
         description=payload.get("description"),
         default_workdir=payload.get("default_workdir"),
@@ -377,6 +378,7 @@ def binding_snapshot_payload(
 def _workspace_summary(workspace: WorkspaceRecord) -> WorkspaceSummary:
     return WorkspaceSummary(
         workspace_id=workspace.workspace_id,
+        project_id=workspace.project_id,
         label=workspace.label,
         description=workspace.description,
         default_workdir=workspace.default_workdir,

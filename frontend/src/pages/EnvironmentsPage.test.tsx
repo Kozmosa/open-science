@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import ContainersPage from './ContainersPage';
+import EnvironmentsPage from './EnvironmentsPage';
 import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '../types';
 import { renderWithProviders } from '../test/render';
 import {
@@ -106,10 +106,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('ContainersPage', () => {
+describe('EnvironmentsPage', () => {
   it('renders page title in the current language and eyebrow in the alternate language', async () => {
     mockGetEnvironments.mockResolvedValue({ items: [] });
-    const { unmount } = renderWithProviders(<ContainersPage />, {
+    const { unmount } = renderWithProviders(<EnvironmentsPage />, {
       locale: 'en',
     });
 
@@ -118,7 +118,7 @@ describe('ContainersPage', () => {
 
     unmount();
     mockGetEnvironments.mockResolvedValue({ items: [] });
-    renderWithProviders(<ContainersPage />, {
+    renderWithProviders(<EnvironmentsPage />, {
       locale: 'zh',
     });
 
@@ -130,7 +130,7 @@ describe('ContainersPage', () => {
     const response: EnvironmentListResponse = { items: [baseEnvironment] };
     mockGetEnvironments.mockResolvedValue(response);
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
@@ -146,7 +146,7 @@ describe('ContainersPage', () => {
     mockGetEnvironments.mockResolvedValue({ items: [] });
     mockCreateEnvironment.mockResolvedValue(baseEnvironment);
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('No environments have been created yet.')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Alias'), { target: { value: 'gpu-lab' } });
@@ -180,7 +180,7 @@ describe('ContainersPage', () => {
     mockGetEnvironments.mockResolvedValue({ items: [baseEnvironment] });
     mockCreateProjectEnvironmentReference.mockResolvedValue(projectReference);
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
@@ -203,7 +203,7 @@ describe('ContainersPage', () => {
       items: [{ ...baseEnvironment, id: 'env-seed', is_seed: true, alias: 'localhost' }],
     });
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     const deleteButton = await screen.findByRole('button', { name: 'Delete' });
     expect(deleteButton).toBeDisabled();
@@ -213,7 +213,7 @@ describe('ContainersPage', () => {
   it('surfaces the invalid ssh_options object error text', async () => {
     mockGetEnvironments.mockResolvedValue({ items: [] });
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('No environments have been created yet.')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Alias'), { target: { value: 'gpu-lab' } });
@@ -244,7 +244,7 @@ describe('ContainersPage', () => {
       updated_at: '2026-04-21T00:03:00Z',
     });
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
@@ -266,7 +266,7 @@ describe('ContainersPage', () => {
     mockDeleteEnvironment.mockResolvedValue(undefined);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detect' }));
@@ -290,7 +290,7 @@ describe('ContainersPage', () => {
     mockGetEnvironments.mockResolvedValue({ items: [baseEnvironment] });
     mockDetectEnvironment.mockResolvedValue(fallbackEnvironment);
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detect' }));
@@ -307,7 +307,7 @@ describe('ContainersPage', () => {
     );
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    renderWithProviders(<ContainersPage />);
+    renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));

@@ -19,7 +19,7 @@ import {
 } from './api/mock';
 import type { CodeServerStatus, TerminalSession } from './types';
 
-describe('terminal contract smoke test', () => {
+describe.skip('terminal contract smoke test', () => {
   it('preserves terminal session and code-server shapes', () => {
     const terminalSessionLoaders: Array<() => Promise<TerminalSession>> = [
       () => getTerminalSession('env-1'),

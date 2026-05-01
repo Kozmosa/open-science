@@ -8,10 +8,14 @@ import type {
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  ProjectCreateRequest,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
+  ProjectListResponse,
+  ProjectRecord,
+  ProjectUpdateRequest,
   SkillItem,
   SkillListResponse,
   SystemHealth,
@@ -69,8 +73,10 @@ let mockEnvironmentCounter = 0;
 let mockTerminalAttachmentCounter = 0;
 let mockTaskCounter = 0;
 let mockWorkspaceCounter = 0;
+let mockProjectCounter = 0;
 let mockEnvironments: EnvironmentRecord[] = [];
 let mockWorkspaces: WorkspaceRecord[] = [];
+let mockProjects: ProjectRecord[] = [];
 let mockProjectEnvironmentReferences: Record<string, ProjectEnvironmentReference[]> = {
   [DEFAULT_PROJECT_ID]: [],
 };
@@ -117,10 +123,24 @@ function createSeedWorkspace(): WorkspaceRecord {
   const timestamp = nowIso();
   return {
     workspace_id: 'workspace-default',
+    project_id: DEFAULT_PROJECT_ID,
     label: 'Repository Default',
     description: 'Seed workspace bound to the current repository checkout.',
     default_workdir: '/workspace/projects',
     workspace_prompt: 'Treat this workspace as the default repository context for the task.',
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+}
+
+function createSeedProject(): ProjectRecord {
+  const timestamp = nowIso();
+  return {
+    project_id: DEFAULT_PROJECT_ID,
+    name: 'Default Project',
+    description: 'Seed project for the current repository checkout.',
+    default_workspace_id: 'workspace-default',
+    default_environment_id: 'env-localhost',
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -154,8 +174,20 @@ function cloneProjectReference(reference: ProjectEnvironmentReference): ProjectE
   return { ...reference };
 }
 
+function cloneProject(project: ProjectRecord): ProjectRecord {
+  return { ...project };
+}
+
 function cloneWorkspace(workspace: WorkspaceRecord): WorkspaceRecord {
   return { ...workspace };
+}
+
+function findProject(projectId: string): ProjectRecord {
+  const project = mockProjects.find((item) => item.project_id === projectId);
+  if (!project) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+  return project;
 }
 
 function findWorkspace(workspaceId: string): WorkspaceRecord {
@@ -456,6 +488,7 @@ function createMockDetection(environment: EnvironmentRecord): EnvironmentRecord[
 const initialMockEnvironments: EnvironmentRecord[] = [createSeedEnvironment()];
 mockEnvironments = [...initialMockEnvironments];
 mockWorkspaces = [createSeedWorkspace()];
+mockProjects = [createSeedProject()];
 
 export function mockGetHealth(): SystemHealth {
   return mockHealth;
@@ -614,6 +647,47 @@ export function mockDeleteWorkspace(workspaceId: string): void {
   mockWorkspaces = mockWorkspaces.filter((workspace) => workspace.workspace_id !== workspaceId);
 }
 
+export function mockGetProjects(): ProjectListResponse {
+  return {
+    items: mockProjects.map((project) => cloneProject(project)),
+  };
+}
+
+export function mockGetProject(projectId: string): ProjectRecord {
+  return cloneProject(findProject(projectId));
+}
+
+export function mockCreateProject(payload: ProjectCreateRequest): ProjectRecord {
+  const project = createMockProject(payload);
+  mockProjects = [...mockProjects, project];
+  mockProjectEnvironmentReferences = {
+    ...mockProjectEnvironmentReferences,
+    [project.project_id]: [],
+  };
+  return cloneProject(project);
+}
+
+export function mockUpdateProject(
+  projectId: string,
+  payload: ProjectUpdateRequest
+): ProjectRecord {
+  const current = findProject(projectId);
+  const updated = createMockProject(payload, current);
+  mockProjects = mockProjects.map((project) =>
+    project.project_id === projectId ? updated : project
+  );
+  return cloneProject(updated);
+}
+
+export function mockDeleteProject(projectId: string): void {
+  findProject(projectId);
+  if (projectId === DEFAULT_PROJECT_ID) {
+    throw new Error('Default project cannot be deleted');
+  }
+  mockProjects = mockProjects.filter((project) => project.project_id !== projectId);
+  delete mockProjectEnvironmentReferences[projectId];
+}
+
 function createMockWorkspace(
   payload: WorkspaceCreateRequest | WorkspaceUpdateRequest,
   existing?: WorkspaceRecord
@@ -621,10 +695,27 @@ function createMockWorkspace(
   const timestamp = nowIso();
   return {
     workspace_id: existing?.workspace_id ?? `workspace-${++mockWorkspaceCounter}`,
+    project_id: payload.project_id ?? existing?.project_id ?? DEFAULT_PROJECT_ID,
     label: payload.label ?? existing?.label ?? 'Mock Workspace',
     description: payload.description ?? existing?.description ?? null,
     default_workdir: payload.default_workdir ?? existing?.default_workdir ?? null,
     workspace_prompt: payload.workspace_prompt ?? existing?.workspace_prompt ?? '',
+    created_at: existing?.created_at ?? timestamp,
+    updated_at: timestamp,
+  };
+}
+
+function createMockProject(
+  payload: ProjectCreateRequest | ProjectUpdateRequest,
+  existing?: ProjectRecord
+): ProjectRecord {
+  const timestamp = nowIso();
+  return {
+    project_id: existing?.project_id ?? `project-${++mockProjectCounter}`,
+    name: payload.name ?? existing?.name ?? 'Mock Project',
+    description: payload.description ?? existing?.description ?? null,
+    default_workspace_id: payload.default_workspace_id ?? existing?.default_workspace_id ?? null,
+    default_environment_id: payload.default_environment_id ?? existing?.default_environment_id ?? null,
     created_at: existing?.created_at ?? timestamp,
     updated_at: timestamp,
   };
@@ -655,6 +746,7 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
   const resolvedWorkdir = workspace.default_workdir ?? environment.default_workdir ?? MOCK_STATE_ROOT;
   const task: TaskRecord = {
     task_id: taskId,
+    project_id: payload.project_id ?? DEFAULT_PROJECT_ID,
     title,
     task_profile: payload.task_profile,
     status: 'queued',
@@ -1003,8 +1095,10 @@ export function resetMockEnvironmentState(): EnvironmentListResponse {
   mockTerminalAttachmentCounter = 0;
   mockTaskCounter = 0;
   mockWorkspaceCounter = 0;
+  mockProjectCounter = 0;
   mockEnvironments = [...initialMockEnvironments];
   mockWorkspaces = [createSeedWorkspace()];
+  mockProjects = [createSeedProject()];
   mockProjectEnvironmentReferences = { [DEFAULT_PROJECT_ID]: [] };
   mockTerminalSessions = {};
   mockTasks = {};

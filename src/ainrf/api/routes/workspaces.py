@@ -17,6 +17,7 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 
 class WorkspaceCreateRequest(BaseModel):
+    project_id: str = Field(default="default", min_length=1)
     label: str = Field(min_length=1)
     description: str | None = None
     default_workdir: str | None = None
@@ -24,6 +25,7 @@ class WorkspaceCreateRequest(BaseModel):
 
 
 class WorkspaceUpdateRequest(BaseModel):
+    project_id: str | None = Field(default=None, min_length=1)
     label: str | None = Field(default=None, min_length=1)
     description: str | None = None
     default_workdir: str | None = None
@@ -53,10 +55,16 @@ def _serialize_workspace(workspace: WorkspaceRecord) -> WorkspaceResponse:
 
 
 @router.get("", response_model=WorkspaceListResponse)
-async def list_workspaces(request: Request) -> WorkspaceListResponse:
+async def list_workspaces(
+    request: Request,
+    project_id: str | None = None,
+) -> WorkspaceListResponse:
     service = _get_workspace_service(request)
     try:
-        items = [_serialize_workspace(workspace) for workspace in service.list_workspaces()]
+        items = [
+            _serialize_workspace(workspace)
+            for workspace in service.list_workspaces(project_id=project_id)
+        ]
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
     return WorkspaceListResponse(items=items)
@@ -70,6 +78,7 @@ async def create_workspace(
     service = _get_workspace_service(request)
     try:
         workspace = service.create_workspace(
+            project_id=payload.project_id,
             label=payload.label,
             description=payload.description,
             default_workdir=payload.default_workdir,
@@ -99,6 +108,7 @@ async def update_workspace(
     try:
         workspace = service.update_workspace(
             workspace_id,
+            project_id=payload.project_id,
             label=payload.label,
             description=payload.description,
             default_workdir=payload.default_workdir,

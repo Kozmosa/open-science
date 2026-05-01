@@ -26,6 +26,7 @@ from ainrf.execution.errors import SSHConnectionError
 from ainrf.terminal.tmux import TmuxCommandError
 
 if TYPE_CHECKING:
+    from ainrf.projects import ProjectRegistryService
     from ainrf.terminal.sessions import SessionManager
 
 
@@ -96,8 +97,13 @@ def _build_seed_environment(default_workdir: str | None = None) -> EnvironmentRe
 
 
 class InMemoryEnvironmentService:
-    def __init__(self, default_local_workdir: str | None = None) -> None:
+    def __init__(
+        self,
+        default_local_workdir: str | None = None,
+        project_service: ProjectRegistryService | None = None,
+    ) -> None:
         self._default_local_workdir = default_local_workdir
+        self._project_service = project_service
         self._environments: dict[str, EnvironmentRegistryEntry] = {}
         self._detections: dict[str, list[DetectionSnapshot]] = defaultdict(list)
         self._project_refs: dict[str, dict[str, ProjectEnvironmentReference]] = defaultdict(dict)
@@ -411,6 +417,100 @@ class InMemoryEnvironmentService:
 
         if updated:
             environment.updated_at = utc_now()
+
+    def _validate_project_id(self, project_id: str) -> None:
+        if self._project_service is not None:
+            self._project_service.get_project(project_id)
+
+    def create_project_reference(
+        self,
+        *,
+        project_id: str,
+        environment_id: str,
+        is_default: bool = False,
+        override_workdir: str | None = None,
+        override_env_name: str | None = None,
+        override_env_manager: str | None = None,
+        override_runtime_notes: str | None = None,
+    ) -> ProjectEnvironmentReference:
+        self._validate_project_id(project_id)
+        if environment_id in self._project_refs[project_id]:
+            raise ProjectReferenceConflictError(environment_id)
+        return self.upsert_project_reference(
+            project_id=project_id,
+            environment_id=environment_id,
+            is_default=is_default,
+            override_workdir=override_workdir,
+            override_env_name=override_env_name,
+            override_env_manager=override_env_manager,
+            override_runtime_notes=override_runtime_notes,
+        )
+
+    def upsert_project_reference(
+        self,
+        *,
+        project_id: str,
+        environment_id: str,
+        is_default: bool = False,
+        override_workdir: str | None = None,
+        override_env_name: str | None = None,
+        override_env_manager: str | None = None,
+        override_runtime_notes: str | None = None,
+    ) -> ProjectEnvironmentReference:
+        self._validate_project_id(project_id)
+        self.get_environment(environment_id)
+        if is_default:
+            for ref in self._project_refs[project_id].values():
+                ref.is_default = False
+        reference = ProjectEnvironmentReference(
+            project_id=project_id,
+            environment_id=environment_id,
+            is_default=is_default,
+            override_workdir=override_workdir,
+            override_env_name=override_env_name,
+            override_env_manager=override_env_manager,
+            override_runtime_notes=override_runtime_notes,
+            updated_at=utc_now(),
+        )
+        self._project_refs[project_id][environment_id] = reference
+        return reference
+
+    def get_project_reference(
+        self,
+        project_id: str,
+        environment_id: str,
+    ) -> ProjectEnvironmentReference:
+        self._validate_project_id(project_id)
+        try:
+            return self._project_refs[project_id][environment_id]
+        except KeyError as exc:
+            raise ProjectReferenceNotFoundError(environment_id) from exc
+
+    def list_project_references(self, project_id: str) -> list[ProjectEnvironmentReference]:
+        self._validate_project_id(project_id)
+        return list(self._project_refs[project_id].values())
+
+    def delete_project_reference(self, project_id: str, environment_id: str) -> None:
+        self._validate_project_id(project_id)
+        self.get_project_reference(project_id, environment_id)
+        del self._project_refs[project_id][environment_id]
+
+    def resolve_effective_workdir(
+        self,
+        project_id: str,
+        environment_id: str,
+        fallback_root: Path,
+    ) -> str:
+        self._validate_project_id(project_id)
+        reference = self._project_refs.get(project_id, {}).get(environment_id)
+        if reference is not None and reference.override_workdir:
+            return reference.override_workdir
+        environment = self.get_environment(environment_id)
+        if environment.default_workdir:
+            return environment.default_workdir
+        if is_localhost_environment(environment) and self._default_local_workdir is not None:
+            return self._default_local_workdir
+        return str(fallback_root)
 
     def _ensure_alias_available(self, alias: str) -> None:
         for environment in self._environments.values():

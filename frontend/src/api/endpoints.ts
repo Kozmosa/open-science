@@ -8,10 +8,14 @@ import type {
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  ProjectCreateRequest,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
+  ProjectListResponse,
+  ProjectRecord,
+  ProjectUpdateRequest,
   SkillListResponse,
   SystemHealth,
   TaskCreateRequest,
@@ -29,12 +33,14 @@ import type {
 import {
   mockCreateCodeServerSession,
   mockCreateEnvironment,
+  mockCreateProject,
   mockCreateProjectEnvironmentReference,
   mockCreateTask,
   mockCreateTerminalSession,
   mockCreateWorkspace,
   mockDeleteCodeServerSession,
   mockDeleteEnvironment,
+  mockDeleteProject,
   mockDeleteProjectEnvironmentReference,
   mockDeleteTerminalSession,
   mockDeleteWorkspace,
@@ -43,7 +49,9 @@ import {
   mockGetEnvironment,
   mockGetEnvironments,
   mockGetHealth,
+  mockGetProject,
   mockGetProjectEnvironmentReferences,
+  mockGetProjects,
   mockGetTask,
   mockGetTaskOutput,
   mockGetTasks,
@@ -57,6 +65,7 @@ import {
   mockListFiles,
   mockReadFile,
   mockUpdateEnvironment,
+  mockUpdateProject,
   mockUpdateProjectEnvironmentReference,
   mockUpdateWorkspace,
 } from './mock';
@@ -241,6 +250,23 @@ export const installEnvironmentCodeServer = (
         `/environments/${environmentId}/install-code-server`,
         {}
       );
+
+export const getProjects = (): Promise<ProjectListResponse> =>
+  USE_MOCK ? Promise.resolve(mockGetProjects()) : api.get<ProjectListResponse>('/projects');
+
+export const getProject = (projectId: string): Promise<ProjectRecord> =>
+  USE_MOCK ? Promise.resolve(mockGetProject(projectId)) : api.get<ProjectRecord>(`/projects/${projectId}`);
+
+export const createProject = (payload: ProjectCreateRequest): Promise<ProjectRecord> =>
+  USE_MOCK ? Promise.resolve(mockCreateProject(payload)) : api.post<ProjectRecord>('/projects', payload);
+
+export const updateProject = (projectId: string, payload: ProjectUpdateRequest): Promise<ProjectRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockUpdateProject(projectId, payload))
+    : api.patch<ProjectRecord>(`/projects/${projectId}`, payload);
+
+export const deleteProject = (projectId: string): Promise<void> =>
+  USE_MOCK ? Promise.resolve(mockDeleteProject(projectId)) : api.delete<void>(`/projects/${projectId}`);
 
 export const getProjectEnvironmentReferences = (
   projectId: string = DEFAULT_PROJECT_ID

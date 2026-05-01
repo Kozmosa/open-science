@@ -18,7 +18,6 @@ from ainrf.environments import EnvironmentAuthKind, InMemoryEnvironmentService
 from ainrf.environments.local import is_localhost_environment
 from ainrf.environments.models import EnvironmentRegistryEntry
 
-_DEFAULT_PROJECT_ID = "default"
 _READY_HTTP_CODES = {200, 302, 401, 403}
 _READY_TIMEOUT_SECONDS = 10.0
 _PROCESS_CLOSE_TIMEOUT_SECONDS = 5.0
@@ -182,13 +181,11 @@ class EnvironmentCodeServerManager:
         *,
         state_root: Path,
         environment_service: InMemoryEnvironmentService,
-        project_id: str = _DEFAULT_PROJECT_ID,
         local_host: str = _REMOTE_CODE_SERVER_HOST,
         local_port: int = _REMOTE_CODE_SERVER_PORT,
     ) -> None:
         self._state_root = state_root
         self._environment_service = environment_service
-        self._project_id = project_id
         self._local_host = local_host
         self._local_port = local_port
         self._lock = asyncio.Lock()
@@ -228,7 +225,12 @@ class EnvironmentCodeServerManager:
             pid=pid,
         )
 
-    async def status(self, environment_id: str | None = None) -> CodeServerState:
+    async def status(
+        self,
+        environment_id: str | None = None,
+        *,
+        project_id: str = "default",
+    ) -> CodeServerState:
         async with self._lock:
             await self._refresh_state_locked()
             if environment_id is None:
@@ -236,7 +238,7 @@ class EnvironmentCodeServerManager:
 
             environment = self._environment_service.get_environment(environment_id)
             workspace_dir = self._environment_service.resolve_effective_workdir(
-                self._project_id,
+                project_id,
                 environment_id,
                 self._state_root,
             )
@@ -253,6 +255,7 @@ class EnvironmentCodeServerManager:
         self,
         environment_id: str,
         *,
+        project_id: str = "default",
         app_user_id: str | None = None,
         terminal_session_manager: SessionManagerLike | None = None,
     ) -> CodeServerState:
@@ -260,7 +263,7 @@ class EnvironmentCodeServerManager:
             await self._refresh_state_locked()
             environment = self._environment_service.get_environment(environment_id)
             workspace_dir = self._environment_service.resolve_effective_workdir(
-                self._project_id,
+                project_id,
                 environment_id,
                 self._state_root,
             )

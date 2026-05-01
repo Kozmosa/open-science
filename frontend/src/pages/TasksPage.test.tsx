@@ -39,6 +39,7 @@ class MockEventSource {
 
 const workspace: WorkspaceRecord = {
   workspace_id: 'workspace-default',
+  project_id: 'default',
   label: 'Repository Default',
   description: 'Seed workspace',
   default_workdir: '/workspace/project',
@@ -83,6 +84,7 @@ const secondaryEnvironment: EnvironmentRecord = {
 
 const taskSummary: TaskSummary = {
   task_id: 'task-1',
+  project_id: 'default',
   title: 'Train model',
   task_profile: 'claude-code',
   status: 'running',
@@ -130,6 +132,7 @@ const reviewTaskSummary: TaskSummary = {
 const taskRecord: TaskRecord = {
   ...taskSummary,
   binding: {
+    project_id: 'default',
     workspace: taskSummary.workspace_summary,
     environment: taskSummary.environment_summary,
     task_profile: 'claude-code',
@@ -197,6 +200,7 @@ vi.mock('../api', () => ({
   createTask: vi.fn(),
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(),
+  getSkills: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
   getTasks: vi.fn(),

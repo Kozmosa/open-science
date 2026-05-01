@@ -41,6 +41,7 @@ class WorkspaceRegistryService:
                 self._workspaces = {
                     item["workspace_id"]: WorkspaceRecord(
                         workspace_id=item["workspace_id"],
+                        project_id=item.get("project_id", "default"),
                         label=item["label"],
                         description=item["description"],
                         default_workdir=item["default_workdir"],
@@ -50,15 +51,24 @@ class WorkspaceRegistryService:
                     )
                     for item in payload.get("items", [])
                 }
+                # Migration: persist if any workspace was missing project_id
+                if any(
+                    "project_id" not in item
+                    for item in payload.get("items", [])
+                ):
+                    self._persist()
             if not self._workspaces:
                 seed = self._build_seed_workspace()
                 self._workspaces[seed.workspace_id] = seed
                 self._persist()
             self._initialized = True
 
-    def list_workspaces(self) -> list[WorkspaceRecord]:
+    def list_workspaces(self, project_id: str | None = None) -> list[WorkspaceRecord]:
         self.initialize()
-        return list(self._workspaces.values())
+        workspaces = list(self._workspaces.values())
+        if project_id is not None:
+            workspaces = [w for w in workspaces if w.project_id == project_id]
+        return workspaces
 
     def get_workspace(self, workspace_id: str) -> WorkspaceRecord:
         self.initialize()
@@ -70,6 +80,7 @@ class WorkspaceRegistryService:
     def create_workspace(
         self,
         *,
+        project_id: str = "default",
         label: str,
         description: str | None,
         default_workdir: str | None,
@@ -81,6 +92,7 @@ class WorkspaceRegistryService:
             workspace_id = f"workspace-{uuid.uuid4().hex[:12]}"
             workspace = WorkspaceRecord(
                 workspace_id=workspace_id,
+                project_id=project_id,
                 label=label,
                 description=description,
                 default_workdir=default_workdir,
@@ -96,6 +108,7 @@ class WorkspaceRegistryService:
         self,
         workspace_id: str,
         *,
+        project_id: str | None = None,
         label: str | None = None,
         description: str | None = None,
         default_workdir: str | None = None,
@@ -106,6 +119,7 @@ class WorkspaceRegistryService:
             current = self.get_workspace(workspace_id)
             workspace = WorkspaceRecord(
                 workspace_id=current.workspace_id,
+                project_id=current.project_id if project_id is None else project_id,
                 label=current.label if label is None else label,
                 description=description,
                 default_workdir=default_workdir,
@@ -137,6 +151,7 @@ class WorkspaceRegistryService:
         default_workdir = str(default_workdir_path)
         return WorkspaceRecord(
             workspace_id="workspace-default",
+            project_id="default",
             label="Repository Default",
             description="Seed workspace bound to the default local workspace directory.",
             default_workdir=default_workdir,

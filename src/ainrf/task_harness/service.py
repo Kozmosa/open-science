@@ -145,12 +145,33 @@ class TaskHarnessService:
                 """
             )
             connection.commit()
+            self._ensure_column(
+                connection,
+                "task_harness_tasks",
+                "project_id",
+                "ALTER TABLE task_harness_tasks ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'",
+            )
+            connection.commit()
         self._fail_unfinished_tasks_for_restart()
         self._initialized = True
+
+    @staticmethod
+    def _ensure_column(
+        connection: sqlite3.Connection,
+        table_name: str,
+        column_name: str,
+        statement: str,
+    ) -> None:
+        columns = {
+            row["name"] for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+        if column_name not in columns:
+            connection.execute(statement)
 
     def create_task(
         self,
         *,
+        project_id: str = "default",
         workspace_id: str,
         environment_id: str,
         task_profile: str,
@@ -198,6 +219,7 @@ class TaskHarnessService:
                 """
                 INSERT INTO task_harness_tasks (
                     task_id,
+                    project_id,
                     workspace_id,
                     environment_id,
                     task_profile,
@@ -211,10 +233,11 @@ class TaskHarnessService:
                     binding_snapshot_path,
                     prompt_manifest_path,
                     launch_payload_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
+                    project_id,
                     workspace_id,
                     environment_id,
                     task_profile,
@@ -282,6 +305,7 @@ class TaskHarnessService:
         runtime = read_runtime_summary(row["launch_payload_path"])
         return TaskDetail(
             task_id=row["task_id"],
+            project_id=row["project_id"],
             title=row["title"],
             task_profile=row["task_profile"],
             status=TaskHarnessStatus(row["status"]),
@@ -665,6 +689,7 @@ class TaskHarnessService:
     def _row_to_list_item(self, row: sqlite3.Row) -> TaskListItem:
         return TaskListItem(
             task_id=row["task_id"],
+            project_id=row["project_id"],
             title=row["title"],
             task_profile=row["task_profile"],
             status=TaskHarnessStatus(row["status"]),

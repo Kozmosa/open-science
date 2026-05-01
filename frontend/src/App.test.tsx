@@ -38,8 +38,8 @@ vi.mock('./pages/TasksPage', () => ({
   default: () => <div data-testid="tasks-page">tasks-page</div>,
 }));
 
-vi.mock('./pages/ContainersPage', () => ({
-  default: () => <div data-testid="containers-page">containers-page</div>,
+vi.mock('./pages/EnvironmentsPage', () => ({
+  default: () => <div data-testid="environments-page">environments-page</div>,
 }));
 
 vi.mock('./pages/WorkspacesPage', () => ({

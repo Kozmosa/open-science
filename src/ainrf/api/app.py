@@ -20,6 +20,7 @@ from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.code_server import CodeServerSupervisor
 from ainrf.files import FileBrowserService
 from ainrf.environments import InMemoryEnvironmentService
+from ainrf.projects import ProjectRegistryService
 from ainrf.runtime.readiness import check_runtime_readiness
 from ainrf.skills import SkillsDiscoveryService
 from ainrf.task_harness import TaskHarnessService
@@ -54,6 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     terminal_session_manager = app.state.terminal_session_manager
     terminal_attachment_broker = app.state.terminal_attachment_broker
     task_harness_service = app.state.task_harness_service
+    project_service = app.state.project_service
     manager = CodeServerSupervisor(
         state_root=app.state.api_config.state_root,
         environment_service=environment_service,
@@ -63,6 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.code_server_manager = manager
     app.state.code_server_supervisor = manager
     try:
+        await _run_sync_in_lifespan(project_service.initialize)
         await _run_sync_in_lifespan(workspace_service.initialize)
         localhost = environment_service.get_environment("env-localhost")
         app.state.runtime_readiness = check_runtime_readiness(
@@ -80,9 +83,14 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
     api_config = config or ApiConfig.from_env()
     runtime_paths = api_config.runtime_paths
     default_workspace_dir = runtime_paths.ensure_default_workspace_dir()
-    environment_service = InMemoryEnvironmentService(str(default_workspace_dir))
+    project_service = ProjectRegistryService(api_config.state_root)
+    environment_service = InMemoryEnvironmentService(
+        str(default_workspace_dir),
+        project_service=project_service,
+    )
     app = FastAPI(title="AINRF API", version="0.1.0", lifespan=lifespan)
     app.state.api_config = api_config
+    app.state.project_service = project_service
     app.state.environment_service = environment_service
     app.state.workspace_service = WorkspaceRegistryService(
         api_config.state_root,

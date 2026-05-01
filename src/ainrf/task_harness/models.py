@@ -48,6 +48,7 @@ class TaskConfigurationSnapshot:
 @dataclass(slots=True)
 class WorkspaceSummary:
     workspace_id: str
+    project_id: str
     label: str
     description: str | None
     default_workdir: str | None
@@ -65,6 +66,7 @@ class EnvironmentSummary:
 @dataclass(slots=True)
 class TaskListItem:
     task_id: str
+    project_id: str
     title: str
     task_profile: str
     status: TaskHarnessStatus
@@ -130,6 +132,7 @@ class TaskResultSummary:
 @dataclass(slots=True)
 class TaskDetail:
     task_id: str
+    project_id: str
     title: str
     task_profile: str
     status: TaskHarnessStatus

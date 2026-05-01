@@ -134,7 +134,7 @@ function GeneralPreferencesSection({
             <option value="terminal">{t('pages.settings.routes.terminal')}</option>
             <option value="tasks">{t('pages.settings.routes.tasks')}</option>
             <option value="workspaces">{t('pages.settings.routes.workspaces')}</option>
-            <option value="containers">{t('pages.settings.routes.containers')}</option>
+            <option value="environments">{t('pages.settings.routes.environments')}</option>
           </Select>
         </FormField>
 
@@ -672,9 +672,9 @@ function SettingsPage() {
             <FormField label="Default workspace">
               <Select
                 aria-label="Default workspace"
-                value={settings.projectDefaults.default.defaultWorkspaceId ?? ''}
+                value={settings.projectDefaults.default?.defaultWorkspaceId ?? ''}
                 onChange={(event) =>
-                  saveProjectDefaultWorkspace(event.target.value || null)
+                  saveProjectDefaultWorkspace('default', event.target.value || null)
                 }
                 disabled={workspaces.length === 0}
               >
@@ -698,16 +698,24 @@ function SettingsPage() {
         />
 
         <ProjectDefaultsSection
-          key={`project-default:${settings.projectDefaults.default.defaultEnvironmentId ?? 'none'}`}
+          key={`project-default:${settings.projectDefaults.default?.defaultEnvironmentId ?? 'none'}`}
           environments={environments}
           taskConfiguration={settings.taskConfiguration}
-          savedDefaultEnvironmentId={settings.projectDefaults.default.defaultEnvironmentId}
+          savedDefaultEnvironmentId={settings.projectDefaults.default?.defaultEnvironmentId ?? null}
           isLoading={environmentsQuery.isLoading}
           loadError={environmentsError}
-          getProjectEnvironmentDefaults={getProjectEnvironmentDefaults}
-          saveProjectDefaultEnvironment={saveProjectDefaultEnvironment}
-          saveProjectEnvironmentDefaults={saveProjectEnvironmentDefaults}
-          resetProjectEnvironmentDefaults={resetProjectEnvironmentDefaults}
+          getProjectEnvironmentDefaults={(environmentId) =>
+            getProjectEnvironmentDefaults('default', environmentId)
+          }
+          saveProjectDefaultEnvironment={(environmentId) =>
+            saveProjectDefaultEnvironment('default', environmentId)
+          }
+          saveProjectEnvironmentDefaults={(environmentId, defaults) =>
+            saveProjectEnvironmentDefaults('default', environmentId, defaults)
+          }
+          resetProjectEnvironmentDefaults={(environmentId) =>
+            resetProjectEnvironmentDefaults('default', environmentId)
+          }
         />
       </div>
     </div>

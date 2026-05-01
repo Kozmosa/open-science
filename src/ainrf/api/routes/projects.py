@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from ainrf.api.schemas import (
+    ProjectCreateRequest,
     ProjectEnvironmentReferenceCreateRequest,
     ProjectEnvironmentReferenceListResponse,
     ProjectEnvironmentReferenceResponse,
     ProjectEnvironmentReferenceUpdateRequest,
+    ProjectListResponse,
+    ProjectResponse,
+    ProjectUpdateRequest,
 )
 from ainrf.environments import (
     EnvironmentNotFoundError,
@@ -17,8 +21,16 @@ from ainrf.environments import (
     ProjectReferenceConflictError,
     ProjectReferenceNotFoundError,
 )
+from ainrf.projects import ProjectNotFoundError, ProjectRegistryService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+def _get_project_service(request: Request) -> ProjectRegistryService:
+    service = getattr(request.app.state, "project_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="project service not initialized")
+    return service
 
 
 def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
@@ -28,12 +40,30 @@ def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
     return service
 
 
+def _serialize_project(project: any) -> ProjectResponse:
+    payload = dict(asdict(project))
+    payload["created_at"] = project.created_at.isoformat()
+    payload["updated_at"] = project.updated_at.isoformat()
+    return ProjectResponse.model_validate(payload)
+
+
 def _serialize_reference(
     reference: ProjectEnvironmentReference,
 ) -> ProjectEnvironmentReferenceResponse:
     payload = dict(asdict(reference))
     payload.pop("project_id", None)
     return ProjectEnvironmentReferenceResponse.model_validate(payload)
+
+
+def _translate_project_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, ProjectNotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unexpected project error",
+    )
 
 
 def _translate_reference_error(exc: Exception) -> HTTPException:
@@ -53,6 +83,70 @@ def _translate_reference_error(exc: Exception) -> HTTPException:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unexpected project environment reference error",
     )
+
+
+@router.get("", response_model=ProjectListResponse)
+async def list_projects(request: Request) -> ProjectListResponse:
+    service = _get_project_service(request)
+    try:
+        items = [_serialize_project(project) for project in service.list_projects()]
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return ProjectListResponse(items=items)
+
+
+@router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+async def create_project(payload: ProjectCreateRequest, request: Request) -> ProjectResponse:
+    service = _get_project_service(request)
+    try:
+        project = service.create_project(
+            name=payload.name,
+            description=payload.description,
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return _serialize_project(project)
+
+
+@router.get("/{project_id}", response_model=ProjectResponse)
+async def read_project(project_id: str, request: Request) -> ProjectResponse:
+    service = _get_project_service(request)
+    try:
+        project = service.get_project(project_id)
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return _serialize_project(project)
+
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: str,
+    payload: ProjectUpdateRequest,
+    request: Request,
+) -> ProjectResponse:
+    service = _get_project_service(request)
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        project = service.update_project(
+            project_id,
+            name=changes.get("name"),
+            description=changes.get("description"),
+            default_workspace_id=changes.get("default_workspace_id"),
+            default_environment_id=changes.get("default_environment_id"),
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return _serialize_project(project)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(project_id: str, request: Request) -> None:
+    service = _get_project_service(request)
+    try:
+        service.delete_project(project_id)
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return None
 
 
 @router.get(

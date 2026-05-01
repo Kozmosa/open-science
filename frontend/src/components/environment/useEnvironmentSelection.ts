@@ -72,19 +72,23 @@ export function useEnvironmentSelection(): EnvironmentSelectionState {
   const [sessionEnvironmentId, setSessionEnvironmentId] = useState<string | null>(null);
   const environments = environmentsQuery.data?.items ?? EMPTY_ENVIRONMENTS;
   const projectReferences = projectReferencesQuery.data?.items ?? EMPTY_PROJECT_REFERENCES;
-  const storedEnvironmentId = settings.projectDefaults.default.selection.lastEnvironmentId;
+
+  const projectSettings = settings.projectDefaults[defaultProjectId];
+  const storedEnvironmentId = projectSettings?.selection.lastEnvironmentId ?? null;
+  const projectDefaultEnvironmentId = projectSettings?.defaultEnvironmentId ?? null;
+
   const selectedEnvironmentId = useMemo(
     () =>
       resolveEnvironmentSelection(
         sessionEnvironmentId,
-        settings.projectDefaults.default.defaultEnvironmentId,
+        projectDefaultEnvironmentId,
         storedEnvironmentId,
         environments
       ),
     [
       environments,
       sessionEnvironmentId,
-      settings.projectDefaults.default.defaultEnvironmentId,
+      projectDefaultEnvironmentId,
       storedEnvironmentId,
     ]
   );
@@ -101,7 +105,7 @@ export function useEnvironmentSelection(): EnvironmentSelectionState {
       return;
     }
 
-    rememberSelectedEnvironment(selectedEnvironmentId);
+    rememberSelectedEnvironment(defaultProjectId, selectedEnvironmentId);
   }, [environments, rememberSelectedEnvironment, selectedEnvironmentId, storedEnvironmentId]);
 
   const selectedEnvironment = useMemo(
@@ -109,7 +113,6 @@ export function useEnvironmentSelection(): EnvironmentSelectionState {
     [environments, selectedEnvironmentId]
   );
 
-  const projectDefaultEnvironmentId = settings.projectDefaults.default.defaultEnvironmentId;
   const loadError = [environmentsQuery.error, projectReferencesQuery.error]
     .filter((error): error is Error => error instanceof Error)
     .map((error) => error.message)
@@ -117,7 +120,7 @@ export function useEnvironmentSelection(): EnvironmentSelectionState {
 
   const onSelectEnvironment = (environmentId: string): void => {
     setSessionEnvironmentId(environmentId);
-    rememberSelectedEnvironment(environmentId);
+    rememberSelectedEnvironment(defaultProjectId, environmentId);
   };
 
   return {

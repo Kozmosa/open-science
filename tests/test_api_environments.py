@@ -656,8 +656,12 @@ async def test_environment_alias_conflicts_and_reference_protection(tmp_path: Pa
             json=payload,
         )
 
+        project = app.state.project_service.create_project(
+            name="Project A",
+            description=None,
+        )
         app.state.environment_service.upsert_project_reference(
-            project_id="project-a",
+            project_id=project.project_id,
             environment_id=environment_id,
             is_default=True,
         )

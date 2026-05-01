@@ -47,7 +47,6 @@ from ainrf.terminal.pty import (
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
 
 router = APIRouter(prefix="/terminal", tags=["terminal"])
-_DEFAULT_PROJECT_ID = "default"
 _APP_USER_HEADER = "X-AINRF-User-Id"
 
 
@@ -172,12 +171,13 @@ def _get_environment_context(
     service: InMemoryEnvironmentService,
     environment_id: str | None,
     state_root: Any,
+    project_id: str = "default",
 ) -> tuple[EnvironmentRegistryEntry | None, str | None]:
     if environment_id is None:
         return None, None
     environment = service.get_environment(environment_id)
     working_directory = service.resolve_effective_workdir(
-        _DEFAULT_PROJECT_ID,
+        project_id,
         environment_id,
         state_root,
     )
@@ -192,6 +192,7 @@ def _get_running_loop() -> asyncio.AbstractEventLoop:
 async def read_terminal_session(
     request: Request,
     environment_id: str | None = Query(default=None),
+    project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
     app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
@@ -201,6 +202,7 @@ async def read_terminal_session(
             service,
             environment_id,
             request.app.state.api_config.state_root,
+            project_id=project_id,
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
@@ -218,6 +220,7 @@ async def read_terminal_session(
 async def read_terminal_session_pairs(
     request: Request,
     environment_id: str | None = Query(default=None),
+    project_id: str = Query(default="default"),
 ) -> UserSessionPairListResponse:
     app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
@@ -243,6 +246,7 @@ async def read_terminal_session_pairs(
 async def create_terminal_session(
     payload: TerminalSessionCreateRequest,
     request: Request,
+    project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
     app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
@@ -253,6 +257,7 @@ async def create_terminal_session(
             service,
             payload.environment_id,
             request.app.state.api_config.state_root,
+            project_id=project_id,
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
@@ -279,6 +284,7 @@ async def delete_terminal_session(
     request: Request,
     environment_id: str | None = Query(default=None),
     attachment_id: str | None = Query(default=None),
+    project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
     app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
@@ -293,6 +299,7 @@ async def delete_terminal_session(
             service,
             resolved_environment_id,
             request.app.state.api_config.state_root,
+            project_id=project_id,
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
@@ -310,6 +317,7 @@ async def delete_terminal_session(
 async def reset_terminal_session(
     payload: TerminalSessionResetRequest,
     request: Request,
+    project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
     app_user_id = _require_app_user_id(request)
     service = _get_environment_service(request)
@@ -321,6 +329,7 @@ async def reset_terminal_session(
             service,
             payload.environment_id,
             request.app.state.api_config.state_root,
+            project_id=project_id,
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc

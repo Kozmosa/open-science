@@ -79,8 +79,37 @@ export interface UserSessionPairListResponse {
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle';
 
+export interface ProjectRecord {
+  project_id: string;
+  name: string;
+  description: string | null;
+  default_workspace_id: string | null;
+  default_environment_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectListResponse {
+  items: ProjectRecord[];
+}
+
+export interface ProjectCreateRequest {
+  name: string;
+  description?: string | null;
+  default_workspace_id?: string | null;
+  default_environment_id?: string | null;
+}
+
+export interface ProjectUpdateRequest {
+  name?: string | null;
+  description?: string | null;
+  default_workspace_id?: string | null;
+  default_environment_id?: string | null;
+}
+
 export interface WorkspaceRecord {
   workspace_id: string;
+  project_id: string;
   label: string;
   description: string | null;
   default_workdir: string | null;
@@ -95,6 +124,7 @@ export interface WorkspaceListResponse {
 
 export interface WorkspaceCreateRequest {
   label: string;
+  project_id?: string | null;
   description?: string | null;
   default_workdir?: string | null;
   workspace_prompt: string;
@@ -124,6 +154,7 @@ export interface TaskEnvironmentSummary {
 
 export interface TaskSummary {
   task_id: string;
+  project_id: string;
   title: string;
   task_profile: string;
   status: TaskStatus;
@@ -155,6 +186,7 @@ export interface TaskConfigurationSnapshot {
 }
 
 export interface TaskBindingSummary {
+  project_id: string;
   workspace: WorkspaceSummary;
   environment: TaskEnvironmentSummary;
   task_profile: string;
@@ -215,6 +247,7 @@ export interface TaskListResponse {
 export interface TaskCreateRequest {
   workspace_id: string;
   environment_id: string;
+  project_id?: string | null;
   task_profile: string;
   task_input: string;
   title?: string | null;

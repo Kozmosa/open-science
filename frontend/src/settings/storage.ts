@@ -181,22 +181,22 @@ function normalizeDefaultProjectSettings(
   hadFallback ||= hadEnvironmentFallback;
 
   const defaultEnvironmentId = readStringOrNull(value.defaultEnvironmentId);
-  if (value.defaultEnvironmentId !== null && defaultEnvironmentId === null) {
+  if (value.defaultEnvironmentId != null && defaultEnvironmentId === null) {
     hadFallback = true;
   }
 
   const defaultWorkspaceId = readStringOrNull(value.defaultWorkspaceId);
-  if (value.defaultWorkspaceId !== null && defaultWorkspaceId === null) {
+  if (value.defaultWorkspaceId != null && defaultWorkspaceId === null) {
     hadFallback = true;
   }
 
   const lastEnvironmentId = selection ? readStringOrNull(selection.lastEnvironmentId) : null;
-  if (selection?.lastEnvironmentId !== null && lastEnvironmentId === null) {
+  if (selection?.lastEnvironmentId != null && lastEnvironmentId === null) {
     hadFallback = true;
   }
 
   const lastWorkspaceId = selection ? readStringOrNull(selection.lastWorkspaceId) : null;
-  if (selection?.lastWorkspaceId !== null && lastWorkspaceId === null) {
+  if (selection?.lastWorkspaceId != null && lastWorkspaceId === null) {
     hadFallback = true;
   }
 
@@ -239,7 +239,7 @@ export function readStoredSettings(): SettingsLoadResult {
     return { settings: defaults, recoveryReason: 'invalid_document' };
   }
 
-  if (parsed.version !== 1 && parsed.version !== 2) {
+  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) {
     return { settings: defaults, recoveryReason: 'unsupported_version' };
   }
 
@@ -249,17 +249,40 @@ export function readStoredSettings(): SettingsLoadResult {
     return { settings: defaults, recoveryReason: 'invalid_document' };
   }
 
-  const { projectSettings, hadFallback } = normalizeDefaultProjectSettings(projectDefaults.default);
+  // v2 → v3 migration: flatten projectDefaults.default into projectDefaults['default']
+  let projectDefaultsMap: Record<string, DefaultProjectSettings>;
+  let hadProjectDefaultsMigration = false;
+  if (parsed.version === 2) {
+    const { projectSettings, hadFallback } = normalizeDefaultProjectSettings(projectDefaults.default);
+    projectDefaultsMap = { default: projectSettings };
+    hadProjectDefaultsMigration = hadFallback;
+  } else {
+    projectDefaultsMap = {};
+    for (const [projectId, rawProjectSettings] of Object.entries(projectDefaults)) {
+      const { projectSettings, hadFallback } = normalizeDefaultProjectSettings(rawProjectSettings);
+      projectDefaultsMap[projectId] = projectSettings;
+      hadProjectDefaultsMigration ||= hadFallback;
+    }
+    if (Object.keys(projectDefaultsMap).length === 0) {
+      projectDefaultsMap = { default: createDefaultProjectSettings() };
+    }
+  }
+
   const {
     taskConfiguration,
     hadFallback: hadTaskConfigurationFallback,
   } = normalizeTaskConfigurationSettings(
-    parsed.version === 2 ? parsed.taskConfiguration : createDefaultTaskConfigurationSettings()
+    parsed.version >= 2 ? parsed.taskConfiguration : createDefaultTaskConfigurationSettings()
   );
 
-  const defaultRoute = isDefaultRoute(general.defaultRoute)
+  let defaultRoute = isDefaultRoute(general.defaultRoute)
     ? general.defaultRoute
     : defaults.general.defaultRoute;
+  // v2 → v3 migration: rename 'containers' route to 'environments'
+  if (defaultRoute === 'containers') {
+    defaultRoute = 'environments';
+  }
+
   const terminalSettings = isRecord(general.terminal) ? general.terminal : null;
   const terminalFontSize = clampTerminalFontSize(terminalSettings?.fontSize);
   const editorSettings = isRecord(general.editor) ? general.editor : null;
@@ -276,14 +299,14 @@ export function readStoredSettings(): SettingsLoadResult {
     terminalSettings?.fontSize !== undefined &&
     clampTerminalFontSize(terminalSettings.fontSize) !== terminalSettings.fontSize;
   const missingEditorSettings =
-    parsed.version === 2 && (editorSettings === null || editorSettings.fontSize === undefined);
+    parsed.version >= 2 && (editorSettings === null || editorSettings.fontSize === undefined);
   const invalidEditorFontSize =
     editorSettings?.fontSize !== undefined &&
     clampEditorFontSize(editorSettings.fontSize) !== editorSettings.fontSize;
 
   return {
     settings: {
-      version: 2,
+      version: 3,
       general: {
         defaultRoute,
         terminal: {
@@ -295,12 +318,10 @@ export function readStoredSettings(): SettingsLoadResult {
         },
       },
       taskConfiguration,
-      projectDefaults: {
-        default: projectSettings,
-      },
+      projectDefaults: projectDefaultsMap,
     },
     recoveryReason:
-      hadFallback ||
+      hadProjectDefaultsMigration ||
       hadTaskConfigurationFallback ||
       missingDefaultRoute ||
       invalidDefaultRoute ||
@@ -323,14 +344,20 @@ export function writeStoredSettings(settings: WebUiSettingsDocument): void {
 
 export function resolveProjectEnvironmentDefaults(
   settings: WebUiSettingsDocument,
+  projectId: string,
   environmentId: string | null
 ): EnvironmentTaskDefaults {
   if (environmentId === null) {
     return createEmptyEnvironmentTaskDefaults();
   }
 
+  const projectSettings = settings.projectDefaults[projectId] ?? settings.projectDefaults.default;
+  if (!projectSettings) {
+    return createEmptyEnvironmentTaskDefaults();
+  }
+
   return (
-    settings.projectDefaults.default.environmentDefaults[environmentId] ??
+    projectSettings.environmentDefaults[environmentId] ??
     createEmptyEnvironmentTaskDefaults()
   );
 }

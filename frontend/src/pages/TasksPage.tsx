@@ -41,9 +41,10 @@ function TasksPage() {
   const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
   const availableSkills = useMemo(() => skillsQuery.data?.items ?? [], [skillsQuery.data]);
 
+  const defaultProjectSettings = settings.projectDefaults.default;
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(
-    settings.projectDefaults.default.defaultWorkspaceId ??
-      settings.projectDefaults.default.selection.lastWorkspaceId ??
+    defaultProjectSettings?.defaultWorkspaceId ??
+      defaultProjectSettings?.selection?.lastWorkspaceId ??
       ''
   );
   const [draftResetVersion, setDraftResetVersion] = useState(0);
@@ -112,7 +113,7 @@ function TasksPage() {
   const draftDefaults = useMemo(() => {
     const environmentDefaults =
       (environmentSelection.selectedEnvironmentId
-        ? settings.projectDefaults.default.environmentDefaults[
+        ? settings.projectDefaults.default?.environmentDefaults?.[
             environmentSelection.selectedEnvironmentId
           ]
         : null) ?? createEmptyEnvironmentTaskDefaults();
@@ -123,7 +124,7 @@ function TasksPage() {
       researchAgentProfileId: environmentDefaults.researchAgentProfileId,
       taskConfigurationId: environmentDefaults.taskConfigurationId,
     };
-  }, [environmentSelection.selectedEnvironmentId, settings.projectDefaults.default.environmentDefaults]);
+  }, [environmentSelection.selectedEnvironmentId, settings.projectDefaults.default?.environmentDefaults]);
 
   const createError = extractErrorMessage(createMutation.error);
   const tasksError = extractErrorMessage(tasksQuery.error);

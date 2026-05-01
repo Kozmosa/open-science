@@ -16,7 +16,7 @@ describe('settings storage v2 task configuration', () => {
   it('creates default task configuration catalog', () => {
     const settings = createDefaultWebUiSettings();
 
-    expect(settings.version).toBe(2);
+    expect(settings.version).toBe(3);
     expect(settings.taskConfiguration.defaultExecutionEngineId).toBe('claude-code');
     expect(settings.taskConfiguration.defaultResearchAgentProfileId).toBe(
       defaultResearchAgentProfileId
@@ -58,7 +58,7 @@ describe('settings storage v2 task configuration', () => {
     const result = readStoredSettings();
 
     expect(result.recoveryReason).toBeNull();
-    expect(result.settings.version).toBe(2);
+    expect(result.settings.version).toBe(3);
     expect(result.settings.general.defaultRoute).toBe('tasks');
     expect(result.settings.general.terminal.fontSize).toBe(16);
     expect(result.settings.projectDefaults.default.environmentDefaults['env-1']).toEqual({

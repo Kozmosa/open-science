@@ -20,7 +20,7 @@ export const defaultResearchAgentProfileId = 'claude-code-default';
 export const rawPromptTaskConfigurationId = 'raw-prompt';
 export const structuredResearchTaskConfigurationId = 'structured-research-default';
 
-const supportedDefaultRoutes: DefaultRoute[] = ['terminal', 'tasks', 'workspaces', 'containers'];
+const supportedDefaultRoutes: DefaultRoute[] = ['terminal', 'tasks', 'workspaces', 'environments'];
 
 export function isDefaultRoute(value: unknown): value is DefaultRoute {
   return typeof value === 'string' && supportedDefaultRoutes.includes(value as DefaultRoute);
@@ -103,7 +103,7 @@ export function createDefaultProjectSettings(): DefaultProjectSettings {
 
 export function createDefaultWebUiSettings(): WebUiSettingsDocument {
   return {
-    version: 2,
+    version: 3,
     general: {
       defaultRoute: 'terminal',
       terminal: {

@@ -50,6 +50,7 @@ def _translate_task_error(exc: Exception) -> HTTPException:
 def _serialize_task_summary(task: TaskListItem) -> dict[str, Any]:
     return {
         "task_id": task.task_id,
+        "project_id": task.project_id,
         "title": task.title,
         "task_profile": task.task_profile,
         "status": task.status.value,
@@ -68,6 +69,7 @@ def _serialize_task_detail(task: TaskDetail) -> dict[str, Any]:
     payload = _serialize_task_summary(
         TaskListItem(
             task_id=task.task_id,
+            project_id=task.project_id,
             title=task.title,
             task_profile=task.task_profile,
             status=task.status,
@@ -148,6 +150,7 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
     service = _get_task_harness_service(request)
     try:
         task = service.create_task(
+            project_id=payload.project_id,
             workspace_id=payload.workspace_id,
             environment_id=payload.environment_id,
             task_profile=payload.task_profile,

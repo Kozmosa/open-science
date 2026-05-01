@@ -9,7 +9,7 @@ import './index.css';
 
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
-const ContainersPage = lazy(() => import('./pages/ContainersPage'));
+const EnvironmentsPage = lazy(() => import('./pages/EnvironmentsPage'));
 const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage'));
 const FileBrowserPage = lazy(() => import('./pages/FileBrowserPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
@@ -20,7 +20,7 @@ const defaultRoutePathById = {
   terminal: '/terminal',
   tasks: '/tasks',
   workspaces: '/workspaces',
-  containers: '/containers',
+  environments: '/environments',
 } as const;
 
 function RootRedirect() {
@@ -48,7 +48,7 @@ function AppRoutes() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/workspaces" element={<WorkspacesPage />} />
           <Route path="/workspace-browser" element={<FileBrowserPage />} />
-          <Route path="/containers" element={<ContainersPage />} />
+          <Route path="/environments" element={<EnvironmentsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Suspense>

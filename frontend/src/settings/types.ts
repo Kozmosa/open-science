@@ -1,4 +1,4 @@
-export type DefaultRoute = 'terminal' | 'tasks' | 'workspaces' | 'containers';
+export type DefaultRoute = 'terminal' | 'tasks' | 'workspaces' | 'environments';
 
 export type ExecutionEngineId = 'claude-code';
 export type TaskConfigurationMode = 'raw_prompt' | 'structured_research';
@@ -46,7 +46,7 @@ export interface TaskConfigurationSettings {
 }
 
 export interface WebUiSettingsDocument {
-  version: 2;
+  version: 3;
   general: {
     defaultRoute: DefaultRoute;
     terminal: {
@@ -58,9 +58,7 @@ export interface WebUiSettingsDocument {
     };
   };
   taskConfiguration: TaskConfigurationSettings;
-  projectDefaults: {
-    default: DefaultProjectSettings;
-  };
+  projectDefaults: Record<string, DefaultProjectSettings>;
 }
 
 export type SettingsRecoveryReason = 'invalid_document' | 'unsupported_version';

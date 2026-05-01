@@ -10,6 +10,7 @@ import {
 } from './defaults';
 import { readStoredSettings, resolveProjectEnvironmentDefaults, writeStoredSettings } from './storage';
 import type {
+  DefaultProjectSettings,
   EnvironmentTaskDefaults,
   ResearchAgentProfileSettings,
   SettingsRecoveryReason,
@@ -20,21 +21,24 @@ import type {
 interface SettingsContextValue {
   settings: WebUiSettingsDocument;
   recoveryReason: SettingsRecoveryReason | null;
+  activeProjectId: string;
+  setActiveProjectId: (projectId: string) => void;
   saveGeneralPreferences: (general: WebUiSettingsDocument['general']) => void;
   resetGeneralPreferences: () => void;
   saveTaskConfigurationSettings: (taskConfiguration: TaskConfigurationSettings) => void;
   resetTaskConfigurationSettings: () => void;
   saveResearchAgentProfile: (profile: ResearchAgentProfileSettings) => void;
-  saveProjectDefaultEnvironment: (environmentId: string | null) => void;
-  saveProjectDefaultWorkspace: (workspaceId: string | null) => void;
+  saveProjectDefaultEnvironment: (projectId: string, environmentId: string | null) => void;
+  saveProjectDefaultWorkspace: (projectId: string, workspaceId: string | null) => void;
   saveProjectEnvironmentDefaults: (
+    projectId: string,
     environmentId: string,
     defaults: EnvironmentTaskDefaults
   ) => void;
-  resetProjectEnvironmentDefaults: (environmentId: string) => void;
-  rememberSelectedEnvironment: (environmentId: string | null) => void;
-  rememberSelectedWorkspace: (workspaceId: string | null) => void;
-  getProjectEnvironmentDefaults: (environmentId: string | null) => EnvironmentTaskDefaults;
+  resetProjectEnvironmentDefaults: (projectId: string, environmentId: string) => void;
+  rememberSelectedEnvironment: (projectId: string, environmentId: string | null) => void;
+  rememberSelectedWorkspace: (projectId: string, workspaceId: string | null) => void;
+  getProjectEnvironmentDefaults: (projectId: string, environmentId: string | null) => EnvironmentTaskDefaults;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -48,6 +52,23 @@ interface SettingsState {
   recoveryReason: SettingsRecoveryReason | null;
 }
 
+function getOrCreateProjectSettings(
+  projectDefaults: Record<string, DefaultProjectSettings>,
+  projectId: string
+): DefaultProjectSettings {
+  return (
+    projectDefaults[projectId] ?? {
+      defaultEnvironmentId: null,
+      defaultWorkspaceId: null,
+      selection: {
+        lastEnvironmentId: null,
+        lastWorkspaceId: null,
+      },
+      environmentDefaults: {},
+    }
+  );
+}
+
 function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocument {
   const editorFontSize = clampEditorFontSize(settings.general.editor?.fontSize);
   const editorFontFamily =
@@ -55,8 +76,50 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
     settings.general.editor.fontFamily.length > 0
       ? settings.general.editor.fontFamily
       : 'monospace';
+
+  const sanitizedProjectDefaults: Record<string, DefaultProjectSettings> = {};
+  for (const [projectId, projectSettings] of Object.entries(settings.projectDefaults)) {
+    sanitizedProjectDefaults[projectId] = {
+      defaultEnvironmentId:
+        typeof projectSettings.defaultEnvironmentId === 'string'
+          ? projectSettings.defaultEnvironmentId
+          : null,
+      defaultWorkspaceId:
+        typeof projectSettings.defaultWorkspaceId === 'string'
+          ? projectSettings.defaultWorkspaceId
+          : null,
+      selection: {
+        lastEnvironmentId:
+          typeof projectSettings.selection?.lastEnvironmentId === 'string'
+            ? projectSettings.selection.lastEnvironmentId
+            : null,
+        lastWorkspaceId:
+          typeof projectSettings.selection?.lastWorkspaceId === 'string'
+            ? projectSettings.selection.lastWorkspaceId
+            : null,
+      },
+      environmentDefaults:
+        typeof projectSettings.environmentDefaults === 'object' &&
+        projectSettings.environmentDefaults !== null
+          ? projectSettings.environmentDefaults
+          : {},
+    };
+  }
+
+  if (!sanitizedProjectDefaults.default) {
+    sanitizedProjectDefaults.default = {
+      defaultEnvironmentId: null,
+      defaultWorkspaceId: null,
+      selection: {
+        lastEnvironmentId: null,
+        lastWorkspaceId: null,
+      },
+      environmentDefaults: {},
+    };
+  }
+
   return {
-    version: 2,
+    version: 3,
     general: {
       defaultRoute: isDefaultRoute(settings.general.defaultRoute)
         ? settings.general.defaultRoute
@@ -70,22 +133,13 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
       },
     },
     taskConfiguration: settings.taskConfiguration,
-    projectDefaults: {
-      default: {
-        defaultEnvironmentId: settings.projectDefaults.default.defaultEnvironmentId,
-        defaultWorkspaceId: settings.projectDefaults.default.defaultWorkspaceId,
-        selection: {
-          lastEnvironmentId: settings.projectDefaults.default.selection.lastEnvironmentId,
-          lastWorkspaceId: settings.projectDefaults.default.selection.lastWorkspaceId,
-        },
-        environmentDefaults: settings.projectDefaults.default.environmentDefaults,
-      },
-    },
+    projectDefaults: sanitizedProjectDefaults,
   };
 }
 
 export function SettingsProvider({ children }: ProviderProps) {
   const [state, setState] = useState<SettingsState>(() => readStoredSettings());
+  const [activeProjectId, setActiveProjectId] = useState<string>('default');
 
   const commitSettings = (nextSettings: WebUiSettingsDocument): void => {
     const sanitized = sanitizeSettings(nextSettings);
@@ -100,6 +154,8 @@ export function SettingsProvider({ children }: ProviderProps) {
     () => ({
       settings: state.settings,
       recoveryReason: state.recoveryReason,
+      activeProjectId,
+      setActiveProjectId,
       saveGeneralPreferences: (general) => {
         commitSettings({
           ...state.settings,
@@ -147,36 +203,42 @@ export function SettingsProvider({ children }: ProviderProps) {
           },
         });
       },
-      saveProjectDefaultEnvironment: (environmentId) => {
+      saveProjectDefaultEnvironment: (projectId, environmentId) => {
+        const currentProject = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
         commitSettings({
           ...state.settings,
           projectDefaults: {
-            default: {
-              ...state.settings.projectDefaults.default,
+            ...state.settings.projectDefaults,
+            [projectId]: {
+              ...currentProject,
               defaultEnvironmentId: environmentId,
             },
           },
         });
       },
-      saveProjectDefaultWorkspace: (workspaceId) => {
+      saveProjectDefaultWorkspace: (projectId, workspaceId) => {
+        const currentProject = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
         commitSettings({
           ...state.settings,
           projectDefaults: {
-            default: {
-              ...state.settings.projectDefaults.default,
+            ...state.settings.projectDefaults,
+            [projectId]: {
+              ...currentProject,
               defaultWorkspaceId: workspaceId,
             },
           },
         });
       },
-      saveProjectEnvironmentDefaults: (environmentId, defaults) => {
+      saveProjectEnvironmentDefaults: (projectId, environmentId, defaults) => {
+        const currentProject = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
         commitSettings({
           ...state.settings,
           projectDefaults: {
-            default: {
-              ...state.settings.projectDefaults.default,
+            ...state.settings.projectDefaults,
+            [projectId]: {
+              ...currentProject,
               environmentDefaults: {
-                ...state.settings.projectDefaults.default.environmentDefaults,
+                ...currentProject.environmentDefaults,
                 [environmentId]: {
                   titleTemplate: defaults.titleTemplate,
                   taskInputTemplate: defaults.taskInputTemplate,
@@ -188,54 +250,60 @@ export function SettingsProvider({ children }: ProviderProps) {
           },
         });
       },
-      resetProjectEnvironmentDefaults: (environmentId) => {
+      resetProjectEnvironmentDefaults: (projectId, environmentId) => {
+        const currentProject = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
         const nextEnvironmentDefaults = {
-          ...state.settings.projectDefaults.default.environmentDefaults,
+          ...currentProject.environmentDefaults,
         };
         delete nextEnvironmentDefaults[environmentId];
 
         commitSettings({
           ...state.settings,
           projectDefaults: {
-            default: {
-              ...state.settings.projectDefaults.default,
+            ...state.settings.projectDefaults,
+            [projectId]: {
+              ...currentProject,
               environmentDefaults: nextEnvironmentDefaults,
             },
           },
         });
       },
-      rememberSelectedEnvironment: (environmentId) => {
+      rememberSelectedEnvironment: (projectId, environmentId) => {
+        const currentProject = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
         commitSettings({
           ...state.settings,
           projectDefaults: {
-            default: {
-              ...state.settings.projectDefaults.default,
+            ...state.settings.projectDefaults,
+            [projectId]: {
+              ...currentProject,
               selection: {
-                ...state.settings.projectDefaults.default.selection,
+                ...currentProject.selection,
                 lastEnvironmentId: environmentId,
               },
             },
           },
         });
       },
-      rememberSelectedWorkspace: (workspaceId) => {
+      rememberSelectedWorkspace: (projectId, workspaceId) => {
+        const currentProject = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
         commitSettings({
           ...state.settings,
           projectDefaults: {
-            default: {
-              ...state.settings.projectDefaults.default,
+            ...state.settings.projectDefaults,
+            [projectId]: {
+              ...currentProject,
               selection: {
-                ...state.settings.projectDefaults.default.selection,
+                ...currentProject.selection,
                 lastWorkspaceId: workspaceId,
               },
             },
           },
         });
       },
-      getProjectEnvironmentDefaults: (environmentId) =>
-        resolveProjectEnvironmentDefaults(state.settings, environmentId),
+      getProjectEnvironmentDefaults: (projectId, environmentId) =>
+        resolveProjectEnvironmentDefaults(state.settings, projectId, environmentId),
     }),
-    [state]
+    [state, activeProjectId]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
@@ -261,6 +329,9 @@ export function useEditorSettings(): { fontSize: number; fontFamily: string } {
   };
 }
 
-export function useProjectEnvironmentDefaults(environmentId: string | null): EnvironmentTaskDefaults {
-  return useSettings().getProjectEnvironmentDefaults(environmentId) ?? createEmptyEnvironmentTaskDefaults();
+export function useProjectEnvironmentDefaults(
+  projectId: string,
+  environmentId: string | null
+): EnvironmentTaskDefaults {
+  return useSettings().getProjectEnvironmentDefaults(projectId, environmentId) ?? createEmptyEnvironmentTaskDefaults();
 }

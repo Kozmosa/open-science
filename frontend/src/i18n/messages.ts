@@ -80,7 +80,7 @@ export const messages = {
         label: 'Browser',
         description: 'Managed code-server workspace',
       },
-      containers: {
+      environments: {
         label: 'Containers',
         description: 'Runtime environments and container status',
       },
@@ -244,7 +244,7 @@ export const messages = {
           terminal: 'Terminal',
           tasks: 'Tasks',
           workspaces: 'Workspaces',
-          containers: 'Environments',
+          environments: 'Environments',
         },
         general: {
           title: 'General Preferences',
@@ -313,7 +313,7 @@ export const messages = {
           'This area will host environment preferences, runtime configuration, and WebUI behavior controls in a later slice.',
         badge: 'Placeholder section',
       },
-      containers: {
+      environments: {
         eyebrow: '容器',
         title: 'Containers',
         description:
@@ -580,7 +580,7 @@ export const messages = {
         label: '浏览器',
         description: '托管 code-server 工作区',
       },
-      containers: {
+      environments: {
         label: '容器',
         description: '运行环境与容器状态',
       },
@@ -735,7 +735,7 @@ export const messages = {
           terminal: '终端',
           tasks: '任务',
           workspaces: '工作区',
-          containers: '环境',
+          environments: '环境',
         },
         general: {
           title: '通用偏好',
@@ -799,7 +799,7 @@ export const messages = {
         description: '此区域将在后续更新中支持环境偏好、运行时配置和行为控制。',
         badge: '占位区块',
       },
-      containers: {
+      environments: {
         eyebrow: 'CONTAINERS',
         title: '容器',
         description:

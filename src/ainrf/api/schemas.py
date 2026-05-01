@@ -53,6 +53,40 @@ class TaskAgentWriteState(StrEnum):
     RESUME_REQUESTED = "resume_requested"
 
 
+class ProjectResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str
+    name: str
+    description: str | None = None
+    default_workspace_id: str | None = None
+    default_environment_id: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class ProjectListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ProjectResponse]
+
+
+class ProjectCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    description: str | None = None
+
+
+class ProjectUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    description: str | None = None
+    default_workspace_id: str | None = None
+    default_environment_id: str | None = None
+
+
 class HealthResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -348,6 +382,7 @@ class TaskConfigurationSnapshotRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    project_id: str = Field(default="default", min_length=1)
     workspace_id: str
     environment_id: str
     task_profile: str = Field(default="claude-code", min_length=1)
@@ -362,6 +397,7 @@ class WorkspaceResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     workspace_id: str
+    project_id: str
     label: str
     description: str | None = None
     default_workdir: str | None = None
@@ -394,6 +430,7 @@ class WorkspaceSummaryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     workspace_id: str
+    project_id: str
     label: str
     description: str | None = None
     default_workdir: str | None = None
@@ -413,6 +450,7 @@ class TaskSummaryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str
+    project_id: str
     title: str
     task_profile: str
     status: TaskStatus
@@ -512,6 +550,7 @@ class TaskDetailResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str
+    project_id: str
     title: str
     task_profile: str
     status: TaskStatus

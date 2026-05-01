@@ -50,12 +50,12 @@ import {
   toEnvironmentUpdateRequest,
   valuesFromEnvironment,
   valuesFromProjectReference,
-} from './containers/helpers';
+} from './environments/helpers';
 import type {
   EnvironmentEditorMode,
   EnvironmentFormValues,
   ProjectRefFormValues,
-} from './containers/helpers';
+} from './environments/helpers';
 
 interface EnvironmentEditorProps {
   mode: EnvironmentEditorMode;
@@ -373,13 +373,13 @@ function ProjectReferenceEditor({
         defaultExpanded={false}
         header={
           <SectionHeader
-            title={t('pages.containers.projectReferenceTitle')}
-            description={t('pages.containers.projectReferenceDescription')}
+            title={t('pages.environments.projectReferenceTitle')}
+            description={t('pages.environments.projectReferenceDescription')}
           />
         }
       >
         <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
-          {t('pages.containers.projectReferenceNoSelection')}
+          {t('pages.environments.projectReferenceNoSelection')}
         </p>
       </SectionCard>
     );
@@ -392,8 +392,8 @@ function ProjectReferenceEditor({
       header={
         <div className="space-y-1">
           <SectionHeader
-            title={t('pages.containers.projectReferenceTitle')}
-            description={t('pages.containers.projectReferenceDescription')}
+            title={t('pages.environments.projectReferenceTitle')}
+            description={t('pages.environments.projectReferenceDescription')}
           />
           <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
             <span className="font-medium text-[var(--text)]">{selectedEnvironment.alias}</span>
@@ -404,12 +404,12 @@ function ProjectReferenceEditor({
     >
       <div className="flex flex-wrap gap-2">
         {projectReference ? (
-          <Badge>{t('pages.containers.projectReferencedBadge')}</Badge>
+          <Badge>{t('pages.environments.projectReferencedBadge')}</Badge>
         ) : (
-          <Badge variant="secondary">{t('pages.containers.projectUnreferencedBadge')}</Badge>
+          <Badge variant="secondary">{t('pages.environments.projectUnreferencedBadge')}</Badge>
         )}
         {projectReference?.is_default ? (
-          <Badge>{t('pages.containers.projectDefaultBadge')}</Badge>
+          <Badge>{t('pages.environments.projectDefaultBadge')}</Badge>
         ) : null}
       </div>
 
@@ -421,15 +421,15 @@ function ProjectReferenceEditor({
               await onSetDefault();
             } catch (error) {
               setFormError(
-                error instanceof Error ? error.message : t('pages.containers.projectReferenceSaveError')
+                error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
               );
             }
           }}
           disabled={isSaving || isRemoving || projectReference?.is_default === true}
         >
           {projectReference?.is_default
-            ? t('pages.containers.setProjectDefaultDisabled')
-            : t('pages.containers.setProjectDefault')}
+            ? t('pages.environments.setProjectDefaultDisabled')
+            : t('pages.environments.setProjectDefault')}
         </Button>
         {projectReference?.is_default ? (
           <Button
@@ -440,13 +440,13 @@ function ProjectReferenceEditor({
                 await onClearDefault();
               } catch (error) {
                 setFormError(
-                  error instanceof Error ? error.message : t('pages.containers.projectReferenceSaveError')
+                  error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
                 );
               }
             }}
             disabled={isSaving || isRemoving}
           >
-            {t('pages.containers.clearProjectDefault')}
+            {t('pages.environments.clearProjectDefault')}
           </Button>
         ) : null}
         {projectReference ? (
@@ -458,14 +458,14 @@ function ProjectReferenceEditor({
                 await onRemove();
               } catch (error) {
                 setFormError(
-                  error instanceof Error ? error.message : t('pages.containers.projectReferenceSaveError')
+                  error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
                 );
               }
             }}
             disabled={isSaving || isRemoving}
             className="border-[#ff3b30]/20 bg-[#ffebee] text-[#c62828] hover:bg-[#ffcdd2] hover:text-[#c62828]"
           >
-            {t('pages.containers.removeProjectReference')}
+            {t('pages.environments.removeProjectReference')}
           </Button>
         ) : null}
       </div>
@@ -479,43 +479,43 @@ function ProjectReferenceEditor({
             await onSave(values);
           } catch (error) {
             setFormError(
-              error instanceof Error ? error.message : t('pages.containers.projectReferenceSaveError')
+              error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
             );
           }
         }}
       >
-        <FormField label={t('pages.containers.projectOverrideWorkdir')}>
+        <FormField label={t('pages.environments.projectOverrideWorkdir')}>
           <Input
             value={values.override_workdir}
             onChange={(event) => updateField('override_workdir', event.target.value)}
-            placeholder={t('pages.containers.projectOverrideWorkdirPlaceholder')}
+            placeholder={t('pages.environments.projectOverrideWorkdirPlaceholder')}
           />
         </FormField>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label={t('pages.containers.projectOverrideEnvName')}>
+          <FormField label={t('pages.environments.projectOverrideEnvName')}>
             <Input
               value={values.override_env_name}
               onChange={(event) => updateField('override_env_name', event.target.value)}
-              placeholder={t('pages.containers.projectOverrideEnvNamePlaceholder')}
+              placeholder={t('pages.environments.projectOverrideEnvNamePlaceholder')}
             />
           </FormField>
 
-          <FormField label={t('pages.containers.projectOverrideEnvManager')}>
+          <FormField label={t('pages.environments.projectOverrideEnvManager')}>
             <Input
               value={values.override_env_manager}
               onChange={(event) => updateField('override_env_manager', event.target.value)}
-              placeholder={t('pages.containers.projectOverrideEnvManagerPlaceholder')}
+              placeholder={t('pages.environments.projectOverrideEnvManagerPlaceholder')}
             />
           </FormField>
         </div>
 
-        <FormField label={t('pages.containers.projectOverrideRuntimeNotes')}>
+        <FormField label={t('pages.environments.projectOverrideRuntimeNotes')}>
           <Textarea
             value={values.override_runtime_notes}
             onChange={(event) => updateField('override_runtime_notes', event.target.value)}
             rows={4}
-            placeholder={t('pages.containers.projectOverrideRuntimeNotesPlaceholder')}
+            placeholder={t('pages.environments.projectOverrideRuntimeNotesPlaceholder')}
           />
         </FormField>
 
@@ -525,17 +525,17 @@ function ProjectReferenceEditor({
 
         <Button type="submit" disabled={isSaving || isRemoving}>
           {isSaving
-            ? t('pages.containers.projectReferenceSaving')
+            ? t('pages.environments.projectReferenceSaving')
             : projectReference
-              ? t('pages.containers.updateProjectReference')
-              : t('pages.containers.attachProjectReference')}
+              ? t('pages.environments.updateProjectReference')
+              : t('pages.environments.attachProjectReference')}
         </Button>
       </form>
     </SectionCard>
   );
 }
 
-function ContainersPage() {
+function EnvironmentsPage() {
   const t = useT();
   const locale = useLocale();
   const queryClient = useQueryClient();
@@ -632,7 +632,7 @@ function ContainersPage() {
         codeServerPath: detection?.code_server?.path ?? null,
       });
       if (detection?.warnings.includes('used_personal_tmux_fallback')) {
-        showToast(t('pages.containers.detectFallbackToast', { alias: environment.alias }), 'warning');
+        showToast(t('pages.environments.detectFallbackToast', { alias: environment.alias }), 'warning');
       } else if (detection?.status === 'failed') {
         showToast(detection.summary, 'error');
       }
@@ -644,14 +644,14 @@ function ContainersPage() {
         alias: environment?.alias ?? null,
         error: error instanceof Error ? error.message : error,
       });
-      showToast(error instanceof Error ? error.message : t('pages.containers.detectFailedToast'), 'error');
+      showToast(error instanceof Error ? error.message : t('pages.environments.detectFailedToast'), 'error');
     },
   });
 
   const saveProjectReferenceMutation = useMutation({
     mutationFn: async (payload: ProjectEnvironmentReferenceUpdateRequest) => {
       if (selectedEnvironment === null) {
-        throw new Error(t('pages.containers.projectReferenceNoSelection'));
+        throw new Error(t('pages.environments.projectReferenceNoSelection'));
       }
 
       if (selectedProjectReference) {
@@ -674,7 +674,7 @@ function ContainersPage() {
   const removeProjectReferenceMutation = useMutation({
     mutationFn: async () => {
       if (selectedEnvironment === null || selectedProjectReference === null) {
-        throw new Error(t('pages.containers.projectReferenceNoSelection'));
+        throw new Error(t('pages.environments.projectReferenceNoSelection'));
       }
       return deleteProjectEnvironmentReference(selectedEnvironment.id, defaultProjectId);
     },
@@ -701,16 +701,16 @@ function ContainersPage() {
       : null);
   const activeEnvironmentSummary = selectedEnvironment
     ? `${selectedEnvironment.alias} · ${selectedEnvironment.display_name}`
-    : t('pages.containers.activeSelectionFallback');
+    : t('pages.environments.activeSelectionFallback');
   const authKindLabels = {
-    ssh_key: t('pages.containers.authKind.ssh_key'),
-    password: t('pages.containers.authKind.password'),
-    agent: t('pages.containers.authKind.agent'),
+    ssh_key: t('pages.environments.authKind.ssh_key'),
+    password: t('pages.environments.authKind.password'),
+    agent: t('pages.environments.authKind.agent'),
   };
   const detectionStatusLabels = {
-    success: t('pages.containers.detectionStatus.success'),
-    partial: t('pages.containers.detectionStatus.partial'),
-    failed: t('pages.containers.detectionStatus.failed'),
+    success: t('pages.environments.detectionStatus.success'),
+    partial: t('pages.environments.detectionStatus.partial'),
+    failed: t('pages.environments.detectionStatus.failed'),
   };
 
   const handleCreate = () => {
@@ -722,35 +722,35 @@ function ContainersPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={t('pages.containers.eyebrow')}
-        title={t('pages.containers.title')}
-        description={t('pages.containers.description')}
+        eyebrow={t('pages.environments.eyebrow')}
+        title={t('pages.environments.title')}
+        description={t('pages.environments.description')}
       />
 
       <SectionCard className="flex flex-wrap items-center justify-between gap-3 p-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-            {t('pages.containers.currentSelection')}
+            {t('pages.environments.currentSelection')}
           </p>
           <p className="mt-1 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
             {activeEnvironmentSummary}
           </p>
         </div>
         <Button onClick={handleCreate}>
-          {t('pages.containers.addEnvironment')}
+          {t('pages.environments.addEnvironment')}
         </Button>
       </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <SectionCard className="space-y-4">
           <SectionHeader
-            title={t('pages.containers.listTitle')}
-            description={t('pages.containers.listDescription')}
+            title={t('pages.environments.listTitle')}
+            description={t('pages.environments.listDescription')}
           />
 
           {environmentSelection.isLoading ? (
             <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
-              {t('pages.containers.loading')}
+              {t('pages.environments.loading')}
             </p>
           ) : null}
 
@@ -759,7 +759,7 @@ function ContainersPage() {
 
           {!environmentSelection.isLoading && environments.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-6 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
-              {t('pages.containers.empty')}
+              {t('pages.environments.empty')}
             </div>
           ) : null}
 
@@ -769,19 +769,19 @@ function ContainersPage() {
                 <thead>
                   <tr className="border-b border-[var(--border)]">
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                      {t('pages.containers.alias')}
+                      {t('pages.environments.alias')}
                     </th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                      {t('pages.containers.host')}
+                      {t('pages.environments.host')}
                     </th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                      {t('pages.containers.auth')}
+                      {t('pages.environments.auth')}
                     </th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                      {t('pages.containers.detection')}
+                      {t('pages.environments.detection')}
                     </th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                      {t('pages.containers.actions')}
+                      {t('pages.environments.actions')}
                     </th>
                   </tr>
                 </thead>
@@ -808,14 +808,14 @@ function ContainersPage() {
                               ) : null}
                               {projectReference ? (
                                 <Badge variant="secondary" className="ml-2">
-                                  {t('pages.containers.projectReferencedBadge')}
+                                  {t('pages.environments.projectReferencedBadge')}
                                 </Badge>
                               ) : null}
                               {projectReference?.is_default ? (
-                                <Badge className="ml-2">{t('pages.containers.projectDefaultBadge')}</Badge>
+                                <Badge className="ml-2">{t('pages.environments.projectDefaultBadge')}</Badge>
                               ) : null}
                               {isActive ? (
-                                <Badge className="ml-2">{t('pages.containers.activeBadge')}</Badge>
+                                <Badge className="ml-2">{t('pages.environments.activeBadge')}</Badge>
                               ) : null}
                             </p>
                             <p className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
@@ -824,12 +824,12 @@ function ContainersPage() {
                               </code>
                               {isEditing ? (
                                 <span className="ml-2 text-[var(--apple-blue)]">
-                                  {t('pages.containers.editingBadge')}
+                                  {t('pages.environments.editingBadge')}
                                 </span>
                               ) : null}
                             </p>
                             <p className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
-                              {environment.default_workdir ?? t('pages.containers.defaultWorkdir')}
+                              {environment.default_workdir ?? t('pages.environments.defaultWorkdir')}
                             </p>
                           </div>
                         </td>
@@ -855,13 +855,13 @@ function ContainersPage() {
                                 {detection.summary}
                               </div>
                               <div className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
-                                {t('pages.containers.detectedAt')}{' '}
+                                {t('pages.environments.detectedAt')}{' '}
                                 {formatTimestamp(detection.detected_at, locale, t('common.never'))}
                               </div>
                             </div>
                           ) : (
                             <span className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
-                              {t('pages.containers.notDetected')}
+                              {t('pages.environments.notDetected')}
                             </span>
                           )}
                         </td>
@@ -901,7 +901,7 @@ function ContainersPage() {
                               onClick={() => {
                                 if (
                                   window.confirm(
-                                    t('pages.containers.confirmDelete', { alias: environment.alias })
+                                    t('pages.environments.confirmDelete', { alias: environment.alias })
                                   )
                                 ) {
                                   deleteMutation.mutate(environment.id);
@@ -910,7 +910,7 @@ function ContainersPage() {
                               disabled={deleteMutation.isPending || environment.is_seed}
                               title={
                                 environment.is_seed
-                                  ? t('pages.containers.defaultEnvironmentLocked')
+                                  ? t('pages.environments.defaultEnvironmentLocked')
                                   : undefined
                               }
                               className="border-[#ff3b30]/20 bg-[#ffebee] text-[#c62828] hover:bg-[#ffcdd2] hover:text-[#c62828]"
@@ -977,4 +977,4 @@ function ContainersPage() {
   );
 }
 
-export default ContainersPage;
+export default EnvironmentsPage;

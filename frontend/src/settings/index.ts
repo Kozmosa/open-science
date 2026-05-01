@@ -16,7 +16,7 @@ export {
   settingsStorageKey,
   structuredResearchTaskConfigurationId,
 } from './defaults';
-export { SettingsProvider, useEditorSettings, useSettings, useTerminalFontSize } from './context';
+export { SettingsProvider, useEditorSettings, useProjectEnvironmentDefaults, useSettings, useTerminalFontSize } from './context';
 export { readStoredSettings, resolveProjectEnvironmentDefaults } from './storage';
 export type {
   DefaultRoute,

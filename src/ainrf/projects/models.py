@@ -5,12 +5,11 @@ from datetime import datetime
 
 
 @dataclass(slots=True)
-class WorkspaceRecord:
-    workspace_id: str
+class ProjectRecord:
     project_id: str
-    label: str
+    name: str
     description: str | None
-    default_workdir: str | None
-    workspace_prompt: str
+    default_workspace_id: str | None
+    default_environment_id: str | None
     created_at: datetime
     updated_at: datetime

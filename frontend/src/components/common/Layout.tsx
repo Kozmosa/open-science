@@ -87,9 +87,9 @@ function Layout({ children, edgeToEdge = false }: Props) {
       icon: FolderOpen,
     },
     {
-      label: t('navigation.containers.label'),
-      to: '/containers',
-      description: t('navigation.containers.description'),
+      label: t('navigation.environments.label'),
+      to: '/environments',
+      description: t('navigation.environments.description'),
       icon: Boxes,
     },
     {
