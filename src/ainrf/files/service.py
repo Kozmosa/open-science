@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shlex
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -10,7 +11,7 @@ from ainrf.execution.models import CommandResult, ContainerConfig
 from ainrf.execution.ssh import SSHExecutor
 from ainrf.files.cache import FileTreeCache
 from ainrf.files.language_map import is_image_file, language_from_path, mime_type_from_path
-from ainrf.files.models import DirectoryListing, FileContent, FileEntry
+from ainrf.files.models import DirectoryListing, FileContent, FileEntry, FileUploadResult
 
 if TYPE_CHECKING:
     from ainrf.environments.models import EnvironmentRegistryEntry
@@ -123,6 +124,33 @@ class FileBrowserService:
 
     def invalidate_cache(self, environment_id: str) -> None:
         self._cache.invalidate_environment(environment_id)
+
+    async def upload_file(
+        self,
+        environment_id: str,
+        path: str,
+        local_temp_path: Path,
+        workspace_id: str | None = None,
+    ) -> FileUploadResult:
+        environment, workdir = self._resolver.resolve(environment_id, workspace_id)
+        resolved_path = _resolve_path(workdir, path)
+
+        if is_localhost_environment(environment):
+            target = Path(resolved_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(local_temp_path, target)
+            size = target.stat().st_size
+        else:
+            config = _build_container_config(environment)
+            executor = SSHExecutor(config)
+            try:
+                await executor.upload(local_temp_path, resolved_path)
+            finally:
+                await executor.close()
+            size = local_temp_path.stat().st_size
+
+        self.invalidate_cache(environment_id)
+        return FileUploadResult(path=resolved_path, size=size)
 
     async def _list_local(self, path: str) -> DirectoryListing:
         target = Path(path)

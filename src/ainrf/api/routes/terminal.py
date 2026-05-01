@@ -12,6 +12,8 @@ from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSock
 from starlette.websockets import WebSocketState
 
 from ainrf.api.schemas import (
+    TerminalExecRequest,
+    TerminalExecResponse,
     TerminalSessionCreateRequest,
     TerminalSessionResetRequest,
     TerminalSessionResponse,
@@ -44,6 +46,7 @@ from ainrf.terminal.pty import (
     resize_terminal,
     write_terminal_input,
 )
+from ainrf.terminal.exec import exec_command
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
 
 router = APIRouter(prefix="/terminal", tags=["terminal"])
@@ -349,6 +352,51 @@ async def reset_terminal_session(
     await to_thread.run_sync(manager.record_personal_attach, target.binding_id)
     attached_session = broker.attach_record(session, attachment, str(request.base_url))
     return TerminalSessionResponse.model_validate(_serialize_session(attached_session))
+
+
+@router.post("/session/exec", response_model=TerminalExecResponse)
+async def terminal_session_exec(
+    payload: TerminalExecRequest,
+    request: Request,
+    project_id: str = Query(default="default"),
+) -> TerminalExecResponse:
+    service = _get_environment_service(request)
+    try:
+        environment, working_directory = _get_environment_context(
+            service,
+            payload.environment_id,
+            request.app.state.api_config.state_root,
+            project_id=project_id,
+        )
+    except Exception as exc:
+        raise _translate_environment_error(exc) from exc
+    assert environment is not None
+
+    if payload.workspace_id is not None:
+        workspace_service = getattr(request.app.state, "workspace_service", None)
+        if workspace_service is not None:
+            try:
+                workspace = workspace_service.get_workspace(payload.workspace_id)
+            except Exception as exc:
+                raise _translate_environment_error(exc) from exc
+            working_directory = workspace.default_workdir or working_directory or "/"
+
+    try:
+        result = await exec_command(
+            environment,
+            payload.command,
+            cwd=working_directory or "/",
+            timeout=payload.timeout,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Command execution failed: {exc}") from exc
+
+    return TerminalExecResponse(
+        stdout=result.stdout,
+        stderr=result.stderr,
+        exit_code=result.exit_code,
+        command=result.command,
+    )
 
 
 @router.websocket("/attachments/{attachment_id}/ws")

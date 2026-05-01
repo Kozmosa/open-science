@@ -130,10 +130,13 @@ def _serialize_output_page(page: TaskOutputPage) -> dict[str, Any]:
 
 
 @router.get("", response_model=TaskListResponse)
-async def list_tasks(request: Request) -> TaskListResponse:
+async def list_tasks(
+    request: Request,
+    include_archived: bool = Query(default=False),
+) -> TaskListResponse:
     service = _get_task_harness_service(request)
     try:
-        items = service.list_tasks()
+        items = service.list_tasks(include_archived=include_archived)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskListResponse.model_validate(
@@ -232,3 +235,23 @@ async def stream_task_output(
             await asyncio.sleep(1.0)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.delete("/{task_id}", response_model=TaskSummaryResponse)
+async def archive_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    service = _get_task_harness_service(request)
+    try:
+        task = service.archive_task(task_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@router.post("/{task_id}/cancel", response_model=TaskSummaryResponse)
+async def cancel_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    service = _get_task_harness_service(request)
+    try:
+        task = await service.cancel_task(task_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskSummaryResponse.model_validate(_serialize_task_summary(task))

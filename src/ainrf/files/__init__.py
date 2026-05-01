@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ainrf.files.cache import FileTreeCache
-from ainrf.files.models import DirectoryListing, FileContent, FileEntry
+from ainrf.files.models import DirectoryListing, FileContent, FileEntry, FileUploadResult
 from ainrf.files.service import (
     FileBrowserError,
     FileBrowserService,
@@ -17,5 +17,6 @@ __all__ = [
     "FileEntry",
     "FileTooLargeError",
     "FileTreeCache",
+    "FileUploadResult",
     "PathNotFoundError",
 ]

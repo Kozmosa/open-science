@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Archive, Search, X } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { TaskSummary } from '../../types';
 import { statusClassName } from './status';
@@ -10,6 +10,8 @@ interface Props {
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   onSelectTask: (taskId: string) => void;
+  onArchiveTask: (taskId: string) => void;
+  onCancelTask: (taskId: string) => void;
 }
 
 function matchesTask(task: TaskSummary, query: string): boolean {
@@ -35,9 +37,14 @@ export default function TaskList({
   searchQuery,
   onSearchQueryChange,
   onSelectTask,
+  onArchiveTask,
+  onCancelTask,
 }: Props) {
   const t = useT();
   const filteredTasks = tasks.filter((task) => matchesTask(task, searchQuery));
+
+  const canCancel = (status: string) => status === 'queued' || status === 'starting' || status === 'running';
+  const canArchive = (status: string) => status === 'succeeded' || status === 'failed' || status === 'cancelled';
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -76,7 +83,7 @@ export default function TaskList({
                 type="button"
                 onClick={() => onSelectTask(task.task_id)}
                 className={[
-                  'flex w-full flex-col gap-2 rounded-lg border px-3 py-3 text-left transition',
+                  'group flex w-full flex-col gap-2 rounded-lg border px-3 py-3 text-left transition',
                   isSelected
                     ? 'border-[var(--apple-blue)]/35 bg-[var(--apple-blue)]/10 shadow-sm'
                     : 'border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-secondary)]',
@@ -86,10 +93,36 @@ export default function TaskList({
                   <span className="min-w-0 text-sm font-medium leading-snug text-[var(--text)]">
                     {task.title}
                   </span>
-                  <span
-                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClassName[task.status]}`}
-                  >
-                    {t(`pages.tasks.status.${task.status}`)}
+                  <span className="flex items-center gap-2">
+                    {canCancel(task.status) ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onCancelTask(task.task_id);
+                        }}
+                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                      >
+                        {t('pages.tasks.actions.cancel')}
+                      </button>
+                    ) : null}
+                    {canArchive(task.status) ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onArchiveTask(task.task_id);
+                        }}
+                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                      >
+                        {t('pages.tasks.actions.archive')}
+                      </button>
+                    ) : null}
+                    <span
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClassName[task.status]}`}
+                    >
+                      {t(`pages.tasks.status.${task.status}`)}
+                    </span>
                   </span>
                 </span>
                 <span className="truncate text-xs text-[var(--text-secondary)]">

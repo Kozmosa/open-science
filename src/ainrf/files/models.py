@@ -30,3 +30,9 @@ class FileContent:
     size: int
     language: str | None = None
     mime_type: str | None = None
+
+
+@dataclass(slots=True)
+class FileUploadResult:
+    path: str
+    size: int

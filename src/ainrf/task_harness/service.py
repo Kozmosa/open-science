@@ -61,7 +61,7 @@ from ainrf.task_harness.prompting import (
 from ainrf.workspaces import WorkspaceNotFoundError, WorkspaceRegistryService
 from ainrf.workspaces.models import WorkspaceRecord
 
-_FINAL_STATUSES = {TaskHarnessStatus.SUCCEEDED, TaskHarnessStatus.FAILED}
+_FINAL_STATUSES = {TaskHarnessStatus.SUCCEEDED, TaskHarnessStatus.FAILED, TaskHarnessStatus.CANCELLED}
 _TASK_PROFILE = "claude-code"
 _EXECUTION_ENGINE = "claude-code"
 _HARNESS_RESTART_REASON = (
@@ -97,6 +97,7 @@ class TaskHarnessService:
         self._workspace_service = workspace_service
         self._initialized = False
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
+        self._running_processes: dict[str, Any] = {}
 
     def initialize(self) -> None:
         if self._initialized:
@@ -150,6 +151,12 @@ class TaskHarnessService:
                 "task_harness_tasks",
                 "project_id",
                 "ALTER TABLE task_harness_tasks ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'",
+            )
+            self._ensure_column(
+                connection,
+                "task_harness_tasks",
+                "archived_at",
+                "ALTER TABLE task_harness_tasks ADD COLUMN archived_at TEXT",
             )
             connection.commit()
         self._fail_unfinished_tasks_for_restart()
@@ -265,16 +272,93 @@ class TaskHarnessService:
             pass
         return self._load_list_item(task_id)
 
-    def list_tasks(self) -> list[TaskListItem]:
+    def list_tasks(self, *, include_archived: bool = False) -> list[TaskListItem]:
         self.initialize()
         with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT * FROM task_harness_tasks
-                ORDER BY created_at DESC
-                """
-            ).fetchall()
+            if include_archived:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM task_harness_tasks
+                    ORDER BY created_at DESC
+                    """
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM task_harness_tasks
+                    WHERE archived_at IS NULL
+                    ORDER BY created_at DESC
+                    """
+                ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
+
+    def archive_task(self, task_id: str) -> TaskListItem:
+        self.initialize()
+        _ = self._load_task_row(task_id)
+        now = utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE task_harness_tasks
+                SET archived_at = ?, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (now.isoformat(), now.isoformat(), task_id),
+            )
+            connection.commit()
+        return self._load_list_item(task_id)
+
+    async def cancel_task(self, task_id: str) -> TaskListItem:
+        self.initialize()
+        row = self._load_task_row(task_id)
+        status = TaskHarnessStatus(row["status"])
+        if status in _FINAL_STATUSES or status == TaskHarnessStatus.CANCELLED:
+            raise TaskHarnessError(f"Cannot cancel task in status: {status.value}")
+
+        process = self._running_processes.pop(task_id, None)
+        if process is not None:
+            try:
+                await process.kill()
+                await process.wait()
+            except Exception:
+                pass
+
+        asyncio_task = self._running_tasks.pop(task_id, None)
+        if asyncio_task is not None and not asyncio_task.done():
+            asyncio_task.cancel()
+            try:
+                await asyncio_task
+            except asyncio.CancelledError:
+                pass
+
+        now = utc_now()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE task_harness_tasks
+                SET status = ?, updated_at = ?, completed_at = ?, exit_code = ?, failure_category = ?, error_summary = ?
+                WHERE task_id = ? AND status NOT IN (?, ?, ?)
+                """,
+                (
+                    TaskHarnessStatus.CANCELLED.value,
+                    now.isoformat(),
+                    now.isoformat(),
+                    -1,
+                    "cancelled",
+                    "Task cancelled by user",
+                    task_id,
+                    TaskHarnessStatus.SUCCEEDED.value,
+                    TaskHarnessStatus.FAILED.value,
+                    TaskHarnessStatus.CANCELLED.value,
+                ),
+            )
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise TaskHarnessError(
+                    f"Cannot cancel task that already reached a terminal state"
+                )
+        self._append_output_event(task_id, TaskOutputKind.LIFECYCLE, "Task cancelled by user")
+        return self._load_list_item(task_id)
 
     def get_task(self, task_id: str) -> TaskDetail:
         self.initialize()
@@ -449,6 +533,7 @@ class TaskHarnessService:
                 runner_kind=launch_payload.runner_kind,
             )
             process = await launch()
+            self._running_processes[task_id] = process
         except (
             EnvironmentNotFoundError,
             WorkspaceNotFoundError,
@@ -488,6 +573,7 @@ class TaskHarnessService:
             )
             return
         finally:
+            self._running_processes.pop(task_id, None)
             await process.cleanup()
 
         if exit_code == 0:
@@ -709,9 +795,13 @@ class TaskHarnessService:
                 """
                 SELECT task_id
                 FROM task_harness_tasks
-                WHERE status NOT IN (?, ?)
+                WHERE status NOT IN (?, ?, ?)
                 """,
-                (TaskHarnessStatus.SUCCEEDED.value, TaskHarnessStatus.FAILED.value),
+                (
+                    TaskHarnessStatus.SUCCEEDED.value,
+                    TaskHarnessStatus.FAILED.value,
+                    TaskHarnessStatus.CANCELLED.value,
+                ),
             ).fetchall()
             if not rows:
                 return
@@ -720,7 +810,7 @@ class TaskHarnessService:
                 """
                 UPDATE task_harness_tasks
                 SET status = ?, updated_at = ?, completed_at = ?, failure_category = ?, error_summary = ?
-                WHERE status NOT IN (?, ?)
+                WHERE status NOT IN (?, ?, ?)
                 """,
                 (
                     TaskHarnessStatus.FAILED.value,
@@ -730,6 +820,7 @@ class TaskHarnessService:
                     _HARNESS_RESTART_REASON,
                     TaskHarnessStatus.SUCCEEDED.value,
                     TaskHarnessStatus.FAILED.value,
+                    TaskHarnessStatus.CANCELLED.value,
                 ),
             )
             connection.commit()

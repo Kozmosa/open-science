@@ -6,4 +6,5 @@ export const statusClassName: Record<TaskStatus, string> = {
   running: 'border-[#34c759]/20 bg-[#34c759]/10 text-[#2e7d32]',
   succeeded: 'border-[#34c759]/20 bg-[#34c759]/10 text-[#2e7d32]',
   failed: 'border-[#ff3b30]/20 bg-[#ff3b30]/10 text-[#c62828]',
+  cancelled: 'border-[var(--text-secondary)]/20 bg-[var(--text-secondary)]/10 text-[var(--text-secondary)]',
 };

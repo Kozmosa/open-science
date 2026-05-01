@@ -76,7 +76,7 @@ export interface UserSessionPairListResponse {
   items: UserSessionPair[];
 }
 
-export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed';
+export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle';
 
 export interface ProjectRecord {

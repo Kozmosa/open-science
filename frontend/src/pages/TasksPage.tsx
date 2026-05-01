@@ -1,8 +1,16 @@
-import { Plus } from 'lucide-react';
+import { Archive, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { createTask, getSkills, getTask, getTasks, getWorkspaces } from '../api';
+import {
+  archiveTask,
+  cancelTask,
+  createTask,
+  getSkills,
+  getTask,
+  getTasks,
+  getWorkspaces,
+} from '../api';
 import { Button } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
@@ -30,9 +38,10 @@ function TasksPage() {
   const { settings } = useSettings();
   const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: getWorkspaces });
   const skillsQuery = useQuery({ queryKey: ['skills'], queryFn: getSkills });
+  const [showArchived, setShowArchived] = useState(false);
   const tasksQuery = useQuery({
-    queryKey: ['tasks'],
-    queryFn: getTasks,
+    queryKey: ['tasks', showArchived],
+    queryFn: () => getTasks(showArchived),
     refetchInterval: 5000,
   });
 
@@ -95,13 +104,29 @@ function TasksPage() {
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreateRequest) => createTask(payload),
     onSuccess: (task) => {
-      queryClient.setQueryData<{ items: TaskSummary[] }>(['tasks'], (current) => ({
+      queryClient.setQueryData<{ items: TaskSummary[] }>(['tasks', showArchived], (current) => ({
         items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
       }));
       selectTask(task.task_id);
       closeCreateDialog();
       setDraftResetVersion((current) => current + 1);
       void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (taskId: string) => archiveTask(taskId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks', true] });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (taskId: string) => cancelTask(taskId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks', true] });
     },
   });
 
@@ -211,14 +236,25 @@ function TasksPage() {
                 {t('pages.tasks.sidebarCount', { count: tasks.length })}
               </p>
             </div>
-            <Button
-              ref={createButtonRef}
-              onClick={() => setCreateDialogOpen(true)}
-              className="inline-flex h-9 items-center gap-2 px-3 shadow-sm"
-            >
-              <Plus size={15} />
-              {t('pages.tasks.newTask')}
-            </Button>
+            <div className="flex flex-col items-end gap-2">
+              <Button
+                ref={createButtonRef}
+                onClick={() => setCreateDialogOpen(true)}
+                className="inline-flex h-9 items-center gap-2 px-3 shadow-sm"
+              >
+                <Plus size={15} />
+                {t('pages.tasks.newTask')}
+              </Button>
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(event) => setShowArchived(event.target.checked)}
+                  className="rounded border-[var(--border)]"
+                />
+                {t('pages.tasks.actions.showArchived')}
+              </label>
+            </div>
           </div>
 
           <TaskList
@@ -228,6 +264,8 @@ function TasksPage() {
             searchQuery={taskSearchQuery}
             onSearchQueryChange={setTaskSearchQuery}
             onSelectTask={selectTask}
+            onArchiveTask={(taskId) => archiveMutation.mutate(taskId)}
+            onCancelTask={(taskId) => cancelMutation.mutate(taskId)}
           />
         </aside>
 

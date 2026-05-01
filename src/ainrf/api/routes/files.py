@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+import tempfile
+from pathlib import Path
 
-from ainrf.api.schemas import FileEntryResponse, FileListResponse, FileReadResponse
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
+
+from ainrf.api.schemas import (
+    FileEntryResponse,
+    FileListResponse,
+    FileReadResponse,
+    FileUploadResponse,
+)
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -75,3 +83,31 @@ async def read_file(
         language=content.language,
         mime_type=content.mime_type,
     )
+
+
+@router.post("/upload", response_model=FileUploadResponse)
+async def upload_file(
+    request: Request,
+    environment_id: str = Form(...),
+    path: str = Form(...),
+    workspace_id: str | None = Form(default=None),
+    file: UploadFile = File(...),
+) -> FileUploadResponse:
+    service = _get_file_browser_service(request)
+    suffix = Path(path).suffix or ""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp_path = Path(tmp.name)
+        while chunk := await file.read(8192):
+            tmp.write(chunk)
+    try:
+        result = await service.upload_file(
+            environment_id=environment_id,
+            path=path,
+            local_temp_path=tmp_path,
+            workspace_id=workspace_id,
+        )
+    except Exception as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise _translate_file_browser_error(exc) from exc
+    tmp_path.unlink(missing_ok=True)
+    return FileUploadResponse(path=result.path, size=result.size)

@@ -35,6 +35,7 @@ class TaskStatus(StrEnum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class TaskTerminalBindingStatus(StrEnum):
@@ -359,6 +360,24 @@ class TerminalSessionResetRequest(BaseModel):
     attachment_id: str | None = None
 
 
+class TerminalExecRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    environment_id: str
+    command: list[str] = Field(default_factory=list, min_length=1)
+    workspace_id: str | None = None
+    timeout: float = Field(default=60.0, gt=0)
+
+
+class TerminalExecResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stdout: str
+    stderr: str
+    exit_code: int
+    command: str
+
+
 class ResearchAgentProfileSnapshotRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -620,3 +639,10 @@ class FileReadResponse(BaseModel):
     size: int
     language: str | None = None
     mime_type: str | None = None
+
+
+class FileUploadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    size: int

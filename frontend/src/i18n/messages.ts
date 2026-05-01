@@ -204,6 +204,12 @@ export const messages = {
           running: 'Running',
           succeeded: 'Succeeded',
           failed: 'Failed',
+          cancelled: 'Cancelled',
+        },
+        actions: {
+          cancel: 'Cancel',
+          archive: 'Archive',
+          showArchived: 'Show archived',
         },
       },
       workspaces: {
@@ -697,6 +703,12 @@ export const messages = {
           running: '运行中',
           succeeded: '已成功',
           failed: '已失败',
+          cancelled: '已取消',
+        },
+        actions: {
+          cancel: '取消',
+          archive: '归档',
+          showArchived: '显示已归档',
         },
       },
       workspaces: {

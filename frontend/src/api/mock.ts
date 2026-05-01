@@ -891,6 +891,35 @@ export function mockGetTaskOutput(taskId: string, afterSeq: number = 0): TaskOut
   };
 }
 
+export function mockArchiveTask(taskId: string): TaskSummary {
+  const task = mockGetTask(taskId);
+  const timestamp = nowIso();
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: { ...task, updated_at: timestamp },
+  };
+  return cloneTaskSummary(mockTasks[taskId]);
+}
+
+export function mockCancelTask(taskId: string): TaskSummary {
+  const task = mockGetTask(taskId);
+  if (task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled') {
+    throw new Error('Cannot cancel task in terminal state');
+  }
+  const timestamp = nowIso();
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: {
+      ...task,
+      status: 'cancelled',
+      updated_at: timestamp,
+      completed_at: timestamp,
+      error_summary: 'Task cancelled by user',
+    },
+  };
+  return cloneTaskSummary(mockTasks[taskId]);
+}
+
 export function mockGetCodeServerStatus(environmentId?: string): CodeServerStatus {
   if (!environmentId) {
     return { ...mockCodeServerStatus };

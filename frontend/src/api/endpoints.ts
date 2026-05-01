@@ -31,6 +31,8 @@ import type {
   WorkspaceUpdateRequest,
 } from '../types';
 import {
+  mockArchiveTask,
+  mockCancelTask,
   mockCreateCodeServerSession,
   mockCreateEnvironment,
   mockCreateProject,
@@ -167,14 +169,22 @@ export const deleteWorkspace = (workspaceId: string): Promise<void> =>
     ? Promise.resolve(mockDeleteWorkspace(workspaceId))
     : api.delete<void>(`/workspaces/${workspaceId}`);
 
-export const getTasks = (): Promise<TaskListResponse> =>
-  USE_MOCK ? Promise.resolve(mockGetTasks()) : api.get<TaskListResponse>('/tasks');
+export const getTasks = (includeArchived: boolean = false): Promise<TaskListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetTasks())
+    : api.get<TaskListResponse>(`/tasks?include_archived=${includeArchived}`);
 
 export const getTask = (taskId: string): Promise<TaskRecord> =>
   USE_MOCK ? Promise.resolve(mockGetTask(taskId)) : api.get<TaskRecord>(`/tasks/${taskId}`);
 
 export const createTask = (payload: TaskCreateRequest): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCreateTask(payload)) : api.post<TaskSummary>('/tasks', payload);
+
+export const archiveTask = (taskId: string): Promise<TaskSummary> =>
+  USE_MOCK ? Promise.resolve(mockArchiveTask(taskId)) : api.delete<TaskSummary>(`/tasks/${taskId}`);
+
+export const cancelTask = (taskId: string): Promise<TaskSummary> =>
+  USE_MOCK ? Promise.resolve(mockCancelTask(taskId)) : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {});
 
 export const getTaskOutput = (
   taskId: string,
