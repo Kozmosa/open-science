@@ -52,7 +52,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const tasksQuery = useQuery({
     queryKey: ['tasks'],
-    queryFn: getTasks,
+    queryFn: () => getTasks(),
     refetchInterval: 5000,
   });
   const taskStatusSummary = buildTaskStatusSummary(
