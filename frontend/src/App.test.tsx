@@ -54,6 +54,7 @@ const mockGetTasks = vi.mocked(getTasks);
 
 const taskBase = {
   task_id: 'task-1',
+  project_id: 'default',
   title: 'Task 1',
   task_profile: 'claude-code',
   workspace_summary: {

@@ -695,7 +695,7 @@ function createMockWorkspace(
   const timestamp = nowIso();
   return {
     workspace_id: existing?.workspace_id ?? `workspace-${++mockWorkspaceCounter}`,
-    project_id: payload.project_id ?? existing?.project_id ?? DEFAULT_PROJECT_ID,
+    project_id: (payload as WorkspaceCreateRequest).project_id ?? existing?.project_id ?? DEFAULT_PROJECT_ID,
     label: payload.label ?? existing?.label ?? 'Mock Workspace',
     description: payload.description ?? existing?.description ?? null,
     default_workdir: payload.default_workdir ?? existing?.default_workdir ?? null,
@@ -770,6 +770,7 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
     error_summary: null,
     latest_output_seq: 1,
     binding: {
+      project_id: payload.project_id ?? DEFAULT_PROJECT_ID,
       workspace: {
         workspace_id: workspace.workspace_id,
         label: workspace.label,

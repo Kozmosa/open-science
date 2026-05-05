@@ -279,7 +279,8 @@ export function readStoredSettings(): SettingsLoadResult {
     ? general.defaultRoute
     : defaults.general.defaultRoute;
   // v2 → v3 migration: rename 'containers' route to 'environments'
-  if (defaultRoute === 'containers') {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if ((defaultRoute as string) === 'containers') {
     defaultRoute = 'environments';
   }
 

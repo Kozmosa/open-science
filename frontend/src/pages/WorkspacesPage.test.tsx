@@ -44,6 +44,7 @@ const mockDeleteWorkspace = vi.mocked(deleteWorkspace);
 
 const defaultWorkspace: WorkspaceRecord = {
   workspace_id: 'workspace-default',
+  project_id: 'default',
   label: 'Repository Default',
   description: 'Seed workspace bound to the current repository checkout.',
   default_workdir: '/workspace/project',
@@ -54,6 +55,7 @@ const defaultWorkspace: WorkspaceRecord = {
 
 const paperWorkspace: WorkspaceRecord = {
   workspace_id: 'workspace-paper',
+  project_id: 'default',
   label: 'Paper Experiments',
   description: 'Runs for paper figures',
   default_workdir: '/workspace/paper',
