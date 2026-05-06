@@ -9,7 +9,6 @@
 /.claude/
 /.superpowers/
 
-docs/superpowers/plans/
 
 /site/
 __pycache__/
@@ -26,7 +25,7 @@ test/Mode1/*.h5
 
 
 # ref-repos
-kimi-cli/
+/ref-repos/*/
 
 # runtime workspace files
 workspace/
