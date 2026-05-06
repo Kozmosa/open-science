@@ -14,7 +14,7 @@ class RuntimePathConfig:
 
     @property
     def default_workspace_dir(self) -> Path:
-        return self.workspace_root / "default"
+        return Path.home() / ".ainrf_workspaces" / "default"
 
     def ensure_default_workspace_dir(self) -> Path:
         path = self.default_workspace_dir

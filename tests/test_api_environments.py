@@ -492,7 +492,8 @@ async def test_localhost_environment_detect_uses_personal_tmux_directly(
     assert detection["ssh_ok"] is False
     assert detection["warnings"] == ["ssh_unavailable", "used_personal_tmux_fallback"]
     assert "localhost_seed_unreachable" not in detection["errors"]
-    assert ensured == [("browser-user", "env-localhost", str(Path.cwd() / "workspace" / "default"))]
+    expected_workdir = str(Path.home() / ".ainrf_workspaces" / "default")
+    assert ensured == [("browser-user", "env-localhost", expected_workdir)]
     assert tmux_commands
 
 
@@ -1015,7 +1016,7 @@ def _probe_result(command: str) -> CommandResult:
         "uname -m": CommandResult(0, "x86_64\n", ""),
         "test -d /workspace/project-a": CommandResult(0, "", ""),
         "test -d /workspace/project": CommandResult(0, "", ""),
-        f"test -d {Path.cwd() / 'workspace' / 'default'}": CommandResult(0, "", ""),
+        f"test -d {Path.home() / '.ainrf_workspaces' / 'default'}": CommandResult(0, "", ""),
         "command -v python3": CommandResult(0, "/usr/bin/python3\n", ""),
         "python3 --version": CommandResult(0, "Python 3.13.0\n", ""),
         "command -v conda": CommandResult(1, "", ""),
