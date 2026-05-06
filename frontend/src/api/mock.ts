@@ -36,6 +36,7 @@ import type {
   WorkspaceListResponse,
   WorkspaceRecord,
   WorkspaceUpdateRequest,
+  ResourcesResponse,
 } from '../types';
 
 const DEFAULT_PROJECT_ID = 'default';
@@ -1146,6 +1147,34 @@ export function resetMockTaskState(): TaskListResponse {
   mockTasks = {};
   mockTaskOutputs = {};
   return mockGetTasks();
+}
+
+export function mockGetResources(): ResourcesResponse {
+  return {
+    items: [
+      {
+        environment_id: 'env-localhost',
+        environment_name: 'Localhost',
+        timestamp: new Date().toISOString(),
+        status: 'ok',
+        gpus: [
+          {
+            index: 0,
+            name: 'NVIDIA GeForce RTX 4090',
+            utilization_percent: 45.0,
+            memory_used_mb: 8192,
+            memory_total_mb: 24576,
+          },
+        ],
+        cpu: { percent: 23.5, core_count: 32 },
+        memory: { used_mb: 16384, total_mb: 65536, percent: 25.0 },
+        ainrf_processes: [
+          { pid: 12345, name: 'ainrf', cpu_percent: 5.2, memory_mb: 512, runtime_seconds: 3600 },
+          { pid: 12346, name: 'python', cpu_percent: 3.1, memory_mb: 256, runtime_seconds: 1800 },
+        ],
+      },
+    ],
+  };
 }
 
 const mockSkills: SkillItem[] = [

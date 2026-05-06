@@ -84,6 +84,10 @@ export const messages = {
         label: 'Containers',
         description: 'Runtime environments and container status',
       },
+      resources: {
+        label: 'Resources',
+        description: 'System resource monitoring and usage',
+      },
       settings: {
         label: 'Settings',
         description: 'Runtime and WebUI preferences',
@@ -407,6 +411,36 @@ export const messages = {
         updateProjectReference: 'Update project binding',
         attachProjectReference: 'Attach to project',
       },
+      resources: {
+        eyebrow: 'RESOURCES',
+        title: 'Resource Monitor',
+        description: 'Real-time system resource usage across all environments.',
+        loading: 'Loading resources...',
+        noData: 'No resource data available yet.',
+        systemCard: {
+          title: 'System Resources',
+          gpuTitle: 'GPU',
+          cpuTitle: 'CPU',
+          memoryTitle: 'Memory',
+          noGpu: 'No GPU detected',
+        },
+        processCard: {
+          title: 'AINRF Processes',
+          empty: 'No AINRF processes detected',
+          columns: {
+            pid: 'PID',
+            name: 'Name',
+            cpu: 'CPU%',
+            memory: 'Memory',
+            runtime: 'Runtime',
+          },
+        },
+        status: {
+          ok: 'Healthy',
+          degraded: 'Degraded',
+          unavailable: 'Unavailable',
+        },
+      },
     },
     components: {
       healthStatusBar: {
@@ -548,6 +582,44 @@ export const messages = {
         title: 'Something went wrong',
         retry: 'Try again',
       },
+      modal: {
+        close: 'Close',
+      },
+      environmentDetectionModal: {
+        groups: {
+          basicInfo: 'Basic Info',
+          pythonToolchain: 'Python Toolchain',
+          devTools: 'Dev Tools',
+          aiMl: 'AI / ML',
+          gpu: 'GPU Info',
+          envVars: 'Environment Variables',
+        },
+        labels: {
+          ssh: 'SSH',
+          hostname: 'Hostname',
+          os: 'OS',
+          arch: 'Architecture',
+          workdir: 'Workdir',
+          python: 'Python',
+          conda: 'Conda',
+          uv: 'uv',
+          pixi: 'pixi',
+          codeServer: 'Code Server',
+          claudeCli: 'Claude CLI',
+          torch: 'PyTorch',
+          cuda: 'CUDA',
+          gpuCount: 'GPU Count',
+          gpuModels: 'GPU Models',
+          anthropic: 'Anthropic',
+        },
+        status: {
+          available: 'Available',
+          unavailable: 'Unavailable',
+          present: 'Present',
+          missing: 'Missing',
+          unknown: 'Unknown',
+        },
+      },
     },
   },
   zh: {
@@ -616,6 +688,10 @@ export const messages = {
       environments: {
         label: '容器',
         description: '运行环境与容器状态',
+      },
+      resources: {
+        label: '资源监控',
+        description: '系统资源占用与使用情况',
       },
       settings: {
         label: '设置',
@@ -925,6 +1001,36 @@ export const messages = {
         updateProjectReference: '更新项目绑定',
         attachProjectReference: '绑定到项目',
       },
+      resources: {
+        eyebrow: '资源监控',
+        title: '资源监控',
+        description: '所有环境的实时系统资源占用情况。',
+        loading: '正在加载资源数据...',
+        noData: '暂无资源数据。',
+        systemCard: {
+          title: '系统资源',
+          gpuTitle: 'GPU',
+          cpuTitle: 'CPU',
+          memoryTitle: '内存',
+          noGpu: '未检测到 GPU',
+        },
+        processCard: {
+          title: 'AINRF 进程',
+          empty: '未检测到 AINRF 进程',
+          columns: {
+            pid: 'PID',
+            name: '进程名',
+            cpu: 'CPU%',
+            memory: '内存',
+            runtime: '运行时间',
+          },
+        },
+        status: {
+          ok: '正常',
+          degraded: '降级',
+          unavailable: '不可用',
+        },
+      },
     },
     components: {
       healthStatusBar: {
@@ -1063,6 +1169,44 @@ export const messages = {
       errorBoundary: {
         title: '出现错误',
         retry: '重试',
+      },
+      modal: {
+        close: '关闭',
+      },
+      environmentDetectionModal: {
+        groups: {
+          basicInfo: '基本信息',
+          pythonToolchain: 'Python 工具链',
+          devTools: '开发工具',
+          aiMl: 'AI / ML 环境',
+          gpu: 'GPU 信息',
+          envVars: '环境变量',
+        },
+        labels: {
+          ssh: 'SSH',
+          hostname: '主机名',
+          os: '操作系统',
+          arch: '架构',
+          workdir: '工作目录',
+          python: 'Python',
+          conda: 'Conda',
+          uv: 'uv',
+          pixi: 'pixi',
+          codeServer: 'Code Server',
+          claudeCli: 'Claude CLI',
+          torch: 'PyTorch',
+          cuda: 'CUDA',
+          gpuCount: 'GPU 数量',
+          gpuModels: 'GPU 型号',
+          anthropic: 'Anthropic',
+        },
+        status: {
+          available: '可用',
+          unavailable: '不可用',
+          present: '已配置',
+          missing: '未配置',
+          unknown: '未知',
+        },
       },
     },
   },

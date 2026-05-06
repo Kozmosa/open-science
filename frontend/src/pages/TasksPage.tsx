@@ -11,7 +11,7 @@ import {
   getTasks,
   getWorkspaces,
 } from '../api';
-import { Button } from '../components/ui';
+import { Button, Modal } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
 import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
@@ -160,33 +160,6 @@ function TasksPage() {
     window.setTimeout(() => createButtonRef.current?.focus(), 0);
   }, []);
 
-  const trapDialogFocus = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab') {
-      return;
-    }
-
-    const focusable = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-      )
-    );
-    if (focusable.length === 0) {
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-      return;
-    }
-    if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }, []);
-
   const handleSplitterPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       event.preventDefault();
@@ -294,43 +267,32 @@ function TasksPage() {
         </main>
       </div>
 
-      {isCreateDialogOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('pages.tasks.createTitle')}
-            tabIndex={-1}
-            onKeyDown={(event) => {
-              trapDialogFocus(event);
-              if (event.key === 'Escape') {
-                closeCreateDialog();
-              }
-            }}
-            className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl"
-          >
-            <TaskCreateForm
-              key={`${effectiveEnvironmentId}:${draftResetVersion}`}
-              workspaces={workspaces}
-              environments={environments}
-              selectedWorkspaceId={effectiveWorkspaceId}
-              selectedEnvironmentId={effectiveEnvironmentId}
-              selectedWorkspace={selectedWorkspace}
-              selectedEnvironment={selectedEnvironment}
-              draftDefaults={draftDefaults}
-              researchAgentProfiles={settings.taskConfiguration.researchAgentProfiles}
-              taskConfigurations={settings.taskConfiguration.taskConfigurations}
-              availableSkills={availableSkills}
-              isSubmitting={createMutation.isPending}
-              createError={createError}
-              onSelectWorkspace={setSelectedWorkspaceId}
-              onSelectEnvironment={environmentSelection.onSelectEnvironment}
-              onSubmit={(payload) => createMutation.mutate(payload)}
-              onClose={closeCreateDialog}
-            />
-          </div>
-        </div>
-      ) : null}
+      <Modal
+        isOpen={isCreateDialogOpen}
+        onClose={closeCreateDialog}
+        title={null}
+        size="lg"
+      >
+        <TaskCreateForm
+          key={`${effectiveEnvironmentId}:${draftResetVersion}`}
+          workspaces={workspaces}
+          environments={environments}
+          selectedWorkspaceId={effectiveWorkspaceId}
+          selectedEnvironmentId={effectiveEnvironmentId}
+          selectedWorkspace={selectedWorkspace}
+          selectedEnvironment={selectedEnvironment}
+          draftDefaults={draftDefaults}
+          researchAgentProfiles={settings.taskConfiguration.researchAgentProfiles}
+          taskConfigurations={settings.taskConfiguration.taskConfigurations}
+          availableSkills={availableSkills}
+          isSubmitting={createMutation.isPending}
+          createError={createError}
+          onSelectWorkspace={setSelectedWorkspaceId}
+          onSelectEnvironment={environmentSelection.onSelectEnvironment}
+          onSubmit={(payload) => createMutation.mutate(payload)}
+          onClose={closeCreateDialog}
+        />
+      </Modal>
     </div>
   );
 }

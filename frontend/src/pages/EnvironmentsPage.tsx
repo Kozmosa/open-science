@@ -32,6 +32,7 @@ import type {
 import { useLocale, useT } from '../i18n';
 import { useEnvironmentSelection } from '../components';
 import { useToast } from '../components/common';
+import { EnvironmentDetectionModal } from '../components/environment';
 import {
   buildEnvironmentRequest,
   buildProjectReferenceCreateRequest,
@@ -544,6 +545,7 @@ function EnvironmentsPage() {
   const [editorMode, setEditorMode] = useState<EnvironmentEditorMode>('create');
   const [editorEnvironmentId, setEditorEnvironmentId] = useState<string | null>(null);
   const [editorFormKey, setEditorFormKey] = useState(0);
+  const [selectedDetectionEnvironmentId, setSelectedDetectionEnvironmentId] = useState<string | null>(null);
 
   const environments = environmentSelection.environments ?? EMPTY_ENVIRONMENTS;
   const projectReferences = environmentSelection.projectReferences ?? EMPTY_PROJECT_REFS;
@@ -551,6 +553,13 @@ function EnvironmentsPage() {
   const editorEnvironment = useMemo(
     () => environments.find((environment) => environment.id === editorEnvironmentId) ?? null,
     [environments, editorEnvironmentId]
+  );
+  const detectionEnv = useMemo(
+    () =>
+      selectedDetectionEnvironmentId !== null
+        ? (environments.find((e) => e.id === selectedDetectionEnvironmentId) ?? null)
+        : null,
+    [environments, selectedDetectionEnvironmentId]
   );
   const projectReferenceByEnvironmentId = useMemo(
     () =>
@@ -850,10 +859,13 @@ function EnvironmentsPage() {
                         <td className="px-4 py-4">
                           {detection ? (
                             <div className="space-y-1">
-                              <div className="text-sm font-medium text-[var(--text)]">
-                                {detectionStatusLabels[detection.status] ?? detection.status} ·{' '}
-                                {detection.summary}
-                              </div>
+                              <button
+                                type="button"
+                                className="text-sm font-medium text-[var(--apple-blue)] hover:underline"
+                                onClick={() => setSelectedDetectionEnvironmentId(environment.id)}
+                              >
+                                {detectionStatusLabels[detection.status] ?? detection.status}
+                              </button>
                               <div className="text-xs tracking-[-0.12px] text-[var(--text-tertiary)]">
                                 {t('pages.environments.detectedAt')}{' '}
                                 {formatTimestamp(detection.detected_at, locale, t('common.never'))}
@@ -973,6 +985,15 @@ function EnvironmentsPage() {
           />
         </div>
       </div>
+
+      {detectionEnv?.latest_detection ? (
+        <EnvironmentDetectionModal
+          detection={detectionEnv.latest_detection}
+          environmentName={detectionEnv.display_name}
+          isOpen={true}
+          onClose={() => setSelectedDetectionEnvironmentId(null)}
+        />
+      ) : null}
     </div>
   );
 }
