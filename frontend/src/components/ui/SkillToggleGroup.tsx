@@ -6,6 +6,19 @@ interface Props {
   onChange: (selected: string[]) => void;
 }
 
+const badgeClass = (mode: string) => {
+  switch (mode) {
+    case 'auto':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'prompt_only':
+      return 'bg-amber-100 text-amber-800';
+    case 'disabled':
+      return 'bg-gray-100 text-gray-600';
+    default:
+      return 'bg-gray-100 text-gray-600';
+  }
+};
+
 export default function SkillToggleGroup({ skills, selected, onChange }: Props) {
   const selectedSet = new Set(selected);
 
@@ -37,6 +50,14 @@ export default function SkillToggleGroup({ skills, selected, onChange }: Props) 
             ].join(' ')}
           >
             {skill.label}
+            <span
+              className={[
+                'ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold',
+                badgeClass(skill.inject_mode),
+              ].join(' ')}
+            >
+              {skill.inject_mode}
+            </span>
           </button>
         );
       })}

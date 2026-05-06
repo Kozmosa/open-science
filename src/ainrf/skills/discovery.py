@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ainrf.skills.models import SkillItem
+from ainrf.skills.loader import SkillLoader
+from ainrf.skills.models import SkillDefinition, SkillItem
 
 _BUILTIN_SKILLS: list[SkillItem] = [
     SkillItem("web-search", "Web Search", "Search the web for information"),
@@ -103,6 +104,25 @@ class SkillsDiscoveryService:
                         seen.add(skill.skill_id)
                         skills.append(skill)
                 for skill in _scan_skills_json(root):
+                    if skill.skill_id not in seen:
+                        seen.add(skill.skill_id)
+                        skills.append(skill)
+
+        return skills
+
+    def discover_full(self) -> list[SkillDefinition]:
+        """Return full skill definitions by scanning skill directories.
+
+        Uses SkillLoader.load_all_from_root() on each scan root.
+        Deduplicates by skill_id — first seen wins (same semantics as discover()).
+        Returns empty list if no scan roots or no skills found.
+        """
+        seen: set[str] = set()
+        skills: list[SkillDefinition] = []
+
+        for root in self._scan_roots:
+            if root.is_dir():
+                for skill in SkillLoader.load_all_from_root(root):
                     if skill.skill_id not in seen:
                         seen.add(skill.skill_id)
                         skills.append(skill)

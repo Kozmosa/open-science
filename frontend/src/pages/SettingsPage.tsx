@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Button,
@@ -13,7 +13,7 @@ import {
   Textarea,
 } from '../components/ui';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
-import { getEnvironments, getSkills, getWorkspaces } from '../api';
+import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill } from '../api';
 import { useT } from '../i18n';
 import {
   clampEditorFontSize,
@@ -31,7 +31,7 @@ import type {
   TaskConfigurationSettings,
   WebUiSettingsDocument,
 } from '../settings';
-import type { EnvironmentRecord, SkillItem } from '../types';
+import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview } from '../types';
 
 interface GeneralDraftState {
   defaultRoute: DefaultRoute;
@@ -592,6 +592,281 @@ function ProjectDefaultsSection({
   );
 }
 
+interface SkillRepositorySectionProps {
+  availableSkills: SkillItem[];
+}
+
+function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps) {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importSource, setImportSource] = useState<'git' | 'local'>('git');
+  const [importUrl, setImportUrl] = useState('');
+  const [importPath, setImportPath] = useState('');
+  const [importSkillId, setImportSkillId] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const detailQuery = useQuery<SkillDetail>({
+    queryKey: ['skillDetail', selectedSkillId],
+    queryFn: () => getSkillDetail(selectedSkillId!),
+    enabled: !!selectedSkillId,
+  });
+
+  const previewQuery = useQuery<SkillPreview>({
+    queryKey: ['skillPreview', selectedSkillId],
+    queryFn: () => previewSkillSettings(selectedSkillId!),
+    enabled: !!selectedSkillId,
+  });
+
+  const importMutation = useMutation({
+    mutationFn: importSkill,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skills'] });
+      setShowImport(false);
+      setImportUrl('');
+      setImportPath('');
+      setImportSkillId('');
+      setImportError(null);
+    },
+    onError: (err: Error) => setImportError(err.message),
+  });
+
+  const handleImportSubmit = () => {
+    setImportError(null);
+    const payload: SkillImportRequest = {
+      source: importSource,
+      url: importSource === 'git' ? importUrl || null : null,
+      local_path: importSource === 'local' ? importPath || null : null,
+      skill_id: importSkillId || null,
+    };
+    importMutation.mutate(payload);
+  };
+
+  const getInjectModeBadgeClasses = (mode: string) => {
+    switch (mode) {
+      case 'auto':
+        return 'rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800';
+      case 'prompt_only':
+        return 'rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800';
+      case 'disabled':
+        return 'rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600';
+      default:
+        return 'rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600';
+    }
+  };
+
+  return (
+    <SectionCard
+      collapsible
+      header={
+        <SectionHeader
+          title={t('pages.settings.skillRepository.title')}
+          description={t('pages.settings.skillRepository.description')}
+        />
+      }
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button onClick={() => setShowImport((current) => !current)}>
+          {t('pages.settings.skillRepository.importSkill')}
+        </Button>
+      </div>
+
+      {showImport && (
+        <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
+          <h4 className="text-sm font-medium text-[var(--text-primary)]">
+            {t('pages.settings.skillRepository.importTitle')}
+          </h4>
+
+          <FormField label={t('pages.settings.skillRepository.sourceLabel')}>
+            <Select
+              aria-label={t('pages.settings.skillRepository.sourceLabel')}
+              value={importSource}
+              onChange={(event) => setImportSource(event.target.value as 'git' | 'local')}
+            >
+              <option value="git">{t('pages.settings.skillRepository.gitSource')}</option>
+              <option value="local">{t('pages.settings.skillRepository.localSource')}</option>
+            </Select>
+          </FormField>
+
+          {importSource === 'git' ? (
+            <FormField label={t('pages.settings.skillRepository.urlLabel')}>
+              <Input
+                aria-label={t('pages.settings.skillRepository.urlLabel')}
+                type="text"
+                value={importUrl}
+                onChange={(event) => setImportUrl(event.target.value)}
+                placeholder="https://github.com/example/skill-repo.git"
+              />
+            </FormField>
+          ) : (
+            <FormField label={t('pages.settings.skillRepository.pathLabel')}>
+              <Input
+                aria-label={t('pages.settings.skillRepository.pathLabel')}
+                type="text"
+                value={importPath}
+                onChange={(event) => setImportPath(event.target.value)}
+                placeholder="/path/to/skill"
+              />
+            </FormField>
+          )}
+
+          <FormField label={t('pages.settings.skillRepository.skillIdOverrideLabel')}>
+            <Input
+              aria-label={t('pages.settings.skillRepository.skillIdOverrideLabel')}
+              type="text"
+              value={importSkillId}
+              onChange={(event) => setImportSkillId(event.target.value)}
+            />
+          </FormField>
+
+          {importError ? <p className="text-sm text-[#ff3b30]">{importError}</p> : null}
+
+          <div className="flex flex-wrap gap-3">
+            <Button variant="secondary" onClick={() => setShowImport(false)}>
+              {t('pages.settings.skillRepository.cancel')}
+            </Button>
+            <Button onClick={handleImportSubmit} disabled={importMutation.isPending}>
+              {importMutation.isPending
+                ? t('pages.settings.skillRepository.importing')
+                : t('pages.settings.skillRepository.importAction')}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-2">
+          {availableSkills.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+              {t('pages.settings.skillRepository.noSkills')}
+            </div>
+          ) : (
+            availableSkills.map((skill) => (
+              <button
+                key={skill.skill_id}
+                onClick={() => {
+                  setSelectedSkillId(skill.skill_id);
+                  setShowPreview(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors ${
+                  selectedSkillId === skill.skill_id
+                    ? 'border-[var(--accent)] bg-[var(--bg-secondary)]'
+                    : 'border-[var(--border)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]'
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{skill.label}</p>
+                  <p className="text-xs text-[var(--text-tertiary)]">{skill.skill_id}</p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {!selectedSkillId ? (
+            <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
+              {t('pages.settings.skillRepository.selectSkill')}
+            </div>
+          ) : detailQuery.isLoading ? (
+            <p className="text-sm text-[var(--text-tertiary)]">{t('common.loading')}</p>
+          ) : detailQuery.error ? (
+            <p className="text-sm text-[#ff3b30]">
+              {detailQuery.error instanceof Error ? detailQuery.error.message : String(detailQuery.error)}
+            </p>
+          ) : detailQuery.data ? (
+            <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                  {detailQuery.data.label}
+                </h3>
+                <span className={getInjectModeBadgeClasses(detailQuery.data.inject_mode)}>
+                  {detailQuery.data.inject_mode}
+                </span>
+              </div>
+
+              <div className="grid gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.version')}</span>
+                  <span className="text-[var(--text-primary)]">{detailQuery.data.version}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.author')}</span>
+                  <span className="text-[var(--text-primary)]">{detailQuery.data.author}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.dependencies')}</span>
+                  <span className="text-[var(--text-primary)]">
+                    {detailQuery.data.dependencies.length > 0
+                      ? detailQuery.data.dependencies.join(', ')
+                      : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.mcpServers')}</span>
+                  <span className="text-[var(--text-primary)]">
+                    {detailQuery.data.mcp_servers.length > 0
+                      ? detailQuery.data.mcp_servers.join(', ')
+                      : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.hooks')}</span>
+                  <span className="text-[var(--text-primary)]">
+                    {detailQuery.data.hooks.length > 0 ? detailQuery.data.hooks.join(', ') : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.allowedAgents')}</span>
+                  <span className="text-[var(--text-primary)]">
+                    {detailQuery.data.allowed_agents.length > 0
+                      ? detailQuery.data.allowed_agents.join(', ')
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {detailQuery.data.skill_md ? (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-[var(--text-secondary)]">
+                    {t('pages.settings.skillRepository.skillMdTitle')}
+                  </h4>
+                  <pre className="whitespace-pre-wrap rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-primary)]">
+                    {detailQuery.data.skill_md}
+                  </pre>
+                </div>
+              ) : null}
+
+              <Button
+                variant="secondary"
+                onClick={() => setShowPreview((current) => !current)}
+                disabled={previewQuery.isLoading}
+              >
+                {showPreview
+                  ? t('common.cancel')
+                  : t('pages.settings.skillRepository.previewSettings')}
+              </Button>
+
+              {showPreview && previewQuery.data ? (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-[var(--text-secondary)]">
+                    {t('pages.settings.skillRepository.settingsPreviewTitle')}
+                  </h4>
+                  <pre className="whitespace-pre-wrap rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-primary)]">
+                    {JSON.stringify(previewQuery.data.merged_preview, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 function SettingsPage() {
   const t = useT();
   const environmentsQuery = useQuery({
@@ -696,6 +971,8 @@ function SettingsPage() {
           onSaveTaskConfigurationSettings={saveTaskConfigurationSettings}
           onResetTaskConfigurationSettings={resetTaskConfigurationSettings}
         />
+
+        <SkillRepositorySection availableSkills={availableSkills} />
 
         <ProjectDefaultsSection
           key={`project-default:${settings.projectDefaults.default?.defaultEnvironmentId ?? 'none'}`}

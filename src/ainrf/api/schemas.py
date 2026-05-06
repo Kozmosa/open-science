@@ -437,12 +437,57 @@ class SkillItemResponse(BaseModel):
     skill_id: str
     label: str
     description: str | None = None
+    inject_mode: str = "auto"
+    dependencies: list[str] = Field(default_factory=list)
 
 
 class SkillListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[SkillItemResponse]
+
+
+class SkillDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skill_id: str
+    label: str
+    description: str | None = None
+    version: str
+    author: str
+    dependencies: list[str] = Field(default_factory=list)
+    inject_mode: str
+    settings_fragment: dict[str, Any] = Field(default_factory=dict)
+    mcp_servers: list[str] = Field(default_factory=list)
+    hooks: list[str] = Field(default_factory=list)
+    allowed_agents: list[str] = Field(default_factory=list)
+    skill_md: str | None = None
+
+
+class SkillPreviewResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skill_id: str
+    label: str
+    settings_fragment: dict[str, Any] = Field(default_factory=dict)
+    merged_preview: dict[str, Any] = Field(default_factory=dict)
+
+
+class SkillImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(..., pattern="^(git|local)$")
+    url: str | None = None
+    local_path: str | None = None
+    skill_id: str | None = None
+
+
+class SkillImportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skill_id: str
+    label: str
+    path: str
 
 
 class WorkspaceSummaryResponse(BaseModel):

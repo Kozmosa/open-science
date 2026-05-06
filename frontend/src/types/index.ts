@@ -473,8 +473,45 @@ export interface SkillItem {
   skill_id: string;
   label: string;
   description: string | null;
+  inject_mode: 'auto' | 'prompt_only' | 'disabled';
+  dependencies: string[];
 }
 
 export interface SkillListResponse {
   items: SkillItem[];
+}
+
+export interface SkillDetail {
+  skill_id: string;
+  label: string;
+  description: string | null;
+  version: string;
+  author: string;
+  dependencies: string[];
+  inject_mode: 'auto' | 'prompt_only' | 'disabled';
+  settings_fragment: Record<string, unknown>;
+  mcp_servers: string[];
+  hooks: string[];
+  allowed_agents: string[];
+  skill_md: string | null;
+}
+
+export interface SkillPreview {
+  skill_id: string;
+  label: string;
+  settings_fragment: Record<string, unknown>;
+  merged_preview: Record<string, unknown>;
+}
+
+export interface SkillImportRequest {
+  source: 'git' | 'local';
+  url?: string | null;
+  local_path?: string | null;
+  skill_id?: string | null;
+}
+
+export interface SkillImportResponse {
+  skill_id: string;
+  label: string;
+  path: string;
 }

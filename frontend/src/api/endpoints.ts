@@ -16,7 +16,11 @@ import type {
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
+  SkillDetail,
+  SkillImportRequest,
+  SkillImportResponse,
   SkillListResponse,
+  SkillPreview,
   SystemHealth,
   TaskCreateRequest,
   TaskListResponse,
@@ -62,8 +66,11 @@ import {
   mockGetWorkspace,
   mockResetTerminalSession,
   mockGetSessionPairs,
+  mockGetSkillDetail,
   mockGetSkills,
+  mockImportSkill,
   mockInstallEnvironmentCodeServer,
+  mockPreviewSkillSettings,
   mockListFiles,
   mockReadFile,
   mockUpdateEnvironment,
@@ -105,6 +112,21 @@ function withTerminalDetachQuery(
 
 export const getSkills = (): Promise<SkillListResponse> =>
   USE_MOCK ? Promise.resolve(mockGetSkills()) : api.get<SkillListResponse>('/skills');
+
+export const getSkillDetail = (skillId: string): Promise<SkillDetail> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetSkillDetail(skillId))
+    : api.get<SkillDetail>(`/skills/${skillId}`);
+
+export const previewSkillSettings = (skillId: string): Promise<SkillPreview> =>
+  USE_MOCK
+    ? Promise.resolve(mockPreviewSkillSettings(skillId))
+    : api.get<SkillPreview>(`/skills/${skillId}/preview`);
+
+export const importSkill = (payload: SkillImportRequest): Promise<SkillImportResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockImportSkill(payload))
+    : api.post<SkillImportResponse>('/skills/import', payload);
 
 export const getHealth = (): Promise<SystemHealth> =>
   USE_MOCK ? Promise.resolve(mockGetHealth()) : api.get<SystemHealth>('/health');

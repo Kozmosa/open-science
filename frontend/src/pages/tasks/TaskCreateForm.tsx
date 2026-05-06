@@ -282,6 +282,11 @@ export default function TaskCreateForm({
             selected={draft.selectedSkills}
             onChange={(selected) => setDraft((current) => ({ ...current, selectedSkills: selected }))}
           />
+          {draft.selectedSkills.length > 0 && availableSkills.some((s) => s.dependencies.length > 0) ? (
+            <p className="text-xs text-[var(--text-tertiary)]">
+              {t('pages.tasks.skillDependenciesHint')}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

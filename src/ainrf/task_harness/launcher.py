@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -74,9 +75,12 @@ def build_local_launcher(
     rendered_prompt: str,
     settings_path: str | None = None,
 ) -> tuple[LaunchPayload, Any]:
+    ainrf_settings = Path(working_directory) / ".ainrf" / "settings.json"
+    resolved_settings = str(ainrf_settings) if ainrf_settings.exists() else settings_path
+
     command = [*_CLAUDE_COMMAND]
-    if settings_path is not None:
-        command.extend(["--settings", settings_path])
+    if resolved_settings is not None:
+        command.extend(["--settings", resolved_settings])
     command.append(rendered_prompt)
     payload = LaunchPayload(
         runner_kind="local-process",
@@ -132,6 +136,7 @@ async def build_remote_launcher(
     working_directory: str,
     prompt_file: Path,
     settings_path: Path | None = None,
+    ainrf_dir: Path | None = None,
 ) -> tuple[LaunchPayload, Any]:
     home_result = await executor.run_command('printf %s "$HOME"', timeout=30)
     if home_result.exit_code != 0 or not home_result.stdout.strip():
@@ -147,6 +152,9 @@ async def build_remote_launcher(
         'PROMPT_FILE="$1"',
         'WORKDIR="$2"',
         'SETTINGS_FILE="${3:-}"',
+        'if [ -f "$WORKDIR/.ainrf/settings.json" ]; then',
+        '  SETTINGS_FILE="$WORKDIR/.ainrf/settings.json"',
+        "fi",
         'PROMPT_CONTENT="$(cat "$PROMPT_FILE")"',
         'cd "$WORKDIR"',
         'if [[ -n "$SETTINGS_FILE" ]]; then',
@@ -159,6 +167,30 @@ async def build_remote_launcher(
     await executor.upload(prompt_file, remote_prompt)
     if settings_path is not None and remote_settings is not None:
         await executor.upload(settings_path, remote_settings)
+
+    # Upload .ainrf/ directory for remote skill injection
+    if ainrf_dir is not None and ainrf_dir.exists():
+        tarball_path = local_task_dir / ".ainrf.tar.gz"
+        with tarfile.open(tarball_path, "w:gz") as tar:
+            tar.add(ainrf_dir, arcname=".ainrf")
+        remote_tarball = f"{working_directory}/.ainrf.tar.gz"
+        await executor.upload(tarball_path, remote_tarball)
+        extract_result = await executor.run_command(
+            f"cd {shlex.quote(working_directory)} && tar -xzf .ainrf.tar.gz && rm .ainrf.tar.gz",
+            timeout=60,
+        )
+        if extract_result.exit_code != 0:
+            raise TaskLaunchError("startup failure: unable to extract .ainrf tarball on remote")
+        sync_script = f"""cd {shlex.quote(working_directory)} && \
+if [ -d .claude/skills ] && [ ! -L .claude/skills ]; then \
+  mv .claude/skills .claude/skills.bak.$(date +%Y%m%d%H%M%S); \
+fi && \
+rm -f .claude/skills && \
+ln -s .ainrf/skills .claude/skills"""
+        sync_result = await executor.run_command(sync_script, timeout=30)
+        if sync_result.exit_code != 0:
+            raise TaskLaunchError("startup failure: unable to sync .claude/skills on remote")
+
     await executor.upload(helper_path, remote_helper)
     chmod_result = await executor.run_command(f"chmod +x {shlex.quote(remote_helper)}", timeout=30)
     if chmod_result.exit_code != 0:

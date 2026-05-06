@@ -33,6 +33,21 @@ class PromptComposition:
         return [layer.name for layer in self.layers]
 
 
+def compose_skill_prompt_lines(skills: list[str], skills_prompt: str | None) -> list[str]:
+    """Build prompt lines for the skills section.
+
+    Returns a list of lines (may be empty). If skills is non-empty, the first
+    line is "Enabled skills: skill1, skill2, ...". If skills_prompt is
+    provided and non-empty, it is appended as a second line.
+    """
+    lines: list[str] = []
+    if skills:
+        lines.append("Enabled skills: " + ", ".join(skills))
+    if skills_prompt and skills_prompt.strip():
+        lines.append(skills_prompt.strip())
+    return lines
+
+
 def compose_task_prompt(
     *,
     workspace: WorkspaceRecord,
@@ -65,11 +80,9 @@ def compose_task_prompt(
                     research_agent_profile.system_prompt.strip(),
                 )
             )
-        skills_lines: list[str] = []
-        if research_agent_profile.skills:
-            skills_lines.append("Enabled skills: " + ", ".join(research_agent_profile.skills))
-        if research_agent_profile.skills_prompt and research_agent_profile.skills_prompt.strip():
-            skills_lines.append(research_agent_profile.skills_prompt.strip())
+        skills_lines = compose_skill_prompt_lines(
+            research_agent_profile.skills, research_agent_profile.skills_prompt
+        )
         if skills_lines:
             raw_layers.append(
                 (
