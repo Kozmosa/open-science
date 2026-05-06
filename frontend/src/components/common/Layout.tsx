@@ -1,4 +1,5 @@
 import {
+  Activity,
   Boxes,
   ChevronLeft,
   ChevronRight,
@@ -91,6 +92,12 @@ function Layout({ children, edgeToEdge = false }: Props) {
       to: '/environments',
       description: t('navigation.environments.description'),
       icon: Boxes,
+    },
+    {
+      label: t('navigation.resources.label'),
+      to: '/resources',
+      description: t('navigation.resources.description'),
+      icon: Activity,
     },
     {
       label: t('navigation.settings.label'),

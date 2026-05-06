@@ -13,10 +13,12 @@ from ainrf.api.routes.environments import router as environments_router
 from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
 from ainrf.api.routes.projects import router as projects_router
+from ainrf.api.routes.resources import router as resources_router
 from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
+from ainrf.monitor.service import ResourceMonitorService
 from ainrf.code_server import CodeServerSupervisor
 from ainrf.files import FileBrowserService
 from ainrf.environments import InMemoryEnvironmentService
@@ -45,6 +47,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     terminal_router,
     tasks_router,
     code_router,
+    resources_router,
 )
 
 
@@ -64,6 +67,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.code_server_manager = manager
     app.state.code_server_supervisor = manager
+    resource_monitor_service = ResourceMonitorService(environment_service)
+    app.state.resource_monitor_service = resource_monitor_service
+    await resource_monitor_service.start()
     try:
         await _run_sync_in_lifespan(project_service.initialize)
         await _run_sync_in_lifespan(workspace_service.initialize)
@@ -77,6 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
         await manager.stop()
+        await resource_monitor_service.stop()
 
 
 def create_app(config: ApiConfig | None = None) -> FastAPI:

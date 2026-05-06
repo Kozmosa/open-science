@@ -84,6 +84,10 @@ export const messages = {
         label: 'Containers',
         description: 'Runtime environments and container status',
       },
+      resources: {
+        label: 'Resources',
+        description: 'System resource monitoring and usage',
+      },
       settings: {
         label: 'Settings',
         description: 'Runtime and WebUI preferences',
@@ -407,6 +411,36 @@ export const messages = {
         updateProjectReference: 'Update project binding',
         attachProjectReference: 'Attach to project',
       },
+      resources: {
+        eyebrow: 'RESOURCES',
+        title: 'Resource Monitor',
+        description: 'Real-time system resource usage across all environments.',
+        loading: 'Loading resources...',
+        noData: 'No resource data available yet.',
+        systemCard: {
+          title: 'System Resources',
+          gpuTitle: 'GPU',
+          cpuTitle: 'CPU',
+          memoryTitle: 'Memory',
+          noGpu: 'No GPU detected',
+        },
+        processCard: {
+          title: 'AINRF Processes',
+          empty: 'No AINRF processes detected',
+          columns: {
+            pid: 'PID',
+            name: 'Name',
+            cpu: 'CPU%',
+            memory: 'Memory',
+            runtime: 'Runtime',
+          },
+        },
+        status: {
+          ok: 'Healthy',
+          degraded: 'Degraded',
+          unavailable: 'Unavailable',
+        },
+      },
     },
     components: {
       healthStatusBar: {
@@ -654,6 +688,10 @@ export const messages = {
       environments: {
         label: '容器',
         description: '运行环境与容器状态',
+      },
+      resources: {
+        label: '资源监控',
+        description: '系统资源占用与使用情况',
       },
       settings: {
         label: '设置',
@@ -962,6 +1000,36 @@ export const messages = {
         projectReferenceSaving: '正在保存绑定…',
         updateProjectReference: '更新项目绑定',
         attachProjectReference: '绑定到项目',
+      },
+      resources: {
+        eyebrow: '资源监控',
+        title: '资源监控',
+        description: '所有环境的实时系统资源占用情况。',
+        loading: '正在加载资源数据...',
+        noData: '暂无资源数据。',
+        systemCard: {
+          title: '系统资源',
+          gpuTitle: 'GPU',
+          cpuTitle: 'CPU',
+          memoryTitle: '内存',
+          noGpu: '未检测到 GPU',
+        },
+        processCard: {
+          title: 'AINRF 进程',
+          empty: '未检测到 AINRF 进程',
+          columns: {
+            pid: 'PID',
+            name: '进程名',
+            cpu: 'CPU%',
+            memory: '内存',
+            runtime: '运行时间',
+          },
+        },
+        status: {
+          ok: '正常',
+          degraded: '降级',
+          unavailable: '不可用',
+        },
       },
     },
     components: {
