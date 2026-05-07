@@ -693,4 +693,59 @@ class FileUploadResponse(BaseModel):
     size: int
 
 
+# --- Skill Registry Schemas ---
 
+class SkillRegistryItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    registry_id: str
+    display_name: str
+    git_url: str
+    installed: bool = False
+    installed_count: int = 0
+    has_update: bool = False
+    is_dirty: bool = False
+    last_sync_at: str | None = None
+
+
+class SkillRegistryListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[SkillRegistryItemResponse]
+
+
+class SkillRegistryStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    registry_id: str
+    installed: bool
+    installed_count: int
+    last_sync_at: str | None = None
+    remote_commit: str | None = None
+    local_commit: str | None = None
+    has_update: bool
+    is_dirty: bool
+    sync_in_progress: bool
+
+
+class SkillRegistryUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    force: bool = False
+
+
+class SkillRegistryInstallResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    registry_id: str
+    installed_count: int
+    skills: list[str]
+
+
+class SkillRegistryUpdateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    registry_id: str
+    updated_count: int
+    added: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)

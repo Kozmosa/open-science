@@ -21,6 +21,11 @@ import type {
   SkillImportResponse,
   SkillListResponse,
   SkillPreview,
+  SkillRegistryInstallResponse,
+  SkillRegistryListResponse,
+  SkillRegistryStatus,
+  SkillRegistryUpdateRequest,
+  SkillRegistryUpdateResponse,
   SystemHealth,
   TaskCreateRequest,
   TaskListResponse,
@@ -365,3 +370,38 @@ export const readFile = (
 
 export const getResources = (): Promise<ResourcesResponse> =>
   USE_MOCK ? Promise.resolve(mockGetResources()) : api.get<ResourcesResponse>('/resources');
+
+// --- Skill Registry API ---
+
+export const getSkillRegistries = (): Promise<SkillRegistryListResponse> =>
+  USE_MOCK
+    ? Promise.resolve({ items: [] })
+    : api.get<SkillRegistryListResponse>('/skill-registries');
+
+export const getSkillRegistryStatus = (registryId: string): Promise<SkillRegistryStatus> =>
+  USE_MOCK
+    ? Promise.resolve({
+        registry_id: registryId,
+        installed: false,
+        installed_count: 0,
+        last_sync_at: null,
+        remote_commit: null,
+        local_commit: null,
+        has_update: false,
+        is_dirty: false,
+        sync_in_progress: false,
+      })
+    : api.get<SkillRegistryStatus>(`/skill-registries/${registryId}/status`);
+
+export const installSkillRegistry = (registryId: string): Promise<SkillRegistryInstallResponse> =>
+  USE_MOCK
+    ? Promise.resolve({ registry_id: registryId, installed_count: 0, skills: [] })
+    : api.post<SkillRegistryInstallResponse>(`/skill-registries/${registryId}/install`, {});
+
+export const updateSkillRegistry = (
+  registryId: string,
+  payload: SkillRegistryUpdateRequest
+): Promise<SkillRegistryUpdateResponse> =>
+  USE_MOCK
+    ? Promise.resolve({ registry_id: registryId, updated_count: 0, added: [], removed: [] })
+    : api.post<SkillRegistryUpdateResponse>(`/skill-registries/${registryId}/update`, payload);
