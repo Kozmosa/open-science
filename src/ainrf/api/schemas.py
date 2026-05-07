@@ -440,6 +440,7 @@ class SkillItemResponse(BaseModel):
     description: str | None = None
     inject_mode: str = "auto"
     dependencies: list[str] = Field(default_factory=list)
+    package: str | None = None
 
 
 class SkillListResponse(BaseModel):
@@ -463,6 +464,7 @@ class SkillDetailResponse(BaseModel):
     hooks: list[str] = Field(default_factory=list)
     allowed_agents: list[str] = Field(default_factory=list)
     skill_md: str | None = None
+    package: str | None = None
 
 
 class SkillPreviewResponse(BaseModel):
