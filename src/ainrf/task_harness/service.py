@@ -333,6 +333,33 @@ class TaskHarnessService:
         target_task_id: str,
     ) -> TaskEdge:
         self.initialize()
+        if source_task_id == target_task_id:
+            raise TaskHarnessError("Cannot create an edge from a task to itself")
+        with self._connect() as connection:
+            source = connection.execute(
+                "SELECT 1 FROM task_harness_tasks WHERE task_id = ?",
+                (source_task_id,),
+            ).fetchone()
+            target = connection.execute(
+                "SELECT 1 FROM task_harness_tasks WHERE task_id = ?",
+                (target_task_id,),
+            ).fetchone()
+        if source is None:
+            raise TaskHarnessNotFoundError(f"Source task not found: {source_task_id}")
+        if target is None:
+            raise TaskHarnessNotFoundError(f"Target task not found: {target_task_id}")
+        with self._connect() as connection:
+            existing = connection.execute(
+                """
+                SELECT 1 FROM task_harness_edges
+                WHERE project_id = ? AND source_task_id = ? AND target_task_id = ?
+                """,
+                (project_id, source_task_id, target_task_id),
+            ).fetchone()
+        if existing is not None:
+            raise TaskHarnessError(
+                f"Edge already exists from {source_task_id} to {target_task_id}"
+            )
         edge_id = f"edge-{uuid4().hex[:12]}"
         now = utc_now()
         with self._connect() as connection:

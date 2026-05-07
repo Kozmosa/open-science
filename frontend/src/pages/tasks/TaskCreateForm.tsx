@@ -142,9 +142,16 @@ export default function TaskCreateForm({
           return;
         }
 
-        const settings_json = selectedResearchAgentProfile?.settingsJson.trim()
-          ? (JSON.parse(selectedResearchAgentProfile.settingsJson) as Record<string, unknown>)
-          : null;
+        let settings_json: Record<string, unknown> | null = null;
+        if (selectedResearchAgentProfile?.settingsJson.trim()) {
+          try {
+            settings_json = JSON.parse(selectedResearchAgentProfile.settingsJson) as Record<string, unknown>;
+          } catch {
+            // Invalid JSON in settings — abort submission. The parent will
+            // surface an error via the createError prop if needed.
+            return;
+          }
+        }
         onSubmit({
           project_id: selectedProjectId ?? 'default',
           workspace_id: selectedWorkspace.workspace_id,
@@ -278,10 +285,10 @@ export default function TaskCreateForm({
       {projects && projects.length > 0 ? (
         <label className="block space-y-2">
           <span className="text-xs font-medium text-[var(--text-secondary)]">
-            {'Project'}
+            {t('pages.tasks.projectLabel')}
           </span>
           <Select
-            aria-label={'Project'}
+            aria-label={t('pages.tasks.projectLabel')}
             value={selectedProjectId ?? ''}
             onChange={(event) => onSelectProject?.(event.target.value)}
           >
