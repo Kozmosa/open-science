@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { SkillItem } from '../../types';
 import type { SkillMode } from '../../settings/types';
 
@@ -70,6 +70,21 @@ export default function SkillToggleGroup({ skills, skillModes, onChange }: Props
   }, [groups]);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(defaultExpanded);
+
+  // When new groups appear (e.g., after async skill loading), apply default expand/collapse
+  useEffect(() => {
+    setExpanded((prev) => {
+      const next: Record<string, boolean> = { ...prev };
+      let changed = false;
+      for (const [name] of groups) {
+        if (!(name in next)) {
+          next[name] = name === '未分组';
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [groups]);
 
   const cycleSkill = (skillId: string) => {
     const current = skillModes[skillId] ?? 'disabled';
