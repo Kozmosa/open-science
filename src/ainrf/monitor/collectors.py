@@ -6,7 +6,7 @@ import shutil
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from ainrf.monitor.models import CpuInfo, GpuInfo, MemoryInfo, ResourceSnapshot
+from ainrf.monitor.models import CpuInfo, GpuInfo, MemoryInfo, ProcessInfo, ResourceSnapshot
 from ainrf.monitor.process_tree import ProcessTreeFilter, RawProcess
 
 if TYPE_CHECKING:
@@ -106,7 +106,17 @@ class LocalCollector:
         cpu, memory = self._extract_system_stats(processes)
 
         filter_ = ProcessTreeFilter(root_pid=self._own_pid)
-        ainrf_processes = filter_.collect_ainrf_processes(processes)
+        ainrf_processes_raw = filter_.collect_ainrf_processes(processes)
+        ainrf_processes = [
+            ProcessInfo(
+                pid=p.pid,
+                name=p.name,
+                cpu_percent=p.cpu_percent,
+                memory_mb=p.memory_mb,
+                runtime_seconds=p.runtime_seconds,
+            )
+            for p in ainrf_processes_raw
+        ]
 
         return ResourceSnapshot(
             environment_id="env-localhost",
@@ -201,8 +211,18 @@ class RemoteCollector:
         except Exception:
             status = "unavailable"
 
-        ainrf_processes = [p for p in processes if p.name in ProcessTreeFilter.WHITELIST]
-        ainrf_processes.sort(key=lambda p: p.cpu_percent, reverse=True)
+        ainrf_processes_raw = [p for p in processes if p.name in ProcessTreeFilter.WHITELIST]
+        ainrf_processes_raw.sort(key=lambda p: p.cpu_percent, reverse=True)
+        ainrf_processes = [
+            ProcessInfo(
+                pid=p.pid,
+                name=p.name,
+                cpu_percent=p.cpu_percent,
+                memory_mb=p.memory_mb,
+                runtime_seconds=p.runtime_seconds,
+            )
+            for p in ainrf_processes_raw
+        ]
 
         core_count = await self._collect_core_count()
         total_cpu = sum(p.cpu_percent for p in processes)
