@@ -166,6 +166,7 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
             task_input=payload.task_input,
             title=payload.title,
             execution_engine=payload.execution_engine,
+            auto_connect=payload.auto_connect,
             research_agent_profile=payload.research_agent_profile.model_dump()
             if payload.research_agent_profile is not None
             else None,

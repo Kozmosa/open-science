@@ -269,6 +269,7 @@ export interface TaskCreateRequest {
   task_input: string;
   title?: string | null;
   execution_engine?: string | null;
+  auto_connect?: boolean;
   research_agent_profile?: {
     profile_id: string;
     label: string;

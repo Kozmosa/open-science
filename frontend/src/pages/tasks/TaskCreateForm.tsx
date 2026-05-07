@@ -128,6 +128,7 @@ export default function TaskCreateForm({
           task_input: effectiveTaskInput.trim(),
           title: draft.title.trim() || undefined,
           execution_engine: 'claude-code',
+          auto_connect: true,
           research_agent_profile: selectedResearchAgentProfile
             ? {
                 profile_id: selectedResearchAgentProfile.profileId,

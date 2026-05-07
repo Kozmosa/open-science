@@ -408,6 +408,7 @@ class TaskCreateRequest(BaseModel):
     task_input: str = Field(min_length=1)
     title: str | None = None
     execution_engine: str | None = None
+    auto_connect: bool = Field(default=False)
     research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
     task_configuration: TaskConfigurationSnapshotRequest | None = None
 
