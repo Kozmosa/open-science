@@ -81,6 +81,31 @@ async def test_get_skill_detail_success(tmp_path: Path) -> None:
     assert payload["hooks"] == ["hook1"]
     assert payload["allowed_agents"] == ["claude-code", "custom-agent"]
     assert payload["skill_md"] == skill_md
+    assert payload["package"] is None
+
+
+@pytest.mark.anyio
+async def test_get_skill_detail_with_package(tmp_path: Path) -> None:
+    skills_root = tmp_path / "skills"
+    skill_id = "packaged-skill"
+    skill_json = {
+        "skill_id": skill_id,
+        "label": "Packaged Skill",
+        "description": "A skill with package",
+        "version": "1.0.0",
+        "author": "tester",
+        "inject_mode": "auto",
+        "package": "aris",
+    }
+    skill_md = "# Packaged Skill\n\nContent.\n"
+    _create_skill_dir(skills_root, skill_id, skill_json, skill_md)
+
+    async with make_client(tmp_path, scan_roots=[skills_root]) as client:
+        response = await client.get(f"/skills/{skill_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["package"] == "aris"
 
 
 @pytest.mark.anyio

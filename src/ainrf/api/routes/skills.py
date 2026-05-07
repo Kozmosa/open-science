@@ -41,6 +41,7 @@ async def list_skills(request: Request) -> SkillListResponse:
                 description=s.description,
                 inject_mode=s.inject_mode.value,
                 dependencies=list(s.dependencies),
+                package=s.package,
             )
             for s in skills
         ]
@@ -76,6 +77,7 @@ async def get_skill_detail(request: Request, skill_id: str) -> SkillDetailRespon
         hooks=list(skill.hooks),
         allowed_agents=list(skill.allowed_agents),
         skill_md=skill_md,
+        package=skill.package,
     )
 
 

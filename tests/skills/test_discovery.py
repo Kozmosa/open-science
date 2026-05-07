@@ -120,3 +120,49 @@ def test_discover_full_returns_builtin_and_scanned(tmp_path: Path) -> None:
     assert "scanned-skill" in discover_ids
     assert "web-search" in discover_ids
     assert "code-analysis" in discover_ids
+
+
+def test_discover_full_reads_package(tmp_path: Path) -> None:
+    """discover_full() reads package field from skill.json."""
+    root = tmp_path / "skills"
+    root.mkdir()
+
+    skill_dir = root / "packaged-skill"
+    skill_dir.mkdir()
+    skill_data = {
+        "skill_id": "packaged-skill",
+        "label": "Packaged Skill",
+        "inject_mode": "auto",
+        "package": "aris",
+    }
+    (skill_dir / "skill.json").write_text(json.dumps(skill_data))
+    (skill_dir / "SKILL.md").write_text("# Packaged Skill\n\nDescription.\n")
+
+    service = SkillsDiscoveryService(scan_roots=[root])
+    results = service.discover_full()
+
+    assert len(results) == 1
+    assert results[0].skill_id == "packaged-skill"
+    assert results[0].package == "aris"
+
+
+def test_discover_reads_package_from_skills_json(tmp_path: Path) -> None:
+    """discover() reads package field from skills.json files."""
+    root = tmp_path / "skills-root"
+    root.mkdir()
+    skills_subdir = root / "skills"
+    skills_subdir.mkdir()
+
+    skills_json = skills_subdir / "skills.json"
+    skills_json.write_text(
+        json.dumps([
+            {"skill_id": "json-skill", "label": "JSON Skill", "package": "my-pkg"}
+        ])
+    )
+
+    service = SkillsDiscoveryService(scan_roots=[root])
+    results = service.discover()
+
+    by_id = {s.skill_id: s for s in results}
+    assert "json-skill" in by_id
+    assert by_id["json-skill"].package == "my-pkg"

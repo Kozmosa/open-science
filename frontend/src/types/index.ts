@@ -493,6 +493,7 @@ export interface SkillItem {
   description: string | null;
   inject_mode: 'auto' | 'prompt_only' | 'disabled';
   dependencies: string[];
+  package?: string;
 }
 
 export interface SkillListResponse {
@@ -512,6 +513,7 @@ export interface SkillDetail {
   hooks: string[];
   allowed_agents: string[];
   skill_md: string | null;
+  package?: string;
 }
 
 export interface SkillPreview {
