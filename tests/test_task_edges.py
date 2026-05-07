@@ -179,7 +179,7 @@ def test_api_create_and_list_edges(tmp_path, monkeypatch):
             assert len(items) == 1
 
             delete_resp = await client.delete(
-                f"/projects/default/task-edges/{created['edge_id']}", headers=API_HEADERS
+                f"/task-edges/{created['edge_id']}", headers=API_HEADERS
             )
             assert delete_resp.status_code == 204
 

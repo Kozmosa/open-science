@@ -16,7 +16,7 @@ from ainrf.api.routes.projects import router as projects_router
 from ainrf.api.routes.resources import router as resources_router
 from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.skill_registries import router as skill_registries_router
-from ainrf.api.routes.tasks import router as tasks_router
+from ainrf.api.routes.tasks import router as tasks_router, task_edges_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.monitor.service import ResourceMonitorService
@@ -48,6 +48,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     workspaces_router,
     terminal_router,
     tasks_router,
+    task_edges_router,
     code_router,
     resources_router,
 )
