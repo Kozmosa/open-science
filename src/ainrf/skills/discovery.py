@@ -7,12 +7,12 @@ from ainrf.skills.loader import SkillLoader
 from ainrf.skills.models import SkillDefinition, SkillItem
 
 _BUILTIN_SKILLS: list[SkillItem] = [
-    SkillItem("web-search", "Web Search", "Search the web for information"),
-    SkillItem("code-analysis", "Code Analysis", "Analyze and understand code"),
-    SkillItem("citation", "Citation", "Manage citations and references"),
-    SkillItem("repo-inspection", "Repo Inspection", "Inspect repository structure and history"),
-    SkillItem("paper-reading", "Paper Reading", "Read and summarize academic papers"),
-    SkillItem("writing", "Academic Writing", "Write academic content"),
+    SkillItem("web-search", "Web Search", "Search the web for information", package="aris"),
+    SkillItem("code-analysis", "Code Analysis", "Analyze and understand code", package="aris"),
+    SkillItem("citation", "Citation", "Manage citations and references", package="aris"),
+    SkillItem("repo-inspection", "Repo Inspection", "Inspect repository structure and history", package="aris"),
+    SkillItem("paper-reading", "Paper Reading", "Read and summarize academic papers", package="aris"),
+    SkillItem("writing", "Academic Writing", "Write academic content", package="aris"),
 ]
 
 _SKILL_DIRS = (".codex/skills", ".claude/skills", "skills")
@@ -30,27 +30,31 @@ def _scan_directory_skills(directory: Path) -> list[SkillItem]:
                 label = skill_id.replace("-", " ").replace("_", " ").title()
                 manifest = entry / "skill.json"
                 description: str | None = None
+                package: str | None = None
                 if manifest.is_file():
                     try:
                         data = json.loads(manifest.read_text(encoding="utf-8"))
                         if isinstance(data, dict):
                             label = data.get("label", label)
                             description = data.get("description")
+                            package = data.get("package")
                     except (json.JSONDecodeError, OSError):
                         pass
-                skills.append(SkillItem(skill_id, label, description))
+                skills.append(SkillItem(skill_id, label, description, package=package))
             elif entry.suffix == ".json" and entry.name != "skills.json":
                 skill_id = entry.stem
                 label = skill_id.replace("-", " ").replace("_", " ").title()
                 description: str | None = None
+                package: str | None = None
                 try:
                     data = json.loads(entry.read_text(encoding="utf-8"))
                     if isinstance(data, dict):
                         label = data.get("label", label)
                         description = data.get("description")
+                        package = data.get("package")
                 except (json.JSONDecodeError, OSError):
                     pass
-                skills.append(SkillItem(skill_id, label, description))
+                skills.append(SkillItem(skill_id, label, description, package=package))
     return skills
 
 
@@ -67,6 +71,7 @@ def _scan_skills_json(directory: Path) -> list[SkillItem]:
                                 skill_id=item["skill_id"],
                                 label=item.get("label", item["skill_id"]),
                                 description=item.get("description"),
+                                package=item.get("package"),
                             )
                         )
             elif isinstance(data, dict) and "skills" in data:
@@ -77,6 +82,7 @@ def _scan_skills_json(directory: Path) -> list[SkillItem]:
                                 skill_id=item["skill_id"],
                                 label=item.get("label", item["skill_id"]),
                                 description=item.get("description"),
+                                package=item.get("package"),
                             )
                         )
         except (json.JSONDecodeError, OSError):
