@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Modal } from '../components/ui';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
@@ -6,14 +6,48 @@ import { getProjects, getProjectTasks, getTaskEdges } from '../api';
 import type { TaskRecord } from '../types';
 import TaskDetail from './tasks/TaskDetail';
 
+const sidebarMinWidth = 260;
+const sidebarMaxWidth = 520;
 const sidebarDefaultWidth = 320;
 
 export default function ProjectsPage() {
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [sidebarWidth] = useState(sidebarDefaultWidth);
+  const [sidebarWidth, setSidebarWidth] = useState(sidebarDefaultWidth);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [, setCreateDialogOpen] = useState(false);
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(sidebarDefaultWidth);
+
+  const handleResizeStart = useCallback((event: React.MouseEvent) => {
+    isResizing.current = true;
+    startX.current = event.clientX;
+    startWidth.current = sidebarWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    function handleMouseMove(event: MouseEvent) {
+      if (!isResizing.current) return;
+      const delta = event.clientX - startX.current;
+      const newWidth = Math.min(sidebarMaxWidth, Math.max(sidebarMinWidth, startWidth.current + delta));
+      setSidebarWidth(newWidth);
+    }
+    function handleMouseUp() {
+      if (!isResizing.current) return;
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   const projects = useMemo(() => projectsQuery.data?.items ?? [], [projectsQuery.data]);
   const effectiveProjectId = selectedProjectId ?? projects[0]?.project_id ?? null;
@@ -67,6 +101,7 @@ export default function ProjectsPage() {
           role="separator"
           aria-orientation="vertical"
           tabIndex={0}
+          onMouseDown={handleResizeStart}
           className="group flex w-2 shrink-0 cursor-col-resize items-stretch justify-center bg-[var(--surface)]"
         >
           <span className="my-3 w-px rounded-full bg-[var(--border)]" />
