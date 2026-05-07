@@ -526,6 +526,7 @@ class TaskSummaryResponse(BaseModel):
     completed_at: str | None = None
     error_summary: str | None = None
     latest_output_seq: int = 0
+    execution_engine: str = "claude-code"
 
 
 class TaskListResponse(BaseModel):

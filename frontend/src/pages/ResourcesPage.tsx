@@ -1,7 +1,17 @@
+import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useQuery } from '@tanstack/react-query';
 import { getResources } from '../api';
-import { SystemResourceCard, AinrfProcessCard } from '../components/resources';
+import { SystemResourceCard, AinrfProcessCard, DraggableResourceCard } from '../components/resources';
 import { useT } from '../i18n';
+import { useCardLayout } from '../hooks/useCardLayout';
+import type { CardKind } from '../hooks/useCardLayout';
+
+const cardRenderers: Record<CardKind, (snapshot: any) => React.ReactNode> = {
+  system: (snapshot) => <SystemResourceCard snapshot={snapshot} />,
+  processes: (snapshot) => (
+    <AinrfProcessCard processes={snapshot.ainrf_processes} environment_name={snapshot.environment_name} />
+  ),
+};
 
 export default function ResourcesPage() {
   const t = useT();
@@ -11,6 +21,15 @@ export default function ResourcesPage() {
     refetchInterval: 5000,
     staleTime: 4000,
   });
+  const { layout, swapCards } = useCardLayout();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
   const snapshots = resourcesQuery.data?.items ?? [];
 
@@ -34,17 +53,30 @@ export default function ResourcesPage() {
         <p className="text-sm text-[var(--text-tertiary)]">{t('pages.resources.noData')}</p>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <DndContext sensors={sensors} onDragEnd={(event) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+          const activeKind = (active.data.current as { kind?: CardKind } | undefined)?.kind;
+          const overKind = (over.data.current as { kind?: CardKind } | undefined)?.kind;
+          if (activeKind && overKind) {
+            swapCards(activeKind, overKind);
+          }
+        }
+      }}>
         {snapshots.map((snapshot) => (
-          <div key={snapshot.environment_id} className="space-y-4">
-            <SystemResourceCard snapshot={snapshot} />
-            <AinrfProcessCard
-              processes={snapshot.ainrf_processes}
-              environment_name={snapshot.environment_name}
-            />
+          <div key={snapshot.environment_id} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {layout.cardOrder.map((kind) => (
+              <DraggableResourceCard
+                key={`${snapshot.environment_id}:${kind}`}
+                id={`${snapshot.environment_id}:${kind}`}
+                kind={kind}
+              >
+                {cardRenderers[kind](snapshot)}
+              </DraggableResourceCard>
+            ))}
           </div>
         ))}
-      </div>
+      </DndContext>
     </div>
   );
 }

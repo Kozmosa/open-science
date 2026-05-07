@@ -50,8 +50,37 @@ export function createDefaultResearchAgentProfile(): ResearchAgentProfileSetting
     label: 'Claude Code Default',
     systemPrompt: '',
     skills: [],
+    skillModes: {},
     skillsPrompt: '',
     settingsJson: '{\n  "permissions": {\n    "allow": ["Read", "Grep"]\n  }\n}',
+  };
+}
+
+export function createKimiResearchAgentProfile(): ResearchAgentProfileSettings {
+  return {
+    profileId: 'kimi-claude-code-default',
+    label: 'Kimi Claude Code Default',
+    systemPrompt: '',
+    skills: [],
+    skillModes: {},
+    skillsPrompt: '',
+    settingsJson: JSON.stringify(
+      {
+        env: {
+          ANTHROPIC_AUTH_TOKEN: 'sk-xxxx',
+          ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
+          ENABLE_TOOL_SEARCH: 'false',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-for-coding',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-for-coding',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-for-coding',
+          CLAUDE_CODE_AUTO_COMPACT_WINDOW: '400000',
+        },
+        model: 'kimi-for-coding',
+        skipDangerousModePermissionPrompt: true,
+      },
+      null,
+      2
+    ),
   };
 }
 
@@ -73,7 +102,10 @@ export function createDefaultTaskConfigurations(): TaskConfigurationPreset[] {
 export function createDefaultTaskConfigurationSettings(): TaskConfigurationSettings {
   return {
     defaultExecutionEngineId: 'claude-code',
-    researchAgentProfiles: [createDefaultResearchAgentProfile()],
+    researchAgentProfiles: [
+      createDefaultResearchAgentProfile(),
+      createKimiResearchAgentProfile(),
+    ],
     taskConfigurations: createDefaultTaskConfigurations(),
     defaultResearchAgentProfileId,
     defaultTaskConfigurationId: rawPromptTaskConfigurationId,

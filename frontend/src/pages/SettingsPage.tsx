@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -27,6 +27,7 @@ import {
 import type {
   DefaultRoute,
   EnvironmentTaskDefaults,
+  ExecutionEngineId,
   ResearchAgentProfileSettings,
   TaskConfigurationSettings,
   WebUiSettingsDocument,
@@ -56,7 +57,6 @@ interface EnvironmentDefaultsCardProps {
 interface TaskConfigurationSectionProps {
   taskConfiguration: TaskConfigurationSettings;
   availableSkills: SkillItem[];
-  onSaveResearchAgentProfile: (profile: ResearchAgentProfileSettings) => void;
   onSaveTaskConfigurationSettings: (settings: TaskConfigurationSettings) => void;
   onResetTaskConfigurationSettings: () => void;
 }
@@ -231,17 +231,19 @@ function GeneralPreferencesSection({
 function TaskConfigurationSection({
   taskConfiguration,
   availableSkills,
-  onSaveResearchAgentProfile,
   onSaveTaskConfigurationSettings,
   onResetTaskConfigurationSettings,
 }: TaskConfigurationSectionProps) {
   const t = useT();
   const [profileDraft, setProfileDraft] = useState<ResearchAgentProfileSettings>(
-    taskConfiguration.researchAgentProfiles[0] ?? {
+    taskConfiguration.researchAgentProfiles.find(
+      (p) => p.profileId === taskConfiguration.defaultResearchAgentProfileId
+    ) ?? taskConfiguration.researchAgentProfiles[0] ?? {
       profileId: 'claude-code-default',
       label: 'Claude Code Default',
       systemPrompt: '',
       skills: [],
+      skillModes: {},
       skillsPrompt: '',
       settingsJson: '',
     }
@@ -250,6 +252,25 @@ function TaskConfigurationSection({
     taskConfiguration.defaultResearchAgentProfileId
   );
   const [defaultConfigId, setDefaultConfigId] = useState(taskConfiguration.defaultTaskConfigurationId);
+
+  useEffect(() => {
+    const nextProfile = taskConfiguration.researchAgentProfiles.find(
+      (p) => p.profileId === taskConfiguration.defaultResearchAgentProfileId
+    );
+    setProfileDraft(
+      nextProfile ?? taskConfiguration.researchAgentProfiles[0] ?? {
+        profileId: 'claude-code-default',
+        label: 'Claude Code Default',
+        systemPrompt: '',
+        skills: [],
+        skillModes: {},
+        skillsPrompt: '',
+        settingsJson: '',
+      }
+    );
+    setDefaultProfileId(taskConfiguration.defaultResearchAgentProfileId);
+    setDefaultConfigId(taskConfiguration.defaultTaskConfigurationId);
+  }, [taskConfiguration]);
 
   return (
     <SectionCard
@@ -267,9 +288,15 @@ function TaskConfigurationSection({
           <Select
             aria-label={t('pages.settings.taskConfiguration.executionEngineLabel')}
             value={taskConfiguration.defaultExecutionEngineId}
-            disabled
+            onChange={(event) =>
+              onSaveTaskConfigurationSettings({
+                ...taskConfiguration,
+                defaultExecutionEngineId: event.target.value as ExecutionEngineId,
+              })
+            }
           >
             <option value="claude-code">Claude Code</option>
+            <option value="kimi-claude-code">Kimi Claude Code</option>
           </Select>
         </FormField>
 
@@ -340,8 +367,16 @@ function TaskConfigurationSection({
             </span>
             <SkillToggleGroup
               skills={availableSkills}
-              selected={profileDraft.skills}
-              onChange={(skills) => setProfileDraft((current) => ({ ...current, skills }))}
+              skillModes={profileDraft.skillModes}
+              onChange={(skillModes) =>
+                setProfileDraft((current) => ({
+                  ...current,
+                  skillModes,
+                  skills: Object.entries(skillModes)
+                    .filter(([, mode]) => mode === 'enabled')
+                    .map(([skillId]) => skillId),
+                }))
+              }
             />
             <p className="text-xs text-[var(--text-tertiary)]">
               {t('pages.settings.taskConfiguration.skillsDescription')}
@@ -378,9 +413,16 @@ function TaskConfigurationSection({
         </Button>
         <Button
           onClick={() => {
-            onSaveResearchAgentProfile(profileDraft);
+            const nextProfiles = taskConfiguration.researchAgentProfiles.some(
+              (p) => p.profileId === profileDraft.profileId
+            )
+              ? taskConfiguration.researchAgentProfiles.map((p) =>
+                  p.profileId === profileDraft.profileId ? profileDraft : p
+                )
+              : [...taskConfiguration.researchAgentProfiles, profileDraft];
             onSaveTaskConfigurationSettings({
               ...taskConfiguration,
+              researchAgentProfiles: nextProfiles,
               defaultResearchAgentProfileId: defaultProfileId,
               defaultTaskConfigurationId: defaultConfigId,
             });
@@ -984,7 +1026,6 @@ function SettingsPage() {
     resetGeneralPreferences,
     saveTaskConfigurationSettings,
     resetTaskConfigurationSettings,
-    saveResearchAgentProfile,
     saveProjectDefaultEnvironment,
     saveProjectDefaultWorkspace,
     saveProjectEnvironmentDefaults,
@@ -1063,7 +1104,6 @@ function SettingsPage() {
         <TaskConfigurationSection
           taskConfiguration={settings.taskConfiguration}
           availableSkills={availableSkills}
-          onSaveResearchAgentProfile={saveResearchAgentProfile}
           onSaveTaskConfigurationSettings={saveTaskConfigurationSettings}
           onResetTaskConfigurationSettings={resetTaskConfigurationSettings}
         />

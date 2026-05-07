@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -465,6 +466,47 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
     assert detail["runtime"]["runner_kind"] == "ssh-process"
     assert detail["runtime"]["helper_path"] == "/remote/launch.sh"
     assert any(item["content"] == "remote hello\n" for item in output.json()["items"])
+
+
+@pytest.mark.anyio
+async def test_create_task_with_kimi_engine(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="local",
+        display_name="Local",
+        host="localhost",
+        default_workdir="/tmp",
+        task_harness_profile="test",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "execution_engine": "kimi-claude-code",
+                "task_input": "Run with Kimi.",
+            },
+        )
+        assert response.status_code == 201
+        created = response.json()
+        assert created["execution_engine"] == "kimi-claude-code"
+
+        # Verify claude-settings.json contains Kimi endpoint
+        task_dir = tmp_path / "runtime" / "task-harness" / "tasks" / created["task_id"]
+        settings_path = task_dir / "claude-settings.json"
+        assert settings_path.exists()
+        data = json.loads(settings_path.read_text())
+        assert data["env"]["ANTHROPIC_BASE_URL"] == "https://api.kimi.com/coding/"
+        assert data["model"] == "kimi-for-coding"
 
 
 @pytest.mark.anyio

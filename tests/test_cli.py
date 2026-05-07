@@ -28,10 +28,10 @@ from ainrf.state import default_state_root
 runner = CliRunner()
 
 
-def test_default_state_root_uses_current_working_directory(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("ainrf.state.Path.cwd", lambda: Path("/tmp/workspace"))
+def test_default_state_root_uses_home_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("ainrf.state.Path.home", lambda: Path("/home/testuser"))
 
-    assert default_state_root() == Path("/tmp/workspace/.ainrf")
+    assert default_state_root() == Path("/home/testuser/.ainrf")
 
 
 class FakeTTY(io.StringIO):

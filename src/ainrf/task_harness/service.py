@@ -68,6 +68,7 @@ _FINAL_STATUSES = {
 }
 _TASK_PROFILE = "claude-code"
 _EXECUTION_ENGINE = "claude-code"
+_SUPPORTED_ENGINES = {"claude-code", "kimi-claude-code"}
 _HARNESS_RESTART_REASON = (
     "startup failure: harness restart prevented Task Harness v1 from resuming this task"
 )
@@ -135,7 +136,8 @@ class TaskHarnessService:
                     prompt_manifest_path TEXT NOT NULL,
                     launch_payload_path TEXT NOT NULL,
                     resolved_workdir TEXT,
-                    runner_kind TEXT
+                    runner_kind TEXT,
+                    execution_engine TEXT NOT NULL DEFAULT 'claude-code'
                 )
                 """
             )
@@ -163,6 +165,12 @@ class TaskHarnessService:
                 "task_harness_tasks",
                 "archived_at",
                 "ALTER TABLE task_harness_tasks ADD COLUMN archived_at TEXT",
+            )
+            self._ensure_column(
+                connection,
+                "task_harness_tasks",
+                "execution_engine",
+                "ALTER TABLE task_harness_tasks ADD COLUMN execution_engine TEXT NOT NULL DEFAULT 'claude-code'",
             )
             connection.commit()
         self._fail_unfinished_tasks_for_restart()
@@ -198,14 +206,16 @@ class TaskHarnessService:
         if task_profile != _TASK_PROFILE:
             raise TaskHarnessError(f"Unsupported task profile: {task_profile}")
         resolved_execution_engine = execution_engine or _EXECUTION_ENGINE
-        if resolved_execution_engine != _EXECUTION_ENGINE:
+        if resolved_execution_engine not in _SUPPORTED_ENGINES:
             raise TaskHarnessError(f"Unsupported execution engine: {resolved_execution_engine}")
         workspace = self._workspace_service.get_workspace(workspace_id)
         environment = self._environment_service.get_environment(environment_id)
         task_dir = self.task_directory(uuid4().hex)
         profile_snapshot = _normalize_research_agent_profile(research_agent_profile)
         settings_artifact_path = write_claude_settings_artifact(
-            claude_settings_path(task_dir), profile_snapshot.settings_json
+            claude_settings_path(task_dir),
+            profile_snapshot.settings_json,
+            resolved_execution_engine,
         )
         if settings_artifact_path is not None:
             profile_snapshot.settings_artifact_path = settings_artifact_path
@@ -245,8 +255,9 @@ class TaskHarnessService:
                     environment_summary_json,
                     binding_snapshot_path,
                     prompt_manifest_path,
-                    launch_payload_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    launch_payload_path,
+                    execution_engine
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -264,6 +275,7 @@ class TaskHarnessService:
                     str(binding_snapshot_path(task_dir)),
                     str(prompt_manifest_path(task_dir)),
                     str(launch_payload_path(task_dir)),
+                    resolved_execution_engine,
                 ),
             )
             connection.commit()
@@ -809,6 +821,7 @@ class TaskHarnessService:
             completed_at=_parse_datetime(row["completed_at"]),
             error_summary=row["error_summary"],
             latest_output_seq=int(row["latest_output_seq"]),
+            execution_engine=row["execution_engine"] or _EXECUTION_ENGINE,
         )
 
     def _fail_unfinished_tasks_for_restart(self) -> None:

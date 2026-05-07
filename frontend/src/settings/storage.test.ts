@@ -68,4 +68,103 @@ describe('settings storage v2 task configuration', () => {
       taskConfigurationId: rawPromptTaskConfigurationId,
     });
   });
+
+  it('migrates v3 settings without skillModes from skills array', () => {
+    window.localStorage.setItem(
+      settingsStorageKey,
+      JSON.stringify({
+        version: 3,
+        general: {
+          defaultRoute: 'tasks',
+          terminal: { fontSize: 13 },
+          editor: { fontSize: 14, fontFamily: 'monospace' },
+        },
+        taskConfiguration: {
+          defaultExecutionEngineId: 'claude-code',
+          researchAgentProfiles: [
+            {
+              profileId: 'claude-code-default',
+              label: 'Claude Code Default',
+              systemPrompt: '',
+              skills: ['web-search', 'code-analysis'],
+              skillsPrompt: '',
+              settingsJson: '',
+            },
+          ],
+          taskConfigurations: [
+            { configId: 'raw-prompt', label: 'Raw Prompt', mode: 'raw_prompt' },
+          ],
+          defaultResearchAgentProfileId: 'claude-code-default',
+          defaultTaskConfigurationId: 'raw-prompt',
+        },
+        projectDefaults: {
+          default: {
+            defaultEnvironmentId: null,
+            defaultWorkspaceId: null,
+            selection: { lastEnvironmentId: null, lastWorkspaceId: null },
+            environmentDefaults: {},
+          },
+        },
+      })
+    );
+
+    const result = readStoredSettings();
+
+    expect(result.recoveryReason).toBeNull();
+    const profile = result.settings.taskConfiguration.researchAgentProfiles[0]!;
+    expect(profile.skillModes).toEqual({
+      'web-search': 'enabled',
+      'code-analysis': 'enabled',
+    });
+    expect(profile.skills).toEqual(['web-search', 'code-analysis']);
+  });
+
+  it('preserves skillModes when present in v3 settings', () => {
+    window.localStorage.setItem(
+      settingsStorageKey,
+      JSON.stringify({
+        version: 3,
+        general: {
+          defaultRoute: 'tasks',
+          terminal: { fontSize: 13 },
+          editor: { fontSize: 14, fontFamily: 'monospace' },
+        },
+        taskConfiguration: {
+          defaultExecutionEngineId: 'kimi-claude-code',
+          researchAgentProfiles: [
+            {
+              profileId: 'claude-code-default',
+              label: 'Claude Code Default',
+              systemPrompt: '',
+              skills: ['web-search'],
+              skillModes: { 'web-search': 'auto', 'code-analysis': 'disabled' },
+              skillsPrompt: '',
+              settingsJson: '',
+            },
+          ],
+          taskConfigurations: [
+            { configId: 'raw-prompt', label: 'Raw Prompt', mode: 'raw_prompt' },
+          ],
+          defaultResearchAgentProfileId: 'claude-code-default',
+          defaultTaskConfigurationId: 'raw-prompt',
+        },
+        projectDefaults: {
+          default: {
+            defaultEnvironmentId: null,
+            defaultWorkspaceId: null,
+            selection: { lastEnvironmentId: null, lastWorkspaceId: null },
+            environmentDefaults: {},
+          },
+        },
+      })
+    );
+
+    const result = readStoredSettings();
+    const profile = result.settings.taskConfiguration.researchAgentProfiles[0]!;
+    expect(profile.skillModes).toEqual({
+      'web-search': 'auto',
+      'code-analysis': 'disabled',
+    });
+    expect(profile.skills).toEqual(['web-search']);
+  });
 });

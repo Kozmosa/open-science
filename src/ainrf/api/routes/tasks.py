@@ -62,6 +62,7 @@ def _serialize_task_summary(task: TaskListItem) -> dict[str, Any]:
         "completed_at": task.completed_at.isoformat() if task.completed_at is not None else None,
         "error_summary": task.error_summary,
         "latest_output_seq": task.latest_output_seq,
+        "execution_engine": task.execution_engine,
     }
 
 
@@ -81,6 +82,7 @@ def _serialize_task_detail(task: TaskDetail) -> dict[str, Any]:
             completed_at=task.completed_at,
             error_summary=task.error_summary,
             latest_output_seq=task.latest_output_seq,
+            execution_engine=task.execution_engine,
         )
     )
     payload["binding"] = asdict(task.binding) if task.binding is not None else None

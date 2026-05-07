@@ -62,7 +62,7 @@ export default function TaskCreateForm({
     task_profile: 'claude-code',
     researchAgentProfileId: draftDefaults.researchAgentProfileId,
     taskConfigurationId: draftDefaults.taskConfigurationId,
-    selectedSkills: defaultProfile?.skills ?? [],
+    skillModes: defaultProfile?.skillModes ?? {},
     researchGoal: '',
     context: '',
     constraints: '',
@@ -125,7 +125,7 @@ export default function TaskCreateForm({
                 profile_id: selectedResearchAgentProfile.profileId,
                 label: selectedResearchAgentProfile.label,
                 system_prompt: selectedResearchAgentProfile.systemPrompt || null,
-                skills: draft.selectedSkills,
+                skills: Object.keys(draft.skillModes).filter((id) => draft.skillModes[id] === 'enabled'),
                 skills_prompt: selectedResearchAgentProfile.skillsPrompt || null,
                 settings_json,
               }
@@ -240,7 +240,7 @@ export default function TaskCreateForm({
               setDraft((current) => ({
                 ...current,
                 researchAgentProfileId: nextId,
-                selectedSkills: nextProfile?.skills ?? [],
+                skillModes: nextProfile?.skillModes ?? {},
               }));
             }}
           >
@@ -279,10 +279,10 @@ export default function TaskCreateForm({
           </span>
           <SkillToggleGroup
             skills={availableSkills}
-            selected={draft.selectedSkills}
-            onChange={(selected) => setDraft((current) => ({ ...current, selectedSkills: selected }))}
+            skillModes={draft.skillModes}
+            onChange={(skillModes) => setDraft((current) => ({ ...current, skillModes }))}
           />
-          {draft.selectedSkills.length > 0 && availableSkills.some((s) => s.dependencies.length > 0) ? (
+          {Object.keys(draft.skillModes).length > 0 && availableSkills.some((s) => s.dependencies.length > 0) ? (
             <p className="text-xs text-[var(--text-tertiary)]">
               {t('pages.tasks.skillDependenciesHint')}
             </p>
@@ -371,7 +371,7 @@ export default function TaskCreateForm({
               task_profile: 'claude-code',
               researchAgentProfileId: draftDefaults.researchAgentProfileId,
               taskConfigurationId: draftDefaults.taskConfigurationId,
-              selectedSkills: defaultProfile?.skills ?? [],
+              skillModes: defaultProfile?.skillModes ?? {},
               researchGoal: '',
               context: '',
               constraints: '',

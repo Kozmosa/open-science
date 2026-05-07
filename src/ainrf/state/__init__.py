@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def default_state_root() -> Path:
-    return Path.cwd() / ".ainrf"
+    return Path.home() / ".ainrf"
 
 
 __all__ = ["default_state_root"]

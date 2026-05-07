@@ -90,12 +90,15 @@ def build_local_launcher(
     )
 
     async def launch() -> RunningProcess:
+        env = os.environ.copy()
+        env["FORCE_COLOR"] = "1"
+        env["TERM"] = "xterm-256color"
         process = await asyncio.create_subprocess_exec(
             *command,
             cwd=working_directory,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=os.environ.copy(),
+            env=env,
         )
         if process.stdout is None or process.stderr is None:
             raise TaskLaunchError("Local launcher failed to attach pipes")

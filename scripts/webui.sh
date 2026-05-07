@@ -68,7 +68,7 @@ print(hashlib.sha256(os.environ["AINRF_WEBUI_API_KEY"].encode("utf-8")).hexdiges
 PY
 )"
 
-mkdir -p "${REPO_ROOT}/.ainrf"
+mkdir -p "${HOME}/.ainrf"
 
 BACKEND_COMMAND=(
   uv
@@ -80,7 +80,7 @@ BACKEND_COMMAND=(
   --port
   "8000"
   --state-root
-  ".ainrf"
+  "${HOME}/.ainrf"
 )
 
 if [[ "${MODE}" == "preview" ]]; then

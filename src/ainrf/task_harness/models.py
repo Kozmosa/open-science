@@ -79,6 +79,7 @@ class TaskListItem:
     completed_at: datetime | None
     error_summary: str | None
     latest_output_seq: int
+    execution_engine: str
 
 
 @dataclass(slots=True)

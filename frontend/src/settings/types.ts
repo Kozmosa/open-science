@@ -1,6 +1,7 @@
 export type DefaultRoute = 'terminal' | 'tasks' | 'workspaces' | 'environments';
 
-export type ExecutionEngineId = 'claude-code';
+export type ExecutionEngineId = 'claude-code' | 'kimi-claude-code';
+export type SkillMode = 'disabled' | 'enabled' | 'auto';
 export type TaskConfigurationMode = 'raw_prompt' | 'structured_research';
 
 export interface ResearchAgentProfileSettings {
@@ -8,6 +9,7 @@ export interface ResearchAgentProfileSettings {
   label: string;
   systemPrompt: string;
   skills: string[];
+  skillModes: Record<string, SkillMode>;
   skillsPrompt: string;
   settingsJson: string;
 }

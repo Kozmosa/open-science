@@ -103,12 +103,34 @@ function normalizeTaskConfigurationSettings(
             .map((s) => s.trim())
             .filter((s) => s.length > 0);
         }
+
+        // Normalize skillModes
+        let skillModes: Record<string, 'disabled' | 'enabled' | 'auto'> = {};
+        if (isRecord(item.skillModes)) {
+          for (const [skillId, mode] of Object.entries(item.skillModes)) {
+            if (mode === 'disabled' || mode === 'enabled' || mode === 'auto') {
+              skillModes[skillId] = mode;
+            }
+          }
+        } else {
+          // Migrate from old skills[] array — not a fallback, just backward compat
+          for (const skillId of skills) {
+            skillModes[skillId] = 'enabled';
+          }
+        }
+
+        // Derive skills from skillModes for backward compatibility
+        const derivedSkills = Object.entries(skillModes)
+          .filter(([, mode]) => mode === 'enabled')
+          .map(([skillId]) => skillId);
+
         return [
           {
             profileId: item.profileId,
             label: item.label,
             systemPrompt: typeof item.systemPrompt === 'string' ? item.systemPrompt : '',
-            skills,
+            skills: derivedSkills.length > 0 ? derivedSkills : skills,
+            skillModes,
             skillsPrompt,
             settingsJson: typeof item.settingsJson === 'string' ? item.settingsJson : '',
           },
@@ -145,7 +167,10 @@ function normalizeTaskConfigurationSettings(
 
   return {
     taskConfiguration: {
-      defaultExecutionEngineId: 'claude-code',
+      defaultExecutionEngineId:
+        value.defaultExecutionEngineId === 'kimi-claude-code'
+          ? 'kimi-claude-code'
+          : 'claude-code',
       researchAgentProfiles: researchAgentProfiles.length > 0 ? researchAgentProfiles : defaults.researchAgentProfiles,
       taskConfigurations: taskConfigurations.length > 0 ? taskConfigurations : defaults.taskConfigurations,
       defaultResearchAgentProfileId:
