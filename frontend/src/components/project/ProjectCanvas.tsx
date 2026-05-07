@@ -178,7 +178,7 @@ export default function ProjectCanvas({
           </Button>
         </div>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         {tasks.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
             {t('pages.projects.emptyCanvas')}
