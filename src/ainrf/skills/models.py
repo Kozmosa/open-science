@@ -16,6 +16,7 @@ class SkillItem:
     skill_id: str
     label: str
     description: str | None = None
+    package: str | None = None
 
 
 @dataclass(slots=True)
@@ -31,6 +32,7 @@ class SkillDefinition:
     mcp_servers: list[str] = field(default_factory=list)
     hooks: list[str] = field(default_factory=list)
     allowed_agents: list[str] = field(default_factory=lambda: ["claude-code"])
+    package: str | None = None
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> SkillDefinition:
@@ -47,6 +49,7 @@ class SkillDefinition:
             mcp_servers=data.get("mcp_servers", []),
             hooks=data.get("hooks", []),
             allowed_agents=data.get("allowed_agents", ["claude-code"]),
+            package=data.get("package"),
         )
 
     def to_skill_item(self) -> SkillItem:
@@ -54,6 +57,7 @@ class SkillDefinition:
             skill_id=self.skill_id,
             label=self.label,
             description=self.description,
+            package=self.package,
         )
 
 
