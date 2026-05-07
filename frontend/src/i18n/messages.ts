@@ -109,6 +109,13 @@ export const messages = {
       expandSidebar: 'Expand sidebar',
     },
     pages: {
+      projects: {
+        sidebarEyebrow: 'Projects',
+        sidebarTitle: 'Project Canvas',
+        sidebarCount: '{{count}} projects',
+        newProject: 'New project',
+        searchPlaceholder: 'Search projects',
+      },
       dashboard: {
         eyebrow: 'Terminal',
         title: 'Scholar Agent runtime shell',
@@ -715,6 +722,13 @@ export const messages = {
       expandSidebar: '展开侧边栏',
     },
     pages: {
+      projects: {
+        sidebarEyebrow: '项目',
+        sidebarTitle: '项目画布',
+        sidebarCount: '{{count}} 个项目',
+        newProject: '新建项目',
+        searchPlaceholder: '搜索项目',
+      },
       dashboard: {
         eyebrow: '终端',
         title: 'Scholar Agent 运行时外壳',
