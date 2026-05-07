@@ -29,12 +29,18 @@ vi.mock('@xyflow/react', () => ({
 const mockTasks: TaskSummary[] = [
   {
     task_id: 't1',
+    project_id: 'p1',
     title: 'Task One',
+    task_profile: 'claude-code',
     status: 'running',
+    workspace_summary: { workspace_id: 'w1', label: 'WS1', description: null, default_workdir: null },
+    environment_summary: { environment_id: 'e1', alias: 'env1', display_name: 'Env One', host: 'localhost', default_workdir: null },
     created_at: '2026-05-08T10:00:00Z',
     updated_at: '2026-05-08T10:00:00Z',
-    workspace_summary: { workspace_id: 'w1', label: 'WS1' },
-    environment_summary: { id: 'e1', alias: 'env1', display_name: 'Env One' },
+    started_at: null,
+    completed_at: null,
+    error_summary: null,
+    latest_output_seq: 0,
   },
 ];
 
