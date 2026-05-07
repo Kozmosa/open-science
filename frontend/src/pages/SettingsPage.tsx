@@ -13,7 +13,7 @@ import {
   Textarea,
 } from '../components/ui';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
-import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill } from '../api';
+import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry } from '../api';
 import { useT } from '../i18n';
 import {
   clampEditorFontSize,
@@ -31,7 +31,7 @@ import type {
   TaskConfigurationSettings,
   WebUiSettingsDocument,
 } from '../settings';
-import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview } from '../types';
+import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview, SkillRegistryItem } from '../types';
 
 interface GeneralDraftState {
   defaultRoute: DefaultRoute;
@@ -607,6 +607,8 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
   const [importSkillId, setImportSkillId] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showDirtyConfirm, setShowDirtyConfirm] = useState(false);
+  const [pendingRegistryId, setPendingRegistryId] = useState<string | null>(null);
 
   const detailQuery = useQuery<SkillDetail>({
     queryKey: ['skillDetail', selectedSkillId],
@@ -631,6 +633,42 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
       setImportError(null);
     },
     onError: (err: Error) => setImportError(err.message),
+  });
+
+  const registriesQuery = useQuery({
+    queryKey: ['skillRegistries'],
+    queryFn: getSkillRegistries,
+  });
+
+  const installRegistryMutation = useMutation({
+    mutationFn: installSkillRegistry,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skillRegistries'] });
+      queryClient.invalidateQueries({ queryKey: ['skills'] });
+    },
+    onError: (err: Error) => {
+      alert(err.message);
+    },
+  });
+
+  const updateRegistryMutation = useMutation({
+    mutationFn: ({ id, force }: { id: string; force: boolean }) =>
+      updateSkillRegistry(id, { force }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skillRegistries'] });
+      queryClient.invalidateQueries({ queryKey: ['skills'] });
+      setShowDirtyConfirm(false);
+      setPendingRegistryId(null);
+    },
+    onError: (err: any) => {
+      if (err.status === 409) {
+        setShowDirtyConfirm(true);
+      } else {
+        alert(err.message || 'Update failed');
+        setShowDirtyConfirm(false);
+        setPendingRegistryId(null);
+      }
+    },
   });
 
   const handleImportSubmit = () => {
@@ -671,6 +709,36 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
         <Button onClick={() => setShowImport((current) => !current)}>
           {t('pages.settings.skillRepository.importSkill')}
         </Button>
+        {(registriesQuery.data?.items ?? []).map((registry: SkillRegistryItem) => (
+          <div key={registry.registry_id} className="flex items-center gap-2">
+            {!registry.installed ? (
+              <Button
+                onClick={() => installRegistryMutation.mutate(registry.registry_id)}
+                disabled={installRegistryMutation.isPending}
+              >
+                {installRegistryMutation.isPending
+                  ? 'Installing...'
+                  : `Install ${registry.display_name}`}
+              </Button>
+            ) : registry.has_update ? (
+              <Button
+                onClick={() => {
+                  setPendingRegistryId(registry.registry_id);
+                  updateRegistryMutation.mutate({ id: registry.registry_id, force: false });
+                }}
+                disabled={updateRegistryMutation.isPending}
+              >
+                {updateRegistryMutation.isPending
+                  ? 'Updating...'
+                  : `Update ${registry.display_name}`}
+              </Button>
+            ) : (
+              <Button disabled>
+                {registry.display_name} Installed
+              </Button>
+            )}
+          </div>
+        ))}
       </div>
 
       {showImport && (
@@ -732,6 +800,34 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
                 ? t('pages.settings.skillRepository.importing')
                 : t('pages.settings.skillRepository.importAction')}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {showDirtyConfirm && pendingRegistryId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-6 shadow-lg">
+            <h3 className="mb-2 text-lg font-semibold text-[var(--text-primary)]">
+              Update {pendingRegistryId.toUpperCase()}
+            </h3>
+            <p className="mb-4 text-sm text-[var(--text-secondary)]">
+              The local git workspace has uncommitted changes. Continuing will discard
+              these changes and pull the latest code from remote.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowDirtyConfirm(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (pendingRegistryId) {
+                    updateRegistryMutation.mutate({ id: pendingRegistryId, force: true });
+                  }
+                }}
+              >
+                Force Update
+              </Button>
+            </div>
           </div>
         </div>
       )}

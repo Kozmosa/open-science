@@ -557,3 +557,47 @@ export interface ResourceSnapshot {
 export interface ResourcesResponse {
   items: ResourceSnapshot[];
 }
+
+export interface SkillRegistryItem {
+  registry_id: string;
+  display_name: string;
+  git_url: string;
+  installed: boolean;
+  installed_count: number;
+  has_update: boolean;
+  is_dirty: boolean;
+  last_sync_at: string | null;
+}
+
+export interface SkillRegistryListResponse {
+  items: SkillRegistryItem[];
+}
+
+export interface SkillRegistryStatus {
+  registry_id: string;
+  installed: boolean;
+  installed_count: number;
+  last_sync_at: string | null;
+  remote_commit: string | null;
+  local_commit: string | null;
+  has_update: boolean;
+  is_dirty: boolean;
+  sync_in_progress: boolean;
+}
+
+export interface SkillRegistryUpdateRequest {
+  force: boolean;
+}
+
+export interface SkillRegistryInstallResponse {
+  registry_id: string;
+  installed_count: number;
+  skills: string[];
+}
+
+export interface SkillRegistryUpdateResponse {
+  registry_id: string;
+  updated_count: number;
+  added: string[];
+  removed: string[];
+}

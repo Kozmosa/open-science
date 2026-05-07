@@ -113,7 +113,8 @@ class SkillsDiscoveryService:
     def discover_full(self) -> list[SkillDefinition]:
         """Return full skill definitions by scanning skill directories.
 
-        Uses SkillLoader.load_all_from_root() on each scan root.
+        Scans _SKILL_DIRS subdirectories under each scan root (same as discover()),
+        then falls back to scanning immediate children of each root.
         Deduplicates by skill_id — first seen wins (same semantics as discover()).
         Returns empty list if no scan roots or no skills found.
         """
@@ -121,10 +122,20 @@ class SkillsDiscoveryService:
         skills: list[SkillDefinition] = []
 
         for root in self._scan_roots:
-            if root.is_dir():
-                for skill in SkillLoader.load_all_from_root(root):
-                    if skill.skill_id not in seen:
-                        seen.add(skill.skill_id)
-                        skills.append(skill)
+            if not root.is_dir():
+                continue
+            # Scan _SKILL_DIRS subdirectories (e.g. root/skills/)
+            for skill_dir_name in _SKILL_DIRS:
+                skill_dir = root / skill_dir_name
+                if skill_dir.is_dir():
+                    for skill in SkillLoader.load_all_from_root(skill_dir):
+                        if skill.skill_id not in seen:
+                            seen.add(skill.skill_id)
+                            skills.append(skill)
+            # Fallback: scan immediate children of root itself
+            for skill in SkillLoader.load_all_from_root(root):
+                if skill.skill_id not in seen:
+                    seen.add(skill.skill_id)
+                    skills.append(skill)
 
         return skills
