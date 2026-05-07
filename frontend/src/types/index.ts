@@ -244,6 +244,23 @@ export interface TaskListResponse {
   items: TaskSummary[];
 }
 
+export interface TaskEdge {
+  edge_id: string;
+  project_id: string;
+  source_task_id: string;
+  target_task_id: string;
+  created_at: string;
+}
+
+export interface TaskEdgeListResponse {
+  items: TaskEdge[];
+}
+
+export interface TaskEdgeCreateRequest {
+  source_task_id: string;
+  target_task_id: string;
+}
+
 export interface TaskCreateRequest {
   workspace_id: string;
   environment_id: string;
