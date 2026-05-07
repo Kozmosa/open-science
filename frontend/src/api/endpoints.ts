@@ -39,6 +39,9 @@ import type {
   WorkspaceRecord,
   WorkspaceUpdateRequest,
   ResourcesResponse,
+  TaskEdge,
+  TaskEdgeCreateRequest,
+  TaskEdgeListResponse,
 } from '../types';
 import {
   mockArchiveTask,
@@ -84,6 +87,10 @@ import {
   mockUpdateProjectEnvironmentReference,
   mockUpdateWorkspace,
   mockGetResources,
+  mockGetProjectTasks,
+  mockGetTaskEdges,
+  mockCreateTaskEdge,
+  mockDeleteTaskEdge,
 } from './mock';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
@@ -214,6 +221,29 @@ export const archiveTask = (taskId: string): Promise<TaskSummary> =>
 
 export const cancelTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCancelTask(taskId)) : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {});
+
+export const getProjectTasks = (projectId: string, includeArchived: boolean = false): Promise<TaskListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetProjectTasks())
+    : api.get<TaskListResponse>(`/projects/${projectId}/tasks?include_archived=${includeArchived}`);
+
+export const getTaskEdges = (projectId: string): Promise<TaskEdgeListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetTaskEdges(projectId))
+    : api.get<TaskEdgeListResponse>(`/projects/${projectId}/task-edges`);
+
+export const createTaskEdge = (
+  projectId: string,
+  payload: TaskEdgeCreateRequest
+): Promise<TaskEdge> =>
+  USE_MOCK
+    ? Promise.resolve(mockCreateTaskEdge(projectId, payload))
+    : api.post<TaskEdge>(`/projects/${projectId}/task-edges`, payload);
+
+export const deleteTaskEdge = (edgeId: string): Promise<void> =>
+  USE_MOCK
+    ? Promise.resolve(mockDeleteTaskEdge(edgeId))
+    : api.delete<void>(`/task-edges/${edgeId}`);
 
 export const getTaskOutput = (
   taskId: string,

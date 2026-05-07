@@ -37,6 +37,9 @@ import type {
   WorkspaceRecord,
   WorkspaceUpdateRequest,
   ResourcesResponse,
+  TaskEdge,
+  TaskEdgeCreateRequest,
+  TaskEdgeListResponse,
 } from '../types';
 
 const DEFAULT_PROJECT_ID = 'default';
@@ -88,6 +91,7 @@ let mockProjectEnvironmentReferences: Record<string, ProjectEnvironmentReference
 let mockTerminalSessions: Record<string, TerminalSession> = {};
 let mockTasks: Record<string, TaskRecord> = {};
 let mockTaskOutputs: Record<string, TaskOutputEvent[]> = {};
+let mockEdges: Record<string, TaskEdge[]> = {};
 let mockCodeServerStatus: CodeServerStatus = createUnavailableCodeServerStatus();
 
 function nowIso(): string {
@@ -1146,6 +1150,7 @@ export function resetMockTaskState(): TaskListResponse {
   mockTaskCounter = 0;
   mockTasks = {};
   mockTaskOutputs = {};
+  mockEdges = {};
   return mockGetTasks();
 }
 
@@ -1175,6 +1180,38 @@ export function mockGetResources(): ResourcesResponse {
       },
     ],
   };
+}
+
+export function mockGetProjectTasks(): TaskListResponse {
+  return { items: Object.values(mockTasks).map((task) => cloneTaskSummary(task)) };
+}
+
+export function mockGetTaskEdges(projectId: string): TaskEdgeListResponse {
+  return { items: mockEdges[projectId] ?? [] };
+}
+
+export function mockCreateTaskEdge(
+  projectId: string,
+  payload: TaskEdgeCreateRequest
+): TaskEdge {
+  const edge: TaskEdge = {
+    edge_id: `edge-${Math.random().toString(36).slice(2, 8)}`,
+    project_id: projectId,
+    source_task_id: payload.source_task_id,
+    target_task_id: payload.target_task_id,
+    created_at: new Date().toISOString(),
+  };
+  if (!mockEdges[projectId]) {
+    mockEdges[projectId] = [];
+  }
+  mockEdges[projectId].push(edge);
+  return edge;
+}
+
+export function mockDeleteTaskEdge(edgeId: string): void {
+  for (const projectId in mockEdges) {
+    mockEdges[projectId] = mockEdges[projectId].filter((e) => e.edge_id !== edgeId);
+  }
 }
 
 const mockSkills: SkillItem[] = [
