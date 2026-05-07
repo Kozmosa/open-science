@@ -19,6 +19,10 @@ class WorkspaceDeletionError(ValueError):
     pass
 
 
+class WorkspaceDirectoryError(ValueError):
+    pass
+
+
 class WorkspaceRegistryService:
     def __init__(self, state_root: Path, default_workspace_dir: Path | None = None) -> None:
         self._state_root = state_root
@@ -90,6 +94,14 @@ class WorkspaceRegistryService:
         with self._lock:
             now = utc_now()
             workspace_id = f"workspace-{uuid.uuid4().hex[:12]}"
+            if default_workdir:
+                workdir_path = Path(default_workdir)
+                try:
+                    workdir_path.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    raise WorkspaceDirectoryError(
+                        f"Failed to create workspace directory {default_workdir}: {exc}"
+                    ) from exc
             workspace = WorkspaceRecord(
                 workspace_id=workspace_id,
                 project_id=project_id,

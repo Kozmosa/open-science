@@ -28,7 +28,14 @@ describe('settings storage v2 task configuration', () => {
     expect(settings.taskConfiguration.taskConfigurations.map((config) => config.configId)).toEqual([
       rawPromptTaskConfigurationId,
       structuredResearchTaskConfigurationId,
+      'reproduce-baseline-default',
+      'discover-ideas-default',
+      'validate-ideas-default',
     ]);
+    const modes = settings.taskConfiguration.taskConfigurations.map((c) => c.mode);
+    expect(modes).toContain('reproduce_baseline');
+    expect(modes).toContain('discover_ideas');
+    expect(modes).toContain('validate_ideas');
   });
 
   it('upgrades v1 settings and preserves environment task templates', () => {

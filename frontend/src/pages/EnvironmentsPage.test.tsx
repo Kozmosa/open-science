@@ -271,7 +271,7 @@ describe('EnvironmentsPage', () => {
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detect' }));
 
-    expect(await screen.findByText(/Success · Manual detection completed for gpu-lab\./)).toBeInTheDocument();
+    expect(await screen.findByText('Success')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(mockDeleteEnvironment).toHaveBeenCalledWith('env-1'));

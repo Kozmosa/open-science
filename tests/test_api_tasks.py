@@ -553,3 +553,105 @@ async def test_task_harness_live_claude_task_output(tmp_path: Path) -> None:
     print(f"Live Claude task {task_id} output:\n{combined_output}")
     assert detail["status"] == TaskHarnessStatus.SUCCEEDED.value, combined_output
     assert marker in combined_output, combined_output
+
+
+@pytest.mark.anyio
+async def test_create_task_rejects_reproduce_baseline_without_aris_skill(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="local",
+        display_name="Local",
+        host="127.0.0.1",
+        default_workdir="/tmp",
+        task_harness_profile="test",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": "Reproduce baseline",
+                "task_configuration": {
+                    "mode": "reproduce_baseline",
+                    "template_id": "reproduce-baseline-default",
+                    "template_vars": {"paper_path": "papers/target.pdf"},
+                },
+            },
+        )
+        assert response.status_code == 409
+        assert "ARIS skill" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_create_task_rejects_discover_ideas_without_aris_skill(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="local",
+        display_name="Local",
+        host="127.0.0.1",
+        default_workdir="/tmp",
+        task_harness_profile="test",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": "Discover ideas",
+                "task_configuration": {
+                    "mode": "discover_ideas",
+                    "template_id": "discover-ideas-default",
+                    "template_vars": {"topic": "graph neural networks"},
+                },
+            },
+        )
+        assert response.status_code == 409
+        assert "ARIS skill" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_create_task_rejects_validate_ideas_without_aris_skill(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    environment = app.state.environment_service.create_environment(
+        alias="local",
+        display_name="Local",
+        host="127.0.0.1",
+        default_workdir="/tmp",
+        task_harness_profile="test",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/tasks",
+            headers=API_HEADERS,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": "Validate ideas",
+                "task_configuration": {
+                    "mode": "validate_ideas",
+                    "template_id": "validate-ideas-default",
+                    "template_vars": {"idea_source": "A novel GNN approach"},
+                },
+            },
+        )
+        assert response.status_code == 409
+        assert "ARIS skill" in response.json()["detail"]

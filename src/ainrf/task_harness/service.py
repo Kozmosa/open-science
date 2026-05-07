@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shlex
 import sqlite3
 from dataclasses import asdict
 from datetime import datetime
@@ -70,6 +71,25 @@ _FINAL_STATUSES = {
 _TASK_PROFILE = "claude-code"
 _EXECUTION_ENGINE = "claude-code"
 _SUPPORTED_ENGINES = {"claude-code", "kimi-claude-code"}
+_ARIS_SKILL_REQUIREMENTS: dict[TaskConfigurationMode, list[str]] = {
+    TaskConfigurationMode.REPRODUCE_BASELINE: ["research-pipeline"],
+    TaskConfigurationMode.DISCOVER_IDEAS: ["research-lit"],
+    TaskConfigurationMode.VALIDATE_IDEAS: ["research-refine-pipeline"],
+}
+
+
+def _check_aris_skills(mode: TaskConfigurationMode, skill_root: Path) -> None:
+    required = _ARIS_SKILL_REQUIREMENTS.get(mode)
+    if not required:
+        return
+    missing = [s for s in required if not (skill_root / s).exists()]
+    if missing:
+        raise TaskHarnessError(
+            f"ARIS skill(s) not installed: {', '.join(missing)}. "
+            f"Install via Settings > Skill Repository before using {mode.value} mode."
+        )
+
+
 _HARNESS_RESTART_REASON = (
     "startup failure: harness restart prevented Task Harness v1 from resuming this task"
 )
@@ -102,7 +122,7 @@ class TaskHarnessService:
         self._db_path = self._runtime_root / "task_harness.sqlite3"
         self._environment_service = environment_service
         self._workspace_service = workspace_service
-        self._skill_root = skill_root or (state_root / "skills")
+        self._skill_root = Path(skill_root) if skill_root is not None else (state_root / "skills")
         self._initialized = False
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._running_processes: dict[str, Any] = {}
@@ -233,6 +253,7 @@ class TaskHarnessService:
         if settings_artifact_path is not None:
             profile_snapshot.settings_artifact_path = settings_artifact_path
         configuration_snapshot = _normalize_task_configuration(task_input, task_configuration)
+        _check_aris_skills(configuration_snapshot.mode, self._skill_root)
         resolved_task_input = configuration_snapshot.rendered_task_input
         resolved_title = (
             title.strip()
@@ -1040,7 +1061,11 @@ def _normalize_task_configuration(
 ) -> TaskConfigurationSnapshot:
     if payload is None:
         return raw_prompt_configuration(legacy_task_input)
-    mode = TaskConfigurationMode(str(payload.get("mode", TaskConfigurationMode.RAW_PROMPT.value)))
+    mode_raw = str(payload.get("mode", TaskConfigurationMode.RAW_PROMPT.value))
+    try:
+        mode = TaskConfigurationMode(mode_raw)
+    except ValueError as exc:
+        raise TaskHarnessError(f"Unsupported task configuration mode: {mode_raw}") from exc
     if mode == TaskConfigurationMode.RAW_PROMPT:
         raw_prompt = str(payload.get("raw_prompt") or legacy_task_input)
         return raw_prompt_configuration(raw_prompt)
@@ -1048,14 +1073,30 @@ def _normalize_task_configuration(
     template_vars: dict[str, object] = {}
     if isinstance(template_vars_value, dict):
         template_vars = {str(key): value for key, value in template_vars_value.items()}
-    rendered_task_input = _render_structured_research_prompt(template_vars)
+    rendered_task_input = _render_task_prompt(legacy_task_input, mode, template_vars)
     return TaskConfigurationSnapshot(
-        mode=TaskConfigurationMode.STRUCTURED_RESEARCH,
+        mode=mode,
         template_id=_optional_str(payload.get("template_id")) or "structured-research-default",
         template_vars=template_vars,
         raw_prompt=None,
         rendered_task_input=rendered_task_input,
     )
+
+
+def _render_task_prompt(
+    task_input: str,
+    mode: TaskConfigurationMode,
+    template_vars: dict[str, object],
+) -> str:
+    if mode == TaskConfigurationMode.STRUCTURED_RESEARCH:
+        return _render_structured_research_prompt(template_vars)
+    if mode == TaskConfigurationMode.REPRODUCE_BASELINE:
+        return _render_reproduce_baseline_prompt(template_vars)
+    if mode == TaskConfigurationMode.DISCOVER_IDEAS:
+        return _render_discover_ideas_prompt(template_vars)
+    if mode == TaskConfigurationMode.VALIDATE_IDEAS:
+        return _render_validate_ideas_prompt(template_vars)
+    return str(task_input).strip()
 
 
 def _render_structured_research_prompt(template_vars: dict[str, object]) -> str:
@@ -1072,6 +1113,66 @@ def _render_structured_research_prompt(template_vars: dict[str, object]) -> str:
         if value:
             sections.append(f"{label}:\n{value}")
     return "\n\n".join(sections)
+
+
+def _render_reproduce_baseline_prompt(template_vars: dict[str, object]) -> str:
+    paper_path = str(template_vars.get("paper_path", "")).strip()
+    scope = str(template_vars.get("scope", "core-only")).strip() or "core-only"
+    target_table = str(template_vars.get("target_table", "")).strip()
+    budget_hours = _as_int(template_vars.get("budget_hours"), default=4)
+    cmd = f"/research-pipeline {shlex.quote(paper_path)} --scope {shlex.quote(scope)}"
+    if target_table:
+        cmd += f" --target {shlex.quote(target_table)}"
+    cmd += f" --budget {budget_hours}"
+    return (
+        f"{cmd}\n\n"
+        "Reproduce the target paper. Parse the PDF, implement the core method, "
+        "run experiments, and compare results against the paper's reported values."
+    )
+
+
+def _render_discover_ideas_prompt(template_vars: dict[str, object]) -> str:
+    topic = str(template_vars.get("topic", "")).strip()
+    seed_paper_path = str(template_vars.get("seed_paper_path", "")).strip()
+    depth = _as_int(template_vars.get("depth"), default=3)
+    budget_hours = _as_int(template_vars.get("budget_hours"), default=4)
+    cmd = f"/research-lit {shlex.quote(topic)}"
+    if seed_paper_path:
+        cmd += f" --seed {shlex.quote(seed_paper_path)}"
+    cmd += f" --depth {depth} --budget {budget_hours}"
+    return (
+        f"{cmd}\n\n"
+        "Discover novel research ideas by surveying the literature, analyzing the seed paper "
+        "(if provided), and generating concrete, feasible research proposals."
+    )
+
+
+def _render_validate_ideas_prompt(template_vars: dict[str, object]) -> str:
+    idea_source = str(template_vars.get("idea_source", "")).strip()
+    validation_scope = str(template_vars.get("validation_scope", "full")).strip() or "full"
+    budget_hours = _as_int(template_vars.get("budget_hours"), default=4)
+    cmd = (
+        f"/research-refine-pipeline {shlex.quote(idea_source)} "
+        f"--scope {shlex.quote(validation_scope)} --budget {budget_hours}"
+    )
+    return (
+        f"{cmd}\n\n"
+        "Validate the given research idea. Design experiments, run pilots, analyze feasibility, "
+        "and produce a validation report."
+    )
+
+
+def _as_int(value: object, *, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(str(value)) if value is not None else default
+    except (ValueError, TypeError):
+        return default
 
 
 def _optional_str(value: object) -> str | None:

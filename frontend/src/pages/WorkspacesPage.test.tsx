@@ -119,6 +119,8 @@ describe('WorkspacesPage', () => {
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
     fireEvent.click(await screen.findByRole('button', { name: 'New workspace' }));
+    const workdirInput = screen.getByLabelText('Default workdir') as HTMLInputElement;
+    expect(workdirInput.placeholder).toBe(defaultWorkspace.default_workdir);
     const labelInput = screen.getByLabelText('Workspace label');
     fireEvent.change(labelInput, {
       target: { value: 'Created Workspace' },
@@ -142,6 +144,31 @@ describe('WorkspacesPage', () => {
         workspace_prompt: 'Created prompt',
       })
     );
+  });
+
+  it('prevents creating a workspace without default_workdir', async () => {
+    mockGetWorkspaces.mockResolvedValueOnce(workspaceList([defaultWorkspace]));
+
+    renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New workspace' }));
+    fireEvent.change(screen.getByLabelText('Workspace label'), {
+      target: { value: 'No Workdir' },
+    });
+    fireEvent.change(screen.getByLabelText('Workspace prompt'), {
+      target: { value: 'Prompt' },
+    });
+
+    // default_workdir 留空，尝试提交
+    const workdirInput = screen.getByLabelText('Default workdir') as HTMLInputElement;
+    expect(workdirInput.required).toBe(true);
+
+    // HTML5 required 校验会阻止表单提交，因此 createWorkspace 不应被调用
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    await waitFor(() => {
+      expect(mockCreateWorkspace).not.toHaveBeenCalled();
+    });
   });
 
   it('updates the selected workspace', async () => {

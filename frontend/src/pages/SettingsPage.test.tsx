@@ -31,9 +31,12 @@ vi.mock('../components/terminal/TerminalSessionConsole', () => ({
 
 vi.mock('../api', () => ({
   getEnvironments: vi.fn(),
+  getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
   getWorkspaces: vi.fn(),
+  importSkill: vi.fn(),
   installEnvironmentCodeServer: vi.fn(),
+  installSkillRegistry: vi.fn(),
 }));
 
 const mockGetEnvironments = vi.mocked(getEnvironments);

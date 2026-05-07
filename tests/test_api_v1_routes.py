@@ -235,6 +235,7 @@ async def test_health_uses_startup_runtime_readiness_snapshot(
 
 @pytest.mark.anyio
 async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
+    workdir = str(tmp_path / "workspace" / "paper")
     async with make_client(tmp_path) as client:
         create_response = await client.post(
             "/v1/workspaces",
@@ -242,7 +243,7 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
             json={
                 "label": "Paper Experiments",
                 "description": "Runs for the paper figures",
-                "default_workdir": "/workspace/paper",
+                "default_workdir": workdir,
                 "workspace_prompt": "Focus on reproducible experiments.",
             },
         )
@@ -251,7 +252,7 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
         workspace_id = created["workspace_id"]
         assert created["label"] == "Paper Experiments"
         assert created["description"] == "Runs for the paper figures"
-        assert created["default_workdir"] == "/workspace/paper"
+        assert created["default_workdir"] == workdir
         assert created["workspace_prompt"] == "Focus on reproducible experiments."
 
         list_response = await client.get(
@@ -261,13 +262,14 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
         assert list_response.status_code == 200
         assert workspace_id in {item["workspace_id"] for item in list_response.json()["items"]}
 
+        updated_workdir = str(tmp_path / "workspace" / "updated")
         update_response = await client.patch(
             f"/v1/workspaces/{workspace_id}",
             headers={"X-API-Key": "secret-key"},
             json={
                 "label": "Updated Experiments",
                 "description": None,
-                "default_workdir": "/workspace/updated",
+                "default_workdir": updated_workdir,
                 "workspace_prompt": "Updated prompt.",
             },
         )
@@ -276,7 +278,7 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
         assert updated["workspace_id"] == workspace_id
         assert updated["label"] == "Updated Experiments"
         assert updated["description"] is None
-        assert updated["default_workdir"] == "/workspace/updated"
+        assert updated["default_workdir"] == updated_workdir
         assert updated["workspace_prompt"] == "Updated prompt."
         assert updated["created_at"] == created["created_at"]
         assert updated["updated_at"] >= created["updated_at"]
@@ -292,6 +294,60 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
             headers={"X-API-Key": "secret-key"},
         )
         assert read_deleted_response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_create_workspace_auto_creates_missing_directory(tmp_path: Path) -> None:
+    target_dir = tmp_path / "auto-created" / "workspace"
+    assert not target_dir.exists()
+
+    async with make_client(tmp_path) as client:
+        create_response = await client.post(
+            "/v1/workspaces",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "label": "Auto Created",
+                "description": None,
+                "default_workdir": str(target_dir),
+                "workspace_prompt": "Auto create test.",
+            },
+        )
+
+    assert create_response.status_code == 200
+    assert target_dir.exists()
+    assert target_dir.is_dir()
+
+
+@pytest.mark.anyio
+async def test_create_workspace_rejects_unavailable_directory(tmp_path: Path) -> None:
+    # 创建一个文件来阻塞目录创建（同名文件存在时 mkdir 会失败）
+    blocked_path = tmp_path / "blocked"
+    blocked_path.write_text("i am a file", encoding="utf-8")
+
+    async with make_client(tmp_path) as client:
+        create_response = await client.post(
+            "/v1/workspaces",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "label": "Blocked",
+                "description": None,
+                "default_workdir": str(blocked_path),
+                "workspace_prompt": "Blocked test.",
+            },
+        )
+
+        assert create_response.status_code == 400
+        detail = create_response.json()["detail"]
+        assert "Failed to create workspace directory" in detail
+
+        # 验证 workspace 未被写入 registry
+        list_response = await client.get(
+            "/v1/workspaces",
+            headers={"X-API-Key": "secret-key"},
+        )
+        assert list_response.status_code == 200
+        labels = {item["label"] for item in list_response.json()["items"]}
+        assert "Blocked" not in labels
 
 
 @pytest.mark.anyio

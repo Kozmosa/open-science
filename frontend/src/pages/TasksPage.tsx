@@ -276,6 +276,7 @@ function TasksPage() {
         isOpen={isCreateDialogOpen}
         onClose={closeCreateDialog}
         title={null}
+        ariaLabel={t('pages.tasks.createTitle')}
         size="lg"
       >
         <TaskCreateForm

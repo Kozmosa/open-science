@@ -533,6 +533,7 @@ describe('TasksPage', () => {
     await waitFor(() => expect(screen.getByLabelText('Task input')).toHaveFocus());
 
     fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.transitionEnd(dialog, { propertyName: 'opacity' });
 
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument()
@@ -600,11 +601,15 @@ describe('TasksPage', () => {
     fireEvent.click(opener);
     const dialog = screen.getByRole('dialog', { name: 'Create task' });
 
-    screen.getByLabelText('Close create task').focus();
+    // Wait for focus trap to activate and auto-focus the first element
+    await waitFor(() => expect(screen.getByLabelText('Close')).toHaveFocus());
+
+    // Shift+Tab from first focusable should cycle to last
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
     expect(screen.getByRole('button', { name: 'Reset draft' })).toHaveFocus();
 
     fireEvent.click(screen.getByLabelText('Close create task'));
+    fireEvent.transitionEnd(dialog, { propertyName: 'opacity' });
 
     await waitFor(() => expect(opener).toHaveFocus());
   });

@@ -19,6 +19,9 @@ export const defaultEditorFontFamily = 'monospace';
 export const defaultResearchAgentProfileId = 'claude-code-default';
 export const rawPromptTaskConfigurationId = 'raw-prompt';
 export const structuredResearchTaskConfigurationId = 'structured-research-default';
+export const reproduceBaselineTaskConfigurationId = 'reproduce-baseline-default';
+export const discoverIdeasTaskConfigurationId = 'discover-ideas-default';
+export const validateIdeasTaskConfigurationId = 'validate-ideas-default';
 
 const supportedDefaultRoutes: DefaultRoute[] = ['terminal', 'tasks', 'workspaces', 'environments'];
 
@@ -95,6 +98,21 @@ export function createDefaultTaskConfigurations(): TaskConfigurationPreset[] {
       configId: structuredResearchTaskConfigurationId,
       label: 'Structured Research',
       mode: 'structured_research',
+    },
+    {
+      configId: reproduceBaselineTaskConfigurationId,
+      label: 'Reproduce Baseline',
+      mode: 'reproduce_baseline',
+    },
+    {
+      configId: discoverIdeasTaskConfigurationId,
+      label: 'Discover IDEAs',
+      mode: 'discover_ideas',
+    },
+    {
+      configId: validateIdeasTaskConfigurationId,
+      label: 'Validate IDEAs',
+      mode: 'validate_ideas',
     },
   ];
 }

@@ -55,6 +55,8 @@ export default function WorkspaceManagerCard() {
     queryFn: getWorkspaces,
   });
   const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
+  const seedWorkspace = workspaces.find((w) => w.workspace_id === 'workspace-default');
+  const defaultWorkdirPlaceholder = seedWorkspace?.default_workdir ?? '';
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.workspace_id === selectedWorkspaceId) ??
     workspaces[0] ??
@@ -194,6 +196,8 @@ export default function WorkspaceManagerCard() {
           <FormField label={t('pages.workspaces.defaultWorkdirField')}>
             <Input
               aria-label={t('pages.workspaces.defaultWorkdirField')}
+              required
+              placeholder={defaultWorkdirPlaceholder}
               value={draft.default_workdir}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, default_workdir: event.target.value }))
