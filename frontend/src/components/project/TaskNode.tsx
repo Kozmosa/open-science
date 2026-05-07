@@ -1,10 +1,12 @@
 import { memo } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { TaskSummary } from '../../types';
 
 interface TaskNodeData extends Record<string, unknown> {
   task: TaskSummary;
 }
+
+type TaskNodeType = Node<TaskNodeData>;
 
 function StatusDot({ status }: { status: string }) {
   const colorMap: Record<string, string> = {
@@ -22,7 +24,7 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-function TaskNode({ data, selected }: { data: TaskNodeData; selected?: boolean }) {
+function TaskNode({ data, selected }: NodeProps<TaskNodeType>) {
   const { task } = data;
   return (
     <div
