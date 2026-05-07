@@ -24,6 +24,8 @@ test/Mode1/*.h5
 /test/
 
 
+/node_modules/
+
 # ref-repos
 /ref-repos/*/
 
