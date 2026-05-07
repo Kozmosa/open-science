@@ -36,6 +36,4 @@ workspace/
 kimi-export-*.md
 
 # presentation build artifacts
-/docs/presentation/*/node_modules/
-/docs/presentation/*/dist/
-/docs/presentation/*/*.pdf
+/docs/presentation/
