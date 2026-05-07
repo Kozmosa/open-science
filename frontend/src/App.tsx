@@ -14,10 +14,12 @@ const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage'));
 const FileBrowserPage = lazy(() => import('./pages/FileBrowserPage'));
 const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
 
 const queryClient = createAppQueryClient();
 
 const defaultRoutePathById = {
+  projects: '/projects',
   terminal: '/terminal',
   tasks: '/tasks',
   workspaces: '/workspaces',
@@ -45,6 +47,7 @@ function AppRoutes() {
       >
         <Routes>
           <Route path="/" element={<RootRedirect />} />
+          <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/terminal" element={<TerminalPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/workspaces" element={<WorkspacesPage />} />

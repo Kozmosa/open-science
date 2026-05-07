@@ -64,6 +64,10 @@ export const messages = {
       error: 'error',
     },
     navigation: {
+      projects: {
+        label: 'Projects',
+        description: 'Project canvas and task graph visualization',
+      },
       terminal: {
         label: 'Terminal',
         description: 'Health checks and terminal bench access',
@@ -669,6 +673,10 @@ export const messages = {
       error: '错误',
     },
     navigation: {
+      projects: {
+        label: '项目',
+        description: '项目画布与任务图可视化',
+      },
       terminal: {
         label: '终端',
         description: '健康检查和终端工作台入口',
