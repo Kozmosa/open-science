@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
 from ainrf.workspaces import (
     WorkspaceDeletionError,
+    WorkspaceDirectoryError,
     WorkspaceNotFoundError,
     WorkspaceRegistryService,
 )
@@ -42,6 +43,8 @@ def _get_workspace_service(request: Request) -> WorkspaceRegistryService:
 def _translate_workspace_error(exc: Exception) -> HTTPException:
     if isinstance(exc, WorkspaceNotFoundError):
         return HTTPException(status_code=404, detail="Workspace not found")
+    if isinstance(exc, WorkspaceDirectoryError):
+        return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, WorkspaceDeletionError):
         return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=500, detail="Unexpected workspace error")
