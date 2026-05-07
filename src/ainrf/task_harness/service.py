@@ -767,7 +767,12 @@ class TaskHarnessService:
             return
         finally:
             self._running_processes.pop(task_id, None)
-            await process.cleanup()
+            try:
+                await process.cleanup()
+            except Exception as exc:
+                self._append_output_event(
+                    task_id, TaskOutputKind.SYSTEM, f"cleanup error: {exc}"
+                )
 
         if exit_code == 0:
             self._complete_task(task_id, exit_code=0)

@@ -404,7 +404,12 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
         task_harness_profile="Use the configured SSH environment.",
     )
     recorded: dict[str, str] = {}
-    fake_executor = object()
+
+    class FakeExecutor:
+        async def close(self) -> None:
+            pass
+
+    fake_executor = FakeExecutor()
 
     def fake_build_ssh_executor(*_args: object, project_dir: str) -> object:
         recorded["project_dir"] = project_dir
@@ -418,8 +423,9 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
         working_directory: str,
         prompt_file: Path,
         settings_path: Path | None = None,
+        ainrf_dir: Path | None = None,
     ) -> tuple[LaunchPayload, object]:
-        _ = settings_path
+        _ = settings_path, ainrf_dir
         assert executor is fake_executor
         assert task_id
         assert local_task_dir.exists()
