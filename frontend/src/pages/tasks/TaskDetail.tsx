@@ -4,6 +4,8 @@ import { useT } from '../../i18n';
 import type { TaskOutputEvent, TaskRecord } from '../../types';
 import { statusClassName } from './status';
 
+type PanelLayout = 'split' | 'main' | 'aside';
+
 interface Props {
   selectedTask: TaskRecord | null;
   detailError: string | null;
@@ -40,7 +42,7 @@ export default function TaskDetail({
   outputError,
 }: Props) {
   const t = useT();
-  const [layout, setLayout] = useState<'split' | 'main' | 'aside'>('split');
+  const [layout, setLayout] = useState<PanelLayout>('split');
   const metadataFallback = t('pages.tasks.unavailable');
 
   if (detailError) {
@@ -106,26 +108,30 @@ export default function TaskDetail({
           .join(' ')}
       >
         {layout !== 'aside' && (
-        <main className="min-h-0 overflow-auto p-5">
-          <section className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-[var(--text)]">
-                {t('pages.tasks.outputTimeline')}
-              </h2>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-[var(--text-secondary)]">
-                  {t('pages.tasks.latestSeq', { seq: selectedTask.latest_output_seq })}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setLayout(layout === 'main' ? 'split' : 'main')}
-                  className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
-                  aria-label={layout === 'main' ? 'Collapse panel' : 'Expand panel'}
-                >
-                  {layout === 'main' ? '<<' : '>>'}
-                </button>
+          <main className="min-h-0 overflow-auto p-5">
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-[var(--text)]">
+                  {t('pages.tasks.outputTimeline')}
+                </h2>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[var(--text-secondary)]">
+                    {t('pages.tasks.latestSeq', { seq: selectedTask.latest_output_seq })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLayout(layout === 'main' ? 'split' : 'main')}
+                    className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+                    aria-label={
+                      layout === 'main'
+                        ? t('pages.tasks.collapseOutputTimeline')
+                        : t('pages.tasks.expandOutputTimeline')
+                    }
+                  >
+                    {layout === 'main' ? '<<' : '>>'}
+                  </button>
+                </div>
               </div>
-            </div>
             {outputError ? <p className="text-sm text-[#ff3b30]">{outputError}</p> : null}
             <div className="min-h-[24rem] space-y-3 rounded-xl border border-[var(--border)] bg-[#0b1020] p-4 text-xs text-gray-100">
               {outputItems.length === 0 ? (
@@ -176,20 +182,24 @@ export default function TaskDetail({
         )}
 
         {layout !== 'main' && (
-        <aside className="min-h-0 overflow-auto border-t border-[var(--border)] bg-[var(--bg)] p-5 lg:border-l lg:border-t-0">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[var(--text)]">
-              {t('pages.tasks.summary')}
-            </h2>
-            <button
-              type="button"
-              onClick={() => setLayout(layout === 'aside' ? 'split' : 'aside')}
-              className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
-              aria-label={layout === 'aside' ? 'Collapse panel' : 'Expand panel'}
-            >
-              {layout === 'aside' ? '>>' : '<<'}
-            </button>
-          </div>
+          <aside className="min-h-0 overflow-auto border-t border-[var(--border)] bg-[var(--bg)] p-5 lg:border-l lg:border-t-0">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--text)]">
+                {t('pages.tasks.summary')}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setLayout(layout === 'aside' ? 'split' : 'aside')}
+                className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+                aria-label={
+                  layout === 'aside'
+                    ? t('pages.tasks.collapseSummary')
+                    : t('pages.tasks.expandSummary')
+                }
+              >
+                {layout === 'aside' ? '>>' : '<<'}
+              </button>
+            </div>
           <div className="space-y-5">
             <section>
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
