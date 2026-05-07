@@ -23,7 +23,10 @@ function MetadataRow({
   return (
     <div className="flex items-start gap-4 border-b border-[var(--border)] py-2 last:border-0">
       <span className="w-28 shrink-0 text-xs text-[var(--text-secondary)]">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-right text-xs font-medium text-[var(--text)]">
+      <span
+        className="min-w-0 flex-1 truncate text-right text-xs font-medium text-[var(--text)]"
+        title={value ? String(value) : fallback}
+      >
         {value ?? fallback}
       </span>
     </div>
