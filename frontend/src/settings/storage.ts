@@ -141,7 +141,7 @@ function normalizeTaskConfigurationSettings(
     hadFallback = true;
   }
 
-  const taskConfigurations = Array.isArray(value.taskConfigurations)
+  const normalizedTaskConfigurations = Array.isArray(value.taskConfigurations)
     ? value.taskConfigurations.flatMap((item): TaskConfigurationPreset[] => {
         if (
           !isRecord(item) ||
@@ -164,6 +164,13 @@ function normalizeTaskConfigurationSettings(
   if (!Array.isArray(value.taskConfigurations)) {
     hadFallback = true;
   }
+
+  // Backfill missing default presets so new ARIS modes appear for existing users
+  const existingIds = new Set(normalizedTaskConfigurations.map((c) => c.configId));
+  const backfilledPresets = defaults.taskConfigurations.filter((preset) => !existingIds.has(preset.configId));
+  const taskConfigurations = backfilledPresets.length > 0
+    ? [...normalizedTaskConfigurations, ...backfilledPresets]
+    : normalizedTaskConfigurations;
 
   return {
     taskConfiguration: {

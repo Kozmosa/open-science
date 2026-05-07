@@ -110,13 +110,13 @@ export default function TaskCreateForm({
         : draft.task_input;
   const hasRequiredFields = (() => {
     if (selectedTaskConfiguration?.mode === 'reproduce_baseline') {
-      return draft.paperPath.trim().length > 0;
+      return draft.paperPath.trim().length > 0 && effectiveTaskInput.trim().length > 0;
     }
     if (selectedTaskConfiguration?.mode === 'discover_ideas') {
-      return draft.topic.trim().length > 0;
+      return draft.topic.trim().length > 0 && effectiveTaskInput.trim().length > 0;
     }
     if (selectedTaskConfiguration?.mode === 'validate_ideas') {
-      return draft.ideaSource.trim().length > 0;
+      return draft.ideaSource.trim().length > 0 && effectiveTaskInput.trim().length > 0;
     }
     return effectiveTaskInput.trim().length > 0;
   })();
@@ -135,9 +135,18 @@ export default function TaskCreateForm({
           return;
         }
 
-        const settings_json = selectedResearchAgentProfile?.settingsJson.trim()
-          ? (JSON.parse(selectedResearchAgentProfile.settingsJson) as Record<string, unknown>)
-          : null;
+        let settings_json: Record<string, unknown> | null = null;
+        if (selectedResearchAgentProfile?.settingsJson.trim()) {
+          try {
+            settings_json = JSON.parse(
+              selectedResearchAgentProfile.settingsJson
+            ) as Record<string, unknown>;
+          } catch {
+            // Invalid JSON in settings — fall back to null and let the task proceed
+            // without custom settings. The user can fix it in Settings.
+            settings_json = null;
+          }
+        }
         onSubmit({
           workspace_id: selectedWorkspace.workspace_id,
           environment_id: selectedEnvironment.id,

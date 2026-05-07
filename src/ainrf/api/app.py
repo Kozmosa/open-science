@@ -123,6 +123,7 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
         state_root=api_config.state_root,
         environment_service=environment_service,
         workspace_service=app.state.workspace_service,
+        skill_root=default_workspace_dir / "skills",
     )
     app.middleware("http")(build_api_key_middleware(api_config))
     for router in ROUTERS:
