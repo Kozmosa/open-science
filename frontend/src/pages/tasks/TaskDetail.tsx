@@ -101,8 +101,7 @@ export default function TaskDetail({
         className={[
           'grid min-h-0 flex-1 gap-0 overflow-hidden transition-all duration-300 ease-in-out',
           layout === 'split' && 'lg:grid-cols-[minmax(0,1fr)_320px]',
-          layout === 'main' && 'lg:grid-cols-[1fr_0fr]',
-          layout === 'aside' && 'lg:grid-cols-[0fr_1fr]',
+          layout !== 'split' && 'lg:grid-cols-1',
         ]
           .filter(Boolean)
           .join(' ')}
