@@ -398,6 +398,29 @@ class TaskHarnessService:
                 ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
+    def list_project_tasks(self, project_id: str, *, include_archived: bool = False) -> list[TaskListItem]:
+        self.initialize()
+        with self._connect() as connection:
+            if include_archived:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM task_harness_tasks
+                    WHERE project_id = ?
+                    ORDER BY created_at DESC
+                    """,
+                    (project_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM task_harness_tasks
+                    WHERE project_id = ? AND archived_at IS NULL
+                    ORDER BY created_at DESC
+                    """,
+                    (project_id,),
+                ).fetchall()
+        return [self._row_to_list_item(row) for row in rows]
+
     def archive_task(self, task_id: str) -> TaskListItem:
         self.initialize()
         _ = self._load_task_row(task_id)

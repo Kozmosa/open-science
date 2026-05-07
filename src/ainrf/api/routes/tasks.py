@@ -321,3 +321,23 @@ async def delete_task_edge(edge_id: str, request: Request) -> None:
         service.delete_task_edge(edge_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
+
+
+@task_edges_router.get("/projects/{project_id}/tasks", response_model=TaskListResponse)
+async def list_project_tasks(
+    project_id: str,
+    request: Request,
+    include_archived: bool = Query(default=False),
+) -> TaskListResponse:
+    service = _get_task_harness_service(request)
+    try:
+        items = service.list_project_tasks(project_id, include_archived=include_archived)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskListResponse.model_validate(
+        {
+            "items": [
+                TaskSummaryResponse.model_validate(_serialize_task_summary(item)) for item in items
+            ]
+        }
+    )

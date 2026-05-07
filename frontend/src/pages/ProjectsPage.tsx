@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Modal } from '../components/ui';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
+import { useT } from '../i18n';
 import { getProjects, getProjectTasks, getTaskEdges } from '../api';
 import type { TaskRecord } from '../types';
 import TaskDetail from './tasks/TaskDetail';
@@ -11,6 +12,7 @@ const sidebarMaxWidth = 520;
 const sidebarDefaultWidth = 320;
 
 export default function ProjectsPage() {
+  const t = useT();
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(sidebarDefaultWidth);
@@ -119,8 +121,7 @@ export default function ProjectsPage() {
             />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-              {/* TODO(Task 12): t('pages.projects.noProjects') */}
-              No projects yet.
+              {t('pages.projects.noProjects')}
             </div>
           )}
         </main>

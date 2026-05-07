@@ -15,7 +15,7 @@ import {
   applyEdgeChanges,
 } from '@xyflow/react';
 import { Button } from '../ui';
-// import { useT } from '../../i18n'; // TODO(Task 12): re-enable when i18n keys are added
+import { useT } from '../../i18n';
 import type { TaskEdge, TaskSummary } from '../../types';
 import TaskNode from './TaskNode';
 import { layoutDagre } from './layoutDagre';
@@ -156,7 +156,7 @@ export default function ProjectCanvas({
   onNewTask,
   onResetLayout,
 }: Props) {
-  // const t = useT(); // TODO(Task 12): re-enable when i18n keys are added
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col">
@@ -164,8 +164,7 @@ export default function ProjectCanvas({
         <div className="flex gap-2">
           <Button onClick={onNewTask} className="h-8 gap-1.5 px-3 text-xs">
             <Plus size={14} />
-            {/* TODO(Task 12): replace with t('pages.projects.newTask') */}
-            New task
+            {t('pages.projects.newTask')}
           </Button>
           <Button
             variant="ghost"
@@ -175,16 +174,14 @@ export default function ProjectCanvas({
             }}
             className="h-8 px-3 text-xs"
           >
-            {/* TODO(Task 12): replace with t('pages.projects.resetLayout') */}
-            Reset layout
+            {t('pages.projects.resetLayout')}
           </Button>
         </div>
       </div>
       <div className="flex-1">
         {tasks.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-            {/* TODO(Task 12): replace with t('pages.projects.emptyCanvas') */}
-            No tasks yet. Create one to start.
+            {t('pages.projects.emptyCanvas')}
           </div>
         ) : (
           <ReactFlowProvider>
