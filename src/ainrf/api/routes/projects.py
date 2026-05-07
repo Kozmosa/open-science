@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from ainrf.api.schemas import (
     ProjectCreateRequest,
@@ -13,6 +13,9 @@ from ainrf.api.schemas import (
     ProjectListResponse,
     ProjectResponse,
     ProjectUpdateRequest,
+    TaskEdgeCreateRequest,
+    TaskEdgeListResponse,
+    TaskEdgeResponse,
 )
 from ainrf.environments import (
     EnvironmentNotFoundError,
@@ -22,6 +25,12 @@ from ainrf.environments import (
     ProjectReferenceNotFoundError,
 )
 from ainrf.projects import ProjectNotFoundError, ProjectRegistryService
+from ainrf.task_harness import (
+    TaskHarnessError,
+    TaskHarnessNotFoundError,
+    TaskHarnessService,
+)
+from ainrf.workspaces import WorkspaceNotFoundError
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -236,3 +245,82 @@ async def delete_project_environment_ref(
     except Exception as exc:
         raise _translate_reference_error(exc) from exc
     return None
+
+
+def _get_task_harness_service(request: Request) -> TaskHarnessService:
+    service = getattr(request.app.state, "task_harness_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="task harness service not initialized")
+    return service
+
+
+def _translate_task_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, TaskHarnessNotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, WorkspaceNotFoundError):
+        return HTTPException(status_code=404, detail="Workspace not found")
+    if exc.__class__.__name__ == "EnvironmentNotFoundError":
+        return HTTPException(status_code=404, detail="Environment not found")
+    if isinstance(exc, TaskHarnessError):
+        return HTTPException(status_code=409, detail=str(exc))
+    return HTTPException(status_code=500, detail="Unexpected task harness error")
+
+
+@router.get("/{project_id}/task-edges", response_model=TaskEdgeListResponse)
+async def list_task_edges(project_id: str, request: Request) -> TaskEdgeListResponse:
+    service = _get_task_harness_service(request)
+    try:
+        edges = service.get_task_edges(project_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskEdgeListResponse.model_validate(
+        {
+            "items": [
+                {
+                    "edge_id": edge.edge_id,
+                    "project_id": edge.project_id,
+                    "source_task_id": edge.source_task_id,
+                    "target_task_id": edge.target_task_id,
+                    "created_at": edge.created_at.isoformat(),
+                }
+                for edge in edges
+            ]
+        }
+    )
+
+
+@router.post(
+    "/{project_id}/task-edges",
+    response_model=TaskEdgeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_task_edge(
+    project_id: str, payload: TaskEdgeCreateRequest, request: Request
+) -> TaskEdgeResponse:
+    service = _get_task_harness_service(request)
+    try:
+        edge = service.create_task_edge(
+            project_id=project_id,
+            source_task_id=payload.source_task_id,
+            target_task_id=payload.target_task_id,
+        )
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskEdgeResponse.model_validate(
+        {
+            "edge_id": edge.edge_id,
+            "project_id": edge.project_id,
+            "source_task_id": edge.source_task_id,
+            "target_task_id": edge.target_task_id,
+            "created_at": edge.created_at.isoformat(),
+        }
+    )
+
+
+@router.delete("/{project_id}/task-edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task_edge(project_id: str, edge_id: str, request: Request) -> None:
+    service = _get_task_harness_service(request)
+    try:
+        service.delete_task_edge(edge_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc

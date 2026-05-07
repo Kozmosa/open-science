@@ -535,6 +535,29 @@ class TaskListResponse(BaseModel):
     items: list[TaskSummaryResponse]
 
 
+class TaskEdgeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    edge_id: str
+    project_id: str
+    source_task_id: str
+    target_task_id: str
+    created_at: str
+
+
+class TaskEdgeListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TaskEdgeResponse]
+
+
+class TaskEdgeCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_task_id: str = Field(min_length=1)
+    target_task_id: str = Field(min_length=1)
+
+
 class ResearchAgentProfileSnapshotResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
