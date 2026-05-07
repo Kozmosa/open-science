@@ -448,8 +448,8 @@ export default function TaskCreateForm({
               value={draft.scope}
               onChange={(e) => setDraft((c) => ({ ...c, scope: e.target.value }))}
             >
-              <option value="core-only">core-only</option>
-              <option value="full-suite">full-suite</option>
+              <option value="core-only">{t('pages.tasks.scopeCoreOnly')}</option>
+              <option value="full-suite">{t('pages.tasks.scopeFullSuite')}</option>
             </Select>
           </label>
           <label className="block space-y-2">
@@ -553,8 +553,8 @@ export default function TaskCreateForm({
               value={draft.validationScope}
               onChange={(e) => setDraft((c) => ({ ...c, validationScope: e.target.value }))}
             >
-              <option value="quick">quick</option>
-              <option value="full">full</option>
+              <option value="quick">{t('pages.tasks.validationScopeQuick')}</option>
+              <option value="full">{t('pages.tasks.validationScopeFull')}</option>
             </Select>
           </label>
           <label className="block space-y-2">
