@@ -20,9 +20,9 @@ function MetadataRow({
   fallback: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-2 last:border-0">
-      <span className="text-xs text-[var(--text-secondary)]">{label}</span>
-      <span className="max-w-[70%] text-right text-xs font-medium text-[var(--text)]">
+    <div className="flex items-start gap-4 border-b border-[var(--border)] py-2 last:border-0">
+      <span className="w-28 shrink-0 text-xs text-[var(--text-secondary)]">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-right text-xs font-medium text-[var(--text)]">
         {value ?? fallback}
       </span>
     </div>
