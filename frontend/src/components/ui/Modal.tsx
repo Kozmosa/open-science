@@ -7,6 +7,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   title?: string | null;
+  ariaLabel?: string | null;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showCloseButton?: boolean;
@@ -24,6 +25,7 @@ export default function Modal({
   isOpen,
   onClose,
   title = null,
+  ariaLabel = null,
   children,
   size = 'md',
   showCloseButton = true,
@@ -88,6 +90,7 @@ export default function Modal({
         className={`w-full ${sizeClasses[size]} max-h-[90vh] overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl transition-all duration-200 ease-out ${dialogTransform}`}
         role="dialog"
         aria-modal="true"
+        aria-label={ariaLabel ?? undefined}
         aria-labelledby={title ? 'modal-title' : undefined}
         onClick={(e) => e.stopPropagation()}
         onTransitionEnd={handleTransitionEnd}

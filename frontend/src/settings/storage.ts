@@ -147,7 +147,7 @@ function normalizeTaskConfigurationSettings(
           !isRecord(item) ||
           typeof item.configId !== 'string' ||
           typeof item.label !== 'string' ||
-          (item.mode !== 'raw_prompt' && item.mode !== 'structured_research')
+          (item.mode !== 'raw_prompt' && item.mode !== 'structured_research' && item.mode !== 'reproduce_baseline' && item.mode !== 'discover_ideas' && item.mode !== 'validate_ideas')
         ) {
           hadFallback = true;
           return [];

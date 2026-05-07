@@ -178,7 +178,7 @@ export interface ResearchAgentProfileSnapshot {
 }
 
 export interface TaskConfigurationSnapshot {
-  mode: 'raw_prompt' | 'structured_research';
+  mode: 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
   template_id: string | null;
   template_vars: Record<string, unknown>;
   raw_prompt: string | null;
@@ -261,7 +261,7 @@ export interface TaskCreateRequest {
     settings_json?: Record<string, unknown> | null;
   } | null;
   task_configuration?: {
-    mode: 'raw_prompt' | 'structured_research';
+    mode: 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
     template_id?: string | null;
     template_vars?: Record<string, unknown>;
     raw_prompt?: string | null;

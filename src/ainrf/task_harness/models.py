@@ -24,6 +24,9 @@ class TaskOutputKind(StrEnum):
 class TaskConfigurationMode(StrEnum):
     RAW_PROMPT = "raw_prompt"
     STRUCTURED_RESEARCH = "structured_research"
+    REPRODUCE_BASELINE = "reproduce_baseline"
+    DISCOVER_IDEAS = "discover_ideas"
+    VALIDATE_IDEAS = "validate_ideas"
 
 
 @dataclass(slots=True)
