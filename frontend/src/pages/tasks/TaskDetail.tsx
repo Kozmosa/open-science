@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Alert } from '../../components/ui';
 import { useT } from '../../i18n';
 import type { TaskOutputEvent, TaskRecord } from '../../types';
@@ -36,6 +37,7 @@ export default function TaskDetail({
   outputError,
 }: Props) {
   const t = useT();
+  const [layout, setLayout] = useState<'split' | 'main' | 'aside'>('split');
   const metadataFallback = t('pages.tasks.unavailable');
 
   if (detailError) {
@@ -90,16 +92,36 @@ export default function TaskDetail({
         ) : null}
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div
+        className={[
+          'grid min-h-0 flex-1 gap-0 overflow-hidden transition-all duration-300 ease-in-out',
+          layout === 'split' && 'lg:grid-cols-[minmax(0,1fr)_320px]',
+          layout === 'main' && 'lg:grid-cols-[1fr_0fr]',
+          layout === 'aside' && 'lg:grid-cols-[0fr_1fr]',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {layout !== 'aside' && (
         <main className="min-h-0 overflow-auto p-5">
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-[var(--text)]">
                 {t('pages.tasks.outputTimeline')}
               </h2>
-              <span className="text-xs text-[var(--text-secondary)]">
-                {t('pages.tasks.latestSeq', { seq: selectedTask.latest_output_seq })}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[var(--text-secondary)]">
+                  {t('pages.tasks.latestSeq', { seq: selectedTask.latest_output_seq })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLayout(layout === 'main' ? 'split' : 'main')}
+                  className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+                  aria-label={layout === 'main' ? 'Collapse panel' : 'Expand panel'}
+                >
+                  {layout === 'main' ? '<<' : '>>'}
+                </button>
+              </div>
             </div>
             {outputError ? <p className="text-sm text-[#ff3b30]">{outputError}</p> : null}
             <div className="min-h-[24rem] space-y-3 rounded-xl border border-[var(--border)] bg-[#0b1020] p-4 text-xs text-gray-100">
@@ -148,13 +170,25 @@ export default function TaskDetail({
             )}
           </section>
         </main>
+        )}
 
+        {layout !== 'main' && (
         <aside className="min-h-0 overflow-auto border-t border-[var(--border)] bg-[var(--bg)] p-5 lg:border-l lg:border-t-0">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[var(--text)]">
+              {t('pages.tasks.summary')}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setLayout(layout === 'aside' ? 'split' : 'aside')}
+              className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+              aria-label={layout === 'aside' ? 'Collapse panel' : 'Expand panel'}
+            >
+              {layout === 'aside' ? '>>' : '<<'}
+            </button>
+          </div>
           <div className="space-y-5">
             <section>
-              <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
-                {t('pages.tasks.summary')}
-              </h2>
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
                 <MetadataRow label={t('pages.tasks.taskId')} value={selectedTask.task_id} fallback={metadataFallback} />
                 <MetadataRow label={t('pages.tasks.created')} value={selectedTask.created_at} fallback={metadataFallback} />
@@ -214,6 +248,7 @@ export default function TaskDetail({
             </section>
           </div>
         </aside>
+        )}
       </div>
     </section>
   );
