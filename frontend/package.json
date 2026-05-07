@@ -13,12 +13,14 @@
     "verify:styles": "npm run build && node scripts/verify-tailwind-build.mjs"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@monaco-editor/react": "^4.7.0",
     "@tanstack/react-query": "^5.96.2",
     "@xterm/addon-fit": "^0.11.0",
+    "@xyflow/react": "^12.10.2",
     "autoprefixer": "^10.4.27",
     "lucide-react": "^1.7.0",
     "monaco-editor": "^0.55.1",

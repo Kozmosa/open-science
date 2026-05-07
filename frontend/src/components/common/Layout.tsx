@@ -5,6 +5,7 @@ import {
   ChevronRight,
   FolderKanban,
   FolderOpen,
+  LayoutGrid,
   ListChecks,
   Settings,
   SquareTerminal,
@@ -63,6 +64,12 @@ function Layout({ children, edgeToEdge = false }: Props) {
   );
   const asideWidth = useMemo(() => (isCollapsed ? 'w-[56px]' : 'w-[248px]'), [isCollapsed]);
   const navigationItems: NavigationItem[] = [
+    {
+      label: t('navigation.projects.label'),
+      to: '/projects',
+      description: t('navigation.projects.description'),
+      icon: LayoutGrid,
+    },
     {
       label: t('navigation.terminal.label'),
       to: '/terminal',

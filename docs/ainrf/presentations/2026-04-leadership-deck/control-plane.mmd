@@ -1,0 +1,42 @@
+flowchart LR
+    subgraph User["用户侧"]
+        A[WebUI / CLI]
+    end
+
+    subgraph Control["AINRF 控制面"]
+        B[Workspace 绑定]
+        C[Environment 选取]
+        D[五层 Prompt 组合]
+        E[Task Harness v1]
+        F[SSE 流输出]
+        G[SQLite 持久化]
+    end
+
+    subgraph Remote["执行环境"]
+        H[本地 Claude Code]
+        I[SSH 远程 Claude Code]
+    end
+
+    subgraph Browser["浏览与回看"]
+        J[Workspace Browser<br/>code-server]
+        K[Task 回放]
+    end
+
+    A --> B
+    A --> C
+    B --> D
+    C --> D
+    D --> E
+    E --> H
+    E --> I
+    H --> F
+    I --> F
+    F --> A
+    F --> G
+    G --> K
+    E --> J
+
+    style User fill:#e1f5fe
+    style Control fill:#fff3e0
+    style Remote fill:#e8f5e9
+    style Browser fill:#f3e5f5

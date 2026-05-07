@@ -6,6 +6,7 @@ import {
   archiveTask,
   cancelTask,
   createTask,
+  getProjects,
   getSkills,
   getTask,
   getTasks,
@@ -37,6 +38,7 @@ function TasksPage() {
   const environmentSelection = useEnvironmentSelection();
   const { settings } = useSettings();
   const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: getWorkspaces });
+  const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const skillsQuery = useQuery({ queryKey: ['skills'], queryFn: getSkills });
   const [showArchived, setShowArchived] = useState(false);
   const tasksQuery = useQuery({
@@ -49,6 +51,7 @@ function TasksPage() {
   const environments = environmentSelection.environments;
   const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
   const availableSkills = useMemo(() => skillsQuery.data?.items ?? [], [skillsQuery.data]);
+  const projects = useMemo(() => projectsQuery.data?.items ?? [], [projectsQuery.data]);
 
   const defaultProjectSettings = settings.projectDefaults.default;
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(
@@ -56,6 +59,7 @@ function TasksPage() {
       defaultProjectSettings?.selection?.lastWorkspaceId ??
       ''
   );
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('default');
   const [draftResetVersion, setDraftResetVersion] = useState(0);
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
@@ -111,6 +115,7 @@ function TasksPage() {
       closeCreateDialog();
       setDraftResetVersion((current) => current + 1);
       void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
+      void queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
     },
   });
 
@@ -278,8 +283,10 @@ function TasksPage() {
           key={`${effectiveEnvironmentId}:${draftResetVersion}`}
           workspaces={workspaces}
           environments={environments}
+          projects={projects}
           selectedWorkspaceId={effectiveWorkspaceId}
           selectedEnvironmentId={effectiveEnvironmentId}
+          selectedProjectId={selectedProjectId}
           selectedWorkspace={selectedWorkspace}
           selectedEnvironment={selectedEnvironment}
           draftDefaults={draftDefaults}
@@ -290,6 +297,7 @@ function TasksPage() {
           createError={createError}
           onSelectWorkspace={setSelectedWorkspaceId}
           onSelectEnvironment={environmentSelection.onSelectEnvironment}
+          onSelectProject={setSelectedProjectId}
           onSubmit={(payload) => createMutation.mutate(payload)}
           onClose={closeCreateDialog}
         />

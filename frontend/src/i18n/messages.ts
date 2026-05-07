@@ -64,6 +64,10 @@ export const messages = {
       error: 'error',
     },
     navigation: {
+      projects: {
+        label: 'Projects',
+        description: 'Project canvas and task graph visualization',
+      },
       terminal: {
         label: 'Terminal',
         description: 'Health checks and terminal bench access',
@@ -105,6 +109,17 @@ export const messages = {
       expandSidebar: 'Expand sidebar',
     },
     pages: {
+      projects: {
+        sidebarEyebrow: 'Projects',
+        sidebarTitle: 'Project Canvas',
+        sidebarCount: '{{count}} projects',
+        newProject: 'New project',
+        searchPlaceholder: 'Search projects',
+        newTask: 'New Task',
+        resetLayout: 'Reset Layout',
+        emptyCanvas: "Click 'New Task' to get started",
+        noProjects: 'No projects yet. Create one to start.',
+      },
       dashboard: {
         eyebrow: 'Terminal',
         title: 'Scholar Agent runtime shell',
@@ -153,6 +168,7 @@ export const messages = {
         closeCreate: 'Close create task',
         workspaceLabel: 'Workspace',
         environmentLabel: 'Environment',
+        projectLabel: 'Project',
         profileLabel: 'Task profile',
         researchAgentLabel: 'Research Agent',
         taskConfigurationLabel: 'Task configuration',
@@ -683,6 +699,10 @@ export const messages = {
       error: '错误',
     },
     navigation: {
+      projects: {
+        label: '项目',
+        description: '项目画布与任务图可视化',
+      },
       terminal: {
         label: '终端',
         description: '健康检查和终端工作台入口',
@@ -721,6 +741,17 @@ export const messages = {
       expandSidebar: '展开侧边栏',
     },
     pages: {
+      projects: {
+        sidebarEyebrow: '项目',
+        sidebarTitle: '项目画布',
+        sidebarCount: '{{count}} 个项目',
+        newProject: '新建项目',
+        searchPlaceholder: '搜索项目',
+        newTask: '新建任务',
+        resetLayout: '重置布局',
+        emptyCanvas: "点击'新建任务'开始",
+        noProjects: '暂无项目。创建一个项目开始。',
+      },
       dashboard: {
         eyebrow: '终端',
         title: 'Scholar Agent 运行时外壳',
@@ -766,6 +797,7 @@ export const messages = {
         closeCreate: '关闭创建任务',
         workspaceLabel: '工作区',
         environmentLabel: '环境',
+        projectLabel: '项目',
         profileLabel: '任务配置',
         researchAgentLabel: '研究代理',
         taskConfigurationLabel: '任务配置模式',

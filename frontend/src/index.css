@@ -152,3 +152,15 @@ pre {
   background: #0b1020;
   overflow-y: auto;
 }
+
+/* React Flow theme integration */
+.react-flow {
+  --xy-edge-stroke: var(--border);
+  --xy-edge-stroke-selected: var(--apple-blue);
+  --xy-handle-background: var(--apple-blue);
+  --xy-handle-border-color: var(--surface);
+}
+
+.react-flow__attribution {
+  display: none;
+}

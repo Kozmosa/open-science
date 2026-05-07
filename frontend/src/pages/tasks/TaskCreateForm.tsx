@@ -4,6 +4,7 @@ import { Button, Input, Select, SkillToggleGroup, Textarea } from '../../compone
 import { useT } from '../../i18n';
 import type {
   EnvironmentRecord,
+  ProjectRecord,
   SkillItem,
   TaskCreateRequest,
   WorkspaceRecord,
@@ -13,8 +14,10 @@ import type { ResearchAgentProfileSettings, TaskConfigurationPreset } from '../.
 interface Props {
   workspaces: WorkspaceRecord[];
   environments: EnvironmentRecord[];
+  projects?: ProjectRecord[];
   selectedWorkspaceId: string;
   selectedEnvironmentId: string;
+  selectedProjectId?: string;
   selectedWorkspace: WorkspaceRecord | null;
   selectedEnvironment: EnvironmentRecord | null;
   draftDefaults: {
@@ -30,6 +33,7 @@ interface Props {
   createError: string | null;
   onSelectWorkspace: (workspaceId: string) => void;
   onSelectEnvironment: (environmentId: string) => void;
+  onSelectProject?: (projectId: string) => void;
   onSubmit: (payload: TaskCreateRequest) => void;
   onClose?: () => void;
 }
@@ -37,8 +41,10 @@ interface Props {
 export default function TaskCreateForm({
   workspaces,
   environments,
+  projects,
   selectedWorkspaceId,
   selectedEnvironmentId,
+  selectedProjectId,
   selectedWorkspace,
   selectedEnvironment,
   draftDefaults,
@@ -49,6 +55,7 @@ export default function TaskCreateForm({
   createError,
   onSelectWorkspace,
   onSelectEnvironment,
+  onSelectProject,
   onSubmit,
   onClose,
 }: Props) {
@@ -148,12 +155,14 @@ export default function TaskCreateForm({
           }
         }
         onSubmit({
+          project_id: selectedProjectId ?? 'default',
           workspace_id: selectedWorkspace.workspace_id,
           environment_id: selectedEnvironment.id,
           task_profile: draft.task_profile,
           task_input: effectiveTaskInput.trim(),
           title: draft.title.trim() || undefined,
           execution_engine: 'claude-code',
+          auto_connect: true,
           research_agent_profile: selectedResearchAgentProfile
             ? {
                 profile_id: selectedResearchAgentProfile.profileId,
@@ -274,6 +283,25 @@ export default function TaskCreateForm({
           </Select>
         </label>
       </div>
+
+      {projects && projects.length > 0 ? (
+        <label className="block space-y-2">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
+            {t('pages.tasks.projectLabel')}
+          </span>
+          <Select
+            aria-label={t('pages.tasks.projectLabel')}
+            value={selectedProjectId ?? ''}
+            onChange={(event) => onSelectProject?.(event.target.value)}
+          >
+            {projects.map((project) => (
+              <option key={project.project_id} value={project.project_id}>
+                {project.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
 
       <label className="block space-y-2">
         <span className="text-xs font-medium text-[var(--text-secondary)]">

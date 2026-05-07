@@ -16,6 +16,7 @@ import {
   createTask,
   getEnvironments,
   getProjectEnvironmentReferences,
+  getProjects,
   getTask,
   getTaskOutput,
   getTasks,
@@ -200,6 +201,7 @@ vi.mock('../api', () => ({
   createTask: vi.fn(),
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(),
+  getProjects: vi.fn(),
   getSkills: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
@@ -211,6 +213,7 @@ const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
+const mockGetProjects = vi.mocked(getProjects);
 const mockGetTask = vi.mocked(getTask);
 const mockGetTaskOutput = vi.mocked(getTaskOutput);
 const mockGetTasks = vi.mocked(getTasks);
@@ -229,6 +232,7 @@ beforeEach(() => {
   mockCreateTask.mockReset();
   mockGetEnvironments.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
+  mockGetProjects.mockReset();
   mockGetTask.mockReset();
   mockGetTaskOutput.mockReset();
   mockGetTasks.mockReset();
@@ -239,6 +243,7 @@ beforeEach(() => {
   );
   mockGetWorkspaces.mockResolvedValue({ items: [workspace] });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
+  mockGetProjects.mockResolvedValue({ items: [] });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
   mockGetTask.mockResolvedValue(taskRecord);

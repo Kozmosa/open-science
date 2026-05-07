@@ -48,6 +48,7 @@ from ainrf.task_harness.models import (
     TaskConfigurationMode,
     TaskConfigurationSnapshot,
     TaskDetail,
+    TaskEdge,
     TaskHarnessStatus,
     TaskListItem,
     TaskOutputEvent,
@@ -200,6 +201,17 @@ class TaskHarnessService:
                 "execution_engine",
                 "ALTER TABLE task_harness_tasks ADD COLUMN execution_engine TEXT NOT NULL DEFAULT 'claude-code'",
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS task_harness_edges (
+                    edge_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    source_task_id TEXT NOT NULL,
+                    target_task_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
             connection.commit()
         self._fail_unfinished_tasks_for_restart()
         self._initialized = True
@@ -229,6 +241,7 @@ class TaskHarnessService:
         execution_engine: str | None = None,
         research_agent_profile: dict[str, object] | None = None,
         task_configuration: dict[str, object] | None = None,
+        auto_connect: bool = False,
     ) -> TaskListItem:
         self.initialize()
         if task_profile != _TASK_PROFILE:
@@ -313,11 +326,113 @@ class TaskHarnessService:
             TaskOutputKind.LIFECYCLE,
             "Task queued in Task Harness v1",
         )
+        if auto_connect:
+            self._maybe_auto_connect_task(project_id, task_id)
         try:
             self._schedule_task(task_id)
         except TaskHarnessError:
             pass
         return self._load_list_item(task_id)
+
+    def create_task_edge(
+        self,
+        project_id: str,
+        source_task_id: str,
+        target_task_id: str,
+    ) -> TaskEdge:
+        self.initialize()
+        if source_task_id == target_task_id:
+            raise TaskHarnessError("Cannot create an edge from a task to itself")
+        with self._connect() as connection:
+            source = connection.execute(
+                "SELECT 1 FROM task_harness_tasks WHERE task_id = ?",
+                (source_task_id,),
+            ).fetchone()
+            target = connection.execute(
+                "SELECT 1 FROM task_harness_tasks WHERE task_id = ?",
+                (target_task_id,),
+            ).fetchone()
+        if source is None:
+            raise TaskHarnessNotFoundError(f"Source task not found: {source_task_id}")
+        if target is None:
+            raise TaskHarnessNotFoundError(f"Target task not found: {target_task_id}")
+        with self._connect() as connection:
+            existing = connection.execute(
+                """
+                SELECT 1 FROM task_harness_edges
+                WHERE project_id = ? AND source_task_id = ? AND target_task_id = ?
+                """,
+                (project_id, source_task_id, target_task_id),
+            ).fetchone()
+        if existing is not None:
+            raise TaskHarnessError(
+                f"Edge already exists from {source_task_id} to {target_task_id}"
+            )
+        edge_id = f"edge-{uuid4().hex[:12]}"
+        now = utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO task_harness_edges (
+                    edge_id, project_id, source_task_id, target_task_id, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (edge_id, project_id, source_task_id, target_task_id, now.isoformat()),
+            )
+            connection.commit()
+        return TaskEdge(
+            edge_id=edge_id,
+            project_id=project_id,
+            source_task_id=source_task_id,
+            target_task_id=target_task_id,
+            created_at=now,
+        )
+
+    def get_task_edges(self, project_id: str) -> list[TaskEdge]:
+        self.initialize()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT edge_id, project_id, source_task_id, target_task_id, created_at
+                FROM task_harness_edges
+                WHERE project_id = ?
+                ORDER BY created_at DESC
+                """,
+                (project_id,),
+            ).fetchall()
+        return [
+            TaskEdge(
+                edge_id=row["edge_id"],
+                project_id=row["project_id"],
+                source_task_id=row["source_task_id"],
+                target_task_id=row["target_task_id"],
+                created_at=_parse_required_datetime(row["created_at"]),
+            )
+            for row in rows
+        ]
+
+    def delete_task_edge(self, edge_id: str) -> None:
+        self.initialize()
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM task_harness_edges WHERE edge_id = ?",
+                (edge_id,),
+            )
+            connection.commit()
+
+    def _maybe_auto_connect_task(self, project_id: str, new_task_id: str) -> None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT task_id FROM task_harness_tasks
+                WHERE project_id = ? AND task_id != ? AND archived_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (project_id, new_task_id),
+            ).fetchone()
+        if row is not None:
+            self.create_task_edge(project_id, row["task_id"], new_task_id)
 
     def list_tasks(self, *, include_archived: bool = False) -> list[TaskListItem]:
         self.initialize()
@@ -336,6 +451,29 @@ class TaskHarnessService:
                     WHERE archived_at IS NULL
                     ORDER BY created_at DESC
                     """
+                ).fetchall()
+        return [self._row_to_list_item(row) for row in rows]
+
+    def list_project_tasks(self, project_id: str, *, include_archived: bool = False) -> list[TaskListItem]:
+        self.initialize()
+        with self._connect() as connection:
+            if include_archived:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM task_harness_tasks
+                    WHERE project_id = ?
+                    ORDER BY created_at DESC
+                    """,
+                    (project_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM task_harness_tasks
+                    WHERE project_id = ? AND archived_at IS NULL
+                    ORDER BY created_at DESC
+                    """,
+                    (project_id,),
                 ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
@@ -637,7 +775,12 @@ class TaskHarnessService:
             return
         finally:
             self._running_processes.pop(task_id, None)
-            await process.cleanup()
+            try:
+                await process.cleanup()
+            except Exception as exc:
+                self._append_output_event(
+                    task_id, TaskOutputKind.SYSTEM, f"cleanup error: {exc}"
+                )
 
         if exit_code == 0:
             self._complete_task(task_id, exit_code=0)

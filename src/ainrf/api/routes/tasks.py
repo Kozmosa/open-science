@@ -10,6 +10,9 @@ from fastapi.responses import StreamingResponse
 from ainrf.api.schemas import (
     TaskCreateRequest,
     TaskDetailResponse,
+    TaskEdgeCreateRequest,
+    TaskEdgeListResponse,
+    TaskEdgeResponse,
     TaskListResponse,
     TaskOutputEventResponse,
     TaskOutputListResponse,
@@ -26,6 +29,7 @@ from ainrf.task_harness import (
 from ainrf.workspaces import WorkspaceNotFoundError
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+task_edges_router = APIRouter(tags=["task-edges"])
 
 
 def _get_task_harness_service(request: Request) -> TaskHarnessService:
@@ -162,6 +166,7 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
             task_input=payload.task_input,
             title=payload.title,
             execution_engine=payload.execution_engine,
+            auto_connect=payload.auto_connect,
             research_agent_profile=payload.research_agent_profile.model_dump()
             if payload.research_agent_profile is not None
             else None,
@@ -257,3 +262,83 @@ async def cancel_task(task_id: str, request: Request) -> TaskSummaryResponse:
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@task_edges_router.get("/projects/{project_id}/task-edges", response_model=TaskEdgeListResponse)
+async def list_task_edges(project_id: str, request: Request) -> TaskEdgeListResponse:
+    service = _get_task_harness_service(request)
+    try:
+        edges = service.get_task_edges(project_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskEdgeListResponse.model_validate(
+        {
+            "items": [
+                {
+                    "edge_id": edge.edge_id,
+                    "project_id": edge.project_id,
+                    "source_task_id": edge.source_task_id,
+                    "target_task_id": edge.target_task_id,
+                    "created_at": edge.created_at.isoformat(),
+                }
+                for edge in edges
+            ]
+        }
+    )
+
+
+@task_edges_router.post(
+    "/projects/{project_id}/task-edges",
+    response_model=TaskEdgeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_task_edge(
+    project_id: str, payload: TaskEdgeCreateRequest, request: Request
+) -> TaskEdgeResponse:
+    service = _get_task_harness_service(request)
+    try:
+        edge = service.create_task_edge(
+            project_id=project_id,
+            source_task_id=payload.source_task_id,
+            target_task_id=payload.target_task_id,
+        )
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskEdgeResponse.model_validate(
+        {
+            "edge_id": edge.edge_id,
+            "project_id": edge.project_id,
+            "source_task_id": edge.source_task_id,
+            "target_task_id": edge.target_task_id,
+            "created_at": edge.created_at.isoformat(),
+        }
+    )
+
+
+@task_edges_router.delete("/task-edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task_edge(edge_id: str, request: Request) -> None:
+    service = _get_task_harness_service(request)
+    try:
+        service.delete_task_edge(edge_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+
+
+@task_edges_router.get("/projects/{project_id}/tasks", response_model=TaskListResponse)
+async def list_project_tasks(
+    project_id: str,
+    request: Request,
+    include_archived: bool = Query(default=False),
+) -> TaskListResponse:
+    service = _get_task_harness_service(request)
+    try:
+        items = service.list_project_tasks(project_id, include_archived=include_archived)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskListResponse.model_validate(
+        {
+            "items": [
+                TaskSummaryResponse.model_validate(_serialize_task_summary(item)) for item in items
+            ]
+        }
+    )

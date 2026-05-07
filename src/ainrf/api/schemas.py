@@ -408,6 +408,7 @@ class TaskCreateRequest(BaseModel):
     task_input: str = Field(min_length=1)
     title: str | None = None
     execution_engine: str | None = None
+    auto_connect: bool = Field(default=False)
     research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
     task_configuration: TaskConfigurationSnapshotRequest | None = None
 
@@ -533,6 +534,29 @@ class TaskListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[TaskSummaryResponse]
+
+
+class TaskEdgeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    edge_id: str
+    project_id: str
+    source_task_id: str
+    target_task_id: str
+    created_at: str
+
+
+class TaskEdgeListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TaskEdgeResponse]
+
+
+class TaskEdgeCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_task_id: str = Field(min_length=1)
+    target_task_id: str = Field(min_length=1)
 
 
 class ResearchAgentProfileSnapshotResponse(BaseModel):

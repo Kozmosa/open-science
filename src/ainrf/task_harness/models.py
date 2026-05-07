@@ -171,3 +171,12 @@ class TaskOutputEvent:
 class TaskOutputPage:
     items: list[TaskOutputEvent]
     next_seq: int
+
+
+@dataclass(slots=True)
+class TaskEdge:
+    edge_id: str
+    project_id: str
+    source_task_id: str
+    target_task_id: str
+    created_at: datetime
