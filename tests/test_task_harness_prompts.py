@@ -93,19 +93,25 @@ def test_render_validate_ideas_prompt_minimal() -> None:
     assert "full" in result  # default scope
 
 
-def test_check_aris_skills_passes_when_skills_present(tmp_path: Path) -> None:
+def test_check_aris_skills_passes_when_skills_present_and_selected(tmp_path: Path) -> None:
     (tmp_path / "research-pipeline").mkdir()
-    _check_aris_skills(TaskConfigurationMode.REPRODUCE_BASELINE, tmp_path)
+    _check_aris_skills(TaskConfigurationMode.REPRODUCE_BASELINE, tmp_path, ["research-pipeline"])
 
 
-def test_check_aris_skills_fails_when_skills_missing(tmp_path: Path) -> None:
+def test_check_aris_skills_fails_when_skills_not_installed(tmp_path: Path) -> None:
     with pytest.raises(TaskHarnessError, match="ARIS skill.*not installed"):
-        _check_aris_skills(TaskConfigurationMode.REPRODUCE_BASELINE, tmp_path)
+        _check_aris_skills(TaskConfigurationMode.REPRODUCE_BASELINE, tmp_path, ["research-pipeline"])
+
+
+def test_check_aris_skills_fails_when_skills_not_selected(tmp_path: Path) -> None:
+    (tmp_path / "research-pipeline").mkdir()
+    with pytest.raises(TaskHarnessError, match="ARIS skill.*not selected"):
+        _check_aris_skills(TaskConfigurationMode.REPRODUCE_BASELINE, tmp_path, [])
 
 
 def test_check_aris_skills_ignores_non_aris_modes(tmp_path: Path) -> None:
-    _check_aris_skills(TaskConfigurationMode.RAW_PROMPT, tmp_path)
-    _check_aris_skills(TaskConfigurationMode.STRUCTURED_RESEARCH, tmp_path)
+    _check_aris_skills(TaskConfigurationMode.RAW_PROMPT, tmp_path, [])
+    _check_aris_skills(TaskConfigurationMode.STRUCTURED_RESEARCH, tmp_path, [])
 
 
 def test_as_int_handles_float() -> None:
@@ -130,3 +136,51 @@ def test_normalize_task_configuration_rejects_invalid_mode() -> None:
             "legacy",
             {"mode": "invalid_mode", "template_vars": {}},
         )
+
+
+def test_validate_required_template_vars_rejects_empty_paper_path() -> None:
+    from ainrf.task_harness.service import _validate_required_template_vars
+
+    with pytest.raises(TaskHarnessError, match="paper_path is required"):
+        _validate_required_template_vars(
+            TaskConfigurationMode.REPRODUCE_BASELINE,
+            {"paper_path": "", "scope": "core-only"},
+        )
+
+
+def test_validate_required_template_vars_rejects_empty_topic() -> None:
+    from ainrf.task_harness.service import _validate_required_template_vars
+
+    with pytest.raises(TaskHarnessError, match="topic is required"):
+        _validate_required_template_vars(
+            TaskConfigurationMode.DISCOVER_IDEAS,
+            {"topic": "   ", "depth": 3},
+        )
+
+
+def test_validate_required_template_vars_rejects_empty_idea_source() -> None:
+    from ainrf.task_harness.service import _validate_required_template_vars
+
+    with pytest.raises(TaskHarnessError, match="idea_source is required"):
+        _validate_required_template_vars(
+            TaskConfigurationMode.VALIDATE_IDEAS,
+            {"idea_source": "", "validation_scope": "full"},
+        )
+
+
+def test_validate_required_template_vars_accepts_valid_vars() -> None:
+    from ainrf.task_harness.service import _validate_required_template_vars
+
+    # Should not raise for valid template vars
+    _validate_required_template_vars(
+        TaskConfigurationMode.REPRODUCE_BASELINE,
+        {"paper_path": "papers/target.pdf"},
+    )
+    _validate_required_template_vars(
+        TaskConfigurationMode.DISCOVER_IDEAS,
+        {"topic": "graph neural networks"},
+    )
+    _validate_required_template_vars(
+        TaskConfigurationMode.VALIDATE_IDEAS,
+        {"idea_source": "workspace/ideas/gnn.md"},
+    )

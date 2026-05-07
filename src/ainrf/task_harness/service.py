@@ -78,15 +78,23 @@ _ARIS_SKILL_REQUIREMENTS: dict[TaskConfigurationMode, list[str]] = {
 }
 
 
-def _check_aris_skills(mode: TaskConfigurationMode, skill_root: Path) -> None:
+def _check_aris_skills(
+    mode: TaskConfigurationMode, skill_root: Path, selected_skills: list[str]
+) -> None:
     required = _ARIS_SKILL_REQUIREMENTS.get(mode)
     if not required:
         return
-    missing = [s for s in required if not (skill_root / s).exists()]
-    if missing:
+    missing_dirs = [s for s in required if not (skill_root / s).exists()]
+    if missing_dirs:
         raise TaskHarnessError(
-            f"ARIS skill(s) not installed: {', '.join(missing)}. "
+            f"ARIS skill(s) not installed: {', '.join(missing_dirs)}. "
             f"Install via Settings > Skill Repository before using {mode.value} mode."
+        )
+    missing_selection = [s for s in required if s not in selected_skills]
+    if missing_selection:
+        raise TaskHarnessError(
+            f"ARIS skill(s) not selected in research agent profile: {', '.join(missing_selection)}. "
+            f"Enable them in the task creation form before using {mode.value} mode."
         )
 
 
@@ -253,7 +261,7 @@ class TaskHarnessService:
         if settings_artifact_path is not None:
             profile_snapshot.settings_artifact_path = settings_artifact_path
         configuration_snapshot = _normalize_task_configuration(task_input, task_configuration)
-        _check_aris_skills(configuration_snapshot.mode, self._skill_root)
+        _check_aris_skills(configuration_snapshot.mode, self._skill_root, profile_snapshot.skills)
         resolved_task_input = configuration_snapshot.rendered_task_input
         resolved_title = (
             title.strip()
@@ -1105,6 +1113,7 @@ def _normalize_task_configuration(
     template_vars: dict[str, object] = {}
     if isinstance(template_vars_value, dict):
         template_vars = {str(key): value for key, value in template_vars_value.items()}
+    _validate_required_template_vars(mode, template_vars)
     rendered_task_input = _render_task_prompt(legacy_task_input, mode, template_vars)
     return TaskConfigurationSnapshot(
         mode=mode,
@@ -1113,6 +1122,21 @@ def _normalize_task_configuration(
         raw_prompt=None,
         rendered_task_input=rendered_task_input,
     )
+
+
+def _validate_required_template_vars(
+    mode: TaskConfigurationMode,
+    template_vars: dict[str, object],
+) -> None:
+    if mode == TaskConfigurationMode.REPRODUCE_BASELINE:
+        if not str(template_vars.get("paper_path", "")).strip():
+            raise TaskHarnessError("paper_path is required for reproduce_baseline mode")
+    elif mode == TaskConfigurationMode.DISCOVER_IDEAS:
+        if not str(template_vars.get("topic", "")).strip():
+            raise TaskHarnessError("topic is required for discover_ideas mode")
+    elif mode == TaskConfigurationMode.VALIDATE_IDEAS:
+        if not str(template_vars.get("idea_source", "")).strip():
+            raise TaskHarnessError("idea_source is required for validate_ideas mode")
 
 
 def _render_task_prompt(
