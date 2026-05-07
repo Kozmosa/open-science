@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Alert } from '../../components/ui';
 import { useT } from '../../i18n';
 import type { TaskOutputEvent, TaskRecord } from '../../types';
 import { statusClassName } from './status';
+
+type PanelLayout = 'split' | 'main' | 'aside';
 
 interface Props {
   selectedTask: TaskRecord | null;
@@ -20,9 +23,12 @@ function MetadataRow({
   fallback: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-2 last:border-0">
-      <span className="text-xs text-[var(--text-secondary)]">{label}</span>
-      <span className="max-w-[70%] text-right text-xs font-medium text-[var(--text)]">
+    <div className="flex items-start gap-4 border-b border-[var(--border)] py-2 last:border-0">
+      <span className="w-28 shrink-0 text-xs text-[var(--text-secondary)]">{label}</span>
+      <span
+        className="min-w-0 flex-1 truncate text-right text-xs font-medium text-[var(--text)]"
+        title={value ? String(value) : fallback}
+      >
         {value ?? fallback}
       </span>
     </div>
@@ -36,6 +42,7 @@ export default function TaskDetail({
   outputError,
 }: Props) {
   const t = useT();
+  const [layout, setLayout] = useState<PanelLayout>('split');
   const metadataFallback = t('pages.tasks.unavailable');
 
   if (detailError) {
@@ -90,17 +97,40 @@ export default function TaskDetail({
         ) : null}
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
-        <main className="min-h-0 overflow-auto p-5">
-          <section className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-[var(--text)]">
-                {t('pages.tasks.outputTimeline')}
-              </h2>
-              <span className="text-xs text-[var(--text-secondary)]">
-                {t('pages.tasks.latestSeq', { seq: selectedTask.latest_output_seq })}
-              </span>
-            </div>
+      <div
+        className={[
+          'grid min-h-0 flex-1 gap-0 overflow-hidden transition-all duration-300 ease-in-out',
+          layout === 'split' && 'lg:grid-cols-[minmax(0,1fr)_320px]',
+          layout !== 'split' && 'lg:grid-cols-1',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {layout !== 'aside' && (
+          <main className="min-h-0 overflow-auto p-5">
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-[var(--text)]">
+                  {t('pages.tasks.outputTimeline')}
+                </h2>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[var(--text-secondary)]">
+                    {t('pages.tasks.latestSeq', { seq: selectedTask.latest_output_seq })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLayout(layout === 'main' ? 'split' : 'main')}
+                    className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+                    aria-label={
+                      layout === 'main'
+                        ? t('pages.tasks.collapseOutputTimeline')
+                        : t('pages.tasks.expandOutputTimeline')
+                    }
+                  >
+                    {layout === 'main' ? '<<' : '>>'}
+                  </button>
+                </div>
+              </div>
             {outputError ? <p className="text-sm text-[#ff3b30]">{outputError}</p> : null}
             <div className="min-h-[24rem] space-y-3 rounded-xl border border-[var(--border)] bg-[#0b1020] p-4 text-xs text-gray-100">
               {outputItems.length === 0 ? (
@@ -148,13 +178,29 @@ export default function TaskDetail({
             )}
           </section>
         </main>
+        )}
 
-        <aside className="min-h-0 overflow-auto border-t border-[var(--border)] bg-[var(--bg)] p-5 lg:border-l lg:border-t-0">
-          <div className="space-y-5">
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
+        {layout !== 'main' && (
+          <aside className="min-h-0 overflow-auto border-t border-[var(--border)] bg-[var(--bg)] p-5 lg:border-l lg:border-t-0">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--text)]">
                 {t('pages.tasks.summary')}
               </h2>
+              <button
+                type="button"
+                onClick={() => setLayout(layout === 'aside' ? 'split' : 'aside')}
+                className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+                aria-label={
+                  layout === 'aside'
+                    ? t('pages.tasks.collapseSummary')
+                    : t('pages.tasks.expandSummary')
+                }
+              >
+                {layout === 'aside' ? '>>' : '<<'}
+              </button>
+            </div>
+          <div className="space-y-5">
+            <section>
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
                 <MetadataRow label={t('pages.tasks.taskId')} value={selectedTask.task_id} fallback={metadataFallback} />
                 <MetadataRow label={t('pages.tasks.created')} value={selectedTask.created_at} fallback={metadataFallback} />
@@ -214,6 +260,7 @@ export default function TaskDetail({
             </section>
           </div>
         </aside>
+        )}
       </div>
     </section>
   );

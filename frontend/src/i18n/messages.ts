@@ -245,6 +245,10 @@ export const messages = {
           failed: 'Failed',
           cancelled: 'Cancelled',
         },
+        expandOutputTimeline: 'Expand output timeline',
+        collapseOutputTimeline: 'Collapse output timeline',
+        expandSummary: 'Expand summary',
+        collapseSummary: 'Collapse summary',
         actions: {
           cancel: 'Cancel',
           archive: 'Archive',
@@ -877,6 +881,10 @@ export const messages = {
           failed: '已失败',
           cancelled: '已取消',
         },
+        expandOutputTimeline: '展开输出时间线',
+        collapseOutputTimeline: '收起输出时间线',
+        expandSummary: '展开摘要面板',
+        collapseSummary: '收起摘要面板',
         actions: {
           cancel: '取消',
           archive: '归档',
