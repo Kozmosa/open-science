@@ -58,8 +58,9 @@ def generate_skill_json(
     label = frontmatter.get("name", skill_dir_name)
     description = frontmatter.get("description", "")
     inject_mode = "auto" if is_core else "disabled"
+    package = frontmatter.get("package", "aris" if is_core else None)
 
-    return {
+    result = {
         "skill_id": skill_id,
         "label": label,
         "description": description,
@@ -72,3 +73,6 @@ def generate_skill_json(
         "hooks": [],
         "allowed_agents": [],
     }
+    if package is not None:
+        result["package"] = package
+    return result

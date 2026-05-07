@@ -72,3 +72,18 @@ class TestGenerateSkillJson:
         frontmatter = {"name": "test"}
         result = generate_skill_json("test", frontmatter, is_core=False)
         assert result["description"] == ""
+
+    def test_generates_package_for_core_skill(self):
+        frontmatter = {"name": "research-lit"}
+        result = generate_skill_json("research-lit", frontmatter, is_core=True)
+        assert result["package"] == "aris"
+
+    def test_generates_no_package_for_non_core_skill(self):
+        frontmatter = {"name": "custom-skill"}
+        result = generate_skill_json("custom-skill", frontmatter, is_core=False)
+        assert result.get("package") is None
+
+    def test_preserves_explicit_package_from_frontmatter(self):
+        frontmatter = {"name": "custom-skill", "package": "my-org"}
+        result = generate_skill_json("custom-skill", frontmatter, is_core=True)
+        assert result["package"] == "my-org"
