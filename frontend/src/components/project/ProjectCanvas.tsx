@@ -57,7 +57,7 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
   const [nodes, setLocalNodes] = useState<Node[]>(initialNodes);
   const [flowEdges, setFlowEdges] = useState<Edge[]>(initialEdges);
 
-  useEffect(() => {
+  const runLayout = useCallback(() => {
     const saved = localStorage.getItem(LAYOUT_KEY(projectId));
     if (saved) {
       try {
@@ -67,17 +67,21 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
             positions[n.id] ? { ...n, position: positions[n.id] } : n
           )
         );
+        return;
       } catch {
-        const laidOut = layoutDagre(initialNodes, initialEdges);
-        setLocalNodes(laidOut);
+        // fall through to dagre layout
       }
-    } else {
-      const laidOut = layoutDagre(initialNodes, initialEdges);
-      setLocalNodes(laidOut);
     }
+    const laidOut = layoutDagre(initialNodes, initialEdges);
+    setLocalNodes(laidOut);
+  }, [projectId, initialNodes, initialEdges]);
+
+  useEffect(() => {
+    runLayout();
     setFlowEdges(initialEdges);
-    setTimeout(() => fitView({ padding: 0.2 }), 50);
-  }, [projectId, initialNodes, initialEdges, fitView]);
+    const timeoutId = setTimeout(() => fitView({ padding: 0.2 }), 50);
+    return () => clearTimeout(timeoutId);
+  }, [runLayout, initialEdges, fitView]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -99,7 +103,11 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     for (const n of current) {
       positions[n.id] = n.position;
     }
-    localStorage.setItem(LAYOUT_KEY(projectId), JSON.stringify(positions));
+    try {
+      localStorage.setItem(LAYOUT_KEY(projectId), JSON.stringify(positions));
+    } catch {
+      // ignore storage errors
+    }
   }, [getNodes, projectId]);
 
   const handleNodeClick = useCallback(
@@ -118,7 +126,6 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
       onEdgesChange={onEdgesChange}
       onNodeDragStop={onNodeDragStop}
       onNodeClick={handleNodeClick}
-      fitView
       attributionPosition="bottom-right"
     >
       <Background gap={16} size={1} color="var(--border)" />
@@ -160,7 +167,14 @@ export default function ProjectCanvas({
             {/* TODO(Task 12): replace with t('pages.projects.newTask') */}
             New task
           </Button>
-          <Button variant="ghost" onClick={onResetLayout} className="h-8 px-3 text-xs">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              localStorage.removeItem(LAYOUT_KEY(projectId));
+              onResetLayout();
+            }}
+            className="h-8 px-3 text-xs"
+          >
             {/* TODO(Task 12): replace with t('pages.projects.resetLayout') */}
             Reset layout
           </Button>

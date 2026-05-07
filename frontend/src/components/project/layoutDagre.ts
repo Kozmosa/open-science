@@ -16,10 +16,17 @@ export function layoutDagre(nodes: Node[], edges: Edge[]): Node[] {
     g.setEdge(edge.source, edge.target);
   }
 
-  dagre.layout(g);
+  try {
+    dagre.layout(g);
+  } catch {
+    return nodes;
+  }
 
   return nodes.map((node) => {
     const positioned = g.node(node.id);
+    if (!positioned) {
+      return node;
+    }
     return {
       ...node,
       position: {
