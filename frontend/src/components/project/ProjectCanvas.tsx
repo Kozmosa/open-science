@@ -134,6 +134,8 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
         nodeColor={() => 'var(--apple-blue)'}
         maskColor="rgba(0,0,0,0.1)"
         className="rounded-lg"
+        pannable
+        zoomable
       />
     </ReactFlow>
   );

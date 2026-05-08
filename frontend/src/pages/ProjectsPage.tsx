@@ -171,7 +171,7 @@ export default function ProjectsPage() {
   const createError = extractErrorMessage(createMutation.error);
 
   return (
-    <div className="flex min-h-0 flex-1 bg-[var(--bg)] p-4">
+    <div className="flex min-h-0 flex-1 bg-[var(--bg)] p-3">
       <div className="flex min-h-0 w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <aside
           className="flex shrink-0 flex-col bg-[var(--sidebar)] p-3"
