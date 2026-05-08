@@ -54,7 +54,21 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     [edges]
   );
 
-  const [nodes, setLocalNodes] = useState<Node[]>(initialNodes);
+  // Sync layout on mount so nodes don't stack at (0, 0) on first render
+  const [nodes, setLocalNodes] = useState<Node[]>(() => {
+    const saved = localStorage.getItem(LAYOUT_KEY(projectId));
+    if (saved) {
+      try {
+        const positions: Record<string, { x: number; y: number }> = JSON.parse(saved);
+        return initialNodes.map((n) =>
+          positions[n.id] ? { ...n, position: positions[n.id] } : n
+        );
+      } catch {
+        // fall through to dagre layout
+      }
+    }
+    return layoutDagre(initialNodes, initialEdges);
+  });
   const [flowEdges, setFlowEdges] = useState<Edge[]>(initialEdges);
 
   const runLayout = useCallback(() => {

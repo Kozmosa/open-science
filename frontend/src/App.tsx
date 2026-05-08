@@ -34,10 +34,10 @@ function RootRedirect() {
 function AppRoutes() {
   const t = useT();
   const location = useLocation();
-  const isTaskRoute = location.pathname === '/tasks';
+  const isEdgeToEdge = location.pathname === '/tasks' || location.pathname === '/projects';
 
   return (
-    <Layout edgeToEdge={isTaskRoute}>
+    <Layout edgeToEdge={isEdgeToEdge}>
       <Suspense
         fallback={
           <div className="flex items-center justify-center py-16 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
