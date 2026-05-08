@@ -42,17 +42,32 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
       })),
     [tasks]
   );
-  const initialEdges: Edge[] = useMemo(
-    () =>
-      edges.map((edge) => ({
+  const initialEdges: Edge[] = useMemo(() => {
+    if (edges.length > 0) {
+      return edges.map((edge) => ({
         id: edge.edge_id,
         source: edge.source_task_id,
         target: edge.target_task_id,
         type: 'default',
         markerEnd: { type: 'arrowclosed' as const, width: 12, height: 12 },
-      })),
-    [edges]
-  );
+      }));
+    }
+    // No explicit edges: auto-connect tasks linearly by created_at (oldest -> newest)
+    const sorted = [...tasks].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    const synthetic: Edge[] = [];
+    for (let i = 0; i < sorted.length - 1; i++) {
+      synthetic.push({
+        id: `auto-${sorted[i].task_id}-${sorted[i + 1].task_id}`,
+        source: sorted[i].task_id,
+        target: sorted[i + 1].task_id,
+        type: 'default',
+        markerEnd: { type: 'arrowclosed' as const, width: 12, height: 12 },
+      });
+    }
+    return synthetic;
+  }, [edges, tasks]);
 
   // Sync layout on mount so nodes don't stack at (0, 0) on first render
   const [nodes, setLocalNodes] = useState<Node[]>(() => {
