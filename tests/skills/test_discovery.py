@@ -155,9 +155,7 @@ def test_discover_reads_package_from_skills_json(tmp_path: Path) -> None:
 
     skills_json = skills_subdir / "skills.json"
     skills_json.write_text(
-        json.dumps([
-            {"skill_id": "json-skill", "label": "JSON Skill", "package": "my-pkg"}
-        ])
+        json.dumps([{"skill_id": "json-skill", "label": "JSON Skill", "package": "my-pkg"}])
     )
 
     service = SkillsDiscoveryService(scan_roots=[root])

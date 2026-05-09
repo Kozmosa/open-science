@@ -218,10 +218,17 @@ function TasksPage() {
               <Button
                 ref={createButtonRef}
                 onClick={() => setCreateDialogOpen(true)}
-                className="inline-flex h-9 items-center gap-2 px-3 shadow-sm"
+                className="inline-flex h-9 shrink-0 items-center px-3 shadow-sm transition-all"
               >
-                <Plus size={15} />
-                {t('pages.tasks.newTask')}
+                <Plus size={15} className="shrink-0" />
+                <span
+                  className={[
+                    'overflow-hidden whitespace-nowrap transition-all duration-200',
+                    taskSidebarWidth < 300 ? 'ml-0 max-w-0 opacity-0' : 'ml-2 max-w-[100px] opacity-100',
+                  ].join(' ')}
+                >
+                  {t('pages.tasks.newTask')}
+                </span>
               </Button>
               <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
                 <input

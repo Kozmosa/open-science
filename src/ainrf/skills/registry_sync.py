@@ -253,9 +253,7 @@ class SkillRegistrySyncService:
             last_sync_at=last_sync_at,
         )
 
-    def _git_run(
-        self, args: list[str], timeout: float = 30
-    ) -> subprocess.CompletedProcess[str]:
+    def _git_run(self, args: list[str], timeout: float = 30) -> subprocess.CompletedProcess[str]:
         try:
             return subprocess.run(
                 ["git", "-C", str(self.git_workspace), *args],
@@ -264,7 +262,9 @@ class SkillRegistrySyncService:
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"git command timed out after {exc.timeout}s: {' '.join(args)}") from exc
+            raise RuntimeError(
+                f"git command timed out after {exc.timeout}s: {' '.join(args)}"
+            ) from exc
 
     def _git_ls_remote(self) -> str | None:
         try:

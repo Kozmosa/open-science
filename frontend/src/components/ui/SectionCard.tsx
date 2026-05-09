@@ -6,6 +6,8 @@ interface Props {
   className?: string;
   collapsible?: boolean;
   defaultExpanded?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
   header?: ReactNode;
 }
 
@@ -14,9 +16,20 @@ function SectionCard({
   className = '',
   collapsible = false,
   defaultExpanded = true,
+  expanded: controlledExpanded,
+  onToggle,
   header,
 }: Props) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+  const isControlled = controlledExpanded !== undefined;
+  const expanded = isControlled ? controlledExpanded : internalExpanded;
+  const toggle = () => {
+    if (isControlled) {
+      onToggle?.();
+    } else {
+      setInternalExpanded((c) => !c);
+    }
+  };
 
   const content = collapsible ? (
     <div
@@ -43,7 +56,7 @@ function SectionCard({
           {collapsible ? (
             <button
               type="button"
-              onClick={() => setExpanded((current) => !current)}
+              onClick={toggle}
               className="mt-0.5 shrink-0 rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
               aria-label={expanded ? 'Collapse section' : 'Expand section'}
             >

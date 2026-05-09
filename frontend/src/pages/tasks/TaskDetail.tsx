@@ -1,16 +1,40 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert } from '../../components/ui';
 import { useT } from '../../i18n';
 import type { TaskOutputEvent, TaskRecord } from '../../types';
 import { statusClassName } from './status';
+import MessageStream from './MessageStream';
+import TaskInputBar from './TaskInputBar';
+import { useTaskMessages } from './useTaskMessages';
+import { useTaskActions } from './useTaskActions';
+import PromptEditor from './PromptEditor';
 
-type PanelLayout = 'split' | 'main' | 'aside';
 
 interface Props {
   selectedTask: TaskRecord | null;
   detailError: string | null;
   outputItems: TaskOutputEvent[];
   outputError: string | null;
+}
+
+function PromptLayerItem({ layer }: { layer: { name: string; label: string; char_count: number; content: string } }) {
+  const t = useT();
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <details
+      className="rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+      onToggle={(e) => setIsOpen(e.currentTarget.open)}
+    >
+      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-[var(--text)]">
+        {layer.label}{' '}
+        <span className="text-[var(--text-secondary)]">
+          ({layer.char_count} {t('pages.tasks.chars')})
+        </span>
+      </summary>
+      {isOpen && <PromptEditor content={layer.content} />}
+    </details>
+  );
 }
 
 function MetadataRow({
@@ -23,8 +47,8 @@ function MetadataRow({
   fallback: string;
 }) {
   return (
-    <div className="flex items-start gap-4 border-b border-[var(--border)] py-2 last:border-0">
-      <span className="w-28 shrink-0 text-xs text-[var(--text-secondary)]">{label}</span>
+    <div className="flex items-start gap-2 border-b border-[var(--border)] py-2 last:border-0">
+      <span className="w-16 shrink-0 text-xs text-[var(--text-secondary)]">{label}</span>
       <span
         className="min-w-0 flex-1 truncate text-right text-xs font-medium text-[var(--text)]"
         title={value ? String(value) : fallback}
@@ -42,8 +66,77 @@ export default function TaskDetail({
   outputError,
 }: Props) {
   const t = useT();
-  const [layout, setLayout] = useState<PanelLayout>('split');
   const metadataFallback = t('pages.tasks.unavailable');
+
+  const taskId = selectedTask?.task_id ?? null;
+  const { messages } = useTaskMessages(taskId, outputItems);
+
+  const MIN_WIDTH = 48;
+  const DEFAULT_WIDTH = 320;
+
+  const [asideWidth, setAsideWidth] = useState(DEFAULT_WIDTH);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const actions = useTaskActions(taskId);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    const startX = e.clientX;
+    const startWidth = asideWidth;
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = startWidth + delta;
+      const clamped = Math.max(MIN_WIDTH, newWidth);
+      if (containerRef.current) {
+        const maxWidth = containerRef.current.getBoundingClientRect().width - MIN_WIDTH;
+        setAsideWidth(Math.min(maxWidth, clamped));
+      }
+    };
+
+    const onUp = () => {
+      setIsDragging(false);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  const toggleCollapse = (direction: 'left' | 'right') => {
+    if (isDragging) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const maxWidth = container.getBoundingClientRect().width - MIN_WIDTH;
+
+    if (direction === 'left') {
+      // ◀ button: collapse main panel, expand aside to max
+      if (asideWidth >= maxWidth - 10) {
+        setAsideWidth(DEFAULT_WIDTH);
+      } else {
+        setAsideWidth(maxWidth);
+      }
+    } else {
+      // ▶ button: collapse aside panel, shrink aside to min
+      if (asideWidth <= MIN_WIDTH + 10) {
+        setAsideWidth(DEFAULT_WIDTH);
+      } else {
+        setAsideWidth(MIN_WIDTH);
+      }
+    }
+  };
+
+  // Determine if input bar should show
+  const showInput = selectedTask &&
+    selectedTask.execution_engine === 'agent-sdk' &&
+    (selectedTask.status === 'running' || selectedTask.status === 'succeeded' || selectedTask.status === 'paused');
+
+  // Determine pause/resume buttons
+  const showPause = selectedTask?.status === 'running' && selectedTask?.execution_engine === 'agent-sdk';
+  const showResume = selectedTask?.status === 'paused';
 
   if (detailError) {
     return (
@@ -80,15 +173,31 @@ export default function TaskDetail({
               {selectedTask.title}
             </h1>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              {selectedTask.workspace_summary.label} · {selectedTask.environment_summary.alias} ·{' '}
+              {selectedTask.workspace_summary.label} &middot; {selectedTask.environment_summary.alias} &middot;{' '}
               {selectedTask.environment_summary.display_name}
             </p>
           </div>
-          <span
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClassName[selectedTask.status]}`}
-          >
-            {t(`pages.tasks.status.${selectedTask.status}`)}
-          </span>
+          <div className="flex items-center gap-2">
+            {showPause && (
+              <button
+                onClick={() => actions.pause()}
+                className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+              >
+                Pause
+              </button>
+            )}
+            {showResume && (
+              <button
+                onClick={() => actions.resume()}
+                className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+              >
+                Resume
+              </button>
+            )}
+            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClassName[selectedTask.status]}`}>
+              {t(`pages.tasks.status.${selectedTask.status}`)}
+            </span>
+          </div>
         </div>
         {selectedTask.error_summary ? (
           <Alert variant="error" className="mt-3">
@@ -97,170 +206,143 @@ export default function TaskDetail({
         ) : null}
       </header>
 
-      <div
-        className={[
-          'grid min-h-0 flex-1 gap-0 overflow-hidden transition-all duration-300 ease-in-out',
-          layout === 'split' && 'lg:grid-cols-[minmax(0,1fr)_320px]',
-          layout !== 'split' && 'lg:grid-cols-1',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        {layout !== 'aside' && (
-          <main className="min-h-0 overflow-auto p-5">
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-[var(--text)]">
-                  {t('pages.tasks.outputTimeline')}
-                </h2>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-[var(--text-secondary)]">
-                    {t('pages.tasks.latestSeq', { seq: selectedTask.latest_output_seq })}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setLayout(layout === 'main' ? 'split' : 'main')}
-                    className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
-                    aria-label={
-                      layout === 'main'
-                        ? t('pages.tasks.collapseOutputTimeline')
-                        : t('pages.tasks.expandOutputTimeline')
-                    }
-                  >
-                    {layout === 'main' ? '<<' : '>>'}
-                  </button>
-                </div>
-              </div>
-            {outputError ? <p className="text-sm text-[#ff3b30]">{outputError}</p> : null}
-            <div className="min-h-[24rem] space-y-3 rounded-xl border border-[var(--border)] bg-[#0b1020] p-4 text-xs text-gray-100">
-              {outputItems.length === 0 ? (
-                <p className="text-gray-400">{t('pages.tasks.noOutput')}</p>
-              ) : (
-                outputItems.map((item) => (
-                  <article key={item.seq} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <p className="mb-2 text-[11px] uppercase tracking-[0.08em] text-gray-400">
-                      #{item.seq} · {item.kind} · {item.created_at}
-                    </p>
-                    <pre className="whitespace-pre-wrap break-words leading-relaxed">{item.content}</pre>
-                  </article>
-                ))
-              )}
+      <div ref={containerRef} className="flex min-h-0 flex-1 overflow-hidden">
+        <main className="min-h-0 min-w-0 flex-1 flex flex-col bg-[var(--surface)]">
+            {/* Message stream area */}
+            <div className="flex-1 overflow-hidden">
+              {outputError ? <p className="text-sm text-[#ff3b30] p-4">{outputError}</p> : null}
+              <MessageStream messages={messages} />
             </div>
-          </section>
 
-          <section className="mt-5 space-y-3">
-            <h2 className="text-sm font-semibold text-[var(--text)]">
-              {t('pages.tasks.promptLayers')}
-            </h2>
-            {selectedTask.prompt ? (
-              <div className="space-y-3">
-                {selectedTask.prompt.layers.map((layer) => (
-                  <details
-                    key={layer.name}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-4"
-                  >
-                    <summary className="cursor-pointer text-sm font-medium text-[var(--text)]">
-                      {layer.label}{' '}
-                      <span className="text-xs text-[var(--text-secondary)]">
-                        ({layer.char_count} {t('pages.tasks.chars')})
-                      </span>
-                    </summary>
-                    <pre className="mt-3 overflow-x-auto rounded-lg bg-[var(--bg-tertiary)] p-3 text-xs text-[var(--text)]">
-                      {layer.content}
-                    </pre>
-                  </details>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--text-secondary)]">
-                {t('pages.tasks.promptUnavailable')}
-              </p>
+            {/* Input bar */}
+            {showInput && (
+              <TaskInputBar
+                onSubmit={actions.sendPrompt}
+                disabled={actions.isPending}
+              />
             )}
-          </section>
-        </main>
-        )}
 
-        {layout !== 'main' && (
-          <aside className="min-h-0 overflow-auto border-t border-[var(--border)] bg-[var(--bg)] p-5 lg:border-l lg:border-t-0">
-            <div className="mb-2 flex items-center justify-between">
+          </main>
+
+        <div
+          className="group relative w-[6px] shrink-0 cursor-col-resize select-none touch-none"
+          onPointerDown={handlePointerDown}
+        >
+          <div className="absolute inset-y-0 left-1/2 w-[1px] -translate-x-1/2 bg-[var(--border)]" />
+
+          <div
+            className={[
+              'absolute top-4 left-1/2 -translate-x-1/2 flex flex-col gap-1 transition-opacity',
+              isDragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100',
+            ].join(' ')}
+          >
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleCollapse('left'); }}
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-[10px] text-[var(--text-secondary)] shadow-sm transition hover:bg-[var(--border)]"
+              title="Show only details"
+            >
+              ◀
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleCollapse('right'); }}
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-[10px] text-[var(--text-secondary)] shadow-sm transition hover:bg-[var(--border)]"
+              title="Show only conversation"
+            >
+              ▶
+            </button>
+          </div>
+        </div>
+
+        <aside
+          style={{
+            width: asideWidth,
+            transition: isDragging ? 'none' : 'width 300ms ease-in-out',
+          }}
+          className="min-h-0 min-w-0 shrink-0 overflow-x-hidden overflow-y-auto border-t border-[var(--border)] bg-[var(--bg)] p-5 lg:border-t-0"
+        >
+            <div className="mb-2">
               <h2 className="text-sm font-semibold text-[var(--text)]">
                 {t('pages.tasks.summary')}
               </h2>
-              <button
-                type="button"
-                onClick={() => setLayout(layout === 'aside' ? 'split' : 'aside')}
-                className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
-                aria-label={
-                  layout === 'aside'
-                    ? t('pages.tasks.collapseSummary')
-                    : t('pages.tasks.expandSummary')
-                }
-              >
-                {layout === 'aside' ? '>>' : '<<'}
-              </button>
             </div>
-          <div className="space-y-5">
-            <section>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                <MetadataRow label={t('pages.tasks.taskId')} value={selectedTask.task_id} fallback={metadataFallback} />
-                <MetadataRow label={t('pages.tasks.created')} value={selectedTask.created_at} fallback={metadataFallback} />
-                <MetadataRow label={t('pages.tasks.updated')} value={selectedTask.updated_at} fallback={metadataFallback} />
-                <MetadataRow label={t('pages.tasks.started')} value={selectedTask.started_at} fallback={metadataFallback} />
-                <MetadataRow label={t('pages.tasks.completed')} value={selectedTask.completed_at} fallback={metadataFallback} />
-              </div>
-            </section>
-
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
-                {t('pages.tasks.binding')}
-              </h2>
-              {selectedTask.binding ? (
+            <div className="space-y-5">
+              <section>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                  <MetadataRow label={t('pages.tasks.profile')} value={selectedTask.binding.task_profile} fallback={metadataFallback} />
-                  <MetadataRow label={t('pages.tasks.workdir')} value={selectedTask.binding.resolved_workdir} fallback={metadataFallback} />
-                  <MetadataRow label={t('pages.tasks.snapshot')} value={selectedTask.binding.snapshot_path} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.taskId')} value={selectedTask.task_id} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.created')} value={selectedTask.created_at} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.updated')} value={selectedTask.updated_at} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.started')} value={selectedTask.started_at} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.completed')} value={selectedTask.completed_at} fallback={metadataFallback} />
                 </div>
-              ) : (
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {t('pages.tasks.bindingUnavailable')}
-                </p>
-              )}
-            </section>
+              </section>
 
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
-                {t('pages.tasks.runtime')}
-              </h2>
-              {selectedTask.runtime ? (
+              <section>
+                <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
+                  {t('pages.tasks.binding')}
+                </h2>
+                {selectedTask.binding ? (
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
+                    <MetadataRow label={t('pages.tasks.profile')} value={selectedTask.binding.task_profile} fallback={metadataFallback} />
+                    <MetadataRow label={t('pages.tasks.workdir')} value={selectedTask.binding.resolved_workdir} fallback={metadataFallback} />
+                    <MetadataRow label={t('pages.tasks.snapshot')} value={selectedTask.binding.snapshot_path} fallback={metadataFallback} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {t('pages.tasks.bindingUnavailable')}
+                  </p>
+                )}
+              </section>
+
+              <section>
+                <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
+                  {t('pages.tasks.runtime')}
+                </h2>
+                {selectedTask.runtime ? (
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
+                    <MetadataRow label={t('pages.tasks.runner')} value={selectedTask.runtime.runner_kind} fallback={metadataFallback} />
+                    <MetadataRow label={t('pages.tasks.directory')} value={selectedTask.runtime.working_directory} fallback={metadataFallback} />
+                    <MetadataRow
+                      label={t('pages.tasks.command')}
+                      value={selectedTask.runtime.command.join(' ') || t('pages.tasks.pendingValue')}
+                      fallback={metadataFallback}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {t('pages.tasks.runtimeUnavailable')}
+                  </p>
+                )}
+              </section>
+
+              <section>
+                <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
+                  {t('pages.tasks.result')}
+                </h2>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                  <MetadataRow label={t('pages.tasks.runner')} value={selectedTask.runtime.runner_kind} fallback={metadataFallback} />
-                  <MetadataRow label={t('pages.tasks.directory')} value={selectedTask.runtime.working_directory} fallback={metadataFallback} />
-                  <MetadataRow
-                    label={t('pages.tasks.command')}
-                    value={selectedTask.runtime.command.join(' ') || t('pages.tasks.pendingValue')}
-                    fallback={metadataFallback}
-                  />
+                  <MetadataRow label={t('pages.tasks.exitCode')} value={selectedTask.result.exit_code} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.failure')} value={selectedTask.result.failure_category} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.completed')} value={selectedTask.result.completed_at} fallback={metadataFallback} />
                 </div>
-              ) : (
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {t('pages.tasks.runtimeUnavailable')}
-                </p>
-              )}
-            </section>
+              </section>
 
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
-                {t('pages.tasks.result')}
-              </h2>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                <MetadataRow label={t('pages.tasks.exitCode')} value={selectedTask.result.exit_code} fallback={metadataFallback} />
-                <MetadataRow label={t('pages.tasks.failure')} value={selectedTask.result.failure_category} fallback={metadataFallback} />
-                <MetadataRow label={t('pages.tasks.completed')} value={selectedTask.result.completed_at} fallback={metadataFallback} />
-              </div>
-            </section>
-          </div>
-        </aside>
-        )}
+              <section>
+                <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
+                  {t('pages.tasks.prompt')}
+                </h2>
+                {selectedTask.prompt ? (
+                  <div className="space-y-2">
+                    {selectedTask.prompt.layers.map((layer) => (
+                      <PromptLayerItem key={layer.name} layer={layer} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {t('pages.tasks.promptUnavailable')}
+                  </p>
+                )}
+              </section>
+            </div>
+          </aside>
       </div>
     </section>
   );

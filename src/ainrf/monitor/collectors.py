@@ -145,7 +145,9 @@ class LocalCollector:
 
     async def _collect_processes(self) -> list[RawProcess]:
         proc = await asyncio.create_subprocess_exec(
-            "ps", "-eo", "pid,ppid,pcpu,rss,etime,comm",
+            "ps",
+            "-eo",
+            "pid,ppid,pcpu,rss,etime,comm",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

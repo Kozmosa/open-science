@@ -98,7 +98,9 @@ class TestSkillRegistrySyncService:
         assert md_path.exists()
         assert md_path.read_text() == "# Content"
 
-    def test_is_installed_checks_marker_file(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_is_installed_checks_marker_file(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         assert not service.is_installed()
 
         # Marker file with matching registry_id
@@ -108,7 +110,9 @@ class TestSkillRegistrySyncService:
 
         assert service.is_installed()
 
-    def test_is_installed_false_for_other_registry(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_is_installed_false_for_other_registry(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         marker = tmp_path / "skills" / ".ainrf-registry"
         marker.parent.mkdir(parents=True)
         marker.write_text("other-registry", encoding="utf-8")
@@ -177,6 +181,7 @@ class TestSkillRegistrySyncService:
         # Fake a git workspace
         service.git_workspace.mkdir(parents=True)
         import shutil
+
         shutil.copytree(source_root, service.git_workspace / "skills")
 
         added, removed = service._sync_all()
@@ -191,7 +196,9 @@ class TestSkillRegistrySyncService:
         assert sorted(manifest["skills"]) == ["skill-a", "skill-b"]
         assert "synced_at" in manifest
 
-    def test_sync_all_removes_orphaned_skills(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_sync_all_removes_orphaned_skills(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         load_dir = tmp_path / "skills"
         load_dir.mkdir(parents=True)
 
@@ -219,6 +226,7 @@ class TestSkillRegistrySyncService:
 
         service.git_workspace.mkdir(parents=True)
         import shutil
+
         shutil.copytree(source_root, service.git_workspace / "skills")
 
         added, removed = service._sync_all()
@@ -252,7 +260,9 @@ class TestSkillRegistrySyncService:
         assert status.installed is True
         assert "test-skill" in added
 
-    def test_build_status_uses_manifest_for_count(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_build_status_uses_manifest_for_count(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         load_dir = tmp_path / "skills"
         load_dir.mkdir(parents=True)
 
@@ -275,7 +285,9 @@ class TestSkillRegistrySyncService:
         assert status.installed_count == 2
         assert status.installed is True
 
-    def test_build_status_sets_last_sync_at_from_marker(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_build_status_sets_last_sync_at_from_marker(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         load_dir = tmp_path / "skills"
         load_dir.mkdir(parents=True)
         (load_dir / ".ainrf-registry").write_text("test-registry", encoding="utf-8")
@@ -284,7 +296,9 @@ class TestSkillRegistrySyncService:
         assert status.last_sync_at is not None
         assert status.installed is True
 
-    def test_build_status_ignores_manifest_for_other_registry(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_build_status_ignores_manifest_for_other_registry(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         load_dir = tmp_path / "skills"
         load_dir.mkdir(parents=True)
         (load_dir / ".ainrf-registry").write_text("test-registry", encoding="utf-8")
@@ -304,7 +318,9 @@ class TestSkillRegistrySyncService:
         assert status.installed_count == 0
         assert status.installed is True  # marker still matches
 
-    def test_sync_all_rejects_file_as_source_path(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_sync_all_rejects_file_as_source_path(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         service.git_workspace.mkdir(parents=True)
         # Create a file instead of directory at source_skills_path
         (service.git_workspace / "skills").write_text("not a directory")

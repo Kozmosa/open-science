@@ -101,8 +101,12 @@ class ProjectRegistryService:
                 project_id=current.project_id,
                 name=current.name if name is None else name,
                 description=description if description is not None else current.description,
-                default_workspace_id=default_workspace_id if default_workspace_id is not None else current.default_workspace_id,
-                default_environment_id=default_environment_id if default_environment_id is not None else current.default_environment_id,
+                default_workspace_id=default_workspace_id
+                if default_workspace_id is not None
+                else current.default_workspace_id,
+                default_environment_id=default_environment_id
+                if default_environment_id is not None
+                else current.default_environment_id,
                 created_at=current.created_at,
                 updated_at=utc_now(),
             )

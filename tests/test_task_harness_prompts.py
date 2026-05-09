@@ -100,7 +100,9 @@ def test_check_aris_skills_passes_when_skills_present_and_selected(tmp_path: Pat
 
 def test_check_aris_skills_fails_when_skills_not_installed(tmp_path: Path) -> None:
     with pytest.raises(TaskHarnessError, match="ARIS skill.*not installed"):
-        _check_aris_skills(TaskConfigurationMode.REPRODUCE_BASELINE, tmp_path, ["research-pipeline"])
+        _check_aris_skills(
+            TaskConfigurationMode.REPRODUCE_BASELINE, tmp_path, ["research-pipeline"]
+        )
 
 
 def test_check_aris_skills_fails_when_skills_not_selected(tmp_path: Path) -> None:

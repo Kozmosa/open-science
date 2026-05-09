@@ -10,8 +10,15 @@ _BUILTIN_SKILLS: list[SkillItem] = [
     SkillItem("web-search", "Web Search", "Search the web for information", package="aris"),
     SkillItem("code-analysis", "Code Analysis", "Analyze and understand code", package="aris"),
     SkillItem("citation", "Citation", "Manage citations and references", package="aris"),
-    SkillItem("repo-inspection", "Repo Inspection", "Inspect repository structure and history", package="aris"),
-    SkillItem("paper-reading", "Paper Reading", "Read and summarize academic papers", package="aris"),
+    SkillItem(
+        "repo-inspection",
+        "Repo Inspection",
+        "Inspect repository structure and history",
+        package="aris",
+    ),
+    SkillItem(
+        "paper-reading", "Paper Reading", "Read and summarize academic papers", package="aris"
+    ),
     SkillItem("writing", "Academic Writing", "Write academic content", package="aris"),
 ]
 

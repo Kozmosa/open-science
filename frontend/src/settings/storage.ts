@@ -14,6 +14,7 @@ import {
 import type {
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
+  ExecutionEngineId,
   ResearchAgentProfileSettings,
   SettingsRecoveryReason,
   TaskConfigurationMode,
@@ -133,6 +134,12 @@ function normalizeTaskConfigurationSettings(
             skillModes,
             skillsPrompt,
             settingsJson: typeof item.settingsJson === 'string' ? item.settingsJson : '',
+            apiBaseUrl: typeof item.apiBaseUrl === 'string' ? item.apiBaseUrl : '',
+            apiKey: typeof item.apiKey === 'string' ? item.apiKey : '',
+            defaultOpusModel: typeof item.defaultOpusModel === 'string' ? item.defaultOpusModel : '',
+            defaultSonnetModel: typeof item.defaultSonnetModel === 'string' ? item.defaultSonnetModel : '',
+            defaultHaikuModel: typeof item.defaultHaikuModel === 'string' ? item.defaultHaikuModel : '',
+            envOverrides: typeof item.envOverrides === 'string' ? item.envOverrides : '',
           },
         ];
       })
@@ -175,8 +182,8 @@ function normalizeTaskConfigurationSettings(
   return {
     taskConfiguration: {
       defaultExecutionEngineId:
-        value.defaultExecutionEngineId === 'kimi-claude-code'
-          ? 'kimi-claude-code'
+        value.defaultExecutionEngineId === 'kimi-claude-code' || value.defaultExecutionEngineId === 'agent-sdk'
+          ? (value.defaultExecutionEngineId as ExecutionEngineId)
           : 'claude-code',
       researchAgentProfiles: researchAgentProfiles.length > 0 ? researchAgentProfiles : defaults.researchAgentProfiles,
       taskConfigurations: taskConfigurations.length > 0 ? taskConfigurations : defaults.taskConfigurations,

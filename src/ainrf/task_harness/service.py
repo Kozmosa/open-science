@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shlex
 import sqlite3
 from dataclasses import asdict
@@ -43,12 +44,18 @@ from ainrf.task_harness.launcher import (
     build_ssh_executor,
     is_local_environment,
 )
+from ainrf.task_harness.engines import get_engine
+from ainrf.task_harness.engines.base import EngineContext, EngineEvent, ExecutionEngine
 from ainrf.task_harness.models import (
     ResearchAgentProfileSnapshot,
+    TaskBindingSummary,
     TaskConfigurationMode,
     TaskConfigurationSnapshot,
     TaskDetail,
     TaskEdge,
+    TaskHarnessError,
+    TaskHarnessNotFoundError,
+    TaskHarnessOutputStoreError,
     TaskHarnessStatus,
     TaskListItem,
     TaskOutputEvent,
@@ -60,6 +67,7 @@ from ainrf.task_harness.prompting import (
     PromptCompositionError,
     derive_task_title,
 )
+from ainrf.task_harness.session_state import SessionStateStore
 from ainrf.workspaces import WorkspaceNotFoundError, WorkspaceRegistryService
 from ainrf.workspaces.models import WorkspaceRecord
 
@@ -67,10 +75,11 @@ _FINAL_STATUSES = {
     TaskHarnessStatus.SUCCEEDED,
     TaskHarnessStatus.FAILED,
     TaskHarnessStatus.CANCELLED,
+    TaskHarnessStatus.PAUSED,
 }
 _TASK_PROFILE = "claude-code"
 _EXECUTION_ENGINE = "claude-code"
-_SUPPORTED_ENGINES = {"claude-code", "kimi-claude-code"}
+_SUPPORTED_ENGINES = {"claude-code", "kimi-claude-code", "agent-sdk"}
 _ARIS_SKILL_REQUIREMENTS: dict[TaskConfigurationMode, list[str]] = {
     TaskConfigurationMode.REPRODUCE_BASELINE: ["research-pipeline"],
     TaskConfigurationMode.DISCOVER_IDEAS: ["research-lit"],
@@ -103,18 +112,6 @@ _HARNESS_RESTART_REASON = (
 )
 
 
-class TaskHarnessError(RuntimeError):
-    pass
-
-
-class TaskHarnessNotFoundError(TaskHarnessError):
-    pass
-
-
-class TaskHarnessOutputStoreError(TaskHarnessError):
-    pass
-
-
 class TaskHarnessService:
     def __init__(
         self,
@@ -134,6 +131,9 @@ class TaskHarnessService:
         self._initialized = False
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._running_processes: dict[str, Any] = {}
+        self._engine_factory = get_engine
+        self._engines: dict[str, ExecutionEngine] = {}
+        self._session_store = SessionStateStore(state_root)
 
     def initialize(self) -> None:
         if self._initialized:
@@ -212,6 +212,20 @@ class TaskHarnessService:
                 )
                 """
             )
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS task_harness_session_states (
+                    id INTEGER PRIMARY KEY,
+                    task_id TEXT NOT NULL REFERENCES task_harness_tasks(task_id),
+                    version INTEGER NOT NULL DEFAULT 1,
+                    session_id TEXT,
+                    cwd TEXT,
+                    checkpoint_path TEXT NOT NULL,
+                    turn_count INTEGER DEFAULT 0,
+                    total_cost_usd REAL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(task_id, version)
+                )
+            """)
             connection.commit()
         self._fail_unfinished_tasks_for_restart()
         self._initialized = True
@@ -365,9 +379,7 @@ class TaskHarnessService:
                 (project_id, source_task_id, target_task_id),
             ).fetchone()
         if existing is not None:
-            raise TaskHarnessError(
-                f"Edge already exists from {source_task_id} to {target_task_id}"
-            )
+            raise TaskHarnessError(f"Edge already exists from {source_task_id} to {target_task_id}")
         edge_id = f"edge-{uuid4().hex[:12]}"
         now = utc_now()
         with self._connect() as connection:
@@ -420,6 +432,33 @@ class TaskHarnessService:
             )
             connection.commit()
 
+    def _engine_event_to_kind(self, event_type: str) -> TaskOutputKind:
+        mapping = {
+            "message": TaskOutputKind.MESSAGE,
+            "thinking": TaskOutputKind.THINKING,
+            "tool_call": TaskOutputKind.TOOL_CALL,
+            "tool_result": TaskOutputKind.TOOL_RESULT,
+            "status": TaskOutputKind.SYSTEM,
+            "system": TaskOutputKind.SYSTEM,
+            "error": TaskOutputKind.STDERR,
+        }
+        return mapping.get(event_type, TaskOutputKind.STDOUT)
+
+    def _get_engine(self, name: str) -> ExecutionEngine:
+        engine = self._engines.get(name)
+        if engine is None:
+            engine = self._engine_factory(name)
+            self._engines[name] = engine
+        return engine
+
+    def _next_seq(self, task_id: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(seq), 0) AS seq FROM task_harness_output_events WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            return (int(row["seq"]) if row else 0) + 1
+
     def _maybe_auto_connect_task(self, project_id: str, new_task_id: str) -> None:
         with self._connect() as connection:
             row = connection.execute(
@@ -454,7 +493,9 @@ class TaskHarnessService:
                 ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
-    def list_project_tasks(self, project_id: str, *, include_archived: bool = False) -> list[TaskListItem]:
+    def list_project_tasks(
+        self, project_id: str, *, include_archived: bool = False
+    ) -> list[TaskListItem]:
         self.initialize()
         with self._connect() as connection:
             if include_archived:
@@ -500,6 +541,10 @@ class TaskHarnessService:
         if status in _FINAL_STATUSES or status == TaskHarnessStatus.CANCELLED:
             raise TaskHarnessError(f"Cannot cancel task in status: {status.value}")
 
+        execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
+        engine = self._get_engine(execution_engine)
+        await engine.abort(task_id)
+
         process = self._running_processes.pop(task_id, None)
         if process is not None:
             try:
@@ -543,6 +588,56 @@ class TaskHarnessService:
         self._append_output_event(task_id, TaskOutputKind.LIFECYCLE, "Task cancelled by user")
         return self._load_list_item(task_id)
 
+    async def pause_task(self, task_id: str) -> TaskListItem:
+        self.initialize()
+        row = self._load_task_row(task_id)
+        status = TaskHarnessStatus(row["status"])
+        if status not in {TaskHarnessStatus.RUNNING, TaskHarnessStatus.STARTING}:
+            raise TaskHarnessError(f"Cannot pause task in status: {status.value}")
+        execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
+        engine = self._get_engine(execution_engine)
+        await engine.pause(task_id)
+        # Status is updated to PAUSED when the engine actually emits
+        # task_paused (via the emit callback), not immediately here.
+        return self._load_list_item(task_id)
+
+    async def resume_task(self, task_id: str) -> TaskListItem:
+        self.initialize()
+        row = self._load_task_row(task_id)
+        status = TaskHarnessStatus(row["status"])
+        execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
+        if status not in {
+            TaskHarnessStatus.PAUSED,
+            TaskHarnessStatus.SUCCEEDED,
+            TaskHarnessStatus.FAILED,
+        }:
+            raise TaskHarnessError(f"Cannot resume task in status: {status.value}")
+        if execution_engine != "agent-sdk" and status in {
+            TaskHarnessStatus.SUCCEEDED,
+            TaskHarnessStatus.FAILED,
+        }:
+            raise TaskHarnessError(
+                f"Cannot resume {execution_engine} task that has already completed"
+            )
+        self._schedule_task(task_id)
+        return self._load_list_item(task_id)
+
+    async def send_prompt(self, task_id: str, prompt: str) -> int:
+        self.initialize()
+        row = self._load_task_row(task_id)
+        execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
+        engine = self._get_engine(execution_engine)
+        await engine.send_prompt(task_id, prompt)
+
+        # Auto-resume agent-sdk tasks so queued prompts are processed
+        if execution_engine == "agent-sdk":
+            self._schedule_task(task_id)
+
+        seq = self._append_output_event(
+            task_id, TaskOutputKind.SYSTEM, json.dumps({"subtype": "user_prompt", "prompt": prompt})
+        )
+        return seq
+
     def get_task(self, task_id: str) -> TaskDetail:
         self.initialize()
         row = self._load_task_row(task_id)
@@ -551,15 +646,15 @@ class TaskHarnessService:
             task_dir = self.task_directory(row["task_id"])
             profile_snapshot = _load_research_agent_profile(task_dir)
             configuration_snapshot = _load_task_configuration(task_dir, row["task_input"])
-            execution_engine = _EXECUTION_ENGINE
-            binding = write_binding_snapshot(
-                Path(row["binding_snapshot_path"]),
-                workspace=self._workspace_service.get_workspace(row["workspace_id"]),
-                environment=self._environment_service.get_environment(row["environment_id"]),
+            execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
+            binding = TaskBindingSummary(
+                workspace=workspace_summary(self._workspace_service.get_workspace(row["workspace_id"])),
+                environment=environment_summary(self._environment_service.get_environment(row["environment_id"])),
                 task_profile=row["task_profile"],
                 title=row["title"],
                 task_input=row["task_input"],
                 resolved_workdir=row["resolved_workdir"] or "",
+                snapshot_path=row["binding_snapshot_path"],
                 execution_engine=execution_engine,
                 research_agent_profile=profile_snapshot,
                 task_configuration=configuration_snapshot,
@@ -598,19 +693,33 @@ class TaskHarnessService:
             task_configuration=configuration_snapshot,
         )
 
-    def get_output(self, task_id: str, *, after_seq: int = 0) -> TaskOutputPage:
+    def get_output(
+        self, task_id: str, *, after_seq: int = 0, limit: int | None = None
+    ) -> TaskOutputPage:
         self.initialize()
         _ = self._load_task_row(task_id)
         with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT task_id, seq, kind, content, created_at
-                FROM task_harness_output_events
-                WHERE task_id = ? AND seq > ?
-                ORDER BY seq ASC
-                """,
-                (task_id, after_seq),
-            ).fetchall()
+            if limit is not None:
+                rows = connection.execute(
+                    """
+                    SELECT task_id, seq, kind, content, created_at
+                    FROM task_harness_output_events
+                    WHERE task_id = ? AND seq > ?
+                    ORDER BY seq ASC
+                    LIMIT ?
+                    """,
+                    (task_id, after_seq, limit + 1),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT task_id, seq, kind, content, created_at
+                    FROM task_harness_output_events
+                    WHERE task_id = ? AND seq > ?
+                    ORDER BY seq ASC
+                    """,
+                    (task_id, after_seq),
+                ).fetchall()
         items = [
             TaskOutputEvent(
                 task_id=row["task_id"],
@@ -619,10 +728,13 @@ class TaskHarnessService:
                 content=row["content"],
                 created_at=_parse_required_datetime(row["created_at"]),
             )
-            for row in rows
+            for row in rows[:limit]
         ]
         next_seq = items[-1].seq if items else after_seq
-        return TaskOutputPage(items=items, next_seq=next_seq)
+        has_more = limit is not None and len(rows) > limit
+        if has_more:
+            next_seq = items[-1].seq
+        return TaskOutputPage(items=items, next_seq=next_seq, has_more=has_more)
 
     def task_directory(self, task_id: str) -> Path:
         return self._task_root / task_id
@@ -660,6 +772,7 @@ class TaskHarnessService:
             profile_snapshot = _load_research_agent_profile(task_dir)
             configuration_snapshot = _load_task_configuration(task_dir, row["task_input"])
             resolved_workdir = _resolve_workdir(workspace, environment)
+            resolved_execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
             write_binding_snapshot(
                 Path(row["binding_snapshot_path"]),
                 workspace=workspace,
@@ -668,7 +781,7 @@ class TaskHarnessService:
                 title=row["title"],
                 task_input=row["task_input"],
                 resolved_workdir=resolved_workdir,
-                execution_engine=_EXECUTION_ENGINE,
+                execution_engine=resolved_execution_engine,
                 research_agent_profile=profile_snapshot,
                 task_configuration=configuration_snapshot,
             )
@@ -703,6 +816,101 @@ class TaskHarnessService:
                     if is_local_environment(environment):
                         injector.sync_to_claude(workdir=resolved_workdir)
 
+            if resolved_execution_engine == "agent-sdk":
+                # Build EngineContext and run via AgentSdkEngine
+                binding_path = Path(row["binding_snapshot_path"])
+                binding = read_binding_summary(str(binding_path))
+                profile = binding.research_agent_profile if binding else None
+                config = binding.task_configuration if binding else None
+
+                if profile is None:
+                    profile = ResearchAgentProfileSnapshot(
+                        profile_id="claude-code-default",
+                        label="Claude Code Default",
+                        system_prompt=None,
+                        skills=[],
+                        skills_prompt=None,
+                        settings_json=None,
+                        settings_artifact_path=None,
+                        model=None,
+                        permission_mode=None,
+                        max_turns=None,
+                        max_budget_usd=None,
+                        mcp_servers=None,
+                        disallowed_tools=None,
+                    )
+
+                if config is None:
+                    config = TaskConfigurationSnapshot(
+                        mode=TaskConfigurationMode.RAW_PROMPT,
+                        template_id=None,
+                        template_vars={},
+                        raw_prompt=None,
+                        rendered_task_input="",
+                    )
+
+                # Read rendered prompt
+                prompt_file_path = binding_path.parent / "rendered_prompt.txt"
+                rendered_prompt = prompt_file_path.read_text() if prompt_file_path.exists() else ""
+
+                # Check for existing checkpoint
+                session_state_path = str(self._session_store.checkpoint_path(task_id))
+
+                context = EngineContext(
+                    task_id=task_id,
+                    working_directory=resolved_workdir,
+                    rendered_prompt=rendered_prompt,
+                    agent_profile=profile,
+                    task_config=config,
+                    session_state_path=session_state_path,
+                )
+
+                engine = self._get_engine(resolved_execution_engine)
+                engine_paused = False
+                engine_failed = False
+
+                async def emit(event: EngineEvent) -> None:
+                    nonlocal engine_paused, engine_failed
+                    if event.event_type == "system":
+                        subtype = event.payload.get("subtype")
+                        if subtype == "task_paused":
+                            engine_paused = True
+                            self._update_task_status(task_id, status=TaskHarnessStatus.PAUSED)
+                        elif subtype == "task_failed":
+                            engine_failed = True
+                    content = (
+                        json.dumps(event.payload)
+                        if isinstance(event.payload, dict)
+                        else str(event.payload)
+                    )
+                    kind = self._engine_event_to_kind(event.event_type)
+                    self._append_output_event(task_id, kind, content)
+
+                self._update_task_status(task_id, status=TaskHarnessStatus.RUNNING)
+                self._append_output_event(task_id, TaskOutputKind.LIFECYCLE, "Task is running")
+
+                try:
+                    await engine.start(context, emit)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    self._fail_task(
+                        task_id, error_summary=str(exc), failure_category="runtime failure"
+                    )
+                    return
+                if engine_paused:
+                    self._update_task_status(task_id, status=TaskHarnessStatus.PAUSED)
+                    return
+                if engine_failed:
+                    self._fail_task(
+                        task_id,
+                        error_summary="Agent SDK reported task failure",
+                        failure_category="runtime failure",
+                    )
+                    return
+                self._complete_task(task_id, exit_code=0)
+                return
+
             if is_local_environment(environment):
                 launch_payload, launch = build_local_launcher(
                     working_directory=resolved_workdir,
@@ -735,6 +943,8 @@ class TaskHarnessService:
             )
             process = await launch()
             self._running_processes[task_id] = process
+        except asyncio.CancelledError:
+            raise
         except (
             EnvironmentNotFoundError,
             WorkspaceNotFoundError,
@@ -755,6 +965,8 @@ class TaskHarnessService:
 
         try:
             exit_code = await self._stream_process_output(task_id, process)
+        except asyncio.CancelledError:
+            raise
         except TaskHarnessOutputStoreError as exc:
             await process.terminate()
             await process.wait()
@@ -778,9 +990,7 @@ class TaskHarnessService:
             try:
                 await process.cleanup()
             except Exception as exc:
-                self._append_output_event(
-                    task_id, TaskOutputKind.SYSTEM, f"cleanup error: {exc}"
-                )
+                self._append_output_event(task_id, TaskOutputKind.SYSTEM, f"cleanup error: {exc}")
 
         if exit_code == 0:
             self._complete_task(task_id, exit_code=0)
@@ -1002,12 +1212,13 @@ class TaskHarnessService:
                 """
                 SELECT task_id
                 FROM task_harness_tasks
-                WHERE status NOT IN (?, ?, ?)
+                WHERE status NOT IN (?, ?, ?, ?)
                 """,
                 (
                     TaskHarnessStatus.SUCCEEDED.value,
                     TaskHarnessStatus.FAILED.value,
                     TaskHarnessStatus.CANCELLED.value,
+                    TaskHarnessStatus.PAUSED.value,
                 ),
             ).fetchall()
             if not rows:
@@ -1017,7 +1228,7 @@ class TaskHarnessService:
                 """
                 UPDATE task_harness_tasks
                 SET status = ?, updated_at = ?, completed_at = ?, failure_category = ?, error_summary = ?
-                WHERE status NOT IN (?, ?, ?)
+                WHERE status NOT IN (?, ?, ?, ?)
                 """,
                 (
                     TaskHarnessStatus.FAILED.value,
@@ -1028,6 +1239,7 @@ class TaskHarnessService:
                     TaskHarnessStatus.SUCCEEDED.value,
                     TaskHarnessStatus.FAILED.value,
                     TaskHarnessStatus.CANCELLED.value,
+                    TaskHarnessStatus.PAUSED.value,
                 ),
             )
             connection.commit()
@@ -1042,7 +1254,7 @@ class TaskHarnessService:
                 continue
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db_path)
+        connection = sqlite3.connect(self._db_path, isolation_level="IMMEDIATE")
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -1085,6 +1297,10 @@ def _normalize_research_agent_profile(
         normalized_settings = {str(key): value for key, value in settings_json.items()}
     skills_raw = payload.get("skills", [])
     skills = [str(s) for s in skills_raw] if isinstance(skills_raw, list) else []
+    env_overrides = payload.get("env_overrides")
+    normalized_env_overrides: dict[str, str] | None = None
+    if isinstance(env_overrides, dict):
+        normalized_env_overrides = {str(key): str(value) for key, value in env_overrides.items()}
     return ResearchAgentProfileSnapshot(
         profile_id=str(payload.get("profile_id", "claude-code-custom")),
         label=str(payload.get("label", "Claude Code Custom")),
@@ -1092,6 +1308,18 @@ def _normalize_research_agent_profile(
         skills=skills,
         skills_prompt=_optional_str(payload.get("skills_prompt")),
         settings_json=normalized_settings,
+        model=_optional_str(payload.get("model")),
+        permission_mode=_optional_str(payload.get("permission_mode")),
+        max_turns=payload.get("max_turns"),
+        max_budget_usd=payload.get("max_budget_usd"),
+        mcp_servers=payload.get("mcp_servers") if isinstance(payload.get("mcp_servers"), dict) else None,
+        disallowed_tools=[str(s) for s in dt] if isinstance((dt := payload.get("disallowed_tools")), list) else None,
+        api_base_url=_optional_str(payload.get("api_base_url")),
+        api_key=_optional_str(payload.get("api_key")),
+        default_opus_model=_optional_str(payload.get("default_opus_model")),
+        default_sonnet_model=_optional_str(payload.get("default_sonnet_model")),
+        default_haiku_model=_optional_str(payload.get("default_haiku_model")),
+        env_overrides=normalized_env_overrides,
     )
 
 

@@ -19,9 +19,11 @@ def deep_merge_settings(base: dict[str, Any], overlay: dict[str, Any]) -> dict[s
 
 def _resolve_value(value: Any) -> Any:
     if isinstance(value, str):
+
         def replacer(match: re.Match[str]) -> str:
             var_name = match.group(1)
             return os.environ.get(var_name, match.group(0))
+
         return _ENV_PATTERN.sub(replacer, value)
     if isinstance(value, dict):
         return resolve_env_placeholders(value)

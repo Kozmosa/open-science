@@ -1,6 +1,6 @@
 export type DefaultRoute = 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
 
-export type ExecutionEngineId = 'claude-code' | 'kimi-claude-code';
+export type ExecutionEngineId = 'claude-code' | 'kimi-claude-code' | 'agent-sdk';
 export type SkillMode = 'disabled' | 'enabled' | 'auto';
 export type TaskConfigurationMode = 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
 
@@ -12,6 +12,12 @@ export interface ResearchAgentProfileSettings {
   skillModes: Record<string, SkillMode>;
   skillsPrompt: string;
   settingsJson: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  defaultOpusModel: string;
+  defaultSonnetModel: string;
+  defaultHaikuModel: string;
+  envOverrides: string;
 }
 
 export interface TaskConfigurationPreset {

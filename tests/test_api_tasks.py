@@ -172,7 +172,9 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
 
     assert listed.status_code == 200
     assert listed.json()["items"][0]["workspace_summary"]["workspace_id"] == "workspace-default"
-    assert detail["binding"]["resolved_workdir"] == str(Path.home() / ".ainrf_workspaces" / "default")
+    assert detail["binding"]["resolved_workdir"] == str(
+        Path.home() / ".ainrf_workspaces" / "default"
+    )
     assert detail["prompt"]["layer_order"] == [
         "global_harness_system",
         "workspace",

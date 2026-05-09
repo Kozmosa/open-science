@@ -23,6 +23,8 @@ interface Props {
   onDetach: () => void;
   onReset: () => void;
   onTerminalDisconnected: () => void;
+  consoleExpanded: boolean;
+  onToggleConsole: () => void;
 }
 
 function TerminalBenchCardView({
@@ -45,6 +47,8 @@ function TerminalBenchCardView({
   onDetach,
   onReset,
   onTerminalDisconnected,
+  consoleExpanded,
+  onToggleConsole,
 }: Props) {
   const t = useT();
   const statusLabel: Record<TerminalSessionStatus, string> = {
@@ -159,10 +163,11 @@ function TerminalBenchCardView({
 
       <SectionCard
         collapsible
-        defaultExpanded={false}
+        expanded={consoleExpanded}
+        onToggle={onToggleConsole}
         header={
           <div className="text-sm font-medium text-[var(--text)]">
-            终端控制台
+            {t('components.terminalBench.consoleTitle')}
           </div>
         }
       >

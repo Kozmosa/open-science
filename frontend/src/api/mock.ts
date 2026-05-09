@@ -779,7 +779,6 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
     error_summary: null,
     latest_output_seq: 1,
     binding: {
-      project_id: payload.project_id ?? DEFAULT_PROJECT_ID,
       workspace: {
         workspace_id: workspace.workspace_id,
         label: workspace.label,

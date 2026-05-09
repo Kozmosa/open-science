@@ -76,8 +76,8 @@ export interface UserSessionPairListResponse {
   items: UserSessionPair[];
 }
 
-export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle';
+export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'paused';
+export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 
 export interface ProjectRecord {
   project_id: string;
@@ -172,9 +172,22 @@ export interface ResearchAgentProfileSnapshot {
   profile_id: string;
   label: string;
   system_prompt: string | null;
+  skills: string[];
   skills_prompt: string | null;
   settings_json: Record<string, unknown> | null;
   settings_artifact_path: string | null;
+  model: string | null;
+  permission_mode: string | null;
+  max_turns: number | null;
+  max_budget_usd: number | null;
+  mcp_servers: Record<string, unknown> | null;
+  disallowed_tools: string[] | null;
+  api_base_url: string | null;
+  api_key: string | null;
+  default_opus_model: string | null;
+  default_sonnet_model: string | null;
+  default_haiku_model: string | null;
+  env_overrides: Record<string, string> | null;
 }
 
 export interface TaskConfigurationSnapshot {
@@ -186,7 +199,6 @@ export interface TaskConfigurationSnapshot {
 }
 
 export interface TaskBindingSummary {
-  project_id: string;
   workspace: WorkspaceSummary;
   environment: TaskEnvironmentSummary;
   task_profile: string;
@@ -277,6 +289,12 @@ export interface TaskCreateRequest {
     skills?: string[];
     skills_prompt?: string | null;
     settings_json?: Record<string, unknown> | null;
+    api_base_url?: string | null;
+    api_key?: string | null;
+    default_opus_model?: string | null;
+    default_sonnet_model?: string | null;
+    default_haiku_model?: string | null;
+    env_overrides?: Record<string, string> | null;
   } | null;
   task_configuration?: {
     mode: 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
@@ -620,4 +638,26 @@ export interface SkillRegistryUpdateResponse {
   updated_count: number;
   added: string[];
   removed: string[];
+}
+
+export interface MessageItem {
+  id: string;
+  type: 'user' | 'assistant' | 'thinking' | 'tool_call' | 'tool_result' | 'system_event';
+  content: string | Record<string, unknown>;
+  metadata: {
+    timestamp: string;
+    sequence: number;
+    isFolded?: boolean;
+    engineType?: string;
+  };
+}
+
+export type DisplayMessageItem =
+  | { kind: 'single'; message: MessageItem }
+  | { kind: 'group'; id: string; messages: MessageItem[]; collapsed: boolean };
+
+export interface TaskMessagesResponse {
+  messages: MessageItem[];
+  has_more: boolean;
+  next_sequence: number | null;
 }

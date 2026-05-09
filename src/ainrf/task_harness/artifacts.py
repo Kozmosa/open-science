@@ -300,7 +300,7 @@ def task_configuration_from_payload(payload: dict[str, Any]) -> TaskConfiguratio
 
 
 def research_agent_profile_payload(profile: ResearchAgentProfileSnapshot) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "profile_id": profile.profile_id,
         "label": profile.label,
         "system_prompt": profile.system_prompt,
@@ -309,12 +309,38 @@ def research_agent_profile_payload(profile: ResearchAgentProfileSnapshot) -> dic
         "settings_json": profile.settings_json,
         "settings_artifact_path": profile.settings_artifact_path,
     }
+    if profile.model is not None:
+        payload["model"] = profile.model
+    if profile.permission_mode is not None:
+        payload["permission_mode"] = profile.permission_mode
+    if profile.max_turns is not None:
+        payload["max_turns"] = profile.max_turns
+    if profile.max_budget_usd is not None:
+        payload["max_budget_usd"] = profile.max_budget_usd
+    if profile.mcp_servers is not None:
+        payload["mcp_servers"] = profile.mcp_servers
+    if profile.disallowed_tools is not None:
+        payload["disallowed_tools"] = profile.disallowed_tools
+    if profile.api_base_url is not None:
+        payload["api_base_url"] = profile.api_base_url
+    if profile.api_key is not None:
+        payload["api_key"] = profile.api_key
+    if profile.default_opus_model is not None:
+        payload["default_opus_model"] = profile.default_opus_model
+    if profile.default_sonnet_model is not None:
+        payload["default_sonnet_model"] = profile.default_sonnet_model
+    if profile.default_haiku_model is not None:
+        payload["default_haiku_model"] = profile.default_haiku_model
+    if profile.env_overrides is not None:
+        payload["env_overrides"] = profile.env_overrides
+    return payload
 
 
 def research_agent_profile_from_payload(payload: dict[str, Any]) -> ResearchAgentProfileSnapshot:
     settings_json = payload.get("settings_json")
     skills_raw = payload.get("skills", [])
     skills = [str(s) for s in skills_raw] if isinstance(skills_raw, list) else []
+    env_overrides = payload.get("env_overrides")
     return ResearchAgentProfileSnapshot(
         profile_id=str(payload["profile_id"]),
         label=str(payload["label"]),
@@ -323,6 +349,18 @@ def research_agent_profile_from_payload(payload: dict[str, Any]) -> ResearchAgen
         skills_prompt=payload.get("skills_prompt"),
         settings_json=dict(settings_json) if isinstance(settings_json, dict) else None,
         settings_artifact_path=payload.get("settings_artifact_path"),
+        model=payload.get("model"),
+        permission_mode=payload.get("permission_mode"),
+        max_turns=payload.get("max_turns"),
+        max_budget_usd=payload.get("max_budget_usd"),
+        mcp_servers=payload.get("mcp_servers"),
+        disallowed_tools=payload.get("disallowed_tools"),
+        api_base_url=payload.get("api_base_url"),
+        api_key=payload.get("api_key"),
+        default_opus_model=payload.get("default_opus_model"),
+        default_sonnet_model=payload.get("default_sonnet_model"),
+        default_haiku_model=payload.get("default_haiku_model"),
+        env_overrides=dict(env_overrides) if isinstance(env_overrides, dict) else None,
     )
 
 

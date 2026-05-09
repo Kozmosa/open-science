@@ -246,6 +246,12 @@ function TaskConfigurationSection({
       skillModes: {},
       skillsPrompt: '',
       settingsJson: '',
+      apiBaseUrl: '',
+      apiKey: '',
+      defaultOpusModel: '',
+      defaultSonnetModel: '',
+      defaultHaikuModel: '',
+      envOverrides: '',
     }
   );
   const [defaultProfileId, setDefaultProfileId] = useState(
@@ -297,6 +303,7 @@ function TaskConfigurationSection({
           >
             <option value="claude-code">Claude Code</option>
             <option value="kimi-claude-code">Kimi Claude Code</option>
+            <option value="agent-sdk">Claude Agent</option>
           </Select>
         </FormField>
 
@@ -394,6 +401,77 @@ function TaskConfigurationSection({
             className="min-h-16"
           />
         </FormField>
+
+        {taskConfiguration.defaultExecutionEngineId === 'agent-sdk' && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label={t('pages.settings.taskConfiguration.apiBaseUrlLabel')}>
+                <Input
+                  aria-label={t('pages.settings.taskConfiguration.apiBaseUrlLabel')}
+                  value={profileDraft.apiBaseUrl}
+                  onChange={(event) =>
+                    setProfileDraft((current) => ({ ...current, apiBaseUrl: event.target.value }))
+                  }
+                  placeholder="https://api.anthropic.com/"
+                />
+              </FormField>
+              <FormField label={t('pages.settings.taskConfiguration.apiKeyLabel')}>
+                <Input
+                  aria-label={t('pages.settings.taskConfiguration.apiKeyLabel')}
+                  type="password"
+                  value={profileDraft.apiKey}
+                  onChange={(event) =>
+                    setProfileDraft((current) => ({ ...current, apiKey: event.target.value }))
+                  }
+                  placeholder="sk-..."
+                />
+              </FormField>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <FormField label={t('pages.settings.taskConfiguration.defaultOpusModelLabel')}>
+                <Input
+                  aria-label={t('pages.settings.taskConfiguration.defaultOpusModelLabel')}
+                  value={profileDraft.defaultOpusModel}
+                  onChange={(event) =>
+                    setProfileDraft((current) => ({ ...current, defaultOpusModel: event.target.value }))
+                  }
+                  placeholder="claude-opus-4-7"
+                />
+              </FormField>
+              <FormField label={t('pages.settings.taskConfiguration.defaultSonnetModelLabel')}>
+                <Input
+                  aria-label={t('pages.settings.taskConfiguration.defaultSonnetModelLabel')}
+                  value={profileDraft.defaultSonnetModel}
+                  onChange={(event) =>
+                    setProfileDraft((current) => ({ ...current, defaultSonnetModel: event.target.value }))
+                  }
+                  placeholder="claude-sonnet-4-6"
+                />
+              </FormField>
+              <FormField label={t('pages.settings.taskConfiguration.defaultHaikuModelLabel')}>
+                <Input
+                  aria-label={t('pages.settings.taskConfiguration.defaultHaikuModelLabel')}
+                  value={profileDraft.defaultHaikuModel}
+                  onChange={(event) =>
+                    setProfileDraft((current) => ({ ...current, defaultHaikuModel: event.target.value }))
+                  }
+                  placeholder="claude-haiku-4-5"
+                />
+              </FormField>
+            </div>
+            <FormField label={t('pages.settings.taskConfiguration.envOverridesLabel')}>
+              <Textarea
+                aria-label={t('pages.settings.taskConfiguration.envOverridesLabel')}
+                value={profileDraft.envOverrides}
+                onChange={(event) =>
+                  setProfileDraft((current) => ({ ...current, envOverrides: event.target.value }))
+                }
+                className="min-h-20 font-mono text-xs"
+                placeholder={'{\n  "CUSTOM_VAR": "value"\n}'}
+              />
+            </FormField>
+          </>
+        )}
 
         <FormField label={t('pages.settings.taskConfiguration.settingsJsonLabel')}>
           <Textarea

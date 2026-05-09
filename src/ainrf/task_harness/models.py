@@ -9,6 +9,7 @@ class TaskHarnessStatus(StrEnum):
     QUEUED = "queued"
     STARTING = "starting"
     RUNNING = "running"
+    PAUSED = "paused"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -19,6 +20,10 @@ class TaskOutputKind(StrEnum):
     STDERR = "stderr"
     SYSTEM = "system"
     LIFECYCLE = "lifecycle"
+    MESSAGE = "message"
+    THINKING = "thinking"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
 
 
 class TaskConfigurationMode(StrEnum):
@@ -38,6 +43,18 @@ class ResearchAgentProfileSnapshot:
     skills_prompt: str | None
     settings_json: dict[str, object] | None
     settings_artifact_path: str | None = None
+    model: str | None = None
+    permission_mode: str | None = None
+    max_turns: int | None = None
+    max_budget_usd: float | None = None
+    mcp_servers: dict[str, object] | None = None
+    disallowed_tools: list[str] | None = None
+    api_base_url: str | None = None
+    api_key: str | None = None
+    default_opus_model: str | None = None
+    default_sonnet_model: str | None = None
+    default_haiku_model: str | None = None
+    env_overrides: dict[str, str] | None = None
 
 
 @dataclass(slots=True)
@@ -171,6 +188,7 @@ class TaskOutputEvent:
 class TaskOutputPage:
     items: list[TaskOutputEvent]
     next_seq: int
+    has_more: bool = False
 
 
 @dataclass(slots=True)
@@ -180,3 +198,15 @@ class TaskEdge:
     source_task_id: str
     target_task_id: str
     created_at: datetime
+
+
+class TaskHarnessError(RuntimeError):
+    """Base error for task harness operations."""
+
+
+class TaskHarnessNotFoundError(TaskHarnessError):
+    """Task or related resource not found."""
+
+
+class TaskHarnessOutputStoreError(TaskHarnessError):
+    """Error reading or writing task output events."""

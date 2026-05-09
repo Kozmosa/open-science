@@ -56,6 +56,12 @@ export function createDefaultResearchAgentProfile(): ResearchAgentProfileSetting
     skillModes: {},
     skillsPrompt: '',
     settingsJson: '{\n  "permissions": {\n    "allow": ["Read", "Grep"]\n  }\n}',
+    apiBaseUrl: '',
+    apiKey: '',
+    defaultOpusModel: '',
+    defaultSonnetModel: '',
+    defaultHaikuModel: '',
+    envOverrides: '',
   };
 }
 
@@ -84,6 +90,30 @@ export function createKimiResearchAgentProfile(): ResearchAgentProfileSettings {
       null,
       2
     ),
+    apiBaseUrl: 'https://api.kimi.com/coding/',
+    apiKey: '',
+    defaultOpusModel: 'kimi-for-coding',
+    defaultSonnetModel: 'kimi-for-coding',
+    defaultHaikuModel: 'kimi-for-coding',
+    envOverrides: '',
+  };
+}
+
+export function createAgentSdkResearchAgentProfile(): ResearchAgentProfileSettings {
+  return {
+    profileId: 'agent-sdk-default',
+    label: 'Claude Agent Default',
+    systemPrompt: '',
+    skills: [],
+    skillModes: {},
+    skillsPrompt: '',
+    settingsJson: '',
+    apiBaseUrl: '',
+    apiKey: '',
+    defaultOpusModel: '',
+    defaultSonnetModel: '',
+    defaultHaikuModel: '',
+    envOverrides: '',
   };
 }
 
@@ -123,6 +153,7 @@ export function createDefaultTaskConfigurationSettings(): TaskConfigurationSetti
     researchAgentProfiles: [
       createDefaultResearchAgentProfile(),
       createKimiResearchAgentProfile(),
+      createAgentSdkResearchAgentProfile(),
     ],
     taskConfigurations: createDefaultTaskConfigurations(),
     defaultResearchAgentProfileId,

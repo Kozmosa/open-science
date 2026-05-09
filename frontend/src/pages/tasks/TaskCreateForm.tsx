@@ -161,7 +161,7 @@ export default function TaskCreateForm({
           task_profile: draft.task_profile,
           task_input: effectiveTaskInput.trim(),
           title: draft.title.trim() || undefined,
-          execution_engine: 'claude-code',
+          execution_engine: draft.task_profile,
           auto_connect: true,
           research_agent_profile: selectedResearchAgentProfile
             ? {
@@ -171,6 +171,19 @@ export default function TaskCreateForm({
                 skills: Object.keys(draft.skillModes).filter((id) => draft.skillModes[id] === 'enabled'),
                 skills_prompt: selectedResearchAgentProfile.skillsPrompt || null,
                 settings_json,
+                api_base_url: selectedResearchAgentProfile.apiBaseUrl || null,
+                api_key: selectedResearchAgentProfile.apiKey || null,
+                default_opus_model: selectedResearchAgentProfile.defaultOpusModel || null,
+                default_sonnet_model: selectedResearchAgentProfile.defaultSonnetModel || null,
+                default_haiku_model: selectedResearchAgentProfile.defaultHaikuModel || null,
+                env_overrides: (() => {
+                  if (!selectedResearchAgentProfile.envOverrides.trim()) return null;
+                  try {
+                    return JSON.parse(selectedResearchAgentProfile.envOverrides) as Record<string, string>;
+                  } catch {
+                    return null;
+                  }
+                })(),
               }
             : null,
           task_configuration:
@@ -315,6 +328,7 @@ export default function TaskCreateForm({
           }
         >
           <option value="claude-code">claude-code</option>
+          <option value="agent-sdk">agent-sdk</option>
         </Select>
       </label>
 

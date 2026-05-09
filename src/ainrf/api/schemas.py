@@ -33,6 +33,7 @@ class TaskStatus(StrEnum):
     QUEUED = "queued"
     STARTING = "starting"
     RUNNING = "running"
+    PAUSED = "paused"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -387,6 +388,12 @@ class ResearchAgentProfileSnapshotRequest(BaseModel):
     skills: list[str] = Field(default_factory=list)
     skills_prompt: str | None = None
     settings_json: dict[str, Any] | None = None
+    api_base_url: str | None = None
+    api_key: str | None = None
+    default_opus_model: str | None = None
+    default_sonnet_model: str | None = None
+    default_haiku_model: str | None = None
+    env_overrides: dict[str, str] | None = None
 
 
 class TaskConfigurationSnapshotRequest(BaseModel):
@@ -571,6 +578,18 @@ class ResearchAgentProfileSnapshotResponse(BaseModel):
     skills_prompt: str | None = None
     settings_json: dict[str, Any] | None = None
     settings_artifact_path: str | None = None
+    model: str | None = None
+    permission_mode: str | None = None
+    max_turns: int | None = None
+    max_budget_usd: float | None = None
+    mcp_servers: dict[str, Any] | None = None
+    disallowed_tools: list[str] | None = None
+    api_base_url: str | None = None
+    api_key: str | None = None
+    default_opus_model: str | None = None
+    default_sonnet_model: str | None = None
+    default_haiku_model: str | None = None
+    env_overrides: dict[str, str] | None = None
 
 
 class TaskConfigurationSnapshotResponse(BaseModel):
@@ -720,7 +739,46 @@ class FileUploadResponse(BaseModel):
     size: int
 
 
+class TaskPauseResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task_id: str
+    status: str
+
+
+class TaskResumeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task_id: str
+    status: str
+
+
+class TaskPromptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    prompt: str = Field(min_length=1)
+
+
+class TaskPromptSendResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task_id: str
+    sequence: int
+
+
+class MessageItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    type: str
+    content: str | dict[str, Any]
+    metadata: dict[str, Any]
+
+
+class TaskMessagesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    messages: list[MessageItemResponse]
+    has_more: bool
+    next_sequence: int | None = None
+
+
 # --- Skill Registry Schemas ---
+
 
 class SkillRegistryItemResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")

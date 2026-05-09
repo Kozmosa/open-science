@@ -95,28 +95,42 @@ export default function TaskList({
                   </span>
                   <span className="flex items-center gap-2">
                     {canCancel(task.status) ? (
-                      <button
-                        type="button"
+                      <span
+                        role="button"
+                        tabIndex={0}
                         onClick={(event) => {
                           event.stopPropagation();
                           onCancelTask(task.task_id);
                         }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.stopPropagation();
+                            onCancelTask(task.task_id);
+                          }
+                        }}
                         className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.cancel')}
-                      </button>
+                      </span>
                     ) : null}
                     {canArchive(task.status) ? (
-                      <button
-                        type="button"
+                      <span
+                        role="button"
+                        tabIndex={0}
                         onClick={(event) => {
                           event.stopPropagation();
                           onArchiveTask(task.task_id);
                         }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.stopPropagation();
+                            onArchiveTask(task.task_id);
+                          }
+                        }}
                         className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.archive')}
-                      </button>
+                      </span>
                     ) : null}
                     <span
                       className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClassName[task.status]}`}

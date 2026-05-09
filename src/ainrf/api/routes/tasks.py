@@ -14,8 +14,11 @@ from ainrf.api.schemas import (
     TaskEdgeListResponse,
     TaskEdgeResponse,
     TaskListResponse,
+    TaskMessagesResponse,
     TaskOutputEventResponse,
     TaskOutputListResponse,
+    TaskPromptRequest,
+    TaskPromptSendResponse,
     TaskSummaryResponse,
 )
 from ainrf.task_harness import (
@@ -135,6 +138,92 @@ def _serialize_output_page(page: TaskOutputPage) -> dict[str, Any]:
     }
 
 
+def _convert_output_event_to_message(item: Any) -> dict[str, Any] | None:
+    import json
+
+    try:
+        payload = (
+            json.loads(item.content) if item.content.startswith("{") else {"content": item.content}
+        )
+    except json.JSONDecodeError:
+        payload = {"content": item.content}
+
+    msg_id = f"{item.task_id}-{item.seq}"
+    kind = item.kind.value if hasattr(item.kind, "value") else str(item.kind)
+
+    if kind == "message":
+        role = payload.get("role", "assistant")
+        return {
+            "id": msg_id,
+            "type": role,
+            "content": payload.get("content", ""),
+            "metadata": {"timestamp": item.created_at.isoformat(), "sequence": item.seq},
+        }
+    elif kind == "thinking":
+        return {
+            "id": msg_id,
+            "type": "thinking",
+            "content": payload.get("content", ""),
+            "metadata": {
+                "timestamp": item.created_at.isoformat(),
+                "sequence": item.seq,
+                "isFolded": True,
+            },
+        }
+    elif kind == "tool_call":
+        return {
+            "id": msg_id,
+            "type": "tool_call",
+            "content": {"name": payload.get("name"), "arguments": payload.get("arguments")},
+            "metadata": {
+                "timestamp": item.created_at.isoformat(),
+                "sequence": item.seq,
+                "isFolded": True,
+            },
+        }
+    elif kind == "tool_result":
+        return {
+            "id": msg_id,
+            "type": "tool_result",
+            "content": {
+                "tool_use_id": payload.get("tool_use_id"),
+                "content": payload.get("content"),
+            },
+            "metadata": {
+                "timestamp": item.created_at.isoformat(),
+                "sequence": item.seq,
+                "isFolded": True,
+            },
+        }
+    elif kind in ("system", "lifecycle"):
+        return {
+            "id": msg_id,
+            "type": "system_event",
+            "content": payload.get("subtype") or payload.get("content", kind),
+            "metadata": {
+                "timestamp": item.created_at.isoformat(),
+                "sequence": item.seq,
+                "payload": payload,
+            },
+        }
+    elif kind == "stdout":
+        return {
+            "id": msg_id,
+            "type": "assistant",
+            "content": payload.get("content", item.content),
+            "metadata": {"timestamp": item.created_at.isoformat(), "sequence": item.seq},
+        }
+    elif kind == "stderr":
+        return {
+            "id": msg_id,
+            "type": "system_event",
+            "content": f"[stderr] {payload.get('content', item.content)}",
+            "metadata": {"timestamp": item.created_at.isoformat(), "sequence": item.seq},
+        }
+
+    return None
+
+
 @router.get("", response_model=TaskListResponse)
 async def list_tasks(
     request: Request,
@@ -236,7 +325,7 @@ async def stream_task_output(
                 next_seq = page.next_seq
                 continue
             task = service.get_task(task_id)
-            if task.status.value in {"succeeded", "failed"} and next_seq >= task.latest_output_seq:
+            if task.status.value in {"succeeded", "failed", "cancelled"} and next_seq >= task.latest_output_seq:
                 return
             yield ": keep-alive\n\n"
             await asyncio.sleep(1.0)
@@ -262,6 +351,64 @@ async def cancel_task(task_id: str, request: Request) -> TaskSummaryResponse:
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@router.post("/{task_id}/pause", response_model=TaskSummaryResponse)
+async def pause_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    service = _get_task_harness_service(request)
+    try:
+        task = await service.pause_task(task_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@router.post("/{task_id}/resume", response_model=TaskSummaryResponse)
+async def resume_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    service = _get_task_harness_service(request)
+    try:
+        task = await service.resume_task(task_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@router.post("/{task_id}/prompt", response_model=TaskPromptSendResponse)
+async def send_task_prompt(
+    task_id: str, payload: TaskPromptRequest, request: Request
+) -> TaskPromptSendResponse:
+    service = _get_task_harness_service(request)
+    try:
+        seq = await service.send_prompt(task_id, payload.prompt)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskPromptSendResponse(task_id=task_id, sequence=seq)
+
+
+@router.get("/{task_id}/messages", response_model=TaskMessagesResponse)
+async def get_task_messages(
+    task_id: str,
+    request: Request,
+    after_seq: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> TaskMessagesResponse:
+    service = _get_task_harness_service(request)
+    try:
+        page = service.get_output(task_id, after_seq=after_seq, limit=limit)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+
+    messages = []
+    for item in page.items:
+        msg = _convert_output_event_to_message(item)
+        if msg is not None:
+            messages.append(msg)
+
+    return TaskMessagesResponse(
+        messages=messages,
+        has_more=page.has_more,
+        next_sequence=page.next_seq if page.has_more else None,
+    )
 
 
 @task_edges_router.get("/projects/{project_id}/task-edges", response_model=TaskEdgeListResponse)

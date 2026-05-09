@@ -42,6 +42,7 @@ import type {
   TaskEdge,
   TaskEdgeCreateRequest,
   TaskEdgeListResponse,
+  TaskMessagesResponse,
 } from '../types';
 import {
   mockArchiveTask,
@@ -261,6 +262,18 @@ export const buildTaskStreamUrl = (taskId: string, afterSeq: number = 0): string
   }
   return `${API_BASE}/tasks/${taskId}/stream?${search.toString()}`;
 };
+
+export const pauseTask = (taskId: string): Promise<TaskSummary> =>
+  api.post<TaskSummary>(`/tasks/${taskId}/pause`, {});
+
+export const resumeTask = (taskId: string): Promise<TaskSummary> =>
+  api.post<TaskSummary>(`/tasks/${taskId}/resume`, {});
+
+export const sendTaskPrompt = (taskId: string, prompt: string): Promise<{ task_id: string; sequence: number }> =>
+  api.post<{ task_id: string; sequence: number }>(`/tasks/${taskId}/prompt`, { prompt });
+
+export const getTaskMessages = (taskId: string, afterSeq: number = 0, limit: number = 100): Promise<TaskMessagesResponse> =>
+  api.get<TaskMessagesResponse>(`/tasks/${taskId}/messages?after_seq=${afterSeq}&limit=${limit}`);
 
 export const getCodeServerStatus = (environmentId?: string): Promise<CodeServerStatus> =>
   USE_MOCK

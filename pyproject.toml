@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
   "asyncssh>=2.21.1",
-  "claude-code-sdk>=0.0.14",
+  "claude_agent_sdk>=0.1.77",
   "fastapi>=0.116.1",
   "httpx>=0.28.1",
   "mkdocs>=1.6.0",

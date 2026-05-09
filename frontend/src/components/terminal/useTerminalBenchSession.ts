@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createTerminalSession,
@@ -34,6 +34,8 @@ export interface TerminalBenchSessionState {
   onDetach: () => void;
   onReset: () => void;
   onTerminalDisconnected: () => void;
+  consoleExpanded: boolean;
+  onToggleConsole: () => void;
 }
 
 function getErrorMessage(error: unknown): string | null {
@@ -68,6 +70,7 @@ export function useTerminalBenchSession(
   const selectedEnvironmentId = selectedEnvironment?.id ?? null;
   const previousEnvironmentIdRef = useRef<string | null>(selectedEnvironmentId);
   const attachRequestKeyRef = useRef<string | null>(null);
+  const [consoleExpanded, setConsoleExpanded] = useState(false);
 
   const terminalQuery = useQuery({
     queryKey: [...terminalSessionQueryKey, selectedEnvironmentId],
@@ -187,6 +190,7 @@ export function useTerminalBenchSession(
       if (selectedEnvironmentId === null) {
         return;
       }
+      setConsoleExpanded(true);
       requestAttach(selectedEnvironmentId, session);
     },
     onDetach: () => {
@@ -216,5 +220,7 @@ export function useTerminalBenchSession(
         queryKey: [...terminalSessionQueryKey, selectedEnvironmentId],
       });
     },
+    consoleExpanded,
+    onToggleConsole: () => setConsoleExpanded((c) => !c),
   };
 }

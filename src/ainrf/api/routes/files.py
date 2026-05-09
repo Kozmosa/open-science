@@ -41,7 +41,9 @@ async def list_files(
     request: Request,
     environment_id: str = Query(..., description="Target environment ID"),
     path: str = Query(default="", description="Directory path relative to workspace root"),
-    workspace_id: str | None = Query(default=None, description="Optional workspace ID to override workdir"),
+    workspace_id: str | None = Query(
+        default=None, description="Optional workspace ID to override workdir"
+    ),
 ) -> FileListResponse:
     service = _get_file_browser_service(request)
     try:
@@ -68,7 +70,9 @@ async def read_file(
     request: Request,
     environment_id: str = Query(..., description="Target environment ID"),
     path: str = Query(..., description="File path relative to workspace root"),
-    workspace_id: str | None = Query(default=None, description="Optional workspace ID to override workdir"),
+    workspace_id: str | None = Query(
+        default=None, description="Optional workspace ID to override workdir"
+    ),
 ) -> FileReadResponse:
     service = _get_file_browser_service(request)
     try:

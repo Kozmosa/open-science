@@ -56,10 +56,7 @@ class WorkspaceRegistryService:
                     for item in payload.get("items", [])
                 }
                 # Migration: persist if any workspace was missing project_id
-                if any(
-                    "project_id" not in item
-                    for item in payload.get("items", [])
-                ):
+                if any("project_id" not in item for item in payload.get("items", [])):
                     self._persist()
             if not self._workspaces:
                 seed = self._build_seed_workspace()

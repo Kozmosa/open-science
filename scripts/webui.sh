@@ -70,6 +70,57 @@ PY
 
 mkdir -p "${HOME}/.ainrf"
 
+# Pre-launch cleanup: kill stale ainrf backend and vite frontend processes
+echo "Checking for stale processes..."
+
+# Kill any process still listening on the backend port
+if command -v lsof &>/dev/null; then
+  stale_pids=$(lsof -ti:8000 2>/dev/null || true)
+  if [[ -n "${stale_pids}" ]]; then
+    echo "Stopping stale backend on port 8000..."
+    kill ${stale_pids} 2>/dev/null || true
+    sleep 1
+    stale_pids=$(lsof -ti:8000 2>/dev/null || true)
+    if [[ -n "${stale_pids}" ]]; then
+      kill -9 ${stale_pids} 2>/dev/null || true
+      sleep 1
+    fi
+  fi
+fi
+
+# Kill vite dev-server processes that were started from this project's frontend directory
+# Linux: inspect /proc/{pid}/cwd and cmdline
+if [[ -d /proc ]]; then
+  for pid in $(pgrep -x node 2>/dev/null || true); do
+    if [[ -r "/proc/${pid}/cwd" ]]; then
+      cwd=$(readlink "/proc/${pid}/cwd" 2>/dev/null || true)
+      if [[ "${cwd}" == "${REPO_ROOT}/frontend" ]]; then
+        cmdline=$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)
+        if [[ "${cmdline}" == *"vite"* ]]; then
+          echo "Stopping stale frontend dev server (pid ${pid})..."
+          kill "${pid}" 2>/dev/null || true
+        fi
+      fi
+    fi
+  done
+fi
+
+# macOS fallback: kill any vite process whose cwd matches our frontend dir via lsof +Apple
+if [[ "$(uname -s)" == "Darwin" ]] && command -v lsof &>/dev/null; then
+  for pid in $(pgrep -x node 2>/dev/null || true); do
+    cwd=$(lsof -a -p "${pid}" -d cwd 2>/dev/null | awk 'NR==2{print $NF}' || true)
+    if [[ "${cwd}" == "${REPO_ROOT}/frontend" ]]; then
+      cmdline=$(ps -p "${pid}" -o command= 2>/dev/null || true)
+      if [[ "${cmdline}" == *"vite"* ]]; then
+        echo "Stopping stale frontend dev server (pid ${pid})..."
+        kill "${pid}" 2>/dev/null || true
+      fi
+    fi
+  done
+fi
+
+sleep 1
+
 BACKEND_COMMAND=(
   uv
   run
