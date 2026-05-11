@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import type { FitAddon } from '@xterm/addon-fit';
-import type { Terminal } from 'xterm';
+import type { Terminal } from '@xterm/xterm';
 
 type ResizeMessage = { type: 'resize'; cols: number; rows: number };
 

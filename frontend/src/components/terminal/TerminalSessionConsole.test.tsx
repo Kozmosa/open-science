@@ -221,7 +221,7 @@ const terminalMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('xterm', () => ({
+vi.mock('@xterm/xterm', () => ({
   Terminal: terminalMocks.MockTerminal,
 }));
 
