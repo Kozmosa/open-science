@@ -45,6 +45,7 @@ fi
 info "Installing backend dependencies ..."
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
 (cd "${REPO_ROOT}" && uv sync)
+(cd "${REPO_ROOT}" && uv pip install -e .)
 info "Backend dependencies installed."
 
 # ── Frontend (Node via npm) ──────────────────────────────────────────
