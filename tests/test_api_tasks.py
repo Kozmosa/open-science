@@ -493,6 +493,16 @@ async def test_create_task_with_kimi_engine(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
+        kimi_settings = {
+            "env": {
+                "ANTHROPIC_AUTH_TOKEN": "sk-xxxx",
+                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-for-coding",
+            },
+            "model": "kimi-for-coding",
+        }
         response = await client.post(
             "/tasks",
             headers=API_HEADERS,
@@ -502,11 +512,23 @@ async def test_create_task_with_kimi_engine(
                 "task_profile": "claude-code",
                 "execution_engine": "kimi-claude-code",
                 "task_input": "Run with Kimi.",
+                "research_agent_profile": {
+                    "profile_id": "kimi-claude-code-default",
+                    "label": "Kimi Claude Code Default",
+                    "settings_json": kimi_settings,
+                },
             },
         )
         assert response.status_code == 201
         created = response.json()
         assert created["execution_engine"] == "claude-code"
+
+        task_dir = tmp_path / "runtime" / "task-harness" / "tasks" / created["task_id"]
+        settings_path = task_dir / "claude-settings.json"
+        assert settings_path.exists()
+        data = json.loads(settings_path.read_text())
+        assert data["env"]["ANTHROPIC_BASE_URL"] == "https://api.kimi.com/coding/"
+        assert data["model"] == "kimi-for-coding"
 
 
 @pytest.mark.anyio
