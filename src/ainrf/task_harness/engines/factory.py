@@ -5,7 +5,6 @@ from .base import ExecutionEngine
 
 _ENGINES: dict[str, str] = {
     "claude-code": "ainrf.task_harness.engines.claude_code:ClaudeCodeEngine",
-    "kimi-claude-code": "ainrf.task_harness.engines.claude_code:ClaudeCodeEngine",
     "agent-sdk": "ainrf.task_harness.engines.agent_sdk:AgentSdkEngine",
 }
 
@@ -21,7 +20,5 @@ def get_engine(name: str) -> ExecutionEngine:
     engine_cls = getattr(module, class_name)
     instance = engine_cls()
     if not isinstance(instance, ExecutionEngine):
-        raise TypeError(
-            f"Engine {name!r} ({spec}) does not implement ExecutionEngine"
-        )
+        raise TypeError(f"Engine {name!r} ({spec}) does not implement ExecutionEngine")
     return instance

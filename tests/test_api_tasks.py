@@ -506,15 +506,7 @@ async def test_create_task_with_kimi_engine(
         )
         assert response.status_code == 201
         created = response.json()
-        assert created["execution_engine"] == "kimi-claude-code"
-
-        # Verify claude-settings.json contains Kimi endpoint
-        task_dir = tmp_path / "runtime" / "task-harness" / "tasks" / created["task_id"]
-        settings_path = task_dir / "claude-settings.json"
-        assert settings_path.exists()
-        data = json.loads(settings_path.read_text())
-        assert data["env"]["ANTHROPIC_BASE_URL"] == "https://api.kimi.com/coding/"
-        assert data["model"] == "kimi-for-coding"
+        assert created["execution_engine"] == "claude-code"
 
 
 @pytest.mark.anyio

@@ -79,7 +79,7 @@ _FINAL_STATUSES = {
 }
 _TASK_PROFILE = "claude-code"
 _EXECUTION_ENGINE = "claude-code"
-_SUPPORTED_ENGINES = {"claude-code", "kimi-claude-code", "agent-sdk"}
+_SUPPORTED_ENGINES = {"claude-code", "agent-sdk"}
 _ARIS_SKILL_REQUIREMENTS: dict[TaskConfigurationMode, list[str]] = {
     TaskConfigurationMode.REPRODUCE_BASELINE: ["research-pipeline"],
     TaskConfigurationMode.DISCOVER_IDEAS: ["research-lit"],
@@ -203,6 +203,14 @@ class TaskHarnessService:
             )
             connection.execute(
                 """
+                UPDATE task_harness_tasks
+                SET execution_engine = 'claude-code'
+                WHERE execution_engine = 'kimi-claude-code'
+                """
+            )
+            connection.commit()
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS task_harness_edges (
                     edge_id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,
@@ -261,6 +269,8 @@ class TaskHarnessService:
         if task_profile != _TASK_PROFILE:
             raise TaskHarnessError(f"Unsupported task profile: {task_profile}")
         resolved_execution_engine = execution_engine or _EXECUTION_ENGINE
+        if resolved_execution_engine == "kimi-claude-code":
+            resolved_execution_engine = "claude-code"
         if resolved_execution_engine not in _SUPPORTED_ENGINES:
             raise TaskHarnessError(f"Unsupported execution engine: {resolved_execution_engine}")
         workspace = self._workspace_service.get_workspace(workspace_id)
@@ -270,7 +280,6 @@ class TaskHarnessService:
         settings_artifact_path = write_claude_settings_artifact(
             claude_settings_path(task_dir),
             profile_snapshot.settings_json,
-            resolved_execution_engine,
         )
         if settings_artifact_path is not None:
             profile_snapshot.settings_artifact_path = settings_artifact_path
@@ -648,8 +657,12 @@ class TaskHarnessService:
             configuration_snapshot = _load_task_configuration(task_dir, row["task_input"])
             execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
             binding = TaskBindingSummary(
-                workspace=workspace_summary(self._workspace_service.get_workspace(row["workspace_id"])),
-                environment=environment_summary(self._environment_service.get_environment(row["environment_id"])),
+                workspace=workspace_summary(
+                    self._workspace_service.get_workspace(row["workspace_id"])
+                ),
+                environment=environment_summary(
+                    self._environment_service.get_environment(row["environment_id"])
+                ),
                 task_profile=row["task_profile"],
                 title=row["title"],
                 task_input=row["task_input"],
@@ -773,6 +786,8 @@ class TaskHarnessService:
             configuration_snapshot = _load_task_configuration(task_dir, row["task_input"])
             resolved_workdir = _resolve_workdir(workspace, environment)
             resolved_execution_engine = row["execution_engine"] or _EXECUTION_ENGINE
+            if resolved_execution_engine == "kimi-claude-code":
+                resolved_execution_engine = "claude-code"
             write_binding_snapshot(
                 Path(row["binding_snapshot_path"]),
                 workspace=workspace,
@@ -1312,8 +1327,12 @@ def _normalize_research_agent_profile(
         permission_mode=_optional_str(payload.get("permission_mode")),
         max_turns=payload.get("max_turns"),
         max_budget_usd=payload.get("max_budget_usd"),
-        mcp_servers=payload.get("mcp_servers") if isinstance(payload.get("mcp_servers"), dict) else None,
-        disallowed_tools=[str(s) for s in dt] if isinstance((dt := payload.get("disallowed_tools")), list) else None,
+        mcp_servers=payload.get("mcp_servers")
+        if isinstance(payload.get("mcp_servers"), dict)
+        else None,
+        disallowed_tools=[str(s) for s in dt]
+        if isinstance((dt := payload.get("disallowed_tools")), list)
+        else None,
         api_base_url=_optional_str(payload.get("api_base_url")),
         api_key=_optional_str(payload.get("api_key")),
         default_opus_model=_optional_str(payload.get("default_opus_model")),

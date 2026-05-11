@@ -33,19 +33,7 @@ RESEARCH_AGENT_PROFILE_FILENAME = "research_agent_profile.json"
 CLAUDE_SETTINGS_FILENAME = "claude-settings.json"
 REMOTE_LAUNCH_FILENAME = "remote-launch.sh"
 DEFAULT_EXECUTION_ENGINE = "claude-code"
-KIMI_SETTINGS_TEMPLATE = {
-    "env": {
-        "ANTHROPIC_AUTH_TOKEN": "sk-xxxx",
-        "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-        "ENABLE_TOOL_SEARCH": "false",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-for-coding",
-        "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "400000",
-    },
-    "model": "kimi-for-coding",
-    "skipDangerousModePermissionPrompt": True,
-}
+
 DEFAULT_RESEARCH_AGENT_PROFILE = ResearchAgentProfileSnapshot(
     profile_id="claude-code-default",
     label="Claude Code Default",
@@ -167,12 +155,8 @@ def write_research_agent_profile_snapshot(
 def write_claude_settings_artifact(
     path: Path,
     settings_json: dict[str, object] | None,
-    execution_engine: str = DEFAULT_EXECUTION_ENGINE,
 ) -> str | None:
     if settings_json is None:
-        if execution_engine == "kimi-claude-code":
-            write_json(path, KIMI_SETTINGS_TEMPLATE)
-            return str(path)
         return None
     write_json(path, settings_json)
     return str(path)
