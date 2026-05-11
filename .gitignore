@@ -37,3 +37,9 @@ kimi-export-*.md
 
 # presentation build artifacts
 /docs/presentation/
+
+# LLM session artifacts
+session-*.md
+
+# paper scratch
+paper-test/
