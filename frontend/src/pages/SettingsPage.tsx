@@ -302,7 +302,6 @@ function TaskConfigurationSection({
             }
           >
             <option value="claude-code">Claude Code</option>
-            <option value="kimi-claude-code">Kimi Claude Code</option>
             <option value="agent-sdk">Claude Agent</option>
           </Select>
         </FormField>

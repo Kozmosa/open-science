@@ -14,7 +14,6 @@ import {
 import type {
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
-  ExecutionEngineId,
   ResearchAgentProfileSettings,
   SettingsRecoveryReason,
   TaskConfigurationMode,
@@ -182,8 +181,8 @@ function normalizeTaskConfigurationSettings(
   return {
     taskConfiguration: {
       defaultExecutionEngineId:
-        value.defaultExecutionEngineId === 'kimi-claude-code' || value.defaultExecutionEngineId === 'agent-sdk'
-          ? (value.defaultExecutionEngineId as ExecutionEngineId)
+        value.defaultExecutionEngineId === 'agent-sdk'
+          ? 'agent-sdk'
           : 'claude-code',
       researchAgentProfiles: researchAgentProfiles.length > 0 ? researchAgentProfiles : defaults.researchAgentProfiles,
       taskConfigurations: taskConfigurations.length > 0 ? taskConfigurations : defaults.taskConfigurations,

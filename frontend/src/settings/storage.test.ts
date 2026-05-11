@@ -167,6 +167,7 @@ describe('settings storage v2 task configuration', () => {
     );
 
     const result = readStoredSettings();
+    expect(result.settings.taskConfiguration.defaultExecutionEngineId).toBe('claude-code');
     const profile = result.settings.taskConfiguration.researchAgentProfiles[0]!;
     expect(profile.skillModes).toEqual({
       'web-search': 'auto',

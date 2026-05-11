@@ -1,6 +1,6 @@
 export type DefaultRoute = 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
 
-export type ExecutionEngineId = 'claude-code' | 'kimi-claude-code' | 'agent-sdk';
+export type ExecutionEngineId = 'claude-code' | 'agent-sdk';
 export type SkillMode = 'disabled' | 'enabled' | 'auto';
 export type TaskConfigurationMode = 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
 
