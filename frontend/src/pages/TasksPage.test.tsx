@@ -429,7 +429,7 @@ describe('TasksPage', () => {
     renderWithProviders(<TasksPage />);
 
     await screen.findByRole('heading', { name: 'Train model' });
-    const splitter = screen.getByRole('separator', { name: 'Resize task list' });
+    const splitter = screen.getByRole('separator', { name: 'Resize sidebar' });
     const sidebar = screen.getByTestId('task-sidebar');
 
     expect(sidebar).toHaveStyle({ width: '320px' });

@@ -16,6 +16,7 @@ import {
 import { Button, Modal } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
+import { SplitPane } from '../components/layout';
 import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
 import { extractErrorMessage } from '../utils/error';
 import type { TaskCreateRequest, TaskSummary } from '../types';
@@ -24,13 +25,6 @@ import TaskDetail from './tasks/TaskDetail';
 import TaskList from './tasks/TaskList';
 import { useTaskOutputStream } from './tasks/useTaskOutputStream';
 
-const taskSidebarMinWidth = 260;
-const taskSidebarMaxWidth = 520;
-const taskSidebarDefaultWidth = 320;
-
-function clampTaskSidebarWidth(width: number): number {
-  return Math.min(taskSidebarMaxWidth, Math.max(taskSidebarMinWidth, width));
-}
 
 function TasksPage() {
   const t = useT();
@@ -64,7 +58,7 @@ function TasksPage() {
   const [draftResetVersion, setDraftResetVersion] = useState(0);
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
-  const [taskSidebarWidth, setTaskSidebarWidth] = useState(taskSidebarDefaultWidth);
+  const [taskSidebarWidth, setTaskSidebarWidth] = useState(320);
   const createButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const requestedTaskId = searchParams.get('task');
@@ -181,44 +175,12 @@ function TasksPage() {
     window.setTimeout(() => createButtonRef.current?.focus(), 0);
   }, []);
 
-  const handleSplitterPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = taskSidebarWidth;
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        setTaskSidebarWidth(clampTaskSidebarWidth(startWidth + moveEvent.clientX - startX));
-      };
-      const handlePointerUp = () => {
-        window.removeEventListener('pointermove', handlePointerMove);
-        window.removeEventListener('pointerup', handlePointerUp);
-      };
-
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', handlePointerUp);
-    },
-    [taskSidebarWidth]
-  );
-
-  const handleSplitterKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-      return;
-    }
-    event.preventDefault();
-    const delta = event.key === 'ArrowLeft' ? -16 : 16;
-    setTaskSidebarWidth((width) => clampTaskSidebarWidth(width + delta));
-  }, []);
-
   return (
-    <div className="flex min-h-0 flex-1 bg-[var(--bg)] p-4">
-      <div className="flex min-h-0 w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-        <aside
-          data-testid="task-sidebar"
-          className="flex shrink-0 flex-col bg-[var(--sidebar)] p-3"
-          style={{ width: taskSidebarWidth }}
-        >
-          <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
+    <>
+      <SplitPane
+        sidebar={
+          <>
+            <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
                 {t('pages.tasks.sidebarEyebrow')}
@@ -270,32 +232,18 @@ function TasksPage() {
             onCancelTask={(taskId) => cancelMutation.mutate(taskId)}
             onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
           />
-        </aside>
-
-        <div
-          role="separator"
-          aria-label={t('pages.tasks.resizeTaskList')}
-          aria-orientation="vertical"
-          aria-valuemin={taskSidebarMinWidth}
-          aria-valuemax={taskSidebarMaxWidth}
-          aria-valuenow={taskSidebarWidth}
-          tabIndex={0}
-          onPointerDown={handleSplitterPointerDown}
-          onKeyDown={handleSplitterKeyDown}
-          className="group flex w-2 shrink-0 cursor-col-resize items-stretch justify-center bg-[var(--surface)] outline-none transition hover:bg-[var(--bg-secondary)] focus:bg-[var(--bg-secondary)]"
-        >
-          <span className="my-3 w-px rounded-full bg-[var(--border)] transition group-hover:bg-[var(--apple-blue)] group-focus:bg-[var(--apple-blue)]" />
-        </div>
-
-        <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] p-4">
-          <TaskDetail
-            selectedTask={selectedTask}
-            detailError={detailError}
-            outputItems={outputItems}
-            outputError={outputError}
-          />
-        </main>
-      </div>
+        </>}
+        sidebarWidth={taskSidebarWidth}
+        onSidebarWidthChange={setTaskSidebarWidth}
+        sidebarTestId="task-sidebar"
+      >
+        <TaskDetail
+          selectedTask={selectedTask}
+          detailError={detailError}
+          outputItems={outputItems}
+          outputError={outputError}
+        />
+      </SplitPane>
 
       <Modal
         isOpen={isCreateDialogOpen}
@@ -327,7 +275,7 @@ function TasksPage() {
           onClose={closeCreateDialog}
         />
       </Modal>
-    </div>
+    </>
   );
 }
 

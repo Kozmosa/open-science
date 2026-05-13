@@ -10,6 +10,7 @@ interface SplitPaneProps {
   sidebarMinWidth?: number;
   sidebarMaxWidth?: number;
   className?: string;
+  sidebarTestId?: string;
 }
 
 function clampWidth(width: number, min: number, max: number): number {
@@ -24,6 +25,7 @@ export default function SplitPane({
   sidebarMinWidth = 260,
   sidebarMaxWidth = 520,
   className,
+  sidebarTestId,
 }: SplitPaneProps) {
   const t = useT();
   const startRef = useRef({ x: 0, width: 0 });
@@ -69,6 +71,7 @@ export default function SplitPane({
         <aside
           className="flex shrink-0 flex-col bg-[var(--sidebar)] p-3"
           style={{ width: sidebarWidth }}
+          data-testid={sidebarTestId}
         >
           {sidebar}
         </aside>
