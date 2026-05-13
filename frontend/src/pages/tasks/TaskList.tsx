@@ -97,7 +97,7 @@ export default function TaskList({
                   <span className="min-w-0 text-sm font-medium leading-snug text-[var(--text)]">
                     {task.title}
                   </span>
-                  <span className="flex items-center gap-2">
+                  <span className="flex shrink-0 items-center gap-2">
                     {canCancel(task.status) ? (
                       <span
                         role="button"
@@ -112,7 +112,7 @@ export default function TaskList({
                             onCancelTask(task.task_id);
                           }
                         }}
-                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.cancel')}
                       </span>
@@ -131,7 +131,7 @@ export default function TaskList({
                             onArchiveTask(task.task_id);
                           }
                         }}
-                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.archive')}
                       </span>
@@ -150,7 +150,7 @@ export default function TaskList({
                             onDeleteTask(task.task_id);
                           }
                         }}
-                        className="rounded-md border border-[#ff3b30]/20 bg-[#ffebee] px-2 py-0.5 text-[11px] font-medium text-[#c62828] opacity-0 transition hover:bg-[#ffcdd2] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-md border border-[#ff3b30]/20 bg-[#ffebee] px-2 py-0.5 text-[11px] font-medium text-[#c62828] opacity-0 transition hover:bg-[#ffcdd2] group-hover:opacity-100"
                       >
                         {t('common.delete')}
                       </span>

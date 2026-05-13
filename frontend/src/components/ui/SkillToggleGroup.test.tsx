@@ -68,7 +68,7 @@ describe('SkillToggleGroup grouping', () => {
     expect(screen.getByText('Skill 2')).toBeInTheDocument();
   });
 
-  it('ungrouped bucket is expanded by default', () => {
+  it('all groups are collapsed by default', () => {
     render(
       <SkillToggleGroup
         skills={skills}
@@ -77,7 +77,7 @@ describe('SkillToggleGroup grouping', () => {
       />
     );
 
-    expect(screen.getByText('Skill 3')).toBeInTheDocument();
+    expect(screen.queryByText('Skill 3')).not.toBeInTheDocument();
   });
 
   it('individual skill toggle still works inside expanded group', () => {
@@ -90,7 +90,10 @@ describe('SkillToggleGroup grouping', () => {
       />
     );
 
-    // Click on Skill 3 (in ungrouped, expanded by default)
+    // Expand the ungrouped bucket first
+    fireEvent.click(screen.getByTestId('chevron-未分组'));
+
+    // Click on Skill 3 (in ungrouped)
     fireEvent.click(screen.getByText('Skill 3'));
 
     expect(onChange).toHaveBeenCalledWith(
