@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+import logging
 from collections import defaultdict
+from datetime import datetime
+from enum import StrEnum
 from getpass import getuser
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -72,6 +76,21 @@ def _current_system_user() -> str:
     return user or "root"
 
 
+logger = logging.getLogger(__name__)
+
+
+def _tool_status_to_dict(ts: ToolStatus) -> dict:
+    return {"available": ts.available, "version": ts.version, "path": ts.path}
+
+
+def _dict_to_tool_status(d: dict) -> ToolStatus:
+    return ToolStatus(
+        available=d.get("available", False),
+        version=d.get("version"),
+        path=d.get("path"),
+    )
+
+
 def _build_seed_environment(default_workdir: str | None = None) -> EnvironmentRegistryEntry:
     now = utc_now()
     return EnvironmentRegistryEntry(
@@ -101,14 +120,17 @@ class InMemoryEnvironmentService:
         self,
         default_local_workdir: str | None = None,
         project_service: ProjectRegistryService | None = None,
+        state_root: str | None = None,
     ) -> None:
         self._default_local_workdir = default_local_workdir
         self._project_service = project_service
+        self._state_root = state_root
         self._environments: dict[str, EnvironmentRegistryEntry] = {}
         self._detections: dict[str, list[DetectionSnapshot]] = defaultdict(list)
         self._project_refs: dict[str, dict[str, ProjectEnvironmentReference]] = defaultdict(dict)
         seed = _build_seed_environment(default_local_workdir)
         self._environments[seed.id] = seed
+        self._load_persisted_detections()
 
     def list_environments(self) -> list[EnvironmentRegistryEntry]:
         return list(self._environments.values())
@@ -267,6 +289,7 @@ class InMemoryEnvironmentService:
                     snapshot = failed_tmux_snapshot(environment, exc)
             self._detections[environment.id].append(snapshot)
             self._write_back_detected_runtime_config(environment, snapshot)
+            self._persist_detection(environment_id, snapshot)
             return snapshot
 
         try:
@@ -287,6 +310,7 @@ class InMemoryEnvironmentService:
                     snapshot = failed_tmux_snapshot(environment, exc)
         self._detections[environment.id].append(snapshot)
         self._write_back_detected_runtime_config(environment, snapshot)
+        self._persist_detection(environment_id, snapshot)
         return snapshot
 
     def get_latest_detection(self, environment_id: str) -> DetectionSnapshot | None:
@@ -417,6 +441,97 @@ class InMemoryEnvironmentService:
 
         if updated:
             environment.updated_at = utc_now()
+
+    def _persist_detection(
+        self, environment_id: str, snapshot: DetectionSnapshot
+    ) -> None:
+        if self._state_root is None:
+            return
+        detections_dir = Path(self._state_root) / "detections"
+        detections_dir.mkdir(parents=True, exist_ok=True)
+        file_path = detections_dir / f"{environment_id}.json"
+
+        def _default(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            if isinstance(obj, StrEnum):
+                return obj.value
+            if isinstance(obj, ToolStatus):
+                return _tool_status_to_dict(obj)
+            raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+        data = {
+            "environment_id": snapshot.environment_id,
+            "detected_at": snapshot.detected_at,
+            "status": snapshot.status,
+            "summary": snapshot.summary,
+            "errors": snapshot.errors,
+            "warnings": snapshot.warnings,
+            "ssh_ok": snapshot.ssh_ok,
+            "hostname": snapshot.hostname,
+            "os_info": snapshot.os_info,
+            "arch": snapshot.arch,
+            "workdir_exists": snapshot.workdir_exists,
+            "python": snapshot.python,
+            "conda": snapshot.conda,
+            "uv": snapshot.uv,
+            "pixi": snapshot.pixi,
+            "code_server": snapshot.code_server,
+            "torch": snapshot.torch,
+            "cuda": snapshot.cuda,
+            "gpu_models": snapshot.gpu_models,
+            "gpu_count": snapshot.gpu_count,
+            "claude_cli": snapshot.claude_cli,
+            "anthropic_env": snapshot.anthropic_env,
+        }
+        file_path.write_text(json.dumps(data, default=_default, indent=2))
+
+    def _load_persisted_detections(self) -> None:
+        if self._state_root is None:
+            return
+        detections_dir = Path(self._state_root) / "detections"
+        if not detections_dir.is_dir():
+            return
+
+        for file_path in sorted(detections_dir.glob("*.json")):
+            env_id = file_path.stem
+            try:
+                data = json.loads(file_path.read_text())
+            except Exception:
+                logger.warning("Failed to parse detection file: %s", file_path)
+                continue
+
+            try:
+                snapshot = DetectionSnapshot(
+                    environment_id=data["environment_id"],
+                    detected_at=datetime.fromisoformat(data["detected_at"]),
+                    status=DetectionStatus(data["status"]),
+                    summary=data["summary"],
+                    errors=data.get("errors", []),
+                    warnings=data.get("warnings", []),
+                    ssh_ok=data.get("ssh_ok", False),
+                    hostname=data.get("hostname"),
+                    os_info=data.get("os_info"),
+                    arch=data.get("arch"),
+                    workdir_exists=data.get("workdir_exists"),
+                    python=_dict_to_tool_status(data.get("python", {})),
+                    conda=_dict_to_tool_status(data.get("conda", {})),
+                    uv=_dict_to_tool_status(data.get("uv", {})),
+                    pixi=_dict_to_tool_status(data.get("pixi", {})),
+                    code_server=_dict_to_tool_status(data.get("code_server", {})),
+                    torch=_dict_to_tool_status(data.get("torch", {})),
+                    cuda=_dict_to_tool_status(data.get("cuda", {})),
+                    gpu_models=data.get("gpu_models", []),
+                    gpu_count=data.get("gpu_count", 0),
+                    claude_cli=_dict_to_tool_status(data.get("claude_cli", {})),
+                    anthropic_env=AnthropicEnvStatus(
+                        data.get("anthropic_env", AnthropicEnvStatus.UNKNOWN.value)
+                    ),
+                )
+                self._detections[env_id].append(snapshot)
+            except Exception:
+                logger.warning("Failed to load detection from: %s", file_path)
+                continue
 
     def _validate_project_id(self, project_id: str) -> None:
         if self._project_service is not None:
