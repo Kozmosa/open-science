@@ -10,7 +10,8 @@ interface Props {
 export default function MessageStream({ messages }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const shouldScrollRef = useRef(true);
+  const shouldScrollRef = useRef(false);
+  const lastFirstIdRef = useRef<string | null>(null);
   const { displayItems, toggleGroup } = useMessageGroups(messages);
 
   const handleScroll = useCallback(() => {
@@ -29,6 +30,12 @@ export default function MessageStream({ messages }: Props) {
   }, [handleScroll]);
 
   useEffect(() => {
+    const firstId = messages.length > 0 ? messages[0].id : null;
+    if (firstId !== lastFirstIdRef.current) {
+      lastFirstIdRef.current = firstId;
+      shouldScrollRef.current = false;
+    }
+
     if (shouldScrollRef.current && bottomRef.current) {
       bottomRef.current.scrollIntoView?.({ behavior: 'auto' });
     }

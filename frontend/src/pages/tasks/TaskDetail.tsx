@@ -87,7 +87,7 @@ export default function TaskDetail({
     const startWidth = asideWidth;
 
     const onMove = (moveEvent: PointerEvent) => {
-      const delta = moveEvent.clientX - startX;
+      const delta = startX - moveEvent.clientX;
       const newWidth = startWidth + delta;
       const clamped = Math.max(MIN_WIDTH, newWidth);
       if (containerRef.current) {
