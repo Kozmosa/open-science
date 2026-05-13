@@ -18,14 +18,6 @@ vi.mock('../api', () => ({
 }));
 
 vi.mock('../components', () => ({
-  CodeServerCard: () => <div data-testid="code-server-card" />,
-  EnvironmentSelectorPanel: () => <div data-testid="environment-selector" />,
-  PageHeader: ({ eyebrow, title }: { eyebrow: string; title: string }) => (
-    <div>
-      <p>{eyebrow}</p>
-      <h1>{title}</h1>
-    </div>
-  ),
   useEnvironmentSelection: () => ({
     selectedEnvironment: null,
     selectedEnvironmentId: null,
@@ -77,35 +69,15 @@ beforeEach(() => {
 });
 
 describe('WorkspacesPage', () => {
-  it('renders page title in the current language and eyebrow in the alternate language', async () => {
-    const { unmount } = renderWithProviders(<WorkspacesPage />, {
-      route: '/workspaces',
-      locale: 'en',
-    });
-
-    expect(await screen.findByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
-    expect(screen.getByText('工作区')).toBeInTheDocument();
-
-    unmount();
-    renderWithProviders(<WorkspacesPage />, {
-      route: '/workspaces',
-      locale: 'zh',
-    });
-
-    expect(await screen.findByRole('heading', { name: '工作区' })).toBeInTheDocument();
-    expect(screen.getByText('WORKSPACES')).toBeInTheDocument();
-  });
-
-  it('renders a workspace manager instead of the shared environment selector or code-server card', async () => {
+  it('renders the workspace list in the sidebar', async () => {
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
-    expect(await screen.findByRole('heading', { name: 'Workspace manager' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Paper Experiments' })).toBeInTheDocument();
-    expect(screen.queryByTestId('environment-selector')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('code-server-card')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Repository Default' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Paper Experiments' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New workspace' })).toBeInTheDocument();
   });
 
-  it('creates a workspace from the manager form', async () => {
+  it('creates a workspace from the form', async () => {
     const createdWorkspace: WorkspaceRecord = {
       ...paperWorkspace,
       workspace_id: 'workspace-created',
@@ -159,11 +131,9 @@ describe('WorkspacesPage', () => {
       target: { value: 'Prompt' },
     });
 
-    // default_workdir 留空，尝试提交
     const workdirInput = screen.getByLabelText('Default workdir') as HTMLInputElement;
     expect(workdirInput.required).toBe(true);
 
-    // HTML5 required 校验会阻止表单提交，因此 createWorkspace 不应被调用
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
 
     await waitFor(() => {
