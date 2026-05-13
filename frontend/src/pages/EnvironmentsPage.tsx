@@ -63,6 +63,8 @@ interface EnvironmentEditorProps {
   environment: EnvironmentRecord | null;
   activeEnvironment: EnvironmentRecord | null;
   isSaving: boolean;
+  expanded: boolean;
+  onToggle: () => void;
   onSubmit: (values: EnvironmentFormValues) => Promise<void>;
   onCancel: () => void;
 }
@@ -72,6 +74,8 @@ function EnvironmentEditor({
   environment,
   activeEnvironment,
   isSaving,
+  expanded,
+  onToggle,
   onSubmit,
   onCancel,
 }: EnvironmentEditorProps) {
@@ -128,7 +132,8 @@ function EnvironmentEditor({
   return (
     <SectionCard
       collapsible
-      defaultExpanded={false}
+      expanded={expanded}
+      onToggle={onToggle}
       header={
         <SectionHeader
           eyebrow={t('components.environmentEditor.eyebrow')}
@@ -545,6 +550,7 @@ function EnvironmentsPage() {
   const [editorMode, setEditorMode] = useState<EnvironmentEditorMode>('create');
   const [editorEnvironmentId, setEditorEnvironmentId] = useState<string | null>(null);
   const [editorFormKey, setEditorFormKey] = useState(0);
+  const [editorExpanded, setEditorExpanded] = useState(false);
   const [selectedDetectionEnvironmentId, setSelectedDetectionEnvironmentId] = useState<string | null>(null);
 
   const environments = environmentSelection.environments ?? EMPTY_ENVIRONMENTS;
@@ -726,6 +732,7 @@ function EnvironmentsPage() {
     setEditorFormKey((value) => value + 1);
     setEditorMode('create');
     setEditorEnvironmentId(null);
+    setEditorExpanded(true);
   };
 
   return (
@@ -892,6 +899,7 @@ function EnvironmentsPage() {
                               onClick={() => {
                                 setEditorMode('edit');
                                 setEditorEnvironmentId(environment.id);
+                                setEditorExpanded(true);
                               }}
                             >
                               {t('common.edit')}
@@ -947,10 +955,13 @@ function EnvironmentsPage() {
             environment={editorEnvironment}
             activeEnvironment={selectedEnvironment}
             isSaving={saveMutation.isPending}
+            expanded={editorExpanded}
+            onToggle={() => setEditorExpanded((value) => !value)}
             onSubmit={async (values) => {
               await saveMutation.mutateAsync(values);
             }}
             onCancel={() => {
+              setEditorExpanded(false);
               if (editorMode === 'edit') {
                 setEditorFormKey((value) => value + 1);
                 setEditorMode('create');
