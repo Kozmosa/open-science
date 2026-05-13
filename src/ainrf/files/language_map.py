@@ -91,5 +91,6 @@ def mime_type_from_path(path: str) -> str | None:
         ".webp": "image/webp",
         ".bmp": "image/bmp",
         ".svg": "image/svg+xml",
+        ".pdf": "application/pdf",
     }
     return mapping.get(ext)

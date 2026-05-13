@@ -282,12 +282,14 @@ class FileBrowserService:
 
     def _build_file_content(self, path: str, data: bytes) -> FileContent:
         is_binary = b"\x00" in data[:_BINARY_PROBE_BYTES]
+        mime_type = mime_type_from_path(path)
         if is_binary:
             return FileContent(
                 path=path,
                 content="",
                 is_binary=True,
                 size=len(data),
+                mime_type=mime_type,
             )
         text = data.decode("utf-8", errors="replace")
         return FileContent(
@@ -296,6 +298,7 @@ class FileBrowserService:
             is_binary=False,
             size=len(data),
             language=language_from_path(path),
+            mime_type=mime_type,
         )
 
     async def _run_ssh_command(
