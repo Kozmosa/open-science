@@ -648,6 +648,7 @@ export const messages = {
         },
         labels: {
           ssh: 'SSH',
+          tmux: 'Tmux',
           hostname: 'Hostname',
           os: 'OS',
           arch: 'Architecture',
@@ -656,7 +657,7 @@ export const messages = {
           conda: 'Conda',
           uv: 'uv',
           pixi: 'pixi',
-          codeServer: 'Code Server',
+          codex: 'Codex',
           claudeCli: 'Claude CLI',
           torch: 'PyTorch',
           cuda: 'CUDA',
@@ -664,6 +665,7 @@ export const messages = {
           gpuModels: 'GPU Models',
           anthropic: 'Anthropic',
         },
+        warningsHeader: 'Warnings',
         status: {
           available: 'Available',
           unavailable: 'Unavailable',
@@ -1288,6 +1290,7 @@ export const messages = {
         },
         labels: {
           ssh: 'SSH',
+          tmux: 'Tmux',
           hostname: '主机名',
           os: '操作系统',
           arch: '架构',
@@ -1296,7 +1299,7 @@ export const messages = {
           conda: 'Conda',
           uv: 'uv',
           pixi: 'pixi',
-          codeServer: 'Code Server',
+          codex: 'Codex',
           claudeCli: 'Claude CLI',
           torch: 'PyTorch',
           cuda: 'CUDA',
@@ -1304,6 +1307,7 @@ export const messages = {
           gpuModels: 'GPU 型号',
           anthropic: 'Anthropic',
         },
+        warningsHeader: '告警',
         status: {
           available: '可用',
           unavailable: '不可用',

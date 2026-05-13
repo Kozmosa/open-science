@@ -420,7 +420,7 @@ function EnvironmentsPage() {
         status: detection?.status ?? null,
         warnings: detection?.warnings ?? [],
         errors: detection?.errors ?? [],
-        codeServerPath: detection?.code_server?.path ?? null,
+        codeServerPath: detection?.codex?.path ?? null,
       });
       if (detection?.warnings.includes('used_personal_tmux_fallback')) {
         showToast(t('pages.environments.detectFallbackToast', { alias: environment.alias }), 'warning');

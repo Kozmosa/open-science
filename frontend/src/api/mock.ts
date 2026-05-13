@@ -170,7 +170,7 @@ function cloneEnvironment(environment: EnvironmentRecord): EnvironmentRecord {
           conda: { ...environment.latest_detection.conda },
           uv: { ...environment.latest_detection.uv },
           pixi: { ...environment.latest_detection.pixi },
-          code_server: { ...environment.latest_detection.code_server },
+          codex: { ...environment.latest_detection.codex },
           torch: { ...environment.latest_detection.torch },
           cuda: { ...environment.latest_detection.cuda },
           claude_cli: { ...environment.latest_detection.claude_cli },
@@ -460,6 +460,7 @@ function createMockDetection(environment: EnvironmentRecord): EnvironmentRecord[
     errors: environment.is_seed ? ['localhost_seed_unreachable'] : [],
     warnings: environment.is_seed ? ['localhost_seed_unreachable'] : [],
     ssh_ok: !environment.is_seed,
+    tmux_ok: !environment.is_seed,
     hostname: environment.host,
     os_info: 'linux',
     arch: 'x86_64',
@@ -476,10 +477,10 @@ function createMockDetection(environment: EnvironmentRecord): EnvironmentRecord[
       environment.is_seed ? null : '/usr/bin/uv'
     ),
     pixi: createToolStatus(false),
-    code_server: createToolStatus(
-      Boolean(environment.code_server_path),
-      environment.code_server_path ? 'mock' : null,
-      environment.code_server_path
+    codex: createToolStatus(
+      !environment.is_seed,
+      environment.is_seed ? null : '0.130.0',
+      environment.is_seed ? null : '/usr/bin/codex'
     ),
     torch: createToolStatus(false),
     cuda: createToolStatus(false),

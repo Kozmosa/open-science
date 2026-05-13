@@ -346,6 +346,7 @@ export interface EnvironmentDetection {
   errors: string[];
   warnings: string[];
   ssh_ok: boolean;
+  tmux_ok: boolean;
   hostname: string | null;
   os_info: string | null;
   arch: string | null;
@@ -354,7 +355,7 @@ export interface EnvironmentDetection {
   conda: ToolStatus;
   uv: ToolStatus;
   pixi: ToolStatus;
-  code_server: ToolStatus;
+  codex: ToolStatus;
   torch: ToolStatus;
   cuda: ToolStatus;
   gpu_models: string[];
