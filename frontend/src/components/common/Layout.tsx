@@ -191,7 +191,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
           <main
             className={[
               'flex w-full flex-1 flex-col overflow-y-auto',
-              edgeToEdge ? '' : 'mx-auto max-w-[1100px] px-6 py-8',
+              edgeToEdge ? '' : 'p-4',
             ].join(' ')}
           >
             {children}

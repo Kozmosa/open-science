@@ -142,7 +142,7 @@ function TerminalSessionConsole({
     const terminal = new Terminal({
       convertEol: true,
       cursorBlink: !isObserveOnly,
-      fontFamily: 'var(--font-mono)',
+      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
       fontSize,
       scrollback: 2000,
       theme: {

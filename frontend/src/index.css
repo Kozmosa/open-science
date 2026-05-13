@@ -141,16 +141,11 @@ pre {
   width: 100%;
 }
 
-.ainrf-terminal .xterm-helpers,
-.ainrf-terminal .xterm-viewport,
-.ainrf-terminal .xterm-screen {
-  height: 100% !important;
-  width: 100% !important;
-}
-
 .ainrf-terminal .xterm-viewport {
   background: #0b1020;
+  height: 100% !important;
   overflow-y: auto;
+  width: 100% !important;
 }
 
 /* React Flow theme integration */
