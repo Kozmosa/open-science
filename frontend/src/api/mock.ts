@@ -910,6 +910,12 @@ export function mockArchiveTask(taskId: string): TaskSummary {
   return cloneTaskSummary(mockTasks[taskId]);
 }
 
+export function mockDeleteTask(taskId: string): Promise<void> {
+  const { [taskId]: _, ...rest } = mockTasks;
+  mockTasks = rest;
+  return Promise.resolve();
+}
+
 export function mockCancelTask(taskId: string): TaskSummary {
   const task = mockGetTask(taskId);
   if (task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled') {

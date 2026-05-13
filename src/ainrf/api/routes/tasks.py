@@ -5,7 +5,7 @@ from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from ainrf.api.schemas import (
     TaskCreateRequest,
@@ -341,6 +341,16 @@ async def archive_task(task_id: str, request: Request) -> TaskSummaryResponse:
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@router.delete("/{task_id}/permanent", status_code=204)
+async def delete_task(task_id: str, request: Request) -> Response:
+    service = _get_task_harness_service(request)
+    try:
+        service.delete_task(task_id)
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return Response(status_code=204)
 
 
 @router.post("/{task_id}/cancel", response_model=TaskSummaryResponse)

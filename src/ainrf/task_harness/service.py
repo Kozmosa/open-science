@@ -543,6 +543,22 @@ class TaskHarnessService:
             connection.commit()
         return self._load_list_item(task_id)
 
+    def delete_task(self, task_id: str) -> None:
+        """Permanently delete a task row and its artifact directory."""
+        self.initialize()
+        _ = self._load_task_row(task_id)
+        task_dir = self.task_directory(task_id)
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM task_harness_tasks WHERE task_id = ?",
+                (task_id,),
+            )
+            connection.commit()
+        if task_dir.exists():
+            import shutil
+
+            shutil.rmtree(task_dir, ignore_errors=True)
+
     async def cancel_task(self, task_id: str) -> TaskListItem:
         self.initialize()
         row = self._load_task_row(task_id)

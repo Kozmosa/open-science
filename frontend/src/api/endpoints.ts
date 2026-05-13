@@ -47,6 +47,7 @@ import type {
 import {
   mockArchiveTask,
   mockCancelTask,
+  mockDeleteTask,
   mockCreateCodeServerSession,
   mockCreateEnvironment,
   mockCreateProject,
@@ -219,6 +220,9 @@ export const createTask = (payload: TaskCreateRequest): Promise<TaskSummary> =>
 
 export const archiveTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockArchiveTask(taskId)) : api.delete<TaskSummary>(`/tasks/${taskId}`);
+
+export const deleteTask = (taskId: string): Promise<void> =>
+  USE_MOCK ? mockDeleteTask(taskId) : api.delete<void>(`/tasks/${taskId}/permanent`);
 
 export const cancelTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCancelTask(taskId)) : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {});

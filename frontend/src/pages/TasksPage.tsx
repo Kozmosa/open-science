@@ -6,6 +6,7 @@ import {
   archiveTask,
   cancelTask,
   createTask,
+  deleteTask,
   getProjects,
   getSkills,
   getTask,
@@ -135,6 +136,21 @@ function TasksPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (taskId: string) => deleteTask(taskId),
+    onSuccess: (_data, taskId) => {
+      queryClient.setQueryData<{ items: TaskSummary[] }>(
+        ['tasks', showArchived],
+        (current) => ({
+          items: (current?.items ?? []).filter((item) => item.task_id !== taskId),
+        })
+      );
+      if (effectiveSelectedTaskId === taskId) {
+        selectTask(null);
+      }
+    },
+  });
+
   const effectiveWorkspaceId = selectedWorkspaceId || workspaces[0]?.workspace_id || '';
   const effectiveEnvironmentId = environmentSelection.selectedEnvironmentId || environments[0]?.id || '';
   const selectedWorkspace =
@@ -247,10 +263,12 @@ function TasksPage() {
             selectedTaskId={effectiveSelectedTaskId}
             tasksError={tasksError}
             searchQuery={taskSearchQuery}
+            showArchived={showArchived}
             onSearchQueryChange={setTaskSearchQuery}
             onSelectTask={selectTask}
             onArchiveTask={(taskId) => archiveMutation.mutate(taskId)}
             onCancelTask={(taskId) => cancelMutation.mutate(taskId)}
+            onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
           />
         </aside>
 
