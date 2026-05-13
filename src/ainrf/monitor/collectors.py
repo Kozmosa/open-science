@@ -42,11 +42,12 @@ def parse_nvidia_smi_csv(stdout: str) -> list[GpuInfo]:
 
 
 def parse_ps_output(stdout: str) -> list[RawProcess]:
-    """Parse ``ps -eo pid,ppid,pcpu,rss,etime,comm`` output.
+    """Parse ``ps -eo pid,ppid,pcpu,rss,etime,args`` output.
 
-    ``comm`` is placed last because it may contain spaces. We parse the first
-    five fixed columns and join the remainder as the command name. The ``rss``
-    column is resident set size in **KB**; it is converted to MB here.
+    ``args`` is placed last because it contains the full command with spaces.
+    We parse the first five fixed columns and join the remainder as the
+    command name. The ``rss`` column is resident set size in **KB**; it is
+    converted to MB here.
     """
     lines = [line.strip() for line in stdout.strip().split("\n") if line.strip()]
     if not lines:
@@ -106,7 +107,7 @@ class LocalCollector:
         cpu, memory = self._extract_system_stats(processes)
 
         filter_ = ProcessTreeFilter(root_pid=self._own_pid)
-        ainrf_processes_raw = filter_.collect_ainrf_processes(processes)
+        ainrf_processes_raw = filter_.collect_descendants(processes)
         ainrf_processes = [
             ProcessInfo(
                 pid=p.pid,
@@ -205,7 +206,7 @@ class RemoteCollector:
 
         try:
             ps_result = await self._executor.run_command(
-                "ps -eo pid,ppid,pcpu,rss,etime,comm",
+                "ps -eo pid,ppid,pcpu,rss,etime,args",
                 timeout=3,
             )
             if ps_result.exit_code == 0:
@@ -213,8 +214,18 @@ class RemoteCollector:
         except Exception:
             status = "unavailable"
 
-        ainrf_processes_raw = [p for p in processes if p.name in ProcessTreeFilter.WHITELIST]
-        ainrf_processes_raw.sort(key=lambda p: p.cpu_percent, reverse=True)
+        ainrf_roots = ProcessTreeFilter.find_ainrf_roots(processes)
+        ainrf_descendant_pids: set[int] = set()
+        for root_pid in ainrf_roots:
+            tree = ProcessTreeFilter(root_pid=root_pid)
+            pid_to_ppid = {p.pid: p.ppid for p in processes}
+            ainrf_descendant_pids.update(tree._collect_descendants(pid_to_ppid, root_pid))
+
+        ainrf_processes_raw = sorted(
+            (p for p in processes if p.pid in ainrf_descendant_pids),
+            key=lambda p: p.cpu_percent,
+            reverse=True,
+        )
         ainrf_processes = [
             ProcessInfo(
                 pid=p.pid,
