@@ -7,14 +7,16 @@ from starlette.responses import JSONResponse, Response
 
 from ainrf.api.config import ApiConfig
 
-_EXEMPT_PATHS = {
+_EXEMPT_PATH_PREFIXES = (
     "/health",
     "/v1/health",
     "/openapi.json",
     "/docs",
     "/docs/oauth2-redirect",
     "/redoc",
-}
+    "/v1/models",
+    "/v1/messages",
+)
 
 
 def build_api_key_middleware(
@@ -24,7 +26,7 @@ def build_api_key_middleware(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if request.url.path in _EXEMPT_PATHS:
+        if request.url.path.startswith(_EXEMPT_PATH_PREFIXES):
             return await call_next(request)
 
         api_key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
