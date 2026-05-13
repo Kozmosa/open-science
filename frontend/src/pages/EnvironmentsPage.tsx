@@ -12,6 +12,7 @@ import {
   Select,
   Textarea,
 } from '../components/ui';
+import { SectionStack } from '../components/layout';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -743,21 +744,24 @@ function EnvironmentsPage() {
         description={t('pages.environments.description')}
       />
 
-      <SectionCard className="flex flex-wrap items-center justify-between gap-3 p-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-            {t('pages.environments.currentSelection')}
-          </p>
-          <p className="mt-1 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
-            {activeEnvironmentSummary}
-          </p>
-        </div>
-        <Button onClick={handleCreate}>
-          {t('pages.environments.addEnvironment')}
-        </Button>
-      </SectionCard>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <SectionStack
+        actions={
+          <SectionCard className="flex flex-wrap items-center justify-between gap-3 p-5">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
+                {t('pages.environments.currentSelection')}
+              </p>
+              <p className="mt-1 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
+                {activeEnvironmentSummary}
+              </p>
+            </div>
+            <Button onClick={handleCreate}>
+              {t('pages.environments.addEnvironment')}
+            </Button>
+          </SectionCard>
+        }
+      >
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <SectionCard className="space-y-4">
           <SectionHeader
             title={t('pages.environments.listTitle')}
@@ -996,6 +1000,7 @@ function EnvironmentsPage() {
           />
         </div>
       </div>
+      </SectionStack>
 
       {detectionEnv?.latest_detection ? (
         <EnvironmentDetectionModal

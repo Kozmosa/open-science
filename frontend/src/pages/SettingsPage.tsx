@@ -12,6 +12,7 @@ import {
   SkillToggleGroup,
   Textarea,
 } from '../components/ui';
+import { SectionStack } from '../components/layout';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry } from '../api';
 import { useT } from '../i18n';
@@ -1134,10 +1135,8 @@ function SettingsPage() {
         description={t('pages.settings.description')}
       />
 
-      <div className="space-y-6">
-        {recoveryReason !== null ? (
-          <Alert variant="warning">{t('pages.settings.recoveryNotice')}</Alert>
-        ) : null}
+      <SectionStack>
+        {recoveryReason !== null ? <Alert variant="warning">{t('pages.settings.recoveryNotice')}</Alert> : null}
 
         <GeneralPreferencesSection
           key={`general:${settings.general.defaultRoute}:${settings.general.terminal.fontSize}`}
@@ -1207,7 +1206,7 @@ function SettingsPage() {
             resetProjectEnvironmentDefaults('default', environmentId)
           }
         />
-      </div>
+      </SectionStack>
     </div>
   );
 }
