@@ -121,7 +121,6 @@ async def stream_file(
         return FileResponse(
             resolved_path,
             media_type=media_type,
-            filename=resolved_path.split("/")[-1],
         )
 
     # Remote file: stream via SSH
