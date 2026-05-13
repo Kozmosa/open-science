@@ -6,13 +6,12 @@ import {
   Button,
   FormField,
   Input,
-  PageHeader,
+  Modal,
   SectionCard,
-  SectionHeader,
   Select,
   Textarea,
 } from '../components/ui';
-import { SectionStack } from '../components/layout';
+import { PageShell, SectionStack } from '../components/layout';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -26,7 +25,6 @@ import type {
   EnvironmentAuthKind,
   EnvironmentListResponse,
   EnvironmentRecord,
-  ProjectEnvironmentReference,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
 } from '../types';
@@ -37,7 +35,6 @@ import { EnvironmentDetectionModal } from '../components/environment';
 import {
   buildEnvironmentRequest,
   buildProjectReferenceCreateRequest,
-  buildProjectReferenceUpdateRequest,
   defaultProjectId,
   EMPTY_ENVIRONMENTS,
   EMPTY_PROJECT_REFS,
@@ -51,12 +48,10 @@ import {
   removeProjectReferenceFromList,
   toEnvironmentUpdateRequest,
   valuesFromEnvironment,
-  valuesFromProjectReference,
 } from './environments/helpers';
 import type {
   EnvironmentEditorMode,
   EnvironmentFormValues,
-  ProjectRefFormValues,
 } from './environments/helpers';
 
 interface EnvironmentEditorProps {
@@ -64,8 +59,6 @@ interface EnvironmentEditorProps {
   environment: EnvironmentRecord | null;
   activeEnvironment: EnvironmentRecord | null;
   isSaving: boolean;
-  expanded: boolean;
-  onToggle: () => void;
   onSubmit: (values: EnvironmentFormValues) => Promise<void>;
   onCancel: () => void;
 }
@@ -75,8 +68,6 @@ function EnvironmentEditor({
   environment,
   activeEnvironment,
   isSaving,
-  expanded,
-  onToggle,
   onSubmit,
   onCancel,
 }: EnvironmentEditorProps) {
@@ -86,10 +77,6 @@ function EnvironmentEditor({
   );
   const [formError, setFormError] = useState<string | null>(null);
 
-  const title =
-    mode === 'create'
-      ? t('components.environmentEditor.createTitle')
-      : t('components.environmentEditor.editTitle');
   const submitLabel =
     mode === 'create' ? t('components.environmentEditor.create') : t('components.environmentEditor.save');
   const placeholders = {
@@ -131,19 +118,7 @@ function EnvironmentEditor({
   };
 
   return (
-    <SectionCard
-      collapsible
-      expanded={expanded}
-      onToggle={onToggle}
-      header={
-        <SectionHeader
-          eyebrow={t('components.environmentEditor.eyebrow')}
-          title={title}
-          description={t('components.environmentEditor.description')}
-        />
-      }
-    >
-
+    <>
       {activeEnvironment ? (
         <div
           data-testid="active-environment-banner"
@@ -338,207 +313,7 @@ function EnvironmentEditor({
           </Button>
         </div>
       </form>
-    </SectionCard>
-  );
-}
-
-interface ProjectReferenceEditorProps {
-  selectedEnvironment: EnvironmentRecord | null;
-  projectReference: ProjectEnvironmentReference | null;
-  isSaving: boolean;
-  isRemoving: boolean;
-  onSave: (values: ProjectRefFormValues) => Promise<void>;
-  onSetDefault: () => Promise<void>;
-  onClearDefault: () => Promise<void>;
-  onRemove: () => Promise<void>;
-}
-
-function ProjectReferenceEditor({
-  selectedEnvironment,
-  projectReference,
-  isSaving,
-  isRemoving,
-  onSave,
-  onSetDefault,
-  onClearDefault,
-  onRemove,
-}: ProjectReferenceEditorProps) {
-  const t = useT();
-  const [values, setValues] = useState<ProjectRefFormValues>(() =>
-    valuesFromProjectReference(projectReference)
-  );
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const updateField = (field: keyof ProjectRefFormValues, nextValue: string) => {
-    setValues((current) => ({ ...current, [field]: nextValue }));
-  };
-
-  if (selectedEnvironment === null) {
-    return (
-      <SectionCard
-        collapsible
-        defaultExpanded={false}
-        header={
-          <SectionHeader
-            title={t('pages.environments.projectReferenceTitle')}
-            description={t('pages.environments.projectReferenceDescription')}
-          />
-        }
-      >
-        <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
-          {t('pages.environments.projectReferenceNoSelection')}
-        </p>
-      </SectionCard>
-    );
-  }
-
-  return (
-    <SectionCard
-      collapsible
-      defaultExpanded={false}
-      header={
-        <div className="space-y-1">
-          <SectionHeader
-            title={t('pages.environments.projectReferenceTitle')}
-            description={t('pages.environments.projectReferenceDescription')}
-          />
-          <p className="text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
-            <span className="font-medium text-[var(--text)]">{selectedEnvironment.alias}</span>
-            <span className="ml-2 text-[var(--text-tertiary)]">({selectedEnvironment.display_name})</span>
-          </p>
-        </div>
-      }
-    >
-      <div className="flex flex-wrap gap-2">
-        {projectReference ? (
-          <Badge>{t('pages.environments.projectReferencedBadge')}</Badge>
-        ) : (
-          <Badge variant="secondary">{t('pages.environments.projectUnreferencedBadge')}</Badge>
-        )}
-        {projectReference?.is_default ? (
-          <Badge>{t('pages.environments.projectDefaultBadge')}</Badge>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Button
-          onClick={async () => {
-            try {
-              setFormError(null);
-              await onSetDefault();
-            } catch (error) {
-              setFormError(
-                error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
-              );
-            }
-          }}
-          disabled={isSaving || isRemoving || projectReference?.is_default === true}
-        >
-          {projectReference?.is_default
-            ? t('pages.environments.setProjectDefaultDisabled')
-            : t('pages.environments.setProjectDefault')}
-        </Button>
-        {projectReference?.is_default ? (
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              try {
-                setFormError(null);
-                await onClearDefault();
-              } catch (error) {
-                setFormError(
-                  error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
-                );
-              }
-            }}
-            disabled={isSaving || isRemoving}
-          >
-            {t('pages.environments.clearProjectDefault')}
-          </Button>
-        ) : null}
-        {projectReference ? (
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              try {
-                setFormError(null);
-                await onRemove();
-              } catch (error) {
-                setFormError(
-                  error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
-                );
-              }
-            }}
-            disabled={isSaving || isRemoving}
-            className="border-[#ff3b30]/20 bg-[#ffebee] text-[#c62828] hover:bg-[#ffcdd2] hover:text-[#c62828]"
-          >
-            {t('pages.environments.removeProjectReference')}
-          </Button>
-        ) : null}
-      </div>
-
-      <form
-        className="space-y-4"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          try {
-            setFormError(null);
-            await onSave(values);
-          } catch (error) {
-            setFormError(
-              error instanceof Error ? error.message : t('pages.environments.projectReferenceSaveError')
-            );
-          }
-        }}
-      >
-        <FormField label={t('pages.environments.projectOverrideWorkdir')}>
-          <Input
-            value={values.override_workdir}
-            onChange={(event) => updateField('override_workdir', event.target.value)}
-            placeholder={t('pages.environments.projectOverrideWorkdirPlaceholder')}
-          />
-        </FormField>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label={t('pages.environments.projectOverrideEnvName')}>
-            <Input
-              value={values.override_env_name}
-              onChange={(event) => updateField('override_env_name', event.target.value)}
-              placeholder={t('pages.environments.projectOverrideEnvNamePlaceholder')}
-            />
-          </FormField>
-
-          <FormField label={t('pages.environments.projectOverrideEnvManager')}>
-            <Input
-              value={values.override_env_manager}
-              onChange={(event) => updateField('override_env_manager', event.target.value)}
-              placeholder={t('pages.environments.projectOverrideEnvManagerPlaceholder')}
-            />
-          </FormField>
-        </div>
-
-        <FormField label={t('pages.environments.projectOverrideRuntimeNotes')}>
-          <Textarea
-            value={values.override_runtime_notes}
-            onChange={(event) => updateField('override_runtime_notes', event.target.value)}
-            rows={4}
-            placeholder={t('pages.environments.projectOverrideRuntimeNotesPlaceholder')}
-          />
-        </FormField>
-
-        {formError ? (
-          <Alert variant="error">{formError}</Alert>
-        ) : null}
-
-        <Button type="submit" disabled={isSaving || isRemoving}>
-          {isSaving
-            ? t('pages.environments.projectReferenceSaving')
-            : projectReference
-              ? t('pages.environments.updateProjectReference')
-              : t('pages.environments.attachProjectReference')}
-        </Button>
-      </form>
-    </SectionCard>
+    </>
   );
 }
 
@@ -551,7 +326,7 @@ function EnvironmentsPage() {
   const [editorMode, setEditorMode] = useState<EnvironmentEditorMode>('create');
   const [editorEnvironmentId, setEditorEnvironmentId] = useState<string | null>(null);
   const [editorFormKey, setEditorFormKey] = useState(0);
-  const [editorExpanded, setEditorExpanded] = useState(false);
+  const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
   const [selectedDetectionEnvironmentId, setSelectedDetectionEnvironmentId] = useState<string | null>(null);
 
   const environments = environmentSelection.environments ?? EMPTY_ENVIRONMENTS;
@@ -733,41 +508,29 @@ function EnvironmentsPage() {
     setEditorFormKey((value) => value + 1);
     setEditorMode('create');
     setEditorEnvironmentId(null);
-    setEditorExpanded(true);
+    setIsEditorModalOpen(true);
   };
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow={t('pages.environments.eyebrow')}
-        title={t('pages.environments.title')}
-        description={t('pages.environments.description')}
-      />
-
-      <SectionStack
-        actions={
-          <SectionCard className="flex flex-wrap items-center justify-between gap-3 p-5">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
-                {t('pages.environments.currentSelection')}
-              </p>
-              <p className="mt-1 text-sm tracking-[-0.224px] text-[var(--text-secondary)]">
-                {activeEnvironmentSummary}
-              </p>
+    <PageShell>
+      <SectionStack>
+        <SectionCard
+          header={
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
+                  {t('pages.environments.currentSelection')}
+                </p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  {activeEnvironmentSummary}
+                </p>
+              </div>
+              <Button onClick={handleCreate}>
+                {t('pages.environments.addEnvironment')}
+              </Button>
             </div>
-            <Button onClick={handleCreate}>
-              {t('pages.environments.addEnvironment')}
-            </Button>
-          </SectionCard>
-        }
-      >
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <SectionCard className="space-y-4">
-          <SectionHeader
-            title={t('pages.environments.listTitle')}
-            description={t('pages.environments.listDescription')}
-          />
-
+          }
+        >
           {environmentSelection.isLoading ? (
             <p className="text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
               {t('pages.environments.loading')}
@@ -903,7 +666,7 @@ function EnvironmentsPage() {
                               onClick={() => {
                                 setEditorMode('edit');
                                 setEditorEnvironmentId(environment.id);
-                                setEditorExpanded(true);
+                                setIsEditorModalOpen(true);
                               }}
                             >
                               {t('common.edit')}
@@ -918,6 +681,24 @@ function EnvironmentsPage() {
                               className="border-[var(--apple-blue)]/20 bg-[var(--apple-blue)]/10 text-[var(--apple-blue)] hover:bg-[var(--apple-blue)]/15 hover:text-[var(--apple-blue)]"
                             >
                               {t('common.detect')}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await saveProjectReferenceMutation.mutateAsync({ is_default: true });
+                                } catch { /* error handled by mutation state */ }
+                              }}
+                              disabled={
+                                saveProjectReferenceMutation.isPending ||
+                                removeProjectReferenceMutation.isPending ||
+                                projectReferenceByEnvironmentId[environment.id]?.is_default === true
+                              }
+                            >
+                              {projectReferenceByEnvironmentId[environment.id]?.is_default
+                                ? 'Is default'
+                                : 'Set default'}
                             </Button>
                             <Button
                               variant="secondary"
@@ -951,56 +732,32 @@ function EnvironmentsPage() {
             </div>
           ) : null}
         </SectionCard>
-
-        <div className="space-y-6">
-          <EnvironmentEditor
-            key={`${editorMode}-${editorEnvironmentId ?? 'new'}-${editorFormKey}`}
-            mode={editorMode}
-            environment={editorEnvironment}
-            activeEnvironment={selectedEnvironment}
-            isSaving={saveMutation.isPending}
-            expanded={editorExpanded}
-            onToggle={() => setEditorExpanded((value) => !value)}
-            onSubmit={async (values) => {
-              await saveMutation.mutateAsync(values);
-            }}
-            onCancel={() => {
-              setEditorExpanded(false);
-              if (editorMode === 'edit') {
-                setEditorFormKey((value) => value + 1);
-                setEditorMode('create');
-                setEditorEnvironmentId(null);
-                return;
-              }
-              setEditorFormKey((value) => value + 1);
-              setEditorEnvironmentId(null);
-            }}
-          />
-
-          <ProjectReferenceEditor
-            key={`${selectedEnvironment?.id ?? 'none'}-${selectedProjectReference?.updated_at ?? 'new'}`}
-            selectedEnvironment={selectedEnvironment}
-            projectReference={selectedProjectReference}
-            isSaving={saveProjectReferenceMutation.isPending}
-            isRemoving={removeProjectReferenceMutation.isPending}
-            onSave={async (values) => {
-              await saveProjectReferenceMutation.mutateAsync(
-                buildProjectReferenceUpdateRequest(values)
-              );
-            }}
-            onSetDefault={async () => {
-              await saveProjectReferenceMutation.mutateAsync({ is_default: true });
-            }}
-            onClearDefault={async () => {
-              await saveProjectReferenceMutation.mutateAsync({ is_default: false });
-            }}
-            onRemove={async () => {
-              await removeProjectReferenceMutation.mutateAsync();
-            }}
-          />
-        </div>
-      </div>
       </SectionStack>
+
+      <Modal
+        isOpen={isEditorModalOpen}
+        onClose={() => setIsEditorModalOpen(false)}
+        title={editorMode === 'create' ? 'Add Environment' : 'Edit Environment'}
+        size="lg"
+      >
+        <EnvironmentEditor
+          key={`${editorMode}-${editorEnvironmentId ?? 'new'}-${editorFormKey}`}
+          mode={editorMode}
+          environment={editorEnvironment}
+          activeEnvironment={selectedEnvironment}
+          isSaving={saveMutation.isPending}
+          onSubmit={async (values) => {
+            await saveMutation.mutateAsync(values);
+            setIsEditorModalOpen(false);
+          }}
+          onCancel={() => {
+            setIsEditorModalOpen(false);
+            setEditorFormKey((v) => v + 1);
+            setEditorMode('create');
+            setEditorEnvironmentId(null);
+          }}
+        />
+      </Modal>
 
       {detectionEnv?.latest_detection ? (
         <EnvironmentDetectionModal
@@ -1010,7 +767,7 @@ function EnvironmentsPage() {
           onClose={() => setSelectedDetectionEnvironmentId(null)}
         />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
