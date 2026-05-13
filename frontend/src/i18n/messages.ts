@@ -107,6 +107,7 @@ export const messages = {
         'Health, terminal bench, environment control plane, and workspace browser shell during backend realignment.',
       collapseSidebar: 'Collapse sidebar',
       expandSidebar: 'Expand sidebar',
+      resizeSidebar: 'Resize sidebar',
     },
     pages: {
       projects: {
@@ -760,6 +761,7 @@ export const messages = {
       footerDescription: '后端重整期间的健康、终端工作台、环境控制平面和工作区浏览器外壳。',
       collapseSidebar: '收起侧边栏',
       expandSidebar: '展开侧边栏',
+      resizeSidebar: '调整侧边栏宽度',
     },
     pages: {
       projects: {
