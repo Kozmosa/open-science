@@ -185,7 +185,7 @@ describe('EnvironmentsPage', () => {
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Set default' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Default' }));
 
     await waitFor(() =>
       expect(mockCreateProjectEnvironmentReference).toHaveBeenCalledWith(
@@ -250,7 +250,7 @@ describe('EnvironmentsPage', () => {
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Set default' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Default' }));
 
     await waitFor(() =>
       expect(mockUpdateProjectEnvironmentReference).toHaveBeenCalledWith(

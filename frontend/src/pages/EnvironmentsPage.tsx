@@ -697,8 +697,8 @@ function EnvironmentsPage() {
                               }
                             >
                               {projectReferenceByEnvironmentId[environment.id]?.is_default
-                                ? 'Is default'
-                                : 'Set default'}
+                                ? t('pages.environments.setProjectDefaultDisabled')
+                                : t('pages.environments.setProjectDefault')}
                             </Button>
                             <Button
                               variant="secondary"
