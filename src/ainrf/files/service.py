@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import shlex
 import shutil
@@ -286,7 +287,7 @@ class FileBrowserService:
         if is_binary:
             return FileContent(
                 path=path,
-                content="",
+                content=base64.b64encode(data).decode("ascii"),
                 is_binary=True,
                 size=len(data),
                 mime_type=mime_type,
