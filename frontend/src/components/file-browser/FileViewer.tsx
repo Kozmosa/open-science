@@ -1,18 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { FileReadResponse } from '../../types';
 import { useEditorSettings } from '../../settings';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
-
-function base64ToBlobUrl(base64: string, mimeType: string): string {
-  const byteChars = atob(base64);
-  const bytes = new Uint8Array(byteChars.length);
-  for (let i = 0; i < byteChars.length; i++) {
-    bytes[i] = byteChars.charCodeAt(i);
-  }
-  const blob = new Blob([bytes], { type: mimeType });
-  return URL.createObjectURL(blob);
-}
 
 function useSystemColorScheme(): 'light' | 'dark' {
   const [scheme, setScheme] = useState<'light' | 'dark'>(() => {
@@ -37,20 +27,11 @@ function useSystemColorScheme(): 'light' | 'dark' {
   return scheme;
 }
 
-function PdfViewer({ file }: { file: FileReadResponse }) {
-  const blobUrl = useMemo(
-    () => base64ToBlobUrl(file.content, 'application/pdf'),
-    [file.content]
-  );
-
-  useEffect(() => {
-    return () => URL.revokeObjectURL(blobUrl);
-  }, [blobUrl]);
-
+function PdfViewer({ streamUrl, title }: { streamUrl: string; title: string }) {
   return (
     <iframe
-      src={blobUrl}
-      title={file.path}
+      src={streamUrl}
+      title={title}
       className="h-full w-full rounded-lg border border-[var(--border)]"
     />
   );
@@ -59,9 +40,10 @@ function PdfViewer({ file }: { file: FileReadResponse }) {
 interface Props {
   file: FileReadResponse | null;
   isLoading: boolean;
+  pdfStreamUrl?: string;
 }
 
-export default function FileViewer({ file, isLoading }: Props) {
+export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
   const colorScheme = useSystemColorScheme();
   const editorSettings = useEditorSettings();
 
@@ -93,8 +75,8 @@ export default function FileViewer({ file, isLoading }: Props) {
     );
   }
 
-  if (file.mime_type === 'application/pdf') {
-    return <PdfViewer file={file} />;
+  if (file.mime_type === 'application/pdf' && pdfStreamUrl) {
+    return <PdfViewer streamUrl={pdfStreamUrl} title={file.path} />;
   }
 
   if (file.is_binary) {

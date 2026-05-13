@@ -415,6 +415,15 @@ export const readFile = (
         }`
       );
 
+export const buildFileStreamUrl = (
+  environmentId: string,
+  path: string,
+  workspaceId?: string
+): string =>
+  `/files/stream?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
+    workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
+  }`;
+
 export const getResources = (): Promise<ResourcesResponse> =>
   USE_MOCK ? Promise.resolve(mockGetResources()) : api.get<ResourcesResponse>('/resources');
 

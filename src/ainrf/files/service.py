@@ -122,6 +122,18 @@ class FileBrowserService:
             return await self._read_local(resolved_path)
         return await self._read_remote(environment, resolved_path)
 
+    async def resolve_stream_target(
+        self, environment_id: str, path: str, workspace_id: str | None = None
+    ):
+        """Return (is_local, local_path, environment_obj) for streaming a file."""
+        environment, workdir = self._resolver.resolve(environment_id, workspace_id)
+        resolved_path = _resolve_path(workdir, path)
+        return (
+            is_localhost_environment(environment),
+            resolved_path,
+            environment,
+        )
+
     def invalidate_cache(self, environment_id: str) -> None:
         self._cache.invalidate_environment(environment_id)
 

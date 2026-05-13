@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { FolderOpen, RefreshCw } from 'lucide-react';
-import { listFiles, readFile, getWorkspaces } from '../api';
+import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { PageHeader, useEnvironmentSelection } from '../components';
 import { Select } from '../components/ui';
@@ -177,7 +177,19 @@ export default function FileBrowserPage() {
               )}
             </div>
             <div className="flex-1 overflow-hidden">
-              <FileViewer file={currentFile} isLoading={isFileLoading} />
+              <FileViewer
+                file={currentFile}
+                isLoading={isFileLoading}
+                pdfStreamUrl={
+                  currentFile?.mime_type === 'application/pdf' && environmentId
+                    ? buildFileStreamUrl(
+                        environmentId,
+                        currentFile.path,
+                        effectiveWorkspaceId || undefined
+                      )
+                    : undefined
+                }
+              />
             </div>
           </div>
         </div>
