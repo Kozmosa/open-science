@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shlex
 import tarfile
@@ -68,6 +69,16 @@ def is_local_environment(environment: EnvironmentRegistryEntry) -> bool:
     )
 
 
+def _should_use_settings(settings_path: Path) -> bool:
+    """Only use --settings when the file contains more than just permissionMode."""
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    stripped = {k: v for k, v in data.items() if k != "permissionMode"}
+    return bool(stripped)
+
+
 def build_local_launcher(
     *,
     working_directory: str,
@@ -76,7 +87,12 @@ def build_local_launcher(
     settings_path: str | None = None,
 ) -> tuple[LaunchPayload, Any]:
     ainrf_settings = Path(working_directory) / ".ainrf" / "settings.json"
-    resolved_settings = str(ainrf_settings) if ainrf_settings.exists() else settings_path
+    if ainrf_settings.exists() and _should_use_settings(ainrf_settings):
+        resolved_settings: str | None = str(ainrf_settings)
+    elif settings_path is not None:
+        resolved_settings = settings_path
+    else:
+        resolved_settings = None
 
     command = [*_CLAUDE_COMMAND]
     if resolved_settings is not None:

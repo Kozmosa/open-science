@@ -5,11 +5,44 @@ from pathlib import Path
 from ainrf.task_harness.launcher import build_local_launcher
 
 
-def test_build_local_launcher_prefers_ainrf_settings(tmp_path: Path) -> None:
+def test_ignores_ainrf_settings_with_only_permission_mode(tmp_path: Path) -> None:
+    """A .ainrf/settings.json with only permissionMode should not shadow a
+    task-specific settings path that carries real configuration."""
     ainrf_dir = tmp_path / ".ainrf"
     ainrf_dir.mkdir(parents=True, exist_ok=True)
     ainrf_settings = ainrf_dir / "settings.json"
     ainrf_settings.write_text('{"permissionMode": "bypassPermissions"}', encoding="utf-8")
+
+    other_settings = tmp_path / "other_settings.json"
+    other_settings.write_text(
+        '{"permissionMode": "ask", "model": "custom-model"}', encoding="utf-8"
+    )
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("test prompt", encoding="utf-8")
+
+    payload, _launch = build_local_launcher(
+        working_directory=str(tmp_path),
+        prompt_file=prompt_file,
+        rendered_prompt="test prompt",
+        settings_path=str(other_settings),
+    )
+
+    # The task-specific settings (with model) win over the bare ainrf settings.
+    assert "--settings" in payload.command
+    settings_idx = payload.command.index("--settings")
+    assert payload.command[settings_idx + 1] == str(other_settings)
+
+
+def test_prefers_ainrf_settings_with_meaningful_content(tmp_path: Path) -> None:
+    """A .ainrf/settings.json with real configuration (env vars, model) wins."""
+    ainrf_dir = tmp_path / ".ainrf"
+    ainrf_dir.mkdir(parents=True, exist_ok=True)
+    ainrf_settings = ainrf_dir / "settings.json"
+    ainrf_settings.write_text(
+        '{"permissionMode": "bypassPermissions", "model": "custom-model"}',
+        encoding="utf-8",
+    )
 
     other_settings = tmp_path / "other_settings.json"
     other_settings.write_text('{"permissionMode": "ask"}', encoding="utf-8")
