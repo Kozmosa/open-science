@@ -4,6 +4,7 @@ import { FolderOpen, RefreshCw } from 'lucide-react';
 import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { PageHeader, useEnvironmentSelection } from '../components';
+import { SplitPane } from '../components/layout';
 import { Select } from '../components/ui';
 import { useT } from '../i18n';
 import type { FileEntry, FileReadResponse } from '../types';
@@ -27,6 +28,7 @@ export default function FileBrowserPage() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<FileReadResponse | null>(null);
   const [isFileLoading, setIsFileLoading] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(288);
 
   const rootQuery = useQuery({
     queryKey: ['files', environmentId, effectiveWorkspaceId, ''],
@@ -125,35 +127,39 @@ export default function FileBrowserPage() {
           <p className="text-sm text-[var(--text-tertiary)]">Loading files...</p>
         </div>
       ) : (
-        <div className="flex flex-1 gap-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          {/* File tree sidebar */}
-          <div className="flex w-72 flex-col border-r border-[var(--border)]">
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-[var(--apple-blue)]" />
-                <span className="text-xs font-medium text-[var(--text)]">Files</span>
+        <SplitPane
+          sidebarMinWidth={200}
+          sidebarWidth={sidebarWidth}
+          onSidebarWidthChange={setSidebarWidth}
+          className="flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
+          sidebar={
+            <>
+              <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-[var(--apple-blue)]" />
+                  <span className="text-xs font-medium text-[var(--text)]">Files</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  className="rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
+                  title="Refresh"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                className="rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
-                title="Refresh"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-2">
-              <FileTree
-                entries={rootQuery.data?.entries ?? []}
-                selectedPath={selectedPath}
-                onSelectFile={handleSelectFile}
-                onLoadDirectory={handleLoadDirectory}
-              />
-            </div>
-          </div>
-
-          {/* File viewer */}
-          <div className="flex flex-1 flex-col">
+              <div className="flex-1 overflow-auto p-2">
+                <FileTree
+                  entries={rootQuery.data?.entries ?? []}
+                  selectedPath={selectedPath}
+                  onSelectFile={handleSelectFile}
+                  onLoadDirectory={handleLoadDirectory}
+                />
+              </div>
+            </>
+          }
+        >
+          <div className="flex h-full flex-col">
             <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-2 text-xs text-[var(--text-secondary)]">
               {breadcrumb.length > 0 ? (
                 breadcrumb.map((segment, index) => (
@@ -192,7 +198,7 @@ export default function FileBrowserPage() {
               />
             </div>
           </div>
-        </div>
+        </SplitPane>
       )}
     </div>
   );
