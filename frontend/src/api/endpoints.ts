@@ -420,7 +420,7 @@ export const buildFileStreamUrl = (
   path: string,
   workspaceId?: string
 ): string =>
-  `/files/stream?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
+  `/api/files/stream?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
     workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
   }`;
 
