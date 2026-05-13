@@ -9,18 +9,22 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 
 
-def _make_app_and_workdir(tmp_path: Path):
+def _make_app_and_workdir(
+    tmp_path: Path, *, max_file_size_bytes: int | None = None
+):
     api_config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("secret-key")}),
         state_root=tmp_path,
     )
-    app = create_app(api_config)
+    app = create_app(api_config, max_file_size_bytes=max_file_size_bytes)
     workdir = api_config.runtime_paths.ensure_default_workspace_dir()
     return app, workdir
 
 
-def make_client(tmp_path: Path) -> httpx.AsyncClient:
-    app, _ = _make_app_and_workdir(tmp_path)
+def make_client(
+    tmp_path: Path, *, max_file_size_bytes: int | None = None
+) -> httpx.AsyncClient:
+    app, _ = _make_app_and_workdir(tmp_path, max_file_size_bytes=max_file_size_bytes)
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
@@ -94,10 +98,10 @@ async def test_read_file_not_found(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_read_file_too_large(tmp_path: Path) -> None:
-    _, workdir = _make_app_and_workdir(tmp_path)
+    _, workdir = _make_app_and_workdir(tmp_path, max_file_size_bytes=1_048_576)
     (workdir / "big.bin").write_bytes(b"x" * (2 * 1024 * 1024))
 
-    async with make_client(tmp_path) as client:
+    async with make_client(tmp_path, max_file_size_bytes=1_048_576) as client:
         response = await client.get("/files/read?environment_id=env-localhost&path=big.bin")
 
     assert response.status_code == 413

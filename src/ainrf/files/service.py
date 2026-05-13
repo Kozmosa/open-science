@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from ainrf.environments.service import InMemoryEnvironmentService
     from ainrf.workspaces.service import WorkspaceRegistryService
 
-_MAX_FILE_SIZE_BYTES = 1_048_576
+_MAX_FILE_SIZE_BYTES = 50_000_000
 _MAX_DIRECTORY_ENTRIES = 1_000
 _BINARY_PROBE_BYTES = 8_192
 
@@ -231,7 +231,7 @@ class FileBrowserService:
 
         size = target.stat().st_size
         if size > self._max_file_size:
-            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1024} KB limit")
+            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1_048_576} MB limit")
 
         data = target.read_bytes()
         return self._build_file_content(path, data)
@@ -249,7 +249,7 @@ class FileBrowserService:
         if size < 0:
             raise PathNotFoundError(f"File not found: {path}")
         if size > self._max_file_size:
-            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1024} KB limit")
+            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1_048_576} MB limit")
 
         if is_image_file(path):
             result = await self._run_ssh_command(environment, f"base64 {quoted_path}")

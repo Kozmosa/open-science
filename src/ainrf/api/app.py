@@ -89,7 +89,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await resource_monitor_service.stop()
 
 
-def create_app(config: ApiConfig | None = None) -> FastAPI:
+def create_app(
+    config: ApiConfig | None = None,
+    *,
+    max_file_size_bytes: int | None = None,
+) -> FastAPI:
     api_config = config or ApiConfig.from_env()
     runtime_paths = api_config.runtime_paths
     default_workspace_dir = runtime_paths.ensure_default_workspace_dir()
@@ -113,10 +117,13 @@ def create_app(config: ApiConfig | None = None) -> FastAPI:
         default_shell=api_config.terminal_command[0] if api_config.terminal_command else None,
     )
     app.state.terminal_attachment_broker = TerminalAttachmentBroker()
-    app.state.file_browser_service = FileBrowserService(
+    file_browser_kwargs: dict = dict(
         environment_service=environment_service,
         workspace_service=app.state.workspace_service,
     )
+    if max_file_size_bytes is not None:
+        file_browser_kwargs["max_file_size_bytes"] = max_file_size_bytes
+    app.state.file_browser_service = FileBrowserService(**file_browser_kwargs)
     app.state.skills_discovery_service = SkillsDiscoveryService(
         scan_roots=[default_workspace_dir],
     )
