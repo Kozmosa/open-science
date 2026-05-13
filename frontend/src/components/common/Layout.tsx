@@ -11,9 +11,9 @@ import {
   SquareTerminal,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { getTasks } from '../../api';
 import type { TaskSummary } from '../../types';
 import LocaleSwitcher from './LocaleSwitcher';
@@ -51,6 +51,7 @@ function buildTaskStatusSummary(tasks: TaskSummary[] | null, isError: boolean, i
 
 function Layout({ children, edgeToEdge = false }: Props) {
   const t = useT();
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(true);
   const tasksQuery = useQuery({
     queryKey: ['tasks'],
@@ -62,6 +63,24 @@ function Layout({ children, edgeToEdge = false }: Props) {
     tasksQuery.isError,
     tasksQuery.isLoading
   );
+  const ROUTE_TITLE_KEYS: Record<string, string> = {
+    '/projects': 'navigation.projects.label',
+    '/terminal': 'navigation.terminal.label',
+    '/tasks': 'navigation.tasks.label',
+    '/workspaces': 'navigation.workspaces.label',
+    '/workspace-browser': 'navigation.workspaceBrowser.label',
+    '/environments': 'navigation.environments.label',
+    '/resources': 'navigation.resources.label',
+    '/settings': 'navigation.settings.label',
+  };
+  const pageTitleKey = ROUTE_TITLE_KEYS[location.pathname] ?? '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pageTitle = pageTitleKey ? t(pageTitleKey as any) : '';
+
+  useEffect(() => {
+    document.title = pageTitle ? `${pageTitle} - AINRF` : 'AINRF学术系统';
+  }, [pageTitle]);
+
   const asideWidth = useMemo(() => (isCollapsed ? 'w-[56px]' : 'w-[248px]'), [isCollapsed]);
   const navigationItems: NavigationItem[] = [
     {
@@ -182,10 +201,15 @@ function Layout({ children, edgeToEdge = false }: Props) {
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--background)]/85 px-4 backdrop-blur-xl">
-            <p className="truncate text-xs font-medium text-[var(--muted-foreground)]">
-              {taskStatusSummary}
+            <p className="truncate text-sm font-medium text-[var(--text)]">
+              {pageTitle}
             </p>
-            <LocaleSwitcher />
+            <div className="flex items-center gap-4">
+              <p className="hidden truncate text-xs font-medium text-[var(--muted-foreground)] sm:block">
+                {taskStatusSummary}
+              </p>
+              <LocaleSwitcher />
+            </div>
           </header>
 
           <main
