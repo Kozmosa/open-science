@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
-import { FolderOpen, PanelLeftClose, PanelLeft, RefreshCw } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { FolderOpen, PanelLeftClose, RefreshCw } from 'lucide-react';
 import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { useEnvironmentSelection } from '../components';
@@ -90,16 +90,21 @@ export default function FileBrowserPage() {
     setCurrentFile(null);
   }, [environmentId, effectiveWorkspaceId, queryClient]);
 
+  const lastSidebarWidthRef = useRef(FILE_TREE_DEFAULT_WIDTH);
+
   const handleToggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => {
       if (prev) {
-        setSidebarWidth(FILE_TREE_DEFAULT_WIDTH);
+        setSidebarWidth(lastSidebarWidthRef.current);
       } else {
-        setSidebarWidth(0);
+        if (sidebarWidth > 44) {
+          lastSidebarWidthRef.current = sidebarWidth;
+        }
+        setSidebarWidth(44);
       }
       return !prev;
     });
-  }, []);
+  }, [sidebarWidth]);
 
   const breadcrumb = selectedPath
     ? selectedPath.split('/').filter(Boolean)
@@ -120,7 +125,7 @@ export default function FileBrowserPage() {
       ) : (
         <SplitPane
           sidebarMinWidth={FILE_TREE_MIN_WIDTH}
-          sidebarWidth={sidebarCollapsed ? 0 : sidebarWidth}
+          sidebarWidth={sidebarWidth}
           onSidebarWidthChange={(w) => {
             setSidebarWidth(w);
             setSidebarCollapsed(false);
@@ -128,56 +133,57 @@ export default function FileBrowserPage() {
           className="flex-1"
           sidebar={
             <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
+              <div className="flex items-center justify-between border-b border-[var(--border)] px-2 py-2">
                 <button
                   type="button"
                   onClick={handleToggleSidebar}
                   className="inline-flex items-center gap-2 rounded p-1 text-[var(--text-secondary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
                   title={sidebarCollapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
                 >
-                  <FolderOpen className="h-4 w-4 text-[var(--apple-blue)]" />
-                  <span className="text-xs font-medium text-[var(--text)]">Files</span>
-                  {sidebarCollapsed ? (
-                    <PanelLeft className="h-3.5 w-3.5" />
-                  ) : (
-                    <PanelLeftClose className="h-3.5 w-3.5" />
+                  <FolderOpen className="h-4 w-4 shrink-0 text-[var(--apple-blue)]" />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="text-xs font-medium text-[var(--text)]">Files</span>
+                      <PanelLeftClose className="h-3.5 w-3.5" />
+                    </>
                   )}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleRefresh}
-                  className="rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
-                  title="Refresh"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-auto p-2">
-                <FileTree
-                  entries={rootQuery.data?.entries ?? []}
-                  selectedPath={selectedPath}
-                  onSelectFile={handleSelectFile}
-                  onLoadDirectory={handleLoadDirectory}
-                />
-              </div>
-              <div className="border-t border-[var(--border)] px-3 py-2">
-                <label className="flex items-center gap-2">
-                  <span className="text-[11px] font-medium text-[var(--text-secondary)]">
-                    Workspace
-                  </span>
-                  <Select
-                    value={effectiveWorkspaceId}
-                    onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-                    disabled={workspaces.length === 0}
+                {!sidebarCollapsed && (
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    className="rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
+                    title="Refresh"
                   >
-                    {workspaces.map((workspace) => (
-                      <option key={workspace.workspace_id} value={workspace.workspace_id}>
-                        {workspace.label}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
+              {!sidebarCollapsed && (
+                <>
+                  <div className="flex-1 overflow-auto p-2">
+                    <FileTree
+                      entries={rootQuery.data?.entries ?? []}
+                      selectedPath={selectedPath}
+                      onSelectFile={handleSelectFile}
+                      onLoadDirectory={handleLoadDirectory}
+                    />
+                  </div>
+                  <div className="border-t border-[var(--border)] px-3 py-2">
+                    <Select
+                      value={effectiveWorkspaceId}
+                      onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                      disabled={workspaces.length === 0}
+                    >
+                      {workspaces.map((workspace) => (
+                        <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                          {workspace.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
           }
         >
