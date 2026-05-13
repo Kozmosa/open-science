@@ -66,9 +66,9 @@ export default function SplitPane({
   );
 
   return (
-    <div className={`flex min-h-0 w-full overflow-hidden ${className ?? ''}`}>
+    <div className={`flex min-h-0 w-full overflow-auto ${className ?? ''}`}>
       <aside
-        className="flex shrink-0 flex-col bg-[var(--sidebar)] p-3"
+        className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
         style={{ width: sidebarWidth }}
         data-testid={sidebarTestId}
       >
