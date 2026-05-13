@@ -656,6 +656,7 @@ function EnvironmentsPage() {
                             <Button
                               variant="secondary"
                               size="sm"
+                              title={t('pages.environments.useTooltip')}
                               onClick={() => environmentSelection.onSelectEnvironment(environment.id)}
                             >
                               {t('common.use')}
@@ -685,6 +686,7 @@ function EnvironmentsPage() {
                             <Button
                               variant="secondary"
                               size="sm"
+                              title={t('pages.environments.defaultTooltip')}
                               onClick={async () => {
                                 try {
                                   await saveProjectReferenceMutation.mutateAsync({ is_default: true });
