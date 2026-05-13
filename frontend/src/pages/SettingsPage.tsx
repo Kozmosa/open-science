@@ -12,7 +12,7 @@ import {
   SkillToggleGroup,
   Textarea,
 } from '../components/ui';
-import { SectionStack } from '../components/layout';
+import { PageShell, SectionStack } from '../components/layout';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry } from '../api';
 import { useT } from '../i18n';
@@ -1128,14 +1128,15 @@ function SettingsPage() {
     environmentsQuery.error instanceof Error ? environmentsQuery.error.message : null;
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow={t('pages.settings.eyebrow')}
-        title={t('pages.settings.title')}
-        description={t('pages.settings.description')}
-      />
+    <PageShell>
+      <div className="space-y-8 p-4">
+        <PageHeader
+          eyebrow={t('pages.settings.eyebrow')}
+          title={t('pages.settings.title')}
+          description={t('pages.settings.description')}
+        />
 
-      <SectionStack>
+        <SectionStack>
         {recoveryReason !== null ? <Alert variant="warning">{t('pages.settings.recoveryNotice')}</Alert> : null}
 
         <GeneralPreferencesSection
@@ -1207,7 +1208,8 @@ function SettingsPage() {
           }
         />
       </SectionStack>
-    </div>
+      </div>
+    </PageShell>
   );
 }
 
