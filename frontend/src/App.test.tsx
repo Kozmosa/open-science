@@ -123,7 +123,7 @@ describe('App routes', () => {
     );
 
     expect(await screen.findByTestId('terminal-page')).toBeInTheDocument();
-    expect(screen.getByRole('main')).toHaveClass('p-4');
+    expect(screen.getByRole('main')).toBeInTheDocument();
   });
 
   it('keeps the sidebar fixed while page content scrolls independently', async () => {
