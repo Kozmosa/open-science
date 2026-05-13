@@ -213,61 +213,12 @@ async def test_environment_detect_writes_back_runtime_configuration(
     data = response.json()
     assert data["preferred_python"] == "/usr/bin/python3"
     assert data["preferred_env_manager"] == "uv"
-    assert data["code_server_path"] == "/usr/local/bin/code-server"
-    assert data["latest_detection"]["code_server"] == {
+    assert data["code_server_path"] == "/usr/local/bin/codex"
+    assert data["latest_detection"]["codex"] == {
         "available": True,
-        "version": "4.117.0",
-        "path": "/usr/local/bin/code-server",
+        "version": "Codex 0.130.0",
+        "path": "/usr/local/bin/codex",
     }
-
-
-@pytest.mark.anyio
-async def test_environment_detect_preserves_usable_configured_code_server_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    commands: list[str] = []
-
-    async def fake_run_command(
-        self: object,
-        command: str,
-        timeout: float | None = None,
-        cwd: str | None = None,
-        env: object | None = None,
-    ) -> CommandResult:
-        _ = self, timeout, cwd, env
-        commands.append(command)
-        if command == "test -x /custom/bin/code-server":
-            return CommandResult(0, "", "")
-        if command == "/custom/bin/code-server --version":
-            return CommandResult(0, "4.116.1\n", "")
-        return _probe_result(command)
-
-    monkeypatch.setattr("ainrf.environments.probing.SSHExecutor.run_command", fake_run_command)
-    app = make_app(tmp_path)
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab",
-        display_name="GPU Lab",
-        host="gpu.example.com",
-        user="researcher",
-        default_workdir="/workspace/project",
-        code_server_path="/custom/bin/code-server",
-    )
-
-    async with make_client(app) as client:
-        response = await client.post(
-            f"/environments/{environment.id}/detect",
-            headers=API_HEADERS,
-        )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["code_server_path"] == "/custom/bin/code-server"
-    assert data["latest_detection"]["code_server"] == {
-        "available": True,
-        "version": "4.116.1",
-        "path": "/custom/bin/code-server",
-    }
-    assert "command -v code-server" not in commands
 
 
 @pytest.mark.anyio
@@ -1023,12 +974,8 @@ def _probe_result(command: str) -> CommandResult:
         "command -v uv": CommandResult(0, "/usr/bin/uv\n", ""),
         "uv --version": CommandResult(0, "uv 0.5.0\n", ""),
         "command -v pixi": CommandResult(1, "", ""),
-        "test -x /home/researcher/.local/ainrf/code-server/bin/code-server": CommandResult(
-            1, "", ""
-        ),
-        "test -x /usr/local/bin/code-server": CommandResult(1, "", ""),
-        "command -v code-server": CommandResult(0, "/usr/local/bin/code-server\n", ""),
-        "/usr/local/bin/code-server --version": CommandResult(0, "4.117.0\n", ""),
+        "command -v codex": CommandResult(0, "/usr/local/bin/codex\n", ""),
+        "codex --version": CommandResult(0, "Codex 0.130.0\n", ""),
         "python3 -c 'import torch; print(torch.__version__)'": CommandResult(
             1, "", "No module named torch"
         ),

@@ -241,7 +241,7 @@ async def detect_environment(environment_id: str, request: Request) -> Environme
                 "status": snapshot.status,
                 "warnings": snapshot.warnings,
                 "errors": snapshot.errors,
-                "code_server_path": snapshot.code_server.path,
+                "codex_path": snapshot.codex.path,
             },
         )
     except Exception as exc:

@@ -195,6 +195,7 @@ class EnvironmentDetectionResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     ssh_ok: bool = False
+    tmux_ok: bool = False
     hostname: str | None = None
     os_info: str | None = None
     arch: str | None = None
@@ -203,7 +204,7 @@ class EnvironmentDetectionResponse(BaseModel):
     conda: ToolStatusResponse
     uv: ToolStatusResponse
     pixi: ToolStatusResponse
-    code_server: ToolStatusResponse
+    codex: ToolStatusResponse
     torch: ToolStatusResponse
     cuda: ToolStatusResponse
     gpu_models: list[str] = Field(default_factory=list)

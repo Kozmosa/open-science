@@ -73,7 +73,8 @@ class DetectionSnapshot:
     conda: ToolStatus = field(default_factory=lambda: ToolStatus(available=False))
     uv: ToolStatus = field(default_factory=lambda: ToolStatus(available=False))
     pixi: ToolStatus = field(default_factory=lambda: ToolStatus(available=False))
-    code_server: ToolStatus = field(default_factory=lambda: ToolStatus(available=False))
+    tmux_ok: bool = False
+    codex: ToolStatus = field(default_factory=lambda: ToolStatus(available=False, version=None, path=None))
     torch: ToolStatus = field(default_factory=lambda: ToolStatus(available=False))
     cuda: ToolStatus = field(default_factory=lambda: ToolStatus(available=False))
     gpu_models: list[str] = field(default_factory=list)

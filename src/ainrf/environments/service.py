@@ -431,12 +431,12 @@ class InMemoryEnvironmentService:
                 environment.preferred_env_manager = env_manager
                 updated = True
 
-        if snapshot.code_server.available and snapshot.code_server.path is not None:
+        if snapshot.codex.available and snapshot.codex.path is not None:
             if (
                 not environment.code_server_path
-                or environment.code_server_path != snapshot.code_server.path
+                or environment.code_server_path != snapshot.codex.path
             ):
-                environment.code_server_path = snapshot.code_server.path
+                environment.code_server_path = snapshot.codex.path
                 updated = True
 
         if updated:
@@ -468,6 +468,7 @@ class InMemoryEnvironmentService:
             "errors": snapshot.errors,
             "warnings": snapshot.warnings,
             "ssh_ok": snapshot.ssh_ok,
+            "tmux_ok": snapshot.tmux_ok,
             "hostname": snapshot.hostname,
             "os_info": snapshot.os_info,
             "arch": snapshot.arch,
@@ -476,7 +477,7 @@ class InMemoryEnvironmentService:
             "conda": snapshot.conda,
             "uv": snapshot.uv,
             "pixi": snapshot.pixi,
-            "code_server": snapshot.code_server,
+            "codex": snapshot.codex,
             "torch": snapshot.torch,
             "cuda": snapshot.cuda,
             "gpu_models": snapshot.gpu_models,
@@ -510,6 +511,7 @@ class InMemoryEnvironmentService:
                     errors=data.get("errors", []),
                     warnings=data.get("warnings", []),
                     ssh_ok=data.get("ssh_ok", False),
+                    tmux_ok=data.get("tmux_ok", False),
                     hostname=data.get("hostname"),
                     os_info=data.get("os_info"),
                     arch=data.get("arch"),
@@ -518,7 +520,7 @@ class InMemoryEnvironmentService:
                     conda=_dict_to_tool_status(data.get("conda", {})),
                     uv=_dict_to_tool_status(data.get("uv", {})),
                     pixi=_dict_to_tool_status(data.get("pixi", {})),
-                    code_server=_dict_to_tool_status(data.get("code_server", {})),
+                    codex=_dict_to_tool_status(data.get("codex", {})),
                     torch=_dict_to_tool_status(data.get("torch", {})),
                     cuda=_dict_to_tool_status(data.get("cuda", {})),
                     gpu_models=data.get("gpu_models", []),
