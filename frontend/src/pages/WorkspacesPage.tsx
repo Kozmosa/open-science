@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from '../api';
 import { useT } from '../i18n';
 import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '../types';
-import { SplitPane } from '../components/layout';
+import { PageShell, SplitPane } from '../components/layout';
 import { Button, FormField, Input, Textarea, Alert } from '../components/ui';
 
 interface WorkspaceDraft {
@@ -111,7 +111,8 @@ function WorkspacesPage() {
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   return (
-    <SplitPane
+    <PageShell>
+      <SplitPane
       sidebarWidth={sidebarWidth}
       onSidebarWidthChange={setSidebarWidth}
       sidebarMinWidth={220}
@@ -254,6 +255,7 @@ function WorkspacesPage() {
         </div>
       </form>
     </SplitPane>
+    </PageShell>
   );
 }
 

@@ -66,35 +66,33 @@ export default function SplitPane({
   );
 
   return (
-    <div className={`flex min-h-0 flex-1 bg-[var(--bg)] p-4 ${className ?? ''}`}>
-      <div className="flex min-h-0 w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-        <aside
-          className="flex shrink-0 flex-col bg-[var(--sidebar)] p-3"
-          style={{ width: sidebarWidth }}
-          data-testid={sidebarTestId}
-        >
-          {sidebar}
-        </aside>
+    <div className={`flex min-h-0 w-full overflow-hidden ${className ?? ''}`}>
+      <aside
+        className="flex shrink-0 flex-col bg-[var(--sidebar)] p-3"
+        style={{ width: sidebarWidth }}
+        data-testid={sidebarTestId}
+      >
+        {sidebar}
+      </aside>
 
-        <div
-          className="group flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-[var(--surface)] transition-colors hover:bg-[var(--surface-hover)]"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t('layout.resizeSidebar')}
-          aria-valuemin={sidebarMinWidth}
-          aria-valuemax={sidebarMaxWidth}
-          aria-valuenow={sidebarWidth}
-          tabIndex={0}
-          onPointerDown={handlePointerDown}
-          onKeyDown={handleKeyDown}
-        >
-          <div className="h-8 w-0.5 rounded-full bg-[var(--border)] transition-colors group-hover:bg-[var(--apple-blue)] group-focus-visible:bg-[var(--apple-blue)]" />
-        </div>
-
-        <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] p-4">
-          {children}
-        </main>
+      <div
+        className="group flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-[var(--surface)] transition-colors hover:bg-[var(--surface-hover)]"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t('layout.resizeSidebar')}
+        aria-valuemin={sidebarMinWidth}
+        aria-valuemax={sidebarMaxWidth}
+        aria-valuenow={sidebarWidth}
+        tabIndex={0}
+        onPointerDown={handlePointerDown}
+        onKeyDown={handleKeyDown}
+      >
+        <div className="h-8 w-0.5 rounded-full bg-[var(--border)] transition-colors group-hover:bg-[var(--apple-blue)] group-focus-visible:bg-[var(--apple-blue)]" />
       </div>
+
+      <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] p-4">
+        {children}
+      </main>
     </div>
   );
 }

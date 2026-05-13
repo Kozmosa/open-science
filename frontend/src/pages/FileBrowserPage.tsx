@@ -4,7 +4,7 @@ import { FolderOpen, RefreshCw } from 'lucide-react';
 import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { useEnvironmentSelection } from '../components';
-import { SplitPane } from '../components/layout';
+import { PageShell, SplitPane } from '../components/layout';
 import { Select } from '../components/ui';
 import { useT } from '../i18n';
 import type { FileEntry, FileReadResponse } from '../types';
@@ -111,7 +111,7 @@ export default function FileBrowserPage() {
     : [];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <PageShell>
       {!selectedEnvironment ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-[var(--text-tertiary)]">
@@ -227,7 +227,7 @@ export default function FileBrowserPage() {
           </div>
         </SplitPane>
       )}
-    </div>
+    </PageShell>
   );
 }
 

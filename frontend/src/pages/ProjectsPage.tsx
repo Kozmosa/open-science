@@ -4,7 +4,7 @@ import { Modal } from '../components/ui';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
-import { SplitPane } from '../components/layout';
+import { PageShell, SplitPane } from '../components/layout';
 import {
   createTask,
   getEnvironments,
@@ -132,8 +132,9 @@ export default function ProjectsPage() {
   const createError = extractErrorMessage(createMutation.error);
 
   return (
-    <div className="flex min-h-0 flex-1 bg-[var(--bg)] p-3">
-      <SplitPane
+    <>
+      <PageShell>
+        <SplitPane
         sidebar={
           <ProjectSidebar
             projects={projects}
@@ -161,6 +162,7 @@ export default function ProjectsPage() {
           </div>
         )}
       </SplitPane>
+      </PageShell>
 
       <Modal
         isOpen={selectedTaskId !== null}
@@ -208,6 +210,6 @@ export default function ProjectsPage() {
           onClose={closeCreateDialog}
         />
       </Modal>
-    </div>
+    </>
   );
 }

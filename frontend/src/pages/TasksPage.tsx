@@ -16,7 +16,7 @@ import {
 import { Button, Modal } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
-import { SplitPane } from '../components/layout';
+import { PageShell, SplitPane } from '../components/layout';
 import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
 import { extractErrorMessage } from '../utils/error';
 import type { TaskCreateRequest, TaskSummary } from '../types';
@@ -177,7 +177,8 @@ function TasksPage() {
 
   return (
     <>
-      <SplitPane
+      <PageShell>
+        <SplitPane
         sidebar={
           <>
             <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
@@ -244,6 +245,7 @@ function TasksPage() {
           outputError={outputError}
         />
       </SplitPane>
+      </PageShell>
 
       <Modal
         isOpen={isCreateDialogOpen}
