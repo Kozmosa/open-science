@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
-import { FolderOpen, PanelLeftClose, RefreshCw } from 'lucide-react';
+import { FolderOpen, RefreshCw } from 'lucide-react';
 import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { useEnvironmentSelection } from '../components';
@@ -144,7 +144,6 @@ export default function FileBrowserPage() {
                   {!sidebarCollapsed && (
                     <>
                       <span className="text-xs font-medium text-[var(--text)]">Files</span>
-                      <PanelLeftClose className="h-3.5 w-3.5" />
                     </>
                   )}
                 </button>
