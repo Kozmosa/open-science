@@ -84,6 +84,9 @@ function writeOrder(storageKey: string, order: string[]): void {
   }
 }
 
+const GAP_CLASSES: Record<number, string> = { 2: 'gap-2', 3: 'gap-3', 4: 'gap-4', 5: 'gap-5', 6: 'gap-6', 8: 'gap-8' };
+const COL_CLASSES: Record<number, string> = { 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' };
+
 // ── CardGrid ──────────────────────────────────────────────────
 export default function CardGrid({
   groups,
@@ -135,24 +138,28 @@ export default function CardGrid({
     [cardOrder, onCardOrderChange]
   );
 
+  const gapClass = GAP_CLASSES[gap] ?? GAP_CLASSES[6];
+  const colClass = COL_CLASSES[columns] ?? COL_CLASSES[2];
+
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className={`space-y-${gap} ${className ?? ''}`}>
+      <div className={`${gapClass} ${className ?? ''}`}>
         {groups.map((group) => (
-          <div
-            key={group.id}
-            className={`grid grid-cols-1 gap-${gap} lg:grid-cols-${columns}`}
-          >
-            {group.cards.map((card) => (
-              <DraggableCard
-                key={`${group.id}:${card.kind}`}
-                id={`${group.id}:${card.kind}`}
-                kind={card.kind}
-                groupId={group.id}
-              >
-                {renderCard(card.id, card.kind, group.id)}
-              </DraggableCard>
-            ))}
+          <div key={group.id} className={`grid grid-cols-1 ${gapClass} ${colClass}`}>
+            {cardOrder.map((kind) => {
+              const card = group.cards.find((c) => c.kind === kind);
+              if (!card) return null;
+              return (
+                <DraggableCard
+                  key={`${group.id}:${kind}`}
+                  id={`${group.id}:${kind}`}
+                  kind={kind}
+                  groupId={group.id}
+                >
+                  {renderCard(card.id, kind, group.id)}
+                </DraggableCard>
+              );
+            })}
           </div>
         ))}
       </div>
