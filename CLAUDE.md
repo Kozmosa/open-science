@@ -104,6 +104,35 @@ Important: never edit files under `.cache/html-notes/` or `site/` — they are g
 - `scripts/` — Build tooling
 - `mkdocs.yml` — MkDocs config (Material theme, Mermaid, zh language)
 
+### Frontend Layout Components
+
+- Reusable layout shells live in `frontend/src/components/layout/`: `PageShell` (outer card wrapper), `SplitPane` (left-right split with drag handle, keyboard resizing, ARIA), `SectionStack` (vertical section spacing with optional `actions` slot), `CardGrid` (draggable card grid with DnD + localStorage). Use these instead of duplicating layout patterns.
+- `PageShell` provides the standard `p-4` + `rounded-2xl border shadow-sm` card shell. All pages should be wrapped in `PageShell` for consistent outer styling.
+
+### Tailwind CSS Constraints
+
+- Dynamic Tailwind classes (e.g. `space-y-${gap}`, `gap-${n}`) do NOT work with Tailwind v4 JIT compiler. Use static class lookup maps: `const GAP_CLASSES: Record<number, string> = { 2: 'gap-2', 4: 'gap-4', 6: 'gap-6' }`.
+
+### @dnd-kit Gotcha
+
+- Never nest `useDraggable`/`useDroppable` wrappers. `CardGrid` already provides an internal `DraggableCard` with drag handle and transform. Content passed via `renderCard` must NOT be wrapped in another draggable component — the double `translate3d` transform makes cards move faster than the pointer.
+
+### API Key Middleware
+
+- External tools may probe `localhost:8000` for Anthropic-compatible endpoints (`/v1/models`, `/v1/messages`). These paths are exempted from API key auth in `src/ainrf/api/middleware.py` to avoid 401 log spam. Add new external-facing paths to `_EXEMPT_PATH_PREFIXES` if needed.
+
+### Testing & Service Commands
+
+- Backend tests MUST run from repo root: `cd /home/xuyang/code/scholar-agent && uv run pytest tests/`
+- Frontend tests and type-check MUST run from the `frontend/` directory: `cd frontend && npm run test:run` and `cd frontend && node_modules/.bin/tsc -b`
+- Start ainrf service for manual testing: `uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`
+- API key for curl testing is stored as SHA256 hash in `~/.ainrf/config.json`; web UI API key in `~/.ainrf/webui.env`
+
+### Spec & Plan Documents
+
+- Design specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+- Implementation plans: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+
 ### Note Conventions
 
 - Frontmatter: YAML with `aliases`, `tags`, `source_repo`, `source_path`
