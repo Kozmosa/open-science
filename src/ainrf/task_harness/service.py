@@ -7,7 +7,7 @@ import sqlite3
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
@@ -70,6 +70,9 @@ from ainrf.task_harness.prompting import (
 from ainrf.task_harness.session_state import SessionStateStore
 from ainrf.workspaces import WorkspaceNotFoundError, WorkspaceRegistryService
 from ainrf.workspaces.models import WorkspaceRecord
+
+if TYPE_CHECKING:
+    from ainrf.sessions import SessionService
 
 _FINAL_STATUSES = {
     TaskHarnessStatus.SUCCEEDED,
