@@ -1,0 +1,111 @@
+<h2>设计 — 前端 UI</h2>
+<p class="subtitle">Session Chain · Section 3/4</p>
+
+<div class="section">
+  <h3>新页面：SessionsPage</h3>
+  <div class="mockup">
+    <div class="mockup-header">路由 & 组件树</div>
+    <div class="mockup-body">
+      <div style="font-family:monospace;font-size:12px;line-height:1.8;">
+        /sessions → <span style="color:#9333ea;">SessionsPage</span><br/>
+        &nbsp;&nbsp;└── <span style="color:#2563eb;">PageShell</span><br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span style="color:#2563eb;">SplitPane</span><br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span style="color:#059669;">SessionList</span> (sidebar, ~320px)<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── Search + Status Filter<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── SessionCard[] (title, status, task_count, cost)<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span style="color:#059669;">SessionDetail</span> (main pane)<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Header (title, status badge, actions)<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Stats bar (task_count | total_duration | total_cost)<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── AttemptChain (attempt 列表, 按 seq 排序)
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Attempt Chain 组件（核心 UI）</h3>
+  <div class="mockup">
+    <div class="mockup-header">Attempt Chain 示意</div>
+    <div class="mockup-body">
+      <div style="display:flex;flex-direction:column;gap:0;position:relative;padding-left:24px;">
+        <!-- Attempt 1 -->
+        <div style="position:relative;padding:10px 14px;margin-bottom:4px;">
+          <div style="position:absolute;left:-24px;top:18px;width:12px;height:12px;background:#16a34a;border-radius:50%;border:2px solid #fff;z-index:1;"></div>
+          <div style="position:absolute;left:-19px;top:30px;width:2px;height:calc(100% - 12px);background:#d1d5db;"></div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-weight:600;font-size:14px;">Attempt #1</span>
+              <span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-size:11px;">completed</span>
+            </div>
+            <div style="font-size:12px;color:#666;margin-top:4px;">Task: "ICML rebuttal baseline run" · 10m 20s · $1.52</div>
+            <div style="display:flex;gap:12px;margin-top:6px;font-size:11px;color:#999;">
+              <span>input 48K</span><span>output 8K</span><span>cache 22K</span>
+            </div>
+          </div>
+        </div>
+        <!-- Attempt 2 -->
+        <div style="position:relative;padding:10px 14px;margin-bottom:4px;">
+          <div style="position:absolute;left:-24px;top:18px;width:12px;height:12px;background:#f59e0b;border-radius:50%;border:2px solid #fff;z-index:1;"></div>
+          <div style="position:absolute;left:-19px;top:30px;width:2px;height:calc(100% - 12px);background:#d1d5db;"></div>
+          <div style="background:#fffdf5;border:1px solid #fef08a;border-radius:8px;padding:10px 14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-weight:600;font-size:14px;">Attempt #2</span>
+              <span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:4px;font-size:11px;">interrupted</span>
+            </div>
+            <div style="font-size:12px;color:#666;margin-top:4px;">Intervention: "实验结果不符合预期，需要调整超参数"</div>
+            <div style="font-size:12px;color:#999;margin-top:2px;">Task: same · 5m 42s · $0.89</div>
+          </div>
+        </div>
+        <!-- Attempt 3 -->
+        <div style="position:relative;padding:10px 14px;">
+          <div style="position:absolute;left:-24px;top:18px;width:12px;height:12px;background:#3b82f6;border-radius:50%;border:2px solid #fff;z-index:1;box-shadow:0 0 0 2px #bfdbfe;"></div>
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-weight:600;font-size:14px;">Attempt #3</span>
+              <span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:11px;">running</span>
+              <span style="font-size:11px;color:#3b82f6;">⏳ 3m 15s elapsed</span>
+            </div>
+            <div style="font-size:12px;color:#666;margin-top:4px;">Continued from Attempt #2 · Task: same</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>布局复用</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">组件</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">用途</th>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">PageShell</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">外层卡片包裹</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">SplitPane</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">SessionList | SessionDetail 左右分栏</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">SectionStack</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">SessionDetail 内部竖向分区</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">StatusDot / Badge</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">Session 和 Attempt 状态展示</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>与 TasksPage 的关联</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:13px;line-height:1.8;">
+      <div>· SessionDetail 的每个 attempt 中，task 名称可点击跳转到 <code style="background:#f1f5f9;padding:1px 4px;border-radius:2px;">/tasks/{task_id}</code></div>
+      <div>· TasksPage 的 TaskDetail 中，如果 task 属于 session，显示 <span style="background:#dbeafe;padding:2px 6px;border-radius:3px;">Session: xxx</span> 链接</div>
+      <div>· TaskCreateForm 增加可选的 <code style="background:#f1f5f9;padding:1px 4px;border-radius:2px;">session_id</code> 选择器（或通过 session 页面内发起新 task）</div>
+    </div>
+  </div>
+</div>
