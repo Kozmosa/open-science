@@ -16,6 +16,7 @@ from ainrf.api.routes.projects import router as projects_router
 from ainrf.api.routes.resources import router as resources_router
 from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.skill_registries import router as skill_registries_router
+from ainrf.api.routes.sessions import router as sessions_router
 from ainrf.api.routes.tasks import router as tasks_router, task_edges_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
@@ -26,6 +27,7 @@ from ainrf.environments import InMemoryEnvironmentService
 from ainrf.projects import ProjectRegistryService
 from ainrf.runtime.readiness import check_runtime_readiness
 from ainrf.skills import SkillsDiscoveryService
+from ainrf.sessions import SessionService
 from ainrf.task_harness import TaskHarnessService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
@@ -49,6 +51,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     terminal_router,
     tasks_router,
     task_edges_router,
+    sessions_router,
     code_router,
     resources_router,
 )
@@ -82,6 +85,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ).as_public_payload()
         await _run_sync_in_lifespan(terminal_session_manager.reconcile)
         await _run_sync_in_lifespan(task_harness_service.initialize)
+        session_service = app.state.session_service
+        await _run_sync_in_lifespan(session_service.initialize)
         yield
     finally:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
@@ -132,6 +137,9 @@ def create_app(
         environment_service=environment_service,
         workspace_service=app.state.workspace_service,
         skill_root=default_workspace_dir / "skills",
+    )
+    app.state.session_service = SessionService(
+        state_root=api_config.state_root,
     )
     app.middleware("http")(build_api_key_middleware(api_config))
     for router in ROUTERS:
