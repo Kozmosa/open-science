@@ -5,6 +5,7 @@ import {
   ChevronRight,
   FolderKanban,
   FolderOpen,
+  History,
   LayoutGrid,
   ListChecks,
   Settings,
@@ -71,6 +72,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
     '/workspace-browser': 'navigation.workspaceBrowser.label',
     '/environments': 'navigation.environments.label',
     '/resources': 'navigation.resources.label',
+    '/sessions': 'navigation.sessions.label',
     '/settings': 'navigation.settings.label',
   };
   const pageTitleKey = ROUTE_TITLE_KEYS[location.pathname] ?? '';
@@ -124,6 +126,12 @@ function Layout({ children, edgeToEdge = false }: Props) {
       to: '/resources',
       description: t('navigation.resources.description'),
       icon: Activity,
+    },
+    {
+      label: t('navigation.sessions.label'),
+      to: '/sessions',
+      description: t('navigation.sessions.description'),
+      icon: History,
     },
     {
       label: t('navigation.settings.label'),
