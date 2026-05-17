@@ -662,3 +662,57 @@ export interface TaskMessagesResponse {
   has_more: boolean;
   next_sequence: number | null;
 }
+
+// ── Session types ──────────────────────────────────────
+
+export type SessionStatus = 'active' | 'completed' | 'archived';
+export type AttemptStatus = 'running' | 'completed' | 'failed' | 'interrupted';
+
+export interface AttemptRecord {
+  id: string;
+  session_id: string;
+  task_id: string | null;
+  parent_attempt_id: string | null;
+  attempt_seq: number;
+  intervention_reason: string | null;
+  status: AttemptStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  token_usage_json: string | null;
+  created_at: string;
+}
+
+export interface SessionRecord {
+  id: string;
+  project_id: string;
+  title: string;
+  status: SessionStatus;
+  task_count: number;
+  total_duration_ms: number;
+  total_cost_usd: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionDetailRecord extends SessionRecord {
+  attempts: AttemptRecord[];
+}
+
+export interface SessionListResponse {
+  items: SessionRecord[];
+}
+
+export interface AttemptListResponse {
+  items: AttemptRecord[];
+}
+
+export interface SessionCreateRequest {
+  project_id: string;
+  title: string;
+}
+
+export interface SessionUpdateRequest {
+  title?: string | null;
+  status?: string | null;
+}
