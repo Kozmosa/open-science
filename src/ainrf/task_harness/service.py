@@ -459,6 +459,7 @@ class TaskHarnessService:
             "status": TaskOutputKind.SYSTEM,
             "system": TaskOutputKind.SYSTEM,
             "error": TaskOutputKind.STDERR,
+            "token": TaskOutputKind.TOKEN,
         }
         return mapping.get(event_type, TaskOutputKind.STDOUT)
 

@@ -31,6 +31,24 @@ from ainrf.task_harness.session_state import SessionCheckpoint
 logger = logging.getLogger(__name__)
 
 
+def _build_token_usage(sdk_msg) -> dict | None:
+    """Build token_usage dict from SDK ResultMessage."""
+    usage = getattr(sdk_msg, "usage", None)
+    if not usage:
+        return None
+    result: dict = {
+        "total": dict(usage),
+        "source": "agent-sdk",
+    }
+    total_cost = getattr(sdk_msg, "total_cost_usd", None) or 0.0
+    if "cost_usd" not in result["total"]:
+        result["total"]["cost_usd"] = float(total_cost)
+    model_usage = getattr(sdk_msg, "model_usage", None)
+    if model_usage:
+        result["by_model"] = dict(model_usage)
+    return result
+
+
 @dataclass
 class AgentSession:
     task_id: str
@@ -283,6 +301,15 @@ class AgentSdkEngine(ExecutionEngine):
                             },
                         )
                     )
+            # Emit per-turn token snapshot
+            if sdk_msg.usage:
+                events.append(
+                    EngineEvent(
+                        event_type="token",
+                        payload={"turn": len(events)},
+                        token_usage={"total": dict(sdk_msg.usage), "source": "agent-sdk"},
+                    )
+                )
             return events
 
         if isinstance(sdk_msg, UserMessage):
@@ -339,6 +366,7 @@ class AgentSdkEngine(ExecutionEngine):
                             "total_cost_usd": sdk_msg.total_cost_usd,
                             "errors": sdk_msg.errors,
                         },
+                        token_usage=_build_token_usage(sdk_msg),
                     )
                 )
             else:
@@ -351,6 +379,7 @@ class AgentSdkEngine(ExecutionEngine):
                             "num_turns": sdk_msg.num_turns,
                             "total_cost_usd": sdk_msg.total_cost_usd,
                         },
+                        token_usage=_build_token_usage(sdk_msg),
                     )
                 )
             return events
