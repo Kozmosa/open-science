@@ -132,14 +132,15 @@ def create_app(
     app.state.skills_discovery_service = SkillsDiscoveryService(
         scan_roots=[default_workspace_dir],
     )
+    app.state.session_service = SessionService(
+        state_root=api_config.state_root,
+    )
     app.state.task_harness_service = TaskHarnessService(
         state_root=api_config.state_root,
         environment_service=environment_service,
         workspace_service=app.state.workspace_service,
         skill_root=default_workspace_dir / "skills",
-    )
-    app.state.session_service = SessionService(
-        state_root=api_config.state_root,
+        session_service=app.state.session_service,
     )
     app.middleware("http")(build_api_key_middleware(api_config))
     for router in ROUTERS:
