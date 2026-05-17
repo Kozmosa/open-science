@@ -9,7 +9,6 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from ainrf.api.schemas import (
     AttemptListResponse,
-    AttemptResponse,
     SessionCreateRequest,
     SessionDetailResponse,
     SessionListResponse,

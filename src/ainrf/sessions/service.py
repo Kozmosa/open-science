@@ -10,7 +10,6 @@ from ainrf.sessions.models import (
     AttemptStatus,
     Session,
     SessionAttempt,
-    SessionError,
     SessionNotFoundError,
     SessionStatus,
 )
