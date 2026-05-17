@@ -1,6 +1,6 @@
 import SectionStack from '../../components/layout/SectionStack';
 import { useT } from '../../i18n';
-import type { SessionDetailRecord } from '../../types';
+import type { SessionDetailRecord, TokenUsage } from '../../types';
 import { AttemptChain } from './AttemptChain';
 
 interface Props {
@@ -69,6 +69,17 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
             })}
           </span>
           <span>${detail.total_cost_usd.toFixed(2)}</span>
+          {(() => {
+            const totalTok = detail.attempts.reduce((sum, a) => {
+              if (!a.token_usage_json) return sum;
+              try {
+                const tu = JSON.parse(a.token_usage_json) as TokenUsage;
+                const t = tu.total;
+                return sum + (t.input_tokens || 0) + (t.output_tokens || 0) + (t.cache_creation_input_tokens || 0) + (t.cache_read_input_tokens || 0);
+              } catch { return sum; }
+            }, 0);
+            return totalTok > 0 ? <span>{totalTok >= 1000 ? `${(totalTok / 1000).toFixed(1)}K tokens` : `${totalTok} tokens`}</span> : null;
+          })()}
         </div>
 
         <AttemptChain attempts={detail.attempts} />

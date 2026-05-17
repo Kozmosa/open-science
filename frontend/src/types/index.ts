@@ -716,3 +716,34 @@ export interface SessionUpdateRequest {
   title?: string | null;
   status?: string | null;
 }
+
+// ── Token types ──────────────────────────────────────────
+
+export interface TokenUsage {
+  total: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+    cost_usd?: number;
+  };
+  by_model?: Record<
+    string,
+    {
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+      cost_usd?: number;
+    }
+  >;
+  source: 'agent-sdk' | 'claude-session-meta';
+}
+
+export interface ProjectCostSummary {
+  project_id: string;
+  total_cost_usd: number;
+  total_tokens: number;
+  session_count: number;
+  by_model: Record<string, { cost_usd: number; tokens: number }>;
+}

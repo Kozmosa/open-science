@@ -1,4 +1,5 @@
 import SectionStack from '../../components/layout/SectionStack';
+import { TokenFlowBar } from '../../components/token/TokenFlowBar';
 import { useT } from '../../i18n';
 import type { AttemptRecord } from '../../types';
 
@@ -88,11 +89,7 @@ export function AttemptChain({ attempts }: Props) {
                   </a>
                 )}
                 <span>{formatDuration(a.duration_ms)}</span>
-                {a.token_usage_json && (
-                  <span className="text-gray-400">
-                    {t('pages.sessions.hasTokens')}
-                  </span>
-                )}
+                <TokenFlowBar tokenUsageJson={a.token_usage_json} />
               </div>
             </div>
           </div>
