@@ -15,6 +15,7 @@ const FileBrowserPage = lazy(() => import('./pages/FileBrowserPage'));
 const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const SessionsPage = lazy(() => import('./pages/SessionsPage'));
 
 const queryClient = createAppQueryClient();
 
@@ -54,6 +55,7 @@ function AppRoutes() {
           <Route path="/workspace-browser" element={<FileBrowserPage />} />
           <Route path="/environments" element={<EnvironmentsPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
+          <Route path="/sessions" element={<SessionsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Suspense>

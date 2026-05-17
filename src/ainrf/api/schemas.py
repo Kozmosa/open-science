@@ -417,6 +417,7 @@ class TaskCreateRequest(BaseModel):
     title: str | None = None
     execution_engine: str | None = None
     auto_connect: bool = Field(default=False)
+    session_id: str | None = None
     research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
     task_configuration: TaskConfigurationSnapshotRequest | None = None
 
@@ -538,6 +539,7 @@ class TaskSummaryResponse(BaseModel):
     error_summary: str | None = None
     latest_output_seq: int = 0
     execution_engine: str = "claude-code"
+    session_id: str | None = None
 
 
 class TaskListResponse(BaseModel):
@@ -680,6 +682,7 @@ class TaskDetailResponse(BaseModel):
     execution_engine: str = "claude-code"
     research_agent_profile: ResearchAgentProfileSnapshotResponse | None = None
     task_configuration: TaskConfigurationSnapshotResponse | None = None
+    session_id: str | None = None
 
 
 class TaskOutputEventResponse(BaseModel):
@@ -835,3 +838,61 @@ class SkillRegistryUpdateResponse(BaseModel):
     updated_count: int
     added: list[str] = Field(default_factory=list)
     removed: list[str] = Field(default_factory=list)
+
+
+# ── Session schemas ──────────────────────────────────────────────
+
+
+class SessionCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=500)
+
+
+class SessionUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    status: str | None = None  # "active" | "completed" | "archived"
+
+
+class AttemptResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    session_id: str
+    task_id: str | None = None
+    parent_attempt_id: str | None = None
+    attempt_seq: int
+    intervention_reason: str | None = None
+    status: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_ms: int | None = None
+    token_usage_json: str | None = None
+    created_at: str
+
+
+class SessionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    project_id: str
+    title: str
+    status: str
+    task_count: int
+    total_duration_ms: int
+    total_cost_usd: float
+    created_at: str
+    updated_at: str
+
+
+class SessionDetailResponse(SessionResponse):
+    attempts: list["AttemptResponse"] = Field(default_factory=list)
+
+
+class SessionListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list["SessionResponse"]
+
+
+class AttemptListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list["AttemptResponse"]

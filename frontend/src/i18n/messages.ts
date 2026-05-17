@@ -92,6 +92,10 @@ export const messages = {
         label: 'Resources',
         description: 'System resource monitoring and usage',
       },
+      sessions: {
+        label: 'Sessions',
+        description: 'Research session history',
+      },
       settings: {
         label: 'Settings',
         description: 'Runtime and WebUI preferences',
@@ -494,6 +498,32 @@ export const messages = {
           unavailable: 'Unavailable',
         },
       },
+      sessions: {
+        sidebarTitle: 'Sessions',
+        sidebarCount: '{{count}} sessions',
+        searchPlaceholder: 'Search sessions...',
+        empty: 'No sessions yet',
+        selectPrompt: 'Select a session to view details',
+        notFound: 'Session not found',
+        taskCount: '{{count}} tasks',
+        totalDuration: 'Total {{duration}}',
+        attemptsTitle: 'Attempts',
+        noAttempts: 'No attempts recorded',
+        attemptLabel: 'Attempt #{{seq}}',
+        viewTask: 'View task',
+        hasTokens: 'Token data',
+        status: {
+          active: 'Active',
+          completed: 'Completed',
+          archived: 'Archived',
+        },
+        attemptStatus: {
+          running: 'Running',
+          completed: 'Completed',
+          failed: 'Failed',
+          interrupted: 'Interrupted',
+        },
+      },
     },
     components: {
       healthStatusBar: {
@@ -752,6 +782,10 @@ export const messages = {
       resources: {
         label: '资源监控',
         description: '系统资源占用与使用情况',
+      },
+      sessions: {
+        label: '会话',
+        description: '研究会话历史',
       },
       settings: {
         label: '设置',
@@ -1138,6 +1172,32 @@ export const messages = {
           ok: '正常',
           degraded: '降级',
           unavailable: '不可用',
+        },
+      },
+      sessions: {
+        sidebarTitle: '会话',
+        sidebarCount: '{{count}} 个会话',
+        searchPlaceholder: '搜索会话...',
+        empty: '暂无会话',
+        selectPrompt: '选择一个会话查看详情',
+        notFound: '未找到会话',
+        taskCount: '{{count}} 个任务',
+        totalDuration: '总计 {{duration}}',
+        attemptsTitle: '尝试记录',
+        noAttempts: '暂无尝试记录',
+        attemptLabel: '尝试 #{{seq}}',
+        viewTask: '查看任务',
+        hasTokens: '有 Token 数据',
+        status: {
+          active: '活跃',
+          completed: '已完成',
+          archived: '已归档',
+        },
+        attemptStatus: {
+          running: '运行中',
+          completed: '已完成',
+          failed: '失败',
+          interrupted: '已中断',
         },
       },
     },

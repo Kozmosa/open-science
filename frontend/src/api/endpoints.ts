@@ -1,5 +1,6 @@
 import { api } from './client';
 import type {
+  AttemptListResponse,
   CodeServerStatus,
   EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
@@ -16,6 +17,11 @@ import type {
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
+  SessionCreateRequest,
+  SessionDetailRecord,
+  SessionListResponse,
+  SessionRecord,
+  SessionUpdateRequest,
   SkillDetail,
   SkillImportRequest,
   SkillImportResponse,
@@ -52,6 +58,7 @@ import {
   mockCreateEnvironment,
   mockCreateProject,
   mockCreateProjectEnvironmentReference,
+  mockCreateSession,
   mockCreateTask,
   mockCreateTerminalSession,
   mockCreateWorkspace,
@@ -59,6 +66,7 @@ import {
   mockDeleteEnvironment,
   mockDeleteProject,
   mockDeleteProjectEnvironmentReference,
+  mockDeleteSession,
   mockDeleteTerminalSession,
   mockDeleteWorkspace,
   mockDetectEnvironment,
@@ -69,6 +77,8 @@ import {
   mockGetProject,
   mockGetProjectEnvironmentReferences,
   mockGetProjects,
+  mockGetSession,
+  mockGetSessions,
   mockGetTask,
   mockGetTaskOutput,
   mockGetTasks,
@@ -87,7 +97,9 @@ import {
   mockUpdateEnvironment,
   mockUpdateProject,
   mockUpdateProjectEnvironmentReference,
+  mockUpdateSession,
   mockUpdateWorkspace,
+  mockGetAttempts,
   mockGetResources,
   mockGetProjectTasks,
   mockGetTaskEdges,
@@ -461,3 +473,48 @@ export const updateSkillRegistry = (
   USE_MOCK
     ? Promise.resolve({ registry_id: registryId, updated_count: 0, added: [], removed: [] })
     : api.post<SkillRegistryUpdateResponse>(`/skill-registries/${registryId}/update`, payload);
+
+// ── Session endpoints ───────────────────────────────────
+
+export const getSessions = (
+  projectId?: string,
+  status?: string,
+): Promise<SessionListResponse> => {
+  const params = new URLSearchParams();
+  if (projectId) params.set('project_id', projectId);
+  if (status) params.set('status', status);
+  const qs = params.toString();
+  return USE_MOCK
+    ? Promise.resolve(mockGetSessions({ projectId, status }))
+    : api.get<SessionListResponse>(`/sessions${qs ? `?${qs}` : ''}`);
+};
+
+export const getSession = (id: string): Promise<SessionDetailRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetSession(id))
+    : api.get<SessionDetailRecord>(`/sessions/${id}`);
+
+export const createSession = (
+  payload: SessionCreateRequest,
+): Promise<SessionRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockCreateSession(payload))
+    : api.post<SessionRecord>('/sessions', payload);
+
+export const updateSession = (
+  id: string,
+  payload: SessionUpdateRequest,
+): Promise<SessionRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockUpdateSession(id, payload))
+    : api.patch<SessionRecord>(`/sessions/${id}`, payload);
+
+export const deleteSession = (id: string): Promise<void> =>
+  USE_MOCK
+    ? Promise.resolve(mockDeleteSession(id))
+    : api.delete<void>(`/sessions/${id}`);
+
+export const getAttempts = (sessionId: string): Promise<AttemptListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetAttempts(sessionId))
+    : api.get<AttemptListResponse>(`/sessions/${sessionId}/attempts`);

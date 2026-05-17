@@ -1,5 +1,6 @@
 import type {
   AnthropicEnvStatus,
+  AttemptListResponse,
   CodeServerStatus,
   EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
@@ -16,6 +17,11 @@ import type {
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
+  SessionCreateRequest,
+  SessionDetailRecord,
+  SessionListResponse,
+  SessionRecord,
+  SessionUpdateRequest,
   SkillDetail,
   SkillImportRequest,
   SkillImportResponse,
@@ -41,6 +47,7 @@ import type {
   TaskEdgeCreateRequest,
   TaskEdgeListResponse,
 } from '../types';
+import { ApiError } from './client';
 
 const DEFAULT_PROJECT_ID = 'default';
 const MOCK_STATE_ROOT = '.ainrf';
@@ -1312,4 +1319,61 @@ export function mockReadFile(_environmentId: string, path: string): FileReadResp
     language,
     mime_type: null,
   };
+}
+
+// ── Session mocks ───────────────────────────────────────
+
+const _mockSessions: SessionRecord[] = [];
+
+export function mockGetSessions(_filters?: {
+  projectId?: string;
+  status?: string;
+}): SessionListResponse {
+  return { items: _mockSessions };
+}
+
+export function mockGetSession(id: string): SessionDetailRecord {
+  const s = _mockSessions.find((x) => x.id === id);
+  if (!s) throw new ApiError('Session not found', 404, `/sessions/${id}`);
+  return { ...s, attempts: [] };
+}
+
+export function mockCreateSession(
+  payload: SessionCreateRequest,
+): SessionRecord {
+  const s: SessionRecord = {
+    id: `sess_${_mockSessions.length + 1}`,
+    project_id: payload.project_id,
+    title: payload.title,
+    status: 'active',
+    task_count: 0,
+    total_duration_ms: 0,
+    total_cost_usd: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  _mockSessions.unshift(s);
+  return s;
+}
+
+export function mockUpdateSession(
+  id: string,
+  payload: SessionUpdateRequest,
+): SessionRecord {
+  const s = _mockSessions.find((x) => x.id === id);
+  if (!s) throw new ApiError('Session not found', 404, `/sessions/${id}`);
+  if (payload.title !== undefined) s.title = payload.title!;
+  if (payload.status !== undefined)
+    s.status = payload.status as SessionRecord['status'];
+  s.updated_at = new Date().toISOString();
+  return { ...s };
+}
+
+export function mockDeleteSession(_id: string): void {
+  const idx = _mockSessions.findIndex((x) => x.id === _id);
+  if (idx >= 0) _mockSessions.splice(idx, 1);
+}
+
+export function mockGetAttempts(_sessionId: string): AttemptListResponse {
+  return { items: [] };
 }
