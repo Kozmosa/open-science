@@ -856,15 +856,15 @@ class AttemptResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
     session_id: str
-    task_id: str | None
-    parent_attempt_id: str | None
+    task_id: str | None = None
+    parent_attempt_id: str | None = None
     attempt_seq: int
-    intervention_reason: str | None
+    intervention_reason: str | None = None
     status: str
-    started_at: str | None
-    finished_at: str | None
-    duration_ms: int | None
-    token_usage_json: str | None
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_ms: int | None = None
+    token_usage_json: str | None = None
     created_at: str
 
 
