@@ -1,0 +1,124 @@
+<h2>Token Track — Task Harness Integration</h2>
+<p class="subtitle">Section 3/5 · SessionService 注入 + _run_task 捕获 token + complete_attempt 写入 + _recalc_session 聚合</p>
+
+<div class="section">
+  <h3>TaskHarnessService 改动 (service.py)</h3>
+
+  <div class="mockup">
+    <div class="mockup-header">1. 构造函数注入 SessionService（可选）</div>
+    <div class="mockup-body" style="font-size:12px;line-height:1.8;">
+      <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;margin-bottom:8px;">
+<span style="color:#93c5fd;">class</span> <span style="color:#f9a8d4;">TaskHarnessService</span>:<br/>
+&nbsp;&nbsp;<span style="color:#93c5fd;">def</span> <span style="color:#67e8f9;">__init__</span>(<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;self, *,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;state_root: Path,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;...<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#fef08a;color:#000;padding:1px 4px;">session_service: SessionService | None = None,</span><br/>
+&nbsp;&nbsp;):<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;...<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#fef08a;color:#000;padding:1px 4px;">self._session_service = session_service</span>
+      </div>
+      <div style="font-size:11px;color:#666;">None 时完全跳过 session 逻辑（向后兼容，不影响现有 task）</div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">2. _run_task 中捕获 token_usage</div>
+    <div class="mockup-body" style="font-size:12px;line-height:1.8;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px;">
+        <strong>emit 闭包内（第 913-928 行区域）：</strong><br/>
+        <code style="font-size:11px;">
+          captured_token_usage = None<br/>
+          <br/>
+          def emit(event: EngineEvent):<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;nonlocal captured_token_usage<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;# 实时发射 per-turn token 事件到 output stream<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;if event.token_usage and event.event_type == "token":<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._append_output_event(task_id, TaskOutputKind.TOKEN,<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;json.dumps(event.token_usage))<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;# 捕获 final token_usage<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;if event.subtype == "task_completed" and event.token_usage:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;captured_token_usage = event.token_usage<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;... (现有逻辑)<br/>
+        </code>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">3. engine.start() 返回后 → 写入 TaskAttempt</div>
+    <div class="mockup-body" style="font-size:12px;line-height:1.8;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px;">
+        <strong>在 _complete_task() 调用前（第 942-952 行区域）：</strong><br/>
+        <code style="font-size:11px;">
+          # engine.start() 已返回<br/>
+          # 如果 task 有 session_id，且存在 captured_token_usage<br/>
+          if self._session_service and task_session_id:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;try:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;attempts = self._session_service.list_attempts(task_session_id)<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;latest = attempts[-1] if attempts else None<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if latest and latest.task_id == task_id:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self._session_service.complete_attempt(<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;latest.id,<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;status="completed",<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;duration_ms=...<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;token_usage_json=json.dumps(captured_token_usage),<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;except Exception:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;logger.warning("failed to update session attempt token", exc_info=True)<br/>
+        </code>
+      </div>
+      <div style="font-size:11px;color:#666;margin-top:6px;">
+        TaskAttempt 在 Task 1 (Session Chain) 中由 API route 创建（POST /tasks + session_id），
+        所以 task harness 只负责在完成时更新它。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>_recalc_session 扩展 (sessions/service.py)</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:12px;line-height:1.8;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px;">
+        <strong>在 _recalc_session 中新增 cost 聚合：</strong><br/>
+        <code style="font-size:11px;">
+          def _recalc_session(self, session_id):<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;with self._connect() as conn:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agg = conn.execute(<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"SELECT COUNT(*) AS cnt, "<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"COALESCE(SUM(duration_ms), 0) AS dur, "<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#fef08a;color:#000;">"COALESCE(SUM(<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CAST(json_extract(token_usage_json, '$.total.cost_usd') AS REAL)<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;), 0.0) AS total_cost "</span><br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"FROM task_attempts WHERE session_id = ? AND duration_ms IS NOT NULL",<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(session_id,),<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;).fetchone()<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if agg:<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;conn.execute(<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"UPDATE task_sessions SET task_count=?, total_duration_ms=?, "<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#fef08a;color:#000;">"total_cost_usd=?, "</span>"updated_at=? WHERE id=?",<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(agg["cnt"], agg["dur"], <span style="background:#fef08a;color:#000;">agg["total_cost"]</span>, _now_iso(), session_id),<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)
+        </code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>app.py 改动</h3>
+  <div style="font-size:13px;line-height:1.8;">
+    在 <code>create_app</code> 中，将 <code>session_service</code> 传给 <code>TaskHarnessService</code>：
+  </div>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;margin-top:6px;">
+session_service = SessionService(state_root=api_config.state_root)<br/>
+app.state.session_service = session_service<br/>
+<br/>
+task_harness_service = TaskHarnessService(<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;state_root=api_config.state_root,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;...<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#fef08a;color:#000;padding:1px 4px;">session_service=session_service,</span><br/>
+)
+  </div>
+</div>

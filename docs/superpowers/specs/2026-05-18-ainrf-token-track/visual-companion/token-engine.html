@@ -1,0 +1,96 @@
+<h2>Token Track — EngineEvent Extension & Engine Changes</h2>
+<p class="subtitle">Section 2/5 · Agent SDK 直接提取 + Claude Code 后处理 + 统一 EngineEvent</p>
+
+<div class="section">
+  <h3>EngineEvent 扩展 (base.py)</h3>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;line-height:1.6;">
+<span style="color:#93c5fd;">@dataclass(slots=True)</span><br/>
+<span style="color:#93c5fd;">class</span> <span style="color:#f9a8d4;">EngineEvent</span>:<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;event_type: <span style="color:#86efac;">Literal</span>[<span style="color:#fde68a;">"message"</span>, <span style="color:#fde68a;">"thinking"</span>, ...]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;subtype: <span style="color:#fde68a;">str</span> | <span style="color:#93c5fd;">None</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;payload: <span style="color:#fde68a;">str</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#fef08a;color:#000;padding:1px 4px;">token_usage: dict[str, Any] | None = None</span>  <span style="color:#6b7280;">← NEW</span><br/>
+  </div>
+</div>
+
+<div class="section">
+  <h3>AgentSdkEngine 改动 (agent_sdk.py)</h3>
+  <div class="mockup">
+    <div class="mockup-header">_convert_sdk_message — ResultMessage 处理</div>
+    <div class="mockup-body" style="font-size:12px;line-height:1.8;">
+      <div style="margin-bottom:8px;">当前 <code>ResultMessage</code> 分支（~line 324）只提取 session_id、num_turns、total_cost_usd。</div>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px;margin-bottom:8px;">
+        <strong>新增提取：</strong><br/>
+        <code>sdk_msg.usage</code> → <code>{"input_tokens": N, "output_tokens": N, "cache_creation_input_tokens": N, "cache_read_input_tokens": N}</code><br/>
+        <code>sdk_msg.model_usage</code> → <code>{"claude-opus-4-7": {同上}, ...}</code><br/>
+        <code>sdk_msg.total_cost_usd</code> → 已有，补充进 token_usage.total.cost_usd
+      </div>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px;">
+        <strong>构建 token_usage dict：</strong><br/>
+        <code style="font-size:11px;">
+          token_usage = {<br/>
+          &nbsp;&nbsp;"total": {**usage, "cost_usd": total_cost_usd},<br/>
+          &nbsp;&nbsp;"by_model": model_usage,<br/>
+          &nbsp;&nbsp;"source": "agent-sdk"<br/>
+          }
+        </code><br/>
+        然后：<code>EngineEvent("system", "task_completed", payload, token_usage=token_usage)</code>
+      </div>
+
+      <div style="margin-top:8px;font-size:11px;color:#666;">
+        另外：每个 AssistantMessage 也有 usage 字段（per-turn token 快照）→ 可作为 "token" 类型的 EngineEvent 实时发射
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>ClaudeCodeEngine 改动 (claude_code.py)</h3>
+  <div class="mockup">
+    <div class="mockup-header">子进程退出后 → 轮询 session-meta</div>
+    <div class="mockup-body" style="font-size:12px;line-height:1.8;">
+      <div style="background:#fefce8;border:1px solid #fef08a;border-radius:6px;padding:10px;margin-bottom:8px;">
+        <strong>流程：</strong><br/>
+        1. 在启动 Claude Code 子进程前，记录启动时间<br/>
+        2. 子进程退出后，轮询 <code style="font-size:11px;">~/.claude/usage-data/session-meta/</code><br/>
+        3. 找到 <code style="font-size:11px;">start_time</code> 最接近的 session-meta 文件（或通过 project_path + time 窗口匹配）<br/>
+        4. 最多等 30 秒（每秒检查一次新文件）<br/>
+        5. 提取 input_tokens + output_tokens
+      </div>
+
+      <div style="background:#fefce8;border:1px solid #fef08a;border-radius:6px;padding:10px;">
+        <strong>构建 token_usage dict（精简版）：</strong><br/>
+        <code style="font-size:11px;">
+          token_usage = {<br/>
+          &nbsp;&nbsp;"total": {<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;"input_tokens": meta["input_tokens"],<br/>
+          &nbsp;&nbsp;&nbsp;&nbsp;"output_tokens": meta["output_tokens"]<br/>
+          &nbsp;&nbsp;},<br/>
+          &nbsp;&nbsp;"source": "claude-session-meta"<br/>
+          }
+        </code><br/>
+        然后：<code>EngineEvent("system", "task_completed", payload, token_usage=token_usage)</code>
+      </div>
+
+      <div style="margin-top:8px;font-size:11px;color:#f59e0b;">
+        ⚠ 超时未找到 session-meta → token_usage=None（静默跳过，不 block task 完成）
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>TaskOutputKind 新增 (models.py)</h3>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:12px;font-family:monospace;font-size:12px;line-height:1.6;">
+<span style="color:#93c5fd;">class</span> <span style="color:#f9a8d4;">TaskOutputKind</span>(<span style="color:#86efac;">StrEnum</span>):<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;STDOUT = <span style="color:#fde68a;">"stdout"</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;STDERR = <span style="color:#fde68a;">"stderr"</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;...<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#fef08a;color:#000;padding:1px 4px;">TOKEN = "token"</span>  <span style="color:#6b7280;">← NEW</span><br/>
+  </div>
+  <div style="font-size:12px;color:#666;margin-top:6px;">
+    每个 AssistantMessage 的 per-turn usage 作为一个 "token" 事件发射，前端可以实时展示 token 消耗进度
+  </div>
+</div>

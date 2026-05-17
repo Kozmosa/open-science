@@ -1,0 +1,144 @@
+<h2>Token Track — Data Flow & Architecture</h2>
+<p class="subtitle">Section 1/5 · 统一的 EngineEvent token 携带 + 双引擎提取 + 实时流 + Session 聚合</p>
+
+<div class="section">
+  <h3>整体数据流</h3>
+  <div class="mockup">
+    <div class="mockup-body">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;">
+        <!-- Layer 1: Engines -->
+        <div style="display:flex;gap:12px;width:100%;">
+          <div style="flex:1;background:#dcfce7;border:2px solid #16a34a;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-weight:700;color:#166534;margin-bottom:4px;">AgentSdkEngine</div>
+            <div style="font-size:11px;color:#666;">ResultMessage.usage<br/>ResultMessage.model_usage<br/>ResultMessage.total_cost_usd</div>
+            <div style="margin-top:4px;font-size:10px;color:#16a34a;">✓ 实时可用</div>
+          </div>
+          <div style="flex:1;background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-weight:700;color:#92400e;margin-bottom:4px;">ClaudeCodeEngine</div>
+            <div style="font-size:11px;color:#666;">~/.claude/usage-data/<br/>session-meta/&lt;uuid&gt;.json</div>
+            <div style="margin-top:4px;font-size:10px;color:#f59e0b;">⚠ 异步，仅 input+output</div>
+          </div>
+        </div>
+
+        <div style="color:#999;font-size:20px;">↓</div>
+
+        <!-- Layer 2: Unified -->
+        <div style="background:#dbeafe;border:2px solid #3b82f6;border-radius:8px;padding:10px;width:100%;text-align:center;">
+          <div style="font-weight:700;color:#1e40af;margin-bottom:4px;">EngineEvent (extended)</div>
+          <div style="font-size:11px;color:#666;font-family:monospace;">
+            event_type: "system" | subtype: "task_completed"<br/>
+            <span style="background:#bfdbfe;padding:1px 4px;border-radius:2px;">+ token_usage: dict | None</span>
+          </div>
+        </div>
+
+        <div style="color:#999;font-size:20px;">↓</div>
+
+        <!-- Layer 3: emit closure -->
+        <div style="background:#f3e8ff;border:2px solid #9333ea;border-radius:8px;padding:10px;width:100%;text-align:center;">
+          <div style="font-weight:700;color:#6b21a8;margin-bottom:4px;">emit() closure in _run_task()</div>
+          <div style="font-size:11px;color:#666;">
+            捕获 token_usage → 存储到局部变量<br/>
+            token events 也写入 task_harness_output_events (kind="system")
+          </div>
+        </div>
+
+        <div style="color:#999;font-size:20px;">↓</div>
+
+        <!-- Layer 4: Session Chain -->
+        <div style="display:flex;gap:12px;width:100%;">
+          <div style="flex:1;background:#fce7f3;border:2px solid #db2777;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-weight:700;color:#9d174d;margin-bottom:4px;">task_attempts</div>
+            <div style="font-size:11px;color:#666;">token_usage_json populated<br/>on task complete</div>
+          </div>
+          <div style="flex:1;background:#fce7f3;border:2px solid #db2777;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-weight:700;color:#9d174d;margin-bottom:4px;">task_sessions</div>
+            <div style="font-size:11px;color:#666;">total_cost_usd updated<br/>via _recalc_session</div>
+          </div>
+        </div>
+
+        <div style="color:#999;font-size:20px;">↓</div>
+
+        <!-- Layer 5: Frontend -->
+        <div style="display:flex;gap:12px;width:100%;">
+          <div style="flex:1;background:#e5e7eb;border:1px solid #9ca3af;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-weight:700;color:#374151;margin-bottom:4px;">AttemptChain</div>
+            <div style="font-size:11px;color:#666;">Token flow bars<br/>(input/cache/output)</div>
+          </div>
+          <div style="flex:1;background:#e5e7eb;border:1px solid #9ca3af;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-weight:700;color:#374151;margin-bottom:4px;">SessionDetail</div>
+            <div style="font-size:11px;color:#666;">Total cost display<br/>Per-model breakdown</div>
+          </div>
+          <div style="flex:1;background:#e5e7eb;border:1px solid #9ca3af;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-weight:700;color:#374151;margin-bottom:4px;">ProjectsPage</div>
+            <div style="font-size:11px;color:#666;">Per-project<br/>cost aggregation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>token_usage_json 结构设计</h3>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:14px;font-family:monospace;font-size:12px;line-height:1.7;">
+{<br/>
+&nbsp;&nbsp;"total": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"input_tokens": 48200,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"output_tokens": 8150,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"cache_creation_input_tokens": 12000,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"cache_read_input_tokens": 8500,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"cost_usd": 3.42<br/>
+&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;"by_model": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"claude-opus-4-7": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"input_tokens": 32000,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"output_tokens": 6100,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"cache_creation_input_tokens": 8000,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"cache_read_input_tokens": 5000,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"cost_usd": 2.85<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"claude-sonnet-4-6": { ... }<br/>
+&nbsp;&nbsp;},<br/>
+&nbsp;&nbsp;"source": "agent-sdk"<br/>
+}
+  </div>
+  <div style="font-size:12px;color:#666;margin-top:6px;">
+    Claude Code 引擎的 source="claude-session-meta"，只有 total.input_tokens + total.output_tokens，无 cache 和 cost
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键设计决策</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">决策</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">选择</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">理由</th>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">EngineEvent 扩展方式</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">在 EngineEvent 增加可选的 token_usage 字段</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">不破坏现有 event 结构；token 数据随 system/task_completed 事件携带；也可作为独立 "token" 事件实时发射</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">Claude Code token 提取</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">子进程退出后，轮询 session-meta 目录（最多等 30s）</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">session-meta 异步生成；通过 Claude 的内部 session_id 匹配</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">TaskOutputEvent 暴露</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">新增 TaskOutputKind.TOKEN = "token"，实时发射 token 快照</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">SSE 流中可见；前端 MessageStream 可展示 token 进度</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">SessionService 注入</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">TaskHarnessService 接收可选的 session_service 引用</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">最小侵入；task 无 session 时完全跳过</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">total_cost_usd 聚合</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">_recalc_session 从 token_usage_json 中 SUM cost_usd</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">复用现有 recalc 流程；Claude Code 路径无 cost 时跳过</td>
+    </tr>
+  </table>
+</div>
