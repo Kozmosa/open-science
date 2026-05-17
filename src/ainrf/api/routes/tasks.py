@@ -70,6 +70,7 @@ def _serialize_task_summary(task: TaskListItem) -> dict[str, Any]:
         "error_summary": task.error_summary,
         "latest_output_seq": task.latest_output_seq,
         "execution_engine": task.execution_engine,
+        "session_id": task.session_id,
     }
 
 
@@ -256,6 +257,7 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
             title=payload.title,
             execution_engine=payload.execution_engine,
             auto_connect=payload.auto_connect,
+            session_id=payload.session_id,
             research_agent_profile=payload.research_agent_profile.model_dump()
             if payload.research_agent_profile is not None
             else None,

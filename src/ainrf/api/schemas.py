@@ -417,6 +417,7 @@ class TaskCreateRequest(BaseModel):
     title: str | None = None
     execution_engine: str | None = None
     auto_connect: bool = Field(default=False)
+    session_id: str | None = None
     research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
     task_configuration: TaskConfigurationSnapshotRequest | None = None
 
@@ -538,6 +539,7 @@ class TaskSummaryResponse(BaseModel):
     error_summary: str | None = None
     latest_output_seq: int = 0
     execution_engine: str = "claude-code"
+    session_id: str | None = None
 
 
 class TaskListResponse(BaseModel):
@@ -680,6 +682,7 @@ class TaskDetailResponse(BaseModel):
     execution_engine: str = "claude-code"
     research_agent_profile: ResearchAgentProfileSnapshotResponse | None = None
     task_configuration: TaskConfigurationSnapshotResponse | None = None
+    session_id: str | None = None
 
 
 class TaskOutputEventResponse(BaseModel):

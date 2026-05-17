@@ -220,6 +220,12 @@ class TaskHarnessService:
                 )
                 """
             )
+            self._ensure_column(
+                connection,
+                "task_harness_tasks",
+                "session_id",
+                "ALTER TABLE task_harness_tasks ADD COLUMN session_id TEXT",
+            )
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS task_harness_session_states (
                     id INTEGER PRIMARY KEY,
@@ -264,6 +270,7 @@ class TaskHarnessService:
         research_agent_profile: dict[str, object] | None = None,
         task_configuration: dict[str, object] | None = None,
         auto_connect: bool = False,
+        session_id: str | None = None,
     ) -> TaskListItem:
         self.initialize()
         if task_profile != _TASK_PROFILE:
@@ -321,8 +328,9 @@ class TaskHarnessService:
                     binding_snapshot_path,
                     prompt_manifest_path,
                     launch_payload_path,
-                    execution_engine
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    execution_engine,
+                    session_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -341,6 +349,7 @@ class TaskHarnessService:
                     str(prompt_manifest_path(task_dir)),
                     str(launch_payload_path(task_dir)),
                     resolved_execution_engine,
+                    session_id,
                 ),
             )
             connection.commit()
@@ -720,6 +729,7 @@ class TaskHarnessService:
             execution_engine=execution_engine,
             research_agent_profile=profile_snapshot,
             task_configuration=configuration_snapshot,
+            session_id=row["session_id"],
         )
 
     def get_output(
@@ -1235,6 +1245,7 @@ class TaskHarnessService:
             error_summary=row["error_summary"],
             latest_output_seq=int(row["latest_output_seq"]),
             execution_engine=row["execution_engine"] or _EXECUTION_ENGINE,
+            session_id=row["session_id"],
         )
 
     def _fail_unfinished_tasks_for_restart(self) -> None:
