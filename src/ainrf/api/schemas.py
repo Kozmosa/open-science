@@ -835,3 +835,61 @@ class SkillRegistryUpdateResponse(BaseModel):
     updated_count: int
     added: list[str] = Field(default_factory=list)
     removed: list[str] = Field(default_factory=list)
+
+
+# ── Session schemas ──────────────────────────────────────────────
+
+
+class SessionCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=500)
+
+
+class SessionUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    status: str | None = None  # "active" | "completed" | "archived"
+
+
+class AttemptResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    session_id: str
+    task_id: str | None
+    parent_attempt_id: str | None
+    attempt_seq: int
+    intervention_reason: str | None
+    status: str
+    started_at: str | None
+    finished_at: str | None
+    duration_ms: int | None
+    token_usage_json: str | None
+    created_at: str
+
+
+class SessionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    project_id: str
+    title: str
+    status: str
+    task_count: int
+    total_duration_ms: int
+    total_cost_usd: float
+    created_at: str
+    updated_at: str
+
+
+class SessionDetailResponse(SessionResponse):
+    attempts: list["AttemptResponse"] = Field(default_factory=list)
+
+
+class SessionListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list["SessionResponse"]
+
+
+class AttemptListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list["AttemptResponse"]
