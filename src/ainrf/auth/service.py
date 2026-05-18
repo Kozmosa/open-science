@@ -345,6 +345,15 @@ class AuthService:
             raise AuthError(f"User not found: {user_id}")
         return _row_to_user(row)
 
+    def _load_user_by_username(self, username: str) -> User:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM users WHERE username = ?", (username,)
+            ).fetchone()
+        if row is None:
+            raise AuthError(f"User not found: {username}")
+        return _row_to_user(row)
+
 
 def _row_to_user(row: sqlite3.Row) -> User:
     return User(
