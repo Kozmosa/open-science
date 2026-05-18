@@ -36,6 +36,7 @@ import type {
 import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview, SkillRegistryItem } from '../types';
 import { UsersTab } from './settings/UsersTab';
 import { EnvAccessTab } from './settings/EnvAccessTab';
+import { CollaboratorsTab } from './settings/CollaboratorsTab';
 import { useAuth } from '../contexts/AuthContext';
 
 interface GeneralDraftState {
@@ -1089,7 +1090,7 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
 function SettingsPage() {
   const t = useT();
   const { user: currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'envAccess'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'envAccess' | 'collaborators'>('general');
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
     queryFn: getEnvironments,
@@ -1137,6 +1138,7 @@ function SettingsPage() {
     ...(currentUser?.role === 'admin' ? [
       { key: 'users' as const, label: 'Users' },
       { key: 'envAccess' as const, label: 'Environment Access' },
+      { key: 'collaborators' as const, label: 'Collaborators' },
     ] : []),
   ];
 
@@ -1243,6 +1245,7 @@ function SettingsPage() {
 
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'envAccess' && <EnvAccessTab />}
+        {activeTab === 'collaborators' && <CollaboratorsTab />}
       </div>
     </PageShell>
   );
