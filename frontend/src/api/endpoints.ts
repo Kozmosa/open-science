@@ -1,10 +1,14 @@
 import { api } from './client';
 import type {
+  AccessTokenResponse,
   AdminPasswordResetRequest,
   AdminUserItem,
   AdminUserListResponse,
   AdminUserUpdateRequest,
   AttemptListResponse,
+  AuthTokenResponse,
+  LoginRequest,
+  RegisterRequest,
   CodeServerStatus,
   CollaboratorItem,
   CollaboratorListResponse,
@@ -50,6 +54,7 @@ import type {
   TaskRecord,
   TaskSummary,
   TerminalSession,
+  UserInfo,
   UserSessionPairListResponse,
   WorkspaceCreateRequest,
   WorkspaceListResponse,
@@ -550,3 +555,9 @@ export const removeCollaborator = (projectId: string, userId: string): Promise<v
 export const getEnvAccess = (envId: string): Promise<EnvAccessListResponse> => api.get(`/admin/environments/${envId}/access`);
 export const grantEnvAccess = (envId: string, payload: EnvAccessRequest): Promise<EnvAccessItem> => api.put(`/admin/environments/${envId}/access`, payload);
 export const revokeEnvAccess = (envId: string, userId: string): Promise<void> => api.delete(`/admin/environments/${envId}/access/${userId}`);
+
+export const login = (payload: LoginRequest): Promise<AuthTokenResponse> => api.post<AuthTokenResponse>('/auth/login', payload);
+export const register = (payload: RegisterRequest): Promise<{ message: string }> => api.post<{ message: string }>('/auth/register', payload);
+export const refreshToken = (refreshTokenValue: string): Promise<AccessTokenResponse> => api.post<AccessTokenResponse>('/auth/refresh', { refresh_token: refreshTokenValue });
+export const logoutApi = (refreshTokenValue: string): Promise<void> => api.post<void>('/auth/logout', { refresh_token: refreshTokenValue });
+export const getMe = (): Promise<UserInfo> => api.get<UserInfo>('/auth/me');

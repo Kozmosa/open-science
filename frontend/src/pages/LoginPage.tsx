@@ -27,21 +27,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
+      <form onSubmit={handleSubmit} className="bg-[var(--surface)] p-8 rounded-xl shadow-sm border border-[var(--border)] w-full max-w-sm">
         <h1 className="text-xl font-semibold mb-6">AINRF</h1>
         {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
         <div className="flex flex-col gap-4">
+          <label className="text-xs text-[var(--text-secondary)]">{t('auth.username')}</label>
           <input
-            className="px-3 py-2 border rounded-lg text-sm"
+            className="px-3 py-2 border border-[var(--border)] rounded-lg text-sm"
             placeholder={t('auth.username')}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoFocus
           />
+          <label className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
           <input
             type="password"
-            className="px-3 py-2 border rounded-lg text-sm"
+            className="px-3 py-2 border border-[var(--border)] rounded-lg text-sm"
             placeholder={t('auth.password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -51,10 +53,10 @@ export default function LoginPage() {
             disabled={submitting || !username || !password}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
           >
-            {submitting ? 'Loading...' : t('auth.login')}
+            {submitting ? t('common.loading') : t('auth.login')}
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-4 text-center">
+        <p className="text-xs text-[var(--text-secondary)] mt-4 text-center">
           <Link to="/register" className="text-blue-600 hover:underline">
             {t('auth.registerLink')}
           </Link>
