@@ -103,4 +103,21 @@ describe('TimelinePage', () => {
     const hasSession = await screen.findByText(/1 sessions/);
     if (!hasSession) throw new Error('not found');
   });
+
+  it('renders attempt bars with correct status colors', async () => {
+    renderWithProviders(<TimelinePage />);
+    await waitFor(() => {
+      // Completed attempts should have green bar
+      const bars = document.querySelectorAll('[class*="bg-green"]');
+      expect(bars.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('renders session cost in label', async () => {
+    renderWithProviders(<TimelinePage />);
+    await waitFor(() => {
+      const costElements = screen.getAllByText(/\$5\.25/);
+      expect(costElements.length).toBeGreaterThan(0);
+    });
+  });
 });
