@@ -11,6 +11,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from tests._testutil import get_jwt_headers
 from ainrf.terminal.tmux import TmuxCommandError
 
 APP_USER_ID = "browser-user"
@@ -41,6 +42,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.get(
             f"/terminal/session?environment_id={environment.id}",
@@ -95,6 +97,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/terminal/session",
@@ -142,6 +145,7 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://lab.internal:5173",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/terminal/session",
@@ -180,6 +184,7 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         first = await client.post(
             "/terminal/session",
@@ -220,6 +225,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         seeded = await client.post(
             "/terminal/session",
@@ -309,6 +315,7 @@ async def test_terminal_session_switching_environment_keeps_distinct_personal_se
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         first = await client.post(
             "/terminal/session",
@@ -357,6 +364,7 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         created = await client.post(
             "/terminal/session",
@@ -405,6 +413,7 @@ async def test_terminal_session_reset_returns_new_attachment(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         created = await client.post(
             "/terminal/session",
@@ -434,6 +443,7 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/terminal/session",
@@ -457,6 +467,7 @@ async def test_terminal_session_routes_require_app_user_header(tmp_path: Path) -
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.get(
             f"/terminal/session?environment_id={environment.id}",

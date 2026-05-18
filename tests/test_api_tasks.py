@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from tests._testutil import get_jwt_headers
 from ainrf.task_harness.launcher import LaunchPayload
 from ainrf.task_harness.models import TaskHarnessStatus
 
@@ -145,6 +146,7 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         workspaces = await client.get("/workspaces", headers=API_HEADERS)
         create_response = await client.post(
@@ -242,6 +244,7 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
@@ -300,6 +303,7 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
@@ -364,6 +368,7 @@ async def test_task_harness_stream_endpoint_emits_new_events(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
         timeout=5.0,
+        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
@@ -454,6 +459,7 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
@@ -492,6 +498,7 @@ async def test_create_task_with_kimi_engine(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         kimi_settings = {
             "env": {
@@ -591,6 +598,7 @@ async def test_create_task_rejects_reproduce_baseline_without_aris_skill(tmp_pat
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/tasks",
@@ -625,6 +633,7 @@ async def test_create_task_rejects_discover_ideas_without_aris_skill(tmp_path: P
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/tasks",
@@ -659,6 +668,7 @@ async def test_create_task_rejects_validate_ideas_without_aris_skill(tmp_path: P
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/tasks",
