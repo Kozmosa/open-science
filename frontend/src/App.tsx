@@ -16,6 +16,7 @@ const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
+const TimelinePage = lazy(() => import('./pages/TimelinePage'));
 
 const queryClient = createAppQueryClient();
 
@@ -56,6 +57,7 @@ function AppRoutes() {
           <Route path="/environments" element={<EnvironmentsPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
           <Route path="/sessions" element={<SessionsPage />} />
+          <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Suspense>
