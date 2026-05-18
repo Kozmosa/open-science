@@ -40,6 +40,7 @@ class Session:
     total_cost_usd: float
     created_at: str
     updated_at: str
+    owner_user_id: str | None = None
 
 
 @dataclass(slots=True)

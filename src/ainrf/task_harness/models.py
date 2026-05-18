@@ -102,6 +102,7 @@ class TaskListItem:
     latest_output_seq: int
     execution_engine: str
     session_id: str | None = None
+    owner_user_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -176,6 +177,7 @@ class TaskDetail:
     research_agent_profile: ResearchAgentProfileSnapshot | None
     task_configuration: TaskConfigurationSnapshot | None
     session_id: str | None = None
+    owner_user_id: str | None = None
 
 
 @dataclass(slots=True)

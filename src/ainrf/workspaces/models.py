@@ -14,3 +14,4 @@ class WorkspaceRecord:
     workspace_prompt: str
     created_at: datetime
     updated_at: datetime
+    owner_user_id: str | None = None

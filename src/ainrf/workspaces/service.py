@@ -52,6 +52,7 @@ class WorkspaceRegistryService:
                         workspace_prompt=item["workspace_prompt"],
                         created_at=datetime.fromisoformat(item["created_at"]),
                         updated_at=datetime.fromisoformat(item["updated_at"]),
+                        owner_user_id=item.get("owner_user_id"),
                     )
                     for item in payload.get("items", [])
                 }
@@ -64,11 +65,17 @@ class WorkspaceRegistryService:
                 self._persist()
             self._initialized = True
 
-    def list_workspaces(self, project_id: str | None = None) -> list[WorkspaceRecord]:
+    def list_workspaces(
+        self,
+        project_id: str | None = None,
+        owner_user_id: str | None = None,
+    ) -> list[WorkspaceRecord]:
         self.initialize()
         workspaces = list(self._workspaces.values())
         if project_id is not None:
             workspaces = [w for w in workspaces if w.project_id == project_id]
+        if owner_user_id is not None:
+            workspaces = [w for w in workspaces if w.owner_user_id == owner_user_id]
         return workspaces
 
     def get_workspace(self, workspace_id: str) -> WorkspaceRecord:
@@ -86,6 +93,7 @@ class WorkspaceRegistryService:
         description: str | None,
         default_workdir: str | None,
         workspace_prompt: str,
+        owner_user_id: str | None = None,
     ) -> WorkspaceRecord:
         self.initialize()
         with self._lock:
@@ -108,6 +116,7 @@ class WorkspaceRegistryService:
                 workspace_prompt=workspace_prompt,
                 created_at=now,
                 updated_at=now,
+                owner_user_id=owner_user_id,
             )
             self._workspaces[workspace_id] = workspace
             self._persist()
@@ -137,6 +146,7 @@ class WorkspaceRegistryService:
                 ),
                 created_at=current.created_at,
                 updated_at=utc_now(),
+                owner_user_id=current.owner_user_id,
             )
             self._workspaces[workspace_id] = workspace
             self._persist()
