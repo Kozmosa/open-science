@@ -1,0 +1,126 @@
+<h2>多用户鉴权 — 数据模型</h2>
+<p class="subtitle">Section 1/5 · User 表 + 资源 ownership + Project Collaborators + Environment 权限组</p>
+
+<div class="section">
+  <h3>1. User 表（新 SQLite DB: auth.sqlite3）</h3>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;line-height:1.7;">
+<span style="color:#93c5fd;">CREATE TABLE</span> users (<br/>
+&nbsp;&nbsp;id TEXT PRIMARY KEY,<br/>
+&nbsp;&nbsp;username TEXT NOT NULL UNIQUE,<br/>
+&nbsp;&nbsp;password_hash TEXT NOT NULL,&nbsp;&nbsp;<span style="color:#6b7280;">-- bcrypt</span><br/>
+&nbsp;&nbsp;display_name TEXT NOT NULL,<br/>
+&nbsp;&nbsp;role TEXT NOT NULL DEFAULT <span style="color:#fde68a;">'member'</span>,&nbsp;&nbsp;<span style="color:#6b7280;">-- 'admin' | 'member'</span><br/>
+&nbsp;&nbsp;status TEXT NOT NULL DEFAULT <span style="color:#fde68a;">'pending'</span>,&nbsp;&nbsp;<span style="color:#6b7280;">-- 'pending' | 'active' | 'disabled'</span><br/>
+&nbsp;&nbsp;created_at TEXT NOT NULL,<br/>
+&nbsp;&nbsp;activated_at TEXT,&nbsp;&nbsp;<span style="color:#6b7280;">-- Admin 审批后设置</span><br/>
+&nbsp;&nbsp;last_login_at TEXT<br/>
+);<br/>
+<br/>
+<span style="color:#6b7280;">-- JWT refresh tokens（支持 logout）</span><br/>
+<span style="color:#93c5fd;">CREATE TABLE</span> refresh_tokens (<br/>
+&nbsp;&nbsp;id TEXT PRIMARY KEY,<br/>
+&nbsp;&nbsp;user_id TEXT NOT NULL REFERENCES users(id),<br/>
+&nbsp;&nbsp;token_hash TEXT NOT NULL,<br/>
+&nbsp;&nbsp;expires_at TEXT NOT NULL,<br/>
+&nbsp;&nbsp;created_at TEXT NOT NULL<br/>
+);
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. 资源表扩展 — user ownership</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;">资源</th>
+      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;">新增列</th>
+      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;">说明</th>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">task_harness_tasks</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">owner_user_id TEXT</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">创建 task 的用户</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">projects</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">owner_user_id TEXT</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">创建 project 的用户</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">workspaces</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">owner_user_id TEXT</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">workspace 所属用户</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">task_sessions</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">owner_user_id TEXT</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">session 创建者</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">user_environment_bindings</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">（已有 user_id）</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">无需改动</td>
+    </tr>
+  </table>
+  <div style="font-size:11px;color:#888;margin-top:6px;">
+    所有 owner_user_id 用 ALTER TABLE ADD COLUMN，默认 NULL。Admin 用户（PI）看到所有资源（不按 owner 过滤）。
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. Project Collaborators（新表）</h3>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;line-height:1.7;">
+<span style="color:#93c5fd;">CREATE TABLE</span> project_collaborators (<br/>
+&nbsp;&nbsp;project_id TEXT NOT NULL,<br/>
+&nbsp;&nbsp;user_id TEXT NOT NULL,<br/>
+&nbsp;&nbsp;role TEXT NOT NULL DEFAULT <span style="color:#fde68a;">'member'</span>,&nbsp;&nbsp;<span style="color:#6b7280;">-- 'member' | 'viewer'</span><br/>
+&nbsp;&nbsp;added_by_user_id TEXT NOT NULL,<br/>
+&nbsp;&nbsp;added_at TEXT NOT NULL,<br/>
+&nbsp;&nbsp;PRIMARY KEY (project_id, user_id)<br/>
+);
+  </div>
+  <div style="font-size:11px;color:#666;margin-top:6px;">
+    <strong>member</strong>: 可读写 project 下所有 tasks/sessions/workspace。<br/>
+    <strong>viewer</strong>: 只读（可查看 task 详情/output，不能创建/修改/取消）。
+  </div>
+</div>
+
+<div class="section">
+  <h3>4. Environment 权限组（新表）</h3>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;line-height:1.7;">
+<span style="color:#93c5fd;">CREATE TABLE</span> environment_access (<br/>
+&nbsp;&nbsp;environment_id TEXT NOT NULL,<br/>
+&nbsp;&nbsp;user_id TEXT NOT NULL,<br/>
+&nbsp;&nbsp;max_concurrent_tasks INTEGER,&nbsp;&nbsp;<span style="color:#6b7280;">-- NULL = 无限制</span><br/>
+&nbsp;&nbsp;granted_by_user_id TEXT NOT NULL,<br/>
+&nbsp;&nbsp;granted_at TEXT NOT NULL,<br/>
+&nbsp;&nbsp;PRIMARY KEY (environment_id, user_id)<br/>
+);<br/>
+<br/>
+<span style="color:#6b7280;">-- Admin 可看到所有 env；普通用户只看到 environment_access 中自己的行</span><br/>
+<span style="color:#6b7280;">-- "全局可用"的 env：Admin 为所有用户各插一行</span>
+  </div>
+</div>
+
+<div class="section">
+  <h3>5. 权限检查逻辑（伪代码）</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:11px;line-height:1.8;">
+<strong>Admin (role='admin'):</strong> 所有资源 CRUD 全通<br/><br/>
+<strong>Project 访问:</strong><br/>
+&nbsp;&nbsp;is_admin OR<br/>
+&nbsp;&nbsp;project.owner_user_id == current_user.id OR<br/>
+&nbsp;&nbsp;project_collaborators 中存在 (project_id, user_id)<br/><br/>
+<strong>Task 访问:</strong><br/>
+&nbsp;&nbsp;is_admin OR<br/>
+&nbsp;&nbsp;task.owner_user_id == current_user.id OR<br/>
+&nbsp;&nbsp;该 task 的 project 的 collaborator<br/><br/>
+<strong>Environment 访问:</strong><br/>
+&nbsp;&nbsp;is_admin OR<br/>
+&nbsp;&nbsp;environment_access 中存在 (environment_id, user_id)<br/><br/>
+<strong>Workspace 访问:</strong><br/>
+&nbsp;&nbsp;is_admin OR<br/>
+&nbsp;&nbsp;workspace.owner_user_id == current_user.id OR<br/>
+&nbsp;&nbsp;该 workspace 的 project 的 collaborator
+    </div>
+  </div>
+</div>
