@@ -88,10 +88,12 @@ class TestSessionService:
         a = service.create_attempt(session_id=s.id)
         done = service.complete_attempt(
             a.id, status="completed", duration_ms=5000,
-            token_usage_json='{"input": 1000, "output": 200}',
+            token_usage_json='{"total": {"input_tokens": 1000, "output_tokens": 200, "cost_usd": 3.0}}',
         )
         assert done.status.value == "completed"
         assert done.duration_ms == 5000
+        s2 = service.get_session(s.id)
+        assert s2.total_cost_usd == pytest.approx(3.0)
 
     def test_complete_attempt_recalcs_session(self, service):
         s = service.create_session(project_id="p1", title="S")
@@ -103,6 +105,8 @@ class TestSessionService:
         s2 = service.get_session(s.id)
         assert s2.task_count == 2
         assert s2.total_duration_ms == 10000
+        # Cost aggregation: neither attempt has cost data, so total should be zero
+        assert s2.total_cost_usd == 0.0
 
     def test_list_attempts_sorted(self, service):
         s = service.create_session(project_id="p1", title="S")
