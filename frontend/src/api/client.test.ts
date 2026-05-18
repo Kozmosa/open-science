@@ -7,9 +7,7 @@ beforeEach(() => {
 });
 
 describe('api client', () => {
-  it('injects the configured API key header and app user id header', async () => {
-    vi.stubEnv('VITE_AINRF_API_KEY', 'secret-key');
-    window.localStorage.clear();
+  it('injects the Bearer token when access token is set', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
@@ -20,18 +18,17 @@ describe('api client', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { api } = await import('./client');
+    const { api, setAccessToken } = await import('./client');
+    setAccessToken('test-jwt-token');
     await expect(api.get<{ status: string }>('/health')).resolves.toEqual({ status: 'ok' });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(init).toBeDefined();
-    expect(new Headers(init?.headers).get('X-API-Key')).toBe('secret-key');
-    expect(new Headers(init?.headers).get('X-AINRF-User-Id')).toBeTruthy();
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-jwt-token');
   });
 
-  it('preserves manually provided API key headers', async () => {
-    vi.stubEnv('VITE_AINRF_API_KEY', 'env-secret');
+  it('does not inject Authorization header when no access token is set', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
@@ -42,14 +39,13 @@ describe('api client', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { api } = await import('./client');
-    await expect(
-      api.post<{ status: string }>('/health', { ok: true }, { headers: { 'X-API-Key': 'manual-secret' } })
-    ).resolves.toEqual({ status: 'ok' });
+    const { api, setAccessToken } = await import('./client');
+    setAccessToken(null);
+    await expect(api.get<{ status: string }>('/health')).resolves.toEqual({ status: 'ok' });
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
-    expect(new Headers(init?.headers).get('X-API-Key')).toBe('manual-secret');
-    expect(new Headers(init?.headers).get('X-AINRF-User-Id')).toBeTruthy();
+    expect(new Headers(init?.headers).get('Authorization')).toBeNull();
   });
 
   it('surfaces server error details in ApiError', async () => {
