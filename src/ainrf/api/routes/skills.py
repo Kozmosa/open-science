@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ainrf.auth.permissions import get_current_user, require_admin
 from ainrf.api.schemas import (
     SkillDetailResponse,
     SkillImportRequest,
@@ -115,7 +116,11 @@ async def import_skill(
 
     If skill_id override is provided, renames the directory and updates skill.json.
     Imported skills are placed in the first scan root of the discovery service.
+
+    Requires admin privileges.
     """
+    user = get_current_user(request)
+    require_admin(user)
     service = _get_skills_discovery_service(request)
     if not service._scan_roots:
         raise HTTPException(status_code=500, detail="No skill scan roots configured")

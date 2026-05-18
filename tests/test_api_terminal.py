@@ -11,10 +11,11 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from tests.testutil import get_jwt_headers
 from ainrf.terminal.tmux import TmuxCommandError
 
 APP_USER_ID = "browser-user"
-API_HEADERS = {"X-API-Key": "secret-key", "X-AINRF-User-Id": APP_USER_ID}
+# API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
 
 
 def make_app(tmp_path: Path) -> FastAPI:
@@ -32,6 +33,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
     tmp_path: Path,
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -44,7 +46,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
     ) as client:
         response = await client.get(
             f"/terminal/session?environment_id={environment.id}",
-            headers=API_HEADERS,
+            headers=jwt_headers,
         )
 
     assert response.status_code == 200
@@ -75,6 +77,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     environment = app.state.environment_service.create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -98,7 +101,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     ) as client:
         response = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
 
@@ -127,6 +130,7 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     environment = app.state.environment_service.create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -145,7 +149,7 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
     ) as client:
         response = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
 
@@ -161,6 +165,7 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -183,12 +188,12 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
     ) as client:
         first = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         second = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
 
@@ -206,6 +211,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -223,7 +229,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
     ) as client:
         seeded = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         assert seeded.status_code == 200
@@ -259,7 +265,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
             await start_event.wait()
             responses[index] = await client.post(
                 "/terminal/session",
-                headers=API_HEADERS,
+                headers=jwt_headers,
                 json={"environment_id": environment.id},
             )
 
@@ -285,6 +291,7 @@ async def test_terminal_session_switching_environment_keeps_distinct_personal_se
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     first_environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -312,17 +319,17 @@ async def test_terminal_session_switching_environment_keeps_distinct_personal_se
     ) as client:
         first = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": first_environment.id},
         )
         second = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": second_environment.id},
         )
         first_summary = await client.get(
             f"/terminal/session?environment_id={first_environment.id}",
-            headers=API_HEADERS,
+            headers=jwt_headers,
         )
 
     assert first.status_code == 200
@@ -338,6 +345,7 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -360,12 +368,12 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
     ) as client:
         created = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         detached = await client.delete(
             f"/terminal/session?environment_id={environment.id}&attachment_id={created.json()['attachment_id']}",
-            headers=API_HEADERS,
+            headers=jwt_headers,
         )
 
     assert created.status_code == 200
@@ -380,6 +388,7 @@ async def test_terminal_session_reset_returns_new_attachment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -408,12 +417,12 @@ async def test_terminal_session_reset_returns_new_attachment(
     ) as client:
         created = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         reset = await client.post(
             "/terminal/session/reset",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "environment_id": environment.id,
                 "attachment_id": created.json()["attachment_id"],
@@ -430,6 +439,7 @@ async def test_terminal_session_reset_returns_new_attachment(
 @pytest.mark.anyio
 async def test_terminal_session_post_returns_404_for_missing_environment(tmp_path: Path) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -437,7 +447,7 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
     ) as client:
         response = await client.post(
             "/terminal/session",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={"environment_id": "missing"},
         )
 
@@ -446,7 +456,7 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
 
 
 @pytest.mark.anyio
-async def test_terminal_session_routes_require_app_user_header(tmp_path: Path) -> None:
+async def test_terminal_session_routes_require_auth(tmp_path: Path) -> None:
     app = make_app(tmp_path)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
@@ -460,8 +470,7 @@ async def test_terminal_session_routes_require_app_user_header(tmp_path: Path) -
     ) as client:
         response = await client.get(
             f"/terminal/session?environment_id={environment.id}",
-            headers={"X-API-Key": "secret-key"},
+            # No JWT headers — should be rejected by middleware
         )
 
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Missing required header: X-AINRF-User-Id"}
+    assert response.status_code == 401

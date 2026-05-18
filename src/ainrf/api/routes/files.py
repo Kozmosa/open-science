@@ -9,6 +9,7 @@ import shlex
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 
+from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     FileEntryResponse,
     FileListResponse,
@@ -52,6 +53,7 @@ async def list_files(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ) -> FileListResponse:
+    user = get_current_user(request)
     service = _get_file_browser_service(request)
     try:
         listing = await service.list_directory(environment_id, path, workspace_id)
