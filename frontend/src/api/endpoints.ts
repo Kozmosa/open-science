@@ -1,6 +1,8 @@
 import { api } from './client';
 import type {
+  AccessTokenResponse,
   AttemptListResponse,
+  AuthTokenResponse,
   CodeServerStatus,
   EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
@@ -9,6 +11,7 @@ import type {
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  LoginRequest,
   ProjectCostSummary,
   ProjectCreateRequest,
   ProjectEnvironmentReference,
@@ -18,6 +21,7 @@ import type {
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
+  RegisterRequest,
   SessionCreateRequest,
   SessionDetailRecord,
   SessionListResponse,
@@ -40,6 +44,7 @@ import type {
   TaskRecord,
   TaskSummary,
   TerminalSession,
+  UserInfo,
   UserSessionPairListResponse,
   WorkspaceCreateRequest,
   WorkspaceListResponse,
@@ -530,3 +535,20 @@ export const getProjectCostSummary = (projectId: string): Promise<ProjectCostSum
         by_model: {},
       })
     : api.get<ProjectCostSummary>(`/projects/${projectId}/cost-summary`);
+
+// ── Auth endpoints ────────────────────────────────────────
+
+export const login = (payload: LoginRequest): Promise<AuthTokenResponse> =>
+  api.post<AuthTokenResponse>('/auth/login', payload);
+
+export const register = (payload: RegisterRequest): Promise<{ message: string }> =>
+  api.post<{ message: string }>('/auth/register', payload);
+
+export const refreshToken = (refreshTokenValue: string): Promise<AccessTokenResponse> =>
+  api.post<AccessTokenResponse>('/auth/refresh', { refresh_token: refreshTokenValue });
+
+export const logoutApi = (refreshTokenValue: string): Promise<void> =>
+  api.post<void>('/auth/logout', { refresh_token: refreshTokenValue });
+
+export const getMe = (): Promise<UserInfo> =>
+  api.get<UserInfo>('/auth/me');
