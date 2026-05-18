@@ -1,9 +1,17 @@
 import { api } from './client';
 import type {
-  AccessTokenResponse,
+  AdminPasswordResetRequest,
+  AdminUserItem,
+  AdminUserListResponse,
+  AdminUserUpdateRequest,
   AttemptListResponse,
-  AuthTokenResponse,
   CodeServerStatus,
+  CollaboratorItem,
+  CollaboratorListResponse,
+  CollaboratorRequest,
+  EnvAccessItem,
+  EnvAccessListResponse,
+  EnvAccessRequest,
   EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
   EnvironmentListResponse,
@@ -11,7 +19,6 @@ import type {
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
-  LoginRequest,
   ProjectCostSummary,
   ProjectCreateRequest,
   ProjectEnvironmentReference,
@@ -21,7 +28,6 @@ import type {
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
-  RegisterRequest,
   SessionCreateRequest,
   SessionDetailRecord,
   SessionListResponse,
@@ -44,7 +50,6 @@ import type {
   TaskRecord,
   TaskSummary,
   TerminalSession,
-  UserInfo,
   UserSessionPairListResponse,
   WorkspaceCreateRequest,
   WorkspaceListResponse,
@@ -536,19 +541,12 @@ export const getProjectCostSummary = (projectId: string): Promise<ProjectCostSum
       })
     : api.get<ProjectCostSummary>(`/projects/${projectId}/cost-summary`);
 
-// ── Auth endpoints ────────────────────────────────────────
-
-export const login = (payload: LoginRequest): Promise<AuthTokenResponse> =>
-  api.post<AuthTokenResponse>('/auth/login', payload);
-
-export const register = (payload: RegisterRequest): Promise<{ message: string }> =>
-  api.post<{ message: string }>('/auth/register', payload);
-
-export const refreshToken = (refreshTokenValue: string): Promise<AccessTokenResponse> =>
-  api.post<AccessTokenResponse>('/auth/refresh', { refresh_token: refreshTokenValue });
-
-export const logoutApi = (refreshTokenValue: string): Promise<void> =>
-  api.post<void>('/auth/logout', { refresh_token: refreshTokenValue });
-
-export const getMe = (): Promise<UserInfo> =>
-  api.get<UserInfo>('/auth/me');
+export const getAdminUsers = (): Promise<AdminUserListResponse> => api.get('/admin/users');
+export const updateAdminUser = (userId: string, payload: AdminUserUpdateRequest): Promise<AdminUserItem> => api.patch(`/admin/users/${userId}`, payload);
+export const resetUserPassword = (userId: string, payload: AdminPasswordResetRequest): Promise<void> => api.put(`/admin/users/${userId}/password`, payload);
+export const getCollaborators = (projectId: string): Promise<CollaboratorListResponse> => api.get(`/projects/${projectId}/collaborators`);
+export const addCollaborator = (projectId: string, payload: CollaboratorRequest): Promise<CollaboratorItem> => api.put(`/projects/${projectId}/collaborators`, payload);
+export const removeCollaborator = (projectId: string, userId: string): Promise<void> => api.delete(`/projects/${projectId}/collaborators/${userId}`);
+export const getEnvAccess = (envId: string): Promise<EnvAccessListResponse> => api.get(`/admin/environments/${envId}/access`);
+export const grantEnvAccess = (envId: string, payload: EnvAccessRequest): Promise<EnvAccessItem> => api.put(`/admin/environments/${envId}/access`, payload);
+export const revokeEnvAccess = (envId: string, userId: string): Promise<void> => api.delete(`/admin/environments/${envId}/access/${userId}`);

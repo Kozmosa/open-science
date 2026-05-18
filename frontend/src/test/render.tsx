@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render } from '@testing-library/react';
 import { ToastProvider } from '../components/common';
+import { AuthProvider } from '../contexts/AuthContext';
 import { LocaleProvider, type Locale } from '../i18n';
 import { appQueryClientDefaultOptions } from '../queryClient';
 import { SettingsProvider } from '../settings';
@@ -36,11 +37,13 @@ export function renderWithProviders(
     return (
       <LocaleProvider initialLocale={locale}>
         <SettingsProvider>
-          <QueryClientProvider client={client}>
-            <ToastProvider>
-              <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
-            </ToastProvider>
-          </QueryClientProvider>
+          <AuthProvider>
+            <QueryClientProvider client={client}>
+              <ToastProvider>
+                <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+              </ToastProvider>
+            </QueryClientProvider>
+          </AuthProvider>
         </SettingsProvider>
       </LocaleProvider>
     );
