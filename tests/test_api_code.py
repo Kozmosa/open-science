@@ -8,13 +8,13 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from tests._testutil import get_jwt_headers
 from ainrf.code_server import (
     CodeServerLifecycleStatus,
     CodeServerState,
     EnvironmentCodeServerManager,
 )
 from ainrf.environments import EnvironmentAuthKind
+from tests.testutil import get_jwt_headers
 
 
 class ReadyManager:
@@ -52,12 +52,13 @@ async def test_code_status_reports_unavailable_without_manager(tmp_path: Path) -
             state_root=tmp_path,
         )
     )
+    jwt_headers = get_jwt_headers(app)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        response = await client.get("/code/status", headers=get_jwt_headers(app))
+        response = await client.get("/code/status", headers=jwt_headers)
 
     assert response.status_code == 200
     assert response.json() == {
@@ -78,6 +79,7 @@ async def test_code_session_returns_conflict_for_password_environment(tmp_path: 
             state_root=tmp_path,
         )
     )
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="password-lab",
         display_name="Password Lab",
@@ -97,7 +99,7 @@ async def test_code_session_returns_conflict_for_password_environment(tmp_path: 
     ) as client:
         response = await client.post(
             "/code/session",
-            headers=get_jwt_headers(app),
+            headers=jwt_headers,
             json={"environment_id": environment.id},
         )
 
@@ -117,6 +119,7 @@ async def test_code_proxy_forwards_ready_requests(
     )
     app.state.code_server_manager = ReadyManager()
     app.state.code_server_supervisor = app.state.code_server_manager
+    jwt_headers = get_jwt_headers(app)
 
     original_request = httpx.AsyncClient.request
 
@@ -148,7 +151,7 @@ async def test_code_proxy_forwards_ready_requests(
     ) as client:
         response = await client.get(
             "/code/",
-            headers={**get_jwt_headers(app), "Accept": "text/html"},
+            headers={**jwt_headers, "Accept": "text/html"},
         )
 
     assert response.status_code == 200
@@ -169,6 +172,7 @@ async def test_code_proxy_forwards_query_string(
     )
     app.state.code_server_manager = ReadyManager()
     app.state.code_server_supervisor = app.state.code_server_manager
+    jwt_headers = get_jwt_headers(app)
 
     original_request = httpx.AsyncClient.request
 
@@ -195,7 +199,7 @@ async def test_code_proxy_forwards_query_string(
     ) as client:
         response = await client.get(
             "/code/proxy/assets/app.js?folder=/workspace/project&view=preview",
-            headers=get_jwt_headers(app),
+            headers=jwt_headers,
         )
 
     assert response.status_code == 204
@@ -214,6 +218,7 @@ async def test_code_proxy_returns_upstream_errors(
     )
     app.state.code_server_manager = ReadyManager()
     app.state.code_server_supervisor = app.state.code_server_manager
+    jwt_headers = get_jwt_headers(app)
 
     original_request = httpx.AsyncClient.request
 
@@ -233,7 +238,7 @@ async def test_code_proxy_returns_upstream_errors(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        timeout_response = await client.get("/code/", headers=get_jwt_headers(app))
+        timeout_response = await client.get("/code/", headers=jwt_headers)
 
     assert timeout_response.status_code == 503
     assert timeout_response.json() == {"detail": "code-server upstream timed out"}
@@ -255,7 +260,7 @@ async def test_code_proxy_returns_upstream_errors(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        transport_response = await client.get("/code/", headers=get_jwt_headers(app))
+        transport_response = await client.get("/code/", headers=jwt_headers)
 
     assert transport_response.status_code == 502
     assert transport_response.json() == {"detail": "code-server upstream request failed"}

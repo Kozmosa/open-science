@@ -7,6 +7,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from starlette.datastructures import Headers
 
+from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     CodeServerLifecycleStatus,
     CodeServerSessionRequest,
@@ -128,6 +129,7 @@ async def ensure_code_server_session(
     payload: CodeServerSessionRequest,
     request: Request,
 ) -> CodeServerStatusResponse:
+    user = get_current_user(request)
     manager = _get_code_server_manager(request)
     if manager is None:
         raise HTTPException(status_code=500, detail="code-server supervisor not initialized")
@@ -136,7 +138,7 @@ async def ensure_code_server_session(
         state = await _call_manager_ensure(
             manager,
             payload.environment_id,
-            app_user_id=request.headers.get("X-AINRF-User-Id"),
+            app_user_id=user["id"],
             terminal_session_manager=getattr(request.app.state, "terminal_session_manager", None),
         )
     except Exception as exc:

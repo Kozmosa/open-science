@@ -10,6 +10,7 @@ from fastapi import APIRouter, FastAPI
 
 from ainrf.api.config import ApiConfig
 from ainrf.api.middleware import build_jwt_auth_middleware
+from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.code import router as code_router
 from ainrf.api.routes.environments import router as environments_router
@@ -45,6 +46,7 @@ def _run_sync_in_lifespan(callback: Callable[[], None]) -> Awaitable[None]:
 
 
 ROUTERS: tuple[APIRouter, ...] = (
+    admin_router,
     auth_router,
     health_router,
     environments_router,

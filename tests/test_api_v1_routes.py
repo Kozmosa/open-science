@@ -7,7 +7,7 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from tests._testutil import get_jwt_headers
+from tests.testutil import get_jwt_headers
 
 
 def make_client(tmp_path: Path) -> httpx.AsyncClient:
@@ -23,14 +23,15 @@ def make_client(tmp_path: Path) -> httpx.AsyncClient:
     )
 
 
-def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
+def make_auth_client(tmp_path: Path, username: str = "admin", password: str = "test-admin-password"):
+    """Create an authenticated async client with JWT Bearer headers."""
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
             state_root=tmp_path,
         )
     )
-    headers = get_jwt_headers(app)
+    headers = get_jwt_headers(app, username=username, password=password)
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
@@ -41,7 +42,7 @@ def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
 @pytest.mark.anyio
 @pytest.mark.parametrize("path", ["/health", "/v1/health"])
 async def test_health_routes_are_public(tmp_path: Path, path: str) -> None:
-    async with make_auth_client(tmp_path) as client:
+    async with make_client(tmp_path) as client:
         response = await client.get(path)
 
     assert response.status_code == 200
@@ -52,7 +53,7 @@ async def test_health_routes_are_public(tmp_path: Path, path: str) -> None:
 async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
     tmp_path: Path,
 ) -> None:
-    async with make_auth_client(tmp_path) as client:
+    async with make_client(tmp_path) as client:
         response = await client.get("/openapi.json")
 
     assert response.status_code == 200
@@ -131,6 +132,7 @@ async def test_lifespan_attaches_environment_aware_code_server_manager(
             state_root=tmp_path,
         )
     )
+    jwt_headers = get_jwt_headers(app)
 
     async with app.router.lifespan_context(app):
         manager = app.state.code_server_manager
@@ -148,6 +150,7 @@ async def test_lifespan_records_startup_runtime_readiness(
             state_root=tmp_path,
         )
     )
+    jwt_headers = get_jwt_headers(app)
     monkeypatch.setattr(
         "ainrf.api.app.check_runtime_readiness",
         lambda code_server_path=None: type(
@@ -189,6 +192,7 @@ async def test_lifespan_records_readiness_even_when_code_server_missing(
             state_root=tmp_path,
         )
     )
+    jwt_headers = get_jwt_headers(app)
     monkeypatch.setattr(
         "ainrf.api.app.check_runtime_readiness",
         lambda code_server_path=None: type(
@@ -230,6 +234,7 @@ async def test_health_uses_startup_runtime_readiness_snapshot(
             state_root=tmp_path,
         )
     )
+    jwt_headers = get_jwt_headers(app)
     app.state.runtime_readiness = {
         "ready": False,
         "dependencies": {"tmux": {"available": False, "path": None, "detail": "Install tmux."}},
@@ -255,7 +260,7 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
     async with make_auth_client(tmp_path) as client:
         create_response = await client.post(
             "/v1/workspaces",
-                        json={
+            json={
                 "label": "Paper Experiments",
                 "description": "Runs for the paper figures",
                 "default_workdir": workdir,
@@ -270,16 +275,14 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
         assert created["default_workdir"] == workdir
         assert created["workspace_prompt"] == "Focus on reproducible experiments."
 
-        list_response = await client.get(
-            "/v1/workspaces",
-                    )
+        list_response = await client.get("/v1/workspaces")
         assert list_response.status_code == 200
         assert workspace_id in {item["workspace_id"] for item in list_response.json()["items"]}
 
         updated_workdir = str(tmp_path / "workspace" / "updated")
         update_response = await client.patch(
             f"/v1/workspaces/{workspace_id}",
-                        json={
+            json={
                 "label": "Updated Experiments",
                 "description": None,
                 "default_workdir": updated_workdir,
@@ -296,14 +299,10 @@ async def test_workspace_crud_routes_persist_changes(tmp_path: Path) -> None:
         assert updated["created_at"] == created["created_at"]
         assert updated["updated_at"] >= created["updated_at"]
 
-        delete_response = await client.delete(
-            f"/v1/workspaces/{workspace_id}",
-                    )
+        delete_response = await client.delete(f"/v1/workspaces/{workspace_id}")
         assert delete_response.status_code == 204
 
-        read_deleted_response = await client.get(
-            f"/v1/workspaces/{workspace_id}",
-                    )
+        read_deleted_response = await client.get(f"/v1/workspaces/{workspace_id}")
         assert read_deleted_response.status_code == 404
 
 
@@ -315,7 +314,7 @@ async def test_create_workspace_auto_creates_missing_directory(tmp_path: Path) -
     async with make_auth_client(tmp_path) as client:
         create_response = await client.post(
             "/v1/workspaces",
-                        json={
+            json={
                 "label": "Auto Created",
                 "description": None,
                 "default_workdir": str(target_dir),
@@ -337,7 +336,7 @@ async def test_create_workspace_rejects_unavailable_directory(tmp_path: Path) ->
     async with make_auth_client(tmp_path) as client:
         create_response = await client.post(
             "/v1/workspaces",
-                        json={
+            json={
                 "label": "Blocked",
                 "description": None,
                 "default_workdir": str(blocked_path),
@@ -350,9 +349,7 @@ async def test_create_workspace_rejects_unavailable_directory(tmp_path: Path) ->
         assert "Failed to create workspace directory" in detail
 
         # 验证 workspace 未被写入 registry
-        list_response = await client.get(
-            "/v1/workspaces",
-                    )
+        list_response = await client.get("/v1/workspaces")
         assert list_response.status_code == 200
         labels = {item["label"] for item in list_response.json()["items"]}
         assert "Blocked" not in labels
@@ -361,9 +358,7 @@ async def test_create_workspace_rejects_unavailable_directory(tmp_path: Path) ->
 @pytest.mark.anyio
 async def test_workspace_delete_rejects_seed_workspace(tmp_path: Path) -> None:
     async with make_auth_client(tmp_path) as client:
-        response = await client.delete(
-            "/v1/workspaces/workspace-default",
-                    )
+        response = await client.delete("/v1/workspaces/workspace-default")
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Default workspace cannot be deleted"

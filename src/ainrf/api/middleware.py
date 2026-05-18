@@ -11,6 +11,7 @@ from ainrf.auth.service import AuthService
 
 _EXEMPT_PATH_PREFIXES = (
     "/health",
+    "/v1/health",
     "/docs",
     "/openapi.json",
     "/redoc",

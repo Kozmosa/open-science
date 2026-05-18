@@ -12,11 +12,11 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from tests._testutil import get_jwt_headers
+from tests.testutil import get_jwt_headers
 from ainrf.task_harness.launcher import LaunchPayload
 from ainrf.task_harness.models import TaskHarnessStatus
 
-API_HEADERS = {"X-API-Key": "secret-key", "X-AINRF-User-Id": "browser-user"}
+# API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
 _LIVE_CLAUDE_TASK_ENV = "AINRF_RUN_LIVE_CLAUDE_TASK"
 
 
@@ -73,11 +73,13 @@ async def wait_for_status(
     task_id: str,
     expected: TaskHarnessStatus,
     *,
+    headers: dict[str, str] | None = None,
     attempts: int = 40,
     delay_seconds: float = 0.05,
 ) -> dict[str, Any]:
+    req_headers = headers or {}
     for _ in range(attempts):
-        response = await client.get(f"/tasks/{task_id}", headers=API_HEADERS)
+        response = await client.get(f"/tasks/{task_id}", headers=req_headers)
         assert response.status_code == 200
         payload = response.json()
         if payload["status"] == expected.value:
@@ -90,12 +92,14 @@ async def wait_for_final_status(
     client: httpx.AsyncClient,
     task_id: str,
     *,
+    headers: dict[str, str] | None = None,
     attempts: int = 240,
     delay_seconds: float = 0.5,
 ) -> dict[str, Any]:
+    req_headers = headers or {}
     final_statuses = {TaskHarnessStatus.SUCCEEDED.value, TaskHarnessStatus.FAILED.value}
     for _ in range(attempts):
-        response = await client.get(f"/tasks/{task_id}", headers=API_HEADERS)
+        response = await client.get(f"/tasks/{task_id}", headers=req_headers)
         assert response.status_code == 200
         payload = response.json()
         if payload["status"] in final_statuses:
@@ -110,6 +114,7 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -146,12 +151,11 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
-        workspaces = await client.get("/workspaces", headers=API_HEADERS)
+        workspaces = await client.get("/workspaces", headers=jwt_headers)
         create_response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -167,10 +171,10 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
         assert created["status"] == "queued"
         assert created["title"] == "Train model"
 
-        detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED)
-        listed = await client.get("/tasks", headers=API_HEADERS)
-        output = await client.get(f"/tasks/{created['task_id']}/output", headers=API_HEADERS)
-        workspace_detail = await client.get("/workspaces/workspace-default", headers=API_HEADERS)
+        detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers)
+        listed = await client.get("/tasks", headers=jwt_headers)
+        output = await client.get(f"/tasks/{created['task_id']}/output", headers=jwt_headers)
+        workspace_detail = await client.get("/workspaces/workspace-default", headers=jwt_headers)
 
     assert listed.status_code == 200
     assert listed.json()["items"][0]["workspace_summary"]["workspace_id"] == "workspace-default"
@@ -206,6 +210,7 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="profile-lab",
         display_name="Profile Lab",
@@ -244,11 +249,10 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -279,7 +283,7 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
 
         assert create_response.status_code == 201
         detail = await wait_for_status(
-            client, create_response.json()["task_id"], TaskHarnessStatus.SUCCEEDED
+            client, create_response.json()["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers
         )
 
     assert recorded["settings_path"] == detail["research_agent_profile"]["settings_artifact_path"]
@@ -292,6 +296,7 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
     assert "research_agent_skills" in detail["prompt"]["layer_order"]
     assert detail["runtime"]["command"] == ["claude", "--settings", recorded["settings_path"]]
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="cpu-lab",
         display_name="CPU Lab",
@@ -303,11 +308,10 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -318,7 +322,7 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
 
         assert create_response.status_code == 201
         detail = await wait_for_status(
-            client, create_response.json()["task_id"], TaskHarnessStatus.FAILED
+            client, create_response.json()["task_id"], TaskHarnessStatus.FAILED, headers=jwt_headers
         )
 
     assert detail["result"]["failure_category"] == "startup failure"
@@ -331,6 +335,7 @@ async def test_task_harness_stream_endpoint_emits_new_events(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -368,11 +373,10 @@ async def test_task_harness_stream_endpoint_emits_new_events(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
         timeout=5.0,
-        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -384,7 +388,7 @@ async def test_task_harness_stream_endpoint_emits_new_events(
         async with client.stream(
             "GET",
             f"/tasks/{task_id}/stream?after_seq=1",
-            headers=API_HEADERS,
+            headers=jwt_headers,
         ) as response:
             assert response.status_code == 200
             body = ""
@@ -403,6 +407,7 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="ssh-lab",
         display_name="SSH Lab",
@@ -459,11 +464,10 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
         create_response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -473,8 +477,8 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
         )
         assert create_response.status_code == 201
         created = create_response.json()
-        detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED)
-        output = await client.get(f"/tasks/{created['task_id']}/output", headers=API_HEADERS)
+        detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers)
+        output = await client.get(f"/tasks/{created['task_id']}/output", headers=jwt_headers)
 
     assert recorded["project_dir"] == str(Path.home() / ".ainrf_workspaces" / "default")
     assert detail["runtime"]["runner_kind"] == "ssh-process"
@@ -487,6 +491,7 @@ async def test_create_task_with_kimi_engine(
     tmp_path: Path,
 ) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="local",
         display_name="Local",
@@ -498,7 +503,6 @@ async def test_create_task_with_kimi_engine(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
         kimi_settings = {
             "env": {
@@ -512,7 +516,7 @@ async def test_create_task_with_kimi_engine(
         }
         response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -545,6 +549,7 @@ async def test_create_task_with_kimi_engine(
 )
 async def test_task_harness_live_claude_task_output(tmp_path: Path) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="live-local",
         display_name="Live Local",
@@ -561,7 +566,7 @@ async def test_task_harness_live_claude_task_output(tmp_path: Path) -> None:
     ) as client:
         create_response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -574,8 +579,8 @@ async def test_task_harness_live_claude_task_output(tmp_path: Path) -> None:
         )
         assert create_response.status_code == 201
         task_id = create_response.json()["task_id"]
-        detail = await wait_for_final_status(client, task_id)
-        output = await client.get(f"/tasks/{task_id}/output", headers=API_HEADERS)
+        detail = await wait_for_final_status(client, task_id, headers=jwt_headers)
+        output = await client.get(f"/tasks/{task_id}/output", headers=jwt_headers)
 
     output_items = output.json()["items"]
     combined_output = "".join(item["content"] for item in output_items)
@@ -587,6 +592,7 @@ async def test_task_harness_live_claude_task_output(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_create_task_rejects_reproduce_baseline_without_aris_skill(tmp_path: Path) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="local",
         display_name="Local",
@@ -598,11 +604,10 @@ async def test_create_task_rejects_reproduce_baseline_without_aris_skill(tmp_pat
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -622,6 +627,7 @@ async def test_create_task_rejects_reproduce_baseline_without_aris_skill(tmp_pat
 @pytest.mark.anyio
 async def test_create_task_rejects_discover_ideas_without_aris_skill(tmp_path: Path) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="local",
         display_name="Local",
@@ -633,11 +639,10 @@ async def test_create_task_rejects_discover_ideas_without_aris_skill(tmp_path: P
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
@@ -657,6 +662,7 @@ async def test_create_task_rejects_discover_ideas_without_aris_skill(tmp_path: P
 @pytest.mark.anyio
 async def test_create_task_rejects_validate_ideas_without_aris_skill(tmp_path: Path) -> None:
     app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
     environment = app.state.environment_service.create_environment(
         alias="local",
         display_name="Local",
@@ -668,11 +674,10 @@ async def test_create_task_rejects_validate_ideas_without_aris_skill(tmp_path: P
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers=get_jwt_headers(app),
     ) as client:
         response = await client.post(
             "/tasks",
-            headers=API_HEADERS,
+            headers=jwt_headers,
             json={
                 "workspace_id": "workspace-default",
                 "environment_id": environment.id,
