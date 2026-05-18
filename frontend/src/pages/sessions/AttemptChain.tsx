@@ -1,4 +1,5 @@
 import SectionStack from '../../components/layout/SectionStack';
+import { TokenFlowBar } from '../../components/token/TokenFlowBar';
 import { useT } from '../../i18n';
 import type { AttemptRecord } from '../../types';
 
@@ -88,11 +89,36 @@ export function AttemptChain({ attempts }: Props) {
                   </a>
                 )}
                 <span>{formatDuration(a.duration_ms)}</span>
-                {a.token_usage_json && (
-                  <span className="text-gray-400">
-                    {t('pages.sessions.hasTokens')}
-                  </span>
-                )}
+                <TokenFlowBar tokenUsageJson={a.token_usage_json} />
+                {(() => {
+                  if (!a.token_usage_json) return null;
+                  try {
+                    const tu = JSON.parse(a.token_usage_json);
+                    if (!tu.by_model || Object.keys(tu.by_model).length === 0) return null;
+                    return (
+                      <details className="mt-2 text-xs">
+                        <summary className="cursor-pointer text-blue-600 font-medium">
+                          {t('pages.sessions.perModelBreakdown')}
+                        </summary>
+                        <div className="mt-2 flex flex-col gap-1">
+                          {Object.entries(tu.by_model as Record<string, Record<string, number>>).map(([model, usage]) => {
+                            const modelTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+                            const cost = typeof usage.cost_usd === 'number' ? usage.cost_usd : null;
+                            return (
+                              <div key={model} className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded">
+                                <span className="font-mono text-[11px]">{model}</span>
+                                <span className="text-gray-500">
+                                  {modelTokens >= 1000 ? `${(modelTokens / 1000).toFixed(1)}K` : modelTokens}
+                                  {cost != null ? ` · $${cost.toFixed(2)}` : ''}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    );
+                  } catch { return null; }
+                })()}
               </div>
             </div>
           </div>

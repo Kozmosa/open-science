@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json as json_mod
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ainrf.api.schemas import (
+    ProjectCostSummaryResponse,
     ProjectCreateRequest,
     ProjectEnvironmentReferenceCreateRequest,
     ProjectEnvironmentReferenceListResponse,
@@ -37,6 +39,13 @@ def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
     service = getattr(request.app.state, "environment_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="environment service not initialized")
+    return service
+
+
+def _get_session_service(request: Request):
+    service = getattr(request.app.state, "session_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="session service not initialized")
     return service
 
 
@@ -236,3 +245,47 @@ async def delete_project_environment_ref(
     except Exception as exc:
         raise _translate_reference_error(exc) from exc
     return None
+
+
+@router.get("/{project_id}/cost-summary", response_model=ProjectCostSummaryResponse)
+async def get_project_cost_summary(
+    project_id: str, request: Request
+) -> ProjectCostSummaryResponse:
+    session_service = _get_session_service(request)
+    try:
+        sessions = session_service.list_sessions(project_id=project_id)
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+    total_cost = 0.0
+    total_tokens = 0
+    by_model: dict[str, dict] = {}
+
+    for s in sessions:
+        total_cost += s.total_cost_usd
+        attempts = session_service.list_attempts(s.id)
+        for a in attempts:
+            if a.token_usage_json:
+                try:
+                    tu = json_mod.loads(a.token_usage_json)
+                except Exception:
+                    continue
+                total_t = tu.get("total", {})
+                total_tokens += total_t.get("input_tokens", 0)
+                total_tokens += total_t.get("output_tokens", 0)
+                total_tokens += total_t.get("cache_creation_input_tokens", 0)
+                total_tokens += total_t.get("cache_read_input_tokens", 0)
+                for model, usage in tu.get("by_model", {}).items():
+                    if model not in by_model:
+                        by_model[model] = {"cost_usd": 0.0, "tokens": 0}
+                    by_model[model]["cost_usd"] += usage.get("cost_usd", 0)
+                    by_model[model]["tokens"] += usage.get("input_tokens", 0)
+                    by_model[model]["tokens"] += usage.get("output_tokens", 0)
+
+    return ProjectCostSummaryResponse.model_validate({
+        "project_id": project_id,
+        "total_cost_usd": round(total_cost, 2),
+        "total_tokens": total_tokens,
+        "session_count": len(sessions),
+        "by_model": by_model,
+    })

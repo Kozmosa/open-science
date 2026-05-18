@@ -24,6 +24,7 @@ class TaskOutputKind(StrEnum):
     THINKING = "thinking"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
+    TOKEN = "token"
 
 
 class TaskConfigurationMode(StrEnum):

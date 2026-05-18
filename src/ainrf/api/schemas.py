@@ -896,3 +896,12 @@ class SessionListResponse(BaseModel):
 class AttemptListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list["AttemptResponse"]
+
+
+class ProjectCostSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str
+    total_cost_usd: float
+    total_tokens: int
+    session_count: int
+    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)

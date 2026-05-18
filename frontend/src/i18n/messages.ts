@@ -523,6 +523,8 @@ export const messages = {
           failed: 'Failed',
           interrupted: 'Interrupted',
         },
+        perModelBreakdown: 'Per-Model Breakdown',
+        totalTokens: '{{count}} tokens',
       },
     },
     components: {
@@ -1199,6 +1201,8 @@ export const messages = {
           failed: '失败',
           interrupted: '已中断',
         },
+        perModelBreakdown: '模型明细',
+        totalTokens: '{{count}} 个 token',
       },
     },
     components: {

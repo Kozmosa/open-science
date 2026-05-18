@@ -52,6 +52,7 @@ class FakeToolResultBlock:
 @dataclass
 class FakeAssistantMessage:
     content: list[Any]
+    usage: Any = None
 
 
 @dataclass
@@ -72,6 +73,8 @@ class FakeResultMessage:
     total_cost_usd: float
     is_error: bool
     errors: list[str] | None = None
+    usage: Any = None
+    model_usage: Any = None
 
 
 @dataclass

@@ -9,6 +9,7 @@ import type {
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  ProjectCostSummary,
   ProjectCreateRequest,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceCreateRequest,
@@ -518,3 +519,14 @@ export const getAttempts = (sessionId: string): Promise<AttemptListResponse> =>
   USE_MOCK
     ? Promise.resolve(mockGetAttempts(sessionId))
     : api.get<AttemptListResponse>(`/sessions/${sessionId}/attempts`);
+
+export const getProjectCostSummary = (projectId: string): Promise<ProjectCostSummary> =>
+  USE_MOCK
+    ? Promise.resolve({
+        project_id: projectId,
+        total_cost_usd: 0,
+        total_tokens: 0,
+        session_count: 0,
+        by_model: {},
+      })
+    : api.get<ProjectCostSummary>(`/projects/${projectId}/cost-summary`);

@@ -224,15 +224,17 @@ class SessionService:
     def _recalc_session(self, session_id: str) -> None:
         with self._connect() as conn:
             agg = conn.execute(
-                "SELECT COUNT(*) AS cnt, COALESCE(SUM(duration_ms), 0) AS dur "
+                "SELECT COUNT(*) AS cnt, "
+                "COALESCE(SUM(duration_ms), 0) AS dur, "
+                "COALESCE(SUM(CAST(json_extract(token_usage_json, '$.total.cost_usd') AS REAL)), 0.0) AS total_cost "
                 "FROM task_attempts WHERE session_id = ? AND duration_ms IS NOT NULL",
                 (session_id,),
             ).fetchone()
             if agg:
                 conn.execute(
-                    "UPDATE task_sessions SET task_count = ?, total_duration_ms = ?, updated_at = ? "
-                    "WHERE id = ?",
-                    (agg["cnt"], agg["dur"], _now_iso(), session_id),
+                    "UPDATE task_sessions SET task_count = ?, total_duration_ms = ?, "
+                    "total_cost_usd = ?, updated_at = ? WHERE id = ?",
+                    (agg["cnt"], agg["dur"], agg["total_cost"], _now_iso(), session_id),
                 )
                 conn.commit()
 

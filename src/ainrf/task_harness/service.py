@@ -7,7 +7,7 @@ import sqlite3
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
@@ -71,6 +71,9 @@ from ainrf.task_harness.session_state import SessionStateStore
 from ainrf.workspaces import WorkspaceNotFoundError, WorkspaceRegistryService
 from ainrf.workspaces.models import WorkspaceRecord
 
+if TYPE_CHECKING:
+    from ainrf.sessions import SessionService
+
 _FINAL_STATUSES = {
     TaskHarnessStatus.SUCCEEDED,
     TaskHarnessStatus.FAILED,
@@ -120,6 +123,7 @@ class TaskHarnessService:
         environment_service: InMemoryEnvironmentService,
         workspace_service: WorkspaceRegistryService,
         skill_root: Path | str | None = None,
+        session_service: "SessionService | None" = None,
     ) -> None:
         self._state_root = state_root
         self._runtime_root = state_root / "runtime"
@@ -128,6 +132,7 @@ class TaskHarnessService:
         self._environment_service = environment_service
         self._workspace_service = workspace_service
         self._skill_root = Path(skill_root) if skill_root is not None else (state_root / "skills")
+        self._session_service = session_service
         self._initialized = False
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._running_processes: dict[str, Any] = {}
@@ -459,6 +464,7 @@ class TaskHarnessService:
             "status": TaskOutputKind.SYSTEM,
             "system": TaskOutputKind.SYSTEM,
             "error": TaskOutputKind.STDERR,
+            "token": TaskOutputKind.TOKEN,
         }
         return mapping.get(event_type, TaskOutputKind.STDOUT)
 
@@ -909,9 +915,10 @@ class TaskHarnessService:
                 engine = self._get_engine(resolved_execution_engine)
                 engine_paused = False
                 engine_failed = False
+                captured_token_usage = None
 
                 async def emit(event: EngineEvent) -> None:
-                    nonlocal engine_paused, engine_failed
+                    nonlocal engine_paused, engine_failed, captured_token_usage
                     if event.event_type == "system":
                         subtype = event.payload.get("subtype")
                         if subtype == "task_paused":
@@ -919,6 +926,8 @@ class TaskHarnessService:
                             self._update_task_status(task_id, status=TaskHarnessStatus.PAUSED)
                         elif subtype == "task_failed":
                             engine_failed = True
+                        if event.token_usage and subtype in ("task_completed", "task_failed"):
+                            captured_token_usage = event.token_usage
                     content = (
                         json.dumps(event.payload)
                         if isinstance(event.payload, dict)
@@ -949,6 +958,37 @@ class TaskHarnessService:
                         failure_category="runtime failure",
                     )
                     return
+                # NEW: update session attempt with token data
+                if self._session_service and captured_token_usage:
+                    task_session_id = row["session_id"] if "session_id" in row.keys() else None
+                    if task_session_id:
+                        try:
+                            attempts = self._session_service.list_attempts(task_session_id)
+                            matching = [a for a in attempts if a.task_id == task_id]
+                            if matching:
+                                latest = matching[-1]
+                                status_val = "failed" if engine_failed else "completed"
+                                duration_ms = None
+                                started = row["started_at"]
+                                if started:
+                                    try:
+                                        from datetime import datetime as _dt, timezone as _tz
+                                        start_dt = _dt.fromisoformat(str(started))
+                                        duration_ms = int((_dt.now(_tz.utc) - start_dt).total_seconds() * 1000)
+                                    except Exception:
+                                        pass
+                                import json as _json_mod
+                                self._session_service.complete_attempt(
+                                    latest.id,
+                                    status=status_val,
+                                    duration_ms=duration_ms,
+                                    token_usage_json=_json_mod.dumps(captured_token_usage),
+                                )
+                        except Exception:
+                            import logging
+                            logging.getLogger(__name__).warning(
+                                "Failed to update session attempt with token data", exc_info=True
+                            )
                 self._complete_task(task_id, exit_code=0)
                 return
 
