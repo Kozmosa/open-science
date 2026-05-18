@@ -3,6 +3,7 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
+  Clock,
   FolderKanban,
   FolderOpen,
   History,
@@ -73,6 +74,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
     '/environments': 'navigation.environments.label',
     '/resources': 'navigation.resources.label',
     '/sessions': 'navigation.sessions.label',
+    '/timeline': 'navigation.timeline.label',
     '/settings': 'navigation.settings.label',
   };
   const pageTitleKey = ROUTE_TITLE_KEYS[location.pathname] ?? '';
@@ -132,6 +134,12 @@ function Layout({ children, edgeToEdge = false }: Props) {
       to: '/sessions',
       description: t('navigation.sessions.description'),
       icon: History,
+    },
+    {
+      label: t('navigation.timeline.label'),
+      to: '/timeline',
+      description: t('navigation.timeline.description'),
+      icon: Clock,
     },
     {
       label: t('navigation.settings.label'),
