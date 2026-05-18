@@ -65,6 +65,7 @@ class ProjectResponse(BaseModel):
     default_environment_id: str | None = None
     created_at: str
     updated_at: str
+    owner_user_id: str | None = None
 
 
 class ProjectListResponse(BaseModel):
@@ -433,6 +434,7 @@ class WorkspaceResponse(BaseModel):
     workspace_prompt: str
     created_at: datetime
     updated_at: datetime
+    owner_user_id: str | None = None
 
 
 class WorkspaceListResponse(BaseModel):
@@ -540,6 +542,7 @@ class TaskSummaryResponse(BaseModel):
     latest_output_seq: int = 0
     execution_engine: str = "claude-code"
     session_id: str | None = None
+    owner_user_id: str | None = None
 
 
 class TaskListResponse(BaseModel):
@@ -683,6 +686,7 @@ class TaskDetailResponse(BaseModel):
     research_agent_profile: ResearchAgentProfileSnapshotResponse | None = None
     task_configuration: TaskConfigurationSnapshotResponse | None = None
     session_id: str | None = None
+    owner_user_id: str | None = None
 
 
 class TaskOutputEventResponse(BaseModel):
@@ -882,6 +886,7 @@ class SessionResponse(BaseModel):
     total_cost_usd: float
     created_at: str
     updated_at: str
+    owner_user_id: str | None = None
 
 
 class SessionDetailResponse(SessionResponse):

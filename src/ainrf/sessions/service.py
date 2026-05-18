@@ -67,6 +67,10 @@ class SessionService:
                 CREATE INDEX IF NOT EXISTS idx_attempts_session
                 ON task_attempts(session_id)
             """)
+            try:
+                conn.execute("ALTER TABLE task_sessions ADD COLUMN owner_user_id TEXT")
+            except sqlite3.OperationalError:
+                pass  # column already exists
             conn.commit()
         self._initialized = True
 
@@ -77,20 +81,22 @@ class SessionService:
 
     # --- Session CRUD ---
 
-    def create_session(self, *, project_id: str, title: str) -> Session:
+    def create_session(
+        self, *, project_id: str, title: str, owner_user_id: str | None = None
+    ) -> Session:
         sid = _new_id()
         now = _now_iso()
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO task_sessions (id, project_id, title, status, created_at, updated_at) "
-                "VALUES (?, ?, ?, 'active', ?, ?)",
-                (sid, project_id, title, now, now),
+                "INSERT INTO task_sessions (id, project_id, title, status, created_at, updated_at, owner_user_id) "
+                "VALUES (?, ?, ?, 'active', ?, ?, ?)",
+                (sid, project_id, title, now, now, owner_user_id),
             )
             conn.commit()
         return self._load_session(sid)
 
     def list_sessions(
-        self, *, project_id: str | None = None, status: str | None = None
+        self, *, project_id: str | None = None, status: str | None = None, owner_user_id: str | None = None
     ) -> list[Session]:
         clauses = []
         params: list[str] = []
@@ -100,6 +106,9 @@ class SessionService:
         if status is not None:
             clauses.append("status = ?")
             params.append(status)
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as conn:
             rows = conn.execute(
@@ -250,6 +259,7 @@ def _row_to_session(row: sqlite3.Row) -> Session:
         total_cost_usd=float(row["total_cost_usd"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        owner_user_id=row["owner_user_id"] if "owner_user_id" in row.keys() else None,
     )
 
 
