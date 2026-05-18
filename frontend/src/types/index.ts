@@ -748,33 +748,15 @@ export interface ProjectCostSummary {
   by_model: Record<string, { cost_usd: number; tokens: number }>;
 }
 
-// ── Auth types ───────────────────────────────────────────
+export interface AdminUserItem { id: string; username: string; display_name: string; role: string; status: string; created_at: string; last_login_at: string | null }
+export interface AdminUserListResponse { items: AdminUserItem[] }
+export interface AdminUserUpdateRequest { status?: string | null }
+export interface AdminPasswordResetRequest { password: string }
 
-export interface UserInfo {
-  id: string;
-  username: string;
-  display_name: string;
-  role: string;
-  status: string;
-}
+export interface CollaboratorItem { user_id: string; username: string; display_name: string; role: string }
+export interface CollaboratorListResponse { items: CollaboratorItem[] }
+export interface CollaboratorRequest { user_id: string; role: string }
 
-export interface LoginRequest {
-  username: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  username: string;
-  display_name: string;
-  password: string;
-}
-
-export interface AuthTokenResponse {
-  access_token: string;
-  refresh_token: string;
-  user: UserInfo;
-}
-
-export interface AccessTokenResponse {
-  access_token: string;
-}
+export interface EnvAccessItem { user_id: string; username: string; display_name: string; max_concurrent_tasks: number | null }
+export interface EnvAccessListResponse { items: EnvAccessItem[] }
+export interface EnvAccessRequest { user_id: string; max_concurrent_tasks: number | null }

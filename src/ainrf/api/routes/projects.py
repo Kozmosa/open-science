@@ -3,10 +3,12 @@ from __future__ import annotations
 import json as json_mod
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from ainrf.auth.permissions import check_resource_owner, get_current_user, is_admin
 from ainrf.api.schemas import (
+    CollaboratorListResponse,
+    CollaboratorRequest,
+    CollaboratorResponse,
     ProjectCostSummaryResponse,
     ProjectCreateRequest,
     ProjectEnvironmentReferenceCreateRequest,
@@ -17,6 +19,7 @@ from ainrf.api.schemas import (
     ProjectResponse,
     ProjectUpdateRequest,
 )
+from ainrf.auth.permissions import check_resource_owner, get_current_user
 from ainrf.environments import (
     EnvironmentNotFoundError,
     InMemoryEnvironmentService,
@@ -47,6 +50,13 @@ def _get_session_service(request: Request):
     service = getattr(request.app.state, "session_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="session service not initialized")
+    return service
+
+
+def _get_auth_service(request: Request):
+    service = getattr(request.app.state, "auth_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="auth service not initialized")
     return service
 
 
@@ -95,38 +105,11 @@ def _translate_reference_error(exc: Exception) -> HTTPException:
     )
 
 
-def _check_project_access(*, project_service: any, user: dict, project_id: str, request: Request) -> None:
-    if is_admin(user):
-        return
-    try:
-        project = project_service.get_project(project_id)
-    except Exception as exc:
-        raise _translate_project_error(exc) from exc
-    auth_svc = getattr(request.app.state, "auth_service", None)
-    is_collaborator = False
-    if auth_svc is not None:
-        is_collaborator = project_id in auth_svc.get_user_project_ids(user["id"])
-    if not check_resource_owner(user, project.owner_user_id) and not is_collaborator:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-
 @router.get("", response_model=ProjectListResponse)
 async def list_projects(request: Request) -> ProjectListResponse:
-    user = get_current_user(request)
     service = _get_project_service(request)
     try:
-        if is_admin(user):
-            items = [_serialize_project(project) for project in service.list_projects()]
-        else:
-            auth_svc = getattr(request.app.state, "auth_service", None)
-            collaborator_ids = auth_svc.get_user_project_ids(user["id"]) if auth_svc else []
-            items = [
-                _serialize_project(project)
-                for project in service.list_projects(
-                    owner_user_id=user["id"],
-                    collaborator_project_ids=collaborator_ids,
-                )
-            ]
+        items = [_serialize_project(project) for project in service.list_projects()]
     except Exception as exc:
         raise _translate_project_error(exc) from exc
     return ProjectListResponse(items=items)
@@ -134,13 +117,11 @@ async def list_projects(request: Request) -> ProjectListResponse:
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreateRequest, request: Request) -> ProjectResponse:
-    user = get_current_user(request)
     service = _get_project_service(request)
     try:
         project = service.create_project(
             name=payload.name,
             description=payload.description,
-            owner_user_id=user["id"],
         )
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -149,18 +130,9 @@ async def create_project(payload: ProjectCreateRequest, request: Request) -> Pro
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def read_project(project_id: str, request: Request) -> ProjectResponse:
-    user = get_current_user(request)
     service = _get_project_service(request)
     try:
         project = service.get_project(project_id)
-        if not is_admin(user):
-            auth_svc = getattr(request.app.state, "auth_service", None)
-            is_collaborator = False
-            if auth_svc is not None:
-                user_project_ids = auth_svc.get_user_project_ids(user["id"])
-                is_collaborator = project_id in user_project_ids
-            if not check_resource_owner(user, project.owner_user_id) and not is_collaborator:
-                raise HTTPException(status_code=404, detail="Project not found")
     except Exception as exc:
         raise _translate_project_error(exc) from exc
     return _serialize_project(project)
@@ -172,18 +144,8 @@ async def update_project(
     payload: ProjectUpdateRequest,
     request: Request,
 ) -> ProjectResponse:
-    user = get_current_user(request)
     service = _get_project_service(request)
     try:
-        project = service.get_project(project_id)
-        if not is_admin(user):
-            auth_svc = getattr(request.app.state, "auth_service", None)
-            is_collaborator = False
-            if auth_svc is not None:
-                user_project_ids = auth_svc.get_user_project_ids(user["id"])
-                is_collaborator = project_id in user_project_ids
-            if not check_resource_owner(user, project.owner_user_id) and not is_collaborator:
-                raise HTTPException(status_code=404, detail="Project not found")
         changes = payload.model_dump(exclude_unset=True)
         project = service.update_project(
             project_id,
@@ -199,12 +161,8 @@ async def update_project(
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: str, request: Request) -> None:
-    user = get_current_user(request)
     service = _get_project_service(request)
     try:
-        project = service.get_project(project_id)
-        if not check_resource_owner(user, project.owner_user_id):
-            raise HTTPException(status_code=404, detail="Project not found")
         service.delete_project(project_id)
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -219,10 +177,7 @@ async def list_project_environment_refs(
     project_id: str,
     request: Request,
 ) -> ProjectEnvironmentReferenceListResponse:
-    user = get_current_user(request)
     service = _get_environment_service(request)
-    # Verify project access
-    _check_project_access(project_service=_get_project_service(request), user=user, project_id=project_id, request=request)
     items = [
         _serialize_reference(reference) for reference in service.list_project_references(project_id)
     ]
@@ -239,9 +194,7 @@ async def create_project_environment_ref(
     payload: ProjectEnvironmentReferenceCreateRequest,
     request: Request,
 ) -> ProjectEnvironmentReferenceResponse:
-    user = get_current_user(request)
     service = _get_environment_service(request)
-    _check_project_access(project_service=_get_project_service(request), user=user, project_id=project_id, request=request)
     try:
         reference = service.create_project_reference(
             project_id=project_id,
@@ -267,9 +220,7 @@ async def update_project_environment_ref(
     payload: ProjectEnvironmentReferenceUpdateRequest,
     request: Request,
 ) -> ProjectEnvironmentReferenceResponse:
-    user = get_current_user(request)
     service = _get_environment_service(request)
-    _check_project_access(project_service=_get_project_service(request), user=user, project_id=project_id, request=request)
     try:
         current = service.get_project_reference(project_id, environment_id)
         changes = payload.model_dump(exclude_unset=True)
@@ -299,9 +250,7 @@ async def delete_project_environment_ref(
     environment_id: str,
     request: Request,
 ) -> None:
-    user = get_current_user(request)
     service = _get_environment_service(request)
-    _check_project_access(project_service=_get_project_service(request), user=user, project_id=project_id, request=request)
     try:
         service.delete_project_reference(project_id, environment_id)
     except Exception as exc:
@@ -313,8 +262,6 @@ async def delete_project_environment_ref(
 async def get_project_cost_summary(
     project_id: str, request: Request
 ) -> ProjectCostSummaryResponse:
-    user = get_current_user(request)
-    _check_project_access(project_service=_get_project_service(request), user=user, project_id=project_id, request=request)
     session_service = _get_session_service(request)
     try:
         sessions = session_service.list_sessions(project_id=project_id)
@@ -353,3 +300,33 @@ async def get_project_cost_summary(
         "session_count": len(sessions),
         "by_model": by_model,
     })
+
+
+@router.get("/{project_id}/collaborators", response_model=CollaboratorListResponse)
+async def list_collaborators(project_id: str, request: Request) -> CollaboratorListResponse:
+    get_current_user(request)
+    auth_svc = _get_auth_service(request)
+    collabs = auth_svc.list_collaborators(project_id)
+    return CollaboratorListResponse.model_validate({"items": collabs})
+
+
+@router.put("/{project_id}/collaborators", response_model=CollaboratorResponse, status_code=status.HTTP_201_CREATED)
+async def add_collaborator(project_id: str, payload: CollaboratorRequest, request: Request) -> CollaboratorResponse:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    if not check_resource_owner(user, proj.owner_user_id):
+        raise HTTPException(status_code=403, detail="Only the project owner can manage collaborators")
+    auth_svc = _get_auth_service(request)
+    auth_svc.add_collaborator(project_id=project_id, user_id=payload.user_id, role=payload.role, added_by=user["id"])
+    return CollaboratorResponse.model_validate({"user_id": payload.user_id, "username": "", "display_name": "", "role": payload.role})
+
+
+@router.delete("/{project_id}/collaborators/{user_id}", status_code=204)
+async def remove_collaborator(project_id: str, user_id: str, request: Request) -> Response:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    if not check_resource_owner(user, proj.owner_user_id):
+        raise HTTPException(status_code=403)
+    auth_svc = _get_auth_service(request)
+    auth_svc.remove_collaborator(project_id, user_id)
+    return Response(status_code=204)

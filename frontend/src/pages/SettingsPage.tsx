@@ -34,6 +34,9 @@ import type {
   WebUiSettingsDocument,
 } from '../settings';
 import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview, SkillRegistryItem } from '../types';
+import { UsersTab } from './settings/UsersTab';
+import { EnvAccessTab } from './settings/EnvAccessTab';
+import { useAuth } from '../contexts/AuthContext';
 
 interface GeneralDraftState {
   defaultRoute: DefaultRoute;
@@ -1085,6 +1088,8 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
 
 function SettingsPage() {
   const t = useT();
+  const { user: currentUser } = useAuth();
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'envAccess'>('general');
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
     queryFn: getEnvironments,
@@ -1127,6 +1132,14 @@ function SettingsPage() {
   const environmentsError =
     environmentsQuery.error instanceof Error ? environmentsQuery.error.message : null;
 
+  const tabs = [
+    { key: 'general' as const, label: 'General' },
+    ...(currentUser?.role === 'admin' ? [
+      { key: 'users' as const, label: 'Users' },
+      { key: 'envAccess' as const, label: 'Environment Access' },
+    ] : []),
+  ];
+
   return (
     <PageShell>
       <div className="space-y-8 p-4">
@@ -1136,78 +1149,100 @@ function SettingsPage() {
           description={t('pages.settings.description')}
         />
 
-        <SectionStack>
-        {recoveryReason !== null ? <Alert variant="warning">{t('pages.settings.recoveryNotice')}</Alert> : null}
+        <div className="flex gap-1 border-b border-gray-200 pb-0">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg border border-b-0 -mb-px transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-white border-gray-200 text-gray-900'
+                  : 'bg-gray-50 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-        <GeneralPreferencesSection
-          key={`general:${settings.general.defaultRoute}:${settings.general.terminal.fontSize}`}
-          savedGeneral={settings.general}
-          onSave={saveGeneralPreferences}
-          onReset={resetGeneralPreferences}
-        />
+        {activeTab === 'general' && (
+          <SectionStack>
+          {recoveryReason !== null ? <Alert variant="warning">{t('pages.settings.recoveryNotice')}</Alert> : null}
 
-        <EnvironmentSelectorPanel {...environmentSelection} />
+          <GeneralPreferencesSection
+            key={`general:${settings.general.defaultRoute}:${settings.general.terminal.fontSize}`}
+            savedGeneral={settings.general}
+            onSave={saveGeneralPreferences}
+            onReset={resetGeneralPreferences}
+          />
 
-        <SectionCard
-          collapsible
-          header={
-            <SectionHeader
-              title="Default Workspace"
-              description="Select the default workspace for task creation and file browsing."
-            />
-          }
-        >
-          <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
-            <FormField label="Default workspace">
-              <Select
-                aria-label="Default workspace"
-                value={settings.projectDefaults.default?.defaultWorkspaceId ?? ''}
-                onChange={(event) =>
-                  saveProjectDefaultWorkspace('default', event.target.value || null)
-                }
-                disabled={workspaces.length === 0}
-              >
-                <option value="">No default workspace</option>
-                {workspaces.map((workspace) => (
-                  <option key={workspace.workspace_id} value={workspace.workspace_id}>
-                    {workspace.label}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-        </SectionCard>
+          <EnvironmentSelectorPanel {...environmentSelection} />
 
-        <TaskConfigurationSection
-          taskConfiguration={settings.taskConfiguration}
-          availableSkills={availableSkills}
-          onSaveTaskConfigurationSettings={saveTaskConfigurationSettings}
-          onResetTaskConfigurationSettings={resetTaskConfigurationSettings}
-        />
+          <SectionCard
+            collapsible
+            header={
+              <SectionHeader
+                title="Default Workspace"
+                description="Select the default workspace for task creation and file browsing."
+              />
+            }
+          >
+            <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
+              <FormField label="Default workspace">
+                <Select
+                  aria-label="Default workspace"
+                  value={settings.projectDefaults.default?.defaultWorkspaceId ?? ''}
+                  onChange={(event) =>
+                    saveProjectDefaultWorkspace('default', event.target.value || null)
+                  }
+                  disabled={workspaces.length === 0}
+                >
+                  <option value="">No default workspace</option>
+                  {workspaces.map((workspace) => (
+                    <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                      {workspace.label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            </div>
+          </SectionCard>
 
-        <SkillRepositorySection availableSkills={availableSkills} />
+          <TaskConfigurationSection
+            taskConfiguration={settings.taskConfiguration}
+            availableSkills={availableSkills}
+            onSaveTaskConfigurationSettings={saveTaskConfigurationSettings}
+            onResetTaskConfigurationSettings={resetTaskConfigurationSettings}
+          />
 
-        <ProjectDefaultsSection
-          key={`project-default:${settings.projectDefaults.default?.defaultEnvironmentId ?? 'none'}`}
-          environments={environments}
-          taskConfiguration={settings.taskConfiguration}
-          savedDefaultEnvironmentId={settings.projectDefaults.default?.defaultEnvironmentId ?? null}
-          isLoading={environmentsQuery.isLoading}
-          loadError={environmentsError}
-          getProjectEnvironmentDefaults={(environmentId) =>
-            getProjectEnvironmentDefaults('default', environmentId)
-          }
-          saveProjectDefaultEnvironment={(environmentId) =>
-            saveProjectDefaultEnvironment('default', environmentId)
-          }
-          saveProjectEnvironmentDefaults={(environmentId, defaults) =>
-            saveProjectEnvironmentDefaults('default', environmentId, defaults)
-          }
-          resetProjectEnvironmentDefaults={(environmentId) =>
-            resetProjectEnvironmentDefaults('default', environmentId)
-          }
-        />
-      </SectionStack>
+          <SkillRepositorySection availableSkills={availableSkills} />
+
+          <ProjectDefaultsSection
+            key={`project-default:${settings.projectDefaults.default?.defaultEnvironmentId ?? 'none'}`}
+            environments={environments}
+            taskConfiguration={settings.taskConfiguration}
+            savedDefaultEnvironmentId={settings.projectDefaults.default?.defaultEnvironmentId ?? null}
+            isLoading={environmentsQuery.isLoading}
+            loadError={environmentsError}
+            getProjectEnvironmentDefaults={(environmentId) =>
+              getProjectEnvironmentDefaults('default', environmentId)
+            }
+            saveProjectDefaultEnvironment={(environmentId) =>
+              saveProjectDefaultEnvironment('default', environmentId)
+            }
+            saveProjectEnvironmentDefaults={(environmentId, defaults) =>
+              saveProjectEnvironmentDefaults('default', environmentId, defaults)
+            }
+            resetProjectEnvironmentDefaults={(environmentId) =>
+              resetProjectEnvironmentDefaults('default', environmentId)
+            }
+          />
+        </SectionStack>
+        )}
+
+        {activeTab === 'users' && <UsersTab />}
+        {activeTab === 'envAccess' && <EnvAccessTab />}
       </div>
     </PageShell>
   );

@@ -976,3 +976,39 @@ class AdminUserResponse(BaseModel):
 class AdminUserListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[AdminUserResponse]
+
+# ── Collaborator schemas ──────────────────────────────────
+
+class CollaboratorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    role: str = "member"
+
+class CollaboratorResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    username: str
+    display_name: str
+    role: str
+
+class CollaboratorListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[CollaboratorResponse]
+
+# ── Environment Access schemas ────────────────────────────
+
+class EnvironmentAccessRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    max_concurrent_tasks: int | None = None
+
+class EnvironmentAccessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    username: str
+    display_name: str
+    max_concurrent_tasks: int | None
+
+class EnvironmentAccessListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[EnvironmentAccessResponse]
