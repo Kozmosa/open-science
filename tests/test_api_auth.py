@@ -8,6 +8,7 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from tests.testutil import get_jwt_headers
 
 
 def make_client(tmp_path: Path) -> httpx.AsyncClient:
@@ -51,9 +52,21 @@ async def test_terminal_session_requires_api_key(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_unknown_route_returns_not_found_with_valid_api_key(tmp_path: Path) -> None:
-    async with make_client(tmp_path) as client:
-        response = await client.get("/retired", headers={"X-API-Key": "secret-key"})
+async def test_unknown_route_returns_not_found_with_valid_jwt(tmp_path: Path) -> None:
+    """Unknown routes should bypass the JWT middleware and reach the 404 handler."""
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+        )
+    )
+    jwt_headers = get_jwt_headers(app)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/retired", headers=jwt_headers)
 
     assert response.status_code == 404
 
