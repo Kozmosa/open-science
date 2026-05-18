@@ -747,3 +747,34 @@ export interface ProjectCostSummary {
   session_count: number;
   by_model: Record<string, { cost_usd: number; tokens: number }>;
 }
+
+// ── Auth types ───────────────────────────────────────────
+
+export interface UserInfo {
+  id: string;
+  username: string;
+  display_name: string;
+  role: string;
+  status: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  display_name: string;
+  password: string;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  user: UserInfo;
+}
+
+export interface AccessTokenResponse {
+  access_token: string;
+}

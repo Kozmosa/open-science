@@ -5,6 +5,7 @@ import { ErrorBoundary, Layout, ToastProvider } from './components/common';
 import { useT } from './i18n';
 import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useSettings } from './settings';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
@@ -17,6 +18,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
 const TimelinePage = lazy(() => import('./pages/TimelinePage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 
 const queryClient = createAppQueryClient();
 
@@ -33,7 +36,7 @@ function RootRedirect() {
   return <Navigate replace to={defaultRoutePathById[settings.general.defaultRoute]} />;
 }
 
-function AppRoutes() {
+function AuthenticatedRoutes() {
   const t = useT();
   const location = useLocation();
   const isEdgeToEdge = location.pathname === '/tasks' || location.pathname === '/projects';
@@ -65,6 +68,31 @@ function AppRoutes() {
   );
 }
 
+function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-gray-400 text-sm">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="*" element={<LoginPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  return <AuthenticatedRoutes />;
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -72,7 +100,9 @@ function App() {
         <SettingsProvider>
           <ToastProvider>
             <BrowserRouter>
-              <AppRoutes />
+              <AuthProvider>
+                <AppRoutes />
+              </AuthProvider>
             </BrowserRouter>
           </ToastProvider>
         </SettingsProvider>

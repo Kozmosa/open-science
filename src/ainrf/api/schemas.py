@@ -905,3 +905,44 @@ class ProjectCostSummaryResponse(BaseModel):
     total_tokens: int
     session_count: int
     by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
+
+
+# ── Auth schemas ──────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
+class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=64)
+    display_name: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=4)
+
+
+class AuthTokenResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    access_token: str
+    refresh_token: str
+    user: dict
+
+
+class RefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    refresh_token: str
+
+
+class AccessTokenResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    access_token: str
+
+
+class UserInfoResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    username: str
+    display_name: str
+    role: str
+    status: str
