@@ -3,11 +3,10 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { getProjects, getSession, getSessions } from '../api';
 import PageShell from '../components/layout/PageShell';
 import SectionStack from '../components/layout/SectionStack';
-import { useT } from '../i18n';
 import type { SessionDetailRecord } from '../types';
+import { GanttChart } from './timeline/GanttChart';
 
 export default function TimelinePage() {
-  const t = useT();
   // Will be wired in Task 2+3
   const [projectId, setProjectId] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState<string>('');
@@ -46,8 +45,6 @@ export default function TimelinePage() {
     [sessionDetails],
   );
 
-  void details; // Will be consumed by GanttChart in Task 3
-
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: () => getProjects(),
@@ -58,13 +55,7 @@ export default function TimelinePage() {
   return (
     <PageShell>
       <SectionStack gap={4}>
-        <p className="text-sm text-gray-400">
-          {sessionsQuery.isLoading
-            ? t('pages.timeline.loading')
-            : sessions.length === 0
-              ? t('pages.timeline.empty')
-              : t('pages.timeline.sessionCount', { count: String(sessions.length) })}
-        </p>
+        <GanttChart sessions={sessions} details={details} loading={sessionsQuery.isLoading} />
       </SectionStack>
     </PageShell>
   );
