@@ -951,3 +951,28 @@ class UserInfoResponse(BaseModel):
     display_name: str
     role: str
     status: str
+
+
+# ── Admin schemas ─────────────────────────────────────────
+
+class AdminUserUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: str | None = None  # 'active' | 'disabled'
+
+class AdminPasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=4)
+
+class AdminUserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    username: str
+    display_name: str
+    role: str
+    status: str
+    created_at: str
+    last_login_at: str | None = None
+
+class AdminUserListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[AdminUserResponse]
