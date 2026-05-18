@@ -42,6 +42,7 @@ class ProjectRegistryService:
                         default_environment_id=item.get("default_environment_id"),
                         created_at=datetime.fromisoformat(item["created_at"]),
                         updated_at=datetime.fromisoformat(item["updated_at"]),
+                        owner_user_id=item.get("owner_user_id"),
                     )
                     for item in payload.get("items", [])
                 }
@@ -51,9 +52,22 @@ class ProjectRegistryService:
                 self._persist()
             self._initialized = True
 
-    def list_projects(self) -> list[ProjectRecord]:
+    def list_projects(
+        self,
+        *,
+        owner_user_id: str | None = None,
+        collaborator_project_ids: list[str] | None = None,
+    ) -> list[ProjectRecord]:
         self.initialize()
-        return list(self._projects.values())
+        projects = list(self._projects.values())
+        if owner_user_id is not None or collaborator_project_ids:
+            collaborator_ids = set(collaborator_project_ids or [])
+            projects = [
+                p
+                for p in projects
+                if p.owner_user_id == owner_user_id or p.project_id in collaborator_ids
+            ]
+        return projects
 
     def get_project(self, project_id: str) -> ProjectRecord:
         self.initialize()
@@ -67,6 +81,7 @@ class ProjectRegistryService:
         *,
         name: str,
         description: str | None,
+        owner_user_id: str | None = None,
     ) -> ProjectRecord:
         self.initialize()
         with self._lock:
@@ -80,6 +95,7 @@ class ProjectRegistryService:
                 default_environment_id=None,
                 created_at=now,
                 updated_at=now,
+                owner_user_id=owner_user_id,
             )
             self._projects[project_id] = project
             self._persist()
@@ -109,6 +125,7 @@ class ProjectRegistryService:
                 else current.default_environment_id,
                 created_at=current.created_at,
                 updated_at=utc_now(),
+                owner_user_id=current.owner_user_id,
             )
             self._projects[project_id] = project
             self._persist()

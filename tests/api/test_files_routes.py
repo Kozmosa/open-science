@@ -5,32 +5,20 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ainrf.api.app import create_app
-from ainrf.api.config import ApiConfig, hash_api_key
-from tests._testutil import get_jwt_headers
+from tests.testutil import make_client
+from ainrf.api.config import ApiConfig
 
 
 def _make_app_and_workdir(
     tmp_path: Path, *, max_file_size_bytes: int | None = None
 ):
+    """Backward compat: returns (app, workdir) from a throwaway ApiConfig."""
     api_config = ApiConfig(
-        api_key_hashes=frozenset({hash_api_key("secret-key")}),
+        api_key_hashes=frozenset(),
         state_root=tmp_path,
     )
-    app = create_app(api_config, max_file_size_bytes=max_file_size_bytes)
     workdir = api_config.runtime_paths.ensure_default_workspace_dir()
-    return app, workdir
-
-
-def make_client(
-    tmp_path: Path, *, max_file_size_bytes: int | None = None
-) -> httpx.AsyncClient:
-    app, _ = _make_app_and_workdir(tmp_path, max_file_size_bytes=max_file_size_bytes)
-    return httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-        headers=get_jwt_headers(app),
-    )
+    return None, workdir
 
 
 @pytest.mark.anyio

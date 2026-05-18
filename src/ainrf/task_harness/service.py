@@ -231,6 +231,12 @@ class TaskHarnessService:
                 "session_id",
                 "ALTER TABLE task_harness_tasks ADD COLUMN session_id TEXT",
             )
+            self._ensure_column(
+                connection,
+                "task_harness_tasks",
+                "owner_user_id",
+                "ALTER TABLE task_harness_tasks ADD COLUMN owner_user_id TEXT",
+            )
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS task_harness_session_states (
                     id INTEGER PRIMARY KEY,
@@ -276,6 +282,7 @@ class TaskHarnessService:
         task_configuration: dict[str, object] | None = None,
         auto_connect: bool = False,
         session_id: str | None = None,
+        owner_user_id: str | None = None,
     ) -> TaskListItem:
         self.initialize()
         if task_profile != _TASK_PROFILE:
@@ -334,8 +341,9 @@ class TaskHarnessService:
                     prompt_manifest_path,
                     launch_payload_path,
                     execution_engine,
-                    session_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    session_id,
+                    owner_user_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -355,6 +363,7 @@ class TaskHarnessService:
                     str(launch_payload_path(task_dir)),
                     resolved_execution_engine,
                     session_id,
+                    owner_user_id,
                 ),
             )
             connection.commit()
@@ -497,49 +506,42 @@ class TaskHarnessService:
         if row is not None:
             self.create_task_edge(project_id, row["task_id"], new_task_id)
 
-    def list_tasks(self, *, include_archived: bool = False) -> list[TaskListItem]:
+    def list_tasks(
+        self, *, include_archived: bool = False, owner_user_id: str | None = None
+    ) -> list[TaskListItem]:
         self.initialize()
+        clauses: list[str] = []
+        params: list[str] = []
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as connection:
-            if include_archived:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    ORDER BY created_at DESC
-                    """
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    WHERE archived_at IS NULL
-                    ORDER BY created_at DESC
-                    """
-                ).fetchall()
+            rows = connection.execute(
+                f"SELECT * FROM task_harness_tasks {where} ORDER BY created_at DESC",
+                tuple(params),
+            ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
     def list_project_tasks(
-        self, project_id: str, *, include_archived: bool = False
+        self, project_id: str, *, include_archived: bool = False, owner_user_id: str | None = None
     ) -> list[TaskListItem]:
         self.initialize()
+        clauses: list[str] = ["project_id = ?"]
+        params: list[str] = [project_id]
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
+        where = f"WHERE {' AND '.join(clauses)}"
         with self._connect() as connection:
-            if include_archived:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    WHERE project_id = ?
-                    ORDER BY created_at DESC
-                    """,
-                    (project_id,),
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    WHERE project_id = ? AND archived_at IS NULL
-                    ORDER BY created_at DESC
-                    """,
-                    (project_id,),
-                ).fetchall()
+            rows = connection.execute(
+                f"SELECT * FROM task_harness_tasks {where} ORDER BY created_at DESC",
+                tuple(params),
+            ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
     def archive_task(self, task_id: str) -> TaskListItem:
@@ -736,6 +738,7 @@ class TaskHarnessService:
             research_agent_profile=profile_snapshot,
             task_configuration=configuration_snapshot,
             session_id=row["session_id"],
+            owner_user_id=row["owner_user_id"],
         )
 
     def get_output(
@@ -1286,6 +1289,7 @@ class TaskHarnessService:
             latest_output_seq=int(row["latest_output_seq"]),
             execution_engine=row["execution_engine"] or _EXECUTION_ENGINE,
             session_id=row["session_id"],
+            owner_user_id=row["owner_user_id"],
         )
 
     def _fail_unfinished_tasks_for_restart(self) -> None:

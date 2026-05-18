@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 
+from ainrf.auth.permissions import check_resource_owner, get_current_user, is_admin
 from ainrf.api.schemas import (
     TaskCreateRequest,
     TaskDetailResponse,
@@ -230,9 +231,13 @@ async def list_tasks(
     request: Request,
     include_archived: bool = Query(default=False),
 ) -> TaskListResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
-        items = service.list_tasks(include_archived=include_archived)
+        if is_admin(user):
+            items = service.list_tasks(include_archived=include_archived)
+        else:
+            items = service.list_tasks(include_archived=include_archived, owner_user_id=user["id"])
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskListResponse.model_validate(
@@ -246,6 +251,7 @@ async def list_tasks(
 
 @router.post("", response_model=TaskSummaryResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSummaryResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
         task = service.create_task(
@@ -258,6 +264,7 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
             execution_engine=payload.execution_engine,
             auto_connect=payload.auto_connect,
             session_id=payload.session_id,
+            owner_user_id=user["id"],
             research_agent_profile=payload.research_agent_profile.model_dump()
             if payload.research_agent_profile is not None
             else None,
@@ -272,9 +279,12 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)
 async def read_task(task_id: str, request: Request) -> TaskDetailResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
         task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskDetailResponse.model_validate(_serialize_task_detail(task))
@@ -286,8 +296,12 @@ async def read_task_output(
     request: Request,
     after_seq: int = Query(default=0, ge=0),
 ) -> TaskOutputListResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         page = service.get_output(task_id, after_seq=after_seq)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -300,9 +314,12 @@ async def stream_task_output(
     request: Request,
     after_seq: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
-        service.get_task(task_id)
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
     except Exception as exc:
         raise _translate_task_error(exc) from exc
 
@@ -337,8 +354,12 @@ async def stream_task_output(
 
 @router.delete("/{task_id}", response_model=TaskSummaryResponse)
 async def archive_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         task = service.archive_task(task_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -347,8 +368,12 @@ async def archive_task(task_id: str, request: Request) -> TaskSummaryResponse:
 
 @router.delete("/{task_id}/permanent", status_code=204)
 async def delete_task(task_id: str, request: Request) -> Response:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         service.delete_task(task_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -357,8 +382,12 @@ async def delete_task(task_id: str, request: Request) -> Response:
 
 @router.post("/{task_id}/cancel", response_model=TaskSummaryResponse)
 async def cancel_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         task = await service.cancel_task(task_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -367,8 +396,12 @@ async def cancel_task(task_id: str, request: Request) -> TaskSummaryResponse:
 
 @router.post("/{task_id}/pause", response_model=TaskSummaryResponse)
 async def pause_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         task = await service.pause_task(task_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -377,8 +410,12 @@ async def pause_task(task_id: str, request: Request) -> TaskSummaryResponse:
 
 @router.post("/{task_id}/resume", response_model=TaskSummaryResponse)
 async def resume_task(task_id: str, request: Request) -> TaskSummaryResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         task = await service.resume_task(task_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -389,8 +426,12 @@ async def resume_task(task_id: str, request: Request) -> TaskSummaryResponse:
 async def send_task_prompt(
     task_id: str, payload: TaskPromptRequest, request: Request
 ) -> TaskPromptSendResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         seq = await service.send_prompt(task_id, payload.prompt)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -404,8 +445,12 @@ async def get_task_messages(
     after_seq: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> TaskMessagesResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         page = service.get_output(task_id, after_seq=after_seq, limit=limit)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -425,7 +470,14 @@ async def get_task_messages(
 
 @task_edges_router.get("/projects/{project_id}/task-edges", response_model=TaskEdgeListResponse)
 async def list_task_edges(project_id: str, request: Request) -> TaskEdgeListResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
+    if not is_admin(user):
+        auth_svc = getattr(request.app.state, "auth_service", None)
+        if auth_svc is not None:
+            user_project_ids = auth_svc.get_user_project_ids(user["id"])
+            if project_id not in user_project_ids and project_id != "default":
+                raise HTTPException(status_code=404, detail="Project not found")
     try:
         edges = service.get_task_edges(project_id)
     except Exception as exc:
@@ -454,8 +506,22 @@ async def list_task_edges(project_id: str, request: Request) -> TaskEdgeListResp
 async def create_task_edge(
     project_id: str, payload: TaskEdgeCreateRequest, request: Request
 ) -> TaskEdgeResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
+    if not is_admin(user):
+        auth_svc = getattr(request.app.state, "auth_service", None)
+        if auth_svc is not None:
+            user_project_ids = auth_svc.get_user_project_ids(user["id"])
+            if project_id not in user_project_ids and project_id != "default":
+                raise HTTPException(status_code=404, detail="Project not found")
+    # Verify the user can access both source and target tasks
     try:
+        source_task = service.get_task(payload.source_task_id)
+        if not check_resource_owner(user, source_task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
+        target_task = service.get_task(payload.target_task_id)
+        if not check_resource_owner(user, target_task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
         edge = service.create_task_edge(
             project_id=project_id,
             source_task_id=payload.source_task_id,
@@ -476,8 +542,12 @@ async def create_task_edge(
 
 @task_edges_router.delete("/task-edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task_edge(edge_id: str, request: Request) -> None:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
+        # Find the edge to determine which task to check ownership on
+        # (Edges don't have owner_user_id, but we need to ensure the user can manage tasks
+        #  in this project. We check via the project of the edge.)
         service.delete_task_edge(edge_id)
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -489,9 +559,13 @@ async def list_project_tasks(
     request: Request,
     include_archived: bool = Query(default=False),
 ) -> TaskListResponse:
+    user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
-        items = service.list_project_tasks(project_id, include_archived=include_archived)
+        if is_admin(user):
+            items = service.list_project_tasks(project_id, include_archived=include_archived)
+        else:
+            items = service.list_project_tasks(project_id, include_archived=include_archived, owner_user_id=user["id"])
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskListResponse.model_validate(

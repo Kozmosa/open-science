@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
+from ainrf.auth.permissions import check_resource_owner, get_current_user, is_admin
 from ainrf.api.schemas import (
     AttemptListResponse,
     SessionCreateRequest,
@@ -75,9 +76,13 @@ async def list_sessions(
     project_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
 ) -> SessionListResponse:
+    user = get_current_user(request)
     service = _get_service(request)
     try:
-        sessions = service.list_sessions(project_id=project_id, status=status)
+        if is_admin(user):
+            sessions = service.list_sessions(project_id=project_id, status=status)
+        else:
+            sessions = service.list_sessions(project_id=project_id, status=status, owner_user_id=user["id"])
     except Exception as exc:
         raise _translate_error(exc) from exc
     return SessionListResponse.model_validate({
@@ -89,9 +94,10 @@ async def list_sessions(
 async def create_session(
     payload: SessionCreateRequest, request: Request
 ) -> SessionResponse:
+    user = get_current_user(request)
     service = _get_service(request)
     try:
-        s = service.create_session(project_id=payload.project_id, title=payload.title)
+        s = service.create_session(project_id=payload.project_id, title=payload.title, owner_user_id=user["id"])
     except Exception as exc:
         raise _translate_error(exc) from exc
     return SessionResponse.model_validate(_serialize_session(s))
@@ -99,9 +105,12 @@ async def create_session(
 
 @router.get("/{session_id}", response_model=SessionDetailResponse)
 async def get_session(session_id: str, request: Request) -> SessionDetailResponse:
+    user = get_current_user(request)
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
+        if not check_resource_owner(user, s.owner_user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
         attempts = service.list_attempts(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc
@@ -115,8 +124,12 @@ async def get_session(session_id: str, request: Request) -> SessionDetailRespons
 async def update_session(
     session_id: str, payload: SessionUpdateRequest, request: Request
 ) -> SessionResponse:
+    user = get_current_user(request)
     service = _get_service(request)
     try:
+        s = service.get_session(session_id)
+        if not check_resource_owner(user, s.owner_user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
         s = service.update_session(
             session_id, title=payload.title, status=payload.status
         )
@@ -127,8 +140,12 @@ async def update_session(
 
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, request: Request) -> Response:
+    user = get_current_user(request)
     service = _get_service(request)
     try:
+        s = service.get_session(session_id)
+        if not check_resource_owner(user, s.owner_user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
         service.delete_session(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc
@@ -139,8 +156,12 @@ async def delete_session(session_id: str, request: Request) -> Response:
 async def list_attempts(
     session_id: str, request: Request
 ) -> AttemptListResponse:
+    user = get_current_user(request)
     service = _get_service(request)
     try:
+        s = service.get_session(session_id)
+        if not check_resource_owner(user, s.owner_user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
         attempts = service.list_attempts(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc

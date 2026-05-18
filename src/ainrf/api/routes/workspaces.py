@@ -5,6 +5,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from ainrf.auth.permissions import check_resource_owner, get_current_user, is_admin
 from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
 from ainrf.workspaces import (
     WorkspaceDeletionError,
@@ -62,12 +63,14 @@ async def list_workspaces(
     request: Request,
     project_id: str | None = None,
 ) -> WorkspaceListResponse:
+    user = get_current_user(request)
     service = _get_workspace_service(request)
     try:
-        items = [
-            _serialize_workspace(workspace)
-            for workspace in service.list_workspaces(project_id=project_id)
-        ]
+        if is_admin(user):
+            workspaces = service.list_workspaces(project_id=project_id)
+        else:
+            workspaces = service.list_workspaces(project_id=project_id, owner_user_id=user["id"])
+        items = [_serialize_workspace(workspace) for workspace in workspaces]
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
     return WorkspaceListResponse(items=items)
@@ -78,6 +81,7 @@ async def create_workspace(
     payload: WorkspaceCreateRequest,
     request: Request,
 ) -> WorkspaceResponse:
+    user = get_current_user(request)
     service = _get_workspace_service(request)
     try:
         workspace = service.create_workspace(
@@ -86,6 +90,7 @@ async def create_workspace(
             description=payload.description,
             default_workdir=payload.default_workdir,
             workspace_prompt=payload.workspace_prompt,
+            owner_user_id=user["id"],
         )
         return _serialize_workspace(workspace)
     except Exception as exc:
@@ -94,9 +99,13 @@ async def create_workspace(
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
 async def read_workspace(workspace_id: str, request: Request) -> WorkspaceResponse:
+    user = get_current_user(request)
     service = _get_workspace_service(request)
     try:
-        return _serialize_workspace(service.get_workspace(workspace_id))
+        workspace = service.get_workspace(workspace_id)
+        if not check_resource_owner(user, workspace.owner_user_id):
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        return _serialize_workspace(workspace)
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
 
@@ -107,8 +116,12 @@ async def update_workspace(
     payload: WorkspaceUpdateRequest,
     request: Request,
 ) -> WorkspaceResponse:
+    user = get_current_user(request)
     service = _get_workspace_service(request)
     try:
+        workspace = service.get_workspace(workspace_id)
+        if not check_resource_owner(user, workspace.owner_user_id):
+            raise HTTPException(status_code=404, detail="Workspace not found")
         workspace = service.update_workspace(
             workspace_id,
             project_id=payload.project_id,
@@ -124,8 +137,12 @@ async def update_workspace(
 
 @router.delete("/{workspace_id}", status_code=204)
 async def delete_workspace(workspace_id: str, request: Request) -> Response:
+    user = get_current_user(request)
     service = _get_workspace_service(request)
     try:
+        workspace = service.get_workspace(workspace_id)
+        if not check_resource_owner(user, workspace.owner_user_id):
+            raise HTTPException(status_code=404, detail="Workspace not found")
         service.delete_workspace(workspace_id)
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc

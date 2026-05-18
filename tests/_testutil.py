@@ -1,22 +1,57 @@
-"""Test utilities for JWT authentication in API tests."""
+"""Internal test utilities for permission and admin API tests."""
+
 from __future__ import annotations
 
-from fastapi import FastAPI
+import tempfile
+from pathlib import Path
+
+import httpx
+
+from ainrf.api.app import create_app
+from ainrf.api.config import ApiConfig, hash_api_key
+
+_app_instance = None
+_tmp_path: Path | None = None
 
 
-def get_jwt_headers(app: FastAPI) -> dict[str, str]:
-    """Register a test user, activate it, log in, and return Bearer auth headers.
+def _ensure_app():
+    """Lazy-create app singleton so tests can share state."""
+    global _app_instance, _tmp_path
+    if _app_instance is None:
+        _tmp_path = Path(tempfile.mkdtemp())
+        _app_instance = create_app(
+            ApiConfig(
+                api_key_hashes=frozenset({hash_api_key("secret-key")}),
+                state_root=_tmp_path,
+            )
+        )
+    return _app_instance
 
-    Call this after creating the app so that app.state.auth_service is available.
-    The test user is named "testuser" with password "test123".
+
+def make_client():
+    """Create an unauthenticated async test client."""
+    app = _ensure_app()
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    )
+
+
+def get_jwt_headers(client, user_id: str = "test-user", role: str = "admin"):
+    """Create JWT auth headers for the given user.
+
+    The *client* argument is accepted for API compatibility but not used directly;
+    the underlying app singleton is used to register + login the test user.
     """
-    auth_service = app.state.auth_service
-    try:
-        auth_service.register(username="testuser", display_name="Test User", password="test123")
-    except Exception:
-        pass
-    with auth_service._connect() as conn:
-        conn.execute("UPDATE users SET status = 'active' WHERE username = 'testuser'")
-        conn.commit()
-    result = auth_service.login(username="testuser", password="test123")
-    return {"Authorization": f"Bearer {result['access_token']}"}
+    from tests.testutil import get_jwt_headers as _orig
+
+    app = _ensure_app()
+    headers = _orig(app, username=user_id, password="test-pass", user_id=user_id)
+    # Override role if not admin (the base helper always sets role='admin')
+    if role != "admin":
+        with app.state.auth_service._connect() as conn:
+            conn.execute(
+                "UPDATE users SET role = ? WHERE username = ?", (role, user_id)
+            )
+            conn.commit()
+    return headers

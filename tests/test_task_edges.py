@@ -8,7 +8,6 @@ from ainrf.environments.models import EnvironmentAuthKind
 from ainrf.environments.service import InMemoryEnvironmentService
 from ainrf.task_harness.service import TaskHarnessService
 from ainrf.workspaces.service import WorkspaceRegistryService
-from tests._testutil import get_jwt_headers
 
 
 def _make_service(tmp_path):
@@ -131,9 +130,13 @@ def test_auto_connect_skips_archived_task(tmp_path, monkeypatch):
     assert edges[0].target_task_id == task3.task_id
 
 
+# API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
+
+
 def test_api_create_and_list_edges(tmp_path, monkeypatch):
     from ainrf.api.app import create_app
     from ainrf.api.config import ApiConfig, hash_api_key
+    from tests.testutil import get_jwt_headers
 
     config = ApiConfig(
         state_root=tmp_path,
@@ -142,6 +145,7 @@ def test_api_create_and_list_edges(tmp_path, monkeypatch):
         code_server_port=8080,
     )
     app = create_app(config)
+    jwt_headers = get_jwt_headers(app)
     service = app.state.task_harness_service
     task1 = service.create_task(
         project_id="default",
@@ -164,20 +168,20 @@ def test_api_create_and_list_edges(tmp_path, monkeypatch):
         ) as client:
             create_resp = await client.post(
                 "/projects/default/task-edges",
-                headers=get_jwt_headers(app),
+                headers=jwt_headers,
                 json={"source_task_id": task1.task_id, "target_task_id": task2.task_id},
             )
             assert create_resp.status_code == 201
             created = create_resp.json()
             assert created["source_task_id"] == task1.task_id
 
-            list_resp = await client.get("/projects/default/task-edges", headers=get_jwt_headers(app))
+            list_resp = await client.get("/projects/default/task-edges", headers=jwt_headers)
             assert list_resp.status_code == 200
             items = list_resp.json()["items"]
             assert len(items) == 1
 
             delete_resp = await client.delete(
-                f"/task-edges/{created['edge_id']}", headers=get_jwt_headers(app)
+                f"/task-edges/{created['edge_id']}", headers=jwt_headers
             )
             assert delete_resp.status_code == 204
 
