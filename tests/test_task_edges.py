@@ -8,6 +8,7 @@ from ainrf.environments.models import EnvironmentAuthKind
 from ainrf.environments.service import InMemoryEnvironmentService
 from ainrf.task_harness.service import TaskHarnessService
 from ainrf.workspaces.service import WorkspaceRegistryService
+from tests._testutil import get_jwt_headers
 
 
 def _make_service(tmp_path):
@@ -130,9 +131,6 @@ def test_auto_connect_skips_archived_task(tmp_path, monkeypatch):
     assert edges[0].target_task_id == task3.task_id
 
 
-API_HEADERS = {"X-API-Key": "test-key"}
-
-
 def test_api_create_and_list_edges(tmp_path, monkeypatch):
     from ainrf.api.app import create_app
     from ainrf.api.config import ApiConfig, hash_api_key
@@ -166,20 +164,20 @@ def test_api_create_and_list_edges(tmp_path, monkeypatch):
         ) as client:
             create_resp = await client.post(
                 "/projects/default/task-edges",
-                headers=API_HEADERS,
+                headers=get_jwt_headers(app),
                 json={"source_task_id": task1.task_id, "target_task_id": task2.task_id},
             )
             assert create_resp.status_code == 201
             created = create_resp.json()
             assert created["source_task_id"] == task1.task_id
 
-            list_resp = await client.get("/projects/default/task-edges", headers=API_HEADERS)
+            list_resp = await client.get("/projects/default/task-edges", headers=get_jwt_headers(app))
             assert list_resp.status_code == 200
             items = list_resp.json()["items"]
             assert len(items) == 1
 
             delete_resp = await client.delete(
-                f"/task-edges/{created['edge_id']}", headers=API_HEADERS
+                f"/task-edges/{created['edge_id']}", headers=get_jwt_headers(app)
             )
             assert delete_resp.status_code == 204
 

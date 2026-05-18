@@ -8,6 +8,7 @@ import pytest
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig
+from tests._testutil import get_jwt_headers
 
 
 @pytest.mark.anyio
@@ -23,7 +24,7 @@ async def test_get_resources_returns_list(tmp_path: Path) -> None:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"X-API-Key": "secret-key"},
+        headers=get_jwt_headers(app),
     ) as client:
         response = await client.get("/resources")
 
