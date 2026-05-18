@@ -20,6 +20,7 @@ import { getTasks } from '../../api';
 import type { TaskSummary } from '../../types';
 import LocaleSwitcher from './LocaleSwitcher';
 import { useT } from '../../i18n';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Props {
   children: ReactNode;
@@ -54,6 +55,7 @@ function buildTaskStatusSummary(tasks: TaskSummary[] | null, isError: boolean, i
 function Layout({ children, edgeToEdge = false }: Props) {
   const t = useT();
   const location = useLocation();
+  const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(true);
   const tasksQuery = useQuery({
     queryKey: ['tasks'],
@@ -172,6 +174,15 @@ function Layout({ children, edgeToEdge = false }: Props) {
               {isCollapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
             </button>
           </div>
+
+          {user && (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-[var(--sidebar-border)]">
+              <span className="text-gray-600 truncate">{user.display_name}</span>
+              <button type="button" onClick={logout} className="text-gray-400 hover:text-gray-600 ml-auto">
+                {t('auth.logout')}
+              </button>
+            </div>
+          )}
 
           <nav className="flex flex-1 flex-col gap-1 px-2 py-3">
             {navigationItems.map((item) => {

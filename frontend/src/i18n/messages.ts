@@ -63,6 +63,16 @@ export const messages = {
       disconnected: 'disconnected',
       error: 'error',
     },
+    auth: {
+      login: 'Log in',
+      logout: 'Log out',
+      username: 'Username',
+      password: 'Password',
+      registerLink: "Don't have an account? Register",
+      loginLink: 'Already have an account? Log in',
+      register: 'Register',
+      pendingApproval: 'Your account is pending admin approval.',
+    },
     navigation: {
       projects: {
         label: 'Projects',
@@ -775,6 +785,16 @@ export const messages = {
       connected: '已连接',
       disconnected: '已断开',
       error: '错误',
+    },
+    auth: {
+      login: '登录',
+      logout: '退出',
+      username: '用户名',
+      password: '密码',
+      registerLink: '没有账号？注册',
+      loginLink: '已有账号？登录',
+      register: '注册',
+      pendingApproval: '账号等待管理员审批中。',
     },
     navigation: {
       projects: {
