@@ -96,6 +96,10 @@ export const messages = {
         label: 'Sessions',
         description: 'Research session history',
       },
+      timeline: {
+        label: 'Timeline',
+        description: 'Research session timeline',
+      },
       settings: {
         label: 'Settings',
         description: 'Runtime and WebUI preferences',
@@ -498,6 +502,22 @@ export const messages = {
           unavailable: 'Unavailable',
         },
       },
+      timeline: {
+        title: 'Timeline',
+        empty: 'No sessions in this time range',
+        loading: 'Loading timeline...',
+        sessionCount: '{{count}} sessions',
+        totalCost: 'Total {{cost}}',
+        allProjects: 'All Projects',
+        today: 'Today',
+        past7Days: 'Past 7 days',
+        past30Days: 'Past 30 days',
+        from: 'From',
+        to: 'To',
+        attemptLabel: 'Attempt #{{seq}}',
+        viewTask: 'View task',
+        viewSession: 'View session',
+      },
       sessions: {
         sidebarTitle: 'Sessions',
         sidebarCount: '{{count}} sessions',
@@ -788,6 +808,10 @@ export const messages = {
       sessions: {
         label: '会话',
         description: '研究会话历史',
+      },
+      timeline: {
+        label: '时间线',
+        description: '研究会话时间线',
       },
       settings: {
         label: '设置',
@@ -1175,6 +1199,22 @@ export const messages = {
           degraded: '降级',
           unavailable: '不可用',
         },
+      },
+      timeline: {
+        title: '时间线',
+        empty: '此时间段内无会话',
+        loading: '加载时间线...',
+        sessionCount: '{{count}} 个会话',
+        totalCost: '总计 {{cost}}',
+        allProjects: '全部项目',
+        today: '今天',
+        past7Days: '过去 7 天',
+        past30Days: '过去 30 天',
+        from: '从',
+        to: '至',
+        attemptLabel: '尝试 #{{seq}}',
+        viewTask: '查看任务',
+        viewSession: '查看会话',
       },
       sessions: {
         sidebarTitle: '会话',
