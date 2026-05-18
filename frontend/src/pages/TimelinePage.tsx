@@ -5,17 +5,13 @@ import PageShell from '../components/layout/PageShell';
 import SectionStack from '../components/layout/SectionStack';
 import type { SessionDetailRecord } from '../types';
 import { GanttChart } from './timeline/GanttChart';
+import { TimelineControls } from './timeline/TimelineControls';
 
 export default function TimelinePage() {
   // Will be wired in Task 2+3
   const [projectId, setProjectId] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
-  void setProjectId;
-  void fromDate;
-  void setFromDate;
-  void toDate;
-  void setToDate;
 
   const sessionsQuery = useQuery({
     queryKey: ['sessions', projectId],
@@ -50,11 +46,19 @@ export default function TimelinePage() {
     queryFn: () => getProjects(),
   });
 
-  void projectsQuery; // Will be consumed by TimelineControls in Task 2
-
   return (
     <PageShell>
       <SectionStack gap={4}>
+        <TimelineControls
+          projectId={projectId}
+          onProjectChange={setProjectId}
+          fromDate={fromDate}
+          toDate={toDate}
+          onFromDateChange={setFromDate}
+          onToDateChange={setToDate}
+          sessions={sessions}
+          projects={projectsQuery.data?.items ?? []}
+        />
         <GanttChart sessions={sessions} details={details} loading={sessionsQuery.isLoading} />
       </SectionStack>
     </PageShell>
