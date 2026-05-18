@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from anyio import to_thread
 from fastapi import APIRouter, FastAPI
 
 from ainrf.api.config import ApiConfig
-from ainrf.api.middleware import build_api_key_middleware
+from ainrf.api.middleware import build_jwt_auth_middleware
+from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.code import router as code_router
 from ainrf.api.routes.environments import router as environments_router
 from ainrf.api.routes.files import router as files_router
@@ -21,6 +24,7 @@ from ainrf.api.routes.tasks import router as tasks_router, task_edges_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.monitor.service import ResourceMonitorService
+from ainrf.auth import AuthService
 from ainrf.code_server import CodeServerSupervisor
 from ainrf.files import FileBrowserService
 from ainrf.environments import InMemoryEnvironmentService
@@ -41,6 +45,7 @@ def _run_sync_in_lifespan(callback: Callable[[], None]) -> Awaitable[None]:
 
 
 ROUTERS: tuple[APIRouter, ...] = (
+    auth_router,
     health_router,
     environments_router,
     files_router,
@@ -87,6 +92,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await _run_sync_in_lifespan(task_harness_service.initialize)
         session_service = app.state.session_service
         await _run_sync_in_lifespan(session_service.initialize)
+        auth_service = app.state.auth_service
+        await _run_sync_in_lifespan(auth_service.initialize)
+        # Create initial admin if no users exist
+        try:
+            with auth_service._connect() as conn:
+                count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            if count == 0:
+                password = secrets.token_hex(12)
+                auth_service.register(username="admin", display_name="Administrator", password=password)
+                with auth_service._connect() as conn:
+                    conn.execute("UPDATE users SET status = 'active', activated_at = ? WHERE username = 'admin'",
+                                 (datetime.now(timezone.utc).isoformat(),))
+                    conn.commit()
+                print(f"\n{'='*60}\nInitial admin created!\nUsername: admin\nPassword: {password}\n{'='*60}\n")
+        except Exception:
+            pass
         yield
     finally:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
@@ -109,6 +130,8 @@ def create_app(
     )
     app = FastAPI(title="AINRF API", version="0.1.0", lifespan=lifespan)
     app.state.api_config = api_config
+    auth_service = AuthService(state_root=api_config.state_root)
+    app.state.auth_service = auth_service
     app.state.project_service = project_service
     app.state.environment_service = environment_service
     app.state.workspace_service = WorkspaceRegistryService(
@@ -142,7 +165,7 @@ def create_app(
         skill_root=default_workspace_dir / "skills",
         session_service=app.state.session_service,
     )
-    app.middleware("http")(build_api_key_middleware(api_config))
+    app.middleware("http")(build_jwt_auth_middleware(auth_service))
     for router in ROUTERS:
         app.include_router(router)
         app.include_router(router, prefix="/v1")

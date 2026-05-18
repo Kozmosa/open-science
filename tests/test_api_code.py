@@ -8,6 +8,7 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from tests._testutil import get_jwt_headers
 from ainrf.code_server import (
     CodeServerLifecycleStatus,
     CodeServerState,
@@ -56,7 +57,7 @@ async def test_code_status_reports_unavailable_without_manager(tmp_path: Path) -
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        response = await client.get("/code/status", headers={"X-API-Key": "secret-key"})
+        response = await client.get("/code/status", headers=get_jwt_headers(app))
 
     assert response.status_code == 200
     assert response.json() == {
@@ -96,7 +97,7 @@ async def test_code_session_returns_conflict_for_password_environment(tmp_path: 
     ) as client:
         response = await client.post(
             "/code/session",
-            headers={"X-API-Key": "secret-key"},
+            headers=get_jwt_headers(app),
             json={"environment_id": environment.id},
         )
 
@@ -147,7 +148,7 @@ async def test_code_proxy_forwards_ready_requests(
     ) as client:
         response = await client.get(
             "/code/",
-            headers={"X-API-Key": "secret-key", "Accept": "text/html"},
+            headers={**get_jwt_headers(app), "Accept": "text/html"},
         )
 
     assert response.status_code == 200
@@ -194,7 +195,7 @@ async def test_code_proxy_forwards_query_string(
     ) as client:
         response = await client.get(
             "/code/proxy/assets/app.js?folder=/workspace/project&view=preview",
-            headers={"X-API-Key": "secret-key"},
+            headers=get_jwt_headers(app),
         )
 
     assert response.status_code == 204
@@ -232,7 +233,7 @@ async def test_code_proxy_returns_upstream_errors(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        timeout_response = await client.get("/code/", headers={"X-API-Key": "secret-key"})
+        timeout_response = await client.get("/code/", headers=get_jwt_headers(app))
 
     assert timeout_response.status_code == 503
     assert timeout_response.json() == {"detail": "code-server upstream timed out"}
@@ -254,7 +255,7 @@ async def test_code_proxy_returns_upstream_errors(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        transport_response = await client.get("/code/", headers={"X-API-Key": "secret-key"})
+        transport_response = await client.get("/code/", headers=get_jwt_headers(app))
 
     assert transport_response.status_code == 502
     assert transport_response.json() == {"detail": "code-server upstream request failed"}

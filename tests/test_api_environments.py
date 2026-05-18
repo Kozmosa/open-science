@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from tests._testutil import get_jwt_headers
 from ainrf.execution.errors import SSHConnectionError
 from ainrf.execution.models import CommandResult
 from ainrf.code_server_installer import CodeServerInstallResult
@@ -35,9 +36,11 @@ def make_app(tmp_path: Path) -> FastAPI:
 
 
 def make_client(app: FastAPI) -> httpx.AsyncClient:
+    jwt_headers = get_jwt_headers(app)
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=jwt_headers,
     )
 
 

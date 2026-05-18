@@ -1,7 +1,22 @@
-import { getAppUserId } from './appUser';
-
 const API_BASE = '/api';
-const API_KEY = import.meta.env.VITE_AINRF_API_KEY?.trim() ?? '';
+
+let _accessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+  _accessToken = token;
+}
+
+export function getStoredRefreshToken(): string | null {
+  return localStorage.getItem('ainrf.refresh_token');
+}
+
+export function setStoredRefreshToken(token: string | null) {
+  if (token) {
+    localStorage.setItem('ainrf.refresh_token', token);
+  } else {
+    localStorage.removeItem('ainrf.refresh_token');
+  }
+}
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -83,12 +98,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.set('Content-Type', 'application/json');
   }
 
-  if (API_KEY && !headers.has('X-API-Key')) {
-    headers.set('X-API-Key', API_KEY);
-  }
-
-  if (!headers.has('X-AINRF-User-Id')) {
-    headers.set('X-AINRF-User-Id', getAppUserId());
+  if (_accessToken) {
+    headers.set('Authorization', `Bearer ${_accessToken}`);
   }
 
   const init: RequestInit = {

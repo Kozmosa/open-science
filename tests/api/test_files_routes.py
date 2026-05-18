@@ -7,6 +7,7 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from tests._testutil import get_jwt_headers
 
 
 def _make_app_and_workdir(
@@ -28,7 +29,7 @@ def make_client(
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
-        headers={"X-API-Key": "secret-key"},
+        headers=get_jwt_headers(app),
     )
 
 

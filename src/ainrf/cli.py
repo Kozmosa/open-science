@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json as json_mod
 import os
 import shlex
 from dataclasses import dataclass
@@ -30,6 +31,8 @@ app = typer.Typer(
 
 container_app = typer.Typer(help="Manage reusable container profiles.")
 app.add_typer(container_app, name="container")
+
+_TOKEN_FILE = Path.home() / ".ainrf" / "token"
 
 
 def version_callback(value: bool) -> None:
@@ -184,6 +187,41 @@ def build_container_profile(
         "ssh_password": password or None,
     }
     return name, profile
+
+
+@app.command()
+def login(
+    server: Annotated[
+        str, typer.Option("--server", help="AINRF server URL")
+    ] = "http://localhost:8000",
+) -> None:
+    """Log in to AINRF and cache the token locally."""
+    import getpass
+
+    import requests
+
+    username = input("Username: ").strip()
+    password = getpass.getpass("Password: ")
+
+    try:
+        resp = requests.post(
+            f"{server}/auth/login",
+            json={"username": username, "password": password},
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"Login failed: {exc}")
+        raise typer.Exit(code=1)
+
+    data = resp.json()
+    _TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _TOKEN_FILE.write_text(json_mod.dumps({
+        "access_token": data["access_token"],
+        "refresh_token": data["refresh_token"],
+    }))
+    user = data["user"]
+    print(f"Logged in as {user['username']} ({user['role']}). Token saved.")
 
 
 def main() -> None:
