@@ -1,11 +1,22 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
+import { visualizer } from 'rollup-plugin-visualizer'
 import { sharedAinrfProxyConfig } from './vite.proxy'
 
 // https://vite.dev/config/
+const ANALYZE = process.env.VITE_BUNDLE_ANALYZE === 'true'
+
 const config = defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(),
+    ...(ANALYZE ? [visualizer({
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+      filename: '.cache/perf-report/bundle-treemap.html',
+      template: 'treemap',
+    })] : []),
+  ],
   build: {
     rollupOptions: {
       output: {
