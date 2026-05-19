@@ -37,6 +37,13 @@ def make_client():
     )
 
 
+def reset_app_instance():
+    """Reset cached app instance between test modules."""
+    global _app_instance, _tmp_path
+    _app_instance = None
+    _tmp_path = None
+
+
 def get_jwt_headers(client, user_id: str = "test-user", role: str = "admin"):
     """Create JWT auth headers for the given user.
 
@@ -50,8 +57,6 @@ def get_jwt_headers(client, user_id: str = "test-user", role: str = "admin"):
     # Override role if not admin (the base helper always sets role='admin')
     if role != "admin":
         with app.state.auth_service._connect() as conn:
-            conn.execute(
-                "UPDATE users SET role = ? WHERE username = ?", (role, user_id)
-            )
+            conn.execute("UPDATE users SET role = ? WHERE username = ?", (role, user_id))
             conn.commit()
     return headers

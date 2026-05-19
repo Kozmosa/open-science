@@ -414,7 +414,7 @@ class TaskCreateRequest(BaseModel):
     workspace_id: str
     environment_id: str
     task_profile: str = Field(default="claude-code", min_length=1)
-    task_input: str = Field(min_length=1)
+    task_input: str = Field(min_length=1, max_length=100000)
     title: str | None = None
     execution_engine: str | None = None
     auto_connect: bool = Field(default=False)
@@ -491,7 +491,7 @@ class SkillImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source: str = Field(..., pattern="^(git|local)$")
-    url: str | None = None
+    url: str | None = Field(default=None, min_length=1, pattern=r"^(https?|git|file)://")
     local_path: str | None = None
     skill_id: str | None = None
 
@@ -914,6 +914,7 @@ class ProjectCostSummaryResponse(BaseModel):
 
 # ── Auth schemas ──────────────────────────────────────────
 
+
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     username: str = Field(min_length=1)
@@ -955,13 +956,16 @@ class UserInfoResponse(BaseModel):
 
 # ── Admin schemas ─────────────────────────────────────────
 
+
 class AdminUserUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: str | None = None  # 'active' | 'disabled'
 
+
 class AdminPasswordResetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     password: str = Field(min_length=4)
+
 
 class AdminUserResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -973,16 +977,20 @@ class AdminUserResponse(BaseModel):
     created_at: str
     last_login_at: str | None = None
 
+
 class AdminUserListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[AdminUserResponse]
 
+
 # ── Collaborator schemas ──────────────────────────────────
+
 
 class CollaboratorRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_id: str
     role: str = "member"
+
 
 class CollaboratorResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -991,16 +999,20 @@ class CollaboratorResponse(BaseModel):
     display_name: str
     role: str
 
+
 class CollaboratorListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[CollaboratorResponse]
 
+
 # ── Environment Access schemas ────────────────────────────
+
 
 class EnvironmentAccessRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_id: str
     max_concurrent_tasks: int | None = None
+
 
 class EnvironmentAccessResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -1008,6 +1020,7 @@ class EnvironmentAccessResponse(BaseModel):
     username: str
     display_name: str
     max_concurrent_tasks: int | None
+
 
 class EnvironmentAccessListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")

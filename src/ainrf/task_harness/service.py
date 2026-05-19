@@ -139,6 +139,8 @@ class TaskHarnessService:
         self._engine_factory = get_engine
         self._engines: dict[str, ExecutionEngine] = {}
         self._session_store = SessionStateStore(state_root)
+        self._output_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self._drain_task: asyncio.Task | None = None
 
     def initialize(self) -> None:
         if self._initialized:
@@ -454,6 +456,23 @@ class TaskHarnessService:
             )
             for row in rows
         ]
+
+    def get_task_edge(self, edge_id: str) -> TaskEdge:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT edge_id, project_id, source_task_id, target_task_id, created_at FROM task_harness_edges WHERE edge_id = ?",
+                (edge_id,),
+            ).fetchone()
+        if row is None:
+            raise TaskHarnessNotFoundError(f"Task edge not found: {edge_id}")
+        return TaskEdge(
+            edge_id=row["edge_id"],
+            project_id=row["project_id"],
+            source_task_id=row["source_task_id"],
+            target_task_id=row["target_task_id"],
+            created_at=_parse_required_datetime(row["created_at"]),
+        )
 
     def delete_task_edge(self, edge_id: str) -> None:
         self.initialize()
@@ -792,6 +811,8 @@ class TaskHarnessService:
             loop = asyncio.get_running_loop()
         except RuntimeError as exc:
             raise TaskHarnessError("Task harness scheduling requires a running event loop") from exc
+        if self._drain_task is None:
+            self._drain_task = loop.create_task(self._drain_output_queue())
         existing = self._running_tasks.get(task_id)
         if existing is not None and not existing.done():
             return
@@ -976,11 +997,15 @@ class TaskHarnessService:
                                 if started:
                                     try:
                                         from datetime import datetime as _dt, timezone as _tz
+
                                         start_dt = _dt.fromisoformat(str(started))
-                                        duration_ms = int((_dt.now(_tz.utc) - start_dt).total_seconds() * 1000)
+                                        duration_ms = int(
+                                            (_dt.now(_tz.utc) - start_dt).total_seconds() * 1000
+                                        )
                                     except Exception:
                                         pass
                                 import json as _json_mod
+
                                 self._session_service.complete_attempt(
                                     latest.id,
                                     status=status_val,
@@ -989,6 +1014,7 @@ class TaskHarnessService:
                                 )
                         except Exception:
                             import logging
+
                             logging.getLogger(__name__).warning(
                                 "Failed to update session attempt with token data", exc_info=True
                             )
@@ -1126,7 +1152,21 @@ class TaskHarnessService:
             text = (
                 chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else str(chunk)
             )
-            self._append_output_event(task_id, kind, text)
+            await self._output_queue.put((task_id, kind, text))
+
+    async def _drain_output_queue(self) -> None:
+        """Continuously drain output events from the queue to the database."""
+        try:
+            while True:
+                task_id, kind, content = await self._output_queue.get()
+                try:
+                    self._append_output_event(task_id, kind, content)
+                except Exception:
+                    pass
+                finally:
+                    self._output_queue.task_done()
+        except asyncio.CancelledError:
+            pass
 
     def _append_output_event(
         self,

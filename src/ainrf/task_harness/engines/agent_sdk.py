@@ -5,10 +5,8 @@ import json
 import logging
 import os
 from collections import deque
-from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterator
 
 from claude_agent_sdk import query, ClaudeAgentOptions, HookMatcher
 from claude_agent_sdk import (
@@ -60,33 +58,6 @@ class AgentSession:
     total_cost_usd: float = 0.0
     had_error: bool = False
     terminal_emitted: bool = False
-
-
-@contextmanager
-def _env_override(overrides: dict[str, str | None]) -> Iterator[None]:
-    """Temporarily override process environment variables.
-
-    WARNING: This mutates the global os.environ dict. The AgentSdkEngine
-    uses a class-level asyncio.Lock (_run_lock) to serialize execution
-    and prevent env var cross-contamination between concurrent tasks.
-    This design limits agent-sdk tasks to one-at-a-time per process.
-    """
-    keys = [k for k, v in overrides.items() if v is not None]
-    if not keys:
-        yield
-        return
-    original: dict[str, str | None] = {}
-    for key in keys:
-        original[key] = os.environ.get(key)
-        os.environ[key] = overrides[key]  # type: ignore[index]
-    try:
-        yield
-    finally:
-        for key, value in original.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
 
 
 class AgentSdkEngine(ExecutionEngine):
@@ -180,7 +151,17 @@ class AgentSdkEngine(ExecutionEngine):
         )
 
         async with self._run_lock:
-            with _env_override(self._provider_env(context)):
+            # Set per-request env vars for the agent SDK call.
+            # NOTE: os.environ is mutated because claude_agent_sdk.query()
+            # reads config from process environment. _run_lock serializes
+            # all SDK calls to prevent cross-task contamination. A future
+            # SDK version may accept an explicit env parameter.
+            _env_overrides = self._provider_env(context)
+            _saved_env = {}
+            for _k, _v in _env_overrides.items():
+                _saved_env[_k] = os.environ.get(_k)
+                os.environ[_k] = _v
+            try:
                 try:
                     async for sdk_msg in query(prompt=prompt, options=options):
                         if session.abort_event.is_set():
@@ -234,6 +215,12 @@ class AgentSdkEngine(ExecutionEngine):
                     if session.abort_event.is_set():
                         async with self._lock:
                             self._sessions.pop(context.task_id, None)
+            finally:
+                for _k, _v in _saved_env.items():
+                    if _v is None:
+                        os.environ.pop(_k, None)
+                    else:
+                        os.environ[_k] = _v
 
     async def pause(self, task_id: str) -> None:
         async with self._lock:

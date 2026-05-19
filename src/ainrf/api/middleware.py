@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request
@@ -44,6 +45,8 @@ def build_jwt_auth_middleware(
         token = auth_header[7:]
         try:
             user = auth_service.get_user_by_token(token)
+        except asyncio.CancelledError:
+            raise
         except Exception:
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
