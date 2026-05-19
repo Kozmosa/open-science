@@ -6,6 +6,9 @@ export function setAccessToken(token: string | null) {
   _accessToken = token;
 }
 
+// NOTE: Refresh token stored in localStorage (XSS-vulnerable).
+// For production, use httpOnly cookies with CSRF protection.
+// Access token is memory-only.
 export function getStoredRefreshToken(): string | null {
   return localStorage.getItem('ainrf.refresh_token');
 }
@@ -112,6 +115,49 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   const response = await fetch(url, init);
+
+  // Auto-refresh on 401 (unless already on auth endpoints)
+  if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
+    const refreshToken = getStoredRefreshToken();
+    if (refreshToken) {
+      try {
+        const refreshResp = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (refreshResp.ok) {
+          const refreshData = (await parseResponseBody(refreshResp)) as Record<string, unknown>;
+          const newToken = refreshData?.access_token as string;
+          if (newToken) {
+            setAccessToken(newToken);
+            headers.set('Authorization', `Bearer ${newToken}`);
+            const retryResponse = await fetch(url, init);
+            if (!retryResponse.ok) {
+              const retryData = await parseResponseBody(retryResponse);
+              throw new ApiError(
+                createErrorMessage(path, retryResponse, retryData),
+                retryResponse.status,
+                path,
+                retryData,
+              );
+            }
+            const retryBody = await parseResponseBody(retryResponse);
+            return retryBody as T;
+          }
+        }
+      } catch {
+        // refresh failed — fall through to clear tokens
+      }
+    }
+    // Refresh failed or no token — clear and redirect
+    setAccessToken(null);
+    setStoredRefreshToken(null);
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    throw new ApiError('Session expired', 401, path);
+  }
 
   if (!response.ok) {
     const data = await parseResponseBody(response);

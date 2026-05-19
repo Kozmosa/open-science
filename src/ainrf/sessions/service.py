@@ -26,7 +26,7 @@ def _new_id() -> str:
 class SessionService:
     def __init__(self, *, state_root: Path) -> None:
         self._runtime_root = state_root / "runtime"
-        self._db_path = self._runtime_root / "task_harness.sqlite3"
+        self._db_path = self._runtime_root / "sessions.sqlite3"
         self._initialized = False
 
     def initialize(self) -> None:
@@ -96,7 +96,11 @@ class SessionService:
         return self._load_session(sid)
 
     def list_sessions(
-        self, *, project_id: str | None = None, status: str | None = None, owner_user_id: str | None = None
+        self,
+        *,
+        project_id: str | None = None,
+        status: str | None = None,
+        owner_user_id: str | None = None,
     ) -> list[Session]:
         clauses = []
         params: list[str] = []
@@ -138,8 +142,10 @@ class SessionService:
     def delete_session(self, session_id: str) -> None:
         self._load_session(session_id)
         with self._connect() as conn:
-            conn.execute("UPDATE task_sessions SET status = 'archived', updated_at = ? WHERE id = ?",
-                         (_now_iso(), session_id))
+            conn.execute(
+                "UPDATE task_sessions SET status = 'archived', updated_at = ? WHERE id = ?",
+                (_now_iso(), session_id),
+            )
             conn.commit()
 
     # --- Attempt management ---
@@ -162,8 +168,16 @@ class SessionService:
                 "(id, session_id, task_id, parent_attempt_id, attempt_seq, "
                 "intervention_reason, status, started_at, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)",
-                (aid, session_id, task_id, parent_attempt_id, next_seq,
-                 intervention_reason, now, now),
+                (
+                    aid,
+                    session_id,
+                    task_id,
+                    parent_attempt_id,
+                    next_seq,
+                    intervention_reason,
+                    now,
+                    now,
+                ),
             )
             conn.commit()
         return self._load_attempt(aid)
@@ -202,22 +216,33 @@ class SessionService:
     def get_attempt(self, attempt_id: str) -> SessionAttempt:
         return self._load_attempt(attempt_id)
 
+    def list_attempts_for_sessions(self, session_ids: list[str]) -> dict[str, list[SessionAttempt]]:
+        if not session_ids:
+            return {}
+        self.initialize()
+        placeholders = ",".join("?" * len(session_ids))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM task_attempts WHERE session_id IN ({placeholders}) ORDER BY attempt_seq ASC",
+                tuple(session_ids),
+            ).fetchall()
+        result: dict[str, list[SessionAttempt]] = {sid: [] for sid in session_ids}
+        for row in rows:
+            result[row["session_id"]].append(_row_to_attempt(row))
+        return result
+
     # --- Internal helpers ---
 
     def _load_session(self, session_id: str) -> Session:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM task_sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM task_sessions WHERE id = ?", (session_id,)).fetchone()
         if row is None:
             raise SessionNotFoundError(f"Session not found: {session_id}")
         return _row_to_session(row)
 
     def _load_attempt(self, attempt_id: str) -> SessionAttempt:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM task_attempts WHERE id = ?", (attempt_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM task_attempts WHERE id = ?", (attempt_id,)).fetchone()
         if row is None:
             raise AttemptNotFoundError(f"Attempt not found: {attempt_id}")
         return _row_to_attempt(row)

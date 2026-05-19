@@ -102,12 +102,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
             if count == 0:
                 password = secrets.token_hex(12)
-                auth_service.register(username="admin", display_name="Administrator", password=password)
+                auth_service.register(
+                    username="admin", display_name="Administrator", password=password
+                )
                 with auth_service._connect() as conn:
-                    conn.execute("UPDATE users SET status = 'active', activated_at = ? WHERE username = 'admin'",
-                                 (datetime.now(timezone.utc).isoformat(),))
+                    conn.execute(
+                        "UPDATE users SET status = 'active', activated_at = ? WHERE username = 'admin'",
+                        (datetime.now(timezone.utc).isoformat(),),
+                    )
                     conn.commit()
-                print(f"\n{'='*60}\nInitial admin created!\nUsername: admin\nPassword: {password}\n{'='*60}\n")
+                print(
+                    f"\n{'=' * 60}\nInitial admin created!\nUsername: admin\nPassword: {password}\n{'=' * 60}\n"
+                )
         except Exception:
             pass
         yield
@@ -132,6 +138,12 @@ def create_app(
     )
     app = FastAPI(title="AINRF API", version="0.1.0", lifespan=lifespan)
     app.state.api_config = api_config
+    # Service initialization order:
+    # 1. project/workspace (no deps)
+    # 2. terminal (no deps)
+    # 3. task_harness (needs env+workspace; SessionService set later)
+    # 4. session_service (standalone)
+    # 5. auth_service (standalone; middleware consumer)
     auth_service = AuthService(state_root=api_config.state_root)
     app.state.auth_service = auth_service
     app.state.project_service = project_service

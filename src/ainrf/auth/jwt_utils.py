@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
 import time
 from pathlib import Path
@@ -10,10 +11,13 @@ import jwt  # PyJWT
 
 _SECRET_PATH = Path.home() / ".ainrf" / "jwt_secret"
 _ALGORITHM = "HS256"
-_ACCESS_TTL_SEC = 15 * 60       # 15 minutes
+_ACCESS_TTL_SEC = 15 * 60  # 15 minutes
 
 
 def _ensure_secret() -> str:
+    env_secret = os.environ.get("AINRF_JWT_SECRET")
+    if env_secret:
+        return env_secret
     if _SECRET_PATH.exists():
         return _SECRET_PATH.read_text().strip()
     secret = secrets.token_hex(32)  # 64-char hex

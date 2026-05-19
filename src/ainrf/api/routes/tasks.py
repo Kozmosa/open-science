@@ -344,7 +344,10 @@ async def stream_task_output(
                 next_seq = page.next_seq
                 continue
             task = service.get_task(task_id)
-            if task.status.value in {"succeeded", "failed", "cancelled"} and next_seq >= task.latest_output_seq:
+            if (
+                task.status.value in {"succeeded", "failed", "cancelled"}
+                and next_seq >= task.latest_output_seq
+            ):
                 return
             yield ": keep-alive\n\n"
             await asyncio.sleep(1.0)
@@ -545,10 +548,13 @@ async def delete_task_edge(edge_id: str, request: Request) -> None:
     user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
-        # Find the edge to determine which task to check ownership on
-        # (Edges don't have owner_user_id, but we need to ensure the user can manage tasks
-        #  in this project. We check via the project of the edge.)
+        edge = service.get_task_edge(edge_id)
+        source_task = service.get_task(edge.source_task_id)
+        if not check_resource_owner(user, source_task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task edge not found")
         service.delete_task_edge(edge_id)
+    except TaskHarnessNotFoundError:
+        raise HTTPException(status_code=404, detail="Task edge not found")
     except Exception as exc:
         raise _translate_task_error(exc) from exc
 
@@ -565,7 +571,9 @@ async def list_project_tasks(
         if is_admin(user):
             items = service.list_project_tasks(project_id, include_archived=include_archived)
         else:
-            items = service.list_project_tasks(project_id, include_archived=include_archived, owner_user_id=user["id"])
+            items = service.list_project_tasks(
+                project_id, include_archived=include_archived, owner_user_id=user["id"]
+            )
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskListResponse.model_validate(
