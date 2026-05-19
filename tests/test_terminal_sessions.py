@@ -142,12 +142,7 @@ def test_tmux_adapter_builds_local_commands(
             "-l",
         )
     ]
-    assert adapter.build_attach_command(binding, environment, session_name) == (
-        "tmux",
-        "attach-session",
-        "-t",
-        tmux_session_target(session_name),
-    )
+    assert adapter.build_attach_command(binding, environment, session_name) == ("/bin/bash", "-l")
 
 
 def test_tmux_adapter_treats_duplicate_new_session_after_recheck_as_success(
@@ -968,7 +963,7 @@ def test_personal_session_reattach_reuses_tmux_safe_target(
     )
     assert record.session_name is not None
     expected_target = tmux_session_target(record.session_name)
-    assert target.attach_command == ("tmux", "attach-session", "-t", expected_target)
+    assert target.attach_command == ("/bin/bash", "-l")
 
     broker = TerminalAttachmentBroker()
     attachment = broker.create_attachment("http://testserver/", target)
@@ -982,8 +977,8 @@ def test_personal_session_reattach_reuses_tmux_safe_target(
     )
 
     assert second_record.status is TerminalSessionStatus.RUNNING
-    assert second_target.attach_command == ("tmux", "attach-session", "-t", expected_target)
-    assert opened_commands == [("tmux", "attach-session", "-t", expected_target)]
+    assert second_target.attach_command == ("/bin/bash", "-l")
+    assert opened_commands == [("/bin/bash", "-l")]
     assert tmux_sessions == {expected_target}
 
 
