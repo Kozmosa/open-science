@@ -80,11 +80,20 @@ function AppRoutes() {
     );
   }
 
+  if (user?.must_change_password) {
+    return (
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="*" element={<ChangePasswordPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
   if (!user) {
     return (
       <Suspense fallback={null}>
         <Routes>
-          <Route path="/change-password" element={<ChangePasswordPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="*" element={<LoginPage />} />
         </Routes>

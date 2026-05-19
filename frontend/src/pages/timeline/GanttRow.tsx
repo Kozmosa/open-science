@@ -10,10 +10,10 @@ interface Props {
 
 export function GanttRow({ session, attempts, minTime, span }: Props) {
   return (
-    <div className="flex border-b border-gray-100 hover:bg-gray-50">
-      <div className="w-[260px] min-w-[260px] p-2 border-r border-gray-200 text-xs">
+    <div className="flex border-b border-[var(--border)] hover:bg-[var(--bg)]">
+      <div className="w-[260px] min-w-[260px] p-2 border-r border-[var(--border)] text-xs">
         <span className="font-medium">{session.title}</span>
-        <div className="text-gray-400 mt-0.5">
+        <div className="text-[var(--text-secondary)] mt-0.5">
           {session.task_count} attempts · ${session.total_cost_usd.toFixed(2)}
         </div>
       </div>

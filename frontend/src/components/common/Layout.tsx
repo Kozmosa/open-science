@@ -56,6 +56,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
   const t = useT();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const tasksQuery = useQuery({
     queryKey: ['tasks'],
@@ -161,8 +162,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
             <div className="flex h-12 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
             {!isCollapsed && (
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-tight">{t('common.appName')}</p>
-                <p className="truncate text-[11px] text-[var(--text-tertiary)]">AINRF console</p>
+                <p className="truncate text-lg font-bold tracking-tight">AINRF Console</p>
               </div>
             )}
             <button
@@ -177,8 +177,8 @@ function Layout({ children, edgeToEdge = false }: Props) {
 
           {user && (
             <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-[var(--sidebar-border)]">
-              <span className="text-gray-600 truncate">{user.display_name}</span>
-              <button type="button" onClick={logout} className="text-gray-400 hover:text-gray-600 ml-auto">
+              {!isCollapsed && <span className="text-gray-600 truncate">{user.display_name}</span>}
+              <button type="button" onClick={() => setShowLogoutConfirm(true)} className="text-gray-400 hover:text-gray-600 ml-auto">
                 {t('auth.logout')}
               </button>
             </div>
@@ -219,7 +219,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
           {!isCollapsed && (
             <div className="border-t border-[var(--sidebar-border)] px-3 py-3">
               <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
-                {t('layout.brandLine')}
+                Built by Kozmosa with ❤️
               </p>
             </div>
           )}
@@ -249,6 +249,31 @@ function Layout({ children, edgeToEdge = false }: Props) {
           </main>
         </div>
       </div>
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-lg p-6 w-full max-w-xs mx-4">
+            <p className="text-sm font-medium mb-2">Confirm Logout</p>
+            <p className="text-xs text-[var(--text-secondary)] mb-4">Are you sure you want to log out?</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--bg)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowLogoutConfirm(false); logout(); }}
+                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

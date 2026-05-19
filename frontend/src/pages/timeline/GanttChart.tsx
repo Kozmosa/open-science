@@ -102,9 +102,9 @@ export function GanttChart({ sessions, details, loading }: Props) {
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="flex bg-gray-50 border-b border-gray-200">
-        <div className="w-[260px] min-w-[260px] p-2 border-r-2 border-gray-300 text-xs font-semibold text-gray-600">
+    <div className="w-full border border-[var(--border)] rounded-lg overflow-x-auto">
+      <div className="flex bg-[var(--bg)] border-b border-[var(--border)]">
+        <div className="w-[260px] min-w-[260px] p-2 border-r-2 border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)]">
           Session
         </div>
         <div className="flex-1 relative h-8">
