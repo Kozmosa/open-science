@@ -93,7 +93,7 @@ describe('WorkspacesPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New workspace' }));
     const workdirInput = screen.getByLabelText('Default workdir') as HTMLInputElement;
     expect(workdirInput.placeholder).toBe(defaultWorkspace.default_workdir);
-    const labelInput = screen.getByLabelText('Workspace label');
+    const labelInput = screen.getByLabelText('Workspace name');
     fireEvent.change(labelInput, {
       target: { value: 'Created Workspace' },
     });
@@ -124,7 +124,7 @@ describe('WorkspacesPage', () => {
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
     fireEvent.click(await screen.findByRole('button', { name: 'New workspace' }));
-    fireEvent.change(screen.getByLabelText('Workspace label'), {
+    fireEvent.change(screen.getByLabelText('Workspace name'), {
       target: { value: 'No Workdir' },
     });
     fireEvent.change(screen.getByLabelText('Workspace prompt'), {
@@ -151,7 +151,7 @@ describe('WorkspacesPage', () => {
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Paper Experiments' }));
-    fireEvent.change(screen.getByLabelText('Workspace label'), {
+    fireEvent.change(screen.getByLabelText('Workspace name'), {
       target: { value: 'Updated Workspace' },
     });
     fireEvent.change(screen.getByLabelText('Description'), {
