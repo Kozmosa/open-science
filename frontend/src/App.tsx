@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Profiler, Suspense, type ProfilerOnRenderCallback } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
@@ -23,6 +23,33 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 
 const queryClient = createAppQueryClient();
+
+const PROFILER_ENABLED = import.meta.env.VITE_PROFILE === 'true';
+
+const profilerData: Array<{
+  id: string;
+  phase: string;
+  actualDuration: number;
+  baseDuration: number;
+  commitTime: number;
+}> = [];
+
+const onRender: ProfilerOnRenderCallback = (
+  id, phase, actualDuration, baseDuration, _startTime, commitTime,
+) => {
+  if (PROFILER_ENABLED) {
+    profilerData.push({ id, phase, actualDuration, baseDuration, commitTime });
+    // Keep only last 50 entries to bound memory
+    if (profilerData.length > 50) {
+      profilerData.splice(0, profilerData.length - 50);
+    }
+  }
+};
+
+// Expose profiler data to window for collection
+if (PROFILER_ENABLED && typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__perfProfilerData = profilerData;
+}
 
 const defaultRoutePathById = {
   projects: '/projects',
@@ -101,7 +128,8 @@ function AppRoutes() {
     );
   }
 
-  return <AuthenticatedRoutes />;
+  const content = <AuthenticatedRoutes />;
+  return PROFILER_ENABLED ? <Profiler id="AppRoutes" onRender={onRender}>{content}</Profiler> : content;
 }
 
 function App() {
