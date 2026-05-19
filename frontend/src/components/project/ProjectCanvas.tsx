@@ -7,6 +7,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  type Connection,
   type Edge,
   type Node,
   type NodeChange,
@@ -16,6 +17,7 @@ import {
 } from '@xyflow/react';
 import { Button } from '../ui';
 import { useT } from '../../i18n';
+import { createTaskEdge } from '../../api';
 import type { TaskEdge, TaskSummary } from '../../types';
 import TaskNode from './TaskNode';
 import { layoutDagre } from './layoutDagre';
@@ -112,6 +114,20 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     return () => clearTimeout(timeoutId);
   }, [runLayout, initialEdges, fitView]);
 
+  // Auto-persist auto-connected edges to backend (when no explicit edges exist)
+  useEffect(() => {
+    if (edges.length === 0 && initialEdges.length > 0) {
+      for (const edge of initialEdges) {
+        createTaskEdge(projectId, {
+          source_task_id: edge.source,
+          target_task_id: edge.target,
+        }).catch(() => {
+          // best-effort; edge already rendered locally
+        });
+      }
+    }
+  }, [edges.length, initialEdges, projectId]);
+
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setLocalNodes((current) => applyNodeChanges(changes, current));
@@ -124,6 +140,31 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
       setFlowEdges((current) => applyEdgeChanges(changes, current));
     },
     []
+  );
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      const edgeId = `edge_${connection.source}_${connection.target}`;
+      const newEdge: Edge = {
+        id: edgeId,
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle ?? undefined,
+        targetHandle: connection.targetHandle ?? undefined,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
+      };
+      setFlowEdges((current) => [...current, newEdge]);
+      createTaskEdge(projectId, {
+        source_task_id: connection.source,
+        target_task_id: connection.target,
+      }).catch(() => {
+        setFlowEdges((current) => current.filter((e) => e.id !== edgeId));
+      });
+    },
+    [projectId]
   );
 
   const onNodeDragStop = useCallback(() => {
@@ -155,6 +196,7 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
       onEdgesChange={onEdgesChange}
       onNodeDragStop={onNodeDragStop}
       onNodeClick={handleNodeClick}
+      onConnect={onConnect}
       attributionPosition="bottom-right"
     >
       <Background gap={16} size={1} color="var(--border)" />
