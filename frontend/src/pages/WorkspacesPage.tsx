@@ -189,7 +189,17 @@ function WorkspacesPage() {
             aria-label={t('pages.workspaces.labelField')}
             required
             value={draft.label}
-            onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
+            onChange={(event) => {
+              const newLabel = event.target.value;
+              setDraft((current) => {
+                const slug = newLabel.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                return {
+                  ...current,
+                  label: newLabel,
+                  default_workdir: isCreating ? `~/.ainrf_workspaces/${slug || 'new'}` : current.default_workdir,
+                };
+              });
+            }}
           />
         </FormField>
         <FormField label={t('pages.workspaces.descriptionField')}>
