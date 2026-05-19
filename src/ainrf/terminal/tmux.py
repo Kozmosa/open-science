@@ -18,23 +18,15 @@ from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND, TERMINAL_SSH_TARGET_K
 _LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 _REMOTE_TMUX_MISSING_MARKER = "__AINRF_REMOTE_TMUX_MISSING__"
 _TMUX_UNSAFE_SESSION_TARGET_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
-
-
 class TmuxCommandError(RuntimeError):
     pass
-
-
 class TmuxProbeTimeoutError(TmuxCommandError):
     pass
-
-
 @dataclass(slots=True)
 class _CommandResult:
     returncode: int
     stdout: str
     stderr: str
-
-
 @dataclass(slots=True)
 class TmuxWindowInfo:
     window_id: str
@@ -42,8 +34,6 @@ class TmuxWindowInfo:
     is_dead: bool = False
     exit_status: int | None = None
     current_path: str | None = None
-
-
 class TmuxAdapter:
     def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
@@ -591,8 +581,6 @@ class TmuxAdapter:
             f"{{ echo {_REMOTE_TMUX_MISSING_MARKER}; exit 127; }}; "
             f"{command}"
         )
-
-
 
     def _build_ssh_command(
         self,
