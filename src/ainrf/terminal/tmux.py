@@ -339,7 +339,10 @@ class TmuxAdapter:
     ) -> tuple[str, ...]:
         session_target = self.session_target_for(session_name)
         if self.target_kind_for(environment) == TERMINAL_LOCAL_TARGET_KIND:
-            return ("tmux", "attach-session", "-t", session_target)
+            # For localhost, skip tmux entirely — run shell directly in PTY.
+            # TIOCSWINSZ resize works directly on the shell without tmux in between.
+            # Persistence is handled by the attachment lifespan; no tmux session needed.
+            return ("/bin/bash", "-l")
         return self._build_ssh_command(
             environment,
             binding.remote_login_user,
