@@ -14,7 +14,7 @@ export default function SectionStack({ children, gap = 6, actions, className = '
   const gapClass = GAP_CLASSES[gap] ?? GAP_CLASSES[6];
   const mbClass = MB_GAP_CLASSES[gap] ?? MB_GAP_CLASSES[6];
   return (
-    <div className={`${gapClass} ${className ?? ''}`}>
+    <div className={`w-full ${gapClass} ${className ?? ''}`}>
       {actions ? <div className={mbClass}>{actions}</div> : null}
       {children}
     </div>

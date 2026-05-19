@@ -952,6 +952,7 @@ class UserInfoResponse(BaseModel):
     display_name: str
     role: str
     status: str
+    must_change_password: bool = False
 
 
 # ── Admin schemas ─────────────────────────────────────────
