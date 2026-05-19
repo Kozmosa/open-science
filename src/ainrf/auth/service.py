@@ -242,7 +242,25 @@ class AuthService:
             if conn.total_changes == 0:
                 raise AuthError(f"User not found: {user_id}")
             conn.commit()
+        # Auto-grant seed environments to newly activated user
+        self._grant_seed_environments(user_id)
         return self._load_user(user_id)
+
+    def _grant_seed_environments(self, user_id: str) -> None:
+        """Grant access to built-in seed environments (e.g., localhost)."""
+        seed_envs = [
+            ("env-localhost", None),  # (env_id, max_concurrent_tasks)
+        ]
+        now = _now_iso()
+        with self._connect() as conn:
+            for env_id, max_tasks in seed_envs:
+                conn.execute(
+                    "INSERT OR IGNORE INTO environment_access "
+                    "(environment_id, user_id, max_concurrent_tasks, granted_by_user_id, granted_at) "
+                    "VALUES (?, ?, ?, 'system', ?)",
+                    (env_id, user_id, max_tasks, now),
+                )
+            conn.commit()
 
     def disable_user(self, user_id: str) -> User:
         self.initialize()
