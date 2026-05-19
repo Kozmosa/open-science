@@ -599,8 +599,8 @@ class TmuxAdapter:
         result = self._run_local_command(
             ("tmux", "resize-window", "-t", session_target, "-x", str(cols), "-y", str(rows))
         )
-        if not result.success:
-            pass
+        if result.returncode != 0:
+            pass  # best-effort: resize failure is non-fatal
 
 
     def _build_ssh_command(
