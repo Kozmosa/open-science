@@ -7,7 +7,7 @@ import type { UserInfo } from '../types';
 interface AuthState {
   user: UserInfo | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<UserInfo>;
   register: (username: string, displayName: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -37,11 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string): Promise<UserInfo> => {
     const res = await apiLogin({ username, password });
     setAccessToken(res.access_token);
     setStoredRefreshToken(res.refresh_token);
     setUser(res.user);
+    return res.user;
   }, []);
 
   const register = useCallback(async (username: string, displayName: string, password: string) => {

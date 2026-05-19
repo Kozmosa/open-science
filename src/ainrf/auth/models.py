@@ -31,3 +31,4 @@ class User:
     created_at: str
     activated_at: str | None
     last_login_at: str | None
+    must_change_password: bool = False

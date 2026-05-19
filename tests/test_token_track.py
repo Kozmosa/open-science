@@ -217,20 +217,24 @@ class TestRecalcSessionCostAggregation:
             a1.id,
             status="completed",
             duration_ms=5000,
-            token_usage_json=json.dumps({
-                "total": {"input_tokens": 100, "output_tokens": 50, "cost_usd": 1.50},
-                "source": "agent-sdk",
-            }),
+            token_usage_json=json.dumps(
+                {
+                    "total": {"input_tokens": 100, "output_tokens": 50, "cost_usd": 1.50},
+                    "source": "agent-sdk",
+                }
+            ),
         )
         a2 = service.create_attempt(session_id=s.id)
         service.complete_attempt(
             a2.id,
             status="completed",
             duration_ms=3000,
-            token_usage_json=json.dumps({
-                "total": {"input_tokens": 200, "output_tokens": 75, "cost_usd": 2.00},
-                "source": "agent-sdk",
-            }),
+            token_usage_json=json.dumps(
+                {
+                    "total": {"input_tokens": 200, "output_tokens": 75, "cost_usd": 2.00},
+                    "source": "agent-sdk",
+                }
+            ),
         )
         s2 = service.get_session(s.id)
         assert s2.total_cost_usd == pytest.approx(3.50)
@@ -251,10 +255,12 @@ class TestRecalcSessionCostAggregation:
             a2.id,
             status="completed",
             duration_ms=3000,
-            token_usage_json=json.dumps({
-                "total": {"input_tokens": 50, "cost_usd": 0.75},
-                "source": "agent-sdk",
-            }),
+            token_usage_json=json.dumps(
+                {
+                    "total": {"input_tokens": 50, "cost_usd": 0.75},
+                    "source": "agent-sdk",
+                }
+            ),
         )
         s2 = service.get_session(s.id)
         assert s2.total_cost_usd == pytest.approx(0.75)
@@ -267,10 +273,12 @@ class TestRecalcSessionCostAggregation:
             a.id,
             status="completed",
             duration_ms=5000,
-            token_usage_json=json.dumps({
-                "total": {"input_tokens": 300, "output_tokens": 150},
-                "source": "claude-session-meta",
-            }),
+            token_usage_json=json.dumps(
+                {
+                    "total": {"input_tokens": 300, "output_tokens": 150},
+                    "source": "claude-session-meta",
+                }
+            ),
         )
         s2 = service.get_session(s.id)
         # No cost_usd --> json_extract returns NULL --> COALESCE --> 0.0

@@ -18,6 +18,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
 const TimelinePage = lazy(() => import('./pages/TimelinePage'));
+const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 
@@ -83,6 +84,7 @@ function AppRoutes() {
     return (
       <Suspense fallback={null}>
         <Routes>
+          <Route path="/change-password" element={<ChangePasswordPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="*" element={<LoginPage />} />
         </Routes>

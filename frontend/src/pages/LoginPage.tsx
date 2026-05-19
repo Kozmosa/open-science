@@ -17,8 +17,12 @@ export default function LoginPage() {
     setError('');
     setSubmitting(true);
     try {
-      await login(username, password);
-      navigate('/');
+      const result = await login(username, password);
+      if (result?.must_change_password) {
+        navigate('/change-password');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {

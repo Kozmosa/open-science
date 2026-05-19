@@ -83,8 +83,19 @@ class AuthService:
                     PRIMARY KEY (environment_id, user_id)
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_collab_user ON project_collaborators(user_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_env_access_user ON environment_access(user_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_collab_user ON project_collaborators(user_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_env_access_user ON environment_access(user_id)"
+            )
+            # Migration: add must_change_password column
+            try:
+                conn.execute(
+                    "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already exists
             conn.commit()
         self._initialized = True
 
@@ -95,12 +106,12 @@ class AuthService:
 
     # --- Registration ---
 
-    def register(self, *, username: str, display_name: str, password: str) -> User:
+    def register(
+        self, *, username: str, display_name: str, password: str, must_change_password: bool = False,
+    ) -> User:
         self.initialize()
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT id FROM users WHERE username = ?", (username,)
-            ).fetchone()
+            row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
         if row is not None:
             raise AuthError(f"Username '{username}' already exists")
 
@@ -109,9 +120,10 @@ class AuthService:
         now = _now_iso()
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO users (id, username, password_hash, display_name, role, status, created_at) "
-                "VALUES (?, ?, ?, ?, 'member', 'pending', ?)",
-                (uid, username, password_hash, display_name, now),
+                "INSERT INTO users (id, username, password_hash, display_name, role, status, "
+                "created_at, must_change_password) "
+                "VALUES (?, ?, ?, ?, 'member', 'pending', ?, ?)",
+                (uid, username, password_hash, display_name, now, int(must_change_password)),
             )
             conn.commit()
         return self._load_user(uid)
@@ -122,9 +134,7 @@ class AuthService:
         """Returns {access_token, refresh_token, user} or raises AuthError."""
         self.initialize()
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM users WHERE username = ?", (username,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         if row is None:
             raise AuthError("Invalid username or password")
         user = _row_to_user(row)
@@ -138,20 +148,23 @@ class AuthService:
 
         now = _now_iso()
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE users SET last_login_at = ? WHERE id = ?", (now, user.id)
-            )
+            conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now, user.id))
             conn.commit()
 
         access_token = create_access_token(user.id, user.username, user.role.value)
         plain_refresh, hashed_refresh = create_refresh_token()
-        expires_at = (datetime.now(timezone.utc).timestamp() + 7 * 86400)
+        expires_at = datetime.now(timezone.utc).timestamp() + 7 * 86400
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (_new_id(), user.id, hashed_refresh,
-                 datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat(), now),
+                (
+                    _new_id(),
+                    user.id,
+                    hashed_refresh,
+                    datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat(),
+                    now,
+                ),
             )
             conn.commit()
 
@@ -194,9 +207,7 @@ class AuthService:
         self.initialize()
         token_hash_val = hashlib.sha256(refresh_token.encode()).hexdigest()
         with self._connect() as conn:
-            conn.execute(
-                "DELETE FROM refresh_tokens WHERE token_hash = ?", (token_hash_val,)
-            )
+            conn.execute("DELETE FROM refresh_tokens WHERE token_hash = ?", (token_hash_val,))
             conn.commit()
 
     # --- Me ---
@@ -217,9 +228,7 @@ class AuthService:
     def list_users(self) -> list[User]:
         self.initialize()
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM users ORDER BY created_at DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
         return [_row_to_user(r) for r in rows]
 
     def activate_user(self, user_id: str) -> User:
@@ -289,8 +298,15 @@ class AuthService:
                 "WHERE pc.project_id = ?",
                 (project_id,),
             ).fetchall()
-        return [{"user_id": r["user_id"], "username": r["username"],
-                 "display_name": r["display_name"], "role": r["role"]} for r in rows]
+        return [
+            {
+                "user_id": r["user_id"],
+                "username": r["username"],
+                "display_name": r["display_name"],
+                "role": r["role"],
+            }
+            for r in rows
+        ]
 
     def get_user_project_ids(self, user_id: str) -> list[str]:
         """Return project_ids where user is a collaborator (not including owned projects)."""
@@ -304,7 +320,9 @@ class AuthService:
 
     # --- Environment Access ---
 
-    def grant_environment(self, *, env_id: str, user_id: str, max_tasks: int | None, granted_by: str) -> None:
+    def grant_environment(
+        self, *, env_id: str, user_id: str, max_tasks: int | None, granted_by: str
+    ) -> None:
         self.initialize()
         now = _now_iso()
         with self._connect() as conn:
@@ -334,22 +352,33 @@ class AuthService:
             ).fetchall()
         return [r["environment_id"] for r in rows]
 
+    # --- Change Password ---
+
+    def change_password(self, user_id: str, old_password: str, new_password: str) -> None:
+        """Change password. Verifies old password first. Clears must_change_password flag."""
+        user = self._load_user(user_id)
+        if not bcrypt.checkpw(old_password.encode(), user.password_hash.encode()):
+            raise AuthError("Current password is incorrect")
+        password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+                (password_hash, user_id),
+            )
+            conn.commit()
+
     # --- Internal ---
 
     def _load_user(self, user_id: str) -> User:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM users WHERE id = ?", (user_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if row is None:
             raise AuthError(f"User not found: {user_id}")
         return _row_to_user(row)
 
     def _load_user_by_username(self, username: str) -> User:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM users WHERE username = ?", (username,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         if row is None:
             raise AuthError(f"User not found: {username}")
         return _row_to_user(row)
@@ -366,6 +395,7 @@ def _row_to_user(row: sqlite3.Row) -> User:
         created_at=row["created_at"],
         activated_at=row["activated_at"],
         last_login_at=row["last_login_at"],
+        must_change_password=bool(row["must_change_password"]) if "must_change_password" in row.keys() else False,
     )
 
 
@@ -376,4 +406,5 @@ def _user_to_dict(user: User) -> dict:
         "display_name": user.display_name,
         "role": user.role.value,
         "status": user.status.value,
+        "must_change_password": user.must_change_password,
     }

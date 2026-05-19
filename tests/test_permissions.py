@@ -28,13 +28,8 @@ class TestPermissionHelpers:
     def test_check_resource_owner_admin_sees_all(self):
         from ainrf.auth.permissions import check_resource_owner
 
-        assert (
-            check_resource_owner({"id": "admin1", "role": "admin"}, "owner_xyz")
-            is True
-        )
-        assert (
-            check_resource_owner({"id": "admin1", "role": "admin"}, None) is True
-        )
+        assert check_resource_owner({"id": "admin1", "role": "admin"}, "owner_xyz") is True
+        assert check_resource_owner({"id": "admin1", "role": "admin"}, None) is True
 
     def test_check_resource_owner_member_own(self):
         from ainrf.auth.permissions import check_resource_owner
@@ -78,7 +73,9 @@ from pathlib import Path
 def _ensure_user(auth_svc, username, password):
     """Create and activate a user, return their id."""
     try:
-        user = auth_svc.register(username=username, display_name=username.capitalize(), password=password)
+        user = auth_svc.register(
+            username=username, display_name=username.capitalize(), password=password
+        )
     except Exception:
         # already exists - find by username
         user = auth_svc._load_user_by_username(username)
@@ -91,6 +88,7 @@ class TestCollaboratorCrud:
     @staticmethod
     def _make_service():
         from ainrf.auth import AuthService
+
         svc = AuthService(state_root=Path(tempfile.mkdtemp()))
         svc.initialize()
         return svc
@@ -125,6 +123,7 @@ class TestEnvironmentAccessCrud:
     @staticmethod
     def _make_service():
         from ainrf.auth import AuthService
+
         svc = AuthService(state_root=Path(tempfile.mkdtemp()))
         svc.initialize()
         return svc
@@ -155,6 +154,7 @@ class TestAdminUserManagement:
     @staticmethod
     def _make_service():
         from ainrf.auth import AuthService
+
         svc = AuthService(state_root=Path(tempfile.mkdtemp()))
         svc.initialize()
         return svc

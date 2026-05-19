@@ -216,10 +216,14 @@ def login(
 
     data = resp.json()
     _TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _TOKEN_FILE.write_text(json_mod.dumps({
-        "access_token": data["access_token"],
-        "refresh_token": data["refresh_token"],
-    }))
+    _TOKEN_FILE.write_text(
+        json_mod.dumps(
+            {
+                "access_token": data["access_token"],
+                "refresh_token": data["refresh_token"],
+            }
+        )
+    )
     user = data["user"]
     print(f"Logged in as {user['username']} ({user['role']}). Token saved.")
 

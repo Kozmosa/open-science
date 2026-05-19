@@ -82,22 +82,26 @@ async def list_sessions(
         if is_admin(user):
             sessions = service.list_sessions(project_id=project_id, status=status)
         else:
-            sessions = service.list_sessions(project_id=project_id, status=status, owner_user_id=user["id"])
+            sessions = service.list_sessions(
+                project_id=project_id, status=status, owner_user_id=user["id"]
+            )
     except Exception as exc:
         raise _translate_error(exc) from exc
-    return SessionListResponse.model_validate({
-        "items": [_serialize_session(s) for s in sessions],
-    })
+    return SessionListResponse.model_validate(
+        {
+            "items": [_serialize_session(s) for s in sessions],
+        }
+    )
 
 
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(
-    payload: SessionCreateRequest, request: Request
-) -> SessionResponse:
+async def create_session(payload: SessionCreateRequest, request: Request) -> SessionResponse:
     user = get_current_user(request)
     service = _get_service(request)
     try:
-        s = service.create_session(project_id=payload.project_id, title=payload.title, owner_user_id=user["id"])
+        s = service.create_session(
+            project_id=payload.project_id, title=payload.title, owner_user_id=user["id"]
+        )
     except Exception as exc:
         raise _translate_error(exc) from exc
     return SessionResponse.model_validate(_serialize_session(s))
@@ -114,10 +118,12 @@ async def get_session(session_id: str, request: Request) -> SessionDetailRespons
         attempts = service.list_attempts(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc
-    return SessionDetailResponse.model_validate({
-        **_serialize_session(s),
-        "attempts": [_serialize_attempt(a) for a in attempts],
-    })
+    return SessionDetailResponse.model_validate(
+        {
+            **_serialize_session(s),
+            "attempts": [_serialize_attempt(a) for a in attempts],
+        }
+    )
 
 
 @router.patch("/{session_id}", response_model=SessionResponse)
@@ -130,9 +136,7 @@ async def update_session(
         s = service.get_session(session_id)
         if not check_resource_owner(user, s.owner_user_id):
             raise HTTPException(status_code=404, detail="Session not found")
-        s = service.update_session(
-            session_id, title=payload.title, status=payload.status
-        )
+        s = service.update_session(session_id, title=payload.title, status=payload.status)
     except Exception as exc:
         raise _translate_error(exc) from exc
     return SessionResponse.model_validate(_serialize_session(s))
@@ -153,9 +157,7 @@ async def delete_session(session_id: str, request: Request) -> Response:
 
 
 @router.get("/{session_id}/attempts", response_model=AttemptListResponse)
-async def list_attempts(
-    session_id: str, request: Request
-) -> AttemptListResponse:
+async def list_attempts(session_id: str, request: Request) -> AttemptListResponse:
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -165,6 +167,8 @@ async def list_attempts(
         attempts = service.list_attempts(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc
-    return AttemptListResponse.model_validate({
-        "items": [_serialize_attempt(a) for a in attempts],
-    })
+    return AttemptListResponse.model_validate(
+        {
+            "items": [_serialize_attempt(a) for a in attempts],
+        }
+    )

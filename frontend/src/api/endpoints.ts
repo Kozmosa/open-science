@@ -1,5 +1,5 @@
 import { api } from './client';
-import type {
+import type { ChangePasswordRequest,
   AccessTokenResponse,
   AdminPasswordResetRequest,
   AdminUserItem,
@@ -561,3 +561,4 @@ export const register = (payload: RegisterRequest): Promise<{ message: string }>
 export const refreshToken = (refreshTokenValue: string): Promise<AccessTokenResponse> => api.post<AccessTokenResponse>('/auth/refresh', { refresh_token: refreshTokenValue });
 export const logoutApi = (refreshTokenValue: string): Promise<void> => api.post<void>('/auth/logout', { refresh_token: refreshTokenValue });
 export const getMe = (): Promise<UserInfo> => api.get<UserInfo>('/auth/me');
+export const changePassword = (payload: ChangePasswordRequest): Promise<void> => api.post<void>('/auth/change-password', payload);

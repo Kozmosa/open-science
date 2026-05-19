@@ -23,7 +23,9 @@ def make_client(tmp_path: Path) -> httpx.AsyncClient:
     )
 
 
-def make_auth_client(tmp_path: Path, username: str = "admin", password: str = "test-admin-password"):
+def make_auth_client(
+    tmp_path: Path, username: str = "admin", password: str = "test-admin-password"
+):
     """Create an authenticated async client with JWT Bearer headers."""
     app = create_app(
         ApiConfig(

@@ -171,7 +171,9 @@ async def test_task_harness_routes_create_list_detail_output_and_workspaces(
         assert created["status"] == "queued"
         assert created["title"] == "Train model"
 
-        detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers)
+        detail = await wait_for_status(
+            client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers
+        )
         listed = await client.get("/tasks", headers=jwt_headers)
         output = await client.get(f"/tasks/{created['task_id']}/output", headers=jwt_headers)
         workspace_detail = await client.get("/workspaces/workspace-default", headers=jwt_headers)
@@ -283,7 +285,10 @@ async def test_task_harness_route_accepts_three_layer_task_payload(
 
         assert create_response.status_code == 201
         detail = await wait_for_status(
-            client, create_response.json()["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers
+            client,
+            create_response.json()["task_id"],
+            TaskHarnessStatus.SUCCEEDED,
+            headers=jwt_headers,
         )
 
     assert recorded["settings_path"] == detail["research_agent_profile"]["settings_artifact_path"]
@@ -477,7 +482,9 @@ async def test_task_harness_remote_path_runs_without_readiness_precheck(
         )
         assert create_response.status_code == 201
         created = create_response.json()
-        detail = await wait_for_status(client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers)
+        detail = await wait_for_status(
+            client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers
+        )
         output = await client.get(f"/tasks/{created['task_id']}/output", headers=jwt_headers)
 
     assert recorded["project_dir"] == str(Path.home() / ".ainrf_workspaces" / "default")

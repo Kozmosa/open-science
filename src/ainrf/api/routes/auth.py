@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 
 from ainrf.api.schemas import (
+    ChangePasswordRequest,
     AccessTokenResponse,
     AuthTokenResponse,
     LoginRequest,
@@ -77,3 +78,16 @@ async def me(request: Request) -> UserInfoResponse:
     if user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return UserInfoResponse.model_validate(user)
+
+@router.post("/change-password", status_code=204)
+async def change_password(payload: ChangePasswordRequest, request: Request):
+    """Change password. Requires current password. Clears must_change_password flag."""
+    service = _get_service(request)
+    user = getattr(request.state, "current_user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        service.change_password(user["id"], payload.old_password, payload.new_password)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return None

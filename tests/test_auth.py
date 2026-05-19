@@ -1,4 +1,5 @@
 """Tests for authentication service."""
+
 from __future__ import annotations
 
 import tempfile
@@ -11,6 +12,7 @@ class TestAuthService:
     @pytest.fixture
     def service(self):
         from ainrf.auth import AuthService
+
         with tempfile.TemporaryDirectory() as td:
             svc = AuthService(state_root=Path(td))
             svc.initialize()
@@ -91,6 +93,7 @@ class TestAuthService:
 class TestJwtUtils:
     def test_create_and_decode_token(self):
         from ainrf.auth.jwt_utils import create_access_token, decode_access_token
+
         token = create_access_token("user1", "alice", "member")
         payload = decode_access_token(token)
         assert payload["sub"] == "user1"
@@ -99,6 +102,7 @@ class TestJwtUtils:
 
     def test_create_refresh_token(self):
         from ainrf.auth.jwt_utils import create_refresh_token
+
         plain, hashed = create_refresh_token()
         assert len(plain) == 64
         assert len(hashed) == 64
