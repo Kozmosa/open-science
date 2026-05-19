@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             with auth_service._connect() as conn:
                 count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
             if count == 0:
-                auth_service.register(
+                admin_user = auth_service.register(
                     username="admin", display_name="Administrator", password="admin",
                     must_change_password=True,
                 )
@@ -111,6 +111,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         (datetime.now(timezone.utc).isoformat(),),
                     )
                     conn.commit()
+                # Auto-grant seed environments to initial admin
+                auth_service._grant_seed_environments(admin_user.id)
                 print(
                     "\n" + "=" * 60 + "\n"
                     "Initial admin created!\n"
