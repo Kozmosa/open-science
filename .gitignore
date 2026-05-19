@@ -43,4 +43,4 @@ kimi-export-*.md
 session-*.md
 
 # paper scratch
-paper-test/
+paper-test/.cache/perf-report/
