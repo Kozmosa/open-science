@@ -1,11 +1,12 @@
 import { Plus } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  addEdge,
   useReactFlow,
   type Connection,
   type Edge,
@@ -46,15 +47,22 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
   );
   const initialEdges: Edge[] = useMemo(() => {
     if (edges.length > 0) {
-      return edges.map((edge) => ({
-        id: edge.edge_id,
-        source: edge.source_task_id,
-        target: edge.target_task_id,
-        type: 'default',
-        markerEnd: { type: 'arrowclosed' as const, width: 12, height: 12 },
-      }));
+      const visibleIds = new Set(tasks.map((t) => t.task_id));
+      const relevant = edges.filter(
+        (e) => visibleIds.has(e.source_task_id) && visibleIds.has(e.target_task_id)
+      );
+      if (relevant.length > 0) {
+        return relevant.map((edge) => ({
+          id: edge.edge_id,
+          source: edge.source_task_id,
+          target: edge.target_task_id,
+          type: 'default',
+          markerEnd: { type: 'arrowclosed' as const, width: 12, height: 12 },
+        }));
+      }
+      // All backend edges reference archived/non-visible tasks — fall through to auto-connect
     }
-    // No explicit edges: auto-connect tasks linearly by created_at (oldest -> newest)
+    // No relevant explicit edges: auto-connect tasks linearly by created_at (oldest -> newest)
     const sorted = [...tasks].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
@@ -87,6 +95,7 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     return layoutDagre(initialNodes, initialEdges);
   });
   const [flowEdges, setFlowEdges] = useState<Edge[]>(initialEdges);
+  const manualEdgeIds = useRef<Set<string>>(new Set());
 
   const runLayout = useCallback(() => {
     const saved = localStorage.getItem(LAYOUT_KEY(projectId));
@@ -109,7 +118,15 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
 
   useEffect(() => {
     runLayout();
-    setFlowEdges(initialEdges);
+    setFlowEdges((current) => {
+      // Preserve manually-added edges that aren't yet in the backend set
+      const initialIds = new Set(initialEdges.map((e) => e.id));
+      const manualEdges = current.filter(
+        (e) => manualEdgeIds.current.has(e.id) && !initialIds.has(e.id)
+      );
+      // Merge: backend edges first, then manual edges on top
+      return [...initialEdges, ...manualEdges];
+    });
     const timeoutId = setTimeout(() => fitView({ padding: 0.2 }), 50);
     return () => clearTimeout(timeoutId);
   }, [runLayout, initialEdges, fitView]);
@@ -146,21 +163,24 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
       const edgeId = `edge_${connection.source}_${connection.target}`;
-      const newEdge: Edge = {
-        id: edgeId,
-        source: connection.source,
-        target: connection.target,
-        sourceHandle: connection.sourceHandle ?? undefined,
-        targetHandle: connection.targetHandle ?? undefined,
-        type: 'smoothstep',
-        animated: true,
-        style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
-      };
-      setFlowEdges((current) => [...current, newEdge]);
+      manualEdgeIds.current.add(edgeId);
+      setFlowEdges((current) =>
+        addEdge(
+          {
+            ...connection,
+            id: edgeId,
+            type: 'smoothstep',
+            animated: true,
+            style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
+          },
+          current,
+        ),
+      );
       createTaskEdge(projectId, {
         source_task_id: connection.source,
         target_task_id: connection.target,
       }).catch(() => {
+        manualEdgeIds.current.delete(edgeId);
         setFlowEdges((current) => current.filter((e) => e.id !== edgeId));
       });
     },
@@ -197,6 +217,12 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
       onNodeDragStop={onNodeDragStop}
       onNodeClick={handleNodeClick}
       onConnect={onConnect}
+      connectionLineStyle={{ stroke: 'var(--apple-blue)', strokeWidth: 2 }}
+      defaultEdgeOptions={{
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
+      }}
       attributionPosition="bottom-right"
     >
       <Background gap={16} size={1} color="var(--border)" />
