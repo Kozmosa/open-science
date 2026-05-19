@@ -592,6 +592,8 @@ class TmuxAdapter:
             f"{command}"
         )
 
+
+
     def _build_ssh_command(
         self,
         environment: EnvironmentRegistryEntry,
