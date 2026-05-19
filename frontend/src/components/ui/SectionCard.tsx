@@ -15,7 +15,7 @@ function SectionCard({
   children,
   className = '',
   collapsible = false,
-  defaultExpanded = true,
+  defaultExpanded = !collapsible,
   expanded: controlledExpanded,
   onToggle,
   header,
@@ -51,12 +51,18 @@ function SectionCard({
       className={['rounded-xl bg-[var(--surface)] p-6 shadow-sm', className].join(' ')}
     >
       {header ? (
-        <div className="flex items-start justify-between gap-3">
+        <div
+          className={[
+            'flex items-start justify-between gap-3',
+            collapsible ? 'cursor-pointer select-none' : '',
+          ].join(' ')}
+          onClick={collapsible ? toggle : undefined}
+        >
           <div className="flex-1">{header}</div>
           {collapsible ? (
             <button
               type="button"
-              onClick={toggle}
+              onClick={(e) => { e.stopPropagation(); toggle(); }}
               className="mt-0.5 shrink-0 rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
               aria-label={expanded ? 'Collapse section' : 'Expand section'}
             >

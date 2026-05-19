@@ -22,6 +22,7 @@ from ainrf.api.schemas import (
     TaskPromptSendResponse,
     TaskSummaryResponse,
 )
+from ainrf.sessions import SessionService
 from ainrf.task_harness import (
     TaskDetail,
     TaskHarnessError,
@@ -274,6 +275,23 @@ async def create_task(payload: TaskCreateRequest, request: Request) -> TaskSumma
         )
     except Exception as exc:
         raise _translate_task_error(exc) from exc
+
+    # Auto-create a session when none was provided (e.g. claude-code tasks)
+    if task.session_id is None:
+        session_service: SessionService | None = getattr(request.app.state, "session_service", None)
+        if session_service is not None:
+            try:
+                session = session_service.create_session(
+                    project_id=task.project_id or "default",
+                    title=task.title,
+                    owner_user_id=user.get("id"),
+                )
+                service.set_task_session(task_id=task.task_id, session_id=session.id)
+                # Reload task to include the new session_id
+                task = service._load_list_item(task.task_id)
+            except Exception:
+                pass  # session creation is best-effort; task still succeeds without it
+
     return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
 
 

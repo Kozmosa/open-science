@@ -431,7 +431,7 @@ export const messages = {
         },
         tabs: {
           general: 'General',
-          users: 'Users',
+          users: 'User Management',
           envAccess: 'Environment Access',
           collaborators: 'Collaborators',
         },
