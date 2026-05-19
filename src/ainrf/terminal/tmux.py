@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import json
 import re
 import shlex
@@ -14,6 +15,9 @@ from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.tasks.runtime import build_runtime_control_invocation
 from ainrf.terminal.models import UserEnvironmentBinding
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND, TERMINAL_SSH_TARGET_KIND
+
+
+
 
 _LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 _REMOTE_TMUX_MISSING_MARKER = "__AINRF_REMOTE_TMUX_MISSING__"
@@ -56,6 +60,7 @@ class TmuxAdapter:
         ):
             return TERMINAL_LOCAL_TARGET_KIND
         return TERMINAL_SSH_TARGET_KIND
+
 
     @staticmethod
     def session_target_for(session_name: str) -> str:
@@ -581,6 +586,22 @@ class TmuxAdapter:
             f"{{ echo {_REMOTE_TMUX_MISSING_MARKER}; exit 127; }}; "
             f"{command}"
         )
+
+    def resize_window(
+        self,
+        *,
+        session_name: str,
+        cols: int,
+        rows: int,
+    ) -> None:
+        """Resize tmux window dimensions."""
+        session_target = self.session_target_for(session_name)
+        result = self._run_local_command(
+            ("tmux", "resize-window", "-t", session_target, "-x", str(cols), "-y", str(rows))
+        )
+        if not result.success:
+            pass
+
 
     def _build_ssh_command(
         self,

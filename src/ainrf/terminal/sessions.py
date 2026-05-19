@@ -891,6 +891,10 @@ class SessionManager:
             detail=detail,
         )
 
+
+    def resize_tmux_window(self, *, session_name: str, cols: int, rows: int) -> None:
+        """Resize the tmux window dimensions."""
+        self._tmux_adapter.resize_window(session_name=session_name, cols=cols, rows=rows)
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path)
         connection.row_factory = sqlite3.Row

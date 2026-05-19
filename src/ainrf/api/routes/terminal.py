@@ -532,6 +532,15 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     if not isinstance(cols, int) or not isinstance(rows, int):
                         raise ValueError("resize payload must include integer cols and rows")
                     resize_terminal(runtime, cols, rows)
+                    try:
+                        manager = _get_session_manager(websocket)
+                        manager.resize_tmux_window(
+                            session_name=attachment.session_name,
+                            cols=cols,
+                            rows=rows,
+                        )
+                    except Exception:
+                        pass
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:
