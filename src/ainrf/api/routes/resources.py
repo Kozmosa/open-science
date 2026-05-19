@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
 from ainrf.auth.permissions import get_current_user, is_admin
 from ainrf.monitor.models import ResourcesResponse

@@ -82,13 +82,8 @@ async def list_environments(request: Request) -> EnvironmentListResponse:
             accessible_ids = set(auth_svc.get_user_environment_ids(user["id"]))
         else:
             accessible_ids = set()
-        environments = [
-            env for env in service.list_environments() if env.id in accessible_ids
-        ]
-    items = [
-        _serialize_environment(service, environment.id)
-        for environment in environments
-    ]
+        environments = [env for env in service.list_environments() if env.id in accessible_ids]
+    items = [_serialize_environment(service, environment.id) for environment in environments]
     return EnvironmentListResponse(items=items)
 
 

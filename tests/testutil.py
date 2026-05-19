@@ -60,9 +60,7 @@ def make_client(tmp_path: Path, *, max_file_size_bytes: int | None = None) -> ht
     )
 
 
-def make_client_and_app(
-    tmp_path: Path, *, max_file_size_bytes: int | None = None
-) -> tuple:
+def make_client_and_app(tmp_path: Path, *, max_file_size_bytes: int | None = None) -> tuple:
     """Create an authenticated test client with admin JWT, returning (app, client, headers)."""
     api_config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("secret-key")}),

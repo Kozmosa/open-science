@@ -442,9 +442,7 @@ class InMemoryEnvironmentService:
         if updated:
             environment.updated_at = utc_now()
 
-    def _persist_detection(
-        self, environment_id: str, snapshot: DetectionSnapshot
-    ) -> None:
+    def _persist_detection(self, environment_id: str, snapshot: DetectionSnapshot) -> None:
         if self._state_root is None:
             return
         detections_dir = Path(self._state_root) / "detections"

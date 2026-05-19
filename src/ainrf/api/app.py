@@ -101,9 +101,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             with auth_service._connect() as conn:
                 count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
             if count == 0:
-                password = secrets.token_hex(12)
                 auth_service.register(
-                    username="admin", display_name="Administrator", password=password
+                    username="admin", display_name="Administrator", password="admin",
+                    must_change_password=True,
                 )
                 with auth_service._connect() as conn:
                     conn.execute(
@@ -112,7 +112,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     )
                     conn.commit()
                 print(
-                    f"\n{'=' * 60}\nInitial admin created!\nUsername: admin\nPassword: {password}\n{'=' * 60}\n"
+                    "\n" + "=" * 60 + "\n"
+                    "Initial admin created!\n"
+                    "Username: admin\n"
+                    "Password: admin\n"
+                    "You will be prompted to change the password on first login.\n"
+                    + "=" * 60 + "\n"
                 )
         except Exception:
             pass

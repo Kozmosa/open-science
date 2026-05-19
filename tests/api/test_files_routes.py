@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import httpx
 import pytest
 
 from tests.testutil import make_client
 from ainrf.api.config import ApiConfig
 
 
-def _make_app_and_workdir(
-    tmp_path: Path, *, max_file_size_bytes: int | None = None
-):
+def _make_app_and_workdir(tmp_path: Path, *, max_file_size_bytes: int | None = None):
     """Backward compat: returns (app, workdir) from a throwaway ApiConfig."""
     api_config = ApiConfig(
         api_key_hashes=frozenset(),

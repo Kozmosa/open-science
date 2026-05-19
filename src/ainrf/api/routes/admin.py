@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request
 
 from ainrf.api.schemas import (
     EnvironmentAccessListResponse,
@@ -29,17 +29,23 @@ async def list_env_access(env_id: str, request: Request) -> EnvironmentAccessLis
     for u in users:
         env_ids = service.get_user_environment_ids(u.id)
         if env_id in env_ids:
-            items.append({
-                "user_id": u.id,
-                "username": u.username,
-                "display_name": u.display_name,
-                "max_concurrent_tasks": None,
-            })
+            items.append(
+                {
+                    "user_id": u.id,
+                    "username": u.username,
+                    "display_name": u.display_name,
+                    "max_concurrent_tasks": None,
+                }
+            )
     return EnvironmentAccessListResponse.model_validate({"items": items})
 
 
-@router.put("/environments/{env_id}/access", response_model=EnvironmentAccessResponse, status_code=201)
-async def grant_env_access(env_id: str, payload: EnvironmentAccessRequest, request: Request) -> EnvironmentAccessResponse:
+@router.put(
+    "/environments/{env_id}/access", response_model=EnvironmentAccessResponse, status_code=201
+)
+async def grant_env_access(
+    env_id: str, payload: EnvironmentAccessRequest, request: Request
+) -> EnvironmentAccessResponse:
     user = get_current_user(request)
     require_admin(user)
     service = _get_service(request)
@@ -49,12 +55,14 @@ async def grant_env_access(env_id: str, payload: EnvironmentAccessRequest, reque
         max_tasks=payload.max_concurrent_tasks,
         granted_by=user["id"],
     )
-    return EnvironmentAccessResponse.model_validate({
-        "user_id": payload.user_id,
-        "username": "",
-        "display_name": "",
-        "max_concurrent_tasks": payload.max_concurrent_tasks,
-    })
+    return EnvironmentAccessResponse.model_validate(
+        {
+            "user_id": payload.user_id,
+            "username": "",
+            "display_name": "",
+            "max_concurrent_tasks": payload.max_concurrent_tasks,
+        }
+    )
 
 
 @router.delete("/environments/{env_id}/access/{user_id}", status_code=204)

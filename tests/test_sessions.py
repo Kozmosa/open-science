@@ -76,8 +76,7 @@ class TestSessionService:
         s = service.create_session(project_id="p1", title="S")
         a1 = service.create_attempt(session_id=s.id)
         a2 = service.create_attempt(
-            session_id=s.id, parent_attempt_id=a1.id,
-            intervention_reason="fix bugs"
+            session_id=s.id, parent_attempt_id=a1.id, intervention_reason="fix bugs"
         )
         assert a2.attempt_seq == 2
         assert a2.parent_attempt_id == a1.id
@@ -87,7 +86,9 @@ class TestSessionService:
         s = service.create_session(project_id="p1", title="S")
         a = service.create_attempt(session_id=s.id)
         done = service.complete_attempt(
-            a.id, status="completed", duration_ms=5000,
+            a.id,
+            status="completed",
+            duration_ms=5000,
             token_usage_json='{"total": {"input_tokens": 1000, "output_tokens": 200, "cost_usd": 3.0}}',
         )
         assert done.status.value == "completed"

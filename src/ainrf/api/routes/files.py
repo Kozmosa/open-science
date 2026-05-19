@@ -16,7 +16,6 @@ from ainrf.api.schemas import (
     FileReadResponse,
     FileUploadResponse,
 )
-from ainrf.environments.local import is_localhost_environment
 from ainrf.execution.ssh import SSHExecutor
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
 from ainrf.files.service import _build_container_config
