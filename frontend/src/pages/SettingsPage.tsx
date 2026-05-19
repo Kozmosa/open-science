@@ -1134,11 +1134,11 @@ function SettingsPage() {
     environmentsQuery.error instanceof Error ? environmentsQuery.error.message : null;
 
   const tabs = [
-    { key: 'general' as const, label: 'General' },
+    { key: 'general' as const, label: t('pages.settings.tabs.general') },
     ...(currentUser?.role === 'admin' ? [
-      { key: 'users' as const, label: 'Users' },
-      { key: 'envAccess' as const, label: 'Environment Access' },
-      { key: 'collaborators' as const, label: 'Collaborators' },
+      { key: 'users' as const, label: t('pages.settings.tabs.users') },
+      { key: 'envAccess' as const, label: t('pages.settings.tabs.envAccess') },
+      { key: 'collaborators' as const, label: t('pages.settings.tabs.collaborators') },
     ] : []),
   ];
 
@@ -1185,22 +1185,22 @@ function SettingsPage() {
             collapsible
             header={
               <SectionHeader
-                title="Default Workspace"
-                description="Select the default workspace for task creation and file browsing."
+                title={t('pages.settings.defaultWorkspace.title')}
+                description={t('pages.settings.defaultWorkspace.description')}
               />
             }
           >
             <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
-              <FormField label="Default workspace">
+              <FormField label={t('pages.settings.defaultWorkspace.label')}>
                 <Select
-                  aria-label="Default workspace"
+                  aria-label={t('pages.settings.defaultWorkspace.label')}
                   value={settings.projectDefaults.default?.defaultWorkspaceId ?? ''}
                   onChange={(event) =>
                     saveProjectDefaultWorkspace('default', event.target.value || null)
                   }
                   disabled={workspaces.length === 0}
                 >
-                  <option value="">No default workspace</option>
+                  <option value="">{t('pages.settings.defaultWorkspace.noDefault')}</option>
                   {workspaces.map((workspace) => (
                     <option key={workspace.workspace_id} value={workspace.workspace_id}>
                       {workspace.label}

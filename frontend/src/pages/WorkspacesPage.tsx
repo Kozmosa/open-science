@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from '../api';
 import { useT } from '../i18n';
+import { useAuth } from '../contexts/AuthContext';
 import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '../types';
 import { PageShell, SplitPane } from '../components/layout';
 import { Button, FormField, Input, Textarea, Alert } from '../components/ui';
@@ -47,10 +48,12 @@ function toUpdatePayload(draft: WorkspaceDraft): WorkspaceUpdateRequest {
 
 function WorkspacesPage() {
   const t = useT();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const workspacesQuery = useQuery({
     queryKey: ['workspaces'],
@@ -184,10 +187,11 @@ function WorkspacesPage() {
           }
         }}
       >
-        <FormField label={t('pages.workspaces.labelField')}>
+        <FormField label={t('pages.workspaces.labelField')} error={labelError ?? undefined}>
           <Input
             aria-label={t('pages.workspaces.labelField')}
             required
+            error={labelError ?? undefined}
             value={draft.label}
             onChange={(event) => {
               const newLabel = event.target.value;
@@ -196,9 +200,15 @@ function WorkspacesPage() {
                 return {
                   ...current,
                   label: newLabel,
-                  default_workdir: isCreating ? `~/.ainrf_workspaces/${slug || 'new'}` : current.default_workdir,
+                  default_workdir: isCreating ? `~/.ainrf_workspaces/${user?.username || 'user'}_${slug || 'new'}` : current.default_workdir,
                 };
               });
+              const conflict = workspaces.find((w) => w.label === newLabel);
+              if (conflict && isCreating && newLabel) {
+                setLabelError(`Workspace "${newLabel}" already exists`);
+              } else {
+                setLabelError(null);
+              }
             }}
           />
         </FormField>
@@ -215,6 +225,7 @@ function WorkspacesPage() {
           <Input
             aria-label={t('pages.workspaces.defaultWorkdirField')}
             required
+            readOnly={isCreating}
             placeholder={defaultWorkdirPlaceholder}
             value={draft.default_workdir}
             onChange={(event) =>

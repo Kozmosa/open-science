@@ -15,7 +15,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea(
     <textarea
       ref={ref}
       className={[
-        'w-full rounded-lg bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition',
+        'w-full rounded-lg border bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition',
         errorClasses,
         'focus:ring-2',
         className,

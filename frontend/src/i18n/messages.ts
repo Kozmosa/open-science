@@ -78,6 +78,12 @@ export const messages = {
       loginLink: 'Already have an account? Log in',
       register: 'Register',
       pendingApproval: 'Your account is pending admin approval.',
+      changePassword: 'Change Password',
+      mustChangePassword: 'You must change your password before continuing.',
+      currentPassword: 'Current Password',
+      newPassword: 'New Password',
+      changePasswordFailed: 'Failed to change password',
+      passwordTooShort: 'Password must be at least 4 characters',
     },
     navigation: {
       projects: {
@@ -97,8 +103,8 @@ export const messages = {
         description: 'Project workspaces and task context',
       },
       workspaceBrowser: {
-        label: 'Browser',
-        description: 'Managed code-server workspace',
+        label: 'Browse Files',
+        description: 'Browse workspace files',
       },
       environments: {
         label: 'Containers',
@@ -416,6 +422,18 @@ export const messages = {
           importing: 'Importing…',
           cancel: 'Cancel',
           noSkills: 'No skills found in the repository.',
+        },
+        defaultWorkspace: {
+          title: 'Default Workspace',
+          description: 'Select the default workspace for task creation and file browsing.',
+          label: 'Default workspace',
+          noDefault: 'No default workspace',
+        },
+        tabs: {
+          general: 'General',
+          users: 'Users',
+          envAccess: 'Environment Access',
+          collaborators: 'Collaborators',
         },
       },
       placeholder: {
@@ -807,6 +825,12 @@ export const messages = {
       loginLink: '已有账号？登录',
       register: '注册',
       pendingApproval: '账号等待管理员审批中。',
+      changePassword: '修改密码',
+      mustChangePassword: '首次登录需要修改密码。',
+      currentPassword: '当前密码',
+      newPassword: '新密码',
+      changePasswordFailed: '修改密码失败',
+      passwordTooShort: '密码至少需要4个字符',
     },
     navigation: {
       projects: {
@@ -826,8 +850,8 @@ export const messages = {
         description: '项目工作区和任务上下文',
       },
       workspaceBrowser: {
-        label: '浏览器',
-        description: '托管 code-server 工作区',
+        label: '工作区浏览',
+        description: '浏览工作区文件',
       },
       environments: {
         label: '容器',
@@ -1132,6 +1156,18 @@ export const messages = {
           importing: '导入中…',
           cancel: '取消',
           noSkills: '仓库中未找到任何技能。',
+        },
+        defaultWorkspace: {
+          title: '默认工作区',
+          description: '选择默认工作区用于任务创建和文件浏览。',
+          label: '默认工作区',
+          noDefault: '无默认工作区',
+        },
+        tabs: {
+          general: '通用',
+          users: '用户管理',
+          envAccess: '环境访问',
+          collaborators: '协作者',
         },
       },
       placeholder: {

@@ -22,7 +22,7 @@ export default function ChangePasswordPage() {
       return;
     }
     if (newPassword.length < 4) {
-      setError('Password must be at least 4 characters');
+      setError(t('auth.passwordTooShort'));
       return;
     }
     setSubmitting(true);
@@ -32,7 +32,7 @@ export default function ChangePasswordPage() {
       await logout();
       navigate('/login');
     } catch (err: any) {
-      setError(err.message || 'Failed to change password');
+      setError(err.message || t('auth.changePasswordFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -44,14 +44,14 @@ export default function ChangePasswordPage() {
         onSubmit={handleSubmit}
         className="bg-[var(--surface)] p-8 rounded-2xl border border-[var(--border)] shadow-sm w-full max-w-sm"
       >
-        <h1 className="text-xl font-semibold mb-2 text-center">Change Password</h1>
+        <h1 className="text-xl font-semibold mb-2 text-center">{t('auth.changePassword')}</h1>
         <p className="text-xs text-[var(--text-secondary)] text-center mb-6">
-          You must change your password before continuing.
+          {t('auth.mustChangePassword')}
         </p>
         {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-[var(--text-secondary)]">Current Password</span>
+            <span className="text-xs text-[var(--text-secondary)]">{t('auth.currentPassword')}</span>
             <input
               type="password"
               className="px-3 py-2 rounded-lg text-sm bg-[var(--bg)] border border-[var(--border)]"
@@ -61,7 +61,7 @@ export default function ChangePasswordPage() {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-[var(--text-secondary)]">New Password</span>
+            <span className="text-xs text-[var(--text-secondary)]">{t('auth.newPassword')}</span>
             <input
               type="password"
               className="px-3 py-2 rounded-lg text-sm bg-[var(--bg)] border border-[var(--border)]"
@@ -70,7 +70,7 @@ export default function ChangePasswordPage() {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-[var(--text-secondary)]">Confirm New Password</span>
+            <span className="text-xs text-[var(--text-secondary)]">{t('auth.confirmPassword')}</span>
             <input
               type="password"
               className="px-3 py-2 rounded-lg text-sm bg-[var(--bg)] border border-[var(--border)]"
@@ -83,7 +83,7 @@ export default function ChangePasswordPage() {
             disabled={submitting || !oldPassword || !newPassword || !confirm}
             className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-blue-700 transition-colors"
           >
-            {submitting ? t('common.loading') : 'Change Password'}
+            {submitting ? t('common.loading') : t('auth.changePassword')}
           </button>
         </div>
       </form>
