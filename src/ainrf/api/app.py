@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -107,12 +106,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 )
                 with auth_service._connect() as conn:
                     conn.execute(
-                        "UPDATE users SET status = 'active', activated_at = ? WHERE username = 'admin'",
+                        "UPDATE users SET status = 'active', role = 'admin', activated_at = ? WHERE username = 'admin'",
                         (datetime.now(timezone.utc).isoformat(),),
                     )
                     conn.commit()
                 # Auto-grant seed environments to initial admin
                 auth_service._grant_seed_environments(admin_user.id)
+            # Fix existing admin users with wrong role (migration from bug)
+            with auth_service._connect() as conn:
+                conn.execute(
+                    "UPDATE users SET role = 'admin' WHERE username = 'admin' AND role != 'admin'"
+                )
+                conn.commit()
                 print(
                     "\n" + "=" * 60 + "\n"
                     "Initial admin created!\n"
