@@ -382,6 +382,14 @@ class TaskHarnessService:
             pass
         return self._load_list_item(task_id)
 
+    def set_task_session(self, task_id: str, session_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE task_harness_tasks SET session_id = ? WHERE task_id = ?",
+                (session_id, task_id),
+            )
+            conn.commit()
+
     def create_task_edge(
         self,
         project_id: str,
