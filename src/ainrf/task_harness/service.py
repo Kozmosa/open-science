@@ -285,18 +285,18 @@ class TaskHarnessService:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_output_events_kind ON task_harness_output_events(kind)"
             )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_th_sessions_project_status ON task_sessions(project_id, status)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_th_sessions_created_at ON task_sessions(created_at)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_th_attempts_parent ON task_attempts(parent_attempt_id)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_th_attempts_status ON task_attempts(status)"
-            )
+            # Legacy tables: task_sessions / task_attempts moved to sessions.sqlite3.
+            # These indexes only apply if the tables still exist in this database.
+            for _ddl in [
+                "CREATE INDEX IF NOT EXISTS idx_th_sessions_project_status ON task_sessions(project_id, status)",
+                "CREATE INDEX IF NOT EXISTS idx_th_sessions_created_at ON task_sessions(created_at)",
+                "CREATE INDEX IF NOT EXISTS idx_th_attempts_parent ON task_attempts(parent_attempt_id)",
+                "CREATE INDEX IF NOT EXISTS idx_th_attempts_status ON task_attempts(status)",
+            ]:
+                try:
+                    connection.execute(_ddl)
+                except sqlite3.OperationalError:
+                    pass
             connection.commit()
         self._fail_unfinished_tasks_for_restart()
         self._initialized = True
