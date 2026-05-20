@@ -82,6 +82,9 @@ class CodexAppServerEngine(ExecutionEngine):
             await self._resume_thread(context, session)
 
         await self._start_turn(context, session, prompt)
+        # Honor a pause that was requested before the turn_id was available.
+        if session.pause_requested and session.turn_id is not None and session.thread_id is not None:
+            await self._interrupt_turn(session)
         await self._await_turn(context, session)
 
     async def pause(self, task_id: str) -> None:
@@ -106,12 +109,16 @@ class CodexAppServerEngine(ExecutionEngine):
             session.pending_prompts.append(prompt)
 
     async def abort(self, task_id: str) -> None:
+        session: CodexSession | None = None
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.pop(task_id, None)
             if session is not None:
                 session.abort_event.set()
-                if session.thread_id is not None and session.turn_id is not None:
+        if session is not None:
+            if session.thread_id is not None and session.turn_id is not None:
+                with contextlib.suppress(Exception):
                     await self._interrupt_turn(session)
+            await self._cleanup_session(session)
 
     def _restore_checkpoint(self, context: EngineContext, session: CodexSession) -> None:
         checkpoint_path = Path(context.session_state_path or "")
@@ -211,16 +218,23 @@ class CodexAppServerEngine(ExecutionEngine):
             while True:
                 line = await session.process.stdout.readline()
                 if not line:
-                    self._fail_pending_requests(
-                        session,
-                        RuntimeError("Codex App Server terminated before completing the request"),
-                    )
-                    session.turn_status = "failed"
-                    session.turn_done.set()
                     break
-                payload = json.loads(line.decode("utf-8"))
+                try:
+                    payload = json.loads(line.decode("utf-8"))
+                except json.JSONDecodeError as exc:
+                    logger.warning("Codex App Server: ignoring non-JSON stdout line: %s", exc)
+                    continue
                 await self._handle_message(session, payload, emit)
         finally:
+            # Unblock any in-flight requests and waiting turn on all exit paths
+            # (EOF, json decode error, cancellation, or any other exception).
+            self._fail_pending_requests(
+                session,
+                RuntimeError("Codex App Server terminated before completing the request"),
+            )
+            if not session.turn_done.is_set():
+                session.turn_status = session.turn_status or "failed"
+                session.turn_done.set()
             stderr_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await stderr_task
