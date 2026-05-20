@@ -104,7 +104,7 @@ class LocalCollector:
     async def collect(self) -> ResourceSnapshot:
         gpus = await self._collect_gpu()
         processes = await self._collect_processes()
-        cpu, _old_memory = self._extract_system_stats(processes)
+        cpu = self._extract_system_stats(processes)
         memory = await self._read_meminfo_async()
 
         filter_ = ProcessTreeFilter(root_pid=self._own_pid)
@@ -156,13 +156,12 @@ class LocalCollector:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
         return parse_ps_output(stdout.decode())
 
-    def _extract_system_stats(self, processes: list[RawProcess]) -> tuple[CpuInfo, MemoryInfo]:
+    def _extract_system_stats(self, processes: list[RawProcess]) -> CpuInfo:
         core_count = os.cpu_count() or 1
         total_cpu = sum(p.cpu_percent for p in processes)
         # pcpu is percent of one CPU; dividing by core_count normalises to 0–100 % system load.
         system_percent = round(total_cpu / core_count, 1)
-        memory = self._read_meminfo()
-        return CpuInfo(percent=system_percent, core_count=core_count), memory
+        return CpuInfo(percent=system_percent, core_count=core_count)
 
     async def _read_meminfo_async(self) -> MemoryInfo:
         from anyio import to_thread

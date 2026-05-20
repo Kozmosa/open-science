@@ -773,19 +773,23 @@ class SessionManager:
         return self._row_to_pair(row)
 
     def _load_pairs_batch(self, binding_ids: list[str]) -> dict[str, UserSessionPair]:
-        """Batch load pairs for multiple binding IDs in a single query."""
+        """Batch load pairs for multiple binding IDs using chunked IN queries."""
         result: dict[str, UserSessionPair] = {}
         if not binding_ids:
             return result
         with self._connect() as conn:
-            placeholders = ','.join('?' * len(binding_ids))
-            rows = conn.execute(
-                f"SELECT * FROM user_session_pairs WHERE binding_id IN ({placeholders})",
-                binding_ids,
-            ).fetchall()
-            for row in rows:
-                pair = self._row_to_pair(row)
-                result[pair.binding_id] = pair
+            # Chunk to stay under SQLite's SQLITE_MAX_VARIABLE_NUMBER (default 999)
+            CHUNK = 500
+            for i in range(0, len(binding_ids), CHUNK):
+                chunk = binding_ids[i:i + CHUNK]
+                placeholders = ','.join('?' * len(chunk))
+                rows = conn.execute(
+                    f"SELECT * FROM user_session_pairs WHERE binding_id IN ({placeholders})",
+                    chunk,
+                ).fetchall()
+                for row in rows:
+                    pair = self._row_to_pair(row)
+                    result[pair.binding_id] = pair
         return result
 
     def _store_binding(self, binding: UserEnvironmentBinding) -> UserEnvironmentBinding:
