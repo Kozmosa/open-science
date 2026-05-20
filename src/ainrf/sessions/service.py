@@ -67,6 +67,18 @@ class SessionService:
                 CREATE INDEX IF NOT EXISTS idx_attempts_session
                 ON task_attempts(session_id)
             """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_project_status ON task_sessions(project_id, status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON task_sessions(created_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_attempts_parent ON task_attempts(parent_attempt_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_attempts_status ON task_attempts(status)"
+            )
             try:
                 conn.execute("ALTER TABLE task_sessions ADD COLUMN owner_user_id TEXT")
             except sqlite3.OperationalError:
