@@ -3,6 +3,7 @@ import { QueryClient, type DefaultOptions } from '@tanstack/react-query';
 export const appQueryClientDefaultOptions = {
   queries: {
     staleTime: 5000,
+    gcTime: 5000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   },
