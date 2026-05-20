@@ -254,6 +254,38 @@ class TaskHarnessService:
                 )
             """)
             connection.commit()
+            # Performance indexes
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON task_harness_tasks(project_id, status)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON task_harness_tasks(session_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_environment_id ON task_harness_tasks(environment_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_workspace_id ON task_harness_tasks(workspace_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_owner_user_id ON task_harness_tasks(owner_user_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON task_harness_tasks(created_at)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_edges_project_id ON task_harness_edges(project_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_edges_source ON task_harness_edges(source_task_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_edges_target ON task_harness_edges(target_task_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_output_events_kind ON task_harness_output_events(kind)"
+            )
+            connection.commit()
         self._fail_unfinished_tasks_for_restart()
         self._initialized = True
 
