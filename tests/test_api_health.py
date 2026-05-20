@@ -8,6 +8,7 @@ import pytest
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig, ContainerHealth
+from tests.testutil import get_jwt_headers
 
 
 @pytest.mark.anyio
@@ -91,6 +92,7 @@ async def test_settings_codex_defaults_reads_local_files(
             state_root=tmp_path,
         )
     )
+    jwt_headers = get_jwt_headers(app)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -98,7 +100,7 @@ async def test_settings_codex_defaults_reads_local_files(
     ) as client:
         response = await client.get(
             "/settings/codex-defaults",
-            headers={"X-API-Key": "secret-key"},
+            headers=jwt_headers,
         )
 
     assert response.status_code == 200
