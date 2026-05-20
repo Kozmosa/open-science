@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import signal
 import subprocess
@@ -80,19 +81,25 @@ def stop_server_daemon(pid_file: Path) -> bool:
     return True
 
 
-def _wait_until_healthy(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
+async def _wait_until_healthy_async(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
     deadline = time.monotonic() + timeout_seconds
     url = f"http://{host}:{port}/health"
-    while time.monotonic() < deadline:
-        try:
-            response = httpx.get(url, timeout=1.0)
-            if response.status_code in {200, 503}:
-                return True
-        except httpx.HTTPError:
-            time.sleep(0.2)
-            continue
-        time.sleep(0.2)
+    async with httpx.AsyncClient() as client:
+        while time.monotonic() < deadline:
+            try:
+                resp = await client.get(url, timeout=1.0)
+                if resp.status_code in {200, 503}:
+                    return True
+            except httpx.HTTPError:
+                pass
+            await asyncio.sleep(0.2)
     return False
+
+
+def _wait_until_healthy(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
+    """Deprecated: prefer _wait_until_healthy_async. Kept for sync callers."""
+    import anyio
+    return anyio.run(_wait_until_healthy_async, host, port, timeout_seconds)
 
 
 def _ensure_not_running(pid_file: Path) -> None:
