@@ -104,7 +104,8 @@ class LocalCollector:
     async def collect(self) -> ResourceSnapshot:
         gpus = await self._collect_gpu()
         processes = await self._collect_processes()
-        cpu, memory = self._extract_system_stats(processes)
+        cpu, _old_memory = self._extract_system_stats(processes)
+        memory = await self._read_meminfo_async()
 
         filter_ = ProcessTreeFilter(root_pid=self._own_pid)
         ainrf_processes_raw = filter_.collect_descendants(processes)
@@ -162,6 +163,10 @@ class LocalCollector:
         system_percent = round(total_cpu / core_count, 1)
         memory = self._read_meminfo()
         return CpuInfo(percent=system_percent, core_count=core_count), memory
+
+    async def _read_meminfo_async(self) -> MemoryInfo:
+        from anyio import to_thread
+        return await to_thread.run_sync(self._read_meminfo)
 
     def _read_meminfo(self) -> MemoryInfo:
         try:
