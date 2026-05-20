@@ -89,6 +89,15 @@ class AuthService:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_env_access_user ON environment_access(user_id)"
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at)"
+            )
             # Migration: add must_change_password column
             try:
                 conn.execute(
