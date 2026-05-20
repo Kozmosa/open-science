@@ -428,11 +428,13 @@ class SessionManager:
         bindings = [binding for binding in self._list_bindings() if binding.user_id == app_user_id]
         if environment_id is not None:
             bindings = [binding for binding in bindings if binding.environment_id == environment_id]
+        binding_ids = [b.binding_id for b in bindings]
+        pairs_map = self._load_pairs_batch(binding_ids)
         items: list[
             tuple[UserEnvironmentBinding, UserSessionPair, EnvironmentRegistryEntry | None]
         ] = []
         for binding in bindings:
-            pair = self._load_pair(binding.binding_id)
+            pair = pairs_map.get(binding.binding_id)
             if pair is None:
                 continue
             environment: EnvironmentRegistryEntry | None
@@ -448,8 +450,10 @@ class SessionManager:
     def reconcile(self) -> None:
         self.initialize()
         bindings = self._list_bindings()
+        binding_ids = [b.binding_id for b in bindings]
+        pairs_map = self._load_pairs_batch(binding_ids)
         for binding in bindings:
-            pair = self._load_pair(binding.binding_id)
+            pair = pairs_map.get(binding.binding_id)
             if pair is None:
                 continue
             try:
@@ -767,6 +771,26 @@ class SessionManager:
         if row is None:
             return None
         return self._row_to_pair(row)
+
+    def _load_pairs_batch(self, binding_ids: list[str]) -> dict[str, UserSessionPair]:
+        """Batch load pairs for multiple binding IDs using chunked IN queries."""
+        result: dict[str, UserSessionPair] = {}
+        if not binding_ids:
+            return result
+        with self._connect() as conn:
+            # Chunk to stay under SQLite's SQLITE_MAX_VARIABLE_NUMBER (default 999)
+            CHUNK = 500
+            for i in range(0, len(binding_ids), CHUNK):
+                chunk = binding_ids[i:i + CHUNK]
+                placeholders = ','.join('?' * len(chunk))
+                rows = conn.execute(
+                    f"SELECT * FROM user_session_pairs WHERE binding_id IN ({placeholders})",
+                    chunk,
+                ).fetchall()
+                for row in rows:
+                    pair = self._row_to_pair(row)
+                    result[pair.binding_id] = pair
+        return result
 
     def _store_binding(self, binding: UserEnvironmentBinding) -> UserEnvironmentBinding:
         created_at = binding.created_at or utc_now()
