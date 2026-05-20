@@ -236,17 +236,26 @@ class FileBrowserService:
         return DirectoryListing(path=path, entries=entries)
 
     async def _read_local(self, path: str) -> FileContent:
+        from anyio import to_thread
+
         target = Path(path)
-        if not target.exists():
+
+        def _check() -> tuple[bool, bool]:
+            return (target.exists(), target.is_dir())
+
+        exists, is_dir = await to_thread.run_sync(_check)
+        if not exists:
             raise PathNotFoundError(f"File not found: {path}")
-        if target.is_dir():
+        if is_dir:
             raise PathNotFoundError(f"Path is a directory: {path}")
 
-        size = target.stat().st_size
-        if size > self._max_file_size:
-            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1_048_576} MB limit")
+        stat = await to_thread.run_sync(target.stat)
+        if stat.st_size > self._max_file_size:
+            raise FileTooLargeError(
+                f"File exceeds {self._max_file_size // 1_048_576} MB limit"
+            )
 
-        data = target.read_bytes()
+        data = await to_thread.run_sync(target.read_bytes)
         return self._build_file_content(path, data)
 
     async def _read_remote(self, environment: EnvironmentRegistryEntry, path: str) -> FileContent:
