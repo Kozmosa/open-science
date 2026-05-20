@@ -285,6 +285,18 @@ class TaskHarnessService:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_output_events_kind ON task_harness_output_events(kind)"
             )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_th_sessions_project_status ON task_sessions(project_id, status)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_th_sessions_created_at ON task_sessions(created_at)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_th_attempts_parent ON task_attempts(parent_attempt_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_th_attempts_status ON task_attempts(status)"
+            )
             connection.commit()
         self._fail_unfinished_tasks_for_restart()
         self._initialized = True
