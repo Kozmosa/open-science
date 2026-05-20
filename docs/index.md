@@ -18,29 +18,29 @@ last_local_commit: workspace aggregate
 ## 当前产品入口
 
 - 使用与运行入口：[[ainrf/index]]
-- 当前产品定位与边界：[[framework/ai-native-research-framework]]
-- 设计/架构与历史索引：[[framework/index]]
+- 设计规范：`docs/superpowers/specs/`（最新的架构与功能设计）
+- 历史文档：`docs/archive/`（V1 框架 RFC、外部项目调研、跨项目综述）
 
 ## 适合什么场景
 
-- 如果你的目标是“直接启动或联调 AINRF”，先读 [[ainrf/index]]。
-- 如果你的目标是“理解当前产品边界、架构取舍与历史演进”，再读 [[framework/index]]。
-- 如果你的目标是“回看外部项目、比较参考方案或追溯早期想法”，再进入 `projects/`、`summary/` 和历史框架文档。
+- 如果你的目标是”直接启动或联调 AINRF”，先读 [[ainrf/index]]。
+- 如果你的目标是”理解当前产品设计与架构取舍”，读 `docs/superpowers/specs/` 下的最新规范。
+- 如果你的目标是”回看历史框架、外部项目比较或早期想法”，进入 `docs/archive/`。
 
 ## 默认阅读顺序
 
 1. [[ainrf/index]]
-2. [[framework/ai-native-research-framework]]
-3. [[framework/index]]
+2. `docs/superpowers/specs/`（最新设计规范）
+3. `docs/archive/`（历史参考）
 
 ## 参考材料入口
 
-- 外部项目调研：[[projects/ai-research-skills]]、[[projects/argusbot]]、[[projects/claude-scholar]]、[[projects/everything-claude-code]]
-- 综述与矩阵：[[summary/academic-research-agents-overview]]
-- 历史框架与 RFC：从 [[framework/index]] 的“历史文档入口”进入
+- 历史框架与 RFC：`docs/archive/framework/`
+- 外部项目调研：`docs/archive/projects/`
+- 综述与矩阵：`docs/archive/summary/`
 
 ## 边界
 
-- `docs/projects/`、`docs/summary/` 与 `ref-repos/` 主要提供参考输入，不直接定义 AINRF 当前 product contract。
-- `docs/LLM-Working/` 主要承载计划、worklog 与实现追溯，不是默认产品入口。
-- 若文档中的历史设计与当前实现冲突，以当前 `ainrf` 代码表面、产品文档和 worklog 收口记录为准。
+- `docs/archive/` 与 `ref-repos/` 主要提供历史参考，不直接定义 AINRF 当前 product contract。
+- `docs/LLM-Working/worklog/` 承载开发工作日志，不是产品入口。
+- 若历史设计与当前实现冲突，以当前 `ainrf` 代码表面和最新 `superpowers/specs/` 规范为准。

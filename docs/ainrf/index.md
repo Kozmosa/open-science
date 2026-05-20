@@ -145,5 +145,4 @@ cd frontend && npm run build
 ## 关联笔记
 
 - [[index]]
-- [[framework/index]]
-- [[framework/ai-native-research-framework]]
+- 历史文档：`docs/archive/framework/`（V1 架构 RFC / roadmap）
