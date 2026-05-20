@@ -1,0 +1,58 @@
+name: Performance Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Subsystem to audit'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - backend
+          - frontend
+          - db
+
+jobs:
+  perf-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Install py-spy
+        run: pip install py-spy
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Start server
+        run: |
+          uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root /tmp/ainrf-ci &
+          sleep 3
+
+      - name: Run performance audit
+        run: uv run python scripts/perf/run-all.py --target ${{ inputs.target }} --ci
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report
+          path: .cache/perf-report/
