@@ -1,12 +1,16 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FolderOpen, RefreshCw } from 'lucide-react';
-import { listFiles, readFile, getWorkspaces } from '../api';
+import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
-import { PageHeader, useEnvironmentSelection } from '../components';
+import { useEnvironmentSelection } from '../components';
+import { PageShell, SplitPane } from '../components/layout';
 import { Select } from '../components/ui';
 import { useT } from '../i18n';
 import type { FileEntry, FileReadResponse } from '../types';
+
+const FILE_TREE_DEFAULT_WIDTH = 288;
+const FILE_TREE_MIN_WIDTH = 200;
 
 export default function FileBrowserPage() {
   const t = useT();
@@ -27,6 +31,8 @@ export default function FileBrowserPage() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<FileReadResponse | null>(null);
   const [isFileLoading, setIsFileLoading] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(FILE_TREE_DEFAULT_WIDTH);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const rootQuery = useQuery({
     queryKey: ['files', environmentId, effectiveWorkspaceId, ''],
@@ -84,38 +90,30 @@ export default function FileBrowserPage() {
     setCurrentFile(null);
   }, [environmentId, effectiveWorkspaceId, queryClient]);
 
+  const lastSidebarWidthRef = useRef(FILE_TREE_DEFAULT_WIDTH);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      if (prev) {
+        setSidebarWidth(lastSidebarWidthRef.current);
+      } else {
+        if (sidebarWidth > 44) {
+          lastSidebarWidthRef.current = sidebarWidth;
+        }
+        setSidebarWidth(44);
+      }
+      return !prev;
+    });
+  }, [sidebarWidth]);
+
   const breadcrumb = selectedPath
     ? selectedPath.split('/').filter(Boolean)
     : [];
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col gap-4">
-      <PageHeader
-        eyebrow={t('pages.workspaceBrowser.eyebrow')}
-        title={t('pages.workspaceBrowser.title')}
-      />
-
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[var(--text-secondary)]">
-            Workspace
-          </span>
-          <Select
-            value={effectiveWorkspaceId}
-            onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-            disabled={workspaces.length === 0}
-          >
-            {workspaces.map((workspace) => (
-              <option key={workspace.workspace_id} value={workspace.workspace_id}>
-                {workspace.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-
+    <PageShell>
       {!selectedEnvironment ? (
-        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-secondary)]">
+        <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-[var(--text-tertiary)]">
             Select an environment to browse files
           </p>
@@ -125,35 +123,70 @@ export default function FileBrowserPage() {
           <p className="text-sm text-[var(--text-tertiary)]">Loading files...</p>
         </div>
       ) : (
-        <div className="flex flex-1 gap-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          {/* File tree sidebar */}
-          <div className="flex w-72 flex-col border-r border-[var(--border)]">
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-[var(--apple-blue)]" />
-                <span className="text-xs font-medium text-[var(--text)]">Files</span>
+        <SplitPane
+          sidebarMinWidth={FILE_TREE_MIN_WIDTH}
+          sidebarWidth={sidebarWidth}
+          onSidebarWidthChange={(w) => {
+            setSidebarWidth(w);
+            setSidebarCollapsed(false);
+          }}
+          className="flex-1"
+          sidebar={
+            <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-[var(--border)] px-2 py-2">
+                <button
+                  type="button"
+                  onClick={handleToggleSidebar}
+                  className="inline-flex items-center gap-2 rounded p-1 text-[var(--text-secondary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
+                  title={sidebarCollapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
+                >
+                  <FolderOpen className="h-4 w-4 shrink-0 text-[var(--apple-blue)]" />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="text-xs font-medium text-[var(--text)]">Files</span>
+                    </>
+                  )}
+                </button>
+                {!sidebarCollapsed && (
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    className="rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
+                    title="Refresh"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                className="rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
-                title="Refresh"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-              </button>
+              {!sidebarCollapsed && (
+                <>
+                  <div className="flex-1 overflow-auto p-2">
+                    <FileTree
+                      entries={rootQuery.data?.entries ?? []}
+                      selectedPath={selectedPath}
+                      onSelectFile={handleSelectFile}
+                      onLoadDirectory={handleLoadDirectory}
+                    />
+                  </div>
+                  <div className="border-t border-[var(--border)] px-3 py-2">
+                    <Select
+                      value={effectiveWorkspaceId}
+                      onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                      disabled={workspaces.length === 0}
+                    >
+                      {workspaces.map((workspace) => (
+                        <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                          {workspace.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="flex-1 overflow-auto p-2">
-              <FileTree
-                entries={rootQuery.data?.entries ?? []}
-                selectedPath={selectedPath}
-                onSelectFile={handleSelectFile}
-                onLoadDirectory={handleLoadDirectory}
-              />
-            </div>
-          </div>
-
-          {/* File viewer */}
-          <div className="flex flex-1 flex-col">
+          }
+        >
+          <div className="flex h-full flex-col">
             <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-2 text-xs text-[var(--text-secondary)]">
               {breadcrumb.length > 0 ? (
                 breadcrumb.map((segment, index) => (
@@ -177,12 +210,24 @@ export default function FileBrowserPage() {
               )}
             </div>
             <div className="flex-1 overflow-hidden">
-              <FileViewer file={currentFile} isLoading={isFileLoading} />
+              <FileViewer
+                file={currentFile}
+                isLoading={isFileLoading}
+                pdfStreamUrl={
+                  currentFile?.mime_type === 'application/pdf' && environmentId
+                    ? buildFileStreamUrl(
+                        environmentId,
+                        currentFile.path,
+                        effectiveWorkspaceId || undefined
+                      )
+                    : undefined
+                }
+              />
             </div>
           </div>
-        </div>
+        </SplitPane>
       )}
-    </div>
+    </PageShell>
   );
 }
 

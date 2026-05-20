@@ -27,12 +27,23 @@ function useSystemColorScheme(): 'light' | 'dark' {
   return scheme;
 }
 
+function PdfViewer({ streamUrl, title }: { streamUrl: string; title: string }) {
+  return (
+    <iframe
+      src={streamUrl}
+      title={title}
+      className="h-full w-full rounded-lg border border-[var(--border)]"
+    />
+  );
+}
+
 interface Props {
   file: FileReadResponse | null;
   isLoading: boolean;
+  pdfStreamUrl?: string;
 }
 
-export default function FileViewer({ file, isLoading }: Props) {
+export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
   const colorScheme = useSystemColorScheme();
   const editorSettings = useEditorSettings();
 
@@ -62,6 +73,10 @@ export default function FileViewer({ file, isLoading }: Props) {
         />
       </div>
     );
+  }
+
+  if (file.mime_type === 'application/pdf' && pdfStreamUrl) {
+    return <PdfViewer streamUrl={pdfStreamUrl} title={file.path} />;
   }
 
   if (file.is_binary) {

@@ -1,0 +1,123 @@
+<h2>设计 — API 设计</h2>
+<p class="subtitle">Session Chain · Section 2/4</p>
+
+<div class="section">
+  <h3>新增 Endpoints</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Method</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Path</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">说明</th>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;color:#2563eb;">GET</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">/sessions</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">列表，支持 ?project_id=&status= 筛选</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;color:#16a34a;">POST</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">/sessions</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">创建 session（title, project_id）</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;color:#2563eb;">GET</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">/sessions/{id}</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">Session 详情 + attempts 列表 + 聚合统计</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;color:#f59e0b;">PATCH</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">/sessions/{id}</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">更新 title / status (archive)</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;color:#dc2626;">DELETE</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">/sessions/{id}</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">Archive session（软删除）</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;color:#2563eb;">GET</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">/sessions/{id}/attempts</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">Session 下的所有 attempts（按 seq 排序）</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>现有 Task API 的扩展</h3>
+  <p style="font-size:13px;color:#666;margin-bottom:8px;">不改现有接口签名，只增加可选字段：</p>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">接口</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">新增字段</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">说明</th>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">POST /tasks</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">session_id? (optional)</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">创建 task 时关联到 session</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">GET /tasks/{id}</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">session_id, attempt_seq</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">Response 中返回所属 session 信息</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">POST /tasks/{id}/prompt</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-family:monospace;">(via attempt chain)</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">发送 prompt 时自动在同 session 下创建新 attempt</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>TaskAttempt 创建时机（自动化）</h3>
+  <div class="mockup">
+    <div class="mockup-body">
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-size:11px;">Task Harness</span>
+          <span>task 从 QUEUED → STARTING 时，自动创建 TaskAttempt</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-size:11px;">Task Harness</span>
+          <span>task 完成/失败时，自动更新 TaskAttempt 的 status + duration + token_usage</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-size:11px;">Task Harness</span>
+          <span>task 被 cancel 后 resume，或收到 prompt 后，创建新 attempt（parent=上一个）</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#fef3c7;padding:3px 8px;border-radius:3px;font-size:11px;">API Route</span>
+          <span>Session 聚合字段在每次 attempt 完成后自动 recalculation</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Response 示例：GET /sessions/{id}</h3>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;line-height:1.6;overflow-x:auto;">
+{<br/>
+&nbsp;&nbsp;"id": "sess_abc123",<br/>
+&nbsp;&nbsp;"title": "ICML 2026 rebuttal experiments",<br/>
+&nbsp;&nbsp;"project_id": "proj_1",<br/>
+&nbsp;&nbsp;"status": "active",<br/>
+&nbsp;&nbsp;"task_count": 3,<br/>
+&nbsp;&nbsp;"total_duration_ms": 1524000,<br/>
+&nbsp;&nbsp;"total_cost_usd": 4.73,<br/>
+&nbsp;&nbsp;"attempts": [<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;{ "id": "att_1", "seq": 1, "task_id": "task_5",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"status": "completed", "duration_ms": 620000,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"token_usage": {"input": 48000, ...} },<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;{ "id": "att_2", "seq": 2, "task_id": "task_5",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"parent_attempt_id": "att_1",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"intervention_reason": "fix reviewer comments",<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"status": "completed", "duration_ms": 420000 },<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;...<br/>
+&nbsp;&nbsp;]<br/>
+}
+      </div>
+    </div>
+  </div>
+</div>

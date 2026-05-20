@@ -1,0 +1,116 @@
+<h2>Humanize2 vs AINRF — 架构对比</h2>
+<p class="subtitle">两个项目的顶层架构与数据流对比</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Humanize2 — MCP Hub + Cartridge Engine</div>
+    <div class="mockup-body">
+      <div style="background:#f0f4ff;border:2px solid #6366f1;border-radius:8px;padding:10px;margin-bottom:8px;text-align:center;font-weight:600;color:#4338ca;">
+        Claude Code (MCP Client)
+      </div>
+      <div style="text-align:center;margin:4px 0;color:#666;">.mcp.json → MCP Tools</div>
+      <div style="background:#eef2ff;border:2px solid #818cf8;border-radius:8px;padding:10px;margin-bottom:8px;text-align:center;font-weight:600;color:#3730a3;">
+        Humanize2 MCP Server (16+ tools)
+      </div>
+      <div style="text-align:center;margin:4px 0;color:#666;">JSON-RPC :4772</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px;text-align:center;font-size:13px;">
+          Agent Run<br/>Coordinator
+        </div>
+        <div style="flex:1;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px;text-align:center;font-size:13px;">
+          Workflow<br/>Coordinator
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px;text-align:center;font-size:12px;">Claude CLI</div>
+        <div style="flex:1;background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px;text-align:center;font-size:12px;">Codex CLI</div>
+        <div style="flex:1;background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px;text-align:center;font-size:12px;">Fake (test)</div>
+      </div>
+      <div style="background:#f3e8ff;border:1px solid #9333ea;border-radius:6px;padding:8px;text-align:center;font-size:13px;">
+        Flow Cartridges (HTML DSL)
+      </div>
+      <div style="background:#fce7f3;border:1px solid #db2777;border-radius:6px;padding:8px;margin-top:8px;text-align:center;font-size:13px;">
+        Browser Dashboard (Vanilla JS)
+      </div>
+      <div style="background:#e5e7eb;border:1px solid #9ca3af;border-radius:6px;padding:6px;margin-top:4px;text-align:center;font-size:11px;color:#666;">
+        Persistence: ~/.h2/cache/ (JSONL + JSON)
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">AINRF — FastAPI + React SPA</div>
+    <div class="mockup-body">
+      <div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:8px;padding:10px;margin-bottom:8px;text-align:center;font-weight:600;color:#166534;">
+        React WebUI (Vite + TanStack Query)
+      </div>
+      <div style="text-align:center;margin:4px 0;color:#666;">HTTP / WebSocket / SSE</div>
+      <div style="background:#dcfce7;border:2px solid #22c55e;border-radius:8px;padding:10px;margin-bottom:8px;text-align:center;font-weight:600;color:#14532d;">
+        FastAPI Backend (REST + WS)
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px;text-align:center;font-size:13px;">
+          Task<br/>Harness
+        </div>
+        <div style="flex:1;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px;text-align:center;font-size:13px;">
+          Terminal<br/>Manager
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px;text-align:center;font-size:12px;">Local Launcher</div>
+        <div style="flex:1;background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px;text-align:center;font-size:12px;">SSH Remote</div>
+        <div style="flex:1;background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px;text-align:center;font-size:12px;">Agent SDK</div>
+      </div>
+      <div style="background:#f3e8ff;border:1px solid #9333ea;border-radius:6px;padding:8px;text-align:center;font-size:13px;">
+        Environment Probing (SSH→GPU/CUDA/Python)
+      </div>
+      <div style="background:#fce7f3;border:1px solid #db2777;border-radius:6px;padding:8px;margin-top:8px;text-align:center;font-size:13px;">
+        PTY Terminal + Code Server Proxy
+      </div>
+      <div style="background:#e5e7eb;border:1px solid #9ca3af;border-radius:6px;padding:6px;margin-top:4px;text-align:center;font-size:11px;color:#666;">
+        Persistence: SQLite + JSON files
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键结构差异</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:14px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">维度</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Humanize2</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">AINRF</th>
+    </tr>
+    <tr>
+      <td style="padding:8px;border:1px solid #e5e7eb;font-weight:600;">集成方式</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">MCP Server → Claude Code 内嵌</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">独立 FastAPI 服务 + 独立 WebUI</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:8px;border:1px solid #e5e7eb;font-weight:600;">Agent 模型</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">Agent Run + Session Chain（中断-继续）</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">Task + Edge DAG（workflow 编排）</td>
+    </tr>
+    <tr>
+      <td style="padding:8px;border:1px solid #e5e7eb;font-weight:600;">执行后端</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">Claude CLI / Codex CLI（本地）</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">Local Shell / SSH Remote / Agent SDK</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:8px;border:1px solid #e5e7eb;font-weight:600;">前端架构</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">Vanilla JS 内嵌 Dashboard（单文件）</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">React 19 + TypeScript + Tailwind v4</td>
+    </tr>
+    <tr>
+      <td style="padding:8px;border:1px solid #e5e7eb;font-weight:600;">工作流引擎</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">HTML Cartridge → Graph Compiler + Expression</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">Task Edge DAG（较简单）</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:8px;border:1px solid #e5e7eb;font-weight:600;">远程计算</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">无</td>
+      <td style="padding:8px;border:1px solid #e5e7eb;">SSH + tmux + PTY Terminal + GPU Probe</td>
+    </tr>
+  </table>
+</div>

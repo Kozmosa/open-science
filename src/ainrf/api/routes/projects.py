@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json as json_mod
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from ainrf.api.schemas import (
+    CollaboratorListResponse,
+    CollaboratorRequest,
+    CollaboratorResponse,
+    ProjectCostSummaryResponse,
     ProjectCreateRequest,
     ProjectEnvironmentReferenceCreateRequest,
     ProjectEnvironmentReferenceListResponse,
@@ -14,6 +19,7 @@ from ainrf.api.schemas import (
     ProjectResponse,
     ProjectUpdateRequest,
 )
+from ainrf.auth.permissions import check_resource_owner, get_current_user
 from ainrf.environments import (
     EnvironmentNotFoundError,
     InMemoryEnvironmentService,
@@ -38,6 +44,20 @@ def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
     service = getattr(request.app.state, "environment_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="environment service not initialized")
+    return service
+
+
+def _get_session_service(request: Request):
+    service = getattr(request.app.state, "session_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="session service not initialized")
+    return service
+
+
+def _get_auth_service(request: Request):
+    service = getattr(request.app.state, "auth_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="auth service not initialized")
     return service
 
 
@@ -88,6 +108,7 @@ def _translate_reference_error(exc: Exception) -> HTTPException:
 
 @router.get("", response_model=ProjectListResponse)
 async def list_projects(request: Request) -> ProjectListResponse:
+    get_current_user(request)
     service = _get_project_service(request)
     try:
         items = [_serialize_project(project) for project in service.list_projects()]
@@ -98,6 +119,7 @@ async def list_projects(request: Request) -> ProjectListResponse:
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreateRequest, request: Request) -> ProjectResponse:
+    get_current_user(request)
     service = _get_project_service(request)
     try:
         project = service.create_project(
@@ -111,6 +133,7 @@ async def create_project(payload: ProjectCreateRequest, request: Request) -> Pro
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def read_project(project_id: str, request: Request) -> ProjectResponse:
+    get_current_user(request)
     service = _get_project_service(request)
     try:
         project = service.get_project(project_id)
@@ -125,6 +148,7 @@ async def update_project(
     payload: ProjectUpdateRequest,
     request: Request,
 ) -> ProjectResponse:
+    get_current_user(request)
     service = _get_project_service(request)
     try:
         changes = payload.model_dump(exclude_unset=True)
@@ -142,6 +166,7 @@ async def update_project(
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: str, request: Request) -> None:
+    get_current_user(request)
     service = _get_project_service(request)
     try:
         service.delete_project(project_id)
@@ -237,3 +262,89 @@ async def delete_project_environment_ref(
     except Exception as exc:
         raise _translate_reference_error(exc) from exc
     return None
+
+
+@router.get("/{project_id}/cost-summary", response_model=ProjectCostSummaryResponse)
+async def get_project_cost_summary(project_id: str, request: Request) -> ProjectCostSummaryResponse:
+    get_current_user(request)
+    session_service = _get_session_service(request)
+    try:
+        sessions = session_service.list_sessions(project_id=project_id)
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+    total_cost = 0.0
+    total_tokens = 0
+    by_model: dict[str, dict] = {}
+
+    session_ids = [s.id for s in sessions]
+    attempts_by_session = session_service.list_attempts_for_sessions(session_ids)
+    for s in sessions:
+        total_cost += s.total_cost_usd
+        for a in attempts_by_session.get(s.id, []):
+            if a.token_usage_json:
+                try:
+                    tu = json_mod.loads(a.token_usage_json)
+                except Exception:
+                    continue
+                total_t = tu.get("total", {})
+                total_tokens += total_t.get("input_tokens", 0)
+                total_tokens += total_t.get("output_tokens", 0)
+                total_tokens += total_t.get("cache_creation_input_tokens", 0)
+                total_tokens += total_t.get("cache_read_input_tokens", 0)
+                for model, usage in tu.get("by_model", {}).items():
+                    if model not in by_model:
+                        by_model[model] = {"cost_usd": 0.0, "tokens": 0}
+                    by_model[model]["cost_usd"] += usage.get("cost_usd", 0)
+                    by_model[model]["tokens"] += usage.get("input_tokens", 0)
+                    by_model[model]["tokens"] += usage.get("output_tokens", 0)
+
+    return ProjectCostSummaryResponse.model_validate(
+        {
+            "project_id": project_id,
+            "total_cost_usd": round(total_cost, 2),
+            "total_tokens": total_tokens,
+            "session_count": len(sessions),
+            "by_model": by_model,
+        }
+    )
+
+
+@router.get("/{project_id}/collaborators", response_model=CollaboratorListResponse)
+async def list_collaborators(project_id: str, request: Request) -> CollaboratorListResponse:
+    get_current_user(request)
+    auth_svc = _get_auth_service(request)
+    collabs = auth_svc.list_collaborators(project_id)
+    return CollaboratorListResponse.model_validate({"items": collabs})
+
+
+@router.put(
+    "/{project_id}/collaborators",
+    response_model=CollaboratorResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_collaborator(
+    project_id: str, payload: CollaboratorRequest, request: Request
+) -> CollaboratorResponse:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    if not check_resource_owner(user, proj.owner_user_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    auth_svc = _get_auth_service(request)
+    auth_svc.add_collaborator(
+        project_id=project_id, user_id=payload.user_id, role=payload.role, added_by=user["id"]
+    )
+    return CollaboratorResponse.model_validate(
+        {"user_id": payload.user_id, "username": "", "display_name": "", "role": payload.role}
+    )
+
+
+@router.delete("/{project_id}/collaborators/{user_id}", status_code=204)
+async def remove_collaborator(project_id: str, user_id: str, request: Request) -> Response:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    if not check_resource_owner(user, proj.owner_user_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    auth_svc = _get_auth_service(request)
+    auth_svc.remove_collaborator(project_id, user_id)
+    return Response(status_code=204)

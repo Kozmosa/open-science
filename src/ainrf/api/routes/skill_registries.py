@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ainrf.auth.permissions import get_current_user, require_admin
 from ainrf.api.schemas import (
     SkillRegistryInstallResponse,
     SkillRegistryListResponse,
@@ -91,7 +92,12 @@ async def get_registry_status(request: Request, registry_id: str) -> SkillRegist
 
 @router.post("/{registry_id}/install", response_model=SkillRegistryInstallResponse)
 async def install_registry(request: Request, registry_id: str) -> SkillRegistryInstallResponse:
-    """Install a skill registry for the first time."""
+    """Install a skill registry for the first time.
+
+    Requires admin privileges.
+    """
+    user = get_current_user(request)
+    require_admin(user)
     config = next((r for r in DEFAULT_REGISTRIES if r.registry_id == registry_id), None)
     if config is None:
         raise HTTPException(status_code=404, detail=f"Registry '{registry_id}' not found")
@@ -127,7 +133,12 @@ async def update_registry(
     registry_id: str,
     payload: SkillRegistryUpdateRequest,
 ) -> SkillRegistryUpdateResponse:
-    """Update an installed skill registry to the latest version."""
+    """Update an installed skill registry to the latest version.
+
+    Requires admin privileges.
+    """
+    user = get_current_user(request)
+    require_admin(user)
     config = next((r for r in DEFAULT_REGISTRIES if r.registry_id == registry_id), None)
     if config is None:
         raise HTTPException(status_code=404, detail=f"Registry '{registry_id}' not found")

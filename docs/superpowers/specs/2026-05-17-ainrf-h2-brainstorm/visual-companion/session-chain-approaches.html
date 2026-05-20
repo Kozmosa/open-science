@@ -1,0 +1,87 @@
+<h2>Session Chain — 三种实现路径</h2>
+<p class="subtitle">从轻到重，对 AINRF Task 模型的改造程度不同</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>轻量级：扩展现有 Task 字段</h3>
+      <p style="color:#666;margin-bottom:8px;">给 tasks 表加 session_id + continued_from_task_id</p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:8px;font-family:monospace;font-size:11px;">
+        tasks 表新增:<br/>
+        · session_id TEXT — 同一次研究会话的标识<br/>
+        · continued_from_task_id TEXT — 指向前一次尝试
+      </div>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>改动最小，一个 migration 搞定</li>
+          <li>复用现有 Task API / TaskList / TaskDetail</li>
+          <li>向后兼容——旧 task 字段留空即可</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Session 没有独立 API——聚合查询需在应用层做</li>
+          <li>Session 级别的元数据（总耗时、总 cost）需实时计算</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>中等：TaskAttempt + 独立 Session 视图</h3>
+      <p style="color:#666;margin-bottom:8px;">Task 表示"逻辑任务"，TaskAttempt 表示"每次执行"</p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:8px;font-family:monospace;font-size:11px;">
+        task_sessions 新表:<br/>
+        · id, title, project_id, created_at, status<br/>
+        <br/>
+        task_attempts 新表 (或复用 tasks 表):<br/>
+        · id, session_id, task_id (可选), attempt_seq<br/>
+        · parent_attempt_id, intervention_reason<br/>
+        · status, started_at, finished_at, duration_ms
+      </div>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Session 是一等公民，有独立 API 和 UI</li>
+          <li>逻辑任务 vs 执行尝试清晰分离</li>
+          <li>Session 级别聚合（cost、耗时）可持久化</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>新表 + 新 API + 新前端页面，工作量大</li>
+          <li>需要迁移现有 Task 数据或提供兼容层</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>完整版：AgentSession（humanize2 对齐）</h3>
+      <p style="color:#666;margin-bottom:8px;">Session 为顶层实体，含 runs 列表、token 统计、中断链</p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:8px;font-family:monospace;font-size:11px;">
+        agent_sessions:<br/>
+        · id, title, project_id, agent_type, model<br/>
+        · total_input_tokens, total_output_tokens<br/>
+        · total_cost_usd, attempt_count<br/>
+        · created_at, updated_at<br/>
+        <br/>
+        agent_runs (替代 tasks 的部分职能):<br/>
+        · session_id, parent_run_id, continued_from_run_id<br/>
+        · intervention_message, backend_session_id<br/>
+        · output_events (JSONL), token_usage
+      </div>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>完全对齐 humanize2 的 Session 模型</li>
+          <li>Timeline / Token / Session 全部原生支持</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>与现有 Task 模型大幅重叠，引入两种平行的"运行"概念</li>
+          <li>AIRNF 的 Task 承载了 workspace/env binding 等额外职责</li>
+          <li>过度设计——AINRF 不需要 humanize2 的全部复杂度</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>

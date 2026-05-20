@@ -13,3 +13,4 @@ class ProjectRecord:
     default_environment_id: str | None
     created_at: datetime
     updated_at: datetime
+    owner_user_id: str | None = None

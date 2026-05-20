@@ -366,6 +366,7 @@ export interface EnvironmentDetection {
   errors: string[];
   warnings: string[];
   ssh_ok: boolean;
+  tmux_ok: boolean;
   hostname: string | null;
   os_info: string | null;
   arch: string | null;
@@ -374,7 +375,7 @@ export interface EnvironmentDetection {
   conda: ToolStatus;
   uv: ToolStatus;
   pixi: ToolStatus;
-  code_server: ToolStatus;
+  codex: ToolStatus;
   torch: ToolStatus;
   cuda: ToolStatus;
   gpu_models: string[];
@@ -681,3 +682,108 @@ export interface TaskMessagesResponse {
   has_more: boolean;
   next_sequence: number | null;
 }
+
+// ── Session types ──────────────────────────────────────
+
+export type SessionStatus = 'active' | 'completed' | 'archived';
+export type AttemptStatus = 'running' | 'completed' | 'failed' | 'interrupted';
+
+export interface AttemptRecord {
+  id: string;
+  session_id: string;
+  task_id: string | null;
+  parent_attempt_id: string | null;
+  attempt_seq: number;
+  intervention_reason: string | null;
+  status: AttemptStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  token_usage_json: string | null;
+  created_at: string;
+}
+
+export interface SessionRecord {
+  id: string;
+  project_id: string;
+  title: string;
+  status: SessionStatus;
+  task_count: number;
+  total_duration_ms: number;
+  total_cost_usd: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionDetailRecord extends SessionRecord {
+  attempts: AttemptRecord[];
+}
+
+export interface SessionListResponse {
+  items: SessionRecord[];
+}
+
+export interface AttemptListResponse {
+  items: AttemptRecord[];
+}
+
+export interface SessionCreateRequest {
+  project_id: string;
+  title: string;
+}
+
+export interface SessionUpdateRequest {
+  title?: string | null;
+  status?: string | null;
+}
+
+// ── Token types ──────────────────────────────────────────
+
+export interface TokenUsage {
+  total: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+    cost_usd?: number;
+  };
+  by_model?: Record<
+    string,
+    {
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+      cost_usd?: number;
+    }
+  >;
+  source: 'agent-sdk' | 'claude-session-meta';
+}
+
+export interface ProjectCostSummary {
+  project_id: string;
+  total_cost_usd: number;
+  total_tokens: number;
+  session_count: number;
+  by_model: Record<string, { cost_usd: number; tokens: number }>;
+}
+
+export interface AdminUserItem { id: string; username: string; display_name: string; role: string; status: string; created_at: string; last_login_at: string | null }
+export interface AdminUserListResponse { items: AdminUserItem[] }
+export interface AdminUserUpdateRequest { status?: string | null }
+export interface AdminPasswordResetRequest { password: string }
+
+export interface CollaboratorItem { user_id: string; username: string; display_name: string; role: string }
+export interface CollaboratorListResponse { items: CollaboratorItem[] }
+export interface CollaboratorRequest { user_id: string; role: string }
+
+export interface EnvAccessItem { user_id: string; username: string; display_name: string; max_concurrent_tasks: number | null }
+export interface EnvAccessListResponse { items: EnvAccessItem[] }
+export interface EnvAccessRequest { user_id: string; max_concurrent_tasks: number | null }
+
+export interface UserInfo { id: string; username: string; display_name: string; role: string; status: string; must_change_password?: boolean }
+export interface LoginRequest { username: string; password: string }
+export interface RegisterRequest { username: string; display_name: string; password: string }
+export interface AuthTokenResponse { access_token: string; refresh_token: string; user: UserInfo }
+export interface AccessTokenResponse { access_token: string }
+export interface ChangePasswordRequest { old_password: string; new_password: string }

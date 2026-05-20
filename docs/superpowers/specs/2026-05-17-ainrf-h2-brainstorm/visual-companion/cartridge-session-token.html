@@ -1,0 +1,161 @@
+<h2>三个概念解释：Cartridge、Session Chain、Token 追踪</h2>
+<p class="subtitle">Humanize2 中的关键设计模式</p>
+
+<div class="section">
+  <h3>1. HTML Cartridge 工作流引擎</h3>
+  <p>用 HTML 自定义标签描述多 Agent 协作流程，由引擎解析成 DAG 并执行。</p>
+
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Cartridge 源文件（HTML）</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:11px;line-height:1.5;">
+&lt;<span style="color:#9333ea;">h2-workflow</span> id="rlcr"&gt;<br/>
+&nbsp;&nbsp;&lt;<span style="color:#9333ea;">h2-flow</span>&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style="color:#2563eb;">h2-agent</span> agent="claude"&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;实现需求<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style="color:#2563eb;">h2-agent</span>&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style="color:#2563eb;">h2-agent</span> agent="codex"&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;审查代码<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style="color:#2563eb;">h2-agent</span>&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span style="color:#dc2626;">h2-loop</span> max="3"&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...修复循环...<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;/<span style="color:#dc2626;">h2-loop</span>&gt;<br/>
+&nbsp;&nbsp;&lt;/<span style="color:#9333ea;">h2-flow</span>&gt;<br/>
+&lt;/<span style="color:#9333ea;">h2-workflow</span>&gt;
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">编译后的执行 DAG</div>
+      <div class="mockup-body">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <div style="background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px 20px;font-size:13px;">Start</div>
+          <div style="color:#999;">↓</div>
+          <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 20px;font-size:13px;">Claude: 实现</div>
+          <div style="color:#999;">↓</div>
+          <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 20px;font-size:13px;">Codex: 审查</div>
+          <div style="color:#999;">↓</div>
+          <div style="background:#fce7f3;border:2px dashed #db2777;border-radius:8px;padding:8px 30px;text-align:center;">
+            <span style="font-size:12px;font-weight:600;">Loop (max 3)</span><br/>
+            <span style="font-size:11px;color:#666;">Claude Fix → Codex Re-Review</span>
+          </div>
+          <div style="color:#999;">↓</div>
+          <div style="background:#dbeafe;border:1px solid #3b82f6;border-radius:6px;padding:6px 20px;font-size:13px;">End</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pros-cons">
+    <div class="pros"><h4>Cartridge 的优势</h4><ul>
+      <li>流程定义即文档——HTML 可读可执行</li>
+      <li>支持 loop / parallel / branch / await 控制流</li>
+      <li>Expression 引擎实现条件路由</li>
+      <li>Cartridge 可热加载、可版本管理</li>
+    </ul></div>
+    <div class="cons"><h4>对 AINRF 的适用性</h4><ul>
+      <li>AINRF 已有 Task Edge DAG，Cartridge 是更高级的 DSL</li>
+      <li>短期内可能 over-engineered</li>
+      <li>但 Loop + Parallel + Condition 的能力值得参考</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. Session Chain（会话链）</h3>
+  <p>每次 Agent Run 通过 <code>continuedFromRunId</code> 串联，形成完整的中断-继续链路。</p>
+
+  <div class="mockup">
+    <div class="mockup-header">Session Chain 示意</div>
+    <div class="mockup-body">
+      <div style="display:flex;align-items:center;gap:0;overflow-x:auto;padding:12px 0;">
+        <div style="background:#dbeafe;border:2px solid #3b82f6;border-radius:8px;padding:8px 14px;text-align:center;min-width:100px;">
+          <div style="font-size:11px;color:#666;">Session A</div>
+          <div style="font-weight:600;font-size:13px;">Run #1</div>
+          <div style="font-size:10px;color:#059669;">实现功能</div>
+          <div style="font-size:10px;color:#999;">12m 30s</div>
+        </div>
+        <div style="font-size:20px;color:#3b82f6;padding:0 4px;">→</div>
+        <div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:8px 14px;text-align:center;min-width:100px;">
+          <div style="font-size:11px;color:#666;">Session A</div>
+          <div style="font-weight:600;font-size:13px;">Run #2</div>
+          <div style="font-size:10px;color:#dc2626;">修复审查意见</div>
+          <div style="font-size:10px;color:#999;">8m 15s</div>
+        </div>
+        <div style="font-size:20px;color:#f59e0b;padding:0 4px;">→</div>
+        <div style="background:#dcfce7;border:2px solid #16a34a;border-radius:8px;padding:8px 14px;text-align:center;min-width:100px;">
+          <div style="font-size:11px;color:#666;">Session A</div>
+          <div style="font-weight:600;font-size:13px;">Run #3</div>
+          <div style="font-size:10px;color:#059669;">最终通过 ✓</div>
+          <div style="font-size:10px;color:#999;">5m 42s</div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:8px;">
+        <span style="background:#f3e8ff;padding:4px 12px;border-radius:4px;font-size:12px;">
+          同一个 AgentSession（root parent 聚合）→ Timeline 上显示为一行的多个色块
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pros-cons">
+    <div class="pros"><h4>对 AINRF 的价值</h4><ul>
+      <li>AINRF 的 Task 之间可以通过 Task Edge 连接，但没有原生的 "同一个任务的多次尝试" 概念</li>
+      <li>Session Chain = 一次研究任务被中断/继续/修正的完整历史</li>
+      <li>可直接支撑 Timeline 的时间轴渲染</li>
+    </ul></div>
+    <div class="cons"><h4>实现考量</h4><ul>
+      <li>需要给 Task 增加 session_id 和 parent_task_id</li>
+      <li>或引入更轻量的 TaskAttempt 概念</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. Token 用量追踪</h3>
+  <p>Humanize2 在 Agent Run 的 output events 中提取 token 信息，按 Session 聚合展示。</p>
+
+  <div class="mockup">
+    <div class="mockup-header">Token Flow 展示（概念）</div>
+    <div class="mockup-body">
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+          <span>Session A · Claude Opus 4.7</span>
+          <span style="font-weight:600;">Total: $3.42</span>
+        </div>
+        <div style="display:flex;height:24px;border-radius:4px;overflow:hidden;gap:2px;">
+          <div style="width:45%;background:#bfdbfe;display:flex;align-items:center;justify-content:center;font-size:10px;">Input 48K</div>
+          <div style="width:20%;background:#bbf7d0;display:flex;align-items:center;justify-content:center;font-size:10px;">Cache 22K</div>
+          <div style="width:25%;background:#fef08a;display:flex;align-items:center;justify-content:center;font-size:10px;">Output 8K</div>
+          <div style="width:10%;background:#fecaca;display:flex;align-items:center;justify-content:center;font-size:10px;">Think 3K</div>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+          <span>Session B · Codex GPT-5.5</span>
+          <span style="font-weight:600;">Total: $1.87</span>
+        </div>
+        <div style="display:flex;height:24px;border-radius:4px;overflow:hidden;gap:2px;">
+          <div style="width:35%;background:#bfdbfe;display:flex;align-items:center;justify-content:center;font-size:10px;">Input 32K</div>
+          <div style="width:15%;background:#bbf7d0;display:flex;align-items:center;justify-content:center;font-size:10px;">Cache 14K</div>
+          <div style="width:40%;background:#fef08a;display:flex;align-items:center;justify-content:center;font-size:10px;">Output 12K</div>
+          <div style="width:10%;background:#fecaca;display:flex;align-items:center;justify-content:center;font-size:10px;">Think 5K</div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:12px;color:#666;">
+        ← 横条宽度 = token 占比，颜色区分 input / cache / output / reasoning
+      </div>
+    </div>
+  </div>
+
+  <div class="pros-cons">
+    <div class="pros"><h4>对 AINRF 的价值</h4><ul>
+      <li>AINRF 已有 TaskOutputKind（含 message / thinking / tool_call），token 数据可能已经存在</li>
+      <li>研究者关心每个研究任务的 API 开销</li>
+      <li>可按 Project / Workspace 聚合成本</li>
+    </ul></div>
+    <div class="cons"><h4>实现考量</h4><ul>
+      <li>需从 agent-sdk engine 的 event stream 中解析 token usage</li>
+      <li>Claude CLI 模式下 token 数据可能不可用</li>
+    </ul></div>
+  </div>
+</div>

@@ -3,15 +3,22 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
+import mimetypes
+import shlex
 
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import FileResponse, StreamingResponse
+
+from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     FileEntryResponse,
     FileListResponse,
     FileReadResponse,
     FileUploadResponse,
 )
+from ainrf.execution.ssh import SSHExecutor
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
+from ainrf.files.service import _build_container_config
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -45,6 +52,7 @@ async def list_files(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ) -> FileListResponse:
+    user = get_current_user(request)
     service = _get_file_browser_service(request)
     try:
         listing = await service.list_directory(environment_id, path, workspace_id)
@@ -86,6 +94,56 @@ async def read_file(
         size=content.size,
         language=content.language,
         mime_type=content.mime_type,
+    )
+
+
+@router.get("/stream")
+async def stream_file(
+    request: Request,
+    environment_id: str = Query(..., description="Target environment ID"),
+    path: str = Query(..., description="File path relative to workspace root"),
+    workspace_id: str | None = Query(
+        default=None, description="Optional workspace ID to override workdir"
+    ),
+):
+    service = _get_file_browser_service(request)
+    try:
+        is_local, resolved_path, environment = await service.resolve_stream_target(
+            environment_id, path, workspace_id
+        )
+    except Exception as exc:
+        raise _translate_file_browser_error(exc) from exc
+
+    media_type, _ = mimetypes.guess_type(resolved_path)
+    if media_type is None:
+        media_type = "application/octet-stream"
+
+    if is_local:
+        return FileResponse(
+            resolved_path,
+            media_type=media_type,
+        )
+
+    # Remote file: stream via SSH
+    container_config = _build_container_config(environment)
+    executor = SSHExecutor(container_config)
+
+    async def _stream():
+        try:
+            result = await executor.run_command(
+                f"base64 -w0 {shlex.quote(resolved_path)}",
+                timeout=60,
+            )
+            if result.exit_code == 0 and result.stdout:
+                import base64
+
+                yield base64.b64decode(result.stdout.strip())
+        finally:
+            await executor.close()
+
+    return StreamingResponse(
+        _stream(),
+        media_type=media_type,
     )
 
 

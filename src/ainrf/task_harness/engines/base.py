@@ -37,8 +37,10 @@ class EngineEvent:
         "status",
         "system",
         "error",
+        "token",
     ]
     payload: dict
+    token_usage: dict | None = None
 
 
 class ExecutionEngine(ABC):

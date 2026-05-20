@@ -7,7 +7,7 @@ import sqlite3
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
@@ -73,6 +73,9 @@ from ainrf.task_harness.session_state import SessionStateStore
 from ainrf.workspaces import WorkspaceNotFoundError, WorkspaceRegistryService
 from ainrf.workspaces.models import WorkspaceRecord
 
+if TYPE_CHECKING:
+    from ainrf.sessions import SessionService
+
 _FINAL_STATUSES = {
     TaskHarnessStatus.SUCCEEDED,
     TaskHarnessStatus.FAILED,
@@ -123,6 +126,7 @@ class TaskHarnessService:
         environment_service: InMemoryEnvironmentService,
         workspace_service: WorkspaceRegistryService,
         skill_root: Path | str | None = None,
+        session_service: "SessionService | None" = None,
     ) -> None:
         self._state_root = state_root
         self._runtime_root = state_root / "runtime"
@@ -131,12 +135,15 @@ class TaskHarnessService:
         self._environment_service = environment_service
         self._workspace_service = workspace_service
         self._skill_root = Path(skill_root) if skill_root is not None else (state_root / "skills")
+        self._session_service = session_service
         self._initialized = False
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._running_processes: dict[str, Any] = {}
         self._engine_factory = get_engine
         self._engines: dict[str, ExecutionEngine] = {}
         self._session_store = SessionStateStore(state_root)
+        self._output_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self._drain_task: asyncio.Task | None = None
 
     def initialize(self) -> None:
         if self._initialized:
@@ -223,6 +230,18 @@ class TaskHarnessService:
                 )
                 """
             )
+            self._ensure_column(
+                connection,
+                "task_harness_tasks",
+                "session_id",
+                "ALTER TABLE task_harness_tasks ADD COLUMN session_id TEXT",
+            )
+            self._ensure_column(
+                connection,
+                "task_harness_tasks",
+                "owner_user_id",
+                "ALTER TABLE task_harness_tasks ADD COLUMN owner_user_id TEXT",
+            )
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS task_harness_session_states (
                     id INTEGER PRIMARY KEY,
@@ -267,6 +286,8 @@ class TaskHarnessService:
         research_agent_profile: dict[str, object] | None = None,
         task_configuration: dict[str, object] | None = None,
         auto_connect: bool = False,
+        session_id: str | None = None,
+        owner_user_id: str | None = None,
     ) -> TaskListItem:
         self.initialize()
         if task_profile != _TASK_PROFILE:
@@ -328,8 +349,10 @@ class TaskHarnessService:
                     binding_snapshot_path,
                     prompt_manifest_path,
                     launch_payload_path,
-                    execution_engine
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    execution_engine,
+                    session_id,
+                    owner_user_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -348,6 +371,8 @@ class TaskHarnessService:
                     str(prompt_manifest_path(task_dir)),
                     str(launch_payload_path(task_dir)),
                     resolved_execution_engine,
+                    session_id,
+                    owner_user_id,
                 ),
             )
             connection.commit()
@@ -363,6 +388,14 @@ class TaskHarnessService:
         except TaskHarnessError:
             pass
         return self._load_list_item(task_id)
+
+    def set_task_session(self, task_id: str, session_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE task_harness_tasks SET session_id = ? WHERE task_id = ?",
+                (session_id, task_id),
+            )
+            conn.commit()
 
     def create_task_edge(
         self,
@@ -439,6 +472,23 @@ class TaskHarnessService:
             for row in rows
         ]
 
+    def get_task_edge(self, edge_id: str) -> TaskEdge:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT edge_id, project_id, source_task_id, target_task_id, created_at FROM task_harness_edges WHERE edge_id = ?",
+                (edge_id,),
+            ).fetchone()
+        if row is None:
+            raise TaskHarnessNotFoundError(f"Task edge not found: {edge_id}")
+        return TaskEdge(
+            edge_id=row["edge_id"],
+            project_id=row["project_id"],
+            source_task_id=row["source_task_id"],
+            target_task_id=row["target_task_id"],
+            created_at=_parse_required_datetime(row["created_at"]),
+        )
+
     def delete_task_edge(self, edge_id: str) -> None:
         self.initialize()
         with self._connect() as connection:
@@ -457,6 +507,7 @@ class TaskHarnessService:
             "status": TaskOutputKind.SYSTEM,
             "system": TaskOutputKind.SYSTEM,
             "error": TaskOutputKind.STDERR,
+            "token": TaskOutputKind.TOKEN,
         }
         return mapping.get(event_type, TaskOutputKind.STDOUT)
 
@@ -489,49 +540,42 @@ class TaskHarnessService:
         if row is not None:
             self.create_task_edge(project_id, row["task_id"], new_task_id)
 
-    def list_tasks(self, *, include_archived: bool = False) -> list[TaskListItem]:
+    def list_tasks(
+        self, *, include_archived: bool = False, owner_user_id: str | None = None
+    ) -> list[TaskListItem]:
         self.initialize()
+        clauses: list[str] = []
+        params: list[str] = []
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as connection:
-            if include_archived:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    ORDER BY created_at DESC
-                    """
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    WHERE archived_at IS NULL
-                    ORDER BY created_at DESC
-                    """
-                ).fetchall()
+            rows = connection.execute(
+                f"SELECT * FROM task_harness_tasks {where} ORDER BY created_at DESC",
+                tuple(params),
+            ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
     def list_project_tasks(
-        self, project_id: str, *, include_archived: bool = False
+        self, project_id: str, *, include_archived: bool = False, owner_user_id: str | None = None
     ) -> list[TaskListItem]:
         self.initialize()
+        clauses: list[str] = ["project_id = ?"]
+        params: list[str] = [project_id]
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
+        where = f"WHERE {' AND '.join(clauses)}"
         with self._connect() as connection:
-            if include_archived:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    WHERE project_id = ?
-                    ORDER BY created_at DESC
-                    """,
-                    (project_id,),
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    """
-                    SELECT * FROM task_harness_tasks
-                    WHERE project_id = ? AND archived_at IS NULL
-                    ORDER BY created_at DESC
-                    """,
-                    (project_id,),
-                ).fetchall()
+            rows = connection.execute(
+                f"SELECT * FROM task_harness_tasks {where} ORDER BY created_at DESC",
+                tuple(params),
+            ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
     def archive_task(self, task_id: str) -> TaskListItem:
@@ -549,6 +593,22 @@ class TaskHarnessService:
             )
             connection.commit()
         return self._load_list_item(task_id)
+
+    def delete_task(self, task_id: str) -> None:
+        """Permanently delete a task row and its artifact directory."""
+        self.initialize()
+        _ = self._load_task_row(task_id)
+        task_dir = self.task_directory(task_id)
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM task_harness_tasks WHERE task_id = ?",
+                (task_id,),
+            )
+            connection.commit()
+        if task_dir.exists():
+            import shutil
+
+            shutil.rmtree(task_dir, ignore_errors=True)
 
     async def cancel_task(self, task_id: str) -> TaskListItem:
         self.initialize()
@@ -711,6 +771,8 @@ class TaskHarnessService:
             execution_engine=execution_engine,
             research_agent_profile=profile_snapshot,
             task_configuration=configuration_snapshot,
+            session_id=row["session_id"],
+            owner_user_id=row["owner_user_id"],
         )
 
     def get_output(
@@ -764,6 +826,8 @@ class TaskHarnessService:
             loop = asyncio.get_running_loop()
         except RuntimeError as exc:
             raise TaskHarnessError("Task harness scheduling requires a running event loop") from exc
+        if self._drain_task is None:
+            self._drain_task = loop.create_task(self._drain_output_queue())
         existing = self._running_tasks.get(task_id)
         if existing is not None and not existing.done():
             return
@@ -927,9 +991,10 @@ class TaskHarnessService:
                 engine = self._get_engine(resolved_execution_engine)
                 engine_paused = False
                 engine_failed = False
+                captured_token_usage = None
 
                 async def emit(event: EngineEvent) -> None:
-                    nonlocal engine_paused, engine_failed
+                    nonlocal engine_paused, engine_failed, captured_token_usage
                     if event.event_type == "system":
                         subtype = event.payload.get("subtype")
                         if subtype == "task_paused":
@@ -937,6 +1002,8 @@ class TaskHarnessService:
                             self._update_task_status(task_id, status=TaskHarnessStatus.PAUSED)
                         elif subtype == "task_failed":
                             engine_failed = True
+                        if event.token_usage and subtype in ("task_completed", "task_failed"):
+                            captured_token_usage = event.token_usage
                     content = (
                         json.dumps(event.payload)
                         if isinstance(event.payload, dict)
@@ -967,6 +1034,42 @@ class TaskHarnessService:
                         failure_category="runtime failure",
                     )
                     return
+                # NEW: update session attempt with token data
+                if self._session_service and captured_token_usage:
+                    task_session_id = row["session_id"] if "session_id" in row.keys() else None
+                    if task_session_id:
+                        try:
+                            attempts = self._session_service.list_attempts(task_session_id)
+                            matching = [a for a in attempts if a.task_id == task_id]
+                            if matching:
+                                latest = matching[-1]
+                                status_val = "failed" if engine_failed else "completed"
+                                duration_ms = None
+                                started = row["started_at"]
+                                if started:
+                                    try:
+                                        from datetime import datetime as _dt, timezone as _tz
+
+                                        start_dt = _dt.fromisoformat(str(started))
+                                        duration_ms = int(
+                                            (_dt.now(_tz.utc) - start_dt).total_seconds() * 1000
+                                        )
+                                    except Exception:
+                                        pass
+                                import json as _json_mod
+
+                                self._session_service.complete_attempt(
+                                    latest.id,
+                                    status=status_val,
+                                    duration_ms=duration_ms,
+                                    token_usage_json=_json_mod.dumps(captured_token_usage),
+                                )
+                        except Exception:
+                            import logging
+
+                            logging.getLogger(__name__).warning(
+                                "Failed to update session attempt with token data", exc_info=True
+                            )
                 self._complete_task(task_id, exit_code=0)
                 return
 
@@ -1101,7 +1204,21 @@ class TaskHarnessService:
             text = (
                 chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else str(chunk)
             )
-            self._append_output_event(task_id, kind, text)
+            await self._output_queue.put((task_id, kind, text))
+
+    async def _drain_output_queue(self) -> None:
+        """Continuously drain output events from the queue to the database."""
+        try:
+            while True:
+                task_id, kind, content = await self._output_queue.get()
+                try:
+                    self._append_output_event(task_id, kind, content)
+                except Exception:
+                    pass
+                finally:
+                    self._output_queue.task_done()
+        except asyncio.CancelledError:
+            pass
 
     def _append_output_event(
         self,
@@ -1263,6 +1380,8 @@ class TaskHarnessService:
             error_summary=row["error_summary"],
             latest_output_seq=int(row["latest_output_seq"]),
             execution_engine=row["execution_engine"] or _EXECUTION_ENGINE,
+            session_id=row["session_id"],
+            owner_user_id=row["owner_user_id"],
         )
 
     def _fail_unfinished_tasks_for_restart(self) -> None:

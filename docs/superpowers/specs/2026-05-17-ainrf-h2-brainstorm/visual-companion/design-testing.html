@@ -1,0 +1,100 @@
+<h2>设计 — 测试与兼容性</h2>
+<p class="subtitle">Session Chain · Section 4/4</p>
+
+<div class="section">
+  <h3>向后兼容策略</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">维度</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">策略</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">影响</th>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">现有 Tasks</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">session_id = null → 不出现在任何 session 中</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">零影响，TasksPage 正常工作</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">Task API</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">session_id 为可选字段，旧调用不传即可</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">零影响</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">Task Harness</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">task 无 session_id 时，不创建 TaskAttempt</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">session 功能完全 opt-in</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">DB Migration</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">CREATE TABLE IF NOT EXISTS，不修改现有表</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">新表独立存在，旧数据完整保留</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;font-weight:600;">前端路由</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">新增 /sessions，现有 8 个路由不变</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">仅导航栏增加一个条目</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>测试范围</h3>
+  <div style="display:flex;gap:16px;">
+    <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+      <h4 style="margin-top:0;">Backend (pytest)</h4>
+      <ul style="font-size:13px;line-height:1.8;">
+        <li>Session CRUD 全流程</li>
+        <li>TaskAttempt 自动创建/更新</li>
+        <li>Session 聚合字段正确性</li>
+        <li>Attempt chain 查询（parent 追溯）</li>
+        <li>session_id=null 时 task 行为不变</li>
+        <li>task_harness DB migration 幂等性</li>
+      </ul>
+    </div>
+    <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+      <h4 style="margin-top:0;">Frontend (Vitest)</h4>
+      <ul style="font-size:13px;line-height:1.8;">
+        <li>SessionsPage 渲染（空态/有数据）</li>
+        <li>SessionList 筛选与搜索</li>
+        <li>AttemptChain 不同状态的渲染</li>
+        <li>Session ↔ Task 双向链接跳转</li>
+        <li>TaskCreateForm session_id 选择器</li>
+        <li>i18n 覆盖（中英文）</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>实现顺序建议</h3>
+  <div class="mockup">
+    <div class="mockup-body">
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 1</span>
+          <span>DB Migration — task_sessions + task_attempts 表</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 2</span>
+          <span>Backend — SessionService + Session API routes + Pydantic schemas</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 3</span>
+          <span>Task Harness 集成 — auto-create/update TaskAttempt</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 4</span>
+          <span>Frontend — SessionsPage + AttemptChain + 路由注册</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 5</span>
+          <span>关联 — TasksPage 显示 session 链接，TaskCreateForm 加 session 选择器</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#e5e7eb;padding:3px 8px;border-radius:3px;font-weight:600;color:#999;">Follow-up</span>
+          <span style="color:#999;">Token Track → Timeline（依赖 Session Chain）</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

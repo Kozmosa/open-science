@@ -1,0 +1,92 @@
+<h2>AINRF 多用户鉴权 — 整体架构方案</h2>
+<p class="subtitle">基于已确认的需求：JWT + 用户名密码 + Owner/Collaborator/Admin + 注册审批</p>
+
+<div class="section">
+  <h3>需求总结</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;">维度</th>
+      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;">选择</th>
+    </tr>
+    <tr><td style="padding:6px 8px;border:1px solid #e5e7eb;">部署规模</td><td style="padding:6px 8px;border:1px solid #e5e7eb;">小团队共享（2-10 人，同一台机器）</td></tr>
+    <tr style="background:#f9fafb;"><td style="padding:6px 8px;border:1px solid #e5e7eb;">认证</td><td style="padding:6px 8px;border:1px solid #e5e7eb;">用户名 + 密码 → JWT（废弃 API Key）</td></tr>
+    <tr><td style="padding:6px 8px;border:1px solid #e5e7eb;">权限模型</td><td style="padding:6px 8px;border:1px solid #e5e7eb;">Owner-based + Project Collaborators (member/viewer) + Admin(PI)</td></tr>
+    <tr style="background:#f9fafb;"><td style="padding:6px 8px;border:1px solid #e5e7eb;">Environments</td><td style="padding:6px 8px;border:1px solid #e5e7eb;">Admin 管理 + 权限组 + 资源配额</td></tr>
+    <tr><td style="padding:6px 8px;border:1px solid #e5e7eb;">Workspaces</td><td style="padding:6px 8px;border:1px solid #e5e7eb;">用户隔离（默认）+ Project 内共享（collaborator 可访问）</td></tr>
+    <tr style="background:#f9fafb;"><td style="padding:6px 8px;border:1px solid #e5e7eb;">用户创建</td><td style="padding:6px 8px;border:1px solid #e5e7eb;">开放注册 + Admin 审批启用</td></tr>
+    <tr><td style="padding:6px 8px;border:1px solid #e5e7eb;">认证方式</td><td style="padding:6px 8px;border:1px solid #e5e7eb;">统一 JWT（WebUI + CLI 通用）</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>三种实现路径</h3>
+
+  <div class="cards">
+    <div class="card" data-choice="a" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>A. 渐进式：最小迁移</h3>
+        <p style="color:#666;font-size:12px;">保留现有 X-API-Key middleware，新增 JWT middleware 作为并行路径。User 表 + login endpoint + JWT 签发。资源表逐步加 owner_user_id 列。向前兼容：现有部署不受影响。</p>
+        <div class="pros-cons">
+          <div class="pros"><h4>Pros</h4><ul>
+            <li>零停机迁移，现有 API key 继续工作</li>
+            <li>可以逐步切换资源表，每步独立上线</li>
+            <li>风险最低，每步可回滚</li>
+          </ul></div>
+          <div class="cons"><h4>Cons</h4><ul>
+            <li>两套鉴权并存期长，代码有分支</li>
+            <li>JWT + API Key 双路径增加 middleware 复杂度</li>
+            <li>owner_user_id 逐步加，过渡期数据可能不一致</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-choice="b" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>B. 硬切换：一次性替换 <span style="font-size:11px;color:#16a34a;">（推荐）</span></h3>
+        <p style="color:#666;font-size:12px;">一次性替换 X-API-Key middleware → JWT middleware。User 表 + 所有资源表加 owner_user_id。Admin 初始账号通过 CLI 创建。一次性 build，一次性 migration，一次性切。</p>
+        <div class="pros-cons">
+          <div class="pros"><h4>Pros</h4><ul>
+            <li>架构干净，无双路径遗留</li>
+            <li>所有资源从第一天就有 owner，无过渡态</li>
+            <li>middleware 逻辑简单：只验 JWT</li>
+          </ul></div>
+          <div class="cons"><h4>Cons</h4><ul>
+            <li>一次性改动大（~15 files），测试工作量大</li>
+            <li>现有部署升级需要重新配置用户</li>
+            <li>如果出问题回滚代价高</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-choice="c" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>C. 拆分为两个 Phase</h3>
+        <p style="color:#666;font-size:12px;">Phase 1: User 系统（注册/登录/JWT/User表）+ 替换 middleware，但不加资源隔离。Phase 2: 逐资源加 owner_user_id + 权限检查 + 前端改造。两个 phase 独立上线。</p>
+        <div class="pros-cons">
+          <div class="pros"><h4>Pros</h4><ul>
+            <li>每个 phase 范围可控，不互相阻塞</li>
+            <li>Phase 1 可以快速上线（login 页面 + JWT）</li>
+            <li>Phase 2 可以按资源优先级分批做</li>
+          </ul></div>
+          <div class="cons"><h4>Cons</h4><ul>
+            <li>Phase 1 上线后到 Phase 2 之间，数据仍是全局可见</li>
+            <li>两个 phase 两次大改 middleware 和前端</li>
+            <li>Phase 1 不提供实际的多用户隔离价值</li>
+          </ul></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>推荐 B — 一次性替换</h3>
+  <p style="font-size:13px;color:#333;">
+    AINRF 当前是单用户工具，用户量少。没有遗留数据迁移的包袱。一次性做干净，比分 phase 更省总工作量。关键风险通过 <strong>充分的集成测试</strong> 覆盖。
+  </p>
+  <p style="font-size:13px;color:#888;">
+    请选择方案，或在浏览器中点击卡片选择。
+  </p>
+</div>

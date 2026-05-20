@@ -1,5 +1,6 @@
 import type {
   AnthropicEnvStatus,
+  AttemptListResponse,
   CodeServerStatus,
   EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
@@ -16,6 +17,11 @@ import type {
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
+  SessionCreateRequest,
+  SessionDetailRecord,
+  SessionListResponse,
+  SessionRecord,
+  SessionUpdateRequest,
   SkillDetail,
   SkillImportRequest,
   SkillImportResponse,
@@ -41,6 +47,7 @@ import type {
   TaskEdgeCreateRequest,
   TaskEdgeListResponse,
 } from '../types';
+import { ApiError } from './client';
 
 const DEFAULT_PROJECT_ID = 'default';
 const MOCK_STATE_ROOT = '.ainrf';
@@ -170,7 +177,7 @@ function cloneEnvironment(environment: EnvironmentRecord): EnvironmentRecord {
           conda: { ...environment.latest_detection.conda },
           uv: { ...environment.latest_detection.uv },
           pixi: { ...environment.latest_detection.pixi },
-          code_server: { ...environment.latest_detection.code_server },
+          codex: { ...environment.latest_detection.codex },
           torch: { ...environment.latest_detection.torch },
           cuda: { ...environment.latest_detection.cuda },
           claude_cli: { ...environment.latest_detection.claude_cli },
@@ -460,6 +467,7 @@ function createMockDetection(environment: EnvironmentRecord): EnvironmentRecord[
     errors: environment.is_seed ? ['localhost_seed_unreachable'] : [],
     warnings: environment.is_seed ? ['localhost_seed_unreachable'] : [],
     ssh_ok: !environment.is_seed,
+    tmux_ok: !environment.is_seed,
     hostname: environment.host,
     os_info: 'linux',
     arch: 'x86_64',
@@ -476,10 +484,10 @@ function createMockDetection(environment: EnvironmentRecord): EnvironmentRecord[
       environment.is_seed ? null : '/usr/bin/uv'
     ),
     pixi: createToolStatus(false),
-    code_server: createToolStatus(
-      Boolean(environment.code_server_path),
-      environment.code_server_path ? 'mock' : null,
-      environment.code_server_path
+    codex: createToolStatus(
+      !environment.is_seed,
+      environment.is_seed ? null : '0.130.0',
+      environment.is_seed ? null : '/usr/bin/codex'
     ),
     torch: createToolStatus(false),
     cuda: createToolStatus(false),
@@ -910,6 +918,12 @@ export function mockArchiveTask(taskId: string): TaskSummary {
   return cloneTaskSummary(mockTasks[taskId]);
 }
 
+export function mockDeleteTask(taskId: string): Promise<void> {
+  const { [taskId]: _, ...rest } = mockTasks;
+  mockTasks = rest;
+  return Promise.resolve();
+}
+
 export function mockCancelTask(taskId: string): TaskSummary {
   const task = mockGetTask(taskId);
   if (task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled') {
@@ -1305,4 +1319,61 @@ export function mockReadFile(_environmentId: string, path: string): FileReadResp
     language,
     mime_type: null,
   };
+}
+
+// ── Session mocks ───────────────────────────────────────
+
+const _mockSessions: SessionRecord[] = [];
+
+export function mockGetSessions(_filters?: {
+  projectId?: string;
+  status?: string;
+}): SessionListResponse {
+  return { items: _mockSessions };
+}
+
+export function mockGetSession(id: string): SessionDetailRecord {
+  const s = _mockSessions.find((x) => x.id === id);
+  if (!s) throw new ApiError('Session not found', 404, `/sessions/${id}`);
+  return { ...s, attempts: [] };
+}
+
+export function mockCreateSession(
+  payload: SessionCreateRequest,
+): SessionRecord {
+  const s: SessionRecord = {
+    id: `sess_${_mockSessions.length + 1}`,
+    project_id: payload.project_id,
+    title: payload.title,
+    status: 'active',
+    task_count: 0,
+    total_duration_ms: 0,
+    total_cost_usd: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  _mockSessions.unshift(s);
+  return s;
+}
+
+export function mockUpdateSession(
+  id: string,
+  payload: SessionUpdateRequest,
+): SessionRecord {
+  const s = _mockSessions.find((x) => x.id === id);
+  if (!s) throw new ApiError('Session not found', 404, `/sessions/${id}`);
+  if (payload.title !== undefined) s.title = payload.title!;
+  if (payload.status !== undefined)
+    s.status = payload.status as SessionRecord['status'];
+  s.updated_at = new Date().toISOString();
+  return { ...s };
+}
+
+export function mockDeleteSession(_id: string): void {
+  const idx = _mockSessions.findIndex((x) => x.id === _id);
+  if (idx >= 0) _mockSessions.splice(idx, 1);
+}
+
+export function mockGetAttempts(_sessionId: string): AttemptListResponse {
+  return { items: [] };
 }

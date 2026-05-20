@@ -11,6 +11,7 @@ from anyio import create_task_group, to_thread
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     TerminalExecRequest,
     TerminalExecResponse,
@@ -197,7 +198,8 @@ async def read_terminal_session(
     environment_id: str | None = Query(default=None),
     project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
-    app_user_id = _require_app_user_id(request)
+    user = get_current_user(request)
+    app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     try:
@@ -225,7 +227,8 @@ async def read_terminal_session_pairs(
     environment_id: str | None = Query(default=None),
     project_id: str = Query(default="default"),
 ) -> UserSessionPairListResponse:
-    app_user_id = _require_app_user_id(request)
+    user = get_current_user(request)
+    app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     if environment_id is not None:
@@ -251,7 +254,8 @@ async def create_terminal_session(
     request: Request,
     project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
-    app_user_id = _require_app_user_id(request)
+    user = get_current_user(request)
+    app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
@@ -289,7 +293,8 @@ async def delete_terminal_session(
     attachment_id: str | None = Query(default=None),
     project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
-    app_user_id = _require_app_user_id(request)
+    user = get_current_user(request)
+    app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
@@ -322,7 +327,8 @@ async def reset_terminal_session(
     request: Request,
     project_id: str = Query(default="default"),
 ) -> TerminalSessionResponse:
-    app_user_id = _require_app_user_id(request)
+    user = get_current_user(request)
+    app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
@@ -526,6 +532,15 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     if not isinstance(cols, int) or not isinstance(rows, int):
                         raise ValueError("resize payload must include integer cols and rows")
                     resize_terminal(runtime, cols, rows)
+                    try:
+                        manager = _get_session_manager(websocket)
+                        manager.resize_tmux_window(
+                            session_name=attachment.session_name,
+                            cols=cols,
+                            rows=rows,
+                        )
+                    except Exception:
+                        pass
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:

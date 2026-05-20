@@ -88,7 +88,7 @@ export default function TaskDetail({
     const startWidth = asideWidth;
 
     const onMove = (moveEvent: PointerEvent) => {
-      const delta = moveEvent.clientX - startX;
+      const delta = startX - moveEvent.clientX;
       const newWidth = startWidth + delta;
       const clamped = Math.max(MIN_WIDTH, newWidth);
       if (containerRef.current) {
@@ -145,7 +145,7 @@ export default function TaskDetail({
 
   if (detailError) {
     return (
-      <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <section className="flex min-h-0 flex-1 items-center justify-center p-6">
         <p className="text-sm text-[#ff3b30]">{detailError}</p>
       </section>
     );
@@ -153,7 +153,7 @@ export default function TaskDetail({
 
   if (!selectedTask) {
     return (
-      <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6">
+      <section className="flex min-h-0 flex-1 items-center justify-center p-6">
         <div className="max-w-sm text-center">
           <h2 className="text-base font-semibold text-[var(--text)]">
             {t('pages.tasks.noTaskSelected')}
@@ -167,7 +167,7 @@ export default function TaskDetail({
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="border-b border-[var(--border)] px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">

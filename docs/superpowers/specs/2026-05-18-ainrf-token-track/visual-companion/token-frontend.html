@@ -1,0 +1,176 @@
+<h2>Token Track — Frontend UI</h2>
+<p class="subtitle">Section 4/5 · AttemptChain token flow bars + SessionDetail cost + per-project aggregation</p>
+
+<div class="section">
+  <h3>1. AttemptChain — Token Flow Bar</h3>
+  <div class="mockup">
+    <div class="mockup-header">AttemptChain 卡片内新增 token 横条（替换当前的 "Token data" 文字）</div>
+    <div class="mockup-body">
+      <!-- Example card with token bar -->
+      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;font-size:14px;">Attempt #1</span>
+          <span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-size:11px;">completed</span>
+        </div>
+        <div style="font-size:11px;color:#666;margin-bottom:6px;">Task: "ICML rebuttal baseline" · 10m 20s</div>
+
+        <!-- Token Flow Bar -->
+        <div style="margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:2px;">
+            <span>Tokens</span><span style="font-weight:600;color:#333;">Total: 68,350 · $3.42</span>
+          </div>
+          <div style="display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px;">
+            <div style="width:48%;background:#bfdbfe;" title="Input: 32,800"></div>
+            <div style="width:17%;background:#bbf7d0;" title="Cache: 12,000"></div>
+            <div style="width:12%;background:#fef08a;" title="Output: 8,150"></div>
+            <div style="width:23%;background:#e5e7eb;" title="Reasoning: 15,400"></div>
+          </div>
+          <div style="display:flex;gap:12px;font-size:9px;color:#888;margin-top:3px;">
+            <span><span style="display:inline-block;width:8px;height:8px;background:#bfdbfe;border-radius:1px;"></span> Input 32.8K</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:#bbf7d0;border-radius:1px;"></span> Cache 12K</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:#fef08a;border-radius:1px;"></span> Output 8.2K</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:#e5e7eb;border-radius:1px;"></span> Think 15.4K</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Second example: Claude Code (no cost) -->
+      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;font-size:14px;">Attempt #2</span>
+          <span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:4px;font-size:11px;">completed</span>
+        </div>
+        <div style="font-size:11px;color:#666;margin-bottom:6px;">Engine: claude-code · 5m 42s</div>
+
+        <div style="margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:2px;">
+            <span>Tokens (session-meta)</span><span style="font-weight:600;color:#333;">Total: 52,100</span>
+          </div>
+          <div style="display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px;">
+            <div style="width:75%;background:#bfdbfe;"></div>
+            <div style="width:25%;background:#fef08a;"></div>
+          </div>
+          <div style="display:flex;gap:12px;font-size:9px;color:#888;margin-top:3px;">
+            <span><span style="display:inline-block;width:8px;height:8px;background:#bfdbfe;border-radius:1px;"></span> Input 39K</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:#fef08a;border-radius:1px;"></span> Output 13.1K</span>
+            <span style="color:#f59e0b;">No cost data</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. SessionDetail — Stats Bar 升级</h3>
+  <div class="mockup">
+    <div class="mockup-header">SessionDetail 顶部 stats 行</div>
+    <div class="mockup-body">
+      <div style="display:flex;align-items:center;gap:24px;font-size:13px;color:#374151;padding:8px 0;">
+        <div>
+          <span style="color:#888;">Tasks</span><br/>
+          <span style="font-weight:700;">3</span>
+        </div>
+        <div>
+          <span style="color:#888;">Duration</span><br/>
+          <span style="font-weight:700;">25m 24s</span>
+        </div>
+        <div style="background:#fef3c7;border-radius:6px;padding:4px 10px;">
+          <span style="color:#888;">Total Cost</span><br/>
+          <span style="font-weight:700;color:#b45309;">$7.85</span>
+        </div>
+        <div>
+          <span style="color:#888;">Total Tokens</span><br/>
+          <span style="font-weight:700;">186,250</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. Per-Model Token Breakdown（可折叠）</h3>
+  <div class="mockup">
+    <div class="mockup-header">AttemptChain 卡片内或 SessionDetail 底部</div>
+    <div class="mockup-body">
+      <details style="font-size:12px;">
+        <summary style="cursor:pointer;color:#6366f1;font-weight:500;">Per-Model Breakdown</summary>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+          <div style="border:1px solid #e5e7eb;border-radius:4px;padding:6px 8px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;">
+              <span style="font-weight:600;">claude-opus-4-7</span>
+              <span style="color:#888;">$2.85</span>
+            </div>
+            <div style="display:flex;height:8px;border-radius:2px;overflow:hidden;gap:1px;margin-top:4px;">
+              <div style="width:50%;background:#bfdbfe;"></div>
+              <div style="width:20%;background:#bbf7d0;"></div>
+              <div style="width:30%;background:#fef08a;"></div>
+            </div>
+            <div style="font-size:9px;color:#888;margin-top:2px;">In: 32K · Cache: 13K · Out: 6.1K · Think: 10K</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:4px;padding:6px 8px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;">
+              <span style="font-weight:600;">claude-sonnet-4-6</span>
+              <span style="color:#888;">$0.57</span>
+            </div>
+            <div style="display:flex;height:8px;border-radius:2px;overflow:hidden;gap:1px;margin-top:4px;">
+              <div style="width:40%;background:#bfdbfe;"></div>
+              <div style="width:10%;background:#bbf7d0;"></div>
+              <div style="width:50%;background:#fef08a;"></div>
+            </div>
+            <div style="font-size:9px;color:#888;margin-top:2px;">In: 8K · Cache: 2K · Out: 4K · Think: 2K</div>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>4. Per-Project Cost Aggregation</h3>
+  <div class="mockup">
+    <div class="mockup-header">新增 API: GET /projects/{id}/cost-summary</div>
+    <div class="mockup-body" style="font-size:12px;">
+      <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;margin-bottom:8px;">
+{<br/>
+&nbsp;&nbsp;"project_id": "proj_1",<br/>
+&nbsp;&nbsp;"total_cost_usd": 23.45,<br/>
+&nbsp;&nbsp;"total_tokens": 520000,<br/>
+&nbsp;&nbsp;"session_count": 5,<br/>
+&nbsp;&nbsp;"by_model": {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"claude-opus-4-7": {"cost_usd": 18.20, "tokens": 380000},<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;"claude-sonnet-4-6": {"cost_usd": 5.25, "tokens": 140000}<br/>
+&nbsp;&nbsp;}<br/>
+}
+      </div>
+      <div style="font-size:11px;color:#666;">
+        Session 数据已有 project_id，直接 SUM 聚合。在前端 ProjectsPage 的 project 卡片或 ProjectCanvas 中展示。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>TypeScript 类型扩展</h3>
+  <div style="font-size:12px;line-height:1.8;">
+    新增 <code>TokenUsage</code> interface：
+  </div>
+  <div style="background:#1e293b;color:#e2e8f0;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;margin-top:4px;">
+<span style="color:#93c5fd;">export interface</span> <span style="color:#f9a8d4;">TokenUsage</span> {<br/>
+&nbsp;&nbsp;total: {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;input_tokens: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;output_tokens: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;cache_creation_input_tokens?: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;cache_read_input_tokens?: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;cost_usd?: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;};<br/>
+&nbsp;&nbsp;by_model?: <span style="color:#86efac;">Record</span>&lt;<span style="color:#86efac;">string</span>, {<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;input_tokens: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;output_tokens: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;cost_usd?: <span style="color:#86efac;">number</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;...<br/>
+&nbsp;&nbsp;}&gt;;<br/>
+&nbsp;&nbsp;source: <span style="color:#fde68a;">'agent-sdk'</span> | <span style="color:#fde68a;">'claude-session-meta'</span>;<br/>
+}
+  </div>
+</div>

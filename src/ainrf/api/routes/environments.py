@@ -5,6 +5,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
 
+from ainrf.auth.permissions import get_current_user, is_admin, require_admin
 from ainrf.api.schemas import (
     EnvironmentCodeServerInstallResponse,
     EnvironmentCreateRequest,
@@ -71,11 +72,18 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
 
 @router.get("", response_model=EnvironmentListResponse)
 async def list_environments(request: Request) -> EnvironmentListResponse:
+    user = get_current_user(request)
     service = _get_environment_service(request)
-    items = [
-        _serialize_environment(service, environment.id)
-        for environment in service.list_environments()
-    ]
+    if is_admin(user):
+        environments = service.list_environments()
+    else:
+        auth_svc = getattr(request.app.state, "auth_service", None)
+        if auth_svc is not None:
+            accessible_ids = set(auth_svc.get_user_environment_ids(user["id"]))
+        else:
+            accessible_ids = set()
+        environments = [env for env in service.list_environments() if env.id in accessible_ids]
+    items = [_serialize_environment(service, environment.id) for environment in environments]
     return EnvironmentListResponse(items=items)
 
 
@@ -84,6 +92,8 @@ async def create_environment(
     payload: EnvironmentCreateRequest,
     request: Request,
 ) -> EnvironmentResponse:
+    user = get_current_user(request)
+    require_admin(user)
     service = _get_environment_service(request)
     try:
         environment = service.create_environment(
@@ -113,7 +123,14 @@ async def create_environment(
 
 @router.get("/{environment_id}", response_model=EnvironmentResponse)
 async def read_environment(environment_id: str, request: Request) -> EnvironmentResponse:
+    user = get_current_user(request)
     service = _get_environment_service(request)
+    if not is_admin(user):
+        auth_svc = getattr(request.app.state, "auth_service", None)
+        if auth_svc is not None:
+            accessible_ids = set(auth_svc.get_user_environment_ids(user["id"]))
+            if environment_id not in accessible_ids:
+                raise HTTPException(status_code=404, detail="Environment not found")
     try:
         return _serialize_environment(service, environment_id)
     except Exception as exc:
@@ -126,6 +143,8 @@ async def update_environment(
     payload: EnvironmentUpdateRequest,
     request: Request,
 ) -> EnvironmentResponse:
+    user = get_current_user(request)
+    require_admin(user)
     service = _get_environment_service(request)
     try:
         service.update_environment(
@@ -156,6 +175,8 @@ async def update_environment(
 
 @router.delete("/{environment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_environment(environment_id: str, request: Request) -> None:
+    user = get_current_user(request)
+    require_admin(user)
     service = _get_environment_service(request)
     try:
         service.delete_environment(environment_id)
@@ -171,8 +192,10 @@ async def install_environment_code_server(
     environment_id: str,
     request: Request,
 ) -> EnvironmentCodeServerInstallResponse:
+    user = get_current_user(request)
+    require_admin(user)
     service = _get_environment_service(request)
-    app_user_id = request.headers.get("X-AINRF-User-Id")
+    app_user_id = user["id"]
     terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
     terminal_attachment_broker = getattr(request.app.state, "terminal_attachment_broker", None)
     try:
@@ -221,8 +244,16 @@ async def install_environment_code_server(
 
 @router.post("/{environment_id}/detect", response_model=EnvironmentResponse)
 async def detect_environment(environment_id: str, request: Request) -> EnvironmentResponse:
+    user = get_current_user(request)
     service = _get_environment_service(request)
-    app_user_id = request.headers.get("X-AINRF-User-Id")
+    # Verify the user has access to this environment
+    if not is_admin(user):
+        auth_svc = getattr(request.app.state, "auth_service", None)
+        if auth_svc is not None:
+            accessible_ids = set(auth_svc.get_user_environment_ids(user["id"]))
+            if environment_id not in accessible_ids:
+                raise HTTPException(status_code=404, detail="Environment not found")
+    app_user_id = user["id"]
     terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
     try:
         logger.info(
@@ -241,7 +272,7 @@ async def detect_environment(environment_id: str, request: Request) -> Environme
                 "status": snapshot.status,
                 "warnings": snapshot.warnings,
                 "errors": snapshot.errors,
-                "code_server_path": snapshot.code_server.path,
+                "codex_path": snapshot.codex.path,
             },
         )
     except Exception as exc:

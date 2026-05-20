@@ -8,10 +8,12 @@ interface Props {
   selectedTaskId: string | null;
   tasksError: string | null;
   searchQuery: string;
+  showArchived: boolean;
   onSearchQueryChange: (query: string) => void;
   onSelectTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
   onCancelTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
 function matchesTask(task: TaskSummary, query: string): boolean {
@@ -35,10 +37,12 @@ export default function TaskList({
   selectedTaskId,
   tasksError,
   searchQuery,
+  showArchived,
   onSearchQueryChange,
   onSelectTask,
   onArchiveTask,
   onCancelTask,
+  onDeleteTask,
 }: Props) {
   const t = useT();
   const filteredTasks = tasks.filter((task) => matchesTask(task, searchQuery));
@@ -93,7 +97,7 @@ export default function TaskList({
                   <span className="min-w-0 text-sm font-medium leading-snug text-[var(--text)]">
                     {task.title}
                   </span>
-                  <span className="flex items-center gap-2">
+                  <span className="flex shrink-0 items-center gap-2">
                     {canCancel(task.status) ? (
                       <span
                         role="button"
@@ -108,12 +112,12 @@ export default function TaskList({
                             onCancelTask(task.task_id);
                           }
                         }}
-                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.cancel')}
                       </span>
                     ) : null}
-                    {canArchive(task.status) ? (
+                    {canArchive(task.status) && !showArchived ? (
                       <span
                         role="button"
                         tabIndex={0}
@@ -127,9 +131,28 @@ export default function TaskList({
                             onArchiveTask(task.task_id);
                           }
                         }}
-                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.archive')}
+                      </span>
+                    ) : null}
+                    {canArchive(task.status) && showArchived ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteTask(task.task_id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.stopPropagation();
+                            onDeleteTask(task.task_id);
+                          }
+                        }}
+                        className="whitespace-nowrap rounded-md border border-[#ff3b30]/20 bg-[#ffebee] px-2 py-0.5 text-[11px] font-medium text-[#c62828] opacity-0 transition hover:bg-[#ffcdd2] group-hover:opacity-100"
+                      >
+                        {t('common.delete')}
                       </span>
                     ) : null}
                     <span

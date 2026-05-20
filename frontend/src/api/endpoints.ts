@@ -1,7 +1,22 @@
 import { api } from './client';
-import type {
+import type { ChangePasswordRequest,
+  AccessTokenResponse,
+  AdminPasswordResetRequest,
+  AdminUserItem,
+  AdminUserListResponse,
+  AdminUserUpdateRequest,
+  AttemptListResponse,
+  AuthTokenResponse,
+  LoginRequest,
+  RegisterRequest,
   CodeServerStatus,
   CodexDefaults,
+  CollaboratorItem,
+  CollaboratorListResponse,
+  CollaboratorRequest,
+  EnvAccessItem,
+  EnvAccessListResponse,
+  EnvAccessRequest,
   EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
   EnvironmentListResponse,
@@ -9,6 +24,7 @@ import type {
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  ProjectCostSummary,
   ProjectCreateRequest,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceCreateRequest,
@@ -17,6 +33,11 @@ import type {
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
+  SessionCreateRequest,
+  SessionDetailRecord,
+  SessionListResponse,
+  SessionRecord,
+  SessionUpdateRequest,
   SkillDetail,
   SkillImportRequest,
   SkillImportResponse,
@@ -34,6 +55,7 @@ import type {
   TaskRecord,
   TaskSummary,
   TerminalSession,
+  UserInfo,
   UserSessionPairListResponse,
   WorkspaceCreateRequest,
   WorkspaceListResponse,
@@ -48,10 +70,12 @@ import type {
 import {
   mockArchiveTask,
   mockCancelTask,
+  mockDeleteTask,
   mockCreateCodeServerSession,
   mockCreateEnvironment,
   mockCreateProject,
   mockCreateProjectEnvironmentReference,
+  mockCreateSession,
   mockCreateTask,
   mockCreateTerminalSession,
   mockCreateWorkspace,
@@ -59,6 +83,7 @@ import {
   mockDeleteEnvironment,
   mockDeleteProject,
   mockDeleteProjectEnvironmentReference,
+  mockDeleteSession,
   mockDeleteTerminalSession,
   mockDeleteWorkspace,
   mockDetectEnvironment,
@@ -69,6 +94,8 @@ import {
   mockGetProject,
   mockGetProjectEnvironmentReferences,
   mockGetProjects,
+  mockGetSession,
+  mockGetSessions,
   mockGetTask,
   mockGetTaskOutput,
   mockGetTasks,
@@ -87,7 +114,9 @@ import {
   mockUpdateEnvironment,
   mockUpdateProject,
   mockUpdateProjectEnvironmentReference,
+  mockUpdateSession,
   mockUpdateWorkspace,
+  mockGetAttempts,
   mockGetResources,
   mockGetProjectTasks,
   mockGetTaskEdges,
@@ -225,6 +254,9 @@ export const createTask = (payload: TaskCreateRequest): Promise<TaskSummary> =>
 
 export const archiveTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockArchiveTask(taskId)) : api.delete<TaskSummary>(`/tasks/${taskId}`);
+
+export const deleteTask = (taskId: string): Promise<void> =>
+  USE_MOCK ? mockDeleteTask(taskId) : api.delete<void>(`/tasks/${taskId}/permanent`);
 
 export const cancelTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCancelTask(taskId)) : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {});
@@ -417,6 +449,15 @@ export const readFile = (
         }`
       );
 
+export const buildFileStreamUrl = (
+  environmentId: string,
+  path: string,
+  workspaceId?: string
+): string =>
+  `/api/files/stream?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
+    workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
+  }`;
+
 export const getResources = (): Promise<ResourcesResponse> =>
   USE_MOCK ? Promise.resolve(mockGetResources()) : api.get<ResourcesResponse>('/resources');
 
@@ -454,3 +495,76 @@ export const updateSkillRegistry = (
   USE_MOCK
     ? Promise.resolve({ registry_id: registryId, updated_count: 0, added: [], removed: [] })
     : api.post<SkillRegistryUpdateResponse>(`/skill-registries/${registryId}/update`, payload);
+
+// ── Session endpoints ───────────────────────────────────
+
+export const getSessions = (
+  projectId?: string,
+  status?: string,
+): Promise<SessionListResponse> => {
+  const params = new URLSearchParams();
+  if (projectId) params.set('project_id', projectId);
+  if (status) params.set('status', status);
+  const qs = params.toString();
+  return USE_MOCK
+    ? Promise.resolve(mockGetSessions({ projectId, status }))
+    : api.get<SessionListResponse>(`/sessions${qs ? `?${qs}` : ''}`);
+};
+
+export const getSession = (id: string): Promise<SessionDetailRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetSession(id))
+    : api.get<SessionDetailRecord>(`/sessions/${id}`);
+
+export const createSession = (
+  payload: SessionCreateRequest,
+): Promise<SessionRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockCreateSession(payload))
+    : api.post<SessionRecord>('/sessions', payload);
+
+export const updateSession = (
+  id: string,
+  payload: SessionUpdateRequest,
+): Promise<SessionRecord> =>
+  USE_MOCK
+    ? Promise.resolve(mockUpdateSession(id, payload))
+    : api.patch<SessionRecord>(`/sessions/${id}`, payload);
+
+export const deleteSession = (id: string): Promise<void> =>
+  USE_MOCK
+    ? Promise.resolve(mockDeleteSession(id))
+    : api.delete<void>(`/sessions/${id}`);
+
+export const getAttempts = (sessionId: string): Promise<AttemptListResponse> =>
+  USE_MOCK
+    ? Promise.resolve(mockGetAttempts(sessionId))
+    : api.get<AttemptListResponse>(`/sessions/${sessionId}/attempts`);
+
+export const getProjectCostSummary = (projectId: string): Promise<ProjectCostSummary> =>
+  USE_MOCK
+    ? Promise.resolve({
+        project_id: projectId,
+        total_cost_usd: 0,
+        total_tokens: 0,
+        session_count: 0,
+        by_model: {},
+      })
+    : api.get<ProjectCostSummary>(`/projects/${projectId}/cost-summary`);
+
+export const getAdminUsers = (): Promise<AdminUserListResponse> => api.get('/admin/users');
+export const updateAdminUser = (userId: string, payload: AdminUserUpdateRequest): Promise<AdminUserItem> => api.patch(`/admin/users/${userId}`, payload);
+export const resetUserPassword = (userId: string, payload: AdminPasswordResetRequest): Promise<void> => api.put(`/admin/users/${userId}/password`, payload);
+export const getCollaborators = (projectId: string): Promise<CollaboratorListResponse> => api.get(`/projects/${projectId}/collaborators`);
+export const addCollaborator = (projectId: string, payload: CollaboratorRequest): Promise<CollaboratorItem> => api.put(`/projects/${projectId}/collaborators`, payload);
+export const removeCollaborator = (projectId: string, userId: string): Promise<void> => api.delete(`/projects/${projectId}/collaborators/${userId}`);
+export const getEnvAccess = (envId: string): Promise<EnvAccessListResponse> => api.get(`/admin/environments/${envId}/access`);
+export const grantEnvAccess = (envId: string, payload: EnvAccessRequest): Promise<EnvAccessItem> => api.put(`/admin/environments/${envId}/access`, payload);
+export const revokeEnvAccess = (envId: string, userId: string): Promise<void> => api.delete(`/admin/environments/${envId}/access/${userId}`);
+
+export const login = (payload: LoginRequest): Promise<AuthTokenResponse> => api.post<AuthTokenResponse>('/auth/login', payload);
+export const register = (payload: RegisterRequest): Promise<{ message: string }> => api.post<{ message: string }>('/auth/register', payload);
+export const refreshToken = (refreshTokenValue: string): Promise<AccessTokenResponse> => api.post<AccessTokenResponse>('/auth/refresh', { refresh_token: refreshTokenValue });
+export const logoutApi = (refreshTokenValue: string): Promise<void> => api.post<void>('/auth/logout', { refresh_token: refreshTokenValue });
+export const getMe = (): Promise<UserInfo> => api.get<UserInfo>('/auth/me');
+export const changePassword = (payload: ChangePasswordRequest): Promise<void> => api.post<void>('/auth/change-password', payload);

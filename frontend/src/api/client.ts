@@ -1,7 +1,27 @@
-import { getAppUserId } from './appUser';
-
 const API_BASE = '/api';
-const API_KEY = import.meta.env.VITE_AINRF_API_KEY?.trim() ?? '';
+
+let _accessToken: string | null = null;
+let _refreshPromise: Promise<string | null> | null = null;
+
+export function setAccessToken(token: string | null) {
+  _accessToken = token;
+}
+
+// NOTE: Refresh token stored in localStorage (XSS-vulnerable).
+// For production, use httpOnly cookies with CSRF protection, and
+// serve the frontend with a strict Content-Security-Policy header.
+// Access token is memory-only.
+export function getStoredRefreshToken(): string | null {
+  return localStorage.getItem('ainrf.refresh_token');
+}
+
+export function setStoredRefreshToken(token: string | null) {
+  if (token) {
+    localStorage.setItem('ainrf.refresh_token', token);
+  } else {
+    localStorage.removeItem('ainrf.refresh_token');
+  }
+}
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -83,12 +103,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.set('Content-Type', 'application/json');
   }
 
-  if (API_KEY && !headers.has('X-API-Key')) {
-    headers.set('X-API-Key', API_KEY);
-  }
-
-  if (!headers.has('X-AINRF-User-Id')) {
-    headers.set('X-AINRF-User-Id', getAppUserId());
+  if (_accessToken) {
+    headers.set('Authorization', `Bearer ${_accessToken}`);
   }
 
   const init: RequestInit = {
@@ -101,6 +117,58 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   const response = await fetch(url, init);
+
+  // Auto-refresh on 401 (unless already on auth endpoints)
+  if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
+    const refreshToken = getStoredRefreshToken();
+    if (refreshToken) {
+      // Share a single refresh attempt across concurrent 401 responses
+      if (!_refreshPromise) {
+        _refreshPromise = (async () => {
+          try {
+            const refreshResp = await fetch(`${API_BASE}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: refreshToken }),
+            });
+            if (refreshResp.ok) {
+              const refreshData = (await parseResponseBody(refreshResp)) as Record<string, unknown>;
+              return (refreshData?.access_token as string) ?? null;
+            }
+            return null;
+          } catch {
+            return null;
+          }
+        })();
+      }
+      const newToken = await _refreshPromise;
+      _refreshPromise = null;
+      if (newToken) {
+        setAccessToken(newToken);
+        headers.set('Authorization', `Bearer ${newToken}`);
+        const retryResponse = await fetch(url, init);
+        if (!retryResponse.ok) {
+          const retryData = await parseResponseBody(retryResponse);
+          throw new ApiError(
+            createErrorMessage(path, retryResponse, retryData),
+            retryResponse.status,
+            path,
+            retryData,
+          );
+        }
+        const retryBody = await parseResponseBody(retryResponse);
+        return retryBody as T;
+      }
+    }
+    // Refresh failed or no token — clear and redirect
+    setAccessToken(null);
+    setStoredRefreshToken(null);
+    _refreshPromise = null;
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    throw new ApiError('Session expired', 401, path);
+  }
 
   if (!response.ok) {
     const data = await parseResponseBody(response);

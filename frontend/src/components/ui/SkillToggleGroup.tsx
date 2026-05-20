@@ -64,7 +64,7 @@ export default function SkillToggleGroup({ skills, skillModes, onChange }: Props
   const defaultExpanded = useMemo(() => {
     const map: Record<string, boolean> = {};
     for (const [name] of groups) {
-      map[name] = name === '未分组';
+      map[name] = false;
     }
     return map;
   }, [groups]);
@@ -78,7 +78,7 @@ export default function SkillToggleGroup({ skills, skillModes, onChange }: Props
       let changed = false;
       for (const [name] of groups) {
         if (!(name in next)) {
-          next[name] = name === '未分组';
+          next[name] = false;
           changed = true;
         }
       }

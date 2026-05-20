@@ -3,21 +3,24 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
+  Clock,
   FolderKanban,
   FolderOpen,
+  History,
   LayoutGrid,
   ListChecks,
   Settings,
   SquareTerminal,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { getTasks } from '../../api';
 import type { TaskSummary } from '../../types';
 import LocaleSwitcher from './LocaleSwitcher';
 import { useT } from '../../i18n';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Props {
   children: ReactNode;
@@ -51,6 +54,9 @@ function buildTaskStatusSummary(tasks: TaskSummary[] | null, isError: boolean, i
 
 function Layout({ children, edgeToEdge = false }: Props) {
   const t = useT();
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const tasksQuery = useQuery({
     queryKey: ['tasks'],
@@ -62,6 +68,26 @@ function Layout({ children, edgeToEdge = false }: Props) {
     tasksQuery.isError,
     tasksQuery.isLoading
   );
+  const ROUTE_TITLE_KEYS: Record<string, string> = {
+    '/projects': 'navigation.projects.label',
+    '/terminal': 'navigation.terminal.label',
+    '/tasks': 'navigation.tasks.label',
+    '/workspaces': 'navigation.workspaces.label',
+    '/workspace-browser': 'navigation.workspaceBrowser.label',
+    '/environments': 'navigation.environments.label',
+    '/resources': 'navigation.resources.label',
+    '/sessions': 'navigation.sessions.label',
+    '/timeline': 'navigation.timeline.label',
+    '/settings': 'navigation.settings.label',
+  };
+  const pageTitleKey = ROUTE_TITLE_KEYS[location.pathname] ?? '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pageTitle = pageTitleKey ? t(pageTitleKey as any) : '';
+
+  useEffect(() => {
+    document.title = pageTitle ? `${pageTitle} - AINRF` : 'AINRF学术系统';
+  }, [pageTitle]);
+
   const asideWidth = useMemo(() => (isCollapsed ? 'w-[56px]' : 'w-[248px]'), [isCollapsed]);
   const navigationItems: NavigationItem[] = [
     {
@@ -107,6 +133,18 @@ function Layout({ children, edgeToEdge = false }: Props) {
       icon: Activity,
     },
     {
+      label: t('navigation.sessions.label'),
+      to: '/sessions',
+      description: t('navigation.sessions.description'),
+      icon: History,
+    },
+    {
+      label: t('navigation.timeline.label'),
+      to: '/timeline',
+      description: t('navigation.timeline.description'),
+      icon: Clock,
+    },
+    {
       label: t('navigation.settings.label'),
       to: '/settings',
       description: t('navigation.settings.description'),
@@ -124,8 +162,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
             <div className="flex h-12 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
             {!isCollapsed && (
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-tight">{t('common.appName')}</p>
-                <p className="truncate text-[11px] text-[var(--text-tertiary)]">AINRF console</p>
+                <p className="truncate text-lg font-bold tracking-tight">AINRF Console</p>
               </div>
             )}
             <button
@@ -137,6 +174,15 @@ function Layout({ children, edgeToEdge = false }: Props) {
               {isCollapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
             </button>
           </div>
+
+          {user && (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-[var(--sidebar-border)]">
+              {!isCollapsed && <span className="text-gray-600 truncate">{user.display_name}</span>}
+              <button type="button" onClick={() => setShowLogoutConfirm(true)} className="text-gray-400 hover:text-gray-600 ml-auto">
+                {t('auth.logout')}
+              </button>
+            </div>
+          )}
 
           <nav className="flex flex-1 flex-col gap-1 px-2 py-3">
             {navigationItems.map((item) => {
@@ -173,7 +219,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
           {!isCollapsed && (
             <div className="border-t border-[var(--sidebar-border)] px-3 py-3">
               <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
-                {t('layout.brandLine')}
+                Built by Kozmosa with ❤️
               </p>
             </div>
           )}
@@ -182,22 +228,52 @@ function Layout({ children, edgeToEdge = false }: Props) {
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--background)]/85 px-4 backdrop-blur-xl">
-            <p className="truncate text-xs font-medium text-[var(--muted-foreground)]">
-              {taskStatusSummary}
+            <p className="truncate text-sm font-medium text-[var(--text)]">
+              {pageTitle}
             </p>
-            <LocaleSwitcher />
+            <div className="flex items-center gap-4">
+              <p className="hidden truncate text-xs font-medium text-[var(--muted-foreground)] sm:block">
+                {taskStatusSummary}
+              </p>
+              <LocaleSwitcher />
+            </div>
           </header>
 
           <main
             className={[
               'flex w-full flex-1 flex-col overflow-y-auto',
-              edgeToEdge ? '' : 'mx-auto max-w-[1100px] px-6 py-8',
+              edgeToEdge ? '' : '',
             ].join(' ')}
           >
             {children}
           </main>
         </div>
       </div>
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-lg p-6 w-full max-w-xs mx-4">
+            <p className="text-sm font-medium mb-2">Confirm Logout</p>
+            <p className="text-xs text-[var(--text-secondary)] mb-4">Are you sure you want to log out?</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--bg)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowLogoutConfirm(false); logout(); }}
+                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

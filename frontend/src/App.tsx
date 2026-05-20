@@ -1,10 +1,11 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Profiler, Suspense, type ProfilerOnRenderCallback } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
 import { useT } from './i18n';
 import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useSettings } from './settings';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
@@ -15,8 +16,40 @@ const FileBrowserPage = lazy(() => import('./pages/FileBrowserPage'));
 const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const SessionsPage = lazy(() => import('./pages/SessionsPage'));
+const TimelinePage = lazy(() => import('./pages/TimelinePage'));
+const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 
 const queryClient = createAppQueryClient();
+
+const PROFILER_ENABLED = import.meta.env.VITE_PROFILE === 'true';
+
+const profilerData: Array<{
+  id: string;
+  phase: string;
+  actualDuration: number;
+  baseDuration: number;
+  commitTime: number;
+}> = [];
+
+const onRender: ProfilerOnRenderCallback = (
+  id, phase, actualDuration, baseDuration, _startTime, commitTime,
+) => {
+  if (PROFILER_ENABLED) {
+    profilerData.push({ id, phase, actualDuration, baseDuration, commitTime });
+    // Keep only last 50 entries to bound memory
+    if (profilerData.length > 50) {
+      profilerData.splice(0, profilerData.length - 50);
+    }
+  }
+};
+
+// Expose profiler data to window for collection
+if (PROFILER_ENABLED && typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__perfProfilerData = profilerData;
+}
 
 const defaultRoutePathById = {
   projects: '/projects',
@@ -31,7 +64,7 @@ function RootRedirect() {
   return <Navigate replace to={defaultRoutePathById[settings.general.defaultRoute]} />;
 }
 
-function AppRoutes() {
+function AuthenticatedRoutes() {
   const t = useT();
   const location = useLocation();
   const isEdgeToEdge = location.pathname === '/tasks' || location.pathname === '/projects';
@@ -54,11 +87,49 @@ function AppRoutes() {
           <Route path="/workspace-browser" element={<FileBrowserPage />} />
           <Route path="/environments" element={<EnvironmentsPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
+          <Route path="/sessions" element={<SessionsPage />} />
+          <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Suspense>
     </Layout>
   );
+}
+
+function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-gray-400 text-sm">
+        Loading...
+      </div>
+    );
+  }
+
+  if (user?.must_change_password) {
+    return (
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="*" element={<ChangePasswordPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="*" element={<LoginPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  const content = <AuthenticatedRoutes />;
+  return PROFILER_ENABLED ? <Profiler id="AppRoutes" onRender={onRender}>{content}</Profiler> : content;
 }
 
 function App() {
@@ -68,7 +139,9 @@ function App() {
         <SettingsProvider>
           <ToastProvider>
             <BrowserRouter>
-              <AppRoutes />
+              <AuthProvider>
+                <AppRoutes />
+              </AuthProvider>
             </BrowserRouter>
           </ToastProvider>
         </SettingsProvider>

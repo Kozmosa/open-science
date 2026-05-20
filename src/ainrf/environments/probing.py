@@ -162,7 +162,7 @@ async def build_detection_snapshot(
     conda = await _probe_tool(run_command, "conda", "conda --version")
     uv = await _probe_tool(run_command, "uv", "uv --version")
     pixi = await _probe_tool(run_command, "pixi", "pixi --version")
-    code_server = await _probe_code_server(run_command, environment.code_server_path)
+    codex = await _probe_codex(run_command)
     torch = await _probe_python_package(run_command, preferred_python, "torch")
     cuda = await _probe_cuda(run_command)
     gpu_models_result = await run_command("nvidia-smi --query-gpu=name --format=csv,noheader")
@@ -177,6 +177,7 @@ async def build_detection_snapshot(
         summary=summary,
         errors=list(errors or []),
         warnings=list(warnings or []),
+        tmux_ok=ssh_ok,
         ssh_ok=ssh_ok,
         hostname=hostname,
         os_info=os_info,
@@ -186,7 +187,7 @@ async def build_detection_snapshot(
         conda=conda,
         uv=uv,
         pixi=pixi,
-        code_server=code_server,
+        codex=codex,
         torch=torch,
         cuda=cuda,
         gpu_models=gpu_models,
@@ -247,35 +248,8 @@ async def _probe_tool(
     return ToolStatus(available=True, version=version, path=path)
 
 
-async def _probe_code_server(
-    run_command: ProbeCommandRunner,
-    configured_path: str | None,
-) -> ToolStatus:
-    if configured_path:
-        configured_test = await run_command(f"test -x {shlex.quote(configured_path)}")
-        if configured_test.exit_code == 0:
-            return await _probe_executable_version(run_command, configured_path)
-
-    path_result = await run_command("command -v code-server")
-    if path_result.exit_code == 0:
-        path = path_result.stdout.strip() or None
-        if path is not None:
-            return await _probe_executable_version(run_command, path)
-
-    return ToolStatus(available=False)
-
-
-async def _probe_executable_version(
-    run_command: ProbeCommandRunner,
-    executable_path: str,
-) -> ToolStatus:
-    version_result = await run_command(f"{shlex.quote(executable_path)} --version")
-    version = (version_result.stdout or version_result.stderr).strip().splitlines()
-    return ToolStatus(
-        available=True,
-        version=version[0] if version else None,
-        path=executable_path,
-    )
+async def _probe_codex(runner: ProbeCommandRunner) -> ToolStatus:
+    return await _probe_tool(runner, "codex", "codex --version")
 
 
 async def _probe_python_package(

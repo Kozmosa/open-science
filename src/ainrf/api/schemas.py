@@ -65,6 +65,7 @@ class ProjectResponse(BaseModel):
     default_environment_id: str | None = None
     created_at: str
     updated_at: str
+    owner_user_id: str | None = None
 
 
 class ProjectListResponse(BaseModel):
@@ -195,6 +196,7 @@ class EnvironmentDetectionResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     ssh_ok: bool = False
+    tmux_ok: bool = False
     hostname: str | None = None
     os_info: str | None = None
     arch: str | None = None
@@ -203,7 +205,7 @@ class EnvironmentDetectionResponse(BaseModel):
     conda: ToolStatusResponse
     uv: ToolStatusResponse
     pixi: ToolStatusResponse
-    code_server: ToolStatusResponse
+    codex: ToolStatusResponse
     torch: ToolStatusResponse
     cuda: ToolStatusResponse
     gpu_models: list[str] = Field(default_factory=list)
@@ -419,10 +421,11 @@ class TaskCreateRequest(BaseModel):
     workspace_id: str
     environment_id: str
     task_profile: str = Field(default="claude-code", min_length=1)
-    task_input: str = Field(min_length=1)
+    task_input: str = Field(min_length=1, max_length=100000)
     title: str | None = None
     execution_engine: str | None = None
     auto_connect: bool = Field(default=False)
+    session_id: str | None = None
     research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
     task_configuration: TaskConfigurationSnapshotRequest | None = None
 
@@ -438,6 +441,7 @@ class WorkspaceResponse(BaseModel):
     workspace_prompt: str
     created_at: datetime
     updated_at: datetime
+    owner_user_id: str | None = None
 
 
 class WorkspaceListResponse(BaseModel):
@@ -494,7 +498,7 @@ class SkillImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source: str = Field(..., pattern="^(git|local)$")
-    url: str | None = None
+    url: str | None = Field(default=None, min_length=1, pattern=r"^(https?|git|file)://")
     local_path: str | None = None
     skill_id: str | None = None
 
@@ -544,6 +548,8 @@ class TaskSummaryResponse(BaseModel):
     error_summary: str | None = None
     latest_output_seq: int = 0
     execution_engine: str = "claude-code"
+    session_id: str | None = None
+    owner_user_id: str | None = None
 
 
 class TaskListResponse(BaseModel):
@@ -694,6 +700,8 @@ class TaskDetailResponse(BaseModel):
     execution_engine: str = "claude-code"
     research_agent_profile: ResearchAgentProfileSnapshotResponse | None = None
     task_configuration: TaskConfigurationSnapshotResponse | None = None
+    session_id: str | None = None
+    owner_user_id: str | None = None
 
 
 class TaskOutputEventResponse(BaseModel):
@@ -849,3 +857,194 @@ class SkillRegistryUpdateResponse(BaseModel):
     updated_count: int
     added: list[str] = Field(default_factory=list)
     removed: list[str] = Field(default_factory=list)
+
+
+# ── Session schemas ──────────────────────────────────────────────
+
+
+class SessionCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=500)
+
+
+class SessionUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    status: str | None = None  # "active" | "completed" | "archived"
+
+
+class AttemptResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    session_id: str
+    task_id: str | None = None
+    parent_attempt_id: str | None = None
+    attempt_seq: int
+    intervention_reason: str | None = None
+    status: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_ms: int | None = None
+    token_usage_json: str | None = None
+    created_at: str
+
+
+class SessionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    project_id: str
+    title: str
+    status: str
+    task_count: int
+    total_duration_ms: int
+    total_cost_usd: float
+    created_at: str
+    updated_at: str
+    owner_user_id: str | None = None
+
+
+class SessionDetailResponse(SessionResponse):
+    attempts: list["AttemptResponse"] = Field(default_factory=list)
+
+
+class SessionListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list["SessionResponse"]
+
+
+class AttemptListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list["AttemptResponse"]
+
+
+class ProjectCostSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str
+    total_cost_usd: float
+    total_tokens: int
+    session_count: int
+    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
+
+
+# ── Auth schemas ──────────────────────────────────────────
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
+class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=64)
+    display_name: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=4)
+
+
+class AuthTokenResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    access_token: str
+    refresh_token: str
+    user: dict
+
+
+class RefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    refresh_token: str
+
+
+class AccessTokenResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    access_token: str
+
+
+class UserInfoResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    username: str
+    display_name: str
+    role: str
+    status: str
+    must_change_password: bool = False
+
+
+# ── Admin schemas ─────────────────────────────────────────
+
+
+class AdminUserUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: str | None = None  # 'active' | 'disabled'
+
+
+class AdminPasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=4)
+
+
+class AdminUserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    username: str
+    display_name: str
+    role: str
+    status: str
+    created_at: str
+    last_login_at: str | None = None
+
+
+class AdminUserListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[AdminUserResponse]
+
+
+# ── Collaborator schemas ──────────────────────────────────
+
+
+class CollaboratorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    role: str = "member"
+
+
+class CollaboratorResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    username: str
+    display_name: str
+    role: str
+
+
+class CollaboratorListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[CollaboratorResponse]
+
+
+# ── Environment Access schemas ────────────────────────────
+
+
+class EnvironmentAccessRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    max_concurrent_tasks: int | None = None
+
+
+class EnvironmentAccessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    username: str
+    display_name: str
+    max_concurrent_tasks: int | None
+
+
+class EnvironmentAccessListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[EnvironmentAccessResponse]
+
+# ── Change Password schema ──────────────────────────────────
+
+class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    old_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=4)

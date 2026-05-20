@@ -1,0 +1,88 @@
+<h2>Token Track — Testing & Implementation Order</h2>
+<p class="subtitle">Section 5/5 · 测试范围 + 6 步实现顺序</p>
+
+<div class="section">
+  <h3>Testing Scope</h3>
+  <div style="display:flex;gap:16px;">
+    <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+      <h4 style="margin-top:0;">Backend (pytest)</h4>
+      <ul style="font-size:13px;line-height:1.8;">
+        <li>EngineEvent.token_usage 字段序列化/反序列化</li>
+        <li>AgentSdkEngine 从 ResultMessage 提取 token_usage</li>
+        <li>ClaudeCodeEngine session-meta 轮询（含超时处理）</li>
+        <li>TaskOutputKind.TOKEN 事件写入 output_events</li>
+        <li>_run_task 中 token_usage 捕获 → complete_attempt 调用</li>
+        <li>_recalc_session cost 聚合正确性（含 NULL 处理）</li>
+        <li>SessionService 注入为 None 时 task harness 不受影响</li>
+        <li>GET /projects/{id}/cost-summary</li>
+      </ul>
+    </div>
+    <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+      <h4 style="margin-top:0;">Frontend (Vitest)</h4>
+      <ul style="font-size:13px;line-height:1.8;">
+        <li>TokenFlowBar 组件渲染（4 色比例正确）</li>
+        <li>TokenFlowBar 空态（无 token 数据）</li>
+        <li>TokenFlowBar Claude Code 态（仅 input/output）</li>
+        <li>SessionDetail 展示 total_cost_usd + total_tokens</li>
+        <li>Per-Model Breakdown 展开/折叠</li>
+        <li>AttemptChain 集成 TokenFlowBar</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Implementation Order</h3>
+  <div class="mockup">
+    <div class="mockup-body">
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 1</span>
+          <span>EngineEvent 扩展 + TaskOutputKind.TOKEN + AgentSdkEngine token 提取</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 2</span>
+          <span>Task Harness 集成: SessionService 注入 + emit 捕获 + complete_attempt 写入</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 3</span>
+          <span>ClaudeCodeEngine session-meta 轮询提取</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 4</span>
+          <span>_recalc_session cost 聚合 + Project cost-summary API</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 5</span>
+          <span>前端: TokenFlowBar + AttemptChain 集成 + SessionDetail 升级</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:#dbeafe;padding:3px 8px;border-radius:3px;font-weight:600;">Step 6</span>
+          <span>前端: Per-Model Breakdown + Per-Project Cost 展示 + i18n</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Risks & Mitigations</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr style="background:#f9fafb;">
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Risk</th>
+      <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Mitigation</th>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">Claude Code session-meta 匹配不准确</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">按 task 启动时间 ± 5 秒窗口匹配；匹配失败时 token_usage=None（不阻塞）</td>
+    </tr>
+    <tr style="background:#f9fafb;">
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">SDK usage 字段未来改名</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">用 .get() 安全访问；source 字段标记数据来源便于排查</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">SessionService 注入导致循环依赖</td>
+      <td style="padding:6px 8px;border:1px solid #e5e7eb;">SessionService 不依赖 TaskHarnessService；单向引用，安全</td>
+    </tr>
+  </table>
+</div>

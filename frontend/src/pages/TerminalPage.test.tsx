@@ -31,14 +31,7 @@ const selectedEnvironment: EnvironmentRecord = {
 };
 
 vi.mock('../components', () => ({
-  EnvironmentSelectorPanel: () => <div data-testid="environment-selector" />,
   TerminalBenchCard: () => <div data-testid="terminal-bench-card" />,
-  PageHeader: ({ eyebrow, title }: { eyebrow: string; title: string }) => (
-    <div>
-      <p>{eyebrow}</p>
-      <h1>{title}</h1>
-    </div>
-  ),
   useEnvironmentSelection: () => ({
     selectedEnvironment,
     selectedEnvironmentId: selectedEnvironment.id,
@@ -55,39 +48,22 @@ beforeEach(() => {
 });
 
 describe('TerminalPage', () => {
-  it('renders page title in the current language and eyebrow in the alternate language', async () => {
-    const { unmount } = renderWithProviders(<TerminalPage />, {
+  it('renders the terminal bench card as the sole page content', () => {
+    renderWithProviders(<TerminalPage />, {
       route: '/terminal',
       locale: 'en',
     });
 
-    expect(await screen.findByRole('heading', { name: 'Terminal' })).toBeInTheDocument();
-    expect(screen.getByText('终端')).toBeInTheDocument();
-
-    unmount();
-    renderWithProviders(<TerminalPage />, {
-      route: '/terminal',
-      locale: 'zh',
-    });
-
-    expect(await screen.findByRole('heading', { name: '终端' })).toBeInTheDocument();
-    expect(screen.getByText('TERMINAL')).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-bench-card')).toBeInTheDocument();
   });
 
-  it('renders the simplified Chinese terminal header and only keeps the terminal session card', async () => {
+  it('does not expose task-attach intent labels in the terminal page content', async () => {
     renderWithProviders(<TerminalPage />, {
       route: '/terminal?environment_id=env-1&task_id=task-1&intent=takeover',
       locale: 'zh',
     });
 
-    expect(await screen.findByRole('heading', { name: '终端' })).toBeInTheDocument();
-    expect(screen.getByText('TERMINAL')).toBeInTheDocument();
-    expect(screen.queryByText('附着终端视图')).not.toBeInTheDocument();
-    expect(screen.queryByText(/task attach intent/)).not.toBeInTheDocument();
-
-    const terminalBenchCard = screen.getByTestId('terminal-bench-card');
-
-    expect(terminalBenchCard).toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-bench-card')).toBeInTheDocument();
     expect(screen.queryByTestId('environment-selector')).not.toBeInTheDocument();
   });
 });

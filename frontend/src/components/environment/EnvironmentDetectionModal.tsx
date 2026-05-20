@@ -28,16 +28,23 @@ const statusBarBgColors: Record<EnvironmentDetection['status'], string> = {
   failed: 'bg-red-50',
 };
 
-function ToolStatusRow({ label, tool }: { label: string; tool: EnvironmentDetection['python'] }) {
+function ToolStatusRow({ label, tool, available, version }: {
+  label: string;
+  tool?: EnvironmentDetection['python'];
+  available?: boolean;
+  version?: string | null;
+}) {
   const t = useT();
+  const effectiveAvailable = tool !== undefined ? tool.available : (available ?? false);
+  const effectiveVersion = tool !== undefined ? tool.version : (version ?? null);
   return (
     <div className="flex items-center justify-between py-1">
       <span className="text-sm text-[var(--text-secondary)]">{label}</span>
       <span className="inline-flex items-center gap-1.5 text-sm text-[var(--text)]">
-        <StatusDot status={tool.available ? 'success' : 'error'} />
-        <span>{tool.available ? t('components.environmentDetectionModal.status.available') : t('components.environmentDetectionModal.status.unavailable')}</span>
-        {tool.version ? (
-          <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{tool.version}</code>
+        <StatusDot status={effectiveAvailable ? 'success' : 'error'} />
+        <span>{effectiveAvailable ? t('components.environmentDetectionModal.status.available') : t('components.environmentDetectionModal.status.unavailable')}</span>
+        {effectiveVersion ? (
+          <code className="rounded bg-[var(--bg-tertiary)] px-1.5 py-0.5 text-xs">{effectiveVersion}</code>
         ) : null}
       </span>
     </div>
@@ -117,7 +124,8 @@ export default function EnvironmentDetectionModal({
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Basic Info */}
           <GroupCard icon={<Globe size={16} />} title={t('components.environmentDetectionModal.groups.basicInfo')}>
-            <InfoRow label={t('components.environmentDetectionModal.labels.ssh')} value={detection.ssh_ok ? t('common.ok') : t('common.failed')} />
+            <ToolStatusRow label={t('components.environmentDetectionModal.labels.ssh')} available={detection.ssh_ok} version={null} />
+            <ToolStatusRow label={t('components.environmentDetectionModal.labels.tmux')} available={detection.tmux_ok} version={null} />
             <InfoRow label={t('components.environmentDetectionModal.labels.hostname')} value={detection.hostname} />
             <InfoRow label={t('components.environmentDetectionModal.labels.os')} value={detection.os_info} />
             <InfoRow label={t('components.environmentDetectionModal.labels.arch')} value={detection.arch} />
@@ -137,7 +145,7 @@ export default function EnvironmentDetectionModal({
 
           {/* Dev Tools */}
           <GroupCard icon={<Terminal size={16} />} title={t('components.environmentDetectionModal.groups.devTools')}>
-            <ToolStatusRow label={t('components.environmentDetectionModal.labels.codeServer')} tool={detection.code_server} />
+            <ToolStatusRow label={t('components.environmentDetectionModal.labels.codex')} tool={detection.codex} />
             <ToolStatusRow label={t('components.environmentDetectionModal.labels.claudeCli')} tool={detection.claude_cli} />
           </GroupCard>
 
@@ -149,11 +157,20 @@ export default function EnvironmentDetectionModal({
 
           {/* GPU Info */}
           <GroupCard icon={<HardDrive size={16} />} title={t('components.environmentDetectionModal.groups.gpu')}>
-            <InfoRow label={t('components.environmentDetectionModal.labels.gpuCount')} value={detection.gpu_count} />
-            <InfoRow
-              label={t('components.environmentDetectionModal.labels.gpuModels')}
-              value={detection.gpu_models.length > 0 ? detection.gpu_models.join(', ') : t('common.no')}
-            />
+            {detection.gpu_count > 1 ? (
+              <>
+                <InfoRow label={t('components.environmentDetectionModal.labels.gpuModels')} value={null} />
+                {detection.gpu_models.map((model, i) => (
+                  <div key={i} className="text-sm text-[var(--text)] pl-4">{model}</div>
+                ))}
+                <InfoRow label={t('components.environmentDetectionModal.labels.gpuCount')} value={String(detection.gpu_count)} />
+              </>
+            ) : (
+              <>
+                <InfoRow label={t('components.environmentDetectionModal.labels.gpuModels')} value={detection.gpu_models[0] ?? null} />
+                <InfoRow label={t('components.environmentDetectionModal.labels.gpuCount')} value={String(detection.gpu_count)} />
+              </>
+            )}
           </GroupCard>
 
           {/* Environment Variables */}
@@ -195,13 +212,16 @@ export default function EnvironmentDetectionModal({
 
         {/* Warnings */}
         {detection.warnings.length > 0 ? (
-          <div className="space-y-2">
-            {detection.warnings.map((warning, index) => (
-              <Alert key={`warning-${index}`} variant="warning">
-                {warning}
-              </Alert>
-            ))}
-          </div>
+          <details className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <summary className="cursor-pointer text-sm font-medium text-amber-800">
+              {t('components.environmentDetectionModal.warningsHeader')} ({detection.warnings.length})
+            </summary>
+            <div className="mt-3 space-y-2">
+              {detection.warnings.map((warning, index) => (
+                <Alert key={index} variant="warning">{warning}</Alert>
+              ))}
+            </div>
+          </details>
         ) : null}
       </div>
     </Modal>

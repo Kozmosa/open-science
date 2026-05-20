@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import shlex
 import shutil
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from ainrf.environments.service import InMemoryEnvironmentService
     from ainrf.workspaces.service import WorkspaceRegistryService
 
-_MAX_FILE_SIZE_BYTES = 1_048_576
+_MAX_FILE_SIZE_BYTES = 50_000_000
 _MAX_DIRECTORY_ENTRIES = 1_000
 _BINARY_PROBE_BYTES = 8_192
 
@@ -121,6 +122,18 @@ class FileBrowserService:
         if is_localhost_environment(environment):
             return await self._read_local(resolved_path)
         return await self._read_remote(environment, resolved_path)
+
+    async def resolve_stream_target(
+        self, environment_id: str, path: str, workspace_id: str | None = None
+    ):
+        """Return (is_local, local_path, environment_obj) for streaming a file."""
+        environment, workdir = self._resolver.resolve(environment_id, workspace_id)
+        resolved_path = _resolve_path(workdir, path)
+        return (
+            is_localhost_environment(environment),
+            resolved_path,
+            environment,
+        )
 
     def invalidate_cache(self, environment_id: str) -> None:
         self._cache.invalidate_environment(environment_id)
@@ -231,7 +244,7 @@ class FileBrowserService:
 
         size = target.stat().st_size
         if size > self._max_file_size:
-            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1024} KB limit")
+            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1_048_576} MB limit")
 
         data = target.read_bytes()
         return self._build_file_content(path, data)
@@ -249,7 +262,7 @@ class FileBrowserService:
         if size < 0:
             raise PathNotFoundError(f"File not found: {path}")
         if size > self._max_file_size:
-            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1024} KB limit")
+            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1_048_576} MB limit")
 
         if is_image_file(path):
             result = await self._run_ssh_command(environment, f"base64 {quoted_path}")
@@ -270,12 +283,14 @@ class FileBrowserService:
 
     def _build_file_content(self, path: str, data: bytes) -> FileContent:
         is_binary = b"\x00" in data[:_BINARY_PROBE_BYTES]
+        mime_type = mime_type_from_path(path)
         if is_binary:
             return FileContent(
                 path=path,
-                content="",
+                content=base64.b64encode(data).decode("ascii"),
                 is_binary=True,
                 size=len(data),
+                mime_type=mime_type,
             )
         text = data.decode("utf-8", errors="replace")
         return FileContent(
@@ -284,6 +299,7 @@ class FileBrowserService:
             is_binary=False,
             size=len(data),
             language=language_from_path(path),
+            mime_type=mime_type,
         )
 
     async def _run_ssh_command(

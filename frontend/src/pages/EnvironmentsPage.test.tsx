@@ -72,6 +72,7 @@ const detectedEnvironment: EnvironmentRecord = {
     errors: [],
     warnings: [],
     ssh_ok: true,
+    tmux_ok: true,
     hostname: 'gpu.example.com',
     os_info: 'linux',
     arch: 'x86_64',
@@ -80,7 +81,7 @@ const detectedEnvironment: EnvironmentRecord = {
     conda: { available: false, version: null, path: null },
     uv: { available: true, version: 'mock', path: '/usr/bin/uv' },
     pixi: { available: false, version: null, path: null },
-    code_server: { available: true, version: '4.99.0', path: '/usr/bin/code-server' },
+    codex: { available: true, version: '0.130.0', path: '/usr/bin/codex' },
     torch: { available: false, version: null, path: null },
     cuda: { available: false, version: null, path: null },
     gpu_models: [],
@@ -107,23 +108,23 @@ afterEach(() => {
 });
 
 describe('EnvironmentsPage', () => {
-  it('renders page title in the current language and eyebrow in the alternate language', async () => {
+  it('renders the current selection header and empty state', async () => {
     mockGetEnvironments.mockResolvedValue({ items: [] });
-    const { unmount } = renderWithProviders(<EnvironmentsPage />, {
-      locale: 'en',
-    });
+    renderWithProviders(<EnvironmentsPage />);
 
-    expect(await screen.findByRole('heading', { name: 'Containers' })).toBeInTheDocument();
-    expect(screen.getByText('容器')).toBeInTheDocument();
+    expect(await screen.findByText('Current selection')).toBeInTheDocument();
+    expect(await screen.findByText('No environments have been created yet.')).toBeInTheDocument();
+  });
 
-    unmount();
+  it('opens the environment editor modal when clicking Add environment', async () => {
     mockGetEnvironments.mockResolvedValue({ items: [] });
-    renderWithProviders(<EnvironmentsPage />, {
-      locale: 'zh',
-    });
+    renderWithProviders(<EnvironmentsPage />);
 
-    expect(await screen.findByRole('heading', { name: '容器' })).toBeInTheDocument();
-    expect(screen.getByText('CONTAINERS')).toBeInTheDocument();
+    expect(await screen.findByText('No environments have been created yet.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add environment' }));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Alias')).toBeInTheDocument();
   });
 
   it('renders the environment list and marks an environment active', async () => {
@@ -135,7 +136,6 @@ describe('EnvironmentsPage', () => {
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
 
-    expect(screen.getByTestId('active-environment-banner')).toHaveTextContent('gpu-lab');
     const storedSettings = JSON.parse(
       window.localStorage.getItem(settingsStorageKey) ?? '{}'
     ) as ReturnType<typeof createDefaultWebUiSettings>;
@@ -149,7 +149,8 @@ describe('EnvironmentsPage', () => {
     renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('No environments have been created yet.')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Alias'), { target: { value: 'gpu-lab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add environment' }));
+    fireEvent.change(await screen.findByLabelText('Alias'), { target: { value: 'gpu-lab' } });
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'GPU Lab' } });
     fireEvent.change(screen.getByLabelText('Host'), { target: { value: 'gpu.example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create environment' }));
@@ -184,7 +185,7 @@ describe('EnvironmentsPage', () => {
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Set project default' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Default' }));
 
     await waitFor(() =>
       expect(mockCreateProjectEnvironmentReference).toHaveBeenCalledWith(
@@ -216,7 +217,8 @@ describe('EnvironmentsPage', () => {
     renderWithProviders(<EnvironmentsPage />);
 
     expect(await screen.findByText('No environments have been created yet.')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Alias'), { target: { value: 'gpu-lab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add environment' }));
+    fireEvent.change(await screen.findByLabelText('Alias'), { target: { value: 'gpu-lab' } });
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'GPU Lab' } });
     fireEvent.change(screen.getByLabelText('Host'), { target: { value: 'gpu.example.com' } });
     fireEvent.change(screen.getByLabelText('SSH options JSON'), { target: { value: '[]' } });
@@ -248,7 +250,7 @@ describe('EnvironmentsPage', () => {
 
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Use' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Set project default' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Default' }));
 
     await waitFor(() =>
       expect(mockUpdateProjectEnvironmentReference).toHaveBeenCalledWith(
