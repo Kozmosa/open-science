@@ -51,6 +51,11 @@ export function CollaboratorsTab() {
   const collaboratorList = collabs?.items ?? [];
 
   const renderRoleBadge = (role: string): ReactNode => {
+    const roleLabel = role === 'member'
+      ? t('pages.settings.collaborators.role.member')
+      : role === 'viewer'
+        ? t('pages.settings.collaborators.role.viewer')
+        : role; // fallback: display raw role value for unknown roles
     const isMember = role === 'member';
     return (
       <span
@@ -60,9 +65,7 @@ export function CollaboratorsTab() {
             : 'bg-[var(--text-secondary)]/10 text-[var(--text-secondary)]'
         }`}
       >
-        {isMember
-          ? t('pages.settings.collaborators.role.member')
-          : t('pages.settings.collaborators.role.viewer')}
+        {roleLabel}
       </span>
     );
   };
