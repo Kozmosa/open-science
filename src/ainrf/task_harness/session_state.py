@@ -15,6 +15,7 @@ class SessionCheckpoint:
     turn_count: int = 0
     total_cost_usd: float = 0.0
     pending_prompts: list[str] | None = None
+    metadata: dict[str, object] | None = None
 
 
 class SessionStateStore:

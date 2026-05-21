@@ -1,8 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { getCodexDefaults } from '../api';
 import {
+  applyCodexDefaultsToProfile,
   clampEditorFontSize,
   clampTerminalFontSize,
+  createCodexAppServerResearchAgentProfile,
   createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
   createEmptyEnvironmentTaskDefaults,
@@ -140,6 +143,38 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
 export function SettingsProvider({ children }: ProviderProps) {
   const [state, setState] = useState<SettingsState>(() => readStoredSettings());
   const [activeProjectId, setActiveProjectId] = useState<string>('default');
+
+  useEffect(() => {
+    void getCodexDefaults().then((defaults) => {
+      setState((current) => {
+        const profileId = 'codex-app-server-default';
+        const profiles = current.settings.taskConfiguration.researchAgentProfiles;
+        const existing = profiles.find((profile) => profile.profileId === profileId);
+        const nextCodexProfile = applyCodexDefaultsToProfile(
+          existing ?? createCodexAppServerResearchAgentProfile(),
+          {
+            codexConfigToml: defaults.codex_config_toml,
+            codexAuthJson: defaults.codex_auth_json,
+          }
+        );
+        const nextProfiles = existing
+          ? profiles.map((profile) =>
+              profile.profileId === profileId ? nextCodexProfile : profile
+            )
+          : [...profiles, nextCodexProfile];
+        return {
+          ...current,
+          settings: {
+            ...current.settings,
+            taskConfiguration: {
+              ...current.settings.taskConfiguration,
+              researchAgentProfiles: nextProfiles,
+            },
+          },
+        };
+      });
+    });
+  }, []);
 
   const commitSettings = (nextSettings: WebUiSettingsDocument): void => {
     const sanitized = sanitizeSettings(nextSettings);

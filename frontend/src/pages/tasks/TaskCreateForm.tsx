@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input, Select, SkillToggleGroup, Textarea } from '../../components/ui';
 import { useT } from '../../i18n';
+import type { ExecutionEngineId } from '../../settings';
 import type {
   EnvironmentRecord,
   ProjectRecord,
@@ -23,6 +24,7 @@ interface Props {
   draftDefaults: {
     title: string;
     task_input: string;
+    executionEngineId?: ExecutionEngineId;
     researchAgentProfileId: string;
     taskConfigurationId: string;
   };
@@ -67,6 +69,7 @@ export default function TaskCreateForm({
     title: draftDefaults.title,
     task_input: draftDefaults.task_input,
     task_profile: 'claude-code',
+    execution_engine: draftDefaults.executionEngineId ?? 'claude-code',
     researchAgentProfileId: draftDefaults.researchAgentProfileId,
     taskConfigurationId: draftDefaults.taskConfigurationId,
     skillModes: defaultProfile?.skillModes ?? {},
@@ -161,7 +164,7 @@ export default function TaskCreateForm({
           task_profile: draft.task_profile,
           task_input: effectiveTaskInput.trim(),
           title: draft.title.trim() || undefined,
-          execution_engine: draft.task_profile,
+          execution_engine: draft.execution_engine,
           auto_connect: true,
           research_agent_profile: selectedResearchAgentProfile
             ? {
@@ -176,6 +179,21 @@ export default function TaskCreateForm({
                 default_opus_model: selectedResearchAgentProfile.defaultOpusModel || null,
                 default_sonnet_model: selectedResearchAgentProfile.defaultSonnetModel || null,
                 default_haiku_model: selectedResearchAgentProfile.defaultHaikuModel || null,
+                codex_base_url: selectedResearchAgentProfile.codexBaseUrl || null,
+                codex_api_key: selectedResearchAgentProfile.codexApiKey || null,
+                codex_model: selectedResearchAgentProfile.codexModel || null,
+                codex_app_server_command:
+                  selectedResearchAgentProfile.codexAppServerCommand || null,
+                codex_approval_policy:
+                  selectedResearchAgentProfile.codexApprovalPolicy || null,
+                codex_config_toml:
+                  selectedResearchAgentProfile.codexConfigTomlSource === 'custom'
+                    ? selectedResearchAgentProfile.codexConfigToml
+                    : null,
+                codex_auth_json:
+                  selectedResearchAgentProfile.codexAuthJsonSource === 'custom'
+                    ? selectedResearchAgentProfile.codexAuthJson
+                    : null,
                 env_overrides: (() => {
                   if (!selectedResearchAgentProfile.envOverrides.trim()) return null;
                   try {
@@ -318,6 +336,26 @@ export default function TaskCreateForm({
 
       <label className="block space-y-2">
         <span className="text-xs font-medium text-[var(--text-secondary)]">
+          Execution engine
+        </span>
+        <Select
+          aria-label="Execution engine"
+          value={draft.execution_engine}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              execution_engine: event.target.value as ExecutionEngineId,
+            }))
+          }
+        >
+          <option value="claude-code">claude-code</option>
+          <option value="agent-sdk">agent-sdk</option>
+          <option value="codex-app-server">codex-app-server</option>
+        </Select>
+      </label>
+
+      <label className="block space-y-2">
+        <span className="text-xs font-medium text-[var(--text-secondary)]">
           {t('pages.tasks.profileLabel')}
         </span>
         <Select
@@ -328,7 +366,6 @@ export default function TaskCreateForm({
           }
         >
           <option value="claude-code">claude-code</option>
-          <option value="agent-sdk">agent-sdk</option>
         </Select>
       </label>
 
@@ -622,6 +659,7 @@ export default function TaskCreateForm({
               title: draftDefaults.title,
               task_input: draftDefaults.task_input,
               task_profile: 'claude-code',
+              execution_engine: draftDefaults.executionEngineId ?? 'claude-code',
               researchAgentProfileId: draftDefaults.researchAgentProfileId,
               taskConfigurationId: draftDefaults.taskConfigurationId,
               skillModes: defaultProfile?.skillModes ?? {},

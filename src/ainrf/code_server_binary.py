@@ -58,7 +58,11 @@ def newest_managed_code_server_binary(managed_install_root: Path) -> Path | None
         binary = child / "bin" / "code-server"
         if not binary.is_file() or not binary.stat().st_mode & 0o111:
             continue
-        version = tuple(int(part) for part in match.groups())
+        version = (
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3)),
+        )
         candidates.append((version, binary))
     if not candidates:
         return None

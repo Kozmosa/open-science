@@ -188,6 +188,13 @@ export interface ResearchAgentProfileSnapshot {
   default_sonnet_model: string | null;
   default_haiku_model: string | null;
   env_overrides: Record<string, string> | null;
+  codex_base_url: string | null;
+  codex_api_key: string | null;
+  codex_model: string | null;
+  codex_app_server_command: string | null;
+  codex_approval_policy: string | null;
+  codex_config_toml: string | null;
+  codex_auth_json: string | null;
 }
 
 export interface TaskConfigurationSnapshot {
@@ -233,6 +240,7 @@ export interface TaskRuntimeSummary {
   prompt_file: string | null;
   helper_path: string | null;
   launch_payload_path: string | null;
+  codex_home: string | null;
 }
 
 export interface TaskResultSummary {
@@ -295,6 +303,13 @@ export interface TaskCreateRequest {
     default_sonnet_model?: string | null;
     default_haiku_model?: string | null;
     env_overrides?: Record<string, string> | null;
+    codex_base_url?: string | null;
+    codex_api_key?: string | null;
+    codex_model?: string | null;
+    codex_app_server_command?: string | null;
+    codex_approval_policy?: string | null;
+    codex_config_toml?: string | null;
+    codex_auth_json?: string | null;
   } | null;
   task_configuration?: {
     mode: 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
@@ -326,6 +341,11 @@ export interface CodeServerStatus {
   workspace_dir: string | null;
   detail: string | null;
   managed: boolean;
+}
+
+export interface CodexDefaults {
+  codex_config_toml: string | null;
+  codex_auth_json: string | null;
 }
 
 export type EnvironmentAuthKind = 'ssh_key' | 'password' | 'agent';

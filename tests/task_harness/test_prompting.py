@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+from ainrf.environments.models import EnvironmentAuthKind, EnvironmentRegistryEntry
 from ainrf.task_harness.models import ResearchAgentProfileSnapshot
 from ainrf.task_harness.prompting import compose_skill_prompt_lines, compose_task_prompt
+from ainrf.workspaces.models import WorkspaceRecord
 
 
 def test_compose_skill_prompt_lines_with_skills_and_prompt():
@@ -30,48 +34,41 @@ def test_compose_skill_prompt_lines_strips_prompt():
 
 
 def test_compose_task_prompt_includes_skills_layer():
-    workspace = type(
-        "WorkspaceRecord",
-        (),
-        {
-            "workspace_id": "ws-1",
-            "project_id": "p-1",
-            "label": "Test Workspace",
-            "description": None,
-            "default_workdir": None,
-            "workspace_prompt": "Workspace prompt content",
-            "created_at": None,
-            "updated_at": None,
-        },
-    )()
-    environment = type(
-        "EnvironmentRegistryEntry",
-        (),
-        {
-            "id": "env-1",
-            "alias": "test-env",
-            "display_name": "Test Environment",
-            "description": None,
-            "is_seed": False,
-            "tags": [],
-            "host": "localhost",
-            "port": 22,
-            "user": "root",
-            "auth_kind": None,
-            "identity_file": None,
-            "proxy_jump": None,
-            "proxy_command": None,
-            "ssh_options": {},
-            "default_workdir": None,
-            "preferred_python": None,
-            "preferred_env_manager": None,
-            "preferred_runtime_notes": None,
-            "task_harness_profile": "Environment harness profile",
-            "code_server_path": None,
-            "created_at": None,
-            "updated_at": None,
-        },
-    )()
+    now = datetime.now(UTC)
+    workspace = WorkspaceRecord(
+        workspace_id="ws-1",
+        project_id="p-1",
+        label="Test Workspace",
+        description=None,
+        default_workdir=None,
+        workspace_prompt="Workspace prompt content",
+        created_at=now,
+        updated_at=now,
+    )
+    environment = EnvironmentRegistryEntry(
+        id="env-1",
+        alias="test-env",
+        display_name="Test Environment",
+        description=None,
+        is_seed=False,
+        tags=[],
+        host="localhost",
+        port=22,
+        user="root",
+        auth_kind=EnvironmentAuthKind.SSH_KEY,
+        identity_file=None,
+        proxy_jump=None,
+        proxy_command=None,
+        ssh_options={},
+        default_workdir=None,
+        preferred_python=None,
+        preferred_env_manager=None,
+        preferred_runtime_notes=None,
+        task_harness_profile="Environment harness profile",
+        code_server_path=None,
+        created_at=now,
+        updated_at=now,
+    )
     research_agent_profile = ResearchAgentProfileSnapshot(
         profile_id="rp-1",
         label="Test Profile",
@@ -79,6 +76,7 @@ def test_compose_task_prompt_includes_skills_layer():
         skills=["skill-a", "skill-b"],
         skills_prompt="Custom skills prompt",
         settings_json=None,
+        settings_artifact_path=None,
     )
 
     composition = compose_task_prompt(

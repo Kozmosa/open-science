@@ -18,6 +18,7 @@ from ainrf.task_harness.models import TaskHarnessStatus
 
 # API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
 _LIVE_CLAUDE_TASK_ENV = "AINRF_RUN_LIVE_CLAUDE_TASK"
+_LIVE_CODEX_APP_SERVER_TASK_ENV = "AINRF_RUN_LIVE_CODEX_APP_SERVER_TASK"
 
 
 class FakeStream:
@@ -547,6 +548,173 @@ async def test_create_task_with_kimi_engine(
         data = json.loads(settings_path.read_text())
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://api.kimi.com/coding/"
         assert data["model"] == "kimi-for-coding"
+
+
+@pytest.mark.anyio
+async def test_create_task_with_codex_app_server_engine(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
+    environment = app.state.environment_service.create_environment(
+        alias="local",
+        display_name="Local",
+        host="localhost",
+        default_workdir="/tmp",
+        task_harness_profile="test",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/tasks",
+            headers=jwt_headers,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "execution_engine": "codex-app-server",
+                "task_input": "Run with Codex App Server.",
+                "research_agent_profile": {
+                    "profile_id": "codex-app-server-default",
+                    "label": "Codex App Server Default",
+                    "codex_model": "gpt-5-codex",
+                    "codex_app_server_command": "codex app-server --listen stdio://",
+                    "codex_approval_policy": "never",
+                    "codex_config_toml": 'model = "custom-provider"\n',
+                    "codex_auth_json": '{"token":"override"}\n',
+                },
+            },
+        )
+
+        assert response.status_code == 201
+        created = response.json()
+        assert created["execution_engine"] == "codex-app-server"
+
+        detail_response = await client.get(f"/tasks/{created['task_id']}", headers=jwt_headers)
+        assert detail_response.status_code == 200
+        detail = detail_response.json()
+
+    assert detail["execution_engine"] == "codex-app-server"
+    assert detail["research_agent_profile"]["profile_id"] == "codex-app-server-default"
+    assert detail["research_agent_profile"]["codex_model"] == "gpt-5-codex"
+    assert (
+        detail["research_agent_profile"]["codex_app_server_command"]
+        == "codex app-server --listen stdio://"
+    )
+    assert detail["research_agent_profile"]["codex_approval_policy"] == "never"
+    assert detail["runtime"]["codex_home"].endswith("/codex-home")
+    assert detail["research_agent_profile"]["codex_config_toml"] == 'model = "custom-provider"\n'
+    assert detail["research_agent_profile"]["codex_auth_json"] == '{"token":"override"}\n'
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    os.environ.get(_LIVE_CODEX_APP_SERVER_TASK_ENV) != "1",
+    reason="Set AINRF_RUN_LIVE_CODEX_APP_SERVER_TASK=1 to run the real Codex App Server smoke test",
+)
+async def test_task_harness_live_codex_app_server_task_output_and_followup(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
+    workdir = tmp_path / "live-codex-workdir"
+    workdir.mkdir(parents=True, exist_ok=True)
+    environment = app.state.environment_service.create_environment(
+        alias="live-codex-local",
+        display_name="Live Codex Local",
+        host="127.0.0.1",
+        default_workdir=str(workdir),
+        task_harness_profile="Use the configured localhost environment.",
+    )
+    marker = "HELLO_FROM_CODEX_APP_SERVER_TASK_20260512"
+    followup_marker = "FOLLOWUP_FROM_CODEX_APP_SERVER_TASK_20260512"
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        timeout=180.0,
+    ) as client:
+        create_response = await client.post(
+            "/tasks",
+            headers=jwt_headers,
+            json={
+                "workspace_id": "workspace-default",
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "execution_engine": "codex-app-server",
+                "task_input": (
+                    f"Reply with exactly {marker} on a single line. "
+                    "Do not add punctuation, explanation, or code fences."
+                ),
+                "research_agent_profile": {
+                    "profile_id": "codex-app-server-live",
+                    "label": "Codex App Server Live",
+                    "codex_model": "gpt-5-codex",
+                    "codex_app_server_command": "codex app-server --listen stdio://",
+                    "codex_approval_policy": "never",
+                },
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        detail = await wait_for_final_status(client, task_id, attempts=360, delay_seconds=0.5)
+        output = await client.get(f"/tasks/{task_id}/output", headers=jwt_headers)
+
+        output_items = output.json()["items"]
+        combined_output = "".join(item["content"] for item in output_items)
+        print(f"Live Codex App Server task {task_id} first pass output:\n{combined_output}")
+        assert detail["status"] == TaskHarnessStatus.SUCCEEDED.value, combined_output
+        assert detail["execution_engine"] == "codex-app-server"
+        assert detail["runtime"]["codex_home"] is not None
+        assert marker in combined_output, combined_output
+
+        prompt_response = await client.post(
+            f"/tasks/{task_id}/prompt",
+            headers=jwt_headers,
+            json={
+                "prompt": (
+                    f"Reply with exactly {followup_marker} on a single line. "
+                    "Do not add punctuation, explanation, or code fences."
+                )
+            },
+        )
+        assert prompt_response.status_code == 200
+        prompt_seq = prompt_response.json()["sequence"]
+
+        for _ in range(360):
+            after_prompt_output = await client.get(
+                f"/tasks/{task_id}/output?after_seq={prompt_seq - 1}",
+                headers=jwt_headers,
+            )
+            assert after_prompt_output.status_code == 200
+            after_items = after_prompt_output.json()["items"]
+            after_combined_output = "".join(item["content"] for item in after_items)
+            if followup_marker in after_combined_output:
+                break
+            await asyncio.sleep(0.5)
+        else:
+            raise AssertionError(
+                f"Task {task_id} did not emit follow-up marker {followup_marker}"
+            )
+
+        final_detail_response = await client.get(f"/tasks/{task_id}", headers=jwt_headers)
+        assert final_detail_response.status_code == 200
+        final_detail = final_detail_response.json()
+
+    assert final_detail["execution_engine"] == "codex-app-server"
+    assert final_detail["research_agent_profile"]["codex_model"] == "gpt-5-codex"
+    assert final_detail["runtime"]["codex_home"] is not None
+    assert followup_marker in after_combined_output, after_combined_output
+    assert any(
+        item["kind"] == "system" and followup_marker in item["content"]
+        for item in after_items
+    ) or any(
+        item["kind"] == "message" and followup_marker in item["content"]
+        for item in after_items
+    ), after_items
 
 
 @pytest.mark.anyio

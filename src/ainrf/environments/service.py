@@ -320,70 +320,6 @@ class InMemoryEnvironmentService:
             return None
         return snapshots[-1]
 
-    def create_project_reference(
-        self,
-        *,
-        project_id: str,
-        environment_id: str,
-        is_default: bool = False,
-        override_workdir: str | None = None,
-        override_env_name: str | None = None,
-        override_env_manager: str | None = None,
-        override_runtime_notes: str | None = None,
-    ) -> ProjectEnvironmentReference:
-        if environment_id in self._project_refs[project_id]:
-            raise ProjectReferenceConflictError(environment_id)
-        return self.upsert_project_reference(
-            project_id=project_id,
-            environment_id=environment_id,
-            is_default=is_default,
-            override_workdir=override_workdir,
-            override_env_name=override_env_name,
-            override_env_manager=override_env_manager,
-            override_runtime_notes=override_runtime_notes,
-        )
-
-    def upsert_project_reference(
-        self,
-        *,
-        project_id: str,
-        environment_id: str,
-        is_default: bool = False,
-        override_workdir: str | None = None,
-        override_env_name: str | None = None,
-        override_env_manager: str | None = None,
-        override_runtime_notes: str | None = None,
-    ) -> ProjectEnvironmentReference:
-        self.get_environment(environment_id)
-        if is_default:
-            for ref in self._project_refs[project_id].values():
-                ref.is_default = False
-        reference = ProjectEnvironmentReference(
-            project_id=project_id,
-            environment_id=environment_id,
-            is_default=is_default,
-            override_workdir=override_workdir,
-            override_env_name=override_env_name,
-            override_env_manager=override_env_manager,
-            override_runtime_notes=override_runtime_notes,
-            updated_at=utc_now(),
-        )
-        self._project_refs[project_id][environment_id] = reference
-        return reference
-
-    def get_project_reference(
-        self,
-        project_id: str,
-        environment_id: str,
-    ) -> ProjectEnvironmentReference:
-        try:
-            return self._project_refs[project_id][environment_id]
-        except KeyError as exc:
-            raise ProjectReferenceNotFoundError(environment_id) from exc
-
-    def list_project_references(self, project_id: str) -> list[ProjectEnvironmentReference]:
-        return list(self._project_refs[project_id].values())
-
     def list_environment_references(self, environment_id: str) -> list[ProjectEnvironmentReference]:
         refs: list[ProjectEnvironmentReference] = []
         for project_refs in self._project_refs.values():
@@ -391,26 +327,6 @@ class InMemoryEnvironmentService:
             if reference is not None:
                 refs.append(reference)
         return refs
-
-    def delete_project_reference(self, project_id: str, environment_id: str) -> None:
-        self.get_project_reference(project_id, environment_id)
-        del self._project_refs[project_id][environment_id]
-
-    def resolve_effective_workdir(
-        self,
-        project_id: str,
-        environment_id: str,
-        fallback_root: Path,
-    ) -> str:
-        reference = self._project_refs.get(project_id, {}).get(environment_id)
-        if reference is not None and reference.override_workdir:
-            return reference.override_workdir
-        environment = self.get_environment(environment_id)
-        if environment.default_workdir:
-            return environment.default_workdir
-        if is_localhost_environment(environment) and self._default_local_workdir is not None:
-            return self._default_local_workdir
-        return str(fallback_root)
 
     def _write_back_detected_runtime_config(
         self,

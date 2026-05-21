@@ -14,6 +14,7 @@ import type {
 import {
   buildTaskStreamUrl,
   createTask,
+  getCodexDefaults,
   getEnvironments,
   getProjectEnvironmentReferences,
   getProjects,
@@ -198,6 +199,7 @@ function createOutputPage(
 vi.mock('../../src/api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
+  getCodexDefaults: vi.fn(),
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(),
   getProjects: vi.fn(),
@@ -210,6 +212,7 @@ vi.mock('../../src/api', () => ({
 
 const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
+const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 const mockGetProjects = vi.mocked(getProjects);
@@ -229,6 +232,7 @@ beforeEach(() => {
 
   mockBuildTaskStreamUrl.mockReset();
   mockCreateTask.mockReset();
+  mockGetCodexDefaults.mockReset();
   mockGetEnvironments.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
   mockGetProjects.mockReset();
@@ -240,6 +244,10 @@ beforeEach(() => {
   mockBuildTaskStreamUrl.mockImplementation(
     (taskId, afterSeq = 0) => `/api/tasks/${taskId}/stream?after_seq=${afterSeq}`
   );
+  mockGetCodexDefaults.mockResolvedValue({
+    codex_config_toml: null,
+    codex_auth_json: null,
+  });
   mockGetWorkspaces.mockResolvedValue({ items: [workspace] });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
   mockGetProjects.mockResolvedValue({ items: [] });

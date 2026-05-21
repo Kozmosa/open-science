@@ -9,6 +9,7 @@ import { useTaskMessages } from './useTaskMessages';
 import { useTaskActions } from './useTaskActions';
 import PromptEditor from './PromptEditor';
 
+const interactiveEngines = new Set(['agent-sdk', 'codex-app-server']);
 
 interface Props {
   selectedTask: TaskRecord | null;
@@ -131,12 +132,16 @@ export default function TaskDetail({
 
   // Determine if input bar should show
   const showInput = selectedTask &&
-    selectedTask.execution_engine === 'agent-sdk' &&
+    interactiveEngines.has(selectedTask.execution_engine ?? '') &&
     (selectedTask.status === 'running' || selectedTask.status === 'succeeded' || selectedTask.status === 'paused');
 
   // Determine pause/resume buttons
-  const showPause = selectedTask?.status === 'running' && selectedTask?.execution_engine === 'agent-sdk';
-  const showResume = selectedTask?.status === 'paused';
+  const showPause =
+    selectedTask?.status === 'running' &&
+    interactiveEngines.has(selectedTask?.execution_engine ?? '');
+  const showResume =
+    selectedTask?.status === 'paused' &&
+    interactiveEngines.has(selectedTask?.execution_engine ?? '');
 
   if (detailError) {
     return (

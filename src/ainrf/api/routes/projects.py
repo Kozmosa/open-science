@@ -28,6 +28,7 @@ from ainrf.environments import (
     ProjectReferenceNotFoundError,
 )
 from ainrf.projects import ProjectNotFoundError, ProjectRegistryService
+from ainrf.projects.models import ProjectRecord
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -60,7 +61,7 @@ def _get_auth_service(request: Request):
     return service
 
 
-def _serialize_project(project: any) -> ProjectResponse:
+def _serialize_project(project: ProjectRecord) -> ProjectResponse:
     payload = dict(asdict(project))
     payload["created_at"] = project.created_at.isoformat()
     payload["updated_at"] = project.updated_at.isoformat()

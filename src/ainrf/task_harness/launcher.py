@@ -36,6 +36,7 @@ class LaunchPayload:
     prompt_file: str
     helper_path: str | None = None
     launch_payload_path: str | None = None
+    codex_home: str | None = None
 
 
 @dataclass(slots=True)
