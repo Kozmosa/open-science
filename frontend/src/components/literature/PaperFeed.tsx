@@ -7,7 +7,7 @@ import PaperCard from './PaperCard';
 
 interface Props {
   subscriptions: LiteratureSubscription[];
-  onConvertToTask: (paperId: string) => void;
+  onConvertToTask: (paperId: string, title: string, abstract: string) => void;
 }
 
 export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
@@ -78,7 +78,7 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
 
         {papers.map((paper) => (
           <PaperCard
-            key={paper.paper_id}
+            key={`${paper.paper_id}-${paper.subscription_id}`}
             paper={paper}
             onConvertToTask={onConvertToTask}
             onReadChange={() => papersQuery.refetch()}
