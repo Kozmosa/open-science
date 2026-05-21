@@ -1,9 +1,11 @@
-"""arXiv fetch + Claude/LLM summarization pipeline."""
+"""arXiv fetch + LLM summarization pipeline."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import random
 
 import arxiv
 
@@ -11,6 +13,8 @@ from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
 
 _DEFAULT_MODEL = "deepseek-v4-flash"
 _DEFAULT_BASE_URL = "https://api.deepseek.com"
+_RATE_DELAY_MIN = 0.1  # seconds
+_RATE_DELAY_MAX = 0.3  # seconds
 
 SUMMARIZE_PROMPT = """你是一个学术文献摘要助手。请对以下论文做提炼：
 
@@ -84,6 +88,8 @@ async def _summarize_papers(papers: list[LiteraturePaper]) -> None:
                         paper.ai_practice_note = result.get("ai_practice_note")
         except Exception:
             continue
+        # Rate limiting: random delay between API calls
+        await asyncio.sleep(random.uniform(_RATE_DELAY_MIN, _RATE_DELAY_MAX))
 
 
 async def fetch_for_subscription(
@@ -102,7 +108,8 @@ async def fetch_for_subscription(
     query_parts: list[str] = []
 
     if sub.keywords:
-        query_parts.append("(" + " OR ".join(f'("{kw}")' for kw in sub.keywords) + ")")
+        # Join keywords with AND for broader matching instead of exact phrase
+        query_parts.append("(" + " AND ".join(f'({kw})' for kw in sub.keywords) + ")")
     if sub.arxiv_categories:
         query_parts.append("(" + " OR ".join(f"cat:{cat}" for cat in sub.arxiv_categories) + ")")
 

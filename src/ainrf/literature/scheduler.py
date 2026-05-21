@@ -37,16 +37,32 @@ class LiteratureScheduler:
         logger.info("Literature scheduler stopped")
 
     async def _fetch_all(self) -> None:
-        """Fetch papers for all active subscriptions."""
+        """Fetch papers for all active subscriptions, respecting frequency."""
+        from datetime import datetime, timezone
+
         subs = self._service.list_active_subscriptions()
         if not subs:
             return
 
-        logger.info("Literature fetch: checking %d active subscriptions", len(subs))
+        now = datetime.now(timezone.utc)
+        due_subs = []
         for sub in subs:
+            if sub.frequency == "weekly":
+                if sub.last_fetched_at:
+                    last = datetime.fromisoformat(sub.last_fetched_at)
+                    if (now - last).days < 7:
+                        continue
+            # daily and twicedaily: always fetch (twicedaily handled by interval)
+            due_subs.append(sub)
+
+        if not due_subs:
+            return
+
+        logger.info("Literature fetch: checking %d due subscriptions", len(due_subs))
+        for sub in due_subs:
             try:
                 papers = await fetch_for_subscription(sub)
-                new = [p for p in papers if not self._service.paper_exists(p.paper_id)]
+                new = [p for p in papers if not self._service.paper_exists(p.paper_id, sub.subscription_id)]
                 if new:
                     count = self._service.insert_papers(new)
                     logger.info("Literature fetch: sub=%s total=%d new=%d", sub.subscription_id, len(papers), count)

@@ -68,11 +68,14 @@ async def list_papers(
 @router.post("/papers/{paper_id}/read", status_code=204)
 async def mark_read(paper_id: str, request: Request):
     user_id = _get_user_id(request)
-    body = await request.json() if request.headers.get("content-type") == "application/json" else None
-    subscription_id = (body or {}).get("subscription_id")
     svc = _get_service(request)
     if not svc.user_owns_paper(user_id, paper_id):
         raise HTTPException(status_code=404, detail="Paper not found")
+    try:
+        body = await request.json()
+        subscription_id = body.get("subscription_id") if body else None
+    except Exception:
+        subscription_id = None
     svc.mark_read(paper_id, subscription_id)
 
 
