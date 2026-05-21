@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../test/render';
-import TimelinePage from './TimelinePage';
-import * as api from '../api';
+import { renderWithProviders } from '../../src/test/render';
+import TimelinePage from '../../src/pages/TimelinePage';
+import * as api from '../../src/api';
 
-vi.mock('../api', () => ({
+vi.mock('../../src/api', () => ({
   getSessions: vi.fn(),
   getSession: vi.fn(),
   getProjects: vi.fn(),

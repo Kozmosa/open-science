@@ -1,21 +1,21 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getEnvironments, getSkills, getWorkspaces, installEnvironmentCodeServer } from '../api';
+import { getEnvironments, getSkills, getWorkspaces, installEnvironmentCodeServer } from '../../src/api';
 import {
   createDefaultWebUiSettings,
   defaultResearchAgentProfileId,
   rawPromptTaskConfigurationId,
   settingsStorageKey,
-} from '../settings';
-import { renderWithProviders } from '../test/render';
-import type { EnvironmentRecord } from '../types';
-import SettingsPage from './SettingsPage';
+} from '../../src/settings';
+import { renderWithProviders } from '../../src/test/render';
+import type { EnvironmentRecord } from '../../src/types';
+import SettingsPage from '../../src/pages/SettingsPage';
 
-vi.mock('../components/environment/EnvironmentSelectorPanel', () => ({
+vi.mock('../../src/components/environment/EnvironmentSelectorPanel', () => ({
   default: () => <div data-testid="environment-selector" />,
 }));
 
-vi.mock('../components/terminal/TerminalSessionConsole', () => ({
+vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
   default: ({
     attachmentId,
     terminalWsUrl,
@@ -29,7 +29,7 @@ vi.mock('../components/terminal/TerminalSessionConsole', () => ({
   ),
 }));
 
-vi.mock('../api', () => ({
+vi.mock('../../src/api', () => ({
   getEnvironments: vi.fn(),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),

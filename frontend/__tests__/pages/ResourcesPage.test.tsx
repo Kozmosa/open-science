@@ -1,11 +1,11 @@
 import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import ResourcesPage from './ResourcesPage';
-import type { ResourcesResponse } from '../types';
-import { renderWithProviders } from '../test/render';
-import { getResources } from '../api';
+import ResourcesPage from '../../src/pages/ResourcesPage';
+import type { ResourcesResponse } from '../../src/types';
+import { renderWithProviders } from '../../src/test/render';
+import { getResources } from '../../src/api';
 
-vi.mock('../api', () => ({
+vi.mock('../../src/api', () => ({
   getResources: vi.fn(),
 }));
 

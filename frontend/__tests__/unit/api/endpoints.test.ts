@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetMockEnvironmentState, resetMockTaskState, resetMockTerminalSession } from './mock';
+import { resetMockEnvironmentState, resetMockTaskState, resetMockTerminalSession } from '../../../src/api/mock';
 
 beforeEach(() => {
   vi.resetModules();
@@ -22,7 +22,7 @@ describe('api endpoints', () => {
       getTasks,
       getTerminalSession,
       getWorkspaces,
-    } = await import('./endpoints');
+    } = await import('../../../src/api/endpoints');
 
     const session = await getTerminalSession('env-localhost');
     const workspaces = await getWorkspaces();
@@ -49,7 +49,7 @@ describe('api endpoints', () => {
     vi.stubEnv('VITE_USE_MOCK', 'false');
     vi.stubEnv('VITE_AINRF_API_KEY', 'stream-secret');
 
-    const { buildTaskStreamUrl } = await import('./endpoints');
+    const { buildTaskStreamUrl } = await import('../../../src/api/endpoints');
 
     expect(buildTaskStreamUrl('task-1', 7)).toBe(
       '/api/tasks/task-1/stream?after_seq=7&api_key=stream-secret'
@@ -68,7 +68,7 @@ describe('api endpoints', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { getHealth } = await import('./endpoints');
+    const { getHealth } = await import('../../../src/api/endpoints');
     await expect(getHealth()).resolves.toEqual({ status: 'ok' });
     expect(fetchMock).toHaveBeenCalledWith('/api/health', expect.any(Object));
   });
@@ -108,7 +108,7 @@ describe('api endpoints', () => {
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { createWorkspace, updateWorkspace, deleteWorkspace } = await import('./endpoints');
+    const { createWorkspace, updateWorkspace, deleteWorkspace } = await import('../../../src/api/endpoints');
 
     await createWorkspace({
       label: 'New workspace',

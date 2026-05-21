@@ -7,7 +7,7 @@ import {
   getCodeServerStatus,
   getTerminalSession,
   resetTerminalSession,
-} from './api/endpoints';
+} from '../../../src/api/endpoints';
 import {
   mockCreateCodeServerSession,
   mockCreateTerminalSession,
@@ -16,8 +16,8 @@ import {
   mockGetCodeServerStatus,
   mockGetTerminalSession,
   mockResetTerminalSession,
-} from './api/mock';
-import type { CodeServerStatus, TerminalSession } from './types';
+} from '../../../src/api/mock';
+import type { CodeServerStatus, TerminalSession } from '../../../src/types';
 
 describe.skip('terminal contract smoke test', () => {
   it('preserves terminal session and code-server shapes', () => {

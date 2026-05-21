@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAppQueryClient } from './queryClient';
+import { createAppQueryClient } from '../../../src/queryClient';
 
 describe('createAppQueryClient', () => {
   it('disables global auto-refetch noise while keeping stale caching', () => {

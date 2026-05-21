@@ -1,23 +1,23 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import WorkspacesPage from './WorkspacesPage';
-import { renderWithProviders } from '../test/render';
+import WorkspacesPage from '../../src/pages/WorkspacesPage';
+import { renderWithProviders } from '../../src/test/render';
 import {
   createWorkspace,
   deleteWorkspace,
   getWorkspaces,
   updateWorkspace,
-} from '../api';
-import type { WorkspaceListResponse, WorkspaceRecord } from '../types';
+} from '../../src/api';
+import type { WorkspaceListResponse, WorkspaceRecord } from '../../src/types';
 
-vi.mock('../api', () => ({
+vi.mock('../../src/api', () => ({
   createWorkspace: vi.fn(),
   deleteWorkspace: vi.fn(),
   getWorkspaces: vi.fn(),
   updateWorkspace: vi.fn(),
 }));
 
-vi.mock('../components', () => ({
+vi.mock('../../src/components', () => ({
   useEnvironmentSelection: () => ({
     selectedEnvironment: null,
     selectedEnvironmentId: null,

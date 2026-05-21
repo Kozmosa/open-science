@@ -1,12 +1,12 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import EnvironmentsPage from './EnvironmentsPage';
-import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '../types';
-import { renderWithProviders } from '../test/render';
+import EnvironmentsPage from '../../src/pages/EnvironmentsPage';
+import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '../../src/types';
+import { renderWithProviders } from '../../src/test/render';
 import {
   createDefaultWebUiSettings,
   settingsStorageKey,
-} from '../settings';
+} from '../../src/settings';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -15,9 +15,9 @@ import {
   getEnvironments,
   getProjectEnvironmentReferences,
   updateProjectEnvironmentReference,
-} from '../api';
+} from '../../src/api';
 
-vi.mock('../api', () => ({
+vi.mock('../../src/api', () => ({
   createProjectEnvironmentReference: vi.fn(),
   createEnvironment: vi.fn(),
   deleteEnvironment: vi.fn(),

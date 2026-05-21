@@ -1,9 +1,9 @@
 import { screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import TerminalSessionConsole from './TerminalSessionConsole';
-import { createDefaultWebUiSettings, settingsStorageKey } from '../../settings';
-import { renderWithProviders } from '../../test/render';
-import type { TerminalSessionStatus } from '../../types';
+import TerminalSessionConsole from '../../../src/components/terminal/TerminalSessionConsole';
+import { createDefaultWebUiSettings, settingsStorageKey } from '../../../src/settings';
+import { renderWithProviders } from '../../../src/test/render';
+import type { TerminalSessionStatus } from '../../../src/types';
 
 interface MockTerminalInstance {
   cols: number;

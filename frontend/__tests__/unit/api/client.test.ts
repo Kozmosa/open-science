@@ -18,7 +18,7 @@ describe('api client', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { api, setAccessToken } = await import('./client');
+    const { api, setAccessToken } = await import('../../../src/api/client');
     setAccessToken('test-jwt-token');
     await expect(api.get<{ status: string }>('/health')).resolves.toEqual({ status: 'ok' });
 
@@ -39,7 +39,7 @@ describe('api client', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { api, setAccessToken } = await import('./client');
+    const { api, setAccessToken } = await import('../../../src/api/client');
     setAccessToken(null);
     await expect(api.get<{ status: string }>('/health')).resolves.toEqual({ status: 'ok' });
 
@@ -61,7 +61,7 @@ describe('api client', () => {
     const fetchMock = vi.fn().mockResolvedValue(response);
     vi.stubGlobal('fetch', fetchMock);
 
-    const { ApiError, api } = await import('./client');
+    const { ApiError, api } = await import('../../../src/api/client');
 
     try {
       await api.get('/terminal/session');
@@ -93,7 +93,7 @@ describe('api client', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { api } = await import('./client');
+    const { api } = await import('../../../src/api/client');
     await expect(api.patch<{ id: string }>('/environments/env-1', { display_name: 'GPU Lab' })).resolves.toEqual({
       id: 'env-1',
     });

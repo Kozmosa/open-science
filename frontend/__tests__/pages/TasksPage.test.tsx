@@ -1,8 +1,8 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import TasksPage from './TasksPage';
-import { createTestQueryClient, renderWithProviders } from '../test/render';
-import { createDefaultWebUiSettings, settingsStorageKey } from '../settings';
+import TasksPage from '../../src/pages/TasksPage';
+import { createTestQueryClient, renderWithProviders } from '../../src/test/render';
+import { createDefaultWebUiSettings, settingsStorageKey } from '../../src/settings';
 import type {
   EnvironmentRecord,
   TaskOutputEvent,
@@ -10,7 +10,7 @@ import type {
   TaskRecord,
   TaskSummary,
   WorkspaceRecord,
-} from '../types';
+} from '../../src/types';
 import {
   buildTaskStreamUrl,
   createTask,
@@ -21,8 +21,8 @@ import {
   getTaskOutput,
   getTasks,
   getWorkspaces,
-} from '../api';
-import { getNextOutputSeq, mergeOutputItems } from './tasks/output';
+} from '../../src/api';
+import { getNextOutputSeq, mergeOutputItems } from '../../src/pages/tasks/output';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -195,7 +195,7 @@ function createOutputPage(
   };
 }
 
-vi.mock('../api', () => ({
+vi.mock('../../src/api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
   getEnvironments: vi.fn(),

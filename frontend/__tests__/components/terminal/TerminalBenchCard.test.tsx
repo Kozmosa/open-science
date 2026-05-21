@@ -1,4 +1,4 @@
-vi.mock('./TerminalSessionConsole', () => ({
+vi.mock('../../../src/components/terminal/TerminalSessionConsole', () => ({
   default: () => <div data-testid="terminal-console" />,
 }));
 
@@ -6,17 +6,17 @@ import { StrictMode } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import TerminalBenchCard from './TerminalBenchCard';
-import type { EnvironmentRecord, TerminalSession } from '../../types';
-import { renderWithProviders } from '../../test/render';
+import TerminalBenchCard from '../../../src/components/terminal/TerminalBenchCard';
+import type { EnvironmentRecord, TerminalSession } from '../../../src/types';
+import { renderWithProviders } from '../../../src/test/render';
 import {
   createTerminalSession,
   deleteTerminalSession,
   getTerminalSession,
   resetTerminalSession,
-} from '../../api';
+} from '../../../src/api';
 
-vi.mock('../../api', () => ({
+vi.mock('../../../src/api', () => ({
   createTerminalSession: vi.fn(),
   deleteTerminalSession: vi.fn(),
   getTerminalSession: vi.fn(),

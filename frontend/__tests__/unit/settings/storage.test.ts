@@ -6,7 +6,7 @@ import {
   readStoredSettings,
   settingsStorageKey,
   structuredResearchTaskConfigurationId,
-} from '.';
+} from '../../../src/settings';
 
 describe('settings storage v2 task configuration', () => {
   beforeEach(() => {

@@ -9,8 +9,8 @@ describe('ainrf vite proxy', () => {
   it('shares the same proxy rules between dev server and preview', async () => {
     vi.stubEnv('AINRF_WEBUI_API_KEY', 'proxy-secret');
 
-    const { default: viteConfig } = await import('../vite.config');
-    const { sharedAinrfProxyConfig } = await import('../vite.proxy');
+    const { default: viteConfig } = await import('../../../vite.config');
+    const { sharedAinrfProxyConfig } = await import('../../../vite.proxy');
 
     expect(viteConfig.server?.proxy).toBe(sharedAinrfProxyConfig);
     expect(viteConfig.preview?.proxy).toBe(sharedAinrfProxyConfig);
@@ -24,7 +24,7 @@ describe('ainrf vite proxy', () => {
   it('injects X-API-Key into proxied http and websocket requests', async () => {
     vi.stubEnv('AINRF_WEBUI_API_KEY', 'proxy-secret');
 
-    const { sharedAinrfProxyConfig } = await import('../vite.proxy');
+    const { sharedAinrfProxyConfig } = await import('../../../vite.proxy');
     const handlers: Record<string, (...args: unknown[]) => void> = {};
     const terminalProxy = sharedAinrfProxyConfig['/terminal'];
     const proxyRequestHeaders = new Map<string, string>();
@@ -51,7 +51,7 @@ describe('ainrf vite proxy', () => {
   });
 
   it('rewrites only /api requests and keeps /code plus /terminal paths intact', async () => {
-    const { sharedAinrfProxyConfig } = await import('../vite.proxy');
+    const { sharedAinrfProxyConfig } = await import('../../../vite.proxy');
 
     expect(sharedAinrfProxyConfig['/api'].rewrite?.('/api/health')).toBe('/health');
     expect(sharedAinrfProxyConfig['/code'].rewrite).toBeUndefined();

@@ -1,13 +1,13 @@
 import { QueryClient } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import App from './App';
-import { getTasks } from './api';
-import { LocaleProvider } from './i18n';
-import { createDefaultWebUiSettings, settingsStorageKey } from './settings';
+import App from '../src/App';
+import { getTasks } from '../src/api';
+import { LocaleProvider } from '../src/i18n';
+import { createDefaultWebUiSettings, settingsStorageKey } from '../src/settings';
 
-vi.mock('./queryClient', async () => {
-  const actual = await vi.importActual<typeof import('./queryClient')>('./queryClient');
+vi.mock('../src/queryClient', async () => {
+  const actual = await vi.importActual<typeof import('../src/queryClient')>('../src/queryClient');
   return {
     ...actual,
     createAppQueryClient: () =>
@@ -26,7 +26,7 @@ vi.mock('./queryClient', async () => {
   };
 });
 
-vi.mock('./contexts/AuthContext', () => ({
+vi.mock('../src/contexts/AuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useAuth: () => ({
     user: { user_id: 'user-1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true },
@@ -37,27 +37,27 @@ vi.mock('./contexts/AuthContext', () => ({
   }),
 }));
 
-vi.mock('./api', () => ({
+vi.mock('../src/api', () => ({
   getTasks: vi.fn(),
 }));
 
-vi.mock('./pages/TerminalPage', () => ({
+vi.mock('../src/pages/TerminalPage', () => ({
   default: () => <div data-testid="terminal-page">terminal-page</div>,
 }));
 
-vi.mock('./pages/TasksPage', () => ({
+vi.mock('../src/pages/TasksPage', () => ({
   default: () => <div data-testid="tasks-page">tasks-page</div>,
 }));
 
-vi.mock('./pages/EnvironmentsPage', () => ({
+vi.mock('../src/pages/EnvironmentsPage', () => ({
   default: () => <div data-testid="environments-page">environments-page</div>,
 }));
 
-vi.mock('./pages/WorkspacesPage', () => ({
+vi.mock('../src/pages/WorkspacesPage', () => ({
   default: () => <div data-testid="workspaces-page">workspaces-page</div>,
 }));
 
-vi.mock('./pages/SettingsPage', () => ({
+vi.mock('../src/pages/SettingsPage', () => ({
   default: () => <div data-testid="settings-page">settings-page</div>,
 }));
 

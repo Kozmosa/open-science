@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetMockEnvironmentState } from './mock';
+import { resetMockEnvironmentState } from '../../../src/api/mock';
 
 beforeEach(() => {
   vi.resetModules();
@@ -13,7 +13,7 @@ describe.skip('environment endpoints', () => {
     vi.stubEnv('VITE_USE_MOCK', 'true');
 
     const { createEnvironment, deleteEnvironment, detectEnvironment, getEnvironments, installEnvironmentCodeServer } =
-      await import('./endpoints');
+      await import('../../../src/api/endpoints');
 
     await expect(getEnvironments()).resolves.toEqual({
       items: [
@@ -65,7 +65,7 @@ describe.skip('environment endpoints', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { installEnvironmentCodeServer, updateEnvironment } = await import('./endpoints');
+    const { installEnvironmentCodeServer, updateEnvironment } = await import('../../../src/api/endpoints');
     await expect(updateEnvironment('env-1', { display_name: 'GPU Lab Updated' })).resolves.toEqual({
       id: 'env-1',
       alias: 'gpu-lab',
