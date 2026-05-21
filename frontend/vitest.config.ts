@@ -5,8 +5,11 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   test: {
+    globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
+    setupFiles: ['./__tests__/setup.ts'],
+    include: ['__tests__/**/*.test.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
+    css: true,
     restoreMocks: true,
     clearMocks: true,
     unstubGlobals: true,
