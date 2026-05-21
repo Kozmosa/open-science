@@ -43,4 +43,3 @@ for (const page of PAGES) {
 
 console.log(`\nLighthouse audit complete. Outputs in ${REPORT_DIR}`);
 process.exit(allPassed ? 0 : 0); // Never fail on audit — just report
-}

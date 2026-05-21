@@ -1,5 +1,4 @@
 from .base import ExecutionEngine, EngineContext, EngineEvent, NotSupportedError
-from .agent_sdk import AgentSdkEngine
 from .claude_code import ClaudeCodeEngine
 from .codex_app_server import CodexAppServerEngine
 from .factory import get_engine
@@ -10,7 +9,14 @@ __all__ = [
     "EngineEvent",
     "NotSupportedError",
     "get_engine",
-    "AgentSdkEngine",
     "ClaudeCodeEngine",
     "CodexAppServerEngine",
+    "AgentSdkEngine",
 ]
+
+
+def __getattr__(name: str):
+    if name == "AgentSdkEngine":
+        from .agent_sdk import AgentSdkEngine as _engine
+        return _engine
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -50,7 +50,7 @@ def make_client(tmp_path: Path, *, max_file_size_bytes: int | None = None) -> ht
         api_key_hashes=frozenset({hash_api_key("secret-key")}),
         state_root=tmp_path,
     )
-    app = create_app(api_config)
+    app = create_app(api_config, max_file_size_bytes=max_file_size_bytes)
     headers = get_jwt_headers(app, "admin", "test-admin-password")
 
     return httpx.AsyncClient(

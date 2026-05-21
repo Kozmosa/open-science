@@ -1,0 +1,67 @@
+---
+aliases:
+  - 工作区管理
+  - Workspace
+  - workspace
+tags:
+  - ainrf
+  - workspace
+  - files
+  - editor
+  - docs
+  - obsidian-note
+source_repo: scholar-agent
+source_path: docs/ainrf/workspace.md
+---
+
+# 工作区管理
+
+> [!abstract]
+> AINRF 工作区（Workspace）是任务执行的目录上下文，包含工作目录定义、系统提示词，并通过文件浏览器提供目录树导航与文件内容查看能力。
+
+## Workspace CRUD
+
+Workspace 通过 REST API 和 WebUI 提供完整的管理操作：
+
+| 操作 | 方法 | API 端点 | 说明 |
+|------|------|----------|------|
+| 列表 | GET | `/workspaces` | 列出当前用户的 workspace，支持 `project_id` 筛选 |
+| 创建 | POST | `/workspaces` | 新建 workspace，需提供 label、workspace_prompt 等字段 |
+| 读取 | GET | `/workspaces/{id}` | 获取单个 workspace 详情 |
+| 更新 | PATCH | `/workspaces/{id}` | 更新 label、description、default_workdir、workspace_prompt |
+| 删除 | DELETE | `/workspaces/{id}` | 删除 workspace（默认 workspace 不可删除，最后一个 workspace 不可删除） |
+
+创建时 `default_workdir` 自动根据 label 生成预设路径，用户可手动修改。
+
+## 默认 Workspace
+
+系统内置 `workspace-default`，指向 `~/.ainrf_workspaces/default` 目录。该 workspace 在服务首次初始化时自动创建，不可被删除，作为新用户的缺省工作区。
+
+## 默认工作目录
+
+每个 workspace 包含一个 `default_workdir` 字段，创建时自动填充为 `~/.ainrf_workspaces/{username}_{slug}` 格式。当任务在此 workspace 下执行时，终端初始目录自动设置为该路径。
+
+## 文件浏览器
+
+文件浏览器位于路由 `/files`，与 workspace 选择器联动：
+
+- **目录树导航**：左侧面板显示目录树，支持展开/折叠、目录切换
+- **文件列表**：右侧展示当前目录下的文件和子目录，显示文件名、大小、修改时间
+- **文件内容查看**：点击文本文件在右侧打开内容预览
+
+### Monaco 编辑器
+
+文本文件通过懒加载的 Monaco Editor 打开，支持语法高亮和代码折叠。大文件不自动加载完整内容。
+
+### 大文件限制
+
+单文件读取超过 50 MB 时，后端返回 `413 Content Too Large` 错误，前端显示文件过大提示。
+
+## 与终端的关系
+
+Workspace 的 `default_workdir` 在任务启动时传递给终端 session，作为初始工作目录。
+
+## 关联文档
+
+- [[terminal]] — 终端 session 与会话管理
+- [[index]] — AINRF 文档索引

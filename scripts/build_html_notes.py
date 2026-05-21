@@ -127,6 +127,9 @@ def load_notes() -> tuple[list[Note], dict[str, str]]:
 
     for path in sorted(SOURCE_DOCS.rglob("*.md")):
         rel = path.relative_to(SOURCE_DOCS)
+        # Skip personal worklog files and archived docs
+        if rel.as_posix().startswith("LLM-Working/") or rel.as_posix().startswith("archive/"):
+            continue
         canonical_key = rel.with_suffix("").as_posix()
         raw = path.read_text(encoding="utf-8")
         meta, body = parse_frontmatter(raw)
