@@ -749,6 +749,7 @@ export interface ProjectCostSummary {
 }
 
 export interface AdminUserItem { id: string; username: string; display_name: string; role: string; status: string; created_at: string; last_login_at: string | null }
+export interface AdminUserResponse { id: string; username: string; display_name: string; status: string }
 export interface AdminUserListResponse { items: AdminUserItem[] }
 export interface AdminUserUpdateRequest { status?: string | null }
 export interface AdminPasswordResetRequest { password: string }
