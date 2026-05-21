@@ -4,7 +4,7 @@ import { renderWithProviders } from '../../src/test/render';
 import SessionsPage from '../../src/pages/SessionsPage';
 import * as api from '../../src/api';
 
-vi.mock('../../src/api', () => ({
+vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getSessions: vi.fn(),
   getSession: vi.fn(),
 }));

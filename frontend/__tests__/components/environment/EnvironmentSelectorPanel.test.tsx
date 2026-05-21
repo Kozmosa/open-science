@@ -7,7 +7,7 @@ import { createDefaultWebUiSettings, settingsStorageKey } from '../../../src/set
 import EnvironmentSelectorPanel from '../../../src/components/environment/EnvironmentSelectorPanel';
 import { useEnvironmentSelection } from '../../../src/components/environment/useEnvironmentSelection';
 
-vi.mock('../../../src/api', () => ({
+vi.mock('../../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(),
 }));
