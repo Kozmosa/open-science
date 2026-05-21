@@ -20,6 +20,7 @@ from ainrf.task_harness.artifacts import (
     environment_summary_from_json,
     launch_payload_path,
     prompt_manifest_path,
+    prepare_codex_home_artifact,
     raw_prompt_configuration,
     read_binding_summary,
     read_prompt_summary,
@@ -38,6 +39,7 @@ from ainrf.task_harness.artifacts import (
     write_task_configuration_snapshot,
 )
 from ainrf.task_harness.launcher import (
+    LaunchPayload,
     TaskLaunchError,
     build_local_launcher,
     build_remote_launcher,
@@ -82,7 +84,8 @@ _FINAL_STATUSES = {
 }
 _TASK_PROFILE = "claude-code"
 _EXECUTION_ENGINE = "claude-code"
-_SUPPORTED_ENGINES = {"claude-code", "agent-sdk"}
+_SUPPORTED_ENGINES = {"claude-code", "agent-sdk", "codex-app-server"}
+_RESUMABLE_ENGINES = {"agent-sdk", "codex-app-server"}
 _ARIS_SKILL_REQUIREMENTS: dict[TaskConfigurationMode, list[str]] = {
     TaskConfigurationMode.REPRODUCE_BASELINE: ["research-pipeline"],
     TaskConfigurationMode.DISCOVER_IDEAS: ["research-lit"],
@@ -340,6 +343,10 @@ class TaskHarnessService:
             raise TaskHarnessError(f"Unsupported execution engine: {resolved_execution_engine}")
         workspace = self._workspace_service.get_workspace(workspace_id)
         environment = self._environment_service.get_environment(environment_id)
+        if resolved_execution_engine == "codex-app-server" and not is_local_environment(environment):
+            raise TaskHarnessError(
+                "codex-app-server is only supported for local environments in the current implementation"
+            )
         task_dir = self.task_directory(uuid4().hex)
         profile_snapshot = _normalize_research_agent_profile(research_agent_profile)
         settings_artifact_path = write_claude_settings_artifact(
@@ -725,7 +732,7 @@ class TaskHarnessService:
             TaskHarnessStatus.FAILED,
         }:
             raise TaskHarnessError(f"Cannot resume task in status: {status.value}")
-        if execution_engine != "agent-sdk" and status in {
+        if execution_engine not in _RESUMABLE_ENGINES and status in {
             TaskHarnessStatus.SUCCEEDED,
             TaskHarnessStatus.FAILED,
         }:
@@ -742,8 +749,8 @@ class TaskHarnessService:
         engine = self._get_engine(execution_engine)
         await engine.send_prompt(task_id, prompt)
 
-        # Auto-resume agent-sdk tasks so queued prompts are processed
-        if execution_engine == "agent-sdk":
+        # Auto-resume resumable tasks so queued prompts are processed
+        if execution_engine in _RESUMABLE_ENGINES:
             self._schedule_task(task_id)
 
         seq = self._append_output_event(
@@ -939,7 +946,7 @@ class TaskHarnessService:
                     if is_local_environment(environment):
                         injector.sync_to_claude(workdir=resolved_workdir)
 
-            if resolved_execution_engine == "agent-sdk":
+            if resolved_execution_engine in _RESUMABLE_ENGINES:
                 # Build EngineContext and run via AgentSdkEngine
                 binding_path = Path(row["binding_snapshot_path"])
                 binding = read_binding_summary(str(binding_path))
@@ -961,6 +968,19 @@ class TaskHarnessService:
                         max_budget_usd=None,
                         mcp_servers=None,
                         disallowed_tools=None,
+                        api_base_url=None,
+                        api_key=None,
+                        default_opus_model=None,
+                        default_sonnet_model=None,
+                        default_haiku_model=None,
+                        env_overrides=None,
+                        codex_base_url=None,
+                        codex_api_key=None,
+                        codex_model=None,
+                        codex_app_server_command=None,
+                        codex_approval_policy=None,
+                        codex_config_toml=None,
+                        codex_auth_json=None,
                     )
 
                 if config is None:
@@ -986,6 +1006,30 @@ class TaskHarnessService:
                     agent_profile=profile,
                     task_config=config,
                     session_state_path=session_state_path,
+                    codex_home_path=None,
+                )
+
+                runtime_command: list[str] = []
+                runtime_codex_home: str | None = None
+                if resolved_execution_engine == "codex-app-server":
+                    runtime_codex_home = prepare_codex_home_artifact(
+                        task_dir,
+                        profile=profile,
+                    )
+                    context.codex_home_path = runtime_codex_home
+                    runtime_command = [
+                        profile.codex_app_server_command or "codex app-server --listen stdio://"
+                    ]
+                write_launch_payload(
+                    Path(row["launch_payload_path"]),
+                    LaunchPayload(
+                        runner_kind=resolved_execution_engine,
+                        working_directory=resolved_workdir,
+                        command=runtime_command,
+                        prompt_file=str(prompt_file_path),
+                        launch_payload_path=row["launch_payload_path"],
+                        codex_home=runtime_codex_home,
+                    ),
                 )
 
                 engine = self._get_engine(resolved_execution_engine)
@@ -1468,6 +1512,26 @@ def _normalize_research_agent_profile(
             skills=[],
             skills_prompt=None,
             settings_json=None,
+            settings_artifact_path=None,
+            model=None,
+            permission_mode=None,
+            max_turns=None,
+            max_budget_usd=None,
+            mcp_servers=None,
+            disallowed_tools=None,
+            api_base_url=None,
+            api_key=None,
+            default_opus_model=None,
+            default_sonnet_model=None,
+            default_haiku_model=None,
+            env_overrides=None,
+            codex_base_url=None,
+            codex_api_key=None,
+            codex_model=None,
+            codex_app_server_command=None,
+            codex_approval_policy=None,
+            codex_config_toml=None,
+            codex_auth_json=None,
         )
     settings_json = payload.get("settings_json")
     normalized_settings: dict[str, object] | None = None
@@ -1479,6 +1543,18 @@ def _normalize_research_agent_profile(
     normalized_env_overrides: dict[str, str] | None = None
     if isinstance(env_overrides, dict):
         normalized_env_overrides = {str(key): str(value) for key, value in env_overrides.items()}
+    max_turns_raw = payload.get("max_turns")
+    max_turns = max_turns_raw if isinstance(max_turns_raw, int) else None
+    max_budget_raw = payload.get("max_budget_usd")
+    max_budget_usd = (
+        float(max_budget_raw) if isinstance(max_budget_raw, int | float) else None
+    )
+    mcp_servers_raw = payload.get("mcp_servers")
+    mcp_servers = (
+        {str(key): value for key, value in mcp_servers_raw.items()}
+        if isinstance(mcp_servers_raw, dict)
+        else None
+    )
     return ResearchAgentProfileSnapshot(
         profile_id=str(payload.get("profile_id", "claude-code-custom")),
         label=str(payload.get("label", "Claude Code Custom")),
@@ -1488,11 +1564,9 @@ def _normalize_research_agent_profile(
         settings_json=normalized_settings,
         model=_optional_str(payload.get("model")),
         permission_mode=_optional_str(payload.get("permission_mode")),
-        max_turns=payload.get("max_turns"),
-        max_budget_usd=payload.get("max_budget_usd"),
-        mcp_servers=payload.get("mcp_servers")
-        if isinstance(payload.get("mcp_servers"), dict)
-        else None,
+        max_turns=max_turns,
+        max_budget_usd=max_budget_usd,
+        mcp_servers=mcp_servers,
         disallowed_tools=[str(s) for s in dt]
         if isinstance((dt := payload.get("disallowed_tools")), list)
         else None,
@@ -1502,6 +1576,13 @@ def _normalize_research_agent_profile(
         default_sonnet_model=_optional_str(payload.get("default_sonnet_model")),
         default_haiku_model=_optional_str(payload.get("default_haiku_model")),
         env_overrides=normalized_env_overrides,
+        codex_base_url=_optional_str(payload.get("codex_base_url")),
+        codex_api_key=_optional_str(payload.get("codex_api_key")),
+        codex_model=_optional_str(payload.get("codex_model")),
+        codex_app_server_command=_optional_str(payload.get("codex_app_server_command")),
+        codex_approval_policy=_optional_str(payload.get("codex_approval_policy")),
+        codex_config_toml=_optional_str(payload.get("codex_config_toml")),
+        codex_auth_json=_optional_str(payload.get("codex_auth_json")),
     )
 
 

@@ -139,6 +139,21 @@ function normalizeTaskConfigurationSettings(
             defaultSonnetModel: typeof item.defaultSonnetModel === 'string' ? item.defaultSonnetModel : '',
             defaultHaikuModel: typeof item.defaultHaikuModel === 'string' ? item.defaultHaikuModel : '',
             envOverrides: typeof item.envOverrides === 'string' ? item.envOverrides : '',
+            codexBaseUrl: typeof item.codexBaseUrl === 'string' ? item.codexBaseUrl : '',
+            codexApiKey: typeof item.codexApiKey === 'string' ? item.codexApiKey : '',
+            codexModel: typeof item.codexModel === 'string' ? item.codexModel : '',
+            codexAppServerCommand:
+              typeof item.codexAppServerCommand === 'string' ? item.codexAppServerCommand : '',
+            codexApprovalPolicy:
+              typeof item.codexApprovalPolicy === 'string' ? item.codexApprovalPolicy : '',
+            codexConfigToml:
+              typeof item.codexConfigToml === 'string' ? item.codexConfigToml : '',
+            codexAuthJson:
+              typeof item.codexAuthJson === 'string' ? item.codexAuthJson : '',
+            codexConfigTomlSource:
+              item.codexConfigTomlSource === 'host_default' ? 'host_default' : 'custom',
+            codexAuthJsonSource:
+              item.codexAuthJsonSource === 'host_default' ? 'host_default' : 'custom',
           },
         ];
       })
@@ -183,6 +198,8 @@ function normalizeTaskConfigurationSettings(
       defaultExecutionEngineId:
         value.defaultExecutionEngineId === 'agent-sdk'
           ? 'agent-sdk'
+          : value.defaultExecutionEngineId === 'codex-app-server'
+            ? 'codex-app-server'
           : 'claude-code',
       researchAgentProfiles: researchAgentProfiles.length > 0 ? researchAgentProfiles : defaults.researchAgentProfiles,
       taskConfigurations: taskConfigurations.length > 0 ? taskConfigurations : defaults.taskConfigurations,

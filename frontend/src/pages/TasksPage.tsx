@@ -161,10 +161,15 @@ function TasksPage() {
     return {
       title: environmentDefaults.titleTemplate,
       task_input: environmentDefaults.taskInputTemplate,
+      executionEngineId: settings.taskConfiguration.defaultExecutionEngineId,
       researchAgentProfileId: environmentDefaults.researchAgentProfileId,
       taskConfigurationId: environmentDefaults.taskConfigurationId,
     };
-  }, [environmentSelection.selectedEnvironmentId, settings.projectDefaults.default?.environmentDefaults]);
+  }, [
+    environmentSelection.selectedEnvironmentId,
+    settings.projectDefaults.default?.environmentDefaults,
+    settings.taskConfiguration.defaultExecutionEngineId,
+  ]);
 
   const createError = extractErrorMessage(createMutation.error);
   const tasksError = extractErrorMessage(tasksQuery.error);

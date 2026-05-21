@@ -62,6 +62,15 @@ export function createDefaultResearchAgentProfile(): ResearchAgentProfileSetting
     defaultSonnetModel: '',
     defaultHaikuModel: '',
     envOverrides: '',
+    codexBaseUrl: '',
+    codexApiKey: '',
+    codexModel: '',
+    codexAppServerCommand: '',
+    codexApprovalPolicy: '',
+    codexConfigToml: '',
+    codexAuthJson: '',
+    codexConfigTomlSource: 'custom',
+    codexAuthJsonSource: 'custom',
   };
 }
 
@@ -96,6 +105,15 @@ export function createKimiResearchAgentProfile(): ResearchAgentProfileSettings {
     defaultSonnetModel: 'kimi-for-coding',
     defaultHaikuModel: 'kimi-for-coding',
     envOverrides: '',
+    codexBaseUrl: '',
+    codexApiKey: '',
+    codexModel: '',
+    codexAppServerCommand: '',
+    codexApprovalPolicy: '',
+    codexConfigToml: '',
+    codexAuthJson: '',
+    codexConfigTomlSource: 'custom',
+    codexAuthJsonSource: 'custom',
   };
 }
 
@@ -114,6 +132,66 @@ export function createAgentSdkResearchAgentProfile(): ResearchAgentProfileSettin
     defaultSonnetModel: '',
     defaultHaikuModel: '',
     envOverrides: '',
+    codexBaseUrl: '',
+    codexApiKey: '',
+    codexModel: '',
+    codexAppServerCommand: '',
+    codexApprovalPolicy: '',
+    codexConfigToml: '',
+    codexAuthJson: '',
+    codexConfigTomlSource: 'custom',
+    codexAuthJsonSource: 'custom',
+  };
+}
+
+export function createCodexAppServerResearchAgentProfile(): ResearchAgentProfileSettings {
+  return {
+    profileId: 'codex-app-server-default',
+    label: 'Codex App Server Default',
+    systemPrompt: '',
+    skills: [],
+    skillModes: {},
+    skillsPrompt: '',
+    settingsJson: '',
+    apiBaseUrl: '',
+    apiKey: '',
+    defaultOpusModel: '',
+    defaultSonnetModel: '',
+    defaultHaikuModel: '',
+    envOverrides: '',
+    codexBaseUrl: '',
+    codexApiKey: '',
+    codexModel: 'gpt-5-codex',
+    codexAppServerCommand: 'codex app-server --listen stdio://',
+    codexApprovalPolicy: 'never',
+    codexConfigToml: '',
+    codexAuthJson: '',
+    codexConfigTomlSource: 'host_default',
+    codexAuthJsonSource: 'host_default',
+  };
+}
+
+export function applyCodexDefaultsToProfile(
+  profile: ResearchAgentProfileSettings,
+  defaults: {
+    codexConfigToml?: string | null;
+    codexAuthJson?: string | null;
+  }
+): ResearchAgentProfileSettings {
+  return {
+    ...profile,
+    codexConfigToml:
+      profile.codexConfigTomlSource === 'custom'
+        ? profile.codexConfigToml
+        : (defaults.codexConfigToml ?? ''),
+    codexAuthJson:
+      profile.codexAuthJsonSource === 'custom'
+        ? profile.codexAuthJson
+        : (defaults.codexAuthJson ?? ''),
+    codexConfigTomlSource:
+      profile.codexConfigTomlSource === 'custom' ? 'custom' : 'host_default',
+    codexAuthJsonSource:
+      profile.codexAuthJsonSource === 'custom' ? 'custom' : 'host_default',
   };
 }
 
@@ -154,6 +232,7 @@ export function createDefaultTaskConfigurationSettings(): TaskConfigurationSetti
       createDefaultResearchAgentProfile(),
       createKimiResearchAgentProfile(),
       createAgentSdkResearchAgentProfile(),
+      createCodexAppServerResearchAgentProfile(),
     ],
     taskConfigurations: createDefaultTaskConfigurations(),
     defaultResearchAgentProfileId,

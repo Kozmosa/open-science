@@ -175,4 +175,62 @@ describe('settings storage v2 task configuration', () => {
     });
     expect(profile.skills).toEqual(['web-search']);
   });
+
+  it('accepts codex-app-server as default execution engine', () => {
+    window.localStorage.setItem(
+      settingsStorageKey,
+      JSON.stringify({
+        version: 3,
+        general: {
+          defaultRoute: 'tasks',
+          terminal: { fontSize: 13 },
+          editor: { fontSize: 14, fontFamily: 'monospace' },
+        },
+        taskConfiguration: {
+          defaultExecutionEngineId: 'codex-app-server',
+          researchAgentProfiles: [
+            {
+              profileId: 'codex-app-server-default',
+              label: 'Codex App Server Default',
+              systemPrompt: '',
+              skills: [],
+              skillModes: {},
+              skillsPrompt: '',
+              settingsJson: '',
+              codexModel: 'gpt-5-codex',
+              codexAppServerCommand: 'codex app-server --listen stdio://',
+              codexApprovalPolicy: 'never',
+              codexConfigToml: 'model = "custom-provider"',
+              codexAuthJson: '{"token":"override"}',
+            },
+          ],
+          taskConfigurations: [
+            { configId: 'raw-prompt', label: 'Raw Prompt', mode: 'raw_prompt' },
+          ],
+          defaultResearchAgentProfileId: 'codex-app-server-default',
+          defaultTaskConfigurationId: 'raw-prompt',
+        },
+        projectDefaults: {
+          default: {
+            defaultEnvironmentId: null,
+            defaultWorkspaceId: null,
+            selection: { lastEnvironmentId: null, lastWorkspaceId: null },
+            environmentDefaults: {},
+          },
+        },
+      })
+    );
+
+    const result = readStoredSettings();
+    expect(result.settings.taskConfiguration.defaultExecutionEngineId).toBe('codex-app-server');
+    expect(result.settings.taskConfiguration.researchAgentProfiles[0]?.codexModel).toBe(
+      'gpt-5-codex'
+    );
+    expect(result.settings.taskConfiguration.researchAgentProfiles[0]?.codexConfigToml).toBe(
+      'model = "custom-provider"'
+    );
+    expect(result.settings.taskConfiguration.researchAgentProfiles[0]?.codexAuthJson).toBe(
+      '{"token":"override"}'
+    );
+  });
 });

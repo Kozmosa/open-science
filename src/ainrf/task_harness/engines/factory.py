@@ -6,6 +6,7 @@ from .base import ExecutionEngine
 _ENGINES: dict[str, str] = {
     "claude-code": "ainrf.task_harness.engines.claude_code:ClaudeCodeEngine",
     "agent-sdk": "ainrf.task_harness.engines.agent_sdk:AgentSdkEngine",
+    "codex-app-server": "ainrf.task_harness.engines.codex_app_server:CodexAppServerEngine",
 }
 
 

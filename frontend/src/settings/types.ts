@@ -1,7 +1,8 @@
 export type DefaultRoute = 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
 
-export type ExecutionEngineId = 'claude-code' | 'agent-sdk';
+export type ExecutionEngineId = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 export type SkillMode = 'disabled' | 'enabled' | 'auto';
+export type CodexConfigSource = 'host_default' | 'custom';
 export type TaskConfigurationMode = 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
 
 export interface ResearchAgentProfileSettings {
@@ -18,6 +19,15 @@ export interface ResearchAgentProfileSettings {
   defaultSonnetModel: string;
   defaultHaikuModel: string;
   envOverrides: string;
+  codexBaseUrl: string;
+  codexApiKey: string;
+  codexModel: string;
+  codexAppServerCommand: string;
+  codexApprovalPolicy: string;
+  codexConfigToml: string;
+  codexAuthJson: string;
+  codexConfigTomlSource: CodexConfigSource;
+  codexAuthJsonSource: CodexConfigSource;
 }
 
 export interface TaskConfigurationPreset {

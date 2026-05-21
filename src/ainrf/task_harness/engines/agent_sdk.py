@@ -7,6 +7,7 @@ import os
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Literal, cast
 
 from claude_agent_sdk import query, ClaudeAgentOptions, HookMatcher
 from claude_agent_sdk import (
@@ -21,12 +22,22 @@ from claude_agent_sdk import (
     ToolUseBlock,
     ToolResultBlock,
 )
+from claude_agent_sdk.types import (
+    McpHttpServerConfig,
+    McpSdkServerConfig,
+    McpSSEServerConfig,
+    McpStdioServerConfig,
+)
 
 from .base import EngineContext, EngineEvent, ExecutionEngine
 from ainrf.environments.models import utc_now
 from ainrf.task_harness.session_state import SessionCheckpoint
 
 logger = logging.getLogger(__name__)
+
+McpServerConfig = (
+    McpStdioServerConfig | McpSSEServerConfig | McpHttpServerConfig | McpSdkServerConfig
+)
 
 
 def _build_token_usage(sdk_msg) -> dict | None:
@@ -132,15 +143,24 @@ class AgentSdkEngine(ExecutionEngine):
         else:
             prompt = context.rendered_prompt
 
+        permission_mode = cast(
+            Literal["default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto"]
+            | None,
+            context.agent_profile.permission_mode or "acceptEdits",
+        )
+        mcp_servers = cast(
+            dict[str, McpServerConfig] | str | Path,
+            context.agent_profile.mcp_servers or {},
+        )
         options = ClaudeAgentOptions(
             model=context.agent_profile.model or "claude-sonnet-4-5",
             system_prompt=context.agent_profile.system_prompt,
-            permission_mode=context.agent_profile.permission_mode or "acceptEdits",
+            permission_mode=permission_mode,
             cwd=context.working_directory,
             resume=session.session_id,
             max_turns=context.agent_profile.max_turns,
             max_budget_usd=context.agent_profile.max_budget_usd,
-            mcp_servers=context.agent_profile.mcp_servers or {},
+            mcp_servers=mcp_servers,
             allowed_tools=context.agent_profile.skills or [],
             disallowed_tools=context.agent_profile.disallowed_tools or [],
             hooks={

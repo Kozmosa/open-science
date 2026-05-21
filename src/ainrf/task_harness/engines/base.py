@@ -24,6 +24,7 @@ class EngineContext:
     agent_profile: ResearchAgentProfileSnapshot
     task_config: TaskConfigurationSnapshot
     session_state_path: str | None = None
+    codex_home_path: str | None = None
 
 
 @dataclass(slots=True)

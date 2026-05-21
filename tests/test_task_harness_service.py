@@ -4,10 +4,15 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+import pytest
+
 from ainrf.environments.models import EnvironmentAuthKind
 from ainrf.environments.service import InMemoryEnvironmentService
 from ainrf.task_harness.artifacts import (
     binding_snapshot_path,
+    codex_auth_path,
+    codex_config_path,
+    codex_home_path,
     launch_payload_path,
     prompt_manifest_path,
     write_binding_snapshot,
@@ -16,7 +21,7 @@ from ainrf.task_harness.artifacts import (
 )
 from ainrf.task_harness.launcher import LaunchPayload
 from ainrf.task_harness.models import TaskHarnessStatus, TaskConfigurationMode
-from ainrf.task_harness.service import TaskHarnessService
+from ainrf.task_harness.service import TaskHarnessError, TaskHarnessService
 from ainrf.workspaces.service import WorkspaceRegistryService
 
 
@@ -281,3 +286,95 @@ def test_task_harness_normalizes_three_layer_task_configuration(tmp_path: Path) 
     assert "Compare task harness designs" in detail.task_configuration.rendered_task_input
     assert detail.binding is not None
     assert detail.binding.task_input == detail.task_configuration.rendered_task_input
+
+
+def test_task_harness_prepares_isolated_codex_home_with_optional_overrides(tmp_path: Path) -> None:
+    source_codex_home = tmp_path / "source-codex-home"
+    source_codex_home.mkdir(parents=True, exist_ok=True)
+    (source_codex_home / "config.toml").write_text('model = "gpt-5-codex"\n', encoding="utf-8")
+    (source_codex_home / "auth.json").write_text('{"token":"base"}\n', encoding="utf-8")
+    (source_codex_home / "extra.txt").write_text("keep\n", encoding="utf-8")
+
+    environment_service = InMemoryEnvironmentService()
+    environment = environment_service.create_environment(
+        alias="codex-lab",
+        display_name="Codex Lab",
+        host="127.0.0.1",
+        user="root",
+        auth_kind=EnvironmentAuthKind.SSH_KEY,
+        default_workdir=str(tmp_path),
+        task_harness_profile="Use Codex profile.",
+    )
+    workspace_service = WorkspaceRegistryService(tmp_path)
+    service = TaskHarnessService(
+        state_root=tmp_path,
+        environment_service=environment_service,
+        workspace_service=workspace_service,
+    )
+    service.initialize()
+
+    task = service.create_task(
+        workspace_id="workspace-default",
+        environment_id=environment.id,
+        task_profile="claude-code",
+        task_input="Run Codex task",
+        title="Codex isolated task",
+        execution_engine="codex-app-server",
+        research_agent_profile={
+            "profile_id": "codex-app-server-default",
+            "label": "Codex App Server Default",
+            "codex_model": "gpt-5-codex",
+            "codex_app_server_command": "codex app-server --listen stdio://",
+            "codex_approval_policy": "never",
+            "codex_config_toml": 'model = "custom-provider"\n',
+            "codex_auth_json": '{"token":"override"}\n',
+        },
+    )
+
+    task_dir = service.task_directory(task.task_id)
+    isolated_home = codex_home_path(task_dir)
+    isolated_home.mkdir(parents=True, exist_ok=True)
+
+    from ainrf.task_harness.artifacts import prepare_codex_home_artifact
+
+    detail_profile = service.get_task(task.task_id).research_agent_profile
+    assert detail_profile is not None
+    prepare_codex_home_artifact(
+        task_dir,
+        profile=detail_profile,
+        source_home=source_codex_home,
+    )
+
+    assert isolated_home.exists()
+    assert not (isolated_home / "extra.txt").exists()
+    assert codex_config_path(task_dir).read_text(encoding="utf-8") == 'model = "custom-provider"\n'
+    assert codex_auth_path(task_dir).read_text(encoding="utf-8") == '{"token":"override"}\n'
+
+
+def test_task_harness_rejects_codex_app_server_for_remote_environment(tmp_path: Path) -> None:
+    environment_service = InMemoryEnvironmentService()
+    environment = environment_service.create_environment(
+        alias="remote-codex",
+        display_name="Remote Codex",
+        host="gpu-server-01",
+        user="root",
+        auth_kind=EnvironmentAuthKind.SSH_KEY,
+        default_workdir="/workspace/project",
+        task_harness_profile="Use remote runtime.",
+    )
+    workspace_service = WorkspaceRegistryService(tmp_path)
+    service = TaskHarnessService(
+        state_root=tmp_path,
+        environment_service=environment_service,
+        workspace_service=workspace_service,
+    )
+    service.initialize()
+
+    with pytest.raises(TaskHarnessError, match="only supported for local environments"):
+        service.create_task(
+            workspace_id="workspace-default",
+            environment_id=environment.id,
+            task_profile="claude-code",
+            task_input="Run Codex task",
+            execution_engine="codex-app-server",
+        )

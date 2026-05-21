@@ -1,6 +1,12 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getEnvironments, getSkills, getWorkspaces, installEnvironmentCodeServer } from '../../src/api';
+import {
+  getCodexDefaults,
+  getEnvironments,
+  getSkills,
+  getWorkspaces,
+  installEnvironmentCodeServer,
+} from '../../src/api';
 import {
   createDefaultWebUiSettings,
   defaultResearchAgentProfileId,
@@ -31,6 +37,7 @@ vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
 
 vi.mock('../../src/api', () => ({
   getEnvironments: vi.fn(),
+  getCodexDefaults: vi.fn(),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
   getWorkspaces: vi.fn(),
@@ -40,6 +47,7 @@ vi.mock('../../src/api', () => ({
 }));
 
 const mockGetEnvironments = vi.mocked(getEnvironments);
+const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 const mockInstallEnvironmentCodeServer = vi.mocked(installEnvironmentCodeServer);
@@ -73,10 +81,15 @@ const environment: EnvironmentRecord = {
 beforeEach(() => {
   window.localStorage.clear();
   mockGetEnvironments.mockReset();
+  mockGetCodexDefaults.mockReset();
   mockGetSkills.mockReset();
   mockGetWorkspaces.mockReset();
   mockInstallEnvironmentCodeServer.mockReset();
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
+  mockGetCodexDefaults.mockResolvedValue({
+    codex_config_toml: 'model = "from-home"\nprovider = "openai"\n',
+    codex_auth_json: '{"token":"from-home"}\n',
+  });
   mockGetSkills.mockResolvedValue({ items: [] });
   mockGetWorkspaces.mockResolvedValue({ items: [] });
 });
@@ -112,6 +125,72 @@ describe('SettingsPage', () => {
     expect(selector.compareDocumentPosition(projectHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
+  });
+
+  it('hydrates codex profile defaults from local codex settings API', async () => {
+    window.localStorage.setItem(
+      settingsStorageKey,
+      JSON.stringify(createDefaultWebUiSettings())
+    );
+
+    renderWithProviders(<SettingsPage />);
+
+    const executionEngineSelect = await screen.findByLabelText('Execution engine');
+    fireEvent.change(executionEngineSelect, { target: { value: 'codex-app-server' } });
+    fireEvent.change(screen.getByLabelText('Default Research Agent'), {
+      target: { value: 'codex-app-server-default' },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Codex config.toml')).toHaveValue(
+        'model = "from-home"\nprovider = "openai"\n'
+      )
+    );
+    expect(screen.getByLabelText('Codex auth.json')).toHaveValue('{"token":"from-home"}\n');
+  });
+
+  it('does not overwrite non-empty saved codex profile values with host defaults', async () => {
+    const settings = createDefaultWebUiSettings();
+    settings.taskConfiguration.defaultExecutionEngineId = 'codex-app-server';
+    const codexProfile = settings.taskConfiguration.researchAgentProfiles.find(
+      (profile) => profile.profileId === 'codex-app-server-default'
+    );
+    if (!codexProfile) {
+      throw new Error('Missing codex default profile in test fixture');
+    }
+    codexProfile.codexConfigToml = 'model = "user-saved"\n';
+    codexProfile.codexAuthJson = '{"token":"user-saved"}\n';
+    settings.taskConfiguration.defaultResearchAgentProfileId = 'codex-app-server-default';
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+
+    renderWithProviders(<SettingsPage />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Codex config.toml')).toHaveValue('model = "user-saved"\n')
+    );
+    expect(screen.getByLabelText('Codex auth.json')).toHaveValue('{"token":"user-saved"}\n');
+  });
+
+  it('preserves intentionally cleared codex profile values across reload', async () => {
+    const settings = createDefaultWebUiSettings();
+    settings.taskConfiguration.defaultExecutionEngineId = 'codex-app-server';
+    const codexProfile = settings.taskConfiguration.researchAgentProfiles.find(
+      (profile) => profile.profileId === 'codex-app-server-default'
+    );
+    if (!codexProfile) {
+      throw new Error('Missing codex default profile in test fixture');
+    }
+    codexProfile.codexConfigToml = '';
+    codexProfile.codexAuthJson = '';
+    codexProfile.codexConfigTomlSource = 'custom';
+    codexProfile.codexAuthJsonSource = 'custom';
+    settings.taskConfiguration.defaultResearchAgentProfileId = 'codex-app-server-default';
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+
+    renderWithProviders(<SettingsPage />);
+
+    await waitFor(() => expect(screen.getByLabelText('Codex config.toml')).toHaveValue(''));
+    expect(screen.getByLabelText('Codex auth.json')).toHaveValue('');
   });
 
   it('falls back from an invalid document and persists section saves', async () => {

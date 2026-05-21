@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -32,6 +33,9 @@ TASK_CONFIG_SNAPSHOT_FILENAME = "task_configuration_snapshot.json"
 RESEARCH_AGENT_PROFILE_FILENAME = "research_agent_profile.json"
 CLAUDE_SETTINGS_FILENAME = "claude-settings.json"
 REMOTE_LAUNCH_FILENAME = "remote-launch.sh"
+CODEX_HOME_DIRNAME = "codex-home"
+CODEX_CONFIG_FILENAME = "config.toml"
+CODEX_AUTH_FILENAME = "auth.json"
 DEFAULT_EXECUTION_ENGINE = "claude-code"
 
 DEFAULT_RESEARCH_AGENT_PROFILE = ResearchAgentProfileSnapshot(
@@ -41,6 +45,7 @@ DEFAULT_RESEARCH_AGENT_PROFILE = ResearchAgentProfileSnapshot(
     skills=[],
     skills_prompt=None,
     settings_json=None,
+    settings_artifact_path=None,
 )
 
 
@@ -74,6 +79,18 @@ def claude_settings_path(task_dir: Path) -> Path:
 
 def remote_launch_path(task_dir: Path) -> Path:
     return task_dir / REMOTE_LAUNCH_FILENAME
+
+
+def codex_home_path(task_dir: Path) -> Path:
+    return task_dir / CODEX_HOME_DIRNAME
+
+
+def codex_config_path(task_dir: Path) -> Path:
+    return codex_home_path(task_dir) / CODEX_CONFIG_FILENAME
+
+
+def codex_auth_path(task_dir: Path) -> Path:
+    return codex_home_path(task_dir) / CODEX_AUTH_FILENAME
 
 
 def write_binding_snapshot(
@@ -162,6 +179,35 @@ def write_claude_settings_artifact(
     return str(path)
 
 
+def prepare_codex_home_artifact(
+    task_dir: Path,
+    *,
+    profile: ResearchAgentProfileSnapshot,
+    source_home: Path | None = None,
+) -> str:
+    source = source_home or (Path.home() / ".codex")
+    target = codex_home_path(task_dir)
+    if target.exists():
+        shutil.rmtree(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.mkdir(parents=True, exist_ok=True)
+    source_config = source / CODEX_CONFIG_FILENAME
+    if source_config.exists() and source_config.is_file():
+        shutil.copy2(source_config, codex_config_path(task_dir))
+    source_auth = source / CODEX_AUTH_FILENAME
+    if source_auth.exists() and source_auth.is_file():
+        shutil.copy2(source_auth, codex_auth_path(task_dir))
+    if profile.codex_config_toml is not None:
+        config_path = codex_config_path(task_dir)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(profile.codex_config_toml, encoding="utf-8")
+    if profile.codex_auth_json is not None:
+        auth_path = codex_auth_path(task_dir)
+        auth_path.parent.mkdir(parents=True, exist_ok=True)
+        auth_path.write_text(profile.codex_auth_json, encoding="utf-8")
+    return str(target)
+
+
 def read_binding_summary(snapshot_path: str) -> TaskBindingSummary | None:
     path = Path(snapshot_path)
     if not path.exists():
@@ -210,6 +256,7 @@ def read_runtime_summary(launch_payload_path: str) -> TaskRuntimeSummary | None:
         prompt_file=payload.get("prompt_file"),
         helper_path=payload.get("helper_path"),
         launch_payload_path=payload.get("launch_payload_path"),
+        codex_home=payload.get("codex_home"),
     )
 
 
@@ -317,6 +364,20 @@ def research_agent_profile_payload(profile: ResearchAgentProfileSnapshot) -> dic
         payload["default_haiku_model"] = profile.default_haiku_model
     if profile.env_overrides is not None:
         payload["env_overrides"] = profile.env_overrides
+    if profile.codex_base_url is not None:
+        payload["codex_base_url"] = profile.codex_base_url
+    if profile.codex_api_key is not None:
+        payload["codex_api_key"] = profile.codex_api_key
+    if profile.codex_model is not None:
+        payload["codex_model"] = profile.codex_model
+    if profile.codex_app_server_command is not None:
+        payload["codex_app_server_command"] = profile.codex_app_server_command
+    if profile.codex_approval_policy is not None:
+        payload["codex_approval_policy"] = profile.codex_approval_policy
+    if profile.codex_config_toml is not None:
+        payload["codex_config_toml"] = profile.codex_config_toml
+    if profile.codex_auth_json is not None:
+        payload["codex_auth_json"] = profile.codex_auth_json
     return payload
 
 
@@ -345,6 +406,13 @@ def research_agent_profile_from_payload(payload: dict[str, Any]) -> ResearchAgen
         default_sonnet_model=payload.get("default_sonnet_model"),
         default_haiku_model=payload.get("default_haiku_model"),
         env_overrides=dict(env_overrides) if isinstance(env_overrides, dict) else None,
+        codex_base_url=payload.get("codex_base_url"),
+        codex_api_key=payload.get("codex_api_key"),
+        codex_model=payload.get("codex_model"),
+        codex_app_server_command=payload.get("codex_app_server_command"),
+        codex_approval_policy=payload.get("codex_approval_policy"),
+        codex_config_toml=payload.get("codex_config_toml"),
+        codex_auth_json=payload.get("codex_auth_json"),
     )
 
 

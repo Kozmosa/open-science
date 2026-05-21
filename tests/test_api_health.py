@@ -8,6 +8,7 @@ import pytest
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig, ContainerHealth
+from tests.testutil import get_jwt_headers
 
 
 @pytest.mark.anyio
@@ -71,3 +72,39 @@ async def test_health_reports_degraded_container_probe(
 
     assert response.status_code == 503
     assert response.json()["status"] == "degraded"
+
+
+@pytest.mark.anyio
+async def test_settings_codex_defaults_reads_local_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_home = tmp_path / "fake-home"
+    codex_home = fake_home / ".codex"
+    codex_home.mkdir(parents=True, exist_ok=True)
+    (codex_home / "config.toml").write_text('model = "gpt-5-codex"\n', encoding="utf-8")
+    (codex_home / "auth.json").write_text('{"token":"abc"}\n', encoding="utf-8")
+    monkeypatch.setattr("ainrf.api.routes.settings.Path.home", lambda: fake_home)
+
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+        )
+    )
+    jwt_headers = get_jwt_headers(app)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            "/settings/codex-defaults",
+            headers=jwt_headers,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "codex_config_toml": 'model = "gpt-5-codex"\n',
+        "codex_auth_json": '{"token":"abc"}\n',
+    }

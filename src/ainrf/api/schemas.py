@@ -396,6 +396,13 @@ class ResearchAgentProfileSnapshotRequest(BaseModel):
     default_sonnet_model: str | None = None
     default_haiku_model: str | None = None
     env_overrides: dict[str, str] | None = None
+    codex_base_url: str | None = None
+    codex_api_key: str | None = None
+    codex_model: str | None = None
+    codex_app_server_command: str | None = None
+    codex_approval_policy: str | None = None
+    codex_config_toml: str | None = None
+    codex_auth_json: str | None = None
 
 
 class TaskConfigurationSnapshotRequest(BaseModel):
@@ -596,6 +603,13 @@ class ResearchAgentProfileSnapshotResponse(BaseModel):
     default_sonnet_model: str | None = None
     default_haiku_model: str | None = None
     env_overrides: dict[str, str] | None = None
+    codex_base_url: str | None = None
+    codex_api_key: str | None = None
+    codex_model: str | None = None
+    codex_app_server_command: str | None = None
+    codex_approval_policy: str | None = None
+    codex_config_toml: str | None = None
+    codex_auth_json: str | None = None
 
 
 class TaskConfigurationSnapshotResponse(BaseModel):
@@ -651,6 +665,7 @@ class TaskRuntimeResponse(BaseModel):
     prompt_file: str | None = None
     helper_path: str | None = None
     launch_payload_path: str | None = None
+    codex_home: str | None = None
 
 
 class TaskResultResponse(BaseModel):
