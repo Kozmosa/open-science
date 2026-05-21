@@ -68,10 +68,12 @@ async def list_papers(
 @router.post("/papers/{paper_id}/read", status_code=204)
 async def mark_read(paper_id: str, request: Request):
     user_id = _get_user_id(request)
+    body = await request.json() if request.headers.get("content-type") == "application/json" else None
+    subscription_id = (body or {}).get("subscription_id")
     svc = _get_service(request)
     if not svc.user_owns_paper(user_id, paper_id):
         raise HTTPException(status_code=404, detail="Paper not found")
-    svc.mark_read(paper_id)
+    svc.mark_read(paper_id, subscription_id)
 
 
 @router.post("/papers/{paper_id}/convert", status_code=201)
@@ -79,12 +81,13 @@ async def convert_to_task(paper_id: str, request: Request):
     user_id = _get_user_id(request)
     body = await request.json()
     task_id = body.get("task_id")
+    subscription_id = body.get("subscription_id")
     if not task_id:
         raise HTTPException(status_code=400, detail="task_id is required")
     svc = _get_service(request)
     if not svc.user_owns_paper(user_id, paper_id):
         raise HTTPException(status_code=404, detail="Paper not found")
-    paper = svc.convert_to_task(paper_id, task_id)
+    paper = svc.convert_to_task(paper_id, task_id, subscription_id)
     return paper.to_dict()
 
 
@@ -107,7 +110,7 @@ async def trigger_fetch(subscription_id: str, request: Request):
     async def _fetch_and_store():
         try:
             papers = await fetch_for_subscription(sub)
-            new_papers = [p for p in papers if not svc.paper_exists(p.paper_id)]
+            new_papers = [p for p in papers if not svc.paper_exists(p.paper_id, sub.subscription_id)]
             if new_papers:
                 svc.insert_papers(new_papers)
             svc.update_last_fetched(sub.subscription_id)

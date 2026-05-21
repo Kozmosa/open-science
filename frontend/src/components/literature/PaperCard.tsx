@@ -15,7 +15,7 @@ export default function PaperCard({ paper, onConvertToTask, onReadChange }: Prop
 
   const handleMarkRead = async () => {
     try {
-      await markPaperRead(paper.paper_id);
+      await markPaperRead(paper.paper_id, paper.subscription_id);
       onReadChange();
     } catch {
       // Silently handle error

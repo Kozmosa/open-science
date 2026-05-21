@@ -595,12 +595,12 @@ export const getLiteraturePapers = (params: { subscription_id?: string; unread_o
         Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined)) as Record<string, string>
       ).toString());
 
-export const markPaperRead = (paperId: string): Promise<void> =>
+export const markPaperRead = (paperId: string, subscriptionId?: string): Promise<void> =>
   USE_MOCK
     ? Promise.resolve()
-    : api.post(`/literature/papers/${paperId}/read`, {});
+    : api.post(`/literature/papers/${paperId}/read`, { subscription_id: subscriptionId });
 
-export const convertPaperToTask = (paperId: string, taskId: string): Promise<LiteraturePaper> =>
+export const convertPaperToTask = (paperId: string, taskId: string, subscriptionId?: string): Promise<LiteraturePaper> =>
   USE_MOCK
     ? Promise.resolve({} as LiteraturePaper)
-    : api.post(`/literature/papers/${paperId}/convert`, { task_id: taskId });
+    : api.post(`/literature/papers/${paperId}/convert`, { task_id: taskId, subscription_id: subscriptionId });

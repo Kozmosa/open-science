@@ -164,32 +164,52 @@ class LiteratureService:
             ).fetchone()
         return row is not None
 
-    def mark_read(self, paper_id):
-        """Mark a paper as read. Note: this affects ALL copies of the paper
-        across all subscriptions (not limited to a single subscription)."""
+    def mark_read(self, paper_id, subscription_id=None):
+        """Mark a paper as read within a specific subscription, or all copies."""
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE literature_papers SET is_read = 1 WHERE paper_id = ?", (paper_id,)
-            )
+            if subscription_id:
+                conn.execute(
+                    "UPDATE literature_papers SET is_read = 1 WHERE paper_id = ? AND subscription_id = ?",
+                    (paper_id, subscription_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE literature_papers SET is_read = 1 WHERE paper_id = ?", (paper_id,)
+                )
             conn.commit()
 
-    def convert_to_task(self, paper_id, task_id):
+    def convert_to_task(self, paper_id, task_id, subscription_id=None):
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE literature_papers SET is_converted_to_task = 1, task_id = ? WHERE paper_id = ?",
-                (task_id, paper_id),
-            )
+            if subscription_id:
+                conn.execute(
+                    "UPDATE literature_papers SET is_converted_to_task = 1, task_id = ? WHERE paper_id = ? AND subscription_id = ?",
+                    (task_id, paper_id, subscription_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE literature_papers SET is_converted_to_task = 1, task_id = ? WHERE paper_id = ?",
+                    (task_id, paper_id),
+                )
             conn.commit()
             row = conn.execute(
+                "SELECT * FROM literature_papers WHERE paper_id = ? AND subscription_id = ?",
+                (paper_id, subscription_id or ""),
+            ).fetchone() if subscription_id else conn.execute(
                 "SELECT * FROM literature_papers WHERE paper_id = ?", (paper_id,)
             ).fetchone()
-        return self._row_to_paper(row)
+        return self._row_to_paper(row) if row else None
 
-    def paper_exists(self, paper_id):
+    def paper_exists(self, paper_id, subscription_id=None):
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM literature_papers WHERE paper_id = ?", (paper_id,)
-            ).fetchone()
+            if subscription_id:
+                row = conn.execute(
+                    "SELECT 1 FROM literature_papers WHERE paper_id = ? AND subscription_id = ?",
+                    (paper_id, subscription_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT 1 FROM literature_papers WHERE paper_id = ?", (paper_id,)
+                ).fetchone()
         return row is not None
 
     def insert_papers(self, papers):
