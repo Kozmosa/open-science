@@ -2,33 +2,49 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { getEnvironments, getEnvAccess, grantEnvAccess, revokeEnvAccess, getAdminUsers } from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useT } from '../../i18n';
+import { Select } from '../../components/ui';
+import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';
+import { AccessItemRow } from '../../components/settings/AccessItemRow';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 export function EnvAccessTab() {
   const { user } = useAuth();
+  const t = useT();
   const queryClient = useQueryClient();
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
   const [grantUserId, setGrantUserId] = useState('');
   const [maxTasks, setMaxTasks] = useState('');
 
-  const { data: envs } = useQuery({
+  const { data: envs, isLoading: envsLoading } = useQuery({
     queryKey: ['environments'],
     queryFn: () => getEnvironments(),
     enabled: user?.role === 'admin',
   });
+
   const { data: users } = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: getAdminUsers,
     enabled: user?.role === 'admin',
   });
-  const { data: accessData } = useQuery({
+
+  const { data: accessData, isLoading: accessLoading } = useQuery({
     queryKey: ['envAccess', selectedEnv],
     queryFn: () => getEnvAccess(selectedEnv!),
     enabled: !!selectedEnv && user?.role === 'admin',
   });
 
   const grantMutation = useMutation({
-    mutationFn: () => grantEnvAccess(selectedEnv!, { user_id: grantUserId, max_concurrent_tasks: maxTasks ? parseInt(maxTasks) : null }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['envAccess', selectedEnv] }); setGrantUserId(''); setMaxTasks(''); },
+    mutationFn: () =>
+      grantEnvAccess(selectedEnv!, {
+        user_id: grantUserId,
+        max_concurrent_tasks: maxTasks ? parseInt(maxTasks) : null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['envAccess', selectedEnv] });
+      setGrantUserId('');
+      setMaxTasks('');
+    },
   });
 
   const revokeMutation = useMutation({
@@ -38,63 +54,81 @@ export function EnvAccessTab() {
 
   if (user?.role !== 'admin') return null;
 
+  const envList = envs?.items ?? [];
+  const accessItems = accessData?.items ?? [];
+
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold">Environment Access</h3>
-      <select
-        value={selectedEnv ?? ''}
-        onChange={(e) => setSelectedEnv(e.target.value || null)}
-        className="text-sm px-2 py-1.5 border rounded-lg"
-      >
-        <option value="">Select environment...</option>
-        {(envs?.items ?? []).map((e) => (
-          <option key={e.id} value={e.id}>{e.display_name || e.alias}</option>
-        ))}
-      </select>
+      <h3 className="text-sm font-semibold text-[var(--text)]">{t('pages.settings.tabs.envAccess')}</h3>
 
-      {selectedEnv && (
+      <Select value={selectedEnv ?? ''} onChange={(e) => setSelectedEnv(e.target.value || null)}>
+        <option value="">{t('pages.settings.envAccess.selectEnv')}</option>
+        {envList.map((e) => (
+          <option key={e.id} value={e.id}>
+            {e.display_name || e.alias}
+          </option>
+        ))}
+      </Select>
+
+      {envsLoading && (
+        <LoadingSpinner size="sm" />
+      )}
+
+      {!envsLoading && !selectedEnv && (
+        <p className="text-sm text-[var(--text-secondary)]">{t('pages.settings.envAccess.noEnvSelected')}</p>
+      )}
+
+      {selectedEnv && accessLoading && (
+        <LoadingSpinner size="sm" />
+      )}
+
+      {selectedEnv && !accessLoading && (
         <div className="flex flex-col gap-2">
-          {(accessData?.items ?? []).map((a) => (
-            <div key={a.user_id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
-              <div>
-                <span className="font-medium">{a.username}</span>
-                <span className="text-gray-400 ml-2">{a.display_name}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500">Max tasks: {a.max_concurrent_tasks ?? 'unlimited'}</span>
-                <button
-                  type="button"
-                  onClick={() => revokeMutation.mutate(a.user_id)}
-                  className="text-xs text-red-600 hover:text-red-800"
-                >Remove</button>
-              </div>
-            </div>
+          {accessItems.length === 0 && (
+            <p className="text-sm text-[var(--text-secondary)]">{t('pages.settings.envAccess.noAccess')}</p>
+          )}
+
+          {accessItems.map((a) => (
+            <AccessItemRow
+              key={a.user_id}
+              label={a.username}
+              sublabel={a.display_name}
+              meta={`${t('pages.settings.envAccess.maxTasks')}: ${a.max_concurrent_tasks ?? t('pages.settings.envAccess.unlimited')}`}
+              onRemove={() => revokeMutation.mutate(a.user_id)}
+              removeLabel={t('pages.settings.envAccess.remove')}
+              disabled={revokeMutation.isPending}
+            />
           ))}
 
-          <div className="flex gap-2 items-center p-3 bg-blue-50 rounded-lg border border-blue-200 mt-2">
-            <select
-              value={grantUserId}
-              onChange={(e) => setGrantUserId(e.target.value)}
-              className="text-xs px-2 py-1 border rounded"
-            >
-              <option value="">Grant to...</option>
-              {(users?.items ?? []).filter(u => u.status === 'active').map((u) => (
-                <option key={u.id} value={u.id}>{u.username} ({u.display_name})</option>
-              ))}
-            </select>
-            <input
-              value={maxTasks}
-              onChange={(e) => setMaxTasks(e.target.value)}
-              placeholder="Max tasks"
-              className="text-xs px-2 py-1 border rounded w-24"
-            />
-            <button
-              type="button"
-              onClick={() => grantMutation.mutate()}
-              disabled={!grantUserId}
-              className="text-xs px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
-            >Grant</button>
-          </div>
+          {revokeMutation.isError && (
+            <p className="text-xs text-[var(--destructive)]">
+              {(revokeMutation.error as Error)?.message ?? 'Request failed'}
+            </p>
+          )}
+
+          <AccessGrantPanel
+            users={users?.items ?? []}
+            selectedUserId={grantUserId}
+            onUserChange={setGrantUserId}
+            onGrant={() => grantMutation.mutate()}
+            grantLabel={t('pages.settings.envAccess.grant')}
+            userPlaceholder={t('pages.settings.envAccess.grantTo')}
+            disabled={grantMutation.isPending}
+            extraField={
+              <input
+                value={maxTasks}
+                onChange={(e) => setMaxTasks(e.target.value)}
+                placeholder={t('pages.settings.envAccess.maxTasks')}
+                className="w-20 text-xs px-2 py-1.5 rounded bg-[var(--surface)] border border-[var(--border)] text-[var(--text)]"
+              />
+            }
+          />
+
+          {grantMutation.isError && (
+            <p className="text-xs text-[var(--destructive)]">
+              {(grantMutation.error as Error)?.message ?? 'Request failed'}
+            </p>
+          )}
         </div>
       )}
     </div>
