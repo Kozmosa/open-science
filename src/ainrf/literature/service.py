@@ -34,7 +34,7 @@ class LiteratureService:
             """)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS literature_papers (
-                    paper_id TEXT PRIMARY KEY,
+                    paper_id TEXT NOT NULL,
                     subscription_id TEXT NOT NULL,
                     title TEXT NOT NULL,
                     title_zh TEXT,
@@ -48,7 +48,8 @@ class LiteratureService:
                     is_read INTEGER NOT NULL DEFAULT 0,
                     is_converted_to_task INTEGER NOT NULL DEFAULT 0,
                     task_id TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (paper_id, subscription_id)
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_sub ON literature_papers(subscription_id)")
@@ -87,6 +88,13 @@ class LiteratureService:
                 "SELECT * FROM literature_subscriptions WHERE user_id = ?", (user_id,)
             ).fetchall()
         return [self._row_to_sub(row) for row in rows]
+
+    def get_subscription(self, subscription_id):
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM literature_subscriptions WHERE subscription_id = ?", (subscription_id,)
+            ).fetchone()
+        return self._row_to_sub(row) if row else None
 
     def list_active_subscriptions(self):
         with self._connect() as conn:
@@ -140,6 +148,17 @@ class LiteratureService:
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_paper(row) for row in rows]
+
+    def user_owns_paper(self, user_id, paper_id):
+        """Check if a paper belongs to a subscription owned by the user."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT 1 FROM literature_papers p
+                   JOIN literature_subscriptions s ON p.subscription_id = s.subscription_id
+                   WHERE p.paper_id = ? AND s.user_id = ?""",
+                (paper_id, user_id),
+            ).fetchone()
+        return row is not None
 
     def mark_read(self, paper_id):
         with self._connect() as conn:
