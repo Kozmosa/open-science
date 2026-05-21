@@ -18,7 +18,7 @@ export default function LiteraturePage() {
   const subscriptions = subscriptionsQuery.data?.items ?? [];
 
   const convertMutation = useMutation({
-    mutationFn: async ({ paperId, title, abstract }: { paperId: string; title: string; abstract: string }) => {
+    mutationFn: async ({ paperId, subscriptionId, title, abstract }: { paperId: string; subscriptionId: string; title: string; abstract: string }) => {
       const task = await createTask({
         project_id: 'default',
         workspace_id: 'workspace-default',
@@ -28,13 +28,13 @@ export default function LiteraturePage() {
         task_input: abstract,
         execution_engine: 'claude-code',
       });
-      await convertPaperToTask(paperId, task.task_id);
+      await convertPaperToTask(paperId, task.task_id, subscriptionId);
       return task;
     },
   });
 
-  const handleConvertToTask = useCallback((paperId: string, title: string, abstract: string) => {
-    convertMutation.mutate({ paperId, title, abstract });
+  const handleConvertToTask = useCallback((paperId: string, subscriptionId: string, title: string, abstract: string) => {
+    convertMutation.mutate({ paperId, subscriptionId, title, abstract });
   }, [convertMutation]);
 
   return (

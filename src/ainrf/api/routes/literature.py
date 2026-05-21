@@ -91,6 +91,8 @@ async def convert_to_task(paper_id: str, request: Request):
     if not svc.user_owns_paper(user_id, paper_id):
         raise HTTPException(status_code=404, detail="Paper not found")
     paper = svc.convert_to_task(paper_id, task_id, subscription_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="Paper not found for this subscription")
     return paper.to_dict()
 
 

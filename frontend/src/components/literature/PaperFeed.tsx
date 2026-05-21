@@ -7,7 +7,7 @@ import PaperCard from './PaperCard';
 
 interface Props {
   subscriptions: LiteratureSubscription[];
-  onConvertToTask: (paperId: string, title: string, abstract: string) => void;
+  onConvertToTask: (paperId: string, subscriptionId: string, title: string, abstract: string) => void;
 }
 
 export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {

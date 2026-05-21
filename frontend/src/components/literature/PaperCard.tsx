@@ -5,7 +5,7 @@ import { markPaperRead } from '../../api';
 
 interface Props {
   paper: LiteraturePaper;
-  onConvertToTask: (paperId: string, title: string, abstract: string) => void;
+  onConvertToTask: (paperId: string, subscriptionId: string, title: string, abstract: string) => void;
   onReadChange: () => void;
 }
 
@@ -100,7 +100,7 @@ export default function PaperCard({ paper, onConvertToTask, onReadChange }: Prop
         </a>
         <button
           type="button"
-          onClick={() => onConvertToTask(paper.paper_id, paper.title, paper.abstract)}
+          onClick={() => onConvertToTask(paper.paper_id, paper.subscription_id, paper.title, paper.abstract)}
           disabled={paper.is_converted_to_task}
           className="ml-auto rounded-md border border-[var(--apple-blue)]/30 px-2.5 py-1 text-[11px] text-[var(--apple-blue)] hover:bg-[var(--apple-blue)]/5 disabled:opacity-40"
         >
