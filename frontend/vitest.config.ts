@@ -4,6 +4,10 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react({ jsxRuntime: 'automatic' }), tailwindcss()],
+  esbuild: {
+    jsx: 'automatic',
+    jsxImportSource: 'react',
+  },
   test: {
     globals: true,
     environment: 'jsdom',
