@@ -30,6 +30,7 @@ from ainrf.auth import AuthService
 from ainrf.code_server import CodeServerSupervisor
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.files import FileBrowserService
+from ainrf.literature.scheduler import LiteratureScheduler
 from ainrf.literature.service import LiteratureService
 from ainrf.monitor.service import ResourceMonitorService
 from ainrf.projects import ProjectRegistryService
@@ -102,6 +103,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         auth_service = app.state.auth_service
         await _run_sync_in_lifespan(auth_service.initialize)
         await _run_sync_in_lifespan(app.state.literature_service.initialize)
+        literature_scheduler = LiteratureScheduler(app.state.literature_service)
+        literature_scheduler.start()
+        app.state.literature_scheduler = literature_scheduler
         # Create initial admin if no users exist
         try:
             with auth_service._connect() as conn:
@@ -140,6 +144,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
         await manager.stop()
         await resource_monitor_service.stop()
+        if hasattr(app.state, "literature_scheduler"):
+            await app.state.literature_scheduler.shutdown()
 
 
 def create_app(
