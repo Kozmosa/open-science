@@ -16,7 +16,7 @@ import {
   resetTerminalSession,
 } from '../../../src/api';
 
-vi.mock('../../../src/api', () => ({
+vi.mock('../../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   createTerminalSession: vi.fn(),
   deleteTerminalSession: vi.fn(),
   getTerminalSession: vi.fn(),

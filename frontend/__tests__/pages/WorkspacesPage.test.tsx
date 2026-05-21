@@ -10,7 +10,7 @@ import {
 } from '../../src/api';
 import type { WorkspaceListResponse, WorkspaceRecord } from '../../src/types';
 
-vi.mock('../../src/api', () => ({
+vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   createWorkspace: vi.fn(),
   deleteWorkspace: vi.fn(),
   getWorkspaces: vi.fn(),

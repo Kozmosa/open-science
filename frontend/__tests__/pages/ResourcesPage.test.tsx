@@ -5,7 +5,7 @@ import type { ResourcesResponse } from '../../src/types';
 import { renderWithProviders } from '../../src/test/render';
 import { getResources } from '../../src/api';
 
-vi.mock('../../src/api', () => ({
+vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getResources: vi.fn(),
 }));
 
