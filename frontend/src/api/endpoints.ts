@@ -24,6 +24,8 @@ import type { ChangePasswordRequest,
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  LiteratureSubscription,
+  LiteraturePaper,
   ProjectCostSummary,
   ProjectCreateRequest,
   ProjectEnvironmentReference,
@@ -568,3 +570,37 @@ export const refreshToken = (refreshTokenValue: string): Promise<AccessTokenResp
 export const logoutApi = (refreshTokenValue: string): Promise<void> => api.post<void>('/auth/logout', { refresh_token: refreshTokenValue });
 export const getMe = (): Promise<UserInfo> => api.get<UserInfo>('/auth/me');
 export const changePassword = (payload: ChangePasswordRequest): Promise<void> => api.post<void>('/auth/change-password', payload);
+
+// ── Literature endpoints ──────────────────────────────────
+
+export const getLiteratureSubscriptions = (): Promise<{ items: LiteratureSubscription[] }> =>
+  USE_MOCK
+    ? Promise.resolve({ items: [] })
+    : api.get('/literature/subscriptions');
+
+export const createLiteratureSubscription = (payload: Partial<LiteratureSubscription>): Promise<LiteratureSubscription> =>
+  USE_MOCK
+    ? Promise.resolve({} as LiteratureSubscription)
+    : api.post('/literature/subscriptions', payload);
+
+export const deleteLiteratureSubscription = (id: string): Promise<void> =>
+  USE_MOCK
+    ? Promise.resolve()
+    : api.delete(`/literature/subscriptions/${id}`);
+
+export const getLiteraturePapers = (params: { subscription_id?: string; unread_only?: boolean; limit?: number; offset?: number }): Promise<{ items: LiteraturePaper[] }> =>
+  USE_MOCK
+    ? Promise.resolve({ items: [] })
+    : api.get(`/literature/papers?` + new URLSearchParams(
+        Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined)) as Record<string, string>
+      ).toString());
+
+export const markPaperRead = (paperId: string): Promise<void> =>
+  USE_MOCK
+    ? Promise.resolve()
+    : api.post(`/literature/papers/${paperId}/read`, {});
+
+export const convertPaperToTask = (paperId: string, taskId: string): Promise<LiteraturePaper> =>
+  USE_MOCK
+    ? Promise.resolve({} as LiteraturePaper)
+    : api.post(`/literature/papers/${paperId}/convert`, { task_id: taskId });
