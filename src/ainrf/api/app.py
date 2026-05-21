@@ -17,22 +17,24 @@ from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
 from ainrf.api.routes.projects import router as projects_router
 from ainrf.api.routes.resources import router as resources_router
-from ainrf.api.routes.settings import router as settings_router
-from ainrf.api.routes.skills import router as skills_router
-from ainrf.api.routes.skill_registries import router as skill_registries_router
 from ainrf.api.routes.sessions import router as sessions_router
-from ainrf.api.routes.tasks import router as tasks_router, task_edges_router
+from ainrf.api.routes.settings import router as settings_router
+from ainrf.api.routes.skill_registries import router as skill_registries_router
+from ainrf.api.routes.skills import router as skills_router
+from ainrf.api.routes.tasks import router as tasks_router
+from ainrf.api.routes.tasks import task_edges_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
-from ainrf.monitor.service import ResourceMonitorService
 from ainrf.auth import AuthService
 from ainrf.code_server import CodeServerSupervisor
-from ainrf.files import FileBrowserService
 from ainrf.environments import InMemoryEnvironmentService
+from ainrf.files import FileBrowserService
+from ainrf.literature.service import LiteratureService
+from ainrf.monitor.service import ResourceMonitorService
 from ainrf.projects import ProjectRegistryService
 from ainrf.runtime.readiness import check_runtime_readiness
-from ainrf.skills import SkillsDiscoveryService
 from ainrf.sessions import SessionService
+from ainrf.skills import SkillsDiscoveryService
 from ainrf.task_harness import TaskHarnessService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
@@ -97,6 +99,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await _run_sync_in_lifespan(session_service.initialize)
         auth_service = app.state.auth_service
         await _run_sync_in_lifespan(auth_service.initialize)
+        await _run_sync_in_lifespan(app.state.literature_service.initialize)
         # Create initial admin if no users exist
         try:
             with auth_service._connect() as conn:
@@ -193,6 +196,7 @@ def create_app(
         skill_root=default_workspace_dir / "skills",
         session_service=app.state.session_service,
     )
+    app.state.literature_service = LiteratureService(state_root=api_config.state_root)
     app.middleware("http")(build_jwt_auth_middleware(auth_service))
     for router in ROUTERS:
         app.include_router(router)
