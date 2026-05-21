@@ -30,7 +30,7 @@ uv run ainrf serve --state-root ~/.ainrf
 - `--port`：监听端口（默认 `8000`）
 - `--state-root`：状态存储目录（默认 `~/.ainrf`）
 
-服务启动后会写入 PID 文件 (`~/.ainrf/server.pid`) 供 `stop` 命令使用。
+以 daemon 模式启动时写入 PID 文件 (`~/.ainrf/runtime/ainrf-api.pid`) 供 `stop` 命令使用。
 
 ## stop
 
@@ -42,11 +42,11 @@ uv run ainrf stop
 
 ## login
 
-通过 CLI 登录并缓存 JWT access token 到内存（供后续 CLI 调用使用）。
+通过 CLI 登录并缓存 JWT access token（交互式提示输入用户名和密码）。
 
 ```bash
 uv run ainrf login
-uv run ainrf login --username admin
+uv run ainrf login --server http://127.0.0.1:8000
 ```
 
 ## container
@@ -55,7 +55,6 @@ uv run ainrf login --username admin
 
 ```bash
 uv run ainrf container add
-uv run ainrf container list
 ```
 
 ## 关联笔记
