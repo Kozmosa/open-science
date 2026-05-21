@@ -1,12 +1,16 @@
-"""arXiv fetch + Claude summarization pipeline."""
+"""arXiv fetch + Claude/LLM summarization pipeline."""
 
 from __future__ import annotations
 
 import json
+import os
 
 import arxiv
 
 from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
+
+_DEFAULT_MODEL = "deepseek-v4-flash"
+_DEFAULT_BASE_URL = "https://api.deepseek.com"
 
 SUMMARIZE_PROMPT = """你是一个学术文献摘要助手。请对以下论文做提炼：
 
@@ -20,6 +24,14 @@ SUMMARIZE_PROMPT = """你是一个学术文献摘要助手。请对以下论文�
 
 请用以下 JSON 格式回复（不要输出其他内容）：
 {{"title_zh": "...", "ai_summary": ["...", "...", "..."], "ai_practice_note": "..."}}"""
+
+
+def _get_api_config() -> tuple[str, str, str]:
+    """Returns (api_key, base_url, model) from environment or defaults."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or ""
+    base_url = os.environ.get("ANTHROPIC_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or _DEFAULT_BASE_URL
+    model = os.environ.get("AINRF_LITERATURE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or _DEFAULT_MODEL
+    return api_key, base_url, model
 
 
 def _extract_json(text: str) -> dict | None:
@@ -36,9 +48,13 @@ def _extract_json(text: str) -> dict | None:
         return None
 
 
-async def _summarize_papers(papers: list[LiteraturePaper], api_key: str, base_url: str) -> None:
-    """Call Claude API to summarize papers."""
+async def _summarize_papers(papers: list[LiteraturePaper]) -> None:
+    """Call LLM API to summarize papers. Reads config from environment."""
     import httpx
+
+    api_key, base_url, model = _get_api_config()
+    if not api_key:
+        return  # no API key configured, skip summarization
 
     for paper in papers:
         prompt = SUMMARIZE_PROMPT.format(
@@ -52,7 +68,7 @@ async def _summarize_papers(papers: list[LiteraturePaper], api_key: str, base_ur
                     f"{base_url}/v1/messages",
                     headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
                     json={
-                        "model": "claude-sonnet-4-6",
+                        "model": model,
                         "max_tokens": 500,
                         "messages": [{"role": "user", "content": prompt}],
                     },
@@ -72,13 +88,15 @@ async def _summarize_papers(papers: list[LiteraturePaper], api_key: str, base_ur
 
 async def fetch_for_subscription(
     sub: LiteratureSubscription,
-    api_key: str,
-    base_url: str,
 ) -> list[LiteraturePaper]:
     """Fetch papers for a single subscription.
 
     Queries arXiv with the subscription's keywords and categories,
-    then optionally summarizes each paper via the Claude API.
+    then optionally summarizes each paper via the configured LLM API.
+    API configuration is read from environment variables:
+    - ANTHROPIC_API_KEY / DEEPSEEK_API_KEY
+    - ANTHROPIC_BASE_URL / DEEPSEEK_BASE_URL (default: https://api.deepseek.com)
+    - AINRF_LITERATURE_MODEL / ANTHROPIC_MODEL (default: deepseek-v4-flash)
     """
     client = arxiv.Client()
     query_parts: list[str] = []
@@ -113,7 +131,7 @@ async def fetch_for_subscription(
     except Exception:
         pass
 
-    if papers and api_key:
-        await _summarize_papers(papers, api_key, base_url)
+    if papers:
+        await _summarize_papers(papers)
 
     return papers

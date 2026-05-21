@@ -92,6 +92,9 @@ async def convert_to_task(paper_id: str, request: Request):
 async def trigger_fetch(subscription_id: str, request: Request):
     """Manually trigger paper fetching for a subscription."""
     import asyncio
+    import logging
+
+    logger = logging.getLogger(__name__)
 
     user_id = _get_user_id(request)
     svc = _get_service(request)
@@ -99,10 +102,19 @@ async def trigger_fetch(subscription_id: str, request: Request):
     if sub is None or sub.user_id != user_id:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    api_key = getattr(request.app.state, "api_config", None)
-    base_url = "http://127.0.0.1:8000"  # self-referencing for Claude calls
-
     from ainrf.literature.fetcher import fetch_for_subscription
 
-    asyncio.create_task(fetch_for_subscription(sub, api_key or "", base_url))
+    async def _fetch_and_store():
+        try:
+            papers = await fetch_for_subscription(sub)
+            new_papers = [p for p in papers if not svc.paper_exists(p.paper_id)]
+            if new_papers:
+                svc.insert_papers(new_papers)
+            svc.update_last_fetched(sub.subscription_id)
+            logger.info("fetch complete: subscription=%s papers=%d new=%d",
+                         subscription_id, len(papers), len(new_papers))
+        except Exception as exc:
+            logger.error("fetch failed: subscription=%s error=%s", subscription_id, exc)
+
+    asyncio.create_task(_fetch_and_store())
     return {"status": "fetch_started"}
