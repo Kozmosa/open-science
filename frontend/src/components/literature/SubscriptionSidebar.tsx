@@ -109,7 +109,7 @@ export default function SubscriptionSidebar({ subscriptions }: Props) {
                   className={`rounded-full px-2 py-0.5 text-[10px] transition ${
                     selectedCategories.includes(cat)
                       ? 'bg-[var(--apple-blue)] text-white'
-                      : 'border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg)]'
+                      : 'bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface)]'
                   }`}
                 >
                   {cat}
@@ -144,8 +144,8 @@ export default function SubscriptionSidebar({ subscriptions }: Props) {
       {/* Subscription list */}
       <div className="flex-1 space-y-2 overflow-y-auto">
         {subscriptions.length === 0 && (
-          <p className="py-4 text-center text-[11px] text-[var(--text-tertiary)]">
-            {t('literature.mySubscriptions')}
+          <p className="py-4 text-center text-[11px] text-[var(--text-secondary)]">
+            {t('literature.noSubscriptions')}
           </p>
         )}
         {subscriptions.map((sub) => (

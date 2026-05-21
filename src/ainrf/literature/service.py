@@ -106,6 +106,10 @@ class LiteratureService:
     def delete_subscription(self, subscription_id):
         with self._connect() as conn:
             conn.execute(
+                "DELETE FROM literature_papers WHERE subscription_id = ?",
+                (subscription_id,),
+            )
+            conn.execute(
                 "DELETE FROM literature_subscriptions WHERE subscription_id = ?",
                 (subscription_id,),
             )
@@ -161,6 +165,8 @@ class LiteratureService:
         return row is not None
 
     def mark_read(self, paper_id):
+        """Mark a paper as read. Note: this affects ALL copies of the paper
+        across all subscriptions (not limited to a single subscription)."""
         with self._connect() as conn:
             conn.execute(
                 "UPDATE literature_papers SET is_read = 1 WHERE paper_id = ?", (paper_id,)

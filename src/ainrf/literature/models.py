@@ -21,6 +21,7 @@ class LiteratureSubscription:
     keywords: list[str] = field(default_factory=list)
     arxiv_categories: list[str] = field(default_factory=list)
     seed_paper_ids: list[str] = field(default_factory=list)
+    # TODO: seed paper diffusion not yet implemented
     frequency: str = "daily"
     is_active: bool = True
     created_at: str = field(default_factory=_now_iso)
