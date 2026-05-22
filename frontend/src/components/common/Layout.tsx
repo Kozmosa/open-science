@@ -226,7 +226,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
           {!isCollapsed && (
             <div className="border-t border-[var(--sidebar-border)] px-3 py-3">
               <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
-                Built by Kozmosa with ❤️
+                {t('common.builtBy')}
               </p>
             </div>
           )}
