@@ -1,3 +1,4 @@
+import { useT } from '../../i18n';
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -27,6 +28,7 @@ const Button = forwardRef<HTMLButtonElement, Props>(function Button(
   { variant = 'primary', size = 'md', isLoading = false, children, className = '', disabled, ...rest },
   ref
 ) {
+  const t = useT();
   const base = variantClasses[variant];
   const sizeOverride = size === 'sm' ? sizeClasses.sm : '';
   return (
@@ -36,7 +38,7 @@ const Button = forwardRef<HTMLButtonElement, Props>(function Button(
       disabled={disabled || isLoading}
       {...rest}
     >
-      {isLoading ? 'Loading…' : children}
+      {isLoading ? t('common.loading') : children}
     </button>
   );
 });

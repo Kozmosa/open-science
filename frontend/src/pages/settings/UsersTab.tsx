@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { getAdminUsers, updateAdminUser, resetUserPassword } from '../../api';
+import { useT } from '../../i18n';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function UsersTab() {
+  const t = useT();
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -28,15 +30,15 @@ export function UsersTab() {
   });
 
   if (currentUser?.role !== 'admin') return null;
-  if (isLoading) return <p className="text-sm text-gray-400 p-4">Loading...</p>;
+  if (isLoading) return <p className="text-sm text-gray-400 p-4">{t('common.loading')}</p>;
 
   const users = data?.items ?? [];
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Users</h3>
-        <span className="text-xs text-gray-500">{users.length} users</span>
+        <h3 className="text-sm font-semibold">{t('pages.settings.users.title')}</h3>
+        <span className="text-xs text-gray-500">{t('pages.settings.users.count', { count: users.length })}</span>
       </div>
       {users.map((u) => (
         <div key={u.id} className={`flex items-center justify-between p-3 rounded-lg border text-sm ${
@@ -55,31 +57,31 @@ export function UsersTab() {
           <div className="flex gap-2">
             {u.status === 'pending' && (
               <button type="button" onClick={() => updateMutation.mutate({ id: u.id, status: 'active' })}
-                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">Approve</button>
+                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">{t('pages.settings.users.approve')}</button>
             )}
             {u.status === 'active' && u.id !== currentUser.id && (
               <button type="button" onClick={() => updateMutation.mutate({ id: u.id, status: 'disabled' })}
-                className="text-xs px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">Disable</button>
+                className="text-xs px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">{t('pages.settings.users.disable')}</button>
             )}
             {u.status === 'disabled' && (
               <button type="button" onClick={() => updateMutation.mutate({ id: u.id, status: 'active' })}
-                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">Re-enable</button>
+                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">{t('pages.settings.users.reEnable')}</button>
             )}
             {u.id !== currentUser.id && (
               <button type="button" onClick={() => setResetUserId(resetUserId === u.id ? null : u.id)}
-                className="text-xs px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">Reset PW</button>
+                className="text-xs px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">{t('pages.settings.users.resetPassword')}</button>
             )}
           </div>
         </div>
       ))}
       {resetUserId && (
         <div className="flex gap-2 items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <span className="text-xs text-gray-600">New password:</span>
+          <span className="text-xs text-gray-600">{t('pages.settings.users.newPassword')}</span>
           <input
             type="text"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Enter new password"
+            placeholder={t('pages.settings.users.enterNewPassword')}
             className="text-xs px-2 py-1 border rounded flex-1"
           />
           <button
@@ -87,7 +89,7 @@ export function UsersTab() {
             onClick={() => resetMutation.mutate({ id: resetUserId, password: newPassword })}
             disabled={!newPassword}
             className="text-xs px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
-          >Set</button>
+          >{t('pages.settings.users.set')}</button>
         </div>
       )}
     </div>

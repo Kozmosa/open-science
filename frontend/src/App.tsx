@@ -98,11 +98,12 @@ function AuthenticatedRoutes() {
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+  const t = useT();
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen text-gray-400 text-sm">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }

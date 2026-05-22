@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen } from 'lucide-react';
+import { useT } from '../../i18n';
 import type { FileEntry } from '../../types';
 
 interface FileTreeProps {
@@ -17,6 +18,7 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ entry, selectedPath, onSelectFile, onLoadDirectory }: TreeNodeProps) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<FileEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,7 +85,7 @@ function TreeNode({ entry, selectedPath, onSelectFile, onLoadDirectory }: TreeNo
       {entry.kind === 'directory' && expanded && (
         <div className="ml-4 border-l border-[var(--border)] pl-1">
           {loading ? (
-            <p className="px-2 py-1 text-xs text-[var(--text-tertiary)]">Loading...</p>
+            <p className="px-2 py-1 text-xs text-[var(--text-tertiary)]">{t('common.loading')}</p>
           ) : children && children.length > 0 ? (
             children.map((child) => (
               <TreeNode
@@ -95,7 +97,7 @@ function TreeNode({ entry, selectedPath, onSelectFile, onLoadDirectory }: TreeNo
               />
             ))
           ) : (
-            <p className="px-2 py-1 text-xs text-[var(--text-tertiary)]">Empty directory</p>
+            <p className="px-2 py-1 text-xs text-[var(--text-tertiary)]">{t('pages.fileBrowser.emptyDirectory')}</p>
           )}
         </div>
       )}
@@ -104,8 +106,9 @@ function TreeNode({ entry, selectedPath, onSelectFile, onLoadDirectory }: TreeNo
 }
 
 export default function FileTree({ entries, selectedPath, onSelectFile, onLoadDirectory }: FileTreeProps) {
+  const t = useT();
   if (entries.length === 0) {
-    return <p className="px-3 py-2 text-sm text-[var(--text-tertiary)]">No files</p>;
+    return <p className="px-3 py-2 text-sm text-[var(--text-tertiary)]">{t('pages.fileBrowser.noFiles')}</p>;
   }
 
   return (

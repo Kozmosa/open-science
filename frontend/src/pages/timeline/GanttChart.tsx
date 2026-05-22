@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { AttemptRecord, SessionDetailRecord, SessionRecord } from '../../types';
+import { useT } from '../../i18n';
 import { GanttRow } from './GanttRow';
 
 interface Props {
@@ -58,6 +59,7 @@ function generateTimeLabels(
 }
 
 export function GanttChart({ sessions, details, loading }: Props) {
+  const t = useT();
   const { minTime, span, timeLabels, detailMap } = useMemo(() => {
     const map = new Map<string, AttemptRecord[]>();
     for (const d of details) {
@@ -94,18 +96,18 @@ export function GanttChart({ sessions, details, loading }: Props) {
   }, [details]);
 
   if (loading) {
-    return <p className="text-sm text-gray-400 p-4">Loading timeline...</p>;
+    return <p className="text-sm text-gray-400 p-4">{t('pages.timeline.loading')}</p>;
   }
 
   if (sessions.length === 0) {
-    return <p className="text-sm text-gray-400 p-4">No sessions in this time range</p>;
+    return <p className="text-sm text-gray-400 p-4">{t('pages.timeline.noSessions')}</p>;
   }
 
   return (
     <div className="w-full border border-[var(--border)] rounded-lg overflow-x-auto">
       <div className="flex bg-[var(--bg)] border-b border-[var(--border)]">
         <div className="w-[260px] min-w-[260px] p-2 border-r-2 border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)]">
-          Session
+          {t('pages.timeline.session')}
         </div>
         <div className="flex-1 relative h-8">
           {timeLabels.map((tl, i) => (

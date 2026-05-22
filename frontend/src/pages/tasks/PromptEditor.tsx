@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useT } from '../../i18n';
 import { useMonacoTheme } from '../../hooks/useMonacoTheme';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
@@ -8,9 +9,10 @@ interface Props {
 }
 
 function EditorFallback() {
+  const t = useT();
   return (
     <div className="border-t border-[var(--border)] flex items-center justify-center h-[300px] text-sm text-[var(--text-secondary)]">
-      Loading editor...
+      {t('common.loadingEditor')}
     </div>
   );
 }
