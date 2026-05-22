@@ -19,7 +19,7 @@ type Paths<T, Prefix extends string = ''> = T extends string
 export const messages = {
   en: {
     common: {
-      appName: 'Scholar Agent',
+      appName: 'AINRF Console',
       language: 'Language',
       english: 'English',
       chinese: '中文',
@@ -64,6 +64,16 @@ export const messages = {
       error: 'error',
       loadingEditor: 'Loading editor...',
       noMessages: 'No messages yet',
+      builtBy: 'Built by Kozmosa with ❤️',
+      collapse: 'Collapse',
+      confirmLogout: 'Confirm Logout',
+      confirmLogoutMessage: 'Are you sure you want to log out?',
+      dragToReorder: 'Drag to reorder',
+      expand: 'Expand',
+      logOut: 'Log out',
+      taskStatusLoading: 'Task | Loading…',
+      taskStatusSummary: 'Task | Total: {{total}}, Running: {{running}}, Pending: {{pending}}, Finished: {{finished}}',
+      taskStatusUnavailable: 'Task | Status unavailable',
     },
     auth: {
       login: 'Log in',
@@ -617,8 +627,13 @@ export const messages = {
       },
       fileBrowser: {
         emptyDirectory: 'Empty directory',
+        loading: 'Loading files...',
+        files: 'Files',
+        noFileSelected: 'No file selected',
         noFiles: 'No files',
         loadingFile: 'Loading file...',
+        selectEnv: 'Select an environment to browse files',
+        refresh: 'Refresh',
         selectFile: 'Select a file to view its contents',
         binaryFile: 'Binary file',
       },
@@ -795,6 +810,24 @@ export const messages = {
       modal: {
         close: 'Close',
       },
+      skills: {
+        ungrouped: 'Ungrouped',
+        mixed: 'Mixed',
+      },
+      token: {
+        tokens: 'Tokens',
+        total: 'Total:',
+        input: 'Input',
+        cache: 'Cache',
+        output: 'Output',
+        think: 'Think',
+      },
+      resources: {
+        cpu: 'CPU Usage',
+        cores: 'cores',
+        noGpu: 'No GPU detected',
+        memory: 'Memory',
+      },
       environmentDetectionModal: {
         groups: {
           basicInfo: 'Basic Info',
@@ -836,7 +869,7 @@ export const messages = {
   },
   zh: {
     common: {
-      appName: 'Scholar Agent',
+      appName: 'AINRF 控制台',
       language: '语言',
       english: '英文',
       chinese: '中文',
@@ -881,6 +914,16 @@ export const messages = {
       error: '错误',
       loadingEditor: '加载编辑器...',
       noMessages: '暂无消息',
+      builtBy: '由 Kozmosa 用 ❤️ 构建',
+      collapse: '折叠',
+      confirmLogout: '确认登出',
+      confirmLogoutMessage: '确定要登出吗？',
+      dragToReorder: '拖拽排序',
+      expand: '展开',
+      logOut: '登出',
+      taskStatusLoading: '任务 | 加载中…',
+      taskStatusSummary: '任务 | 共 {{total}} 个，运行中：{{running}}，等待中：{{pending}}，已完成：{{finished}}',
+      taskStatusUnavailable: '任务 | 状态不可用',
     },
     auth: {
       login: '登录',
@@ -1285,6 +1328,17 @@ export const messages = {
           noProjectSelected: '选择一个项目以管理协作者。',
           noCollaborators: '暂无协作者。',
         },
+        users: {
+          title: '用户管理',
+          count: '{{count}} 个用户',
+          approve: '批准',
+          disable: '禁用',
+          reEnable: '重新启用',
+          resetPassword: '重置密码',
+          newPassword: '新密码：',
+          enterNewPassword: '输入新密码',
+          set: '设置',
+        },
       },
       placeholder: {
         eyebrow: '设置',
@@ -1408,8 +1462,13 @@ export const messages = {
       },
       fileBrowser: {
         emptyDirectory: '空目录',
+        loading: '加载文件...',
+        files: '文件',
+        noFileSelected: '未选择文件',
         noFiles: '无文件',
         loadingFile: '加载文件...',
+        selectEnv: '选择一个环境以浏览文件',
+        refresh: '刷新',
         selectFile: '选择一个文件以查看内容',
         binaryFile: '二进制文件',
       },
@@ -1443,7 +1502,7 @@ export const messages = {
       },
     },
     components: {
-      healthStatusBar: {
+healthStatusBar: {
         loading: '正在加载系统状态...',
         unable: '无法获取系统状态',
         apiLabel: 'API：',
@@ -1583,6 +1642,24 @@ export const messages = {
       },
       modal: {
         close: '关闭',
+      },
+      skills: {
+        ungrouped: '未分组',
+        mixed: '混合',
+      },
+      token: {
+        tokens: 'Tokens',
+        total: '合计：',
+        input: '输入',
+        cache: '缓存',
+        output: '输出',
+        think: '思考',
+      },
+      resources: {
+        cpu: 'CPU 使用率',
+        cores: '核',
+        noGpu: '未检测到 GPU',
+        memory: '内存',
       },
       environmentDetectionModal: {
         groups: {

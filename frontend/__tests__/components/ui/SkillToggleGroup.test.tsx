@@ -20,7 +20,7 @@ describe('SkillToggleGroup grouping', () => {
     );
 
     expect(screen.getByText('aris')).toBeInTheDocument();
-    expect(screen.getByText('未分组')).toBeInTheDocument();
+    expect(screen.getByText('Ungrouped')).toBeInTheDocument();
   });
 
   it('toggles all skills in a group when group toggle is clicked', () => {
@@ -91,7 +91,7 @@ describe('SkillToggleGroup grouping', () => {
     );
 
     // Expand the ungrouped bucket first
-    fireEvent.click(screen.getByTestId('chevron-未分组'));
+    fireEvent.click(screen.getByTestId('chevron-Ungrouped'));
 
     // Click on Skill 3 (in ungrouped)
     fireEvent.click(screen.getByText('Skill 3'));

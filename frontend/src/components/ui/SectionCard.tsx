@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useT } from '../../i18n';
 
 interface Props {
   children: ReactNode;
@@ -23,6 +24,7 @@ function SectionCard({
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
   const isControlled = controlledExpanded !== undefined;
   const expanded = isControlled ? controlledExpanded : internalExpanded;
+  const t = useT();
   const toggle = () => {
     if (isControlled) {
       onToggle?.();
@@ -64,7 +66,7 @@ function SectionCard({
               type="button"
               onClick={(e) => { e.stopPropagation(); toggle(); }}
               className="mt-0.5 shrink-0 rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
-              aria-label={expanded ? 'Collapse section' : 'Expand section'}
+              aria-label={expanded ? t('common.collapse') : t('common.expand')}
             >
               {expanded ? (
                 <ChevronDown className="h-4 w-4" />

@@ -1,3 +1,4 @@
+import { useT } from '../../i18n';
 import type { AttemptRecord } from '../../types';
 
 interface Props {
@@ -23,11 +24,12 @@ function formatDuration(ms: number | null): string {
 }
 
 export function AttemptSegment({ attempt, leftPct, widthPct, onClick }: Props) {
+  const t = useT();
   const tooltip = [
-    `Attempt #${attempt.attempt_seq}`,
-    `Status: ${attempt.status}`,
-    `Duration: ${formatDuration(attempt.duration_ms)}`,
-    attempt.intervention_reason ? `Reason: ${attempt.intervention_reason}` : '',
+    t('pages.timeline.attemptSeq', { seq: attempt.attempt_seq }),
+    `${t('pages.timeline.status')} ${attempt.status}`,
+    `${t('pages.timeline.duration')} ${formatDuration(attempt.duration_ms)}`,
+    attempt.intervention_reason ? `${t('pages.timeline.reason')} ${attempt.intervention_reason}` : '',
   ]
     .filter(Boolean)
     .join(' · ');

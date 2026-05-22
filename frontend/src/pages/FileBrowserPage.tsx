@@ -115,12 +115,12 @@ export default function FileBrowserPage() {
       {!selectedEnvironment ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-[var(--text-tertiary)]">
-            Select an environment to browse files
+            {t('pages.fileBrowser.selectEnv')}
           </p>
         </div>
       ) : rootQuery.isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-[var(--text-tertiary)]">Loading files...</p>
+          <p className="text-sm text-[var(--text-tertiary)]">{t('pages.fileBrowser.loading')}</p>
         </div>
       ) : (
         <SplitPane
@@ -143,7 +143,7 @@ export default function FileBrowserPage() {
                   <FolderOpen className="h-4 w-4 shrink-0 text-[var(--apple-blue)]" />
                   {!sidebarCollapsed && (
                     <>
-                      <span className="text-xs font-medium text-[var(--text)]">Files</span>
+                      <span className="text-xs font-medium text-[var(--text)]">{t('pages.fileBrowser.files')}</span>
                     </>
                   )}
                 </button>
@@ -152,7 +152,7 @@ export default function FileBrowserPage() {
                     type="button"
                     onClick={handleRefresh}
                     className="rounded p-1 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
-                    title="Refresh"
+                    title={t('pages.fileBrowser.refresh')}
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                   </button>
@@ -206,7 +206,7 @@ export default function FileBrowserPage() {
                   </span>
                 ))
               ) : (
-                <span className="text-[var(--text-tertiary)]">No file selected</span>
+                <span className="text-[var(--text-tertiary)]">{t('pages.fileBrowser.noFileSelected')}</span>
               )}
             </div>
             <div className="flex-1 overflow-hidden">

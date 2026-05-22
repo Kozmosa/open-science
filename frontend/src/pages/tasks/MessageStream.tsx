@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import type { MessageItem } from '../../types';
 import { MessageBlock, CollapsedGroupBlock } from './MessageBlocks';
+import { useT } from '../../i18n';
 import { useMessageGroups } from './useMessageGroups';
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function MessageStream({ messages }: Props) {
+  const t = useT();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldScrollRef = useRef(false);
@@ -44,7 +46,7 @@ export default function MessageStream({ messages }: Props) {
   if (messages.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-        No messages yet
+        {t('common.noMessages')}
       </div>
     );
   }

@@ -1,3 +1,5 @@
+import { useT } from '../../i18n';
+
 interface CpuRingProps {
   percent: number;
   core_count: number;
@@ -10,6 +12,7 @@ function getColor(percent: number): string {
 }
 
 export default function CpuRing({ percent, core_count }: CpuRingProps) {
+  const t = useT();
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
@@ -45,8 +48,8 @@ export default function CpuRing({ percent, core_count }: CpuRingProps) {
         </div>
       </div>
       <div>
-        <p className="text-xs text-[var(--text-tertiary)]">CPU Usage</p>
-        <p className="text-sm font-medium">{core_count} cores</p>
+        <p className="text-xs text-[var(--text-tertiary)]">{t('components.resources.cpu')}</p>
+        <p className="text-sm font-medium">{core_count} {t('components.resources.cores')}</p>
       </div>
     </div>
   );

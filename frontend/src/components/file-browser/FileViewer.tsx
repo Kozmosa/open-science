@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { FileReadResponse } from '../../types';
+import { useT } from '../../i18n';
 import { useEditorSettings } from '../../settings';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
@@ -44,13 +45,14 @@ interface Props {
 }
 
 export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
+  const t = useT();
   const colorScheme = useSystemColorScheme();
   const editorSettings = useEditorSettings();
 
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
-        Loading file...
+        {t('pages.fileBrowser.loadingFile')}
       </div>
     );
   }
@@ -58,7 +60,7 @@ export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
   if (!file) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
-        Select a file to view its contents
+        {t('pages.fileBrowser.selectFile')}
       </div>
     );
   }
@@ -83,7 +85,7 @@ export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
         <div className="text-center">
-          <p className="font-medium">Binary file</p>
+          <p className="font-medium">{t('pages.fileBrowser.binaryFile')}</p>
           <p className="mt-1 text-xs text-[var(--text-tertiary)]">
             {file.path} · {(file.size / 1024).toFixed(1)} KB
           </p>
@@ -97,7 +99,7 @@ export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
       <Suspense
         fallback={
           <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
-            Loading editor...
+            {t('common.loadingEditor')}
           </div>
         }
       >
