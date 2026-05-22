@@ -1,5 +1,6 @@
 import {
   Activity,
+  BookOpen,
   Boxes,
   ChevronLeft,
   ChevronRight,
@@ -85,6 +86,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
     '/resources': 'navigation.resources.label',
     '/sessions': 'navigation.sessions.label',
     '/timeline': 'navigation.timeline.label',
+    '/literature': 'nav.literature',
     '/settings': 'navigation.settings.label',
   };
   const pageTitleKey = ROUTE_TITLE_KEYS[location.pathname] ?? '';
@@ -150,6 +152,12 @@ function Layout({ children, edgeToEdge = false }: Props) {
       to: '/timeline',
       description: t('navigation.timeline.description'),
       icon: Clock,
+    },
+    {
+      label: t('nav.literature'),
+      to: '/literature',
+      description: t('nav.literature'),
+      icon: BookOpen,
     },
     {
       label: t('navigation.settings.label'),

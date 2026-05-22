@@ -21,6 +21,7 @@ const TimelinePage = lazy(() => import('./pages/TimelinePage'));
 const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const LiteraturePage = lazy(() => import('./pages/LiteraturePage'));
 
 const queryClient = createAppQueryClient();
 
@@ -89,6 +90,7 @@ function AuthenticatedRoutes() {
           <Route path="/resources" element={<ResourcesPage />} />
           <Route path="/sessions" element={<SessionsPage />} />
           <Route path="/timeline" element={<TimelinePage />} />
+          <Route path="/literature" element={<LiteraturePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Suspense>
