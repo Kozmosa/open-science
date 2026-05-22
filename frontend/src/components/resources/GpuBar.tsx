@@ -1,4 +1,5 @@
 import type { GpuInfo } from '../../types';
+import { useT } from '../../i18n';
 
 function formatMB(mb: number): string {
   if (mb >= 1024) {
@@ -18,8 +19,9 @@ interface GpuBarProps {
 }
 
 export default function GpuBar({ gpus }: GpuBarProps) {
+  const t = useT();
   if (gpus.length === 0) {
-    return <p className="text-sm text-[var(--text-tertiary)]">No GPU detected</p>;
+    return <p className="text-sm text-[var(--text-tertiary)]">{t('components.resources.noGpu')}</p>;
   }
 
   return (

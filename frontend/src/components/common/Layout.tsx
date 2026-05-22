@@ -34,12 +34,17 @@ interface NavigationItem {
   icon: typeof SquareTerminal;
 }
 
-function buildTaskStatusSummary(tasks: TaskSummary[] | null, isError: boolean, isLoading: boolean): string {
+function buildTaskStatusSummary(
+  t: ReturnType<typeof useT>,
+  tasks: TaskSummary[] | null,
+  isError: boolean,
+  isLoading: boolean,
+): string {
   if (isError) {
-    return 'Task | Status unavailable';
+    return t('common.taskStatusUnavailable');
   }
   if (isLoading && tasks === null) {
-    return 'Task | Loading…';
+    return t('common.taskStatusLoading');
   }
 
   const items = tasks ?? [];
@@ -49,7 +54,7 @@ function buildTaskStatusSummary(tasks: TaskSummary[] | null, isError: boolean, i
     (task) => task.status === 'succeeded' || task.status === 'failed'
   ).length;
 
-  return `Task | Total: ${items.length}, Running: ${running}, Pending: ${pending}, Finished: ${finished}`;
+  return t('common.taskStatusSummary', { total: items.length, running, pending, finished });
 }
 
 function Layout({ children, edgeToEdge = false }: Props) {
@@ -64,6 +69,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
     refetchInterval: 5000,
   });
   const taskStatusSummary = buildTaskStatusSummary(
+    t,
     tasksQuery.data?.items ?? null,
     tasksQuery.isError,
     tasksQuery.isLoading
@@ -162,7 +168,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
             <div className="flex h-12 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
             {!isCollapsed && (
               <div className="min-w-0">
-                <p className="truncate text-lg font-bold tracking-tight">AINRF Console</p>
+                <p className="truncate text-lg font-bold tracking-tight">{t('common.appName')}</p>
               </div>
             )}
             <button
@@ -219,7 +225,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
           {!isCollapsed && (
             <div className="border-t border-[var(--sidebar-border)] px-3 py-3">
               <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
-                Built by Kozmosa with ❤️
+                {t('common.builtBy')}
               </p>
             </div>
           )}
@@ -253,22 +259,22 @@ function Layout({ children, edgeToEdge = false }: Props) {
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
           <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-lg p-6 w-full max-w-xs mx-4">
-            <p className="text-sm font-medium mb-2">Confirm Logout</p>
-            <p className="text-xs text-[var(--text-secondary)] mb-4">Are you sure you want to log out?</p>
+            <p className="text-sm font-medium mb-2">{t('common.confirmLogout')}</p>
+            <p className="text-xs text-[var(--text-secondary)] mb-4">{t('common.confirmLogoutMessage')}</p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
                 className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--bg)]"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={() => { setShowLogoutConfirm(false); logout(); }}
                 className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700"
               >
-                Log out
+                {t('common.logOut')}
               </button>
             </div>
           </div>

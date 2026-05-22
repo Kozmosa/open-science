@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SkillItem } from '../../types';
 import type { SkillMode } from '../../settings/types';
+import { useT } from '../../i18n';
 
 interface Props {
   skills: SkillItem[];
@@ -40,6 +41,7 @@ function getGroupMode(
 }
 
 export default function SkillToggleGroup({ skills, skillModes, onChange }: Props) {
+  const t = useT();
   const groups = useMemo(() => {
     const map = new Map<string, SkillItem[]>();
     const ungrouped: SkillItem[] = [];
@@ -56,10 +58,10 @@ export default function SkillToggleGroup({ skills, skillModes, onChange }: Props
 
     const sorted = Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
     if (ungrouped.length > 0) {
-      sorted.push(['未分组', ungrouped]);
+      sorted.push([t('components.skills.ungrouped'), ungrouped]);
     }
     return sorted;
-  }, [skills]);
+  }, [skills, t]);
 
   const defaultExpanded = useMemo(() => {
     const map: Record<string, boolean> = {};
@@ -128,7 +130,7 @@ export default function SkillToggleGroup({ skills, skillModes, onChange }: Props
                   buttonClass(groupMode),
                 ].join(' ')}
               >
-                {groupMode === 'mixed' ? 'mixed' : groupMode}
+                {groupMode === 'mixed' ? t('components.skills.mixed') : groupMode}
               </button>
               <span className="text-sm font-medium text-[var(--text)]">{groupName}</span>
               <button

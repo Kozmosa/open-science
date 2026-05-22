@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
+import { useT } from '../../i18n';
 
 interface CardGroup {
   id: string;
@@ -36,6 +37,7 @@ function DraggableCard({ id, kind, groupId, children }: DraggableCardProps) {
     id,
     data: { kind, groupId },
   });
+  const t = useT();
 
   const style: React.CSSProperties = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
@@ -50,7 +52,7 @@ function DraggableCard({ id, kind, groupId, children }: DraggableCardProps) {
         {...listeners}
         {...attributes}
         className="absolute right-3 top-3 cursor-grab active:cursor-grabbing"
-        title="Drag to reorder"
+        title={t('common.dragToReorder')}
       >
         <svg
           width="16"

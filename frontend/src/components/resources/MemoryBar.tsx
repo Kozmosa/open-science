@@ -1,3 +1,5 @@
+import { useT } from '../../i18n';
+
 function formatMB(mb: number): string {
   if (mb >= 1024) {
     return `${(mb / 1024).toFixed(1)} GB`;
@@ -11,12 +13,13 @@ interface MemoryBarProps {
 }
 
 export default function MemoryBar({ used_mb, total_mb }: MemoryBarProps) {
+  const t = useT();
   const percent = total_mb > 0 ? Math.round((used_mb / total_mb) * 100) : 0;
 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-medium">Memory</span>
+        <span className="font-medium">{t('components.resources.memory')}</span>
         <span className="text-[var(--text-tertiary)]">
           {formatMB(used_mb)} / {formatMB(total_mb)} ({percent}%)
         </span>
