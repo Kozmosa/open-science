@@ -42,7 +42,7 @@ export function TimelineControls({
         onChange={(e) => onProjectChange(e.target.value || null)}
         className="px-2 py-1 border border-[var(--border)] rounded text-sm"
       >
-        <option value="">{t('pages.timeline.allProjects')}</option>
+        <option value="">{t('pages.sessions.timeline.allProjects')}</option>
         {projects.map((p) => (
           <option key={p.project_id} value={p.project_id}>
             {p.name}
@@ -53,7 +53,7 @@ export function TimelineControls({
       <span className="text-[var(--border)]">|</span>
 
       <label className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-        {t('pages.timeline.from')}
+        {t('pages.sessions.timeline.from')}
         <input
           type="date"
           value={fromDate}
@@ -62,7 +62,7 @@ export function TimelineControls({
         />
       </label>
       <label className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-        {t('pages.timeline.to')}
+        {t('pages.sessions.timeline.to')}
         <input
           type="date"
           value={toDate}
@@ -81,7 +81,7 @@ export function TimelineControls({
         }}
         className="px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
       >
-        {t('pages.timeline.today')}
+        {t('pages.sessions.timeline.today')}
       </button>
       <button
         type="button"
@@ -91,7 +91,7 @@ export function TimelineControls({
         }}
         className="px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
       >
-        {t('pages.timeline.past7Days')}
+        {t('pages.sessions.timeline.past7Days')}
       </button>
       <button
         type="button"
@@ -101,15 +101,15 @@ export function TimelineControls({
         }}
         className="px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
       >
-        {t('pages.timeline.past30Days')}
+        {t('pages.sessions.timeline.past30Days')}
       </button>
 
       <span className="flex-1" />
 
       <span className="text-xs text-[var(--text-secondary)]">
-        {t('pages.timeline.sessionCount', { count: sessions.length })}
+        {t('pages.sessions.timeline.sessionCount', { count: sessions.length })}
         {totalCost > 0
-          ? ` · ${t('pages.timeline.totalCost', { cost: `$${totalCost.toFixed(2)}` })}`
+          ? ` · ${t('pages.sessions.timeline.totalCost', { cost: `$${totalCost.toFixed(2)}` })}`
           : ''}
       </span>
     </div>
