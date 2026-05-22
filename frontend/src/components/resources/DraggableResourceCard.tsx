@@ -1,5 +1,6 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { CardKind } from '../../hooks/useCardLayout';
+import { useT } from '../../i18n';
 
 interface Props {
   id: string;
@@ -16,6 +17,7 @@ export default function DraggableResourceCard({ id, kind, children }: Props) {
     id,
     data: { kind },
   });
+  const t = useT();
 
   const style: React.CSSProperties = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
@@ -30,7 +32,7 @@ export default function DraggableResourceCard({ id, kind, children }: Props) {
         {...listeners}
         {...attributes}
         className="absolute right-3 top-3 cursor-grab active:cursor-grabbing"
-        title="Drag to reorder"
+        title={t('common.dragToReorder')}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[var(--text-tertiary)]">
           <circle cx="4" cy="4" r="1.5" />

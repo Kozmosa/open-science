@@ -19,7 +19,7 @@ type Paths<T, Prefix extends string = ''> = T extends string
 export const messages = {
   en: {
     common: {
-      appName: 'Scholar Agent',
+      appName: 'AINRF Console',
       language: 'Language',
       english: 'English',
       chinese: '中文',
@@ -62,6 +62,16 @@ export const messages = {
       connected: 'connected',
       disconnected: 'disconnected',
       error: 'error',
+      builtBy: 'Built by Kozmosa with ❤️',
+      collapse: 'Collapse',
+      confirmLogout: 'Confirm Logout',
+      confirmLogoutMessage: 'Are you sure you want to log out?',
+      dragToReorder: 'Drag to reorder',
+      expand: 'Expand',
+      logOut: 'Log out',
+      taskStatusLoading: 'Task | Loading…',
+      taskStatusSummary: 'Task | Total: {{total}}, Running: {{running}}, Pending: {{pending}}, Finished: {{finished}}',
+      taskStatusUnavailable: 'Task | Status unavailable',
     },
     auth: {
       login: 'Log in',
@@ -602,6 +612,13 @@ export const messages = {
         perModelBreakdown: 'Per-Model Breakdown',
         totalTokens: '{{count}} tokens',
       },
+      fileBrowser: {
+        loading: 'Loading files...',
+        files: 'Files',
+        noFileSelected: 'No file selected',
+        selectEnv: 'Select an environment to browse files',
+        refresh: 'Refresh',
+      },
     },
     components: {
       healthStatusBar: {
@@ -747,6 +764,24 @@ export const messages = {
       modal: {
         close: 'Close',
       },
+      skills: {
+        ungrouped: 'Ungrouped',
+        mixed: 'Mixed',
+      },
+      token: {
+        tokens: 'Tokens',
+        total: 'Total:',
+        input: 'Input',
+        cache: 'Cache',
+        output: 'Output',
+        think: 'Think',
+      },
+      resources: {
+        cpu: 'CPU Usage',
+        cores: 'cores',
+        noGpu: 'No GPU detected',
+        memory: 'Memory',
+      },
       environmentDetectionModal: {
         groups: {
           basicInfo: 'Basic Info',
@@ -788,7 +823,7 @@ export const messages = {
   },
   zh: {
     common: {
-      appName: 'Scholar Agent',
+      appName: 'AINRF 控制台',
       language: '语言',
       english: '英文',
       chinese: '中文',
@@ -831,6 +866,16 @@ export const messages = {
       connected: '已连接',
       disconnected: '已断开',
       error: '错误',
+      builtBy: '由 Kozmosa 用 ❤️ 构建',
+      collapse: '折叠',
+      confirmLogout: '确认登出',
+      confirmLogoutMessage: '确定要登出吗？',
+      dragToReorder: '拖拽排序',
+      expand: '展开',
+      logOut: '登出',
+      taskStatusLoading: '任务 | 加载中…',
+      taskStatusSummary: '任务 | 共 {{total}} 个，运行中：{{running}}，等待中：{{pending}}，已完成：{{finished}}',
+      taskStatusUnavailable: '任务 | 状态不可用',
     },
     auth: {
       login: '登录',
@@ -1356,6 +1401,13 @@ export const messages = {
         perModelBreakdown: '模型明细',
         totalTokens: '{{count}} 个 token',
       },
+      fileBrowser: {
+        loading: '加载文件...',
+        files: '文件',
+        noFileSelected: '未选择文件',
+        selectEnv: '选择一个环境以浏览文件',
+        refresh: '刷新',
+      },
     },
     components: {
       healthStatusBar: {
@@ -1498,6 +1550,24 @@ export const messages = {
       },
       modal: {
         close: '关闭',
+      },
+      skills: {
+        ungrouped: '未分组',
+        mixed: '混合',
+      },
+      token: {
+        tokens: 'Tokens',
+        total: '合计：',
+        input: '输入',
+        cache: '缓存',
+        output: '输出',
+        think: '思考',
+      },
+      resources: {
+        cpu: 'CPU 使用率',
+        cores: '核',
+        noGpu: '未检测到 GPU',
+        memory: '内存',
       },
       environmentDetectionModal: {
         groups: {

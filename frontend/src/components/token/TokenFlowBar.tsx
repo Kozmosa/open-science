@@ -1,4 +1,5 @@
 import type { TokenUsage } from '../../types';
+import { useT } from '../../i18n';
 
 interface Props {
   tokenUsageJson: string | null;
@@ -19,13 +20,14 @@ function formatTokens(n: number): string {
 }
 
 const SEGMENTS = [
-  { key: 'input_tokens', label: 'Input', color: 'bg-blue-300' },
-  { key: 'cache_creation_input_tokens', label: 'Cache', color: 'bg-green-300' },
-  { key: 'output_tokens', label: 'Output', color: 'bg-yellow-300' },
-  { key: 'cache_read_input_tokens', label: 'Think', color: 'bg-gray-300' },
+  { key: 'input_tokens', tKey: 'components.token.input' as const, label: 'Input', color: 'bg-blue-300' },
+  { key: 'cache_creation_input_tokens', tKey: 'components.token.cache' as const, label: 'Cache', color: 'bg-green-300' },
+  { key: 'output_tokens', tKey: 'components.token.output' as const, label: 'Output', color: 'bg-yellow-300' },
+  { key: 'cache_read_input_tokens', tKey: 'components.token.think' as const, label: 'Think', color: 'bg-gray-300' },
 ] as const;
 
 export function TokenFlowBar({ tokenUsageJson }: Props) {
+  const t = useT();
   const usage = parseTokenUsage(tokenUsageJson);
   if (!usage) return null;
 
@@ -40,9 +42,9 @@ export function TokenFlowBar({ tokenUsageJson }: Props) {
   return (
     <div className="mt-2">
       <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-        <span>Tokens</span>
+        <span>{t('components.token.tokens')}</span>
         <span className="font-medium text-gray-700">
-          Total: {formatTokens(totalTokens)}
+          {t('components.token.total')} {formatTokens(totalTokens)}
           {total.cost_usd != null ? ` · $${total.cost_usd.toFixed(2)}` : ''}
         </span>
       </div>
@@ -61,13 +63,13 @@ export function TokenFlowBar({ tokenUsageJson }: Props) {
         })}
       </div>
       <div className="flex gap-3 mt-1 text-[9px] text-gray-400">
-        {SEGMENTS.map(({ key, label, color }) => {
+        {SEGMENTS.map(({ key, tKey, color }) => {
           const val = (usage.total as Record<string, number | undefined>)[key] || 0;
           if (val === 0) return null;
           return (
             <span key={key} className="flex items-center gap-1">
               <span className={`inline-block w-[6px] h-[6px] rounded-sm ${color}`} />
-              {label} {formatTokens(val)}
+              {t(tKey)} {formatTokens(val)}
             </span>
           );
         })}
