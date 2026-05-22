@@ -330,9 +330,9 @@ function TaskConfigurationSection({
               })
             }
           >
-            <option value="claude-code">Claude Code</option>
-            <option value="agent-sdk">Claude Agent</option>
-            <option value="codex-app-server">Codex App Server</option>
+            <option value="claude-code">{t('pages.settings.engine.claudeCode')}</option>
+            <option value="agent-sdk">{t('pages.settings.engine.claudeAgent')}</option>
+            <option value="codex-app-server">{t('pages.settings.engine.codexAppServer')}</option>
           </Select>
         </FormField>
 
@@ -505,9 +505,9 @@ function TaskConfigurationSection({
         {taskConfiguration.defaultExecutionEngineId === 'codex-app-server' && (
           <>
             <div className="grid gap-4 sm:grid-cols-3">
-              <FormField label="Codex model">
+              <FormField label={t('pages.settings.codex.model')}>
                 <Input
-                  aria-label="Codex model"
+                  aria-label={t('pages.settings.codex.model')}
                   value={profileDraft.codexModel}
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, codexModel: event.target.value }))
@@ -515,9 +515,9 @@ function TaskConfigurationSection({
                   placeholder="gpt-5-codex"
                 />
               </FormField>
-              <FormField label="App Server command">
+              <FormField label={t('pages.settings.codex.command')}>
                 <Input
-                  aria-label="App Server command"
+                  aria-label={t('pages.settings.codex.command')}
                   value={profileDraft.codexAppServerCommand}
                   onChange={(event) =>
                     setProfileDraft((current) => ({
@@ -528,9 +528,9 @@ function TaskConfigurationSection({
                   placeholder="codex app-server --listen stdio://"
                 />
               </FormField>
-              <FormField label="Approval policy">
+              <FormField label={t('pages.settings.codex.approval')}>
                 <Input
-                  aria-label="Approval policy"
+                  aria-label={t('pages.settings.codex.approval')}
                   value={profileDraft.codexApprovalPolicy}
                   onChange={(event) =>
                     setProfileDraft((current) => ({
@@ -542,9 +542,9 @@ function TaskConfigurationSection({
                 />
               </FormField>
             </div>
-            <FormField label="Codex config.toml">
+            <FormField label={t('pages.settings.codex.config')}>
               <Textarea
-                aria-label="Codex config.toml"
+                aria-label={t('pages.settings.codex.config')}
                 value={profileDraft.codexConfigToml}
                 onChange={(event) =>
                   setProfileDraft((current) => ({
@@ -557,9 +557,9 @@ function TaskConfigurationSection({
                 placeholder={'model = "gpt-5-codex"'}
               />
             </FormField>
-            <FormField label="Codex auth.json">
+            <FormField label={t('pages.settings.codex.auth')}>
               <Textarea
-                aria-label="Codex auth.json"
+                aria-label={t('pages.settings.codex.auth')}
                 value={profileDraft.codexAuthJson}
                 onChange={(event) =>
                   setProfileDraft((current) => ({
@@ -939,8 +939,8 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
                 disabled={installRegistryMutation.isPending}
               >
                 {installRegistryMutation.isPending
-                  ? 'Installing...'
-                  : `Install ${registry.display_name}`}
+                  ? t('pages.settings.codex.installing', { name: registry.display_name })
+                  : t('pages.settings.codex.install', { name: registry.display_name })}
               </Button>
             ) : registry.has_update ? (
               <Button
@@ -951,12 +951,12 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
                 disabled={updateRegistryMutation.isPending}
               >
                 {updateRegistryMutation.isPending
-                  ? 'Updating...'
-                  : `Update ${registry.display_name}`}
+                  ? t('pages.settings.codex.updating')
+                  : t('pages.settings.codex.update', { name: registry.display_name })}
               </Button>
             ) : (
               <Button disabled>
-                {registry.display_name} Installed
+                {t('pages.settings.codex.installed', { name: registry.display_name })}
               </Button>
             )}
           </div>
@@ -1030,15 +1030,14 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-6 shadow-lg">
             <h3 className="mb-2 text-lg font-semibold text-[var(--text-primary)]">
-              Update {pendingRegistryId.toUpperCase()}
+              {t('pages.settings.codex.updateTitle', { name: pendingRegistryId.toUpperCase() })}
             </h3>
             <p className="mb-4 text-sm text-[var(--text-secondary)]">
-              The local git workspace has uncommitted changes. Continuing will discard
-              these changes and pull the latest code from remote.
+              {t('pages.settings.codex.updateWarning')}
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowDirtyConfirm(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 onClick={() => {
@@ -1047,7 +1046,7 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
                   }
                 }}
               >
-                Force Update
+                {t('pages.settings.codex.forceUpdate')}
               </Button>
             </div>
           </div>

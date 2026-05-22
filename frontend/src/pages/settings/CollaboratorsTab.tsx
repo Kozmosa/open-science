@@ -97,10 +97,10 @@ export function CollaboratorsTab() {
       {selectedProject && (
         <div className="flex flex-col gap-2">
           {collabsLoading && (
-            <p className="text-xs text-[var(--text-secondary)]">Loading...</p>
+            <p className="text-xs text-[var(--text-secondary)]">{t('common.loading')}</p>
           )}
           {collabsError && (
-            <p className="text-xs text-red-500">Failed to load collaborators.</p>
+            <p className="text-xs text-red-500">{t('pages.settings.collaborators.loadError')}</p>
           )}
           {!collabsLoading && !collabsError && collaboratorList.length === 0 && (
             <p className="text-xs text-[var(--text-secondary)]">
