@@ -665,6 +665,13 @@ export const messages = {
         perModelBreakdown: 'Per-Model Breakdown',
         totalTokens: '{{count}} tokens',
       },
+      fileBrowser: {
+        loading: 'Loading files...',
+        files: 'Files',
+        noFileSelected: 'No file selected',
+        selectEnv: 'Select an environment to browse files',
+        refresh: 'Refresh',
+      },
     },
     components: {
       healthStatusBar: {
@@ -1499,6 +1506,13 @@ export const messages = {
         },
         perModelBreakdown: '模型明细',
         totalTokens: '{{count}} 个 token',
+      },
+      fileBrowser: {
+        loading: '加载文件...',
+        files: '文件',
+        noFileSelected: '未选择文件',
+        selectEnv: '选择一个环境以浏览文件',
+        refresh: '刷新',
       },
     },
     components: {
