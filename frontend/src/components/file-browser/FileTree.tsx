@@ -97,7 +97,7 @@ function TreeNode({ entry, selectedPath, onSelectFile, onLoadDirectory }: TreeNo
               />
             ))
           ) : (
-            <p className="px-2 py-1 text-xs text-[var(--text-tertiary)]">{t('pages.fileBrowser.emptyDirectory')}</p>
+            <p className="px-2 py-1 text-xs text-[var(--text-tertiary)]">{t('pages.sessions.fileBrowser.emptyDirectory')}</p>
           )}
         </div>
       )}
@@ -108,7 +108,7 @@ function TreeNode({ entry, selectedPath, onSelectFile, onLoadDirectory }: TreeNo
 export default function FileTree({ entries, selectedPath, onSelectFile, onLoadDirectory }: FileTreeProps) {
   const t = useT();
   if (entries.length === 0) {
-    return <p className="px-3 py-2 text-sm text-[var(--text-tertiary)]">{t('pages.fileBrowser.noFiles')}</p>;
+    return <p className="px-3 py-2 text-sm text-[var(--text-tertiary)]">{t('pages.sessions.fileBrowser.noFiles')}</p>;
   }
 
   return (

@@ -52,7 +52,7 @@ export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
-        {t('pages.fileBrowser.loadingFile')}
+        {t('pages.sessions.fileBrowser.loadingFile')}
       </div>
     );
   }
@@ -60,7 +60,7 @@ export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
   if (!file) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
-        {t('pages.fileBrowser.selectFile')}
+        {t('pages.sessions.fileBrowser.selectFile')}
       </div>
     );
   }
@@ -85,7 +85,7 @@ export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
         <div className="text-center">
-          <p className="font-medium">{t('pages.fileBrowser.binaryFile')}</p>
+          <p className="font-medium">{t('pages.sessions.fileBrowser.binaryFile')}</p>
           <p className="mt-1 text-xs text-[var(--text-tertiary)]">
             {file.path} · {(file.size / 1024).toFixed(1)} KB
           </p>
