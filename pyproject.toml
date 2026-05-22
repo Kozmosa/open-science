@@ -25,6 +25,8 @@ dependencies = [
   "pyyaml>=6.0.2",
   "bcrypt>=5.0.0",
   "pyjwt>=2.12.1",
+  "arxiv>=4.0.0",
+  "apscheduler>=3.11.2",
 ]
 
 [project.scripts]

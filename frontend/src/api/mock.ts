@@ -870,6 +870,7 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
       prompt_file: `.ainrf/runtime/task-harness/tasks/${taskId}/rendered_prompt.txt`,
       helper_path: null,
       launch_payload_path: `.ainrf/runtime/task-harness/tasks/${taskId}/resolved_launch_payload.json`,
+      codex_home: null,
     },
     result: {
       exit_code: null,

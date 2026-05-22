@@ -788,3 +788,34 @@ export interface RegisterRequest { username: string; display_name: string; passw
 export interface AuthTokenResponse { access_token: string; refresh_token: string; user: UserInfo }
 export interface AccessTokenResponse { access_token: string }
 export interface ChangePasswordRequest { old_password: string; new_password: string }
+
+export interface LiteratureSubscription {
+  subscription_id: string;
+  user_id: string;
+  label: string;
+  keywords: string[];
+  arxiv_categories: string[];
+  seed_paper_ids: string[];
+  frequency: 'daily' | 'twice_daily' | 'weekly';
+  is_active: boolean;
+  created_at: string;
+  last_fetched_at: string | null;
+}
+
+export interface LiteraturePaper {
+  paper_id: string;
+  subscription_id: string;
+  title: string;
+  title_zh: string | null;
+  authors: string[];
+  abstract: string;
+  journal: string | null;
+  published_at: string;
+  arxiv_category: string;
+  ai_summary: string | null;
+  ai_practice_note: string | null;
+  is_read: boolean;
+  is_converted_to_task: boolean;
+  task_id: string | null;
+  created_at: string;
+}
