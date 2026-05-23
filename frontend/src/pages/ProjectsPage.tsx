@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useMutation, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Modal } from '../components/ui';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
 import { useEnvironmentSelection } from '../components';
@@ -48,14 +48,12 @@ export default function ProjectsPage() {
   const availableSkills = useMemo(() => skillsQuery.data?.items ?? [], [skillsQuery.data]);
   const effectiveProjectId = selectedProjectId ?? projects[0]?.project_id ?? null;
 
-  const tasksQuery = useInfiniteQuery({
+  const tasksQuery = useQuery({
     queryKey: ['project-tasks', effectiveProjectId],
-    queryFn: ({ pageParam }) =>
+    queryFn: () =>
       effectiveProjectId
-        ? getProjectTasks(effectiveProjectId, { cursor: pageParam, limit: 50 })
+        ? getProjectTasks(effectiveProjectId, { limit: 500 })
         : Promise.resolve({ items: [], has_more: false, next_cursor: null }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
     enabled: effectiveProjectId !== null,
   });
 
@@ -67,7 +65,7 @@ export default function ProjectsPage() {
   });
 
   const tasks = useMemo(
-    () => tasksQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    () => tasksQuery.data?.items ?? [],
     [tasksQuery.data],
   );
   const edges = useMemo(() => edgesQuery.data?.items ?? [], [edgesQuery.data]);

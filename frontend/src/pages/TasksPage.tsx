@@ -19,7 +19,7 @@ import { useT } from '../i18n';
 import { PageShell, SplitPane } from '../components/layout';
 import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
 import { extractErrorMessage } from '../utils/error';
-import type { TaskCreateRequest, TaskSummary } from '../types';
+import type { TaskCreateRequest, TaskListResponse } from '../types';
 import TaskCreateForm from './tasks/TaskCreateForm';
 import TaskDetail from './tasks/TaskDetail';
 import TaskList from './tasks/TaskList';
@@ -103,8 +103,11 @@ function TasksPage() {
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreateRequest) => createTask(payload),
     onSuccess: (task) => {
-      queryClient.setQueryData<{ items: TaskSummary[] }>(['tasks', showArchived], (current) => ({
+      queryClient.setQueryData<TaskListResponse>(['tasks', showArchived], (current) => ({
         items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
+        total: (current?.total ?? 0) + 1,
+        has_more: current?.has_more ?? false,
+        next_cursor: current?.next_cursor ?? null,
       }));
       selectTask(task.task_id);
       closeCreateDialog();
@@ -133,10 +136,13 @@ function TasksPage() {
   const deleteMutation = useMutation({
     mutationFn: (taskId: string) => deleteTask(taskId),
     onSuccess: (_data, taskId) => {
-      queryClient.setQueryData<{ items: TaskSummary[] }>(
+      queryClient.setQueryData<TaskListResponse>(
         ['tasks', showArchived],
         (current) => ({
           items: (current?.items ?? []).filter((item) => item.task_id !== taskId),
+          total: current?.total != null ? current.total - 1 : undefined,
+          has_more: current?.has_more ?? false,
+          next_cursor: current?.next_cursor ?? null,
         })
       );
       if (effectiveSelectedTaskId === taskId) {

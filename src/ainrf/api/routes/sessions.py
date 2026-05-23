@@ -200,5 +200,8 @@ async def get_sessions_batch_detail(
         raise HTTPException(status_code=400, detail="Too many IDs (max 200)")
     user = get_current_user(request)
     service = _get_service(request)
-    details = service.get_sessions_batch_detail(session_ids)
+    if is_admin(user):
+        details = service.get_sessions_batch_detail(session_ids)
+    else:
+        details = service.get_sessions_batch_detail(session_ids, owner_user_id=user["id"])
     return {"items": details}
