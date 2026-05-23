@@ -556,6 +556,9 @@ class TaskListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[TaskSummaryResponse]
+    total: int | None = None
+    has_more: bool = False
+    next_cursor: str | None = None
 
 
 class TaskEdgeResponse(BaseModel):
