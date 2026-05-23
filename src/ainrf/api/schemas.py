@@ -914,6 +914,9 @@ class SessionDetailResponse(SessionResponse):
 class SessionListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list["SessionResponse"]
+    total: int | None = None
+    has_more: bool = False
+    next_cursor: str | None = None
 
 
 class AttemptListResponse(BaseModel):

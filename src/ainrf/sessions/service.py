@@ -133,6 +133,45 @@ class SessionService:
             ).fetchall()
         return [_row_to_session(r) for r in rows]
 
+    def list_sessions_cursor(
+        self,
+        *,
+        cursor: str | None = None,
+        limit: int = 50,
+        project_id: str | None = None,
+        status: str | None = None,
+        owner_user_id: str | None = None,
+    ) -> tuple[list[Session], int, bool, str | None]:
+        clauses: list[str] = []
+        params: list[str] = []
+        if cursor is not None:
+            clauses.append("id < ?")
+            params.append(cursor)
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as conn:
+            count_row = conn.execute(
+                f"SELECT COUNT(*) FROM task_sessions {where}",
+                tuple(params),
+            ).fetchone()
+            total = count_row[0] if count_row else 0
+            rows = conn.execute(
+                f"SELECT * FROM task_sessions {where} ORDER BY id DESC LIMIT ?",
+                (*params, limit + 1),
+            ).fetchall()
+        has_more = len(rows) > limit
+        items = [_row_to_session(r) for r in rows[:limit]]
+        next_cursor = items[-1].id if has_more and items else None
+        return items, total, has_more, next_cursor
+
     def get_session(self, session_id: str) -> Session:
         return self._load_session(session_id)
 
