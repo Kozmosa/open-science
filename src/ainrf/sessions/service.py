@@ -172,6 +172,33 @@ class SessionService:
         next_cursor = items[-1].id if has_more and items else None
         return items, total, has_more, next_cursor
 
+    def get_sessions_batch_detail(
+        self, session_ids: list[str]
+    ) -> dict[str, list[dict[str, object]]]:
+        """Return {session_id: [attempt_summaries]} for the given session IDs."""
+        if not session_ids:
+            return {}
+        placeholders = ", ".join(["?"] * len(session_ids))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""SELECT session_id, attempt_seq, status, duration_ms,
+                           intervention_reason, created_at
+                    FROM task_attempts
+                    WHERE session_id IN ({placeholders})
+                    ORDER BY session_id, attempt_seq ASC""",
+                tuple(session_ids),
+            ).fetchall()
+        result: dict[str, list[dict[str, object]]] = {sid: [] for sid in session_ids}
+        for r in rows:
+            result[r["session_id"]].append({
+                "attempt_seq": r["attempt_seq"],
+                "status": r["status"],
+                "duration_ms": r["duration_ms"],
+                "intervention_reason": r["intervention_reason"],
+                "created_at": r["created_at"],
+            })
+        return result
+
     def get_session(self, session_id: str) -> Session:
         return self._load_session(session_id)
 
