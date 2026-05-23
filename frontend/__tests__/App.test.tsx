@@ -146,7 +146,8 @@ describe('App routes', () => {
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
     expect(screen.getByRole('complementary')).toHaveClass('sticky', 'top-0', 'h-screen');
-    expect(screen.getByRole('main')).toHaveClass('overflow-y-auto');
+    // Layout <main> is now overflow-hidden; scroll is delegated to SplitPane panels
+    expect(screen.getByRole('main')).toHaveClass('overflow-hidden');
   });
 
   it('renders a collapsed sidebar by default and live task status summary', async () => {
