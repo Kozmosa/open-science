@@ -164,7 +164,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     setAccessToken(null);
     setStoredRefreshToken(null);
     _refreshPromise = null;
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
       window.location.href = '/login';
     }
     throw new ApiError('Session expired', 401, path);
