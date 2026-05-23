@@ -6,11 +6,13 @@ import * as api from '../../src/api';
 
 vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getSessions: vi.fn(),
+  getSessionsBatchDetail: vi.fn(),
   getSession: vi.fn(),
   getProjects: vi.fn(),
 }));
 
 const mockGetSessions = vi.mocked(api.getSessions);
+const mockGetSessionsBatchDetail = vi.mocked(api.getSessionsBatchDetail);
 const mockGetSession = vi.mocked(api.getSession);
 const mockGetProjects = vi.mocked(api.getProjects);
 
@@ -72,6 +74,7 @@ beforeEach(() => {
   localStorage.clear();
   mockGetProjects.mockResolvedValue({ items: [mockProject] });
   mockGetSessions.mockResolvedValue({ items: [mockSession] });
+  mockGetSessionsBatchDetail.mockResolvedValue({ items: { s1: mockAttempts } });
   mockGetSession.mockResolvedValue({ ...mockSession, attempts: mockAttempts });
 });
 
