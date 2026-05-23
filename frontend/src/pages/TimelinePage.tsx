@@ -15,7 +15,7 @@ export default function TimelinePage() {
 
   const sessionsQuery = useQuery({
     queryKey: ['sessions', projectId],
-    queryFn: () => getSessions(projectId ?? undefined),
+    queryFn: () => getSessions({ projectId: projectId ?? undefined }),
     refetchInterval: 15000,
   });
 

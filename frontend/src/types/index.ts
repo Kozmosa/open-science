@@ -262,6 +262,9 @@ export interface TaskRecord extends TaskSummary {
 
 export interface TaskListResponse {
   items: TaskSummary[];
+  total?: number;
+  has_more: boolean;
+  next_cursor?: string | null;
 }
 
 export interface TaskEdge {
@@ -721,6 +724,13 @@ export interface SessionDetailRecord extends SessionRecord {
 
 export interface SessionListResponse {
   items: SessionRecord[];
+  total?: number;
+  has_more: boolean;
+  next_cursor?: string | null;
+}
+
+export interface SessionsBatchDetailResponse {
+  items: Record<string, AttemptRecord[]>;
 }
 
 export interface AttemptListResponse {
