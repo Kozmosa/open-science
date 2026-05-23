@@ -1,6 +1,6 @@
 import { lazy, Profiler, Suspense, type ProfilerOnRenderCallback } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
 import { useT } from './i18n';
 import { createAppQueryClient } from './queryClient';
@@ -67,11 +67,9 @@ function RootRedirect() {
 
 function AuthenticatedRoutes() {
   const t = useT();
-  const location = useLocation();
-  const isEdgeToEdge = location.pathname === '/tasks' || location.pathname === '/projects';
 
   return (
-    <Layout edgeToEdge={isEdgeToEdge}>
+    <Layout>
       <Suspense
         fallback={
           <div className="flex items-center justify-center py-16 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">

@@ -38,7 +38,7 @@ function TasksPage() {
   const [showArchived, setShowArchived] = useState(false);
   const tasksQuery = useQuery({
     queryKey: ['tasks', showArchived],
-    queryFn: () => getTasks(showArchived),
+    queryFn: () => getTasks({ includeArchived: showArchived }),
     refetchInterval: 5000,
   });
 

@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import type { AttemptRecord, SessionDetailRecord, SessionRecord } from '../../types';
+import type { AttemptRecord, SessionRecord } from '../../types';
 import { useT } from '../../i18n';
 import { GanttRow } from './GanttRow';
 
 interface Props {
   sessions: SessionRecord[];
-  details: SessionDetailRecord[];
+  details: Record<string, AttemptRecord[]>;
   loading: boolean;
 }
 
@@ -61,12 +61,7 @@ function generateTimeLabels(
 export function GanttChart({ sessions, details, loading }: Props) {
   const t = useT();
   const { minTime, span, timeLabels, detailMap } = useMemo(() => {
-    const map = new Map<string, AttemptRecord[]>();
-    for (const d of details) {
-      map.set(d.id, d.attempts);
-    }
-
-    const allAttempts = details.flatMap((d) => d.attempts);
+    const allAttempts = Object.values(details).flat();
     const times = allAttempts
       .map((a) => (a.started_at ? new Date(a.started_at).getTime() : null))
       .filter(Boolean) as number[];
@@ -76,7 +71,7 @@ export function GanttChart({ sessions, details, loading }: Props) {
         minTime: now - 3600000,
         span: 7200000,
         timeLabels: [] as { label: string; leftPct: number }[],
-        detailMap: map,
+        detailMap: details,
       };
     }
 
@@ -91,7 +86,7 @@ export function GanttChart({ sessions, details, loading }: Props) {
       minTime: min,
       span: s,
       timeLabels: generateTimeLabels(min, max, getTimeLabel(s)),
-      detailMap: map,
+      detailMap: details,
     };
   }, [details]);
 
@@ -104,7 +99,7 @@ export function GanttChart({ sessions, details, loading }: Props) {
   }
 
   return (
-    <div className="w-full border border-[var(--border)] rounded-lg overflow-x-auto">
+    <div className="w-full border border-[var(--border)] rounded-lg overflow-x-auto overflow-y-auto">
       <div className="flex bg-[var(--bg)] border-b border-[var(--border)]">
         <div className="w-[260px] min-w-[260px] p-2 border-r-2 border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)]">
           {t('pages.sessions.timeline.title')}
@@ -125,7 +120,7 @@ export function GanttChart({ sessions, details, loading }: Props) {
         <GanttRow
           key={s.id}
           session={s}
-          attempts={detailMap.get(s.id) ?? []}
+          attempts={detailMap[s.id] ?? []}
           minTime={minTime}
           span={span}
         />

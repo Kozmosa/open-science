@@ -603,6 +603,45 @@ class TaskHarnessService:
             ).fetchall()
         return [self._row_to_list_item(row) for row in rows]
 
+    def list_tasks_cursor(
+        self,
+        *,
+        cursor: str | None = None,
+        limit: int = 50,
+        include_archived: bool = False,
+        owner_user_id: str | None = None,
+        project_id: str | None = None,
+    ) -> tuple[list[TaskListItem], int, bool, str | None]:
+        self.initialize()
+        clauses: list[str] = []
+        params: list[str] = []
+        if cursor is not None:
+            clauses.append("task_id < ?")
+            params.append(cursor)
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as connection:
+            count_row = connection.execute(
+                f"SELECT COUNT(*) FROM task_harness_tasks {where}",
+                tuple(params),
+            ).fetchone()
+            total = count_row[0] if count_row else 0
+            rows = connection.execute(
+                f"SELECT * FROM task_harness_tasks {where} ORDER BY task_id DESC LIMIT ?",
+                (*params, limit + 1),
+            ).fetchall()
+        has_more = len(rows) > limit
+        items = [self._row_to_list_item(row) for row in rows[:limit]]
+        next_cursor = items[-1].task_id if has_more and items else None
+        return items, total, has_more, next_cursor
+
     def list_project_tasks(
         self, project_id: str, *, include_archived: bool = False, owner_user_id: str | None = None
     ) -> list[TaskListItem]:
