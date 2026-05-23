@@ -99,7 +99,7 @@ export function GanttChart({ sessions, details, loading }: Props) {
   }
 
   return (
-    <div className="w-full border border-[var(--border)] rounded-lg overflow-x-auto">
+    <div className="w-full border border-[var(--border)] rounded-lg overflow-x-auto overflow-y-auto">
       <div className="flex bg-[var(--bg)] border-b border-[var(--border)]">
         <div className="w-[260px] min-w-[260px] p-2 border-r-2 border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)]">
           {t('pages.sessions.timeline.title')}
