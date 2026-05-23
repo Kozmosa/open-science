@@ -38,6 +38,7 @@ import type { ChangePasswordRequest,
   SessionCreateRequest,
   SessionDetailRecord,
   SessionListResponse,
+  SessionsBatchDetailResponse,
   SessionRecord,
   SessionUpdateRequest,
   SkillDetail,
@@ -243,10 +244,21 @@ export const deleteWorkspace = (workspaceId: string): Promise<void> =>
     ? Promise.resolve(mockDeleteWorkspace(workspaceId))
     : api.delete<void>(`/workspaces/${workspaceId}`);
 
-export const getTasks = (includeArchived: boolean = false): Promise<TaskListResponse> =>
-  USE_MOCK
+export const getTasks = (params: {
+  includeArchived?: boolean;
+  cursor?: string;
+  limit?: number;
+} = {}): Promise<TaskListResponse> => {
+  const { includeArchived = false, cursor, limit } = params;
+  const searchParams = new URLSearchParams();
+  searchParams.set('include_archived', String(includeArchived));
+  if (cursor) searchParams.set('cursor', cursor);
+  if (limit) searchParams.set('limit', String(limit));
+  const qs = searchParams.toString();
+  return USE_MOCK
     ? Promise.resolve(mockGetTasks())
-    : api.get<TaskListResponse>(`/tasks?include_archived=${includeArchived}`);
+    : api.get<TaskListResponse>(`/tasks?${qs}`);
+};
 
 export const getTask = (taskId: string): Promise<TaskRecord> =>
   USE_MOCK ? Promise.resolve(mockGetTask(taskId)) : api.get<TaskRecord>(`/tasks/${taskId}`);
@@ -263,10 +275,20 @@ export const deleteTask = (taskId: string): Promise<void> =>
 export const cancelTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCancelTask(taskId)) : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {});
 
-export const getProjectTasks = (projectId: string, includeArchived: boolean = false): Promise<TaskListResponse> =>
-  USE_MOCK
+export const getProjectTasks = (
+  projectId: string,
+  params: { includeArchived?: boolean; cursor?: string; limit?: number } = {},
+): Promise<TaskListResponse> => {
+  const { includeArchived = false, cursor, limit } = params;
+  const searchParams = new URLSearchParams();
+  searchParams.set('include_archived', String(includeArchived));
+  if (cursor) searchParams.set('cursor', cursor);
+  if (limit) searchParams.set('limit', String(limit));
+  const qs = searchParams.toString();
+  return USE_MOCK
     ? Promise.resolve(mockGetProjectTasks())
-    : api.get<TaskListResponse>(`/projects/${projectId}/tasks?include_archived=${includeArchived}`);
+    : api.get<TaskListResponse>(`/projects/${projectId}/tasks?${qs}`);
+};
 
 export const getTaskEdges = (projectId: string): Promise<TaskEdgeListResponse> =>
   USE_MOCK
@@ -500,17 +522,30 @@ export const updateSkillRegistry = (
 
 // ── Session endpoints ───────────────────────────────────
 
-export const getSessions = (
-  projectId?: string,
-  status?: string,
-): Promise<SessionListResponse> => {
-  const params = new URLSearchParams();
-  if (projectId) params.set('project_id', projectId);
-  if (status) params.set('status', status);
-  const qs = params.toString();
+export const getSessions = (params: {
+  projectId?: string;
+  status?: string;
+  cursor?: string;
+  limit?: number;
+} = {}): Promise<SessionListResponse> => {
+  const { projectId, status, cursor, limit } = params;
+  const searchParams = new URLSearchParams();
+  if (projectId) searchParams.set('project_id', projectId);
+  if (status) searchParams.set('status', status);
+  if (cursor) searchParams.set('cursor', cursor);
+  if (limit) searchParams.set('limit', String(limit));
+  const qs = searchParams.toString();
   return USE_MOCK
     ? Promise.resolve(mockGetSessions({ projectId, status }))
     : api.get<SessionListResponse>(`/sessions${qs ? `?${qs}` : ''}`);
+};
+
+export const getSessionsBatchDetail = (
+  ids: string[],
+): Promise<SessionsBatchDetailResponse> => {
+  if (ids.length === 0) return Promise.resolve({ items: {} });
+  const qs = `ids=${ids.join(',')}`;
+  return api.get<SessionsBatchDetailResponse>(`/sessions/batch-detail?${qs}`);
 };
 
 export const getSession = (id: string): Promise<SessionDetailRecord> =>

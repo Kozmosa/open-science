@@ -51,7 +51,7 @@ export default function ProjectsPage() {
   const tasksQuery = useQuery({
     queryKey: ['project-tasks', effectiveProjectId],
     queryFn: () =>
-      effectiveProjectId ? getProjectTasks(effectiveProjectId) : Promise.resolve({ items: [] }),
+      effectiveProjectId ? getProjectTasks(effectiveProjectId, {}) : Promise.resolve({ items: [], has_more: false, next_cursor: null }),
     enabled: effectiveProjectId !== null,
   });
 
