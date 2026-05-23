@@ -75,21 +75,35 @@ async def list_sessions(
     request: Request,
     project_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> SessionListResponse:
     user = get_current_user(request)
     service = _get_service(request)
     try:
         if is_admin(user):
-            sessions = service.list_sessions(project_id=project_id, status=status)
+            items, total, has_more, next_cursor = service.list_sessions_cursor(
+                project_id=project_id,
+                status=status,
+                cursor=cursor,
+                limit=limit,
+            )
         else:
-            sessions = service.list_sessions(
-                project_id=project_id, status=status, owner_user_id=user["id"]
+            items, total, has_more, next_cursor = service.list_sessions_cursor(
+                project_id=project_id,
+                status=status,
+                cursor=cursor,
+                limit=limit,
+                owner_user_id=user["id"],
             )
     except Exception as exc:
         raise _translate_error(exc) from exc
     return SessionListResponse.model_validate(
         {
-            "items": [_serialize_session(s) for s in sessions],
+            "items": [_serialize_session(s) for s in items],
+            "total": total if cursor is None else None,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
         }
     )
 
@@ -172,3 +186,19 @@ async def list_attempts(session_id: str, request: Request) -> AttemptListRespons
             "items": [_serialize_attempt(a) for a in attempts],
         }
     )
+
+
+@router.get("/batch-detail")
+async def get_sessions_batch_detail(
+    request: Request,
+    ids: str = Query(..., description="Comma-separated session IDs"),
+):
+    session_ids = [sid.strip() for sid in ids.split(",") if sid.strip()]
+    if not session_ids:
+        return {"items": {}}
+    if len(session_ids) > 200:
+        raise HTTPException(status_code=400, detail="Too many IDs (max 200)")
+    user = get_current_user(request)
+    service = _get_service(request)
+    details = service.get_sessions_batch_detail(session_ids)
+    return {"items": details}
