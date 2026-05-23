@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getSession, getSessions } from '../api';
 import PageShell from '../components/layout/PageShell';
 import SplitPane from '../components/layout/SplitPane';
@@ -11,14 +11,16 @@ export default function SessionsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(320);
 
-  const sessionsQuery = useQuery({
+  const sessionsQuery = useInfiniteQuery({
     queryKey: ['sessions'],
-    queryFn: () => getSessions(),
+    queryFn: ({ pageParam }) => getSessions({ cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
     refetchInterval: 10000,
   });
 
   const sessions = useMemo(
-    () => sessionsQuery.data?.items ?? [],
+    () => sessionsQuery.data?.pages.flatMap((p) => p.items) ?? [],
     [sessionsQuery.data],
   );
 
@@ -45,6 +47,9 @@ export default function SessionsPage() {
             selectedId={selectedId}
             onSelect={handleSelect}
             loading={sessionsQuery.isLoading}
+            hasNextPage={sessionsQuery.hasNextPage}
+            isFetchingNextPage={sessionsQuery.isFetchingNextPage}
+            onLoadMore={() => sessionsQuery.fetchNextPage()}
           />
         }
         sidebarWidth={sidebarWidth}
