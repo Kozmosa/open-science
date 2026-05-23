@@ -616,7 +616,7 @@ class TaskHarnessService:
         clauses: list[str] = []
         params: list[str] = []
         if cursor is not None:
-            clauses.append("task_id > ?")
+            clauses.append("task_id < ?")
             params.append(cursor)
         if not include_archived:
             clauses.append("archived_at IS NULL")
@@ -634,7 +634,7 @@ class TaskHarnessService:
             ).fetchone()
             total = count_row[0] if count_row else 0
             rows = connection.execute(
-                f"SELECT * FROM task_harness_tasks {where} ORDER BY created_at DESC LIMIT ?",
+                f"SELECT * FROM task_harness_tasks {where} ORDER BY task_id DESC LIMIT ?",
                 (*params, limit + 1),
             ).fetchall()
         has_more = len(rows) > limit
