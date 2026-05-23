@@ -77,6 +77,7 @@ const environment: EnvironmentRecord = {
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.localStorage.setItem('ainrf.refresh_token', 'mock-refresh-token');
   mockGetEnvironments.mockReset();
   mockGetCodexDefaults.mockReset();
   mockGetSkills.mockReset();

@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getCodexDefaults } from '../api';
+import { getStoredRefreshToken } from '../api/client';
 import {
   applyCodexDefaultsToProfile,
   clampEditorFontSize,
@@ -145,6 +146,7 @@ export function SettingsProvider({ children }: ProviderProps) {
   const [activeProjectId, setActiveProjectId] = useState<string>('default');
 
   useEffect(() => {
+    if (!getStoredRefreshToken()) return;
     void getCodexDefaults().then((defaults) => {
       setState((current) => {
         const profileId = 'codex-app-server-default';
@@ -173,6 +175,8 @@ export function SettingsProvider({ children }: ProviderProps) {
           },
         };
       });
+    }).catch(() => {
+      // Ignore — codex defaults are optional, will retry on next mount
     });
   }, []);
 
