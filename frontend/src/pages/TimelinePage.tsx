@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
-import { getProjects, getSession, getSessions } from '../api';
+import { useQuery } from '@tanstack/react-query';
+import { getProjects, getSessions, getSessionsBatchDetail } from '../api';
 import PageShell from '../components/layout/PageShell';
 import SectionStack from '../components/layout/SectionStack';
-import type { SessionDetailRecord } from '../types';
 import { GanttChart } from './timeline/GanttChart';
 import { TimelineControls } from './timeline/TimelineControls';
 
@@ -24,22 +23,13 @@ export default function TimelinePage() {
     [sessionsQuery.data],
   );
 
-  const sessionDetails = useQueries({
-    queries: sessions.map((s) => ({
-      queryKey: ['session', s.id],
-      queryFn: () => getSession(s.id),
-      enabled: sessions.length > 0,
-      refetchInterval: 30000,
-    })),
+  const detailQuery = useQuery({
+    queryKey: ['session-batch-detail', sessions.map((s) => s.id)],
+    queryFn: () => getSessionsBatchDetail(sessions.map((s) => s.id)),
+    enabled: sessions.length > 0,
   });
 
-  const details = useMemo(
-    () =>
-      sessionDetails
-        .map((q) => q.data)
-        .filter(Boolean) as SessionDetailRecord[],
-    [sessionDetails],
-  );
+  const details = useMemo(() => detailQuery.data?.items ?? {}, [detailQuery.data]);
 
   const projectsQuery = useQuery({
     queryKey: ['projects'],
