@@ -25,7 +25,6 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface Props {
   children: ReactNode;
-  edgeToEdge?: boolean;
 }
 
 interface NavigationItem {
@@ -58,8 +57,7 @@ function buildTaskStatusSummary(
   return t('common.taskStatusSummary', { total: items.length, running, pending, finished });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Layout({ children, edgeToEdge = false }: Props) {
+function Layout({ children }: Props) {
   const t = useT();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -255,10 +253,7 @@ function Layout({ children, edgeToEdge = false }: Props) {
           </header>
 
           <main
-            className={[
-              'flex w-full flex-1 flex-col overflow-y-auto',
-              edgeToEdge ? '' : '',
-            ].join(' ')}
+            className="flex w-full flex-1 flex-col overflow-hidden"
           >
             {children}
           </main>

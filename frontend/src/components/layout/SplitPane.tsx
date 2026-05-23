@@ -66,7 +66,7 @@ export default function SplitPane({
   );
 
   return (
-    <div className={`flex min-h-0 w-full overflow-auto ${className ?? ''}`}>
+    <div className={`flex min-h-0 w-full ${className ?? ''}`}>
       <aside
         className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
         style={{ width: sidebarWidth }}
@@ -90,7 +90,7 @@ export default function SplitPane({
         <div className="h-8 w-0.5 rounded-full bg-[var(--border)] transition-colors group-hover:bg-[var(--apple-blue)] group-focus-visible:bg-[var(--apple-blue)]" />
       </div>
 
-      <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] p-4">
+      <main className="flex min-w-0 flex-1 flex-col bg-[var(--bg)] p-4 overflow-y-auto">
         {children}
       </main>
     </div>
