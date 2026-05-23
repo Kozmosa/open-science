@@ -133,6 +133,72 @@ class SessionService:
             ).fetchall()
         return [_row_to_session(r) for r in rows]
 
+    def list_sessions_cursor(
+        self,
+        *,
+        cursor: str | None = None,
+        limit: int = 50,
+        project_id: str | None = None,
+        status: str | None = None,
+        owner_user_id: str | None = None,
+    ) -> tuple[list[Session], int, bool, str | None]:
+        clauses: list[str] = []
+        params: list[str] = []
+        if cursor is not None:
+            clauses.append("id < ?")
+            params.append(cursor)
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        if owner_user_id is not None:
+            clauses.append("owner_user_id = ?")
+            params.append(owner_user_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as conn:
+            count_row = conn.execute(
+                f"SELECT COUNT(*) FROM task_sessions {where}",
+                tuple(params),
+            ).fetchone()
+            total = count_row[0] if count_row else 0
+            rows = conn.execute(
+                f"SELECT * FROM task_sessions {where} ORDER BY id DESC LIMIT ?",
+                (*params, limit + 1),
+            ).fetchall()
+        has_more = len(rows) > limit
+        items = [_row_to_session(r) for r in rows[:limit]]
+        next_cursor = items[-1].id if has_more and items else None
+        return items, total, has_more, next_cursor
+
+    def get_sessions_batch_detail(
+        self, session_ids: list[str]
+    ) -> dict[str, list[dict[str, object]]]:
+        """Return {session_id: [attempt_summaries]} for the given session IDs."""
+        if not session_ids:
+            return {}
+        placeholders = ", ".join(["?"] * len(session_ids))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""SELECT session_id, attempt_seq, status, duration_ms,
+                           intervention_reason, created_at
+                    FROM task_attempts
+                    WHERE session_id IN ({placeholders})
+                    ORDER BY session_id, attempt_seq ASC""",
+                tuple(session_ids),
+            ).fetchall()
+        result: dict[str, list[dict[str, object]]] = {sid: [] for sid in session_ids}
+        for r in rows:
+            result[r["session_id"]].append({
+                "attempt_seq": r["attempt_seq"],
+                "status": r["status"],
+                "duration_ms": r["duration_ms"],
+                "intervention_reason": r["intervention_reason"],
+                "created_at": r["created_at"],
+            })
+        return result
+
     def get_session(self, session_id: str) -> Session:
         return self._load_session(session_id)
 

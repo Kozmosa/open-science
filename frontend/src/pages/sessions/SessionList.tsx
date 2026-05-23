@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Input from '../../components/ui/Input';
 import StatusDot from '../../components/ui/StatusDot';
+import LoadMoreSentinel from '../../components/common/LoadMoreSentinel';
 import { useT } from '../../i18n';
 import type { SessionRecord } from '../../types';
 
@@ -9,6 +10,9 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
   loading: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
 }
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'idle'> = {
@@ -17,7 +21,7 @@ const STATUS_COLOR: Record<string, 'success' | 'warning' | 'idle'> = {
   archived: 'idle',
 };
 
-export function SessionList({ sessions, selectedId, onSelect, loading }: Props) {
+export function SessionList({ sessions, selectedId, onSelect, loading, hasNextPage, isFetchingNextPage, onLoadMore }: Props) {
   const t = useT();
   const [search, setSearch] = useState('');
 
@@ -26,7 +30,7 @@ export function SessionList({ sessions, selectedId, onSelect, loading }: Props) 
   );
 
   return (
-    <div className="flex flex-col gap-3 p-2">
+    <div className="flex flex-col gap-3 p-2 min-h-0">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{t('pages.sessions.sidebarTitle')}</h3>
         <span className="text-xs text-gray-500">
@@ -67,6 +71,9 @@ export function SessionList({ sessions, selectedId, onSelect, loading }: Props) 
             </li>
           ))}
         </ul>
+      )}
+      {hasNextPage && (
+        <LoadMoreSentinel onVisible={onLoadMore ?? (() => {})} loading={isFetchingNextPage ?? false} />
       )}
     </div>
   );

@@ -743,6 +743,8 @@ export function mockGetTasks(): TaskListResponse {
     items: Object.values(mockTasks)
       .sort((left, right) => right.created_at.localeCompare(left.created_at))
       .map((task) => cloneTaskSummary(task)),
+    has_more: false,
+    next_cursor: null,
   };
 }
 
@@ -1197,7 +1199,11 @@ export function mockGetResources(): ResourcesResponse {
 }
 
 export function mockGetProjectTasks(): TaskListResponse {
-  return { items: Object.values(mockTasks).map((task) => cloneTaskSummary(task)) };
+  return {
+    items: Object.values(mockTasks).map((task) => cloneTaskSummary(task)),
+    has_more: false,
+    next_cursor: null,
+  };
 }
 
 export function mockGetTaskEdges(projectId: string): TaskEdgeListResponse {
@@ -1330,7 +1336,7 @@ export function mockGetSessions(_filters?: {
   projectId?: string;
   status?: string;
 }): SessionListResponse {
-  return { items: _mockSessions };
+  return { items: _mockSessions, has_more: false, next_cursor: null };
 }
 
 export function mockGetSession(id: string): SessionDetailRecord {

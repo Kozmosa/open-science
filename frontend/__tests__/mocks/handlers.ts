@@ -32,7 +32,7 @@ export const handlers = [
   }),
 
   http.get('/api/projects/default/tasks', () => {
-    return HttpResponse.json({ items: [] })
+    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
   }),
 
   http.get('/api/projects/default/task-edges', () => {
@@ -65,6 +65,10 @@ export const handlers = [
 
   // Sessions
   http.get('/api/sessions', () => {
-    return HttpResponse.json({ items: [] })
+    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
+  }),
+
+  http.get('/api/sessions/batch-detail', () => {
+    return HttpResponse.json({ items: {} })
   }),
 ]
