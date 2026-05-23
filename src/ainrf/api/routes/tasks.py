@@ -231,21 +231,35 @@ def _convert_output_event_to_message(item: Any) -> dict[str, Any] | None:
 async def list_tasks(
     request: Request,
     include_archived: bool = Query(default=False),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> TaskListResponse:
     user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
         if is_admin(user):
-            items = service.list_tasks(include_archived=include_archived)
+            items, total, has_more, next_cursor = service.list_tasks_cursor(
+                cursor=cursor,
+                limit=limit,
+                include_archived=include_archived,
+            )
         else:
-            items = service.list_tasks(include_archived=include_archived, owner_user_id=user["id"])
+            items, total, has_more, next_cursor = service.list_tasks_cursor(
+                cursor=cursor,
+                limit=limit,
+                include_archived=include_archived,
+                owner_user_id=user["id"],
+            )
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskListResponse.model_validate(
         {
             "items": [
                 TaskSummaryResponse.model_validate(_serialize_task_summary(item)) for item in items
-            ]
+            ],
+            "total": total if cursor is None else None,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
         }
     )
 
@@ -582,15 +596,26 @@ async def list_project_tasks(
     project_id: str,
     request: Request,
     include_archived: bool = Query(default=False),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> TaskListResponse:
     user = get_current_user(request)
     service = _get_task_harness_service(request)
     try:
         if is_admin(user):
-            items = service.list_project_tasks(project_id, include_archived=include_archived)
+            items, total, has_more, next_cursor = service.list_tasks_cursor(
+                cursor=cursor,
+                limit=limit,
+                include_archived=include_archived,
+                project_id=project_id,
+            )
         else:
-            items = service.list_project_tasks(
-                project_id, include_archived=include_archived, owner_user_id=user["id"]
+            items, total, has_more, next_cursor = service.list_tasks_cursor(
+                cursor=cursor,
+                limit=limit,
+                include_archived=include_archived,
+                owner_user_id=user["id"],
+                project_id=project_id,
             )
     except Exception as exc:
         raise _translate_task_error(exc) from exc
@@ -598,6 +623,9 @@ async def list_project_tasks(
         {
             "items": [
                 TaskSummaryResponse.model_validate(_serialize_task_summary(item)) for item in items
-            ]
+            ],
+            "total": total if cursor is None else None,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
         }
     )
