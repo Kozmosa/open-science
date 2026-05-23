@@ -173,21 +173,30 @@ class SessionService:
         return items, total, has_more, next_cursor
 
     def get_sessions_batch_detail(
-        self, session_ids: list[str]
+        self, session_ids: list[str], *, owner_user_id: str | None = None
     ) -> dict[str, list[dict[str, object]]]:
         """Return {session_id: [attempt_summaries]} for the given session IDs."""
         if not session_ids:
             return {}
         placeholders = ", ".join(["?"] * len(session_ids))
+        if owner_user_id is not None:
+            params = (*session_ids, owner_user_id)
+            query = f"""SELECT ta.session_id, ta.attempt_seq, ta.status, ta.duration_ms,
+                               ta.intervention_reason, ta.created_at
+                        FROM task_attempts ta
+                        JOIN task_sessions ts ON ta.session_id = ts.id
+                        WHERE ta.session_id IN ({placeholders})
+                          AND ts.owner_user_id = ?
+                        ORDER BY ta.session_id, ta.attempt_seq ASC"""
+        else:
+            params = tuple(session_ids)
+            query = f"""SELECT session_id, attempt_seq, status, duration_ms,
+                               intervention_reason, created_at
+                        FROM task_attempts
+                        WHERE session_id IN ({placeholders})
+                        ORDER BY session_id, attempt_seq ASC"""
         with self._connect() as conn:
-            rows = conn.execute(
-                f"""SELECT session_id, attempt_seq, status, duration_ms,
-                           intervention_reason, created_at
-                    FROM task_attempts
-                    WHERE session_id IN ({placeholders})
-                    ORDER BY session_id, attempt_seq ASC""",
-                tuple(session_ids),
-            ).fetchall()
+            rows = conn.execute(query, params).fetchall()
         result: dict[str, list[dict[str, object]]] = {sid: [] for sid in session_ids}
         for r in rows:
             result[r["session_id"]].append({

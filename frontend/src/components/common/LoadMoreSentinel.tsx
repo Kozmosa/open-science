@@ -7,19 +7,21 @@ interface Props {
 
 export default function LoadMoreSentinel({ onVisible, loading }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const onVisibleRef = useRef(onVisible);
+  onVisibleRef.current = onVisible;
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) onVisible();
+        if (entry.isIntersecting && !loading) onVisibleRef.current();
       },
       { threshold: 0.1 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [onVisible]);
+  }, [loading]);
 
   return (
     <div ref={ref} className="h-8 flex items-center justify-center">

@@ -27,6 +27,7 @@ export default function TimelinePage() {
     queryKey: ['session-batch-detail', sessions.map((s) => s.id)],
     queryFn: () => getSessionsBatchDetail(sessions.map((s) => s.id)),
     enabled: sessions.length > 0,
+    refetchInterval: 30000,
   });
 
   const details = useMemo(() => detailQuery.data?.items ?? {}, [detailQuery.data]);

@@ -544,7 +544,7 @@ export const getSessionsBatchDetail = (
   ids: string[],
 ): Promise<SessionsBatchDetailResponse> => {
   if (ids.length === 0) return Promise.resolve({ items: {} });
-  const qs = `ids=${ids.join(',')}`;
+  const qs = `ids=${encodeURIComponent(ids.join(','))}`;
   return api.get<SessionsBatchDetailResponse>(`/sessions/batch-detail?${qs}`);
 };
 
