@@ -115,19 +115,43 @@ class LiteratureService:
             )
             conn.commit()
 
-    def update_subscription(self, subscription_id, is_active=None, frequency=None):
+    def update_subscription(
+        self,
+        subscription_id,
+        label=None,
+        keywords=None,
+        arxiv_categories=None,
+        frequency=None,
+        is_active=None,
+    ):
         with self._connect() as conn:
-            if is_active is not None:
+            if label is not None:
                 conn.execute(
-                    "UPDATE literature_subscriptions SET is_active = ? WHERE subscription_id = ?",
-                    (int(is_active), subscription_id),
+                    "UPDATE literature_subscriptions SET label = ? WHERE subscription_id = ?",
+                    (label, subscription_id),
+                )
+            if keywords is not None:
+                conn.execute(
+                    "UPDATE literature_subscriptions SET keywords_json = ? WHERE subscription_id = ?",
+                    (json.dumps(keywords), subscription_id),
+                )
+            if arxiv_categories is not None:
+                conn.execute(
+                    "UPDATE literature_subscriptions SET arxiv_categories_json = ? WHERE subscription_id = ?",
+                    (json.dumps(arxiv_categories), subscription_id),
                 )
             if frequency is not None:
                 conn.execute(
                     "UPDATE literature_subscriptions SET frequency = ? WHERE subscription_id = ?",
                     (frequency, subscription_id),
                 )
+            if is_active is not None:
+                conn.execute(
+                    "UPDATE literature_subscriptions SET is_active = ? WHERE subscription_id = ?",
+                    (int(is_active), subscription_id),
+                )
             conn.commit()
+        return self.get_subscription(subscription_id)
 
     def update_last_fetched(self, subscription_id):
         with self._connect() as conn:

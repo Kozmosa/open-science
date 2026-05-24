@@ -1248,7 +1248,7 @@ function SettingsPage() {
           description={t('pages.settings.description')}
         />
 
-        <div className="flex gap-1 border-b border-gray-200 pb-0">
+        <div className="flex gap-1 border-b border-[var(--border)] pb-0">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -1256,8 +1256,8 @@ function SettingsPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2 text-sm font-medium rounded-t-lg border border-b-0 -mb-px transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-white border-gray-200 text-gray-900'
-                  : 'bg-gray-50 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  ? 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)]'
+                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)]'
               }`}
             >
               {tab.label}

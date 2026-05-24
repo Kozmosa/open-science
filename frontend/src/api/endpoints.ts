@@ -618,6 +618,11 @@ export const createLiteratureSubscription = (payload: Partial<LiteratureSubscrip
     ? Promise.resolve({} as LiteratureSubscription)
     : api.post('/literature/subscriptions', payload);
 
+export const updateLiteratureSubscription = (id: string, payload: Partial<LiteratureSubscription>): Promise<LiteratureSubscription> =>
+  USE_MOCK
+    ? Promise.resolve({} as LiteratureSubscription)
+    : api.put(`/literature/subscriptions/${id}`, payload);
+
 export const deleteLiteratureSubscription = (id: string): Promise<void> =>
   USE_MOCK
     ? Promise.resolve()

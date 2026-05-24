@@ -30,65 +30,81 @@ export function UsersTab() {
   });
 
   if (currentUser?.role !== 'admin') return null;
-  if (isLoading) return <p className="text-sm text-gray-400 p-4">{t('common.loading')}</p>;
+  if (isLoading) return <p className="p-4 text-sm text-[var(--text-tertiary)]">{t('common.loading')}</p>;
 
   const users = data?.items ?? [];
+
+  const getStatusCardClasses = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-amber-500/5 border-amber-500/20';
+      case 'active':
+        return 'bg-emerald-500/5 border-emerald-500/20';
+      default:
+        return 'bg-[var(--bg-secondary)] border-[var(--border)]';
+    }
+  };
+
+  const getStatusBadgeClasses = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-amber-500/10 text-amber-600';
+      case 'active':
+        return 'bg-emerald-500/10 text-emerald-600';
+      default:
+        return 'bg-[var(--bg)] text-[var(--text-secondary)]';
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">{t('pages.settings.users.title')}</h3>
-        <span className="text-xs text-gray-500">{t('pages.settings.users.count', { count: users.length })}</span>
+        <h3 className="text-sm font-semibold text-[var(--text)]">{t('pages.settings.users.title')}</h3>
+        <span className="text-xs text-[var(--text-secondary)]">{t('pages.settings.users.count', { count: users.length })}</span>
       </div>
       {users.map((u) => (
-        <div key={u.id} className={`flex items-center justify-between p-3 rounded-lg border text-sm ${
-          u.status === 'pending' ? 'bg-yellow-50 border-yellow-200' :
-          u.status === 'active' ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
-        }`}>
+        <div key={u.id} className={`flex items-center justify-between p-3 rounded-lg border text-sm ${getStatusCardClasses(u.status)}`}>
           <div>
-            <span className="font-medium">{u.username}</span>
-            <span className="text-gray-400 ml-2">{u.display_name}</span>
-            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
-              u.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-              u.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'
-            }`}>{u.status}</span>
-            {u.role === 'admin' && <span className="ml-1 text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">admin</span>}
+            <span className="font-medium text-[var(--text)]">{u.username}</span>
+            <span className="ml-2 text-[var(--text-tertiary)]">{u.display_name}</span>
+            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClasses(u.status)}`}>{u.status}</span>
+            {u.role === 'admin' && <span className="ml-1 text-xs bg-[var(--apple-blue)]/10 text-[var(--apple-blue)] px-1.5 py-0.5 rounded">admin</span>}
           </div>
           <div className="flex gap-2">
             {u.status === 'pending' && (
               <button type="button" onClick={() => updateMutation.mutate({ id: u.id, status: 'active' })}
-                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">{t('pages.settings.users.approve')}</button>
+                className="text-xs px-2 py-1 bg-[var(--apple-green)] text-white rounded hover:bg-[var(--apple-green)]/90">{t('pages.settings.users.approve')}</button>
             )}
             {u.status === 'active' && u.id !== currentUser.id && (
               <button type="button" onClick={() => updateMutation.mutate({ id: u.id, status: 'disabled' })}
-                className="text-xs px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">{t('pages.settings.users.disable')}</button>
+                className="text-xs px-2 py-1 bg-[var(--bg-secondary)] text-[var(--text)] rounded hover:bg-[var(--bg)] border border-[var(--border)]">{t('pages.settings.users.disable')}</button>
             )}
             {u.status === 'disabled' && (
               <button type="button" onClick={() => updateMutation.mutate({ id: u.id, status: 'active' })}
-                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">{t('pages.settings.users.reEnable')}</button>
+                className="text-xs px-2 py-1 bg-[var(--apple-green)] text-white rounded hover:bg-[var(--apple-green)]/90">{t('pages.settings.users.reEnable')}</button>
             )}
             {u.id !== currentUser.id && (
               <button type="button" onClick={() => setResetUserId(resetUserId === u.id ? null : u.id)}
-                className="text-xs px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">{t('pages.settings.users.resetPassword')}</button>
+                className="text-xs px-2 py-1 bg-[var(--bg-secondary)] text-[var(--text)] rounded hover:bg-[var(--bg)] border border-[var(--border)]">{t('pages.settings.users.resetPassword')}</button>
             )}
           </div>
         </div>
       ))}
       {resetUserId && (
-        <div className="flex gap-2 items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <span className="text-xs text-gray-600">{t('pages.settings.users.newPassword')}</span>
+        <div className="flex gap-2 items-center p-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]">
+          <span className="text-xs text-[var(--text-secondary)]">{t('pages.settings.users.newPassword')}</span>
           <input
             type="text"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder={t('pages.settings.users.enterNewPassword')}
-            className="text-xs px-2 py-1 border rounded flex-1"
+            className="text-xs px-2 py-1 border border-[var(--border)] rounded flex-1 bg-[var(--surface)] text-[var(--text)]"
           />
           <button
             type="button"
             onClick={() => resetMutation.mutate({ id: resetUserId, password: newPassword })}
             disabled={!newPassword}
-            className="text-xs px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+            className="text-xs px-2 py-1 bg-[var(--apple-blue)] text-white rounded disabled:opacity-50"
           >{t('pages.settings.users.set')}</button>
         </div>
       )}
