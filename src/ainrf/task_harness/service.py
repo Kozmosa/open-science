@@ -611,6 +611,7 @@ class TaskHarnessService:
         include_archived: bool = False,
         owner_user_id: str | None = None,
         project_id: str | None = None,
+        sort: str = "updated",
     ) -> tuple[list[TaskListItem], int, bool, str | None]:
         self.initialize()
         clauses: list[str] = []
@@ -627,6 +628,14 @@ class TaskHarnessService:
             clauses.append("project_id = ?")
             params.append(project_id)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        order_map = {
+            "updated": "updated_at DESC",
+            "created": "created_at DESC",
+            "name": "title COLLATE NOCASE ASC",
+        }
+        order_by = order_map.get(sort, "updated_at DESC")
+
         with self._connect() as connection:
             count_row = connection.execute(
                 f"SELECT COUNT(*) FROM task_harness_tasks {where}",
@@ -634,7 +643,7 @@ class TaskHarnessService:
             ).fetchone()
             total = count_row[0] if count_row else 0
             rows = connection.execute(
-                f"SELECT * FROM task_harness_tasks {where} ORDER BY task_id DESC LIMIT ?",
+                f"SELECT * FROM task_harness_tasks {where} ORDER BY {order_by} LIMIT ?",
                 (*params, limit + 1),
             ).fetchall()
         has_more = len(rows) > limit

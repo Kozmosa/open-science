@@ -13,7 +13,7 @@ import {
   getTasks,
   getWorkspaces,
 } from '../api';
-import { Button, Modal } from '../components/ui';
+import { Button, Modal, Select } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
 import { useT } from '../i18n';
 import { PageShell, SplitPane } from '../components/layout';
@@ -36,9 +36,10 @@ function TasksPage() {
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const skillsQuery = useQuery({ queryKey: ['skills'], queryFn: getSkills });
   const [showArchived, setShowArchived] = useState(false);
+  const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
   const tasksQuery = useQuery({
-    queryKey: ['tasks', showArchived],
-    queryFn: () => getTasks({ includeArchived: showArchived }),
+    queryKey: ['tasks', showArchived, taskSort],
+    queryFn: () => getTasks({ includeArchived: showArchived, limit: 200, sort: taskSort }),
     refetchInterval: 5000,
   });
 
@@ -103,7 +104,7 @@ function TasksPage() {
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreateRequest) => createTask(payload),
     onSuccess: (task) => {
-      queryClient.setQueryData<TaskListResponse>(['tasks', showArchived], (current) => ({
+      queryClient.setQueryData<TaskListResponse>(['tasks', showArchived, taskSort], (current) => ({
         items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
         total: (current?.total ?? 0) + 1,
         has_more: current?.has_more ?? false,
@@ -137,7 +138,7 @@ function TasksPage() {
     mutationFn: (taskId: string) => deleteTask(taskId),
     onSuccess: (_data, taskId) => {
       queryClient.setQueryData<TaskListResponse>(
-        ['tasks', showArchived],
+        ['tasks', showArchived, taskSort],
         (current) => ({
           items: (current?.items ?? []).filter((item) => item.task_id !== taskId),
           total: current?.total != null ? current.total - 1 : undefined,
@@ -220,6 +221,15 @@ function TasksPage() {
                   {t('pages.tasks.newTask')}
                 </span>
               </Button>
+              <Select
+                value={taskSort}
+                onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
+                className="w-full text-[11px] py-1"
+              >
+                <option value="updated">{t('pages.tasks.sort.updated')}</option>
+                <option value="created">{t('pages.tasks.sort.created')}</option>
+                <option value="name">{t('pages.tasks.sort.name')}</option>
+              </Select>
               <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
                 <input
                   type="checkbox"

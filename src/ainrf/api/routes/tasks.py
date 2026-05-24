@@ -233,6 +233,7 @@ async def list_tasks(
     include_archived: bool = Query(default=False),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
+    sort: str = Query(default="updated", pattern=r"^(updated|created|name)$"),
 ) -> TaskListResponse:
     user = get_current_user(request)
     service = _get_task_harness_service(request)
@@ -242,6 +243,7 @@ async def list_tasks(
                 cursor=cursor,
                 limit=limit,
                 include_archived=include_archived,
+                sort=sort,
             )
         else:
             items, total, has_more, next_cursor = service.list_tasks_cursor(
@@ -249,6 +251,7 @@ async def list_tasks(
                 limit=limit,
                 include_archived=include_archived,
                 owner_user_id=user["id"],
+                sort=sort,
             )
     except Exception as exc:
         raise _translate_task_error(exc) from exc

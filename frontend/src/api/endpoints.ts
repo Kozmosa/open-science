@@ -248,12 +248,14 @@ export const getTasks = (params: {
   includeArchived?: boolean;
   cursor?: string;
   limit?: number;
+  sort?: 'updated' | 'created' | 'name';
 } = {}): Promise<TaskListResponse> => {
-  const { includeArchived = false, cursor, limit } = params;
+  const { includeArchived = false, cursor, limit, sort } = params;
   const searchParams = new URLSearchParams();
   searchParams.set('include_archived', String(includeArchived));
   if (cursor) searchParams.set('cursor', cursor);
   if (limit) searchParams.set('limit', String(limit));
+  if (sort) searchParams.set('sort', sort);
   const qs = searchParams.toString();
   return USE_MOCK
     ? Promise.resolve(mockGetTasks())
