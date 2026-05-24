@@ -56,11 +56,31 @@ interface ItemProps {
   onClose: () => void;
 }
 
-const toastStyles: Record<ToastType, { bg: string; border: string; icon: typeof Info }> = {
-  success: { bg: 'bg-[#e8f5e9]', border: 'border-[#81c784]', icon: CheckCircle },
-  error: { bg: 'bg-[#ffebee]', border: 'border-[#e57373]', icon: AlertCircle },
-  warning: { bg: 'bg-[#fff8e1]', border: 'border-[#ffb74d]', icon: AlertTriangle },
-  info: { bg: 'bg-[#e3f2fd]', border: 'border-[#64b5f6]', icon: Info },
+const toastStyles: Record<ToastType, { bg: string; border: string; text: string; icon: typeof Info }> = {
+  success: {
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500/30',
+    text: 'text-emerald-600',
+    icon: CheckCircle,
+  },
+  error: {
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/30',
+    text: 'text-red-500',
+    icon: AlertCircle,
+  },
+  warning: {
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/30',
+    text: 'text-amber-600',
+    icon: AlertTriangle,
+  },
+  info: {
+    bg: 'bg-[var(--apple-blue)]/10',
+    border: 'border-[var(--apple-blue)]/30',
+    text: 'text-[var(--apple-blue)]',
+    icon: Info,
+  },
 };
 
 function ToastItem({ toast, onClose }: ItemProps) {
@@ -74,15 +94,15 @@ function ToastItem({ toast, onClose }: ItemProps) {
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg border ${style.border} ${style.bg} px-4 py-3 shadow-lg`}
+      className={`flex items-center gap-3 rounded-lg border ${style.border} ${style.bg} px-4 py-3 shadow-lg backdrop-blur-sm`}
     >
-      <Icon size={16} className="shrink-0 text-[var(--apple-near-black)]" />
-      <span className="text-sm tracking-[-0.224px] text-[var(--apple-near-black)]">
+      <Icon size={16} className={`shrink-0 ${style.text}`} />
+      <span className={`text-sm tracking-[-0.224px] ${style.text}`}>
         {toast.message}
       </span>
       <button
         onClick={onClose}
-        className="ml-2 shrink-0 rounded-md p-0.5 text-[var(--apple-near-black)]/50 transition hover:bg-black/5 hover:text-[var(--apple-near-black)]"
+        className="ml-2 shrink-0 rounded-md p-0.5 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
       >
         <X size={14} />
       </button>

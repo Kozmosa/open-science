@@ -95,7 +95,8 @@ export const messages = {
       refresh: 'Refresh',
       markRead: 'Mark Read',
       viewarXiv: 'arXiv',
-      convertToTask: '→ Task',
+      convertToTask: 'Convert to Task',
+      convertConfirm: 'Convert this paper into an agent task. Select workspace, environment and execution engine below.',
       convertSuccess: 'Paper converted to task successfully',
       convertError: 'Failed to convert paper to task',
       noPapers: 'No papers found. Create a subscription to get started.',
@@ -330,6 +331,11 @@ export const messages = {
           cancel: 'Cancel',
           archive: 'Archive',
           showArchived: 'Show archived',
+        },
+        sort: {
+          updated: 'Updated (newest)',
+          created: 'Created (newest)',
+          name: 'Name (A-Z)',
         },
       },
       workspaces: {
@@ -970,7 +976,8 @@ export const messages = {
       refresh: '刷新',
       markRead: '标记已读',
       viewarXiv: 'arXiv',
-      convertToTask: '→ 任务',
+      convertToTask: '转换为任务',
+      convertConfirm: '将此论文转换为 Agent 任务。请在下方选择工作区、运行环境和执行引擎。',
       convertSuccess: '论文已成功转换为任务',
       convertError: '转换论文为任务失败',
       noPapers: '暂无论文。请先创建订阅。',
@@ -1198,6 +1205,11 @@ export const messages = {
           cancel: '取消',
           archive: '归档',
           showArchived: '显示已归档',
+        },
+        sort: {
+          updated: '更新时间（从新到旧）',
+          created: '创建时间（从新到旧）',
+          name: '名称（A-Z）',
         },
       },
       workspaces: {
