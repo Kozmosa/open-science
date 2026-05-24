@@ -39,33 +39,23 @@ export default function LiteraturePage() {
 
   return (
     <PageShell>
-      <div className="space-y-6 p-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
-            {t('nav.literature')}
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text)]">{t('nav.literature')}</h1>
-        </div>
-
-        {subscriptionsQuery.isLoading && (
-          <p className="text-sm text-[var(--text-secondary)]">{t('common.loading')}</p>
-        )}
-
-        {!subscriptionsQuery.isLoading && (
-          <SplitPane
-            sidebar={<SubscriptionSidebar subscriptions={subscriptions} />}
-            sidebarWidth={sidebarWidth}
-            onSidebarWidthChange={setSidebarWidth}
-            sidebarMinWidth={220}
-            sidebarMaxWidth={400}
-          >
-            <PaperFeed
-              subscriptions={subscriptions}
-              onConvertToTask={handleConvertToTask}
-            />
-          </SplitPane>
-        )}
-      </div>
+      {subscriptionsQuery.isLoading && (
+        <p className="text-sm text-[var(--text-secondary)]">{t('common.loading')}</p>
+      )}
+      {!subscriptionsQuery.isLoading && (
+        <SplitPane
+          sidebar={<SubscriptionSidebar subscriptions={subscriptions} />}
+          sidebarWidth={sidebarWidth}
+          onSidebarWidthChange={setSidebarWidth}
+          sidebarMinWidth={220}
+          sidebarMaxWidth={400}
+        >
+          <PaperFeed
+            subscriptions={subscriptions}
+            onConvertToTask={handleConvertToTask}
+          />
+        </SplitPane>
+      )}
     </PageShell>
   );
 }
