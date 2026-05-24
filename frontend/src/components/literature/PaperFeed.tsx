@@ -64,7 +64,7 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 space-y-3 overflow-y-auto">
         {papersQuery.isLoading && papers.length === 0 && (
           <p className="py-8 text-center text-xs text-[var(--text-tertiary)]">{t('common.loading')}</p>
         )}
