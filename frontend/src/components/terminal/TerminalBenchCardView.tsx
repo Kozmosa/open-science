@@ -171,13 +171,15 @@ function TerminalBenchCardView({
           </div>
         }
       >
-        <TerminalSessionConsole
-          sessionId={sessionId}
-          attachmentId={attachmentId}
-          terminalWsUrl={terminalWsUrl}
-          status={status}
-          onDisconnected={onTerminalDisconnected}
-        />
+        <div className="h-[480px]">
+          <TerminalSessionConsole
+            sessionId={sessionId}
+            attachmentId={attachmentId}
+            terminalWsUrl={terminalWsUrl}
+            status={status}
+            onDisconnected={onTerminalDisconnected}
+          />
+        </div>
       </SectionCard>
     </SectionCard>
   );

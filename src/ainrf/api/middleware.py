@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import Request
 from starlette.responses import JSONResponse, Response
 
+from ainrf.api.config import ApiConfig
 from ainrf.auth.service import AuthService
 
 _EXEMPT_PATH_PREFIXES = (
@@ -30,6 +31,7 @@ def _is_exempt(path: str) -> bool:
 
 def build_jwt_auth_middleware(
     auth_service: AuthService,
+    api_config: ApiConfig,
 ) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
     async def jwt_auth_middleware(
         request: Request,
@@ -39,18 +41,29 @@ def build_jwt_auth_middleware(
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            try:
+                user = auth_service.get_user_by_token(token)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
-        token = auth_header[7:]
-        try:
-            user = auth_service.get_user_by_token(token)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            request.state.current_user = user
+            return await call_next(request)
 
-        request.state.current_user = user
-        return await call_next(request)
+        # Fallback: API key in query string (needed for native EventSource/SSE)
+        api_key = request.query_params.get("api_key")
+        if api_key and api_config.verify_api_key(api_key):
+            request.state.current_user = {
+                "id": "api-key-user",
+                "username": "api-key",
+                "role": "admin",
+                "display_name": "API Key",
+            }
+            return await call_next(request)
+
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
     return jwt_auth_middleware

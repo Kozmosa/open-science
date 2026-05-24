@@ -68,6 +68,10 @@ print(hashlib.sha256(os.environ["AINRF_WEBUI_API_KEY"].encode("utf-8")).hexdiges
 PY
 )"
 
+# Write API key to frontend .env.local so Vite can inject it into the build
+FRONTEND_ENV_FILE="${REPO_ROOT}/frontend/.env.local"
+printf 'VITE_AINRF_API_KEY=%s\n' "${AINRF_WEBUI_API_KEY}" > "${FRONTEND_ENV_FILE}"
+
 mkdir -p "${HOME}/.ainrf"
 
 # Pre-launch cleanup: kill stale ainrf backend and vite frontend processes
@@ -153,6 +157,10 @@ cleanup() {
     kill "${backend_pid}" 2>/dev/null || true
   fi
   wait || true
+  # Clean up injected env file
+  if [[ -f "${FRONTEND_ENV_FILE}" ]]; then
+    rm -f "${FRONTEND_ENV_FILE}"
+  fi
   exit "${exit_code}"
 }
 
