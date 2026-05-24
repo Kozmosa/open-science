@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { Button, Select } from '../../components/ui';
 import { getLiteraturePapers } from '../../api';
 import { useT } from '../../i18n';
 import type { LiteratureSubscription } from '../../types';
@@ -32,12 +34,11 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
       <div className="mb-4 flex items-center gap-3">
-        <select
+        <Select
           value={selectedSubscriptionId ?? ''}
           onChange={(e) => setSelectedSubscriptionId(e.target.value || undefined)}
-          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs text-[var(--foreground)]"
+          className="w-auto min-w-[160px]"
         >
           <option value="">{t('literature.mySubscriptions')}</option>
           {subscriptions.map((sub) => (
@@ -45,7 +46,7 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
               {sub.label}
             </option>
           ))}
-        </select>
+        </Select>
 
         <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
           <input
@@ -57,17 +58,13 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
           {t('literature.unreadOnly')}
         </label>
 
-        <button
-          type="button"
-          onClick={handleRefresh}
-          className="ml-auto rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg)]"
-        >
+        <Button variant="secondary" size="sm" onClick={handleRefresh} className="ml-auto">
+          <RefreshCw className="mr-1 h-3.5 w-3.5" />
           {t('literature.refresh')}
-        </button>
+        </Button>
       </div>
 
-      {/* Paper list */}
-      <div className="flex-1 space-y-3 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         {papersQuery.isLoading && papers.length === 0 && (
           <p className="py-8 text-center text-xs text-[var(--text-tertiary)]">{t('common.loading')}</p>
         )}
