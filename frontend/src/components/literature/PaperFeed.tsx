@@ -9,12 +9,13 @@ import PaperCard from './PaperCard';
 
 interface Props {
   subscriptions: LiteratureSubscription[];
+  selectedSubscriptionId?: string;
+  onSubscriptionChange?: (id: string | undefined) => void;
   onConvertToTask: (paperId: string, subscriptionId: string, title: string, abstract: string) => void;
 }
 
-export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
+export default function PaperFeed({ subscriptions, selectedSubscriptionId, onSubscriptionChange, onConvertToTask }: Props) {
   const t = useT();
-  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | undefined>(undefined);
   const [unreadOnly, setUnreadOnly] = useState(false);
 
   const papersQuery = useQuery({
@@ -52,7 +53,7 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
       <div className="mb-4 flex items-center gap-3">
         <Select
           value={selectedSubscriptionId ?? ''}
-          onChange={(e) => setSelectedSubscriptionId(e.target.value || undefined)}
+          onChange={(e) => onSubscriptionChange?.(e.target.value || undefined)}
           className="w-auto min-w-[160px]"
         >
           <option value="">{t('literature.mySubscriptions')}</option>

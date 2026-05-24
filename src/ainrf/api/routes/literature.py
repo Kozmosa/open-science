@@ -43,6 +43,24 @@ async def create_subscription(request: Request):
     return sub.to_dict()
 
 
+@router.put("/subscriptions/{subscription_id}")
+async def update_subscription(subscription_id: str, request: Request):
+    user_id = _get_user_id(request)
+    service = _get_service(request)
+    sub = service.get_subscription(subscription_id)
+    if sub is None or sub.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    body = await request.json()
+    updated = service.update_subscription(
+        subscription_id,
+        label=body.get("label"),
+        keywords=body.get("keywords"),
+        arxiv_categories=body.get("arxiv_categories"),
+        frequency=body.get("frequency"),
+    )
+    return updated.to_dict()
+
+
 @router.delete("/subscriptions/{subscription_id}", status_code=204)
 async def delete_subscription(subscription_id: str, request: Request):
     user_id = _get_user_id(request)

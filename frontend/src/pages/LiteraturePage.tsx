@@ -3,12 +3,15 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { getLiteratureSubscriptions, createTask, convertPaperToTask } from '../api';
 import { SplitPane, PageShell } from '../components/layout';
 import { useT } from '../i18n';
+import { useToast } from '../components/common/Toast';
 import SubscriptionSidebar from '../components/literature/SubscriptionSidebar';
 import PaperFeed from '../components/literature/PaperFeed';
 
 export default function LiteraturePage() {
   const t = useT();
+  const { showToast } = useToast();
   const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | undefined>(undefined);
 
   const subscriptionsQuery = useQuery({
     queryKey: ['literature-subscriptions'],
@@ -31,6 +34,12 @@ export default function LiteraturePage() {
       await convertPaperToTask(paperId, task.task_id, subscriptionId);
       return task;
     },
+    onSuccess: () => {
+      showToast(t('literature.convertSuccess'), 'success');
+    },
+    onError: () => {
+      showToast(t('literature.convertError'), 'error');
+    },
   });
 
   const handleConvertToTask = useCallback((paperId: string, subscriptionId: string, title: string, abstract: string) => {
@@ -44,7 +53,13 @@ export default function LiteraturePage() {
       )}
       {!subscriptionsQuery.isLoading && (
         <SplitPane
-          sidebar={<SubscriptionSidebar subscriptions={subscriptions} />}
+          sidebar={
+            <SubscriptionSidebar
+              subscriptions={subscriptions}
+              selectedSubscriptionId={selectedSubscriptionId}
+              onSelectSubscription={setSelectedSubscriptionId}
+            />
+          }
           sidebarWidth={sidebarWidth}
           onSidebarWidthChange={setSidebarWidth}
           sidebarMinWidth={220}
@@ -52,6 +67,8 @@ export default function LiteraturePage() {
         >
           <PaperFeed
             subscriptions={subscriptions}
+            selectedSubscriptionId={selectedSubscriptionId}
+            onSubscriptionChange={setSelectedSubscriptionId}
             onConvertToTask={handleConvertToTask}
           />
         </SplitPane>
