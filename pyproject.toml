@@ -27,6 +27,7 @@ dependencies = [
   "pyjwt>=2.12.1",
   "arxiv>=4.0.0",
   "apscheduler>=3.11.2",
+  "json-repair>=0.59.10",
 ]
 
 [project.scripts]

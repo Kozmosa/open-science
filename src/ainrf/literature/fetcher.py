@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import random
 
 import arxiv
+import json_repair
 
 from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
 
@@ -32,14 +32,19 @@ SUMMARIZE_PROMPT = """你是一个学术文献摘要助手。请对以下论文�
 
 def _get_api_config() -> tuple[str, str, str]:
     """Returns (api_key, base_url, model) from environment or defaults."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or ""
+    api_key = (
+        os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+        or os.environ.get("DEEPSEEK_API_KEY")
+        or ""
+    )
     base_url = os.environ.get("ANTHROPIC_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or _DEFAULT_BASE_URL
     model = os.environ.get("AINRF_LITERATURE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or _DEFAULT_MODEL
     return api_key, base_url, model
 
 
 def _extract_json(text: str) -> dict | None:
-    """Extract JSON from Claude response, handling markdown code fences."""
+    """Extract JSON from LLM response, handling markdown code fences and trailing commas."""
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")
@@ -47,8 +52,8 @@ def _extract_json(text: str) -> dict | None:
         if text.endswith("```"):
             text = text[:-3]
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
+        return json_repair.repair_json(text, return_json=True)
+    except Exception:
         return None
 
 
@@ -100,7 +105,7 @@ async def fetch_for_subscription(
     Queries arXiv with the subscription's keywords and categories,
     then optionally summarizes each paper via the configured LLM API.
     API configuration is read from environment variables:
-    - ANTHROPIC_API_KEY / DEEPSEEK_API_KEY
+    - ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / DEEPSEEK_API_KEY
     - ANTHROPIC_BASE_URL / DEEPSEEK_BASE_URL (default: https://api.deepseek.com)
     - AINRF_LITERATURE_MODEL / ANTHROPIC_MODEL (default: deepseek-v4-flash)
     """
@@ -108,8 +113,8 @@ async def fetch_for_subscription(
     query_parts: list[str] = []
 
     if sub.keywords:
-        # Join keywords with AND for broader matching instead of exact phrase
-        query_parts.append("(" + " AND ".join(f'({kw})' for kw in sub.keywords) + ")")
+        # Wrap each keyword phrase in double quotes for exact phrase matching
+        query_parts.append("(" + " AND ".join(f'"{kw}"' for kw in sub.keywords) + ")")
     if sub.arxiv_categories:
         query_parts.append("(" + " OR ".join(f"cat:{cat}" for cat in sub.arxiv_categories) + ")")
 

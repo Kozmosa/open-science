@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button, Select } from '../../components/ui';
-import { getLiteraturePapers } from '../../api';
+import { getLiteraturePapers, triggerLiteratureFetch } from '../../api';
 import { useT } from '../../i18n';
 import type { LiteratureSubscription } from '../../types';
 import PaperCard from './PaperCard';
@@ -26,9 +26,24 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
     }),
   });
 
+  const fetchMutation = useMutation({
+    mutationFn: () => {
+      if (selectedSubscriptionId) {
+        return triggerLiteratureFetch(selectedSubscriptionId);
+      }
+      return Promise.resolve({ status: 'skipped' });
+    },
+  });
+
   const handleRefresh = useCallback(() => {
-    papersQuery.refetch();
-  }, [papersQuery]);
+    if (selectedSubscriptionId) {
+      fetchMutation.mutate(undefined, {
+        onSettled: () => papersQuery.refetch(),
+      });
+    } else {
+      papersQuery.refetch();
+    }
+  }, [selectedSubscriptionId, fetchMutation, papersQuery]);
 
   const papers = papersQuery.data?.items ?? [];
 
@@ -58,7 +73,7 @@ export default function PaperFeed({ subscriptions, onConvertToTask }: Props) {
           {t('literature.unreadOnly')}
         </label>
 
-        <Button variant="secondary" size="sm" onClick={handleRefresh} className="ml-auto">
+        <Button variant="secondary" size="sm" onClick={handleRefresh} isLoading={fetchMutation.isPending} className="ml-auto">
           <RefreshCw className="mr-1 h-3.5 w-3.5" />
           {t('literature.refresh')}
         </Button>

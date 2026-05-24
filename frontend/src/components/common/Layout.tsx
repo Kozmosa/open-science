@@ -166,8 +166,8 @@ function Layout({ children }: Props) {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <div className="flex min-h-screen">
+    <div className="h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <div className="flex h-screen">
         <aside
           className={`${asideWidth} sticky top-0 h-screen shrink-0 overflow-hidden border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] text-[var(--sidebar-foreground)] transition-all duration-200 ease-out`}
         >
@@ -239,7 +239,7 @@ function Layout({ children }: Props) {
           </div>
         </aside>
 
-        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <div className="flex h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--background)]/85 px-4 backdrop-blur-xl">
             <p className="truncate text-sm font-medium text-[var(--text)]">
               {pageTitle}

@@ -639,3 +639,8 @@ export const convertPaperToTask = (paperId: string, taskId: string, subscription
   USE_MOCK
     ? Promise.resolve({} as LiteraturePaper)
     : api.post(`/literature/papers/${paperId}/convert`, { task_id: taskId, subscription_id: subscriptionId });
+
+export const triggerLiteratureFetch = (subscriptionId: string): Promise<{ status: string }> =>
+  USE_MOCK
+    ? Promise.resolve({ status: 'fetch_started' })
+    : api.post(`/literature/subscriptions/${subscriptionId}/fetch`, {});

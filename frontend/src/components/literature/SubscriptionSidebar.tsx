@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createLiteratureSubscription, deleteLiteratureSubscription } from '../../api';
+import { createLiteratureSubscription, deleteLiteratureSubscription, triggerLiteratureFetch } from '../../api';
 import { useT } from '../../i18n';
 import { Button, Input, Select } from '../../components/ui';
 import type { LiteratureSubscription } from '../../types';
@@ -26,13 +26,19 @@ export default function SubscriptionSidebar({ subscriptions }: Props) {
 
   const createMutation = useMutation({
     mutationFn: (payload: Partial<LiteratureSubscription>) => createLiteratureSubscription(payload),
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidate();
       setShowNewForm(false);
       setLabel('');
       setKeywords('');
       setSelectedCategories([]);
       setFrequency('daily');
+      // Auto-trigger fetch for the new subscription
+      if (data.subscription_id) {
+        triggerLiteratureFetch(data.subscription_id).catch(() => {
+          // Silently handle fetch trigger errors
+        });
+      }
     },
   });
 

@@ -123,12 +123,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     conn.commit()
                 # Auto-grant seed environments to initial admin
                 auth_service._grant_seed_environments(admin_user.id)
-            # Fix existing admin users with wrong role (migration from bug)
-            with auth_service._connect() as conn:
-                conn.execute(
-                    "UPDATE users SET role = 'admin' WHERE username = 'admin' AND role != 'admin'"
-                )
-                conn.commit()
                 print(
                     "\n" + "=" * 60 + "\n"
                     "Initial admin created!\n"
@@ -137,6 +131,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     "You will be prompted to change the password on first login.\n"
                     + "=" * 60 + "\n"
                 )
+            # Fix existing admin users with wrong role (migration from bug)
+            with auth_service._connect() as conn:
+                conn.execute(
+                    "UPDATE users SET role = 'admin' WHERE username = 'admin' AND role != 'admin'"
+                )
+                conn.commit()
         except Exception:
             pass
         yield
@@ -205,7 +205,7 @@ def create_app(
         session_service=app.state.session_service,
     )
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
-    app.middleware("http")(build_jwt_auth_middleware(auth_service))
+    app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
     for router in ROUTERS:
         app.include_router(router)
         app.include_router(router, prefix="/v1")
