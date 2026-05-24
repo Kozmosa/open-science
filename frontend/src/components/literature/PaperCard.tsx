@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useT } from '../../i18n';
 import type { LiteraturePaper } from '../../types';
 import { markPaperRead } from '../../api';
+import { Button } from '../../components/ui';
 
 interface Props {
   paper: LiteraturePaper;
@@ -82,30 +83,27 @@ export default function PaperCard({ paper, onConvertToTask, onReadChange }: Prop
       {/* Action bar */}
       <div className="mt-3 flex items-center gap-2 border-t border-[var(--border)] pt-3">
         {!paper.is_read && (
-          <button
-            type="button"
-            onClick={handleMarkRead}
-            className="rounded-md border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--bg)]"
-          >
+          <Button variant="secondary" size="sm" onClick={handleMarkRead}>
             {t('literature.markRead')}
-          </button>
+          </Button>
         )}
         <a
           href={`https://arxiv.org/abs/${paper.paper_id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-md border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--bg)]"
+          className="inline-flex items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
         >
           {t('literature.viewarXiv')}
         </a>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => onConvertToTask(paper.paper_id, paper.subscription_id, paper.title, paper.abstract)}
           disabled={paper.is_converted_to_task}
-          className="ml-auto rounded-md border border-[var(--apple-blue)]/30 px-2.5 py-1 text-[11px] text-[var(--apple-blue)] hover:bg-[var(--apple-blue)]/5 disabled:opacity-40"
+          className="ml-auto"
         >
           {t('literature.convertToTask')}
-        </button>
+        </Button>
       </div>
     </div>
   );
