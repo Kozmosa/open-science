@@ -348,6 +348,11 @@ export function readStoredSettings(): SettingsLoadResult {
       ? editorSettings.fontFamily
       : defaultEditorFontFamily;
 
+  const appearanceSettings = isRecord(general.appearance) ? general.appearance : null;
+  const fontFamily =
+    appearanceSettings?.fontFamily === 'serif' ? 'serif' : 'sans-serif';
+  const missingAppearanceSettings = appearanceSettings === null;
+
   const missingDefaultRoute = general.defaultRoute === undefined;
   const invalidDefaultRoute = general.defaultRoute !== undefined && !isDefaultRoute(general.defaultRoute);
   const missingTerminalSettings = terminalSettings === null || terminalSettings.fontSize === undefined;
@@ -372,6 +377,9 @@ export function readStoredSettings(): SettingsLoadResult {
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
         },
+        appearance: {
+          fontFamily,
+        },
       },
       taskConfiguration,
       projectDefaults: projectDefaultsMap,
@@ -384,7 +392,8 @@ export function readStoredSettings(): SettingsLoadResult {
       missingTerminalSettings ||
       invalidTerminalFontSize ||
       missingEditorSettings ||
-      invalidEditorFontSize
+      invalidEditorFontSize ||
+      missingAppearanceSettings
         ? 'invalid_document'
         : null,
   };
