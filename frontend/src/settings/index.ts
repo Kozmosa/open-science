@@ -24,6 +24,8 @@ export type {
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
   ExecutionEngineId,
+  LlmProvider,
+  LlmProviderFormat,
   ResearchAgentProfileSettings,
   SettingsRecoveryReason,
   TaskConfigurationMode,
