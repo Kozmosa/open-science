@@ -84,4 +84,36 @@ export interface WebUiSettingsDocument {
   projectDefaults: Record<string, DefaultProjectSettings>;
 }
 
+export type LlmProviderFormat = 'openai' | 'anthropic';
+
+export interface LlmProvider {
+  id: string;
+  name: string;
+  format: LlmProviderFormat;
+  baseUrl: string;
+  apiKey: string;
+  opusModel?: string;
+  sonnetModel?: string;
+  haikuModel?: string;
+  defaultModel?: string;
+}
+
+export interface WebUiSettingsDocument {
+  version: 3;
+  general: {
+    defaultRoute: DefaultRoute;
+    terminal: {
+      fontSize: number;
+    };
+    editor: {
+      fontSize: number;
+      fontFamily: string;
+    };
+    appearance: AppearanceSettings;
+  };
+  taskConfiguration: TaskConfigurationSettings;
+  projectDefaults: Record<string, DefaultProjectSettings>;
+  llmProviders: LlmProvider[];
+}
+
 export type SettingsRecoveryReason = 'invalid_document' | 'unsupported_version';

@@ -281,5 +281,6 @@ export function createDefaultWebUiSettings(): WebUiSettingsDocument {
     projectDefaults: {
       default: createDefaultProjectSettings(),
     },
+    llmProviders: [],
   };
 }
