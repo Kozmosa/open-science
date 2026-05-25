@@ -230,6 +230,7 @@ export function SettingsProvider({ children }: ProviderProps) {
               fontSize: general.editor.fontSize,
               fontFamily: general.editor.fontFamily,
             },
+            appearance: state.settings.general.appearance,
           },
         });
       },

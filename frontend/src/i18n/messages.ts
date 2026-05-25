@@ -337,14 +337,6 @@ export const messages = {
           created: 'Created (newest)',
           name: 'Name (A-Z)',
         },
-        appearance: {
-          title: 'Appearance',
-          description: 'Global font family preference',
-          fontFamilyLabel: 'Font family',
-          sansSerif: 'Sans-serif',
-          serif: 'Serif',
-          previewHint: 'Changes apply immediately across the entire interface.',
-        },
       },
       workspaces: {
         eyebrow: '工作区',
@@ -531,6 +523,14 @@ export const messages = {
           updateTitle: 'Update {{name}}',
           updateWarning: 'This will replace existing files. Continue?',
           forceUpdate: 'Force Update',
+        },
+        appearance: {
+          title: 'Appearance',
+          description: 'Global font family preference',
+          fontFamilyLabel: 'Font family',
+          sansSerif: 'Sans-serif',
+          serif: 'Serif',
+          previewHint: 'Changes apply immediately across the entire interface.',
         },
         users: {
           title: 'User Management',
@@ -1219,14 +1219,6 @@ export const messages = {
           created: '创建时间（从新到旧）',
           name: '名称（A-Z）',
         },
-        appearance: {
-          title: '外观',
-          description: '全局字体偏好设置',
-          fontFamilyLabel: '字体',
-          sansSerif: '非衬线体',
-          serif: '衬线体',
-          previewHint: '更改将立即应用到整个界面。',
-        },
       },
       workspaces: {
         eyebrow: 'WORKSPACES',
@@ -1407,6 +1399,14 @@ export const messages = {
           updateTitle: '更新 {{name}}',
           updateWarning: '此操作将覆盖现有文件，是否继续？',
           forceUpdate: '强制更新',
+        },
+        appearance: {
+          title: '外观',
+          description: '全局字体偏好设置',
+          fontFamilyLabel: '字体',
+          sansSerif: '非衬线体',
+          serif: '衬线体',
+          previewHint: '更改将立即应用到整个界面。',
         },
         users: {
           title: '用户管理',

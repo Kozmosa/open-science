@@ -221,6 +221,7 @@ function GeneralPreferencesSection({
                   fontSize: clampedEditorFontSize,
                   fontFamily: draft.editorFontFamily || 'monospace',
                 },
+                appearance: savedGeneral.appearance,
               })
             }
             disabled={!hasChanges}

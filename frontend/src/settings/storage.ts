@@ -392,8 +392,7 @@ export function readStoredSettings(): SettingsLoadResult {
       missingTerminalSettings ||
       invalidTerminalFontSize ||
       missingEditorSettings ||
-      invalidEditorFontSize ||
-      missingAppearanceSettings
+      invalidEditorFontSize
         ? 'invalid_document'
         : null,
   };
