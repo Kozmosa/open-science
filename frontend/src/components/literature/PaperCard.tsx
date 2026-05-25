@@ -35,16 +35,23 @@ export default function PaperCard({ paper, onConvertToTask, onReadChange }: Prop
         </span>
       </div>
 
-      {/* Title */}
+      {/* Title: dual-line (zh + en) */}
       <h3 className="text-sm font-semibold leading-snug text-[var(--text)]">
-        {paper.title}
+        {paper.title_zh ?? paper.title}
       </h3>
       {paper.title_zh && (
-        <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{paper.title_zh}</p>
+        <h3 className="mt-0.5 text-sm font-medium leading-snug text-[var(--text-secondary)]">
+          {paper.title}
+        </h3>
       )}
 
+      {/* Abstract snippet */}
+      <p className="mt-1 text-xs text-[var(--text-secondary)] line-clamp-3">
+        {paper.abstract}
+      </p>
+
       {/* Authors and journal */}
-      <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+      <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">
         {paper.authors.join(', ')}
         {paper.journal && <span className="ml-1 italic">{paper.journal}</span>}
       </p>
