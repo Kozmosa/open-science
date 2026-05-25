@@ -17,6 +17,7 @@ import type {
   AppearanceSettings,
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
+  LlmProvider,
   ResearchAgentProfileSettings,
   SettingsRecoveryReason,
   TaskConfigurationSettings,
@@ -46,6 +47,9 @@ interface SettingsContextValue {
   rememberSelectedEnvironment: (projectId: string, environmentId: string | null) => void;
   rememberSelectedWorkspace: (projectId: string, workspaceId: string | null) => void;
   getProjectEnvironmentDefaults: (projectId: string, environmentId: string | null) => EnvironmentTaskDefaults;
+  saveLlmProvider: (provider: LlmProvider) => void;
+  updateLlmProvider: (provider: LlmProvider) => void;
+  deleteLlmProvider: (providerId: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -385,6 +389,26 @@ export function SettingsProvider({ children }: ProviderProps) {
       },
       getProjectEnvironmentDefaults: (projectId, environmentId) =>
         resolveProjectEnvironmentDefaults(state.settings, projectId, environmentId),
+      saveLlmProvider: (provider) => {
+        commitSettings({
+          ...state.settings,
+          llmProviders: [...state.settings.llmProviders, provider],
+        });
+      },
+      updateLlmProvider: (provider) => {
+        commitSettings({
+          ...state.settings,
+          llmProviders: state.settings.llmProviders.map((p) =>
+            p.id === provider.id ? provider : p
+          ),
+        });
+      },
+      deleteLlmProvider: (providerId) => {
+        commitSettings({
+          ...state.settings,
+          llmProviders: state.settings.llmProviders.filter((p) => p.id !== providerId),
+        });
+      },
     }),
     [state, activeProjectId]
   );
