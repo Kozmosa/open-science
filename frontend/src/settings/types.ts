@@ -67,23 +67,6 @@ export interface TaskConfigurationSettings {
   defaultTaskConfigurationId: string;
 }
 
-export interface WebUiSettingsDocument {
-  version: 3;
-  general: {
-    defaultRoute: DefaultRoute;
-    terminal: {
-      fontSize: number;
-    };
-    editor: {
-      fontSize: number;
-      fontFamily: string;
-    };
-    appearance: AppearanceSettings;
-  };
-  taskConfiguration: TaskConfigurationSettings;
-  projectDefaults: Record<string, DefaultProjectSettings>;
-}
-
 export type LlmProviderFormat = 'openai' | 'anthropic';
 
 export interface LlmProvider {
