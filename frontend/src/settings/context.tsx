@@ -14,6 +14,7 @@ import {
 } from './defaults';
 import { readStoredSettings, resolveProjectEnvironmentDefaults, writeStoredSettings } from './storage';
 import type {
+  AppearanceSettings,
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
   ResearchAgentProfileSettings,
@@ -29,6 +30,8 @@ interface SettingsContextValue {
   setActiveProjectId: (projectId: string) => void;
   saveGeneralPreferences: (general: WebUiSettingsDocument['general']) => void;
   resetGeneralPreferences: () => void;
+  saveAppearanceSettings: (appearance: AppearanceSettings) => void;
+  resetAppearanceSettings: () => void;
   saveTaskConfigurationSettings: (taskConfiguration: TaskConfigurationSettings) => void;
   resetTaskConfigurationSettings: () => void;
   saveResearchAgentProfile: (profile: ResearchAgentProfileSettings) => void;
@@ -80,6 +83,9 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
     settings.general.editor.fontFamily.length > 0
       ? settings.general.editor.fontFamily
       : 'monospace';
+
+  const appearanceFontFamily =
+    settings.general.appearance?.fontFamily === 'serif' ? 'serif' : 'sans-serif';
 
   const sanitizedProjectDefaults: Record<string, DefaultProjectSettings> = {};
   for (const [projectId, projectSettings] of Object.entries(settings.projectDefaults)) {
@@ -135,6 +141,9 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
         fontSize: editorFontSize,
         fontFamily: editorFontFamily,
       },
+      appearance: {
+        fontFamily: appearanceFontFamily,
+      },
     },
     taskConfiguration: settings.taskConfiguration,
     projectDefaults: sanitizedProjectDefaults,
@@ -180,6 +189,20 @@ export function SettingsProvider({ children }: ProviderProps) {
     });
   }, []);
 
+  const sansStack =
+    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  const serifStack =
+    'Georgia, "Noto Serif", "Times New Roman", "Songti SC", "STSong", serif';
+
+  useEffect(() => {
+    const fontStack =
+      state.settings.general.appearance.fontFamily === 'serif'
+        ? serifStack
+        : sansStack;
+    document.documentElement.style.setProperty('--font-text', fontStack);
+    document.documentElement.style.setProperty('--font-display', fontStack);
+  }, [state.settings.general.appearance.fontFamily]);
+
   const commitSettings = (nextSettings: WebUiSettingsDocument): void => {
     const sanitized = sanitizeSettings(nextSettings);
     writeStoredSettings(sanitized);
@@ -215,6 +238,25 @@ export function SettingsProvider({ children }: ProviderProps) {
         commitSettings({
           ...state.settings,
           general: defaults.general,
+        });
+      },
+      saveAppearanceSettings: (appearance) => {
+        commitSettings({
+          ...state.settings,
+          general: {
+            ...state.settings.general,
+            appearance,
+          },
+        });
+      },
+      resetAppearanceSettings: () => {
+        const defaults = createDefaultWebUiSettings();
+        commitSettings({
+          ...state.settings,
+          general: {
+            ...state.settings.general,
+            appearance: defaults.general.appearance,
+          },
         });
       },
       saveTaskConfigurationSettings: (taskConfiguration) => {
