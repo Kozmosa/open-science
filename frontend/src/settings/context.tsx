@@ -147,6 +147,7 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
     },
     taskConfiguration: settings.taskConfiguration,
     projectDefaults: sanitizedProjectDefaults,
+    llmProviders: settings.llmProviders ?? [],
   };
 }
 

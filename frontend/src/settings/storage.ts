@@ -14,6 +14,7 @@ import {
 import type {
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
+  LlmProvider,
   ResearchAgentProfileSettings,
   SettingsRecoveryReason,
   TaskConfigurationMode,
@@ -216,6 +217,24 @@ function normalizeTaskConfigurationSettings(
   };
 }
 
+function normalizeLlmProviders(value: unknown): LlmProvider[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is LlmProvider => {
+    if (!isRecord(item)) {
+      return false;
+    }
+    const id = typeof item.id === 'string';
+    const name = typeof item.name === 'string';
+    const format = item.format === 'openai' || item.format === 'anthropic';
+    const baseUrl = typeof item.baseUrl === 'string';
+    const apiKey = typeof item.apiKey === 'string';
+    return id && name && format && baseUrl && apiKey;
+  });
+}
+
 function normalizeDefaultProjectSettings(
   value: unknown
 ): { projectSettings: DefaultProjectSettings; hadFallback: boolean } {
@@ -351,7 +370,6 @@ export function readStoredSettings(): SettingsLoadResult {
   const appearanceSettings = isRecord(general.appearance) ? general.appearance : null;
   const fontFamily =
     appearanceSettings?.fontFamily === 'serif' ? 'serif' : 'sans-serif';
-  const missingAppearanceSettings = appearanceSettings === null;
 
   const missingDefaultRoute = general.defaultRoute === undefined;
   const invalidDefaultRoute = general.defaultRoute !== undefined && !isDefaultRoute(general.defaultRoute);
@@ -364,6 +382,8 @@ export function readStoredSettings(): SettingsLoadResult {
   const invalidEditorFontSize =
     editorSettings?.fontSize !== undefined &&
     clampEditorFontSize(editorSettings.fontSize) !== editorSettings.fontSize;
+
+  const llmProviders = normalizeLlmProviders(parsed.llmProviders);
 
   return {
     settings: {
@@ -383,6 +403,7 @@ export function readStoredSettings(): SettingsLoadResult {
       },
       taskConfiguration,
       projectDefaults: projectDefaultsMap,
+      llmProviders,
     },
     recoveryReason:
       hadProjectDefaultsMigration ||
