@@ -242,6 +242,7 @@ function TaskConfigurationSection({
   onResetTaskConfigurationSettings,
 }: TaskConfigurationSectionProps) {
   const t = useT();
+  const settingsContext = useSettings();
   const [profileDraft, setProfileDraft] = useState<ResearchAgentProfileSettings>(
     taskConfiguration.researchAgentProfiles.find(
       (p) => p.profileId === taskConfiguration.defaultResearchAgentProfileId
@@ -435,6 +436,46 @@ function TaskConfigurationSection({
 
         {taskConfiguration.defaultExecutionEngineId === 'agent-sdk' && (
           <>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <FormField label={t('pages.settings.llmProviders.fillFromProvider')}>
+                  <Select
+                    aria-label={t('pages.settings.llmProviders.fillFromProvider')}
+                    value=""
+                    onChange={(event) => {
+                      const providerId = event.target.value;
+                      if (!providerId) return;
+                      const provider = settingsContext.settings.llmProviders.find((p) => p.id === providerId);
+                      if (!provider) return;
+                      setProfileDraft((current) => ({
+                        ...current,
+                        apiBaseUrl: provider.baseUrl,
+                        apiKey: provider.apiKey,
+                        defaultOpusModel:
+                          provider.format === 'anthropic'
+                            ? (provider.opusModel ?? current.defaultOpusModel)
+                            : (provider.defaultModel ?? current.defaultOpusModel),
+                        defaultSonnetModel:
+                          provider.format === 'anthropic'
+                            ? (provider.sonnetModel ?? current.defaultSonnetModel)
+                            : (provider.defaultModel ?? current.defaultSonnetModel),
+                        defaultHaikuModel:
+                          provider.format === 'anthropic'
+                            ? (provider.haikuModel ?? current.defaultHaikuModel)
+                            : (provider.defaultModel ?? current.defaultHaikuModel),
+                      }));
+                    }}
+                  >
+                    <option value="">{t('pages.settings.llmProviders.customOption')}</option>
+                    {settingsContext.settings.llmProviders.map((provider) => (
+                      <option key={provider.id} value={provider.id}>
+                        {provider.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label={t('pages.settings.taskConfiguration.apiBaseUrlLabel')}>
                 <Input
