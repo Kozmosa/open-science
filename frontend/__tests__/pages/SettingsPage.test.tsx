@@ -280,4 +280,45 @@ describe('SettingsPage', () => {
       });
     });
   });
+
+  it('renders LLM Providers tab and allows adding a provider', async () => {
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'LLM Providers' }));
+
+    expect(
+      screen.getByText(/No providers configured yet/)
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Provider' }));
+
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Test Provider' },
+    });
+    fireEvent.change(screen.getByLabelText('Base URL'), {
+      target: { value: 'https://api.test.com/' },
+    });
+    fireEvent.change(screen.getByLabelText('API Key'), {
+      target: { value: 'sk-test' },
+    });
+    fireEvent.change(screen.getByLabelText('Opus Model'), {
+      target: { value: 'claude-opus-test' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Provider')).toBeInTheDocument();
+    });
+    expect(screen.getByText('anthropic')).toBeInTheDocument();
+
+    const storedSettings = JSON.parse(
+      window.localStorage.getItem(settingsStorageKey) ?? '{}'
+    ) as ReturnType<typeof createDefaultWebUiSettings>;
+    expect(storedSettings.llmProviders).toHaveLength(1);
+    expect(storedSettings.llmProviders[0].name).toBe('Test Provider');
+    expect(storedSettings.llmProviders[0].baseUrl).toBe('https://api.test.com/');
+  });
 });
