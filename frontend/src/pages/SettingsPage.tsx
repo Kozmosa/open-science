@@ -37,6 +37,7 @@ import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, Ski
 import { UsersTab } from './settings/UsersTab';
 import { EnvAccessTab } from './settings/EnvAccessTab';
 import { CollaboratorsTab } from './settings/CollaboratorsTab';
+import { LlmProvidersTab } from './settings/LlmProvidersTab';
 import { useAuth } from '../contexts/AuthContext';
 
 interface GeneralDraftState {
@@ -1239,7 +1240,7 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
 function SettingsPage() {
   const t = useT();
   const { user: currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'envAccess' | 'collaborators'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'llmProviders' | 'users' | 'envAccess' | 'collaborators'>('general');
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
     queryFn: getEnvironments,
@@ -1286,6 +1287,7 @@ function SettingsPage() {
 
   const tabs = [
     { key: 'general' as const, label: t('pages.settings.tabs.general') },
+    { key: 'llmProviders' as const, label: t('pages.settings.tabs.llmProviders') },
     ...(currentUser?.role === 'admin' ? [
       { key: 'users' as const, label: t('pages.settings.tabs.users') },
       { key: 'envAccess' as const, label: t('pages.settings.tabs.envAccess') },
@@ -1400,6 +1402,7 @@ function SettingsPage() {
         </SectionStack>
         )}
 
+        {activeTab === 'llmProviders' && <LlmProvidersTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'envAccess' && <EnvAccessTab />}
         {activeTab === 'collaborators' && <CollaboratorsTab />}
