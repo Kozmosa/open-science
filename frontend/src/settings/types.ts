@@ -55,6 +55,10 @@ export interface DefaultProjectSettings {
   environmentDefaults: Record<string, EnvironmentTaskDefaults>;
 }
 
+export interface AppearanceSettings {
+  fontFamily: 'sans-serif' | 'serif';
+}
+
 export interface TaskConfigurationSettings {
   defaultExecutionEngineId: ExecutionEngineId;
   researchAgentProfiles: ResearchAgentProfileSettings[];
@@ -74,6 +78,7 @@ export interface WebUiSettingsDocument {
       fontSize: number;
       fontFamily: string;
     };
+    appearance: AppearanceSettings;
   };
   taskConfiguration: TaskConfigurationSettings;
   projectDefaults: Record<string, DefaultProjectSettings>;
