@@ -273,6 +273,9 @@ export function createDefaultWebUiSettings(): WebUiSettingsDocument {
         fontSize: defaultEditorFontSize,
         fontFamily: defaultEditorFontFamily,
       },
+      appearance: {
+        fontFamily: 'sans-serif',
+      },
     },
     taskConfiguration: createDefaultTaskConfigurationSettings(),
     projectDefaults: {
