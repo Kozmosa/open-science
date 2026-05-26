@@ -21,6 +21,10 @@ This repository's active product surface is the AINRF runtime plus WebUI, while 
 
 Reference repositories live under `ref-repos/` and are treated as read-only research inputs.
 
+## Project Overview
+
+`scholar-agent` currently centers on the AINRF frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities, while `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs, and the repository still generates a static HTML site from `docs/` with MkDocs.
+
 ## LLM Working Log
 
 - `docs/LLM-Working/` is versioned working memory for plans, checklists, smoke notes, and agent-side implementation records.
@@ -40,6 +44,21 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests`: run lint checks.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests`: verify formatting.
 
+### Build & Serve Shortcuts
+
+- `scripts/build.sh`: build the static docs site.
+- `scripts/serve.sh`: run the local docs preview server.
+
+Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activation so execution stays aligned with the lockfile.
+
+### Frontend Command Constraints
+
+- Frontend type-check must run from `frontend/`: `cd frontend && node_modules/.bin/tsc -b`
+- Frontend tests: `cd frontend && npm run test:run`
+- Frontend build: `cd frontend && npm run build`
+- Do **not** use `npx tsc --noEmit`, `npx tsc -p tsconfig.app.json`, or run plain `tsc` from the repo root.
+- This frontend uses project references; always use `tsc -b` from the `frontend/` directory.
+
 ## Coding Style & Naming Conventions
 
 Use 4-space indentation and keep Python compatible with `>=3.13`. All Python code in `src/ainrf/`, `tests/`, and `scripts/` must include strict type annotations. Treat missing annotations as defects, not optional cleanup. Use `snake_case` for files, functions, and variables; use `PascalCase` for classes.
@@ -47,6 +66,73 @@ Use 4-space indentation and keep Python compatible with `>=3.13`. All Python cod
 For notes, keep file slugs in English and content in Chinese. Use Obsidian wikilinks like `[[framework/v1-rfc]]`, YAML frontmatter, and Mermaid fences when needed.
 
 Formatting and linting are enforced with `ruff`; static type checking must pass with `ty`; pre-commit hooks are defined in `.pre-commit-config.yaml`.
+
+## Architecture
+
+### Build Pipeline
+
+`scripts/build_html_notes.py` is the core docs build script. It:
+
+1. Reads all `.md` files from `docs/`.
+2. Converts Obsidian-only syntax to MkDocs-compatible Markdown.
+3. Validates internal wikilinks and fails on unresolved targets.
+4. Computes backlinks and appends a `反向链接` section to each note.
+5. Writes processed files to `.cache/html-notes/docs/`.
+6. Runs `mkdocs build` or `mkdocs serve` against the generated output.
+
+Never edit files under `.cache/html-notes/` or `site/`; they are generated artifacts.
+
+### Directory Layout Notes
+
+- `docs/index.md`: top-level docs/research index.
+- `docs/projects/`: per-project research reports.
+- `docs/framework/`: AI-Native Research Framework design notes.
+- `docs/summary/`: cross-project comparison and synthesis.
+- `.codex-skill-staging/`: Codex skill definitions and staging assets.
+
+### Frontend Layout Components
+
+- Reusable layout shells live in `frontend/src/components/layout/`.
+- `PageShell`: standard outer card wrapper.
+- `SplitPane`: left-right split layout with drag handle, keyboard resizing, and ARIA support.
+- `SectionStack`: vertical section spacing with optional actions slot.
+- `CardGrid`: draggable card grid with DnD and localStorage persistence.
+- Prefer these shared layout primitives over duplicating layout patterns.
+
+### Tailwind CSS Constraints
+
+- Dynamic Tailwind classes such as `space-y-${gap}` or `gap-${n}` do not work reliably with Tailwind v4 JIT in this repo.
+- Use static lookup maps instead, e.g. `const GAP_CLASSES: Record<number, string> = { 2: 'gap-2', 4: 'gap-4' }`.
+
+### `@dnd-kit` Gotcha
+
+- Do not nest `useDraggable` / `useDroppable` wrappers.
+- `CardGrid` already provides an internal draggable wrapper; content passed via `renderCard` must not add another draggable layer.
+
+### API Key Middleware
+
+- External tools may probe Anthropic-compatible endpoints such as `/v1/models` and `/v1/messages`.
+- These are exempted from API key auth in `src/ainrf/api/middleware.py` to avoid local 401 log spam.
+- If new externally probed paths are added, update `_EXEMPT_PATH_PREFIXES` consistently.
+
+### Runtime Fallback Notes
+
+- Localhost environment detection is SSH-first.
+- After repeated bounded SSH failure, runtime must fall back to the user's personal tmux session and surface a warning in the WebUI.
+- Keep localhost tmux probe marker output newline-safe; a previous `printf %s\n` style bug produced literal `n` characters and broke parsing.
+
+### Spec & Plan Documents
+
+- Design specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+- Implementation plans: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+
+### Note Conventions
+
+- Frontmatter: YAML with fields such as `aliases`, `tags`, `source_repo`, `source_path`.
+- Internal links: use Obsidian wikilinks like `[[note-name]]` or `[[note-name|label]]`.
+- Callouts: use Obsidian `> [!type]` syntax, not MkDocs admonitions directly in source notes.
+- Diagrams: use Mermaid fenced code blocks.
+- File naming: English slugs, Chinese content.
 
 ## Testing Guidelines
 
@@ -57,9 +143,41 @@ Before submitting changes to Python code, run both runtime and static checks:
 - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
 
+### Testing & Service Command Notes
+
+- Backend tests must run from repo root: `cd /home/xuyang/code/scholar-agent && uv run pytest tests/`
+- Frontend tests and type-check must run from `frontend/`.
+- Start manual service testing with `uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`.
+
 ## Commit & Pull Request Guidelines
 
 Follow the existing commit style: short, imperative, and scoped when useful, e.g. `docs: revise framework...` or `chore: update gitignore`. Keep commits focused.
+
+- Follow Conventional Commits for the first line: `feat: ...`, `fix: ...`, `refactor: ...`, `docs: ...`, `chore: ...`.
+- Prefer one logical change per commit. Do not mix unrelated frontend, backend, docs, and hygiene changes in the same commit unless they are inseparable.
+- Do not create commits from a dirty branch without first understanding whether unrelated changes belong to another work slice.
+- Do not commit secrets, `.env` files, local API keys, or local investigation artifacts.
+- Daily worklog updates under `docs/LLM-Working/worklog/` do not require a standalone `docs:`/`chore:` commit; they should normally be committed together with the corresponding `feat:`/`fix:`/`refactor:` work slice they record.
+- Root-level governance documents such as `AGENTS.md`, `CLAUDE.md`, and `PROJECT_BASIS.md` must be committed in a dedicated `docs:` or `chore:` commit when they change. A single dedicated commit may update multiple such root-level governance files together.
+
+### Git Workflow
+
+- `master` is the protected stable branch. Treat it as read-mostly: sync from it, review from it, and merge into it via PR only.
+- `develop` is the pre-release integration buffer. It may accept direct merges for validation/integration, but it is not the default branch to start feature work from.
+- Start every new feature, fix, refactor, docs, or chore branch from the latest `master`, not from `develop`.
+- Preferred branch prefixes are: `feat/`, `fix/`, `refactor/`, `docs/`, and `chore/`.
+- Agent-only temporary branches should not be pushed to the remote and should be deleted after their useful changes are merged or extracted.
+
+### Worktree Hygiene
+
+- Default to worktree-first development for non-trivial work.
+- The main workspace should stay clean and should not be the default place for feature implementation.
+- Use `/.worktrees/<branch>` for formal development worktrees.
+- Treat `/.claude/worktrees/` as temporary agent execution space only, not as a long-lived development location.
+- After a branch is merged or abandoned, remove its corresponding worktree and delete the local branch.
+- Regularly prune stale remote-tracking refs with `git fetch --prune origin` when reviewing repository hygiene.
+- When auditing hygiene, inspect `git worktree list --porcelain` and `git branch -vv` before deleting anything.
+- Preserve dirty or unaudited worktrees until their state is understood.
 
 Pull requests should include:
 
