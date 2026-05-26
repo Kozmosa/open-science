@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, FormField, Input, Select } from '../../components/ui';
 import { useT } from '../../i18n';
 import type { LlmProvider, LlmProviderFormat } from '../../settings';
@@ -16,6 +16,7 @@ function generateId(): string {
 export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProviderEditDialogProps) {
   const t = useT();
   const isEditing = provider !== null;
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const [name, setName] = useState('');
   const [format, setFormat] = useState<LlmProviderFormat>('anthropic');
@@ -48,6 +49,10 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
     }
   }, [provider]);
 
+  useEffect(() => {
+    overlayRef.current?.focus();
+  }, []);
+
   const handleSave = () => {
     const savedProvider: LlmProvider = {
       id: provider?.id ?? generateId(),
@@ -69,10 +74,25 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
     onClose();
   };
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
   const canSave = name.trim().length > 0 && baseUrl.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div
+      ref={overlayRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 outline-none"
+      onKeyDown={handleKeyDown}
+    >
       <div className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-lg">
         <h2 className="mb-4 text-lg font-semibold">
           {isEditing ? t('pages.settings.llmProviders.editProvider') : t('pages.settings.llmProviders.addProvider')}
