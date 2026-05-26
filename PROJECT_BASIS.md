@@ -129,6 +129,29 @@
 - commit message 正文使用团队统一语言，说明本次修改细节、影响范围与必要背景。
 - 正文使用 Markdown 无序列表分点描述，优先说明“为什么改”和“改了什么”。
 - 需要换行时，使用多个 `-m` 参数或等效方式提交，不在字符串中写字面量 `\n`。
+- 默认保持“一次 commit 对应一个逻辑工作批次”，避免把无关的前端、后端、文档和仓库卫生改动混在同一提交中。
+- `docs/LLM-Working/worklog/` 下的当日 worklog 更新不要求单独使用 `docs:` 或 `chore:` 提交；它默认应与对应的功能、修复、重构等工作批次一起提交。
+- `AGENTS.md`、`CLAUDE.md`、`PROJECT_BASIS.md` 等仓库根级长期约束文件发生修改时，应使用单独的 `docs:` 或 `chore:` 提交进行记录；同一个提交可以同时包含多个此类根级约束文件的更新。
+
+## Git 分支与工作区约定
+
+- `master` 是受保护的稳定主线；默认只接受 PR 合入，仅在仓库清理、历史整理或经明确授权的场景下允许强推。
+- `develop` 是预发布缓冲区，用于联调、批量验证和发布前整合；它不是默认的新开发起点。
+- 新开发默认从最新 `master` 起分支，而不是从 `develop` 起分支。
+- 推荐的正式分支前缀为：`feat/`、`fix/`、`refactor/`、`docs/`、`chore/`。
+- `develop` 默认接受来自 `master` 的同步；只有在整合与验证完成后，才从 `develop` 回流到 `master`。
+- `develop` 允许直接 merge 作为缓冲区使用，但进入 `master` 仍应走 PR。
+
+## Git 卫生与 Worktree 约定
+
+- 默认采用 worktree-first 开发范式：非微小改动优先在独立 worktree 中实施。
+- 主工作区应尽量保持干净，主要用于同步、检查、轻量文档修改与受控清理动作，而不是默认功能开发现场。
+- 正式开发 worktree 统一放在 `/.worktrees/<branch>`。
+- `/.claude/worktrees/` 仅作为 agent 临时执行空间使用，不作为长期开发工作区。
+- 合并完成或确认放弃后，应删除对应本地分支和 worktree。
+- 远程不应长期保留 `worktree-*`、`agent/*` 或其他明显过程性命名分支。
+- 进行仓库卫生巡检时，应使用 `git fetch --prune origin` 清理 stale remote-tracking refs，避免把本地过期引用误判为真实远程状态。
+- 严禁提交 `.env`、本地 API key、调查导出物和其他本地敏感或一次性产物。
 
 ## 变更维护原则
 
