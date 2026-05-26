@@ -10,7 +10,7 @@ interface LlmProviderEditDialogProps {
 }
 
 function generateId(): string {
-  return Math.random().toString(36).slice(2, 10);
+  return crypto.randomUUID();
 }
 
 export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProviderEditDialogProps) {

@@ -217,7 +217,7 @@ function normalizeTaskConfigurationSettings(
   };
 }
 
-function normalizeLlmProviders(value: unknown): LlmProvider[] {
+export function normalizeLlmProviders(value: unknown): LlmProvider[] {
   if (!Array.isArray(value)) {
     return [];
   }

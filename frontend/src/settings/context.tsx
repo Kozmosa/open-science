@@ -12,7 +12,7 @@ import {
   createEmptyEnvironmentTaskDefaults,
   isDefaultRoute,
 } from './defaults';
-import { readStoredSettings, resolveProjectEnvironmentDefaults, writeStoredSettings } from './storage';
+import { readStoredSettings, resolveProjectEnvironmentDefaults, writeStoredSettings, normalizeLlmProviders } from './storage';
 import type {
   AppearanceSettings,
   DefaultProjectSettings,
@@ -151,9 +151,14 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
     },
     taskConfiguration: settings.taskConfiguration,
     projectDefaults: sanitizedProjectDefaults,
-    llmProviders: settings.llmProviders ?? [],
+    llmProviders: normalizeLlmProviders(settings.llmProviders),
   };
 }
+
+const sansStack =
+  'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const serifStack =
+  'Georgia, "Noto Serif", "Times New Roman", "Songti SC", "STSong", serif';
 
 export function SettingsProvider({ children }: ProviderProps) {
   const [state, setState] = useState<SettingsState>(() => readStoredSettings());
@@ -193,11 +198,6 @@ export function SettingsProvider({ children }: ProviderProps) {
       // Ignore — codex defaults are optional, will retry on next mount
     });
   }, []);
-
-  const sansStack =
-    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  const serifStack =
-    'Georgia, "Noto Serif", "Times New Roman", "Songti SC", "STSong", serif';
 
   useEffect(() => {
     const fontStack =
