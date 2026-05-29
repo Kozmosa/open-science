@@ -1,0 +1,48 @@
+site_name: AINRF 使用文档
+site_description: AINRF 产品文档 — CLI、WebUI、认证、项目管理、终端、工作区等
+site_url: https://kozmosa.github.io/scholar-agent/
+docs_dir: docs/ainrf
+site_dir: site
+use_directory_urls: true
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到深色模式
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到浅色模式
+
+plugins:
+  - search
+  - roamlinks
+  - mermaid2:
+      javascript: https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.min.js
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
