@@ -1,0 +1,34 @@
+sequenceDiagram
+    actor U as 用户
+    participant W as WebUI
+    participant API as AINRF API
+    participant TH as Task Harness
+    participant P as Prompt Composer
+    participant L as Launcher
+    participant E as 执行环境<br/>(本地/SSH)
+    participant DB as SQLite
+
+    U->>W: 选择 Workspace + Environment<br/>输入任务描述
+    W->>API: POST /tasks
+    API->>TH: 创建任务
+    TH->>P: compose_task_prompt()
+    Note over P: 五层组合：<br/>global → workspace →<br/>environment → profile →<br/>task input
+    P-->>TH: rendered_prompt
+    TH->>L: build_launcher()
+    L->>E: 启动 Claude Code
+    activate E
+    E-->>L: stdout/stderr 流
+    L-->>TH: 实时输出
+    TH-->>API: SSE 流
+    API-->>W: 实时显示
+    TH->>DB: 持久化输出
+    deactivate E
+    E-->>L: 进程结束
+    L-->>TH: exit code
+    TH-->>API: 状态更新<br/>succeeded / failed
+    API-->>W: 任务完成
+    U->>W: 点击回放
+    W->>API: GET /tasks/{id}/replay
+    API->>DB: 读取历史输出
+    DB-->>API: 完整输出
+    API-->>W: 回放展示
