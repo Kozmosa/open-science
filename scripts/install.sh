@@ -394,3 +394,50 @@ while true; do
       ;;
   esac
 done
+
+# ── Project Dependencies ─────────────────────────────────────────────
+
+step "Installing Python dependencies (uv sync) ..."
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
+(cd "$REPO_ROOT" && uv sync)
+info "Python dependencies installed."
+
+step "Installing frontend dependencies (npm ci) ..."
+(cd "$REPO_ROOT/frontend" && npm ci)
+info "Frontend dependencies installed."
+
+# ── Service Startup ──────────────────────────────────────────────────
+
+if [[ "$NO_START" == true ]]; then
+  echo ""
+  info "Installation complete!"
+  info "To start AINRF services, run: scripts/webui.sh"
+  exit 0
+fi
+
+if [[ "$AUTO_YES" == true ]]; then
+  step "Starting AINRF services ..."
+  exec "$REPO_ROOT/scripts/webui.sh"
+fi
+
+echo ""
+info "Installation complete!"
+echo ""
+
+while true; do
+  read -rp "Start AINRF services now? [Y/n]: " start_choice
+  start_choice="${start_choice:-Y}"
+  case "${start_choice,,}" in
+    y|yes)
+      step "Starting AINRF services ..."
+      exec "$REPO_ROOT/scripts/webui.sh"
+      ;;
+    n|no)
+      info "Skipped. To start services later, run: scripts/webui.sh"
+      exit 0
+      ;;
+    *)
+      warn "Please answer Y or n."
+      ;;
+  esac
+done
