@@ -275,3 +275,122 @@ while true; do
       ;;
   esac
 done
+
+# ── Node.js Detection ────────────────────────────────────────────────
+
+check_node_version() {
+  local node_cmd="$1"
+  local version
+  version="$($node_cmd --version 2>/dev/null | sed 's/^v//')"
+  local major
+  major="$(echo "$version" | cut -d. -f1)"
+
+  if [[ -n "$major" ]] && [[ "$major" -ge 22 ]]; then
+    echo "$version"
+    return 0
+  fi
+  return 1
+}
+
+# ── fnm + Node LTS Installation ──────────────────────────────────────
+
+install_fnm_and_node() {
+  step "Installing fnm (Fast Node Manager) ..."
+
+  local install_script
+  install_script="$(mktemp)"
+  trap 'rm -f "$install_script"' RETURN
+
+  if ! download_with_retry "https://fnm.vercel.app/install" "$install_script"; then
+    error "Failed to download fnm installer."
+    return 1
+  fi
+
+  # Install fnm to ~/.local/share/fnm
+  if ! bash "$install_script" --skip-shell; then
+    error "fnm installation failed."
+    return 1
+  fi
+
+  # Set up fnm environment
+  export PATH="$HOME/.local/share/fnm:$PATH"
+  eval "$(fnm env --shell bash)"
+
+  if ! check_command fnm; then
+    error "fnm was installed but is not on PATH."
+    return 1
+  fi
+
+  info "fnm installed: $(fnm --version)"
+
+  step "Installing Node.js LTS ..."
+
+  if ! fnm install --lts; then
+    error "Failed to install Node.js LTS."
+    return 1
+  fi
+
+  if ! fnm use --lts; then
+    error "Failed to activate Node.js LTS."
+    return 1
+  fi
+
+  if ! check_command node; then
+    error "Node.js was installed but is not on PATH."
+    return 1
+  fi
+
+  local node_version
+  node_version="$(node --version | sed 's/^v//')"
+  info "Node.js LTS installed: v$node_version"
+
+  if ! check_command npm; then
+    error "npm is not available after Node.js installation."
+    return 1
+  fi
+
+  info "npm installed: $(npm --version)"
+}
+
+# ── Node.js/npm Detection & Installation ─────────────────────────────
+
+step "Checking Node.js and npm ..."
+NODE_INSTALLED=false
+
+while true; do
+  if check_command node; then
+    local node_version
+    if node_version="$(check_node_version node)"; then
+      if check_command npm; then
+        NODE_INSTALLED=true
+        info "Found Node.js v$node_version and npm $(npm --version)"
+        break
+      fi
+    fi
+  fi
+
+  local choice
+  choice="$(prompt_choice \
+    "Node.js 22+ LTS and npm are required but not found." \
+    "Exit and install Node.js manually (https://nodejs.org/)" \
+    "Retry detection after manual installation" \
+    "Let the script install fnm and Node.js LTS automatically")"
+
+  case "$choice" in
+    1)
+      error "Exiting. Please install Node.js 22+ LTS manually and re-run."
+      exit 1
+      ;;
+    2)
+      continue
+      ;;
+    3)
+      if ! install_fnm_and_node; then
+        error "Failed to install Node.js automatically."
+        error "Please install Node.js 22+ LTS manually and re-run."
+        exit 1
+      fi
+      break
+      ;;
+  esac
+done
