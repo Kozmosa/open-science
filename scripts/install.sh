@@ -52,7 +52,7 @@ while (($# > 0)); do
       exit 0
       ;;
     *)
-      error "Unknown option: $1"
+      error "Unknown option: $1" >&2
       usage >&2
       exit 1
       ;;
