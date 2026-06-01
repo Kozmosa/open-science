@@ -168,3 +168,110 @@ if ! PYTHON_VERSION="$(check_python_version "$PYTHON_CMD")"; then
 fi
 
 info "Found Python $PYTHON_VERSION ($PYTHON_CMD)"
+
+# ── Interactive Prompts ──────────────────────────────────────────────
+
+prompt_choice() {
+  local message="$1"
+  local option1="$2"
+  local option2="$3"
+  local option3="$4"
+  local choice
+
+  if [[ "$AUTO_YES" == true ]]; then
+    echo "3"
+    return 0
+  fi
+
+  echo ""
+  error "$message"
+  echo ""
+  echo "Options:"
+  echo "  1) $option1"
+  echo "  2) $option2"
+  echo "  3) $option3"
+  echo ""
+
+  while true; do
+    read -rp "Enter your choice [1/2/3]: " choice
+    case "$choice" in
+      1|2|3)
+        echo "$choice"
+        return 0
+        ;;
+      *)
+        warn "Invalid choice. Please enter 1, 2, or 3."
+        ;;
+    esac
+  done
+}
+
+# ── UV Installation ──────────────────────────────────────────────────
+
+install_uv() {
+  step "Installing uv ..."
+
+  local install_script
+  install_script="$(mktemp)"
+  trap 'rm -f "$install_script"' RETURN
+
+  if ! download_with_retry "https://astral.sh/uv/install.sh" "$install_script"; then
+    error "Failed to download uv installer."
+    return 1
+  fi
+
+  if ! bash "$install_script"; then
+    error "uv installation failed."
+    return 1
+  fi
+
+  # Refresh PATH to include uv
+  export PATH="$HOME/.local/bin:$PATH"
+
+  if ! check_command uv; then
+    error "uv was installed but is not on PATH."
+    error "Please restart your shell or run: export PATH=\"$HOME/.local/bin:\$PATH\""
+    return 1
+  fi
+
+  info "uv installed successfully: $(uv --version)"
+}
+
+# ── UV Detection & Installation ──────────────────────────────────────
+
+step "Checking uv ..."
+UV_INSTALLED=false
+
+while true; do
+  if check_command uv; then
+    UV_INSTALLED=true
+    info "Found uv: $(uv --version)"
+    break
+  fi
+
+  local choice
+  choice="$(prompt_choice \
+    "uv is not installed or not on PATH." \
+    "Exit and install uv manually (https://docs.astral.sh/uv/getting-started/installation/)" \
+    "Retry detection after manual installation" \
+    "Let the script install uv automatically")"
+
+  case "$choice" in
+    1)
+      error "Exiting. Please install uv manually and re-run."
+      exit 1
+      ;;
+    2)
+      # Retry loop will check again
+      continue
+      ;;
+    3)
+      if ! install_uv; then
+        error "Failed to install uv automatically."
+        error "Please install uv manually and re-run."
+        exit 1
+      fi
+      break
+      ;;
+  esac
+done
