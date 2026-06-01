@@ -84,3 +84,87 @@ download_with_retry() {
 check_command() {
   command -v "$1" &>/dev/null
 }
+
+# ── OS / Architecture Detection ──────────────────────────────────────
+
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS" in
+  Linux)
+    OS_TYPE="linux"
+    ;;
+  Darwin)
+    OS_TYPE="macos"
+    ;;
+  *)
+    error "Unsupported operating system: $OS"
+    error "AINRF install script only supports Linux and macOS."
+    exit 1
+    ;;
+esac
+
+case "$ARCH" in
+  x86_64)
+    ARCH_TYPE="x86_64"
+    ;;
+  aarch64|arm64)
+    ARCH_TYPE="aarch64"
+    ;;
+  *)
+    error "Unsupported architecture: $ARCH"
+    error "Supported architectures: x86_64, aarch64/arm64"
+    exit 1
+    ;;
+esac
+
+info "Detected platform: $OS_TYPE ($ARCH_TYPE)"
+
+# ── Python Detection ─────────────────────────────────────────────────
+
+find_python() {
+  local py_cmd
+  for py_cmd in python3 python; do
+    if check_command "$py_cmd"; then
+      echo "$py_cmd"
+      return 0
+    fi
+  done
+  return 1
+}
+
+check_python_version() {
+  local py_cmd="$1"
+  local version
+  version="$($py_cmd --version 2>&1 | awk '{print $2}')"
+  local major minor
+  major="$(echo "$version" | cut -d. -f1)"
+  minor="$(echo "$version" | cut -d. -f2)"
+
+  if [[ "$major" -gt 3 ]] || { [[ "$major" -eq 3 ]] && [[ "$minor" -ge 13 ]]; }; then
+    echo "$version"
+    return 0
+  fi
+  return 1
+}
+
+step "Checking Python ..."
+PYTHON_CMD=""
+if ! PYTHON_CMD="$(find_python)"; then
+  error "Python is not installed or not on PATH."
+  error "AINRF requires Python 3.13 or later."
+  error "Please install Python 3.13+ and re-run this script."
+  exit 1
+fi
+
+PYTHON_VERSION=""
+if ! PYTHON_VERSION="$(check_python_version "$PYTHON_CMD")"; then
+  local current_version
+  current_version="$($PYTHON_CMD --version 2>&1 | awk '{print $2}')"
+  error "Python $current_version is too old."
+  error "AINRF requires Python 3.13 or later."
+  error "Please upgrade Python and re-run this script."
+  exit 1
+fi
+
+info "Found Python $PYTHON_VERSION ($PYTHON_CMD)"
