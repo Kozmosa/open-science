@@ -67,7 +67,7 @@ export interface TaskConfigurationSettings {
   defaultTaskConfigurationId: string;
 }
 
-export type LlmProviderFormat = 'openai' | 'anthropic';
+export type LlmProviderFormat = 'anthropic' | 'openai-chat' | 'openai-responses';
 
 export interface LlmProvider {
   id: string;

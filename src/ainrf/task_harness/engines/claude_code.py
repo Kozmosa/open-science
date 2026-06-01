@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 
@@ -45,9 +46,26 @@ class ClaudeCodeEngine(ExecutionEngine):
             "--permission-mode",
             "bypassPermissions",
         ]
+        env = os.environ.copy()
+        profile = context.agent_profile
+        if profile.api_base_url:
+            env["ANTHROPIC_BASE_URL"] = profile.api_base_url
+        if profile.api_key:
+            env["ANTHROPIC_API_KEY"] = profile.api_key
+            env["ANTHROPIC_AUTH_TOKEN"] = profile.api_key
+        if profile.default_opus_model:
+            env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = profile.default_opus_model
+        if profile.default_sonnet_model:
+            env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = profile.default_sonnet_model
+        if profile.default_haiku_model:
+            env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = profile.default_haiku_model
+        if profile.env_overrides:
+            for key, value in profile.env_overrides.items():
+                env[key] = value
         process = await asyncio.create_subprocess_exec(
             *command,
             cwd=context.working_directory,
+            env=env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

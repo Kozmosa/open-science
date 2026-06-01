@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import shlex
 from collections import deque
 from dataclasses import dataclass, field
@@ -155,11 +156,13 @@ class CodexAppServerEngine(ExecutionEngine):
         command = shlex.split(command_text)
         if not command:
             raise RuntimeError("Codex App Server command is empty")
-        env = None
+        env = os.environ.copy()
+        profile = context.agent_profile
+        if profile.codex_base_url:
+            env["OPENAI_BASE_URL"] = profile.codex_base_url
+        if profile.codex_api_key:
+            env["OPENAI_API_KEY"] = profile.codex_api_key
         if context.codex_home_path is not None:
-            import os
-
-            env = os.environ.copy()
             env["CODEX_HOME"] = context.codex_home_path
 
         process = await asyncio.create_subprocess_exec(

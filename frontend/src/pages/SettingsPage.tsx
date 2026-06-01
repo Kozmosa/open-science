@@ -467,11 +467,13 @@ function TaskConfigurationSection({
                     }}
                   >
                     <option value="">{t('pages.settings.llmProviders.customOption')}</option>
-                    {settingsContext.settings.llmProviders.map((provider) => (
-                      <option key={provider.id} value={provider.id}>
-                        {provider.name}
-                      </option>
-                    ))}
+                    {settingsContext.settings.llmProviders
+                      .filter((p) => p.format === 'anthropic')
+                      .map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </option>
+                      ))}
                   </Select>
                 </FormField>
               </div>
@@ -547,6 +549,60 @@ function TaskConfigurationSection({
 
         {taskConfiguration.defaultExecutionEngineId === 'codex-app-server' && (
           <>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <FormField label={t('pages.settings.llmProviders.fillFromProvider')}>
+                  <Select
+                    aria-label={t('pages.settings.llmProviders.fillFromProvider')}
+                    value=""
+                    onChange={(event) => {
+                      const providerId = event.target.value;
+                      if (!providerId) return;
+                      const provider = settingsContext.settings.llmProviders.find((p) => p.id === providerId);
+                      if (!provider) return;
+                      setProfileDraft((current) => ({
+                        ...current,
+                        codexBaseUrl: provider.baseUrl,
+                        codexApiKey: provider.apiKey,
+                        codexModel: provider.defaultModel ?? current.codexModel,
+                      }));
+                    }}
+                  >
+                    <option value="">{t('pages.settings.llmProviders.customOption')}</option>
+                    {settingsContext.settings.llmProviders
+                      .filter((p) => p.format === 'openai-responses')
+                      .map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </option>
+                      ))}
+                  </Select>
+                </FormField>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label={t('pages.settings.codex.baseUrl')}>
+                <Input
+                  aria-label={t('pages.settings.codex.baseUrl')}
+                  value={profileDraft.codexBaseUrl}
+                  onChange={(event) =>
+                    setProfileDraft((current) => ({ ...current, codexBaseUrl: event.target.value }))
+                  }
+                  placeholder="https://api.openai.com/"
+                />
+              </FormField>
+              <FormField label={t('pages.settings.codex.apiKey')}>
+                <Input
+                  aria-label={t('pages.settings.codex.apiKey')}
+                  type="password"
+                  value={profileDraft.codexApiKey}
+                  onChange={(event) =>
+                    setProfileDraft((current) => ({ ...current, codexApiKey: event.target.value }))
+                  }
+                  placeholder="sk-..."
+                />
+              </FormField>
+            </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <FormField label={t('pages.settings.codex.model')}>
                 <Input

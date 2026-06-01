@@ -115,7 +115,8 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
               onChange={(e) => setFormat(e.target.value as LlmProviderFormat)}
             >
               <option value="anthropic">{t('pages.settings.llmProviders.formatAnthropic')}</option>
-              <option value="openai">{t('pages.settings.llmProviders.formatOpenAI')}</option>
+              <option value="openai-chat">{t('pages.settings.llmProviders.formatOpenAIChat')}</option>
+              <option value="openai-responses">{t('pages.settings.llmProviders.formatOpenAIResponses')}</option>
             </Select>
           </FormField>
 

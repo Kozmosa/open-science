@@ -222,17 +222,27 @@ export function normalizeLlmProviders(value: unknown): LlmProvider[] {
     return [];
   }
 
-  return value.filter((item): item is LlmProvider => {
-    if (!isRecord(item)) {
-      return false;
-    }
-    const id = typeof item.id === 'string';
-    const name = typeof item.name === 'string';
-    const format = item.format === 'openai' || item.format === 'anthropic';
-    const baseUrl = typeof item.baseUrl === 'string';
-    const apiKey = typeof item.apiKey === 'string';
-    return id && name && format && baseUrl && apiKey;
-  });
+  return value
+    .map((item) => {
+      if (isRecord(item) && item.format === 'openai') {
+        return { ...item, format: 'openai-chat' };
+      }
+      return item;
+    })
+    .filter((item): item is LlmProvider => {
+      if (!isRecord(item)) {
+        return false;
+      }
+      const id = typeof item.id === 'string';
+      const name = typeof item.name === 'string';
+      const format =
+        item.format === 'anthropic' ||
+        item.format === 'openai-chat' ||
+        item.format === 'openai-responses';
+      const baseUrl = typeof item.baseUrl === 'string';
+      const apiKey = typeof item.apiKey === 'string';
+      return id && name && format && baseUrl && apiKey;
+    });
 }
 
 function normalizeDefaultProjectSettings(
