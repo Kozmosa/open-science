@@ -126,6 +126,10 @@ Never edit files under `.cache/html-notes/` or `site/`; they are generated artif
 - Design specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
 - Implementation plans: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
 
+**Commit rules for spec/plan documents:**
+- Design specs (`docs/superpowers/specs/`) are part of the long-lived knowledge base and should be committed.
+- Implementation plans (`docs/superpowers/plans/`) are transient agent working artifacts and must **not** be committed to git. They should be kept in the working directory only and discarded after implementation completes.
+
 ### Note Conventions
 
 - Frontmatter: YAML with fields such as `aliases`, `tags`, `source_repo`, `source_path`.
