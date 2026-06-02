@@ -199,10 +199,25 @@ async def proxy_code_server(request: Request, path: str) -> Response:
 
     upstream_url = _build_upstream_url(base_url, request, path)
     request_headers = _filter_request_headers(request.headers)
+
+    # Limit request body size (default 50MB)
+    MAX_REQUEST_BODY_SIZE = 50 * 1024 * 1024
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_REQUEST_BODY_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Request body size exceeds maximum of {MAX_REQUEST_BODY_SIZE} bytes"
+        )
+
     request_body = await request.body()
+    if len(request_body) > MAX_REQUEST_BODY_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Request body size exceeds maximum of {MAX_REQUEST_BODY_SIZE} bytes"
+        )
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             upstream_response = await client.request(
                 request.method,
                 upstream_url,
@@ -210,6 +225,16 @@ async def proxy_code_server(request: Request, path: str) -> Response:
                 content=request_body,
                 follow_redirects=False,
             )
+
+            # Limit response size for safety (default 100MB)
+            MAX_RESPONSE_SIZE = 100 * 1024 * 1024
+            resp_content_length = upstream_response.headers.get("content-length")
+            if resp_content_length and int(resp_content_length) > MAX_RESPONSE_SIZE:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Upstream response size exceeds maximum of {MAX_RESPONSE_SIZE} bytes"
+                )
+
     except httpx.TimeoutException as exc:
         raise HTTPException(status_code=503, detail="code-server upstream timed out") from exc
     except (httpx.RequestError, httpx.TransportError) as exc:

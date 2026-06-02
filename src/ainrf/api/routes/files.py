@@ -9,7 +9,6 @@ import shlex
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 
-from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     FileEntryResponse,
     FileListResponse,
@@ -52,7 +51,6 @@ async def list_files(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ) -> FileListResponse:
-    user = get_current_user(request)
     service = _get_file_browser_service(request)
     try:
         listing = await service.list_directory(environment_id, path, workspace_id)
@@ -128,6 +126,28 @@ async def stream_file(
     container_config = _build_container_config(environment)
     executor = SSHExecutor(container_config)
 
+    # Check file size before streaming (default 100MB limit)
+    MAX_REMOTE_FILE_SIZE = 100 * 1024 * 1024
+    try:
+        size_result = await executor.run_command(
+            f"stat -c %s {shlex.quote(resolved_path)} 2>/dev/null || stat -f %z {shlex.quote(resolved_path)}",
+            timeout=10,
+        )
+        if size_result.exit_code == 0 and size_result.stdout:
+            file_size = int(size_result.stdout.strip())
+            if file_size > MAX_REMOTE_FILE_SIZE:
+                await executor.close()
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File size {file_size} exceeds maximum allowed size of {MAX_REMOTE_FILE_SIZE} bytes"
+                )
+    except (ValueError, HTTPException):
+        await executor.close()
+        raise
+    except Exception:
+        # If size check fails, proceed with caution but still stream
+        pass
+
     async def _stream():
         try:
             result = await executor.run_command(
@@ -156,20 +176,37 @@ async def upload_file(
     file: UploadFile = File(...),
 ) -> FileUploadResponse:
     service = _get_file_browser_service(request)
+
+    # Check file size limit (default 100MB)
+    MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+    total_size = 0
+
     suffix = Path(path).suffix or ""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp_path = Path(tmp.name)
-        while chunk := await file.read(8192):
-            tmp.write(chunk)
+    tmp_path = None
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = Path(tmp.name)
+            while chunk := await file.read(8192):
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File size exceeds maximum allowed size of {MAX_UPLOAD_SIZE} bytes"
+                    )
+                tmp.write(chunk)
+
         result = await service.upload_file(
             environment_id=environment_id,
             path=path,
             local_temp_path=tmp_path,
             workspace_id=workspace_id,
         )
+        return result
+    except HTTPException:
+        raise
     except Exception as exc:
-        tmp_path.unlink(missing_ok=True)
         raise _translate_file_browser_error(exc) from exc
-    tmp_path.unlink(missing_ok=True)
+    finally:
+        if tmp_path:
+            tmp_path.unlink(missing_ok=True)
     return FileUploadResponse(path=result.path, size=result.size)

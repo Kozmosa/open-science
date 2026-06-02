@@ -380,7 +380,8 @@ class SSHExecutor:
         if env:
             export_parts = [f"{key}={shlex.quote(value)}" for key, value in sorted(env.items())]
             steps.append(f"export {' '.join(export_parts)}")
-        steps.append(cmd)
+        # Quote cmd to prevent command injection
+        steps.append(shlex.quote(cmd))
         return f"bash -lc {shlex.quote(' && '.join(steps))}"
 
     async def _sftp_put(self, local_path: Path, remote_path: str) -> None:

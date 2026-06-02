@@ -111,8 +111,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             with auth_service._connect() as conn:
                 count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
             if count == 0:
+                # Generate secure random password
+                import secrets
+                import string
+                alphabet = string.ascii_letters + string.digits + string.punctuation
+                initial_password = ''.join(secrets.choice(alphabet) for _ in range(24))
+
                 admin_user = auth_service.register(
-                    username="admin", display_name="Administrator", password="admin",
+                    username="admin", display_name="Administrator", password=initial_password,
                     must_change_password=True,
                 )
                 with auth_service._connect() as conn:
@@ -123,11 +129,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     conn.commit()
                 # Auto-grant seed environments to initial admin
                 auth_service._grant_seed_environments(admin_user.id)
+
+                # Write password to protected file instead of stdout
+                import os
+                from pathlib import Path
+                from ainrf.runtime.config import RuntimeConfig
+                config = RuntimeConfig.load()
+                state_root = Path(os.path.expanduser(config.state_root))
+                password_file = state_root / "admin_initial_password.txt"
+                password_file.write_text(f"Initial admin password: {initial_password}\n")
+                os.chmod(password_file, 0o600)
+
                 print(
                     "\n" + "=" * 60 + "\n"
                     "Initial admin created!\n"
                     "Username: admin\n"
-                    "Password: admin\n"
+                    f"Password: (saved to {password_file})\n"
                     "You will be prompted to change the password on first login.\n"
                     + "=" * 60 + "\n"
                 )
