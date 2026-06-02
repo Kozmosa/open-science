@@ -23,6 +23,8 @@ def _ensure_secret() -> str:
     secret = secrets.token_hex(32)  # 64-char hex
     _SECRET_PATH.parent.mkdir(parents=True, exist_ok=True)
     _SECRET_PATH.write_text(secret)
+    # Set restrictive permissions to prevent other users from reading
+    os.chmod(_SECRET_PATH, 0o600)
     return secret
 
 

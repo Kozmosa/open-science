@@ -224,6 +224,10 @@ class CodexAppServerEngine(ExecutionEngine):
                     break
                 try:
                     payload = json.loads(line.decode("utf-8"))
+                    # Validate payload is a dictionary
+                    if not isinstance(payload, dict):
+                        logger.warning("Codex App Server: ignoring non-dict payload: %s", type(payload))
+                        continue
                 except json.JSONDecodeError as exc:
                     logger.warning("Codex App Server: ignoring non-JSON stdout line: %s", exc)
                     continue
