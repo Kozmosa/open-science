@@ -61,10 +61,11 @@ def _resolve_path(workdir: str, path: str) -> str:
     if not path:
         return workdir
     if path.startswith("/"):
-        resolved = Path(path).resolve()
+        # Use absolute() instead of resolve() to avoid following symlinks
+        resolved = Path(path).absolute()
     else:
-        resolved = (Path(workdir) / path).resolve()
-    workdir_resolved = Path(workdir).resolve()
+        resolved = (Path(workdir) / path).absolute()
+    workdir_resolved = Path(workdir).absolute()
     try:
         resolved.relative_to(workdir_resolved)
     except ValueError:

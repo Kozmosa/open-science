@@ -76,43 +76,53 @@ class ClaudeCodeEngine(ExecutionEngine):
         if stdin is None or stdout is None or stderr is None:
             raise RuntimeError("Claude Code engine failed to attach stdio pipes")
 
-        if context.rendered_prompt:
-            stdin.write(context.rendered_prompt.encode())
-            await stdin.drain()
-            stdin.close()
+        try:
+            if context.rendered_prompt:
+                stdin.write(context.rendered_prompt.encode())
+                await stdin.drain()
+                stdin.close()
 
-        await emit(EngineEvent(event_type="system", payload={"subtype": "task_started"}))
+            await emit(EngineEvent(event_type="system", payload={"subtype": "task_started"}))
 
-        async def read_stream(stream, kind):
-            while True:
-                line = await stream.readline()
-                if not line:
-                    break
-                role = "assistant" if kind == "stdout" else "system"
-                await emit(
-                    EngineEvent(
-                        event_type="message",
-                        payload={"role": role, "content": line.decode("utf-8", errors="replace")},
+            async def read_stream(stream, kind):
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    role = "assistant" if kind == "stdout" else "system"
+                    await emit(
+                        EngineEvent(
+                            event_type="message",
+                            payload={"role": role, "content": line.decode("utf-8", errors="replace")},
+                        )
                     )
-                )
 
-        await asyncio.gather(
-            read_stream(stdout, "stdout"),
-            read_stream(stderr, "stderr"),
-        )
-        await process.wait()
-
-        # Poll for session-meta token data
-        token_usage = await self._poll_session_meta(started_at)
-        status = "succeeded" if process.returncode == 0 else "failed"
-        await emit(
-            EngineEvent(
-                event_type="system",
-                payload={"subtype": f"task_{status}"},
-                token_usage=token_usage,
+            await asyncio.gather(
+                read_stream(stdout, "stdout"),
+                read_stream(stderr, "stderr"),
             )
-        )
-        await emit(EngineEvent(event_type="status", payload={"status": status}))
+            await process.wait()
+
+            # Poll for session-meta token data
+            token_usage = await self._poll_session_meta(started_at)
+            status = "succeeded" if process.returncode == 0 else "failed"
+            await emit(
+                EngineEvent(
+                    event_type="system",
+                    payload={"subtype": f"task_{status}"},
+                    token_usage=token_usage,
+                )
+            )
+            await emit(EngineEvent(event_type="status", payload={"status": status}))
+        finally:
+            # Ensure process is terminated if still running
+            if process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
 
     async def _poll_session_meta(self, started_at: float) -> dict | None:
         """Poll session-meta directory for a matching file, up to 30 seconds."""

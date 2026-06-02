@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import errno
 import json
+import logging
 import os
 from contextlib import suppress
 from typing import Any
@@ -49,6 +50,8 @@ from ainrf.terminal.pty import (
 )
 from ainrf.terminal.exec import exec_command
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/terminal", tags=["terminal"])
 _APP_USER_HEADER = "X-AINRF-User-Id"
@@ -560,8 +563,9 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                             cols=cols,
                             rows=rows,
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("Failed to resize tmux window for session %s: %s",
+                                     attachment.session_name, exc)
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:
