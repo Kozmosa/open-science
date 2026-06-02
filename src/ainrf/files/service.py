@@ -320,3 +320,5 @@ class FileBrowserService:
             return await executor.run_command(cmd)
         except Exception as exc:
             raise FileBrowserError(f"SSH command failed: {exc}") from exc
+        finally:
+            await executor.close()

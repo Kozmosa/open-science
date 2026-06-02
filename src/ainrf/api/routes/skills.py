@@ -131,12 +131,32 @@ async def import_skill(
     if payload.source == "git":
         if not payload.url:
             raise HTTPException(status_code=400, detail="url is required when source=git")
+
+        # Whitelist allowed git URL patterns for security
+        ALLOWED_GIT_DOMAINS = [
+            "github.com",
+            "gitlab.com",
+            "bitbucket.org",
+            "git.sr.ht",
+        ]
+        import urllib.parse
+        parsed_url = urllib.parse.urlparse(payload.url)
+        domain = parsed_url.netloc.lower().replace("www.", "")
+
+        # Check if domain is whitelisted
+        if not any(domain.endswith(allowed) for allowed in ALLOWED_GIT_DOMAINS):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Git URL domain '{domain}' not in allowed list: {', '.join(ALLOWED_GIT_DOMAINS)}"
+            )
+
         tmp_clone = tempfile.mkdtemp(prefix="skill-import-")
         try:
             result = subprocess.run(
                 ["git", "clone", "--depth", "1", payload.url, tmp_clone],
                 capture_output=True,
                 text=True,
+                timeout=60,  # Add timeout to prevent hanging
             )
             if result.returncode != 0:
                 raise HTTPException(
@@ -144,13 +164,31 @@ async def import_skill(
                     detail=f"Git clone failed: {result.stderr}",
                 )
             src_dir = Path(tmp_clone)
+        except subprocess.TimeoutExpired:
+            shutil.rmtree(tmp_clone, ignore_errors=True)
+            raise HTTPException(status_code=408, detail="Git clone timed out")
         except HTTPException:
             shutil.rmtree(tmp_clone, ignore_errors=True)
             raise
     else:  # local
         if not payload.local_path:
             raise HTTPException(status_code=400, detail="local_path is required when source=local")
-        src_dir = Path(payload.local_path)
+
+        # Restrict local path to specific allowed directories for security
+        src_dir = Path(payload.local_path).resolve()
+        home_dir = Path.home()
+        allowed_dirs = [
+            home_dir / ".local" / "share" / "claude" / "skills",
+            home_dir / ".claude" / "skills",
+            Path("/tmp"),  # Allow temporary directories
+        ]
+
+        if not any(src_dir.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Local path must be within allowed directories: {', '.join(str(d) for d in allowed_dirs)}"
+            )
+
         if not src_dir.exists():
             raise HTTPException(status_code=400, detail="Local path does not exist")
 

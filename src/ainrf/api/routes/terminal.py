@@ -388,12 +388,33 @@ async def terminal_session_exec(
             working_directory = workspace.default_workdir or working_directory or "/"
 
     try:
+        # Validate command against allowlist for security
+        ALLOWED_COMMANDS = {
+            "ls", "cat", "pwd", "echo", "cd", "mkdir", "touch", "rm", "mv", "cp",
+            "grep", "find", "tail", "head", "wc", "sort", "uniq", "diff",
+            "git", "python", "python3", "node", "npm", "pip", "uv",
+            "bash", "sh", "zsh",
+        }
+
+        # Extract base command (first element)
+        if not payload.command or len(payload.command) == 0:
+            raise HTTPException(status_code=400, detail="Command cannot be empty")
+
+        base_cmd = payload.command[0].split()[0] if payload.command[0] else ""
+        if base_cmd not in ALLOWED_COMMANDS:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Command '{base_cmd}' not in allowed list. Contact administrator to add it."
+            )
+
         result = await exec_command(
             environment,
             payload.command,
             cwd=working_directory or "/",
             timeout=payload.timeout,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Command execution failed: {exc}") from exc
 
@@ -544,12 +565,11 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:
-            task_group.cancel_scope.cancel()
+            pass
         except ValueError:
             if websocket.client_state == WebSocketState.CONNECTED:
                 with suppress(Exception):
                     await websocket.close(code=4409)
-            task_group.cancel_scope.cancel()
 
     async def forward_output() -> None:
         nonlocal buffered_output_bytes, process_return_code
@@ -581,8 +601,6 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                 await websocket.send_json({"type": "output", "data": decoded_chunk})
         except Exception:
             pass
-        finally:
-            task_group.cancel_scope.cancel()
 
     async def watch_process() -> None:
         nonlocal process_return_code
@@ -599,6 +617,9 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
             task_group.start_soon(forward_input)
             task_group.start_soon(forward_output)
             task_group.start_soon(watch_process)
+    except Exception:
+        # task_group cleanup handled by context manager
+        pass
     finally:
         loop.remove_reader(master_fd)
         broker.close_runtime(attachment_id)

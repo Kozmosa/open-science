@@ -54,12 +54,13 @@ def build_jwt_auth_middleware(
             return await call_next(request)
 
         # Fallback: API key in query string (needed for native EventSource/SSE)
+        # API keys are granted restricted non-admin role for security
         api_key = request.query_params.get("api_key")
         if api_key and api_config.verify_api_key(api_key):
             request.state.current_user = {
                 "id": "api-key-user",
                 "username": "api-key",
-                "role": "admin",
+                "role": "user",  # API keys get user role, not admin
                 "display_name": "API Key",
             }
             return await call_next(request)

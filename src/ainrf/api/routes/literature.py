@@ -130,6 +130,9 @@ async def trigger_fetch(subscription_id: str, request: Request):
 
     from ainrf.literature.fetcher import fetch_for_subscription
 
+    # Store background task status for user to query
+    task_status = {"status": "running", "error": None}
+
     async def _fetch_and_store():
         try:
             papers = await fetch_for_subscription(sub)
@@ -137,10 +140,18 @@ async def trigger_fetch(subscription_id: str, request: Request):
             if new_papers:
                 svc.insert_papers(new_papers)
             svc.update_last_fetched(sub.subscription_id)
+            task_status["status"] = "completed"
             logger.info("fetch complete: subscription=%s papers=%d new=%d",
                          subscription_id, len(papers), len(new_papers))
         except Exception as exc:
+            task_status["status"] = "failed"
+            task_status["error"] = str(exc)
             logger.error("fetch failed: subscription=%s error=%s", subscription_id, exc)
 
-    asyncio.create_task(_fetch_and_store())
-    return {"status": "fetch_started"}
+    task = asyncio.create_task(_fetch_and_store())
+    # Store task reference to prevent premature garbage collection
+    if not hasattr(request.app.state, "_literature_tasks"):
+        request.app.state._literature_tasks = {}
+    request.app.state._literature_tasks[subscription_id] = (task, task_status)
+
+    return {"status": "fetch_started", "subscription_id": subscription_id}
