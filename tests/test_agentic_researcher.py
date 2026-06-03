@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -13,10 +15,44 @@ from ainrf.agentic_researcher import (
     vanilla,
 )
 from ainrf.agentic_researcher.service import TaskNotFoundError
+from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
+from ainrf.harness_engine.base import EngineEmit
+
+
+class FakeEngine(HarnessEngine):
+    def __init__(self) -> None:
+        self.pending_prompts: list[str] = []
+
+    @property
+    def engine_type(self) -> HarnessEngineType:
+        return HarnessEngineType.CLAUDE_CODE
+
+    async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        prompt = self.pending_prompts.pop(0) if self.pending_prompts else context.rendered_prompt
+        await emit(
+            EngineEvent(
+                event_type="message",
+                payload={"role": "assistant", "content": f"ran: {prompt}"},
+            )
+        )
+        await emit(
+            EngineEvent(
+                event_type="status",
+                payload={"status": "succeeded", "exit_code": 0},
+            )
+        )
+
+    async def cancel(self, task_id: str) -> None:
+        _ = task_id
+        return None
+
+    async def send_input(self, task_id: str, text: str) -> None:
+        _ = task_id
+        self.pending_prompts.append(text)
 
 
 @pytest.fixture
-def service() -> AgenticResearcherService:
+def service() -> Iterator[AgenticResearcherService]:
     with tempfile.TemporaryDirectory() as tmpdir:
         svc = AgenticResearcherService(state_root=Path(tmpdir))
         svc.initialize()
@@ -129,3 +165,71 @@ def test_cancel_task(service: AgenticResearcherService) -> None:
     )
     cancelled = service.cancel_task(task.task_id)
     assert cancelled.status == TaskStatus.CANCELLED
+
+
+@pytest.mark.anyio
+async def test_run_task_persists_output_and_succeeds(tmp_path: Path) -> None:
+    fake_engine = FakeEngine()
+    svc = AgenticResearcherService(
+        state_root=tmp_path,
+        engine_factory=lambda _name: fake_engine,
+    )
+    svc.initialize()
+    task = svc.create_task(
+        project_id="proj-001",
+        workspace_id="ws-001",
+        environment_id="env-001",
+        researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
+        prompt="Test prompt",
+        owner_user_id="user-001",
+    )
+
+    await svc.run_task(task.task_id)
+
+    completed = svc.get_task(task.task_id)
+    assert completed.status == TaskStatus.SUCCEEDED
+    output = svc.get_output(task.task_id)
+    assert [item.content for item in output] == [
+        "ran: Test prompt",
+        '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
+    ]
+    assert completed.latest_output_seq == 2
+
+
+@pytest.mark.anyio
+async def test_send_prompt_to_succeeded_task_schedules_followup(tmp_path: Path) -> None:
+    fake_engine = FakeEngine()
+    svc = AgenticResearcherService(
+        state_root=tmp_path,
+        engine_factory=lambda _name: fake_engine,
+    )
+    svc.initialize()
+    task = svc.create_task(
+        project_id="proj-001",
+        workspace_id="ws-001",
+        environment_id="env-001",
+        researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
+        prompt="Initial prompt",
+        owner_user_id="user-001",
+    )
+
+    await svc.run_task(task.task_id)
+    prompt_event = await svc.send_prompt(task.task_id, "Follow up")
+
+    for _ in range(20):
+        current = svc.get_task(task.task_id)
+        if current.status == TaskStatus.SUCCEEDED and current.latest_output_seq >= 5:
+            break
+        await asyncio.sleep(0.05)
+
+    completed = svc.get_task(task.task_id)
+    output = svc.get_output(task.task_id)
+    assert prompt_event.seq == 3
+    assert completed.status == TaskStatus.SUCCEEDED
+    assert [item.content for item in output] == [
+        "ran: Initial prompt",
+        '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
+        '{"role": "user", "content": "Follow up"}',
+        "ran: Follow up",
+        '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
+    ]

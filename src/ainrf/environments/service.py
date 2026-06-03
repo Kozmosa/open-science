@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from ainrf.environments.local import is_localhost_environment
 from ainrf.environments.models import (
+    AnthropicEnvStatus,
     DetectionSnapshot,
     DetectionStatus,
     EnvironmentAuthKind,

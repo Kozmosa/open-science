@@ -13,7 +13,7 @@ class TestBuildTokenUsage:
     """Tests for _build_token_usage in agent_sdk.py."""
 
     def test_full_result_message(self):
-        from ainrf.task_harness.engines.agent_sdk import _build_token_usage
+        from ainrf.harness_engine.engines.agent_sdk import _build_token_usage
 
         class FakeResultMsg:
             usage = {
@@ -40,7 +40,7 @@ class TestBuildTokenUsage:
         assert result["by_model"]["claude-opus-4-7"]["cost_usd"] == 1.20
 
     def test_no_usage_returns_none(self):
-        from ainrf.task_harness.engines.agent_sdk import _build_token_usage
+        from ainrf.harness_engine.engines.agent_sdk import _build_token_usage
 
         class FakeMsg:
             pass
@@ -49,7 +49,7 @@ class TestBuildTokenUsage:
         assert result is None
 
     def test_empty_usage_returns_none(self):
-        from ainrf.task_harness.engines.agent_sdk import _build_token_usage
+        from ainrf.harness_engine.engines.agent_sdk import _build_token_usage
 
         class FakeMsg:
             usage = None
@@ -58,7 +58,7 @@ class TestBuildTokenUsage:
         assert result is None
 
     def test_no_model_usage(self):
-        from ainrf.task_harness.engines.agent_sdk import _build_token_usage
+        from ainrf.harness_engine.engines.agent_sdk import _build_token_usage
 
         class FakeMsg:
             usage = {"input_tokens": 100, "output_tokens": 50}
@@ -70,7 +70,7 @@ class TestBuildTokenUsage:
         assert result["total"]["cost_usd"] == 0.15
 
     def test_cost_usd_zero(self):
-        from ainrf.task_harness.engines.agent_sdk import _build_token_usage
+        from ainrf.harness_engine.engines.agent_sdk import _build_token_usage
 
         class FakeMsg:
             usage = {"input_tokens": 100}
@@ -81,7 +81,7 @@ class TestBuildTokenUsage:
         assert result["total"]["cost_usd"] == 0.0
 
     def test_cost_usd_none_defaults_to_zero(self):
-        from ainrf.task_harness.engines.agent_sdk import _build_token_usage
+        from ainrf.harness_engine.engines.agent_sdk import _build_token_usage
 
         class FakeMsg:
             usage = {"input_tokens": 100}
@@ -95,10 +95,10 @@ class TestFindSessionMeta:
     """Tests for _find_session_meta in claude_code.py."""
 
     def test_finds_matching_file_within_window(self):
-        from ainrf.task_harness.engines.claude_code import _find_session_meta
+        from ainrf.harness_engine.engines.claude_code import _find_session_meta
 
         with tempfile.TemporaryDirectory() as td:
-            import ainrf.task_harness.engines.claude_code as cc
+            import ainrf.harness_engine.engines.claude_code as cc
 
             original_dir = cc._SESSION_META_DIR
             cc._SESSION_META_DIR = Path(td)
@@ -117,10 +117,10 @@ class TestFindSessionMeta:
                 cc._SESSION_META_DIR = original_dir
 
     def test_no_match_outside_window(self):
-        from ainrf.task_harness.engines.claude_code import _find_session_meta
+        from ainrf.harness_engine.engines.claude_code import _find_session_meta
 
         with tempfile.TemporaryDirectory() as td:
-            import ainrf.task_harness.engines.claude_code as cc
+            import ainrf.harness_engine.engines.claude_code as cc
 
             original_dir = cc._SESSION_META_DIR
             cc._SESSION_META_DIR = Path(td)
@@ -136,10 +136,10 @@ class TestFindSessionMeta:
                 cc._SESSION_META_DIR = original_dir
 
     def test_returns_none_for_empty_directory(self):
-        from ainrf.task_harness.engines.claude_code import _find_session_meta
+        from ainrf.harness_engine.engines.claude_code import _find_session_meta
 
         with tempfile.TemporaryDirectory() as td:
-            import ainrf.task_harness.engines.claude_code as cc
+            import ainrf.harness_engine.engines.claude_code as cc
 
             original_dir = cc._SESSION_META_DIR
             cc._SESSION_META_DIR = Path(td)
@@ -151,9 +151,9 @@ class TestFindSessionMeta:
                 cc._SESSION_META_DIR = original_dir
 
     def test_returns_none_when_dir_missing(self):
-        from ainrf.task_harness.engines.claude_code import _find_session_meta
+        from ainrf.harness_engine.engines.claude_code import _find_session_meta
 
-        import ainrf.task_harness.engines.claude_code as cc
+        import ainrf.harness_engine.engines.claude_code as cc
 
         original_dir = cc._SESSION_META_DIR
         cc._SESSION_META_DIR = Path("/nonexistent/path/xyz")
@@ -165,10 +165,10 @@ class TestFindSessionMeta:
             cc._SESSION_META_DIR = original_dir
 
     def test_ignores_non_json_files(self):
-        from ainrf.task_harness.engines.claude_code import _find_session_meta
+        from ainrf.harness_engine.engines.claude_code import _find_session_meta
 
         with tempfile.TemporaryDirectory() as td:
-            import ainrf.task_harness.engines.claude_code as cc
+            import ainrf.harness_engine.engines.claude_code as cc
 
             original_dir = cc._SESSION_META_DIR
             cc._SESSION_META_DIR = Path(td)
@@ -182,10 +182,10 @@ class TestFindSessionMeta:
                 cc._SESSION_META_DIR = original_dir
 
     def test_handles_malformed_json(self):
-        from ainrf.task_harness.engines.claude_code import _find_session_meta
+        from ainrf.harness_engine.engines.claude_code import _find_session_meta
 
         with tempfile.TemporaryDirectory() as td:
-            import ainrf.task_harness.engines.claude_code as cc
+            import ainrf.harness_engine.engines.claude_code as cc
 
             original_dir = cc._SESSION_META_DIR
             cc._SESSION_META_DIR = Path(td)
@@ -287,14 +287,15 @@ class TestRecalcSessionCostAggregation:
 
 class TestTaskOutputKindToken:
     def test_token_kind_exists(self):
-        from ainrf.task_harness.models import TaskOutputKind
+        from ainrf.harness_engine import OutputEvent
 
-        assert TaskOutputKind.TOKEN == "token"
+        event = OutputEvent(kind="token", content="", seq=1, created_at="2026-01-01")
+        assert event.kind == "token"
 
 
 class TestEngineEventTokenUsage:
     def test_system_event_carries_token_usage(self):
-        from ainrf.task_harness.engines.base import EngineEvent
+        from ainrf.harness_engine import EngineEvent
 
         e = EngineEvent(
             "system",
@@ -305,13 +306,13 @@ class TestEngineEventTokenUsage:
         assert e.event_type == "system"
 
     def test_message_event_defaults_token_usage_none(self):
-        from ainrf.task_harness.engines.base import EngineEvent
+        from ainrf.harness_engine import EngineEvent
 
         e = EngineEvent("message", {"role": "assistant", "content": "hello"})
         assert e.token_usage is None
 
     def test_token_event_type_accepted(self):
-        from ainrf.task_harness.engines.base import EngineEvent
+        from ainrf.harness_engine import EngineEvent
 
         e = EngineEvent("token", {}, token_usage={"total": {"input_tokens": 50}})
         assert e.event_type == "token"

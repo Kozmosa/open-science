@@ -77,5 +77,15 @@ class Task:
     updated_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    latest_output_seq: int = 0
     exit_code: int | None = None
     error_summary: str | None = None
+
+
+@dataclass
+class TaskOutputEvent:
+    task_id: str
+    seq: int
+    kind: str
+    content: str
+    created_at: datetime

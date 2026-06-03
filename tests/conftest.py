@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 
 @pytest.fixture(autouse=True, scope="module")
-def _reset_cached_app() -> None:
+def _reset_cached_app() -> Iterator[None]:
     """Reset cached app instance before each test module.
 
     ``tests._testutil`` lazily creates and caches an app singleton so multiple
