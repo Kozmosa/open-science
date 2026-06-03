@@ -10,6 +10,7 @@ const WORKSPACE = {
 }
 
 const ENVIRONMENT = {
+  id: 'env-001',
   environment_id: 'env-001',
   alias: 'local',
   display_name: 'Local',
@@ -27,20 +28,31 @@ const TASK_RESULT = {
 const FAILED_TASK_SUMMARY = {
   task_id: 'task-failed-001',
   project_id: 'proj-001',
+  workspace_id: 'ws-001',
+  environment_id: 'env-001',
   title: 'Failed research task',
   task_profile: 'default',
+  researcher_type: 'vanilla',
+  harness_engine: 'claude-code',
+  prompt: 'Failed prompt',
+  owner_user_id: 'user-001',
+  exit_code: 1,
   status: 'failed',
   workspace_summary: WORKSPACE,
   environment_summary: ENVIRONMENT,
   created_at: '2026-06-03T10:00:00Z',
   updated_at: '2026-06-03T10:05:00Z',
+  started_at: '2026-06-03T10:00:30Z',
+  completed_at: '2026-06-03T10:05:00Z',
+  error_summary: 'Task failed',
+  latest_output_seq: 0,
 }
 
 // TaskRecord extends TaskSummary with extra fields — needed for GET /tasks/{id}
 const FAILED_TASK_RECORD = {
   ...FAILED_TASK_SUMMARY,
   binding: null,
-  prompt: null,
+  prompt_detail: null,
   runtime: null,
   result: TASK_RESULT,
 }
@@ -57,6 +69,9 @@ const RUNNING_TASK_SUMMARY = {
   task_id: 'task-running-001',
   status: 'running',
   title: 'Running research task',
+  exit_code: null,
+  completed_at: null,
+  error_summary: null,
 }
 
 const NEW_TASK_SUMMARY = {
@@ -65,6 +80,10 @@ const NEW_TASK_SUMMARY = {
   status: 'queued',
   created_at: '2026-06-03T10:10:00Z',
   updated_at: '2026-06-03T10:10:00Z',
+  started_at: null,
+  completed_at: null,
+  exit_code: null,
+  error_summary: null,
 }
 
 const RETRY_RESPONSE = {
@@ -148,7 +167,7 @@ async function setupTasksMock(
     const taskId = route.request().url().split('/api/tasks/')[1]
     const match = tasks.find((t) => t.task_id === taskId)
     if (match) {
-      const record = { ...match, binding: null, prompt: null, runtime: null, result: TASK_RESULT }
+      const record = { ...match, binding: null, prompt_detail: null, runtime: null, result: TASK_RESULT }
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(record) })
     } else {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Not found' }) })
@@ -158,7 +177,7 @@ async function setupTasksMock(
   // Task output: GET /tasks/{id}/output — needed to avoid 401 errors in detail panel
   await page.route(/\/api\/tasks\/[^/?]+\/output/, async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false }) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false, next_seq: 0 }) })
   })
 
   // Tasks list: GET /tasks?* — must come after more-specific patterns
@@ -234,14 +253,14 @@ test.describe('Task Retry', () => {
       const taskId = route.request().url().split('/api/tasks/')[1]
       const taskMap: Record<string, object> = {
         'task-failed-001': FAILED_TASK_RECORD,
-        'task-new-001': { ...NEW_TASK_SUMMARY, binding: null, prompt: null, runtime: null, result: TASK_RESULT },
+        'task-new-001': { ...NEW_TASK_SUMMARY, binding: null, prompt_detail: null, runtime: null, result: TASK_RESULT },
       }
       const record = taskMap[taskId]
       await route.fulfill({ status: record ? 200 : 404, contentType: 'application/json', body: JSON.stringify(record ?? { detail: 'Not found' }) })
     })
     await page.route(/\/api\/tasks\/[^/?]+\/output/, async (route) => {
       if (route.request().method() !== 'GET') { await route.continue(); return }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false }) })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false, next_seq: 0 }) })
     })
 
     // Tasks list: return failed task until retry fires, then switch to new task
@@ -356,7 +375,7 @@ test.describe('Task Retry', () => {
       if (route.request().method() !== 'GET') { await route.continue(); return }
       const taskId = route.request().url().split('/api/tasks/')[1]
       if (taskId === 'task-cancelled-001') {
-        const record = { ...CANCELLED_TASK_SUMMARY, binding: null, prompt: null, runtime: null, result: TASK_RESULT }
+        const record = { ...CANCELLED_TASK_SUMMARY, binding: null, prompt_detail: null, runtime: null, result: TASK_RESULT }
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(record) })
       } else {
         await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Not found' }) })
