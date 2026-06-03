@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 
-import json
 import re
 import shlex
 import subprocess
@@ -12,7 +11,6 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.environments.models import EnvironmentRegistryEntry
-from ainrf.tasks.runtime import build_runtime_control_invocation
 from ainrf.terminal.models import UserEnvironmentBinding
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND, TERMINAL_SSH_TARGET_KIND
 
@@ -477,36 +475,6 @@ class TmuxAdapter:
         if stdout:
             stdout += "\n"
         return _CommandResult(returncode=exit_status, stdout=stdout, stderr="")
-
-    def run_task_runtime_control(
-        self,
-        binding: UserEnvironmentBinding,
-        environment: EnvironmentRegistryEntry,
-        *,
-        runtime_dir: str,
-        action: str,
-        timeout_seconds: float = 5.0,
-    ) -> dict[str, object]:
-        result = self.run_shell_command(
-            binding,
-            environment,
-            build_runtime_control_invocation(
-                runtime_dir=runtime_dir,
-                action=action,
-                timeout_seconds=timeout_seconds,
-            ),
-        )
-        if result.returncode != 0:
-            self._raise_command_error(result, environment)
-        stdout = result.stdout.strip()
-        if not stdout:
-            raise TmuxCommandError(f"Task runtime {action} returned an empty response")
-        try:
-            return json.loads(stdout)
-        except json.JSONDecodeError as exc:
-            raise TmuxCommandError(
-                f"Task runtime {action} returned invalid JSON: {stdout}"
-            ) from exc
 
     def _configure_remain_on_exit(
         self,

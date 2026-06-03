@@ -37,7 +37,6 @@ from ainrf.runtime.readiness import check_runtime_readiness
 from ainrf.sessions import SessionService
 from ainrf.skills import SkillsDiscoveryService
 from ainrf.agentic_researcher import AgenticResearcherService
-from ainrf.task_harness import TaskHarnessService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
@@ -75,7 +74,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     workspace_service = app.state.workspace_service
     terminal_session_manager = app.state.terminal_session_manager
     terminal_attachment_broker = app.state.terminal_attachment_broker
-    task_harness_service = app.state.task_harness_service
     project_service = app.state.project_service
     manager = CodeServerSupervisor(
         state_root=app.state.api_config.state_root,
@@ -96,7 +94,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             localhost.code_server_path
         ).as_public_payload()
         await _run_sync_in_lifespan(terminal_session_manager.reconcile)
-        await _run_sync_in_lifespan(task_harness_service.initialize)
         session_service = app.state.session_service
         await _run_sync_in_lifespan(session_service.initialize)
         auth_service = app.state.auth_service
@@ -182,9 +179,8 @@ def create_app(
     # Service initialization order:
     # 1. project/workspace (no deps)
     # 2. terminal (no deps)
-    # 3. task_harness (needs env+workspace; SessionService set later)
-    # 4. session_service (standalone)
-    # 5. auth_service (standalone; middleware consumer)
+    # 3. session_service (standalone)
+    # 4. auth_service (standalone; middleware consumer)
     auth_service = AuthService(state_root=api_config.state_root)
     app.state.auth_service = auth_service
     app.state.project_service = project_service
@@ -212,13 +208,6 @@ def create_app(
     )
     app.state.session_service = SessionService(
         state_root=api_config.state_root,
-    )
-    app.state.task_harness_service = TaskHarnessService(
-        state_root=api_config.state_root,
-        environment_service=environment_service,
-        workspace_service=app.state.workspace_service,
-        skill_root=default_workspace_dir / "skills",
-        session_service=app.state.session_service,
     )
     agentic_researcher_service = AgenticResearcherService(state_root=api_config.state_root)
     agentic_researcher_service.initialize()
