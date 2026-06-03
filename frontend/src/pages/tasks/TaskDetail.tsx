@@ -7,7 +7,6 @@ import MessageStream from './MessageStream';
 import TaskInputBar from './TaskInputBar';
 import { useTaskMessages } from './useTaskMessages';
 import { useTaskActions } from './useTaskActions';
-import PromptEditor from './PromptEditor';
 
 const interactiveEngines = new Set(['agent-sdk', 'codex-app-server']);
 
@@ -16,26 +15,6 @@ interface Props {
   detailError: string | null;
   outputItems: TaskOutputEvent[];
   outputError: string | null;
-}
-
-function PromptLayerItem({ layer }: { layer: { name: string; label: string; char_count: number; content: string } }) {
-  const t = useT();
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <details
-      className="rounded-lg border border-[var(--border)] bg-[var(--surface)]"
-      onToggle={(e) => setIsOpen(e.currentTarget.open)}
-    >
-      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-[var(--text)]">
-        {layer.label}{' '}
-        <span className="text-[var(--text-secondary)]">
-          ({layer.char_count} {t('pages.tasks.chars')})
-        </span>
-      </summary>
-      {isOpen && <PromptEditor content={layer.content} />}
-    </details>
-  );
 }
 
 function MetadataRow({
@@ -114,14 +93,12 @@ export default function TaskDetail({
     const maxWidth = container.getBoundingClientRect().width - MIN_WIDTH;
 
     if (direction === 'left') {
-      // ◀ button: collapse main panel, expand aside to max
       if (asideWidth >= maxWidth - 10) {
         setAsideWidth(DEFAULT_WIDTH);
       } else {
         setAsideWidth(maxWidth);
       }
     } else {
-      // ▶ button: collapse aside panel, shrink aside to min
       if (asideWidth <= MIN_WIDTH + 10) {
         setAsideWidth(DEFAULT_WIDTH);
       } else {
@@ -178,8 +155,7 @@ export default function TaskDetail({
               {selectedTask.title}
             </h1>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              {selectedTask.workspace_summary.label} &middot; {selectedTask.environment_summary.alias} &middot;{' '}
-              {selectedTask.environment_summary.display_name}
+              {selectedTask.task_profile} &middot; {selectedTask.execution_engine ?? 'agent-sdk'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -283,44 +259,6 @@ export default function TaskDetail({
 
               <section>
                 <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
-                  {t('pages.tasks.binding')}
-                </h2>
-                {selectedTask.binding ? (
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                    <MetadataRow label={t('pages.tasks.profile')} value={selectedTask.binding.task_profile} fallback={metadataFallback} />
-                    <MetadataRow label={t('pages.tasks.workdir')} value={selectedTask.binding.resolved_workdir} fallback={metadataFallback} />
-                    <MetadataRow label={t('pages.tasks.snapshot')} value={selectedTask.binding.snapshot_path} fallback={metadataFallback} />
-                  </div>
-                ) : (
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    {t('pages.tasks.bindingUnavailable')}
-                  </p>
-                )}
-              </section>
-
-              <section>
-                <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
-                  {t('pages.tasks.runtime')}
-                </h2>
-                {selectedTask.runtime ? (
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                    <MetadataRow label={t('pages.tasks.runner')} value={selectedTask.runtime.runner_kind} fallback={metadataFallback} />
-                    <MetadataRow label={t('pages.tasks.directory')} value={selectedTask.runtime.working_directory} fallback={metadataFallback} />
-                    <MetadataRow
-                      label={t('pages.tasks.command')}
-                      value={selectedTask.runtime.command.join(' ') || t('pages.tasks.pendingValue')}
-                      fallback={metadataFallback}
-                    />
-                  </div>
-                ) : (
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    {t('pages.tasks.runtimeUnavailable')}
-                  </p>
-                )}
-              </section>
-
-              <section>
-                <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
                   {t('pages.tasks.result')}
                 </h2>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
@@ -328,23 +266,6 @@ export default function TaskDetail({
                   <MetadataRow label={t('pages.tasks.failure')} value={selectedTask.result.failure_category} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.completed')} value={selectedTask.result.completed_at} fallback={metadataFallback} />
                 </div>
-              </section>
-
-              <section>
-                <h2 className="mb-2 text-sm font-semibold text-[var(--text)]">
-                  {t('pages.tasks.prompt')}
-                </h2>
-                {selectedTask.prompt ? (
-                  <div className="space-y-2">
-                    {selectedTask.prompt.layers.map((layer) => (
-                      <PromptLayerItem key={layer.name} layer={layer} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    {t('pages.tasks.promptUnavailable')}
-                  </p>
-                )}
               </section>
             </div>
           </aside>
