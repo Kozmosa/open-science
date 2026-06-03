@@ -43,13 +43,17 @@ class AgenticResearcher:
         )
 
     @classmethod
-    def aris(cls, engine: HarnessEngineType) -> AgenticResearcher:
+    def aris(
+        cls,
+        engine: HarnessEngineType,
+        system_prompt: str | None = None,
+    ) -> AgenticResearcher:
         return cls(
             type=AgenticResearcherType.ARIS,
             harness_engine=engine,
             skills=["research-pipeline", "research-lit", "research-refine-pipeline"],
             mcp_servers=[],
-            system_prompt=None,
+            system_prompt=system_prompt,
         )
 
 
