@@ -68,7 +68,7 @@ export default function TaskList({
         />
       </label>
 
-      {tasksError ? <p className="mb-3 text-sm text-[#ff3b30]">{tasksError}</p> : null}
+      {tasksError ? <p className="mb-3 text-sm text-[var(--danger)]">{tasksError}</p> : null}
 
       <div className="min-h-0 flex-1 space-y-1 overflow-auto pr-1">
         {tasks.length === 0 ? (
@@ -96,7 +96,7 @@ export default function TaskList({
                 ].join(' ')}
               >
                 <span className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 text-sm font-medium leading-snug text-[var(--text)]">
+                  <span className="min-w-0 text-sm font-medium leading-snug text-[var(--text)]" title={task.title}>
                     {task.title}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
@@ -171,7 +171,7 @@ export default function TaskList({
                             onDeleteTask(task.task_id);
                           }
                         }}
-                        className="whitespace-nowrap rounded-md border border-[#ff3b30]/20 bg-[#ffebee] px-2 py-0.5 text-[11px] font-medium text-[#c62828] opacity-0 transition hover:bg-[#ffcdd2] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-md border border-[var(--danger-border)] bg-[var(--danger-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--danger-foreground)] opacity-0 transition hover:opacity-80 group-hover:opacity-100"
                       >
                         {t('common.delete')}
                       </span>

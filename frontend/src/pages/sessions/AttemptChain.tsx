@@ -1,5 +1,6 @@
 import SectionStack from '../../components/layout/SectionStack';
 import { TokenFlowBar } from '../../components/token/TokenFlowBar';
+import { semanticDotClasses, semanticToneClasses } from '../../components/ui/theme';
 import { useT } from '../../i18n';
 import type { AttemptRecord } from '../../types';
 
@@ -8,10 +9,17 @@ interface Props {
 }
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
-  running: 'bg-blue-100 text-blue-700 border-blue-200',
-  completed: 'bg-green-100 text-green-700 border-green-200',
-  failed: 'bg-red-100 text-red-700 border-red-200',
-  interrupted: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  running: semanticToneClasses.info,
+  completed: semanticToneClasses.success,
+  failed: semanticToneClasses.danger,
+  interrupted: semanticToneClasses.warning,
+};
+
+const STATUS_DOT_CLASSES: Record<string, string> = {
+  running: `${semanticDotClasses.info} shadow-[0_0_0_2px_var(--info-border)]`,
+  completed: semanticDotClasses.success,
+  failed: semanticDotClasses.danger,
+  interrupted: semanticDotClasses.warning,
 };
 
 function formatDuration(ms: number | null): string {
@@ -26,47 +34,27 @@ export function AttemptChain({ attempts }: Props) {
   const t = useT();
 
   if (attempts.length === 0) {
-    return <p className="text-sm text-gray-400">{t('pages.sessions.noAttempts')}</p>;
+    return <p className="text-sm text-[var(--text-tertiary)]">{t('pages.sessions.noAttempts')}</p>;
   }
 
   return (
     <SectionStack gap={2}>
-      <h3 className="text-sm font-semibold text-gray-700">
+      <h3 className="text-sm font-semibold text-[var(--text)]">
         {t('pages.sessions.attemptsTitle')}
       </h3>
       <div className="relative pl-6">
         {attempts.map((a, i) => (
           <div key={a.id} className="relative pb-4 last:pb-0">
-            {/* Timeline dot */}
             <div
-              className={`absolute left-[-22px] top-[14px] w-3 h-3 rounded-full border-2 border-white z-10 ${
-                a.status === 'running'
-                  ? 'bg-blue-500 shadow-[0_0_0_2px_#bfdbfe]'
-                  : a.status === 'completed'
-                    ? 'bg-green-500'
-                    : a.status === 'failed'
-                      ? 'bg-red-500'
-                      : 'bg-gray-400'
-              }`}
+              className={`absolute left-[-22px] top-[14px] z-10 h-3 w-3 rounded-full border-2 border-[var(--surface)] ${STATUS_DOT_CLASSES[a.status] ?? semanticDotClasses.muted}`}
             />
-            {/* Connector line */}
             {i < attempts.length - 1 && (
-              <div className="absolute left-[-16.5px] top-[26px] w-[1px] h-full bg-gray-200" />
+              <div className="absolute left-[-16.5px] top-[26px] h-full w-[1px] bg-[var(--border)]" />
             )}
 
-            <div
-              className={`rounded-lg border p-3 ${
-                a.status === 'running'
-                  ? 'bg-blue-50 border-blue-200'
-                  : a.status === 'completed'
-                    ? 'bg-green-50 border-green-200'
-                    : a.status === 'failed'
-                      ? 'bg-red-50 border-red-200'
-                      : 'bg-yellow-50 border-yellow-200'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-sm">
+            <div className={`rounded-lg border p-3 ${STATUS_BADGE_CLASSES[a.status] ?? STATUS_BADGE_CLASSES.interrupted}`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-[var(--text)]">
                   {t('pages.sessions.attemptLabel', { seq: a.attempt_seq })}
                 </span>
                 <span
@@ -76,13 +64,13 @@ export function AttemptChain({ attempts }: Props) {
                 </span>
               </div>
               {a.intervention_reason && (
-                <p className="text-xs text-gray-500 mt-1">{a.intervention_reason}</p>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">{a.intervention_reason}</p>
               )}
-              <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+              <div className="mt-2 flex items-center gap-4 text-xs text-[var(--text-secondary)]">
                 {a.task_id && (
                   <a
                     href={`/tasks/${a.task_id}`}
-                    className="text-blue-600 hover:underline"
+                    className="text-[var(--info)] hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {t('pages.sessions.viewTask')}
@@ -97,7 +85,7 @@ export function AttemptChain({ attempts }: Props) {
                     if (!tu.by_model || Object.keys(tu.by_model).length === 0) return null;
                     return (
                       <details className="mt-2 text-xs">
-                        <summary className="cursor-pointer text-blue-600 font-medium">
+                        <summary className="cursor-pointer font-medium text-[var(--info)]">
                           {t('pages.sessions.perModelBreakdown')}
                         </summary>
                         <div className="mt-2 flex flex-col gap-1">
@@ -105,9 +93,9 @@ export function AttemptChain({ attempts }: Props) {
                             const modelTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
                             const cost = typeof usage.cost_usd === 'number' ? usage.cost_usd : null;
                             return (
-                              <div key={model} className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded">
-                                <span className="font-mono text-[11px]">{model}</span>
-                                <span className="text-gray-500">
+                              <div key={model} className="flex items-center justify-between rounded bg-[var(--bg-secondary)] px-2 py-1">
+                                <span className="font-mono text-[11px] text-[var(--text)]">{model}</span>
+                                <span className="text-[var(--text-secondary)]">
                                   {modelTokens >= 1000 ? `${(modelTokens / 1000).toFixed(1)}K` : modelTokens}
                                   {cost != null ? ` · $${cost.toFixed(2)}` : ''}
                                 </span>

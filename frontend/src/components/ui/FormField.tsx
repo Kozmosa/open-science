@@ -11,7 +11,7 @@ function FormField({ label, error, children }: Props) {
     <label className="space-y-2">
       <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">{label}</span>
       {children}
-      {error ? <p className="text-xs text-[#ff3b30]">{error}</p> : null}
+      {error ? <p className="text-xs text-[var(--danger)]">{error}</p> : null}
     </label>
   );
 }

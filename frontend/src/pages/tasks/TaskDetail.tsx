@@ -123,7 +123,7 @@ export default function TaskDetail({
   if (detailError) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-[#ff3b30]">{detailError}</p>
+        <p className="text-sm text-[var(--danger)]">{detailError}</p>
       </section>
     );
   }
@@ -162,7 +162,7 @@ export default function TaskDetail({
             <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
               {t('pages.tasks.workspaceEyebrow')}
             </p>
-            <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-[var(--text)]">
+            <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-[var(--text)]" title={selectedTask.title}>
               {selectedTask.title}
             </h1>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -172,18 +172,20 @@ export default function TaskDetail({
           <div className="flex items-center gap-2">
             {showPause && (
               <button
+                type="button"
                 onClick={() => actions.pause()}
                 className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
               >
-                Pause
+                {t('pages.tasks.actions.pause')}
               </button>
             )}
             {showResume && (
               <button
+                type="button"
                 onClick={() => actions.resume()}
                 className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
               >
-                Resume
+                {t('pages.tasks.actions.resume')}
               </button>
             )}
             <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClassName[selectedTask.status]}`}>
@@ -202,7 +204,7 @@ export default function TaskDetail({
         <main className="min-h-0 min-w-0 flex-1 flex flex-col bg-[var(--surface)]">
             {/* Message stream area */}
             <div className="flex min-h-0 flex-1 overflow-hidden">
-              {outputError ? <p className="text-sm text-[#ff3b30] p-4">{outputError}</p> : null}
+              {outputError ? <p className="p-4 text-sm text-[var(--danger)]">{outputError}</p> : null}
               <MessageStream messages={messages} />
             </div>
 
@@ -229,16 +231,20 @@ export default function TaskDetail({
             ].join(' ')}
           >
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); toggleCollapse('left'); }}
               className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-[10px] text-[var(--text-secondary)] shadow-sm transition hover:bg-[var(--border)]"
-              title="Show only details"
+              title={t('pages.tasks.layout.showOnlyDetails')}
+              aria-label={t('pages.tasks.layout.showOnlyDetails')}
             >
               ◀
             </button>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); toggleCollapse('right'); }}
               className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-[10px] text-[var(--text-secondary)] shadow-sm transition hover:bg-[var(--border)]"
-              title="Show only conversation"
+              title={t('pages.tasks.layout.showOnlyConversation')}
+              aria-label={t('pages.tasks.layout.showOnlyConversation')}
             >
               ▶
             </button>
@@ -260,9 +266,9 @@ export default function TaskDetail({
             <div className="space-y-5">
               <section>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                  <MetadataRow label="Workdir" value={workingDirectory} fallback={metadataFallback} />
-                  <MetadataRow label="Command" value={command} fallback={metadataFallback} />
-                  <MetadataRow label="Task input" value={selectedTask.prompt ?? selectedTask.binding?.task_input ?? null} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.metadata.workdir')} value={workingDirectory} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.metadata.command')} value={command} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.metadata.taskInput')} value={selectedTask.prompt ?? selectedTask.binding?.task_input ?? null} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.taskId')} value={selectedTask.task_id} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.created')} value={selectedTask.created_at} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.updated')} value={selectedTask.updated_at} fallback={metadataFallback} />

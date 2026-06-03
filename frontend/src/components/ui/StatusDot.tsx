@@ -1,13 +1,15 @@
+import { semanticDotClasses } from './theme';
+
 interface Props {
   status: 'success' | 'error' | 'warning' | 'idle';
   size?: 'sm' | 'md';
 }
 
 const statusColors: Record<Props['status'], string> = {
-  success: 'bg-[#34c759]',
-  error: 'bg-[#ff3b30]',
-  warning: 'bg-[#ff9500]',
-  idle: 'bg-[var(--text-tertiary)]',
+  success: semanticDotClasses.success,
+  error: semanticDotClasses.danger,
+  warning: semanticDotClasses.warning,
+  idle: semanticDotClasses.muted,
 };
 
 const sizeClasses: Record<NonNullable<Props['size']>, string> = {

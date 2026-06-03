@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { useT } from '../../i18n';
+import { useLocale, useT } from '../../i18n';
 import type { MessageItem } from '../../types';
 
-function formatTime(timestamp: string): string {
+function browserLocale(locale: 'en' | 'zh'): string {
+  return locale === 'zh' ? 'zh-CN' : 'en-US';
+}
+
+function formatTime(timestamp: string, locale: 'en' | 'zh'): string {
   const date = new Date(timestamp);
-  return date.toLocaleTimeString('zh-CN', {
+  return date.toLocaleTimeString(browserLocale(locale), {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -12,37 +16,65 @@ function formatTime(timestamp: string): string {
   });
 }
 
+function messageTypeLabel(type: string, t: ReturnType<typeof useT>): string {
+  switch (type) {
+    case 'system_event':
+      return t('pages.tasks.messageType.systemEvent');
+    case 'user':
+      return t('pages.tasks.messageType.user');
+    case 'assistant':
+      return t('pages.tasks.messageType.assistant');
+    case 'thinking':
+      return t('pages.tasks.messageType.thinking');
+    case 'tool_call':
+      return t('pages.tasks.messageType.toolCall');
+    case 'tool_result':
+      return t('pages.tasks.messageType.toolResult');
+    case 'stdout':
+      return t('pages.tasks.messageType.stdout');
+    case 'stderr':
+      return t('pages.tasks.messageType.stderr');
+    case 'lifecycle':
+      return t('pages.tasks.messageType.lifecycle');
+    default:
+      return type.replace('_', ' ');
+  }
+}
+
 export function SystemEventBlock({ message }: { message: MessageItem }) {
+  const locale = useLocale();
   const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
   return (
     <div className="my-2 flex justify-center px-4">
-      <div className="flex max-w-full items-center gap-2 rounded-lg border-l-2 border-[var(--apple-blue)] bg-[var(--bg-secondary)] px-3 py-1.5">
+      <div className="flex max-w-full items-center gap-2 rounded-lg border-l-2 border-[var(--info)] bg-[var(--bg-secondary)] px-3 py-1.5">
         <span className="max-w-full break-all text-xs text-[var(--text-secondary)]">{content}</span>
-        <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp)}</span>
+        <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp, locale)}</span>
       </div>
     </div>
   );
 }
 
 export function UserMessage({ message }: { message: MessageItem }) {
+  const locale = useLocale();
   const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
   return (
     <div className="my-2 flex justify-end">
-      <div className="max-w-[80%] rounded-2xl rounded-tr-sm border border-[var(--apple-blue)]/20 bg-[var(--apple-blue)]/10 px-4 py-2">
-        <pre className="whitespace-pre-wrap break-words font-sans text-sm text-[var(--apple-blue)]">{content}</pre>
-        <div className="mt-1 text-right text-[10px] text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp)}</div>
+      <div className="max-w-[80%] rounded-2xl rounded-tr-sm border border-[var(--info-border)] bg-[var(--info-soft)] px-4 py-2">
+        <pre className="whitespace-pre-wrap break-words font-sans text-sm text-[var(--info-foreground)]">{content}</pre>
+        <div className="mt-1 text-right text-[10px] text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp, locale)}</div>
       </div>
     </div>
   );
 }
 
 export function AssistantMessage({ message }: { message: MessageItem }) {
+  const locale = useLocale();
   const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
   return (
     <div className="my-2 flex justify-start">
       <div className="max-w-[80%] rounded-2xl rounded-tl-sm bg-[var(--bg-secondary)] px-4 py-2">
         <pre className="whitespace-pre-wrap break-words font-sans text-sm text-[var(--text)]">{content}</pre>
-        <div className="mt-1 text-right text-[10px] text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp)}</div>
+        <div className="mt-1 text-right text-[10px] text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp, locale)}</div>
       </div>
     </div>
   );
@@ -55,7 +87,9 @@ export function ThinkingBlock({ message }: { message: MessageItem }) {
   return (
     <div className="my-1 flex flex-col items-start">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         className="flex items-center gap-1 rounded-lg border-l-2 border-[var(--text-tertiary)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
       >
         {isOpen ? '▾' : '▸'} {t('pages.tasks.thinking')}
@@ -77,13 +111,15 @@ export function ToolCallBlock({ message }: { message: MessageItem }) {
   return (
     <div className="my-1 flex flex-col items-start">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 rounded-lg border-l-2 border-[var(--apple-blue)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+        aria-expanded={isOpen}
+        className="flex items-center gap-1 rounded-lg border-l-2 border-[var(--info)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
       >
         {isOpen ? '▾' : '▸'} {t('pages.tasks.toolCall', { name })}
       </button>
       {isOpen && (
-        <div className="mt-1 w-full rounded-lg border-l-2 border-[var(--apple-blue)] bg-[var(--bg-secondary)] px-3 py-2">
+        <div className="mt-1 w-full rounded-lg border-l-2 border-[var(--info)] bg-[var(--bg-secondary)] px-3 py-2">
           <pre className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--text-secondary)]">{JSON.stringify(content, null, 2)}</pre>
         </div>
       )}
@@ -98,13 +134,15 @@ export function ToolResultBlock({ message }: { message: MessageItem }) {
   return (
     <div className="my-1 flex flex-col items-start pl-4">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 rounded-lg border-l-2 border-[#22c55e] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+        aria-expanded={isOpen}
+        className="flex items-center gap-1 rounded-lg border-l-2 border-[var(--success)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
       >
         {isOpen ? '▾' : '▸'} {t('pages.tasks.toolResult')}
       </button>
       {isOpen && (
-        <div className="mt-1 w-full rounded-lg border-l-2 border-[#22c55e] bg-[var(--bg-secondary)] px-3 py-2">
+        <div className="mt-1 w-full rounded-lg border-l-2 border-[var(--success)] bg-[var(--bg-secondary)] px-3 py-2">
           <pre className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--text-secondary)]">{JSON.stringify(content, null, 2)}</pre>
         </div>
       )}
@@ -119,6 +157,8 @@ interface CollapsedGroupItem {
 }
 
 export function CollapsedGroupBlock({ item, onToggle }: { item: CollapsedGroupItem; onToggle: () => void }) {
+  const t = useT();
+
   if (!item.collapsed) {
     return (
       <div className="space-y-1">
@@ -135,13 +175,15 @@ export function CollapsedGroupBlock({ item, onToggle }: { item: CollapsedGroupIt
   }, {} as Record<string, number>);
 
   const summary = Object.entries(counts)
-    .map(([type, count]) => `${count} ${type.replace('_', ' ')}`)
+    .map(([type, count]) => t('pages.tasks.messageGroup.summary', { count, type: messageTypeLabel(type, t) }))
     .join(', ');
 
   return (
     <div className="my-2 flex justify-center">
       <button
+        type="button"
         onClick={onToggle}
+        aria-expanded={false}
         className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
       >
         <span>▸ {summary}</span>

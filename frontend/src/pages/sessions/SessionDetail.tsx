@@ -1,4 +1,5 @@
 import SectionStack from '../../components/layout/SectionStack';
+import { semanticToneClasses } from '../../components/ui/theme';
 import { useT } from '../../i18n';
 import type { SessionDetailRecord, TokenUsage } from '../../types';
 import { AttemptChain } from './AttemptChain';
@@ -10,9 +11,9 @@ interface Props {
 }
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
-  active: 'bg-green-100 text-green-700 border-green-200',
-  completed: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  archived: 'bg-gray-100 text-gray-700 border-gray-200',
+  active: semanticToneClasses.success,
+  completed: semanticToneClasses.warning,
+  archived: semanticToneClasses.muted,
 };
 
 function formatDuration(ms: number): string {
@@ -27,7 +28,7 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
 
   if (!selectedId) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+      <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
         {t('pages.sessions.selectPrompt')}
       </div>
     );
@@ -35,7 +36,7 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+      <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
         {t('common.loading')}
       </div>
     );
@@ -43,7 +44,7 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
 
   if (!detail) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+      <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
         {t('pages.sessions.notFound')}
       </div>
     );
@@ -53,7 +54,7 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
     <div className="p-4">
       <SectionStack gap={4}>
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">{detail.title}</h2>
+          <h2 className="text-lg font-semibold text-[var(--text)]" title={detail.title}>{detail.title}</h2>
           <span
             className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE_CLASSES[detail.status] ?? STATUS_BADGE_CLASSES.archived}`}
           >
@@ -61,7 +62,7 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
           </span>
         </div>
 
-        <div className="flex items-center gap-6 text-sm text-gray-600">
+        <div className="flex items-center gap-6 text-sm text-[var(--text-secondary)]">
           <span>{t('pages.sessions.taskCount', { count: detail.task_count })}</span>
           <span>
             {t('pages.sessions.totalDuration', {

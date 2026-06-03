@@ -10,7 +10,7 @@ const Select = forwardRef<HTMLSelectElement, Props>(function Select(
   ref
 ) {
   const errorClasses = error
-    ? 'border-[#ff3b30] focus:border-[#ff3b30] focus:ring-[#ff3b30]/15'
+    ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[var(--danger)]/15'
     : 'border-[var(--border)] focus:border-[var(--apple-blue)] focus:ring-[var(--apple-blue)]/15';
   return (
     <select

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useT } from '../i18n';
+import { Button, Input } from '../components/ui';
 
 export default function LoginPage() {
   const t = useT();
@@ -24,7 +25,7 @@ export default function LoginPage() {
         navigate('/');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || t('auth.loginFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -34,34 +35,31 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
       <form onSubmit={handleSubmit} className="bg-[var(--surface)] p-8 rounded-xl shadow-sm border border-[var(--border)] w-full max-w-sm">
         <h1 className="text-xl font-semibold mb-6">AINRF</h1>
-        {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+        {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
           <label className="text-xs text-[var(--text-secondary)]">{t('auth.username')}</label>
-          <input
-            className="px-3 py-2 border border-[var(--border)] rounded-lg text-sm"
+          <Input
             placeholder={t('auth.username')}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoFocus
           />
           <label className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
-          <input
+          <Input
             type="password"
-            className="px-3 py-2 border border-[var(--border)] rounded-lg text-sm"
             placeholder={t('auth.password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button
+          <Button
             type="submit"
             disabled={submitting || !username || !password}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
           >
             {submitting ? t('common.loading') : t('auth.login')}
-          </button>
+          </Button>
         </div>
         <p className="text-xs text-[var(--text-secondary)] mt-4 text-center">
-          <Link to="/register" className="text-blue-600 hover:underline">
+          <Link to="/register" className="text-[var(--info)] hover:underline">
             {t('auth.registerLink')}
           </Link>
         </p>
