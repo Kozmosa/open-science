@@ -103,7 +103,7 @@ class AgenticResearcherService:
             environment_id=environment_id,
             researcher_type=researcher.type,
             harness_engine=researcher.harness_engine,
-            status=TaskStatus.PENDING,
+            status=TaskStatus.QUEUED,
             title=title or f"Task {task_id}",
             prompt=prompt,
             user_skills=researcher.skills,
@@ -141,7 +141,14 @@ class AgenticResearcherService:
             raise TaskNotFoundError(f"Task not found: {task_id}")
         return self._row_to_task(row)
 
-    def list_tasks(self, project_id: str | None = None, user_id: str | None = None) -> list[Task]:
+    def list_tasks(
+        self,
+        project_id: str | None = None,
+        user_id: str | None = None,
+        include_archived: bool = False,
+        limit: int = 200,
+        sort: str = "updated",
+    ) -> list[Task]:
         query = "SELECT * FROM tasks WHERE 1=1"
         params: list = []
         if project_id:
@@ -150,14 +157,23 @@ class AgenticResearcherService:
         if user_id:
             query += " AND owner_user_id = ?"
             params.append(user_id)
-        query += " ORDER BY created_at DESC"
+        if not include_archived:
+            # Exclude CANCELLED status as the closest equivalent to "archived"
+            query += " AND status != ?"
+            params.append(TaskStatus.CANCELLED.value)
+
+        order_col = "updated_at" if sort == "updated" else "created_at"
+        query += f" ORDER BY {order_col} DESC"
+        query += " LIMIT ?"
+        params.append(limit)
+
         with closing(self._connect()) as conn:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_task(row) for row in rows]
 
     def cancel_task(self, task_id: str) -> Task:
         task = self.get_task(task_id)
-        if task.status not in {TaskStatus.PENDING, TaskStatus.RUNNING}:
+        if task.status not in {TaskStatus.QUEUED, TaskStatus.STARTING, TaskStatus.RUNNING}:
             raise TaskOperationError(f"Cannot cancel task with status: {task.status}")
         now = self._now()
         with closing(self._connect()) as conn:
@@ -170,6 +186,33 @@ class AgenticResearcherService:
         task.updated_at = datetime.fromisoformat(now)
         task.completed_at = datetime.fromisoformat(now)
         return task
+
+    def delete_task(self, task_id: str) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute("DELETE FROM tasks WHERE task_id = ?", (task_id,))
+            conn.execute("DELETE FROM task_outputs WHERE task_id = ?", (task_id,))
+            conn.commit()
+
+    def retry_task(self, task_id: str) -> Task:
+        old = self.get_task(task_id)
+        if old.status not in {TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            raise TaskOperationError(f"Cannot retry task with status: {old.status}")
+        researcher = AgenticResearcher(
+            type=old.researcher_type,
+            harness_engine=old.harness_engine,
+            skills=old.user_skills,
+            mcp_servers=old.user_mcp_servers,
+            system_prompt=None,
+        )
+        return self.create_task(
+            project_id=old.project_id,
+            workspace_id=old.workspace_id,
+            environment_id=old.environment_id,
+            researcher=researcher,
+            prompt=old.prompt,
+            owner_user_id=old.owner_user_id,
+            title=f"Retry: {old.title}",
+        )
 
     def _row_to_task(self, row: sqlite3.Row) -> Task:
         return Task(

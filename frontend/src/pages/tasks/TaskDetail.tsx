@@ -108,17 +108,18 @@ export default function TaskDetail({
   };
 
   // Determine if input bar should show
+  const engine = selectedTask?.harness_engine ?? selectedTask?.execution_engine ?? '';
   const showInput = selectedTask &&
-    interactiveEngines.has(selectedTask.execution_engine ?? '') &&
+    interactiveEngines.has(engine) &&
     (selectedTask.status === 'running' || selectedTask.status === 'succeeded' || selectedTask.status === 'paused');
 
   // Determine pause/resume buttons
   const showPause =
     selectedTask?.status === 'running' &&
-    interactiveEngines.has(selectedTask?.execution_engine ?? '');
+    interactiveEngines.has(engine);
   const showResume =
     selectedTask?.status === 'paused' &&
-    interactiveEngines.has(selectedTask?.execution_engine ?? '');
+    interactiveEngines.has(engine);
 
   if (detailError) {
     return (
@@ -155,7 +156,7 @@ export default function TaskDetail({
               {selectedTask.title}
             </h1>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              {selectedTask.task_profile} &middot; {selectedTask.execution_engine ?? 'agent-sdk'}
+              {selectedTask.researcher_type ?? selectedTask.task_profile ?? 'researcher'} &middot; {selectedTask.harness_engine ?? selectedTask.execution_engine ?? 'claude-code'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -262,9 +263,9 @@ export default function TaskDetail({
                   {t('pages.tasks.result')}
                 </h2>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                  <MetadataRow label={t('pages.tasks.exitCode')} value={selectedTask.result.exit_code} fallback={metadataFallback} />
-                  <MetadataRow label={t('pages.tasks.failure')} value={selectedTask.result.failure_category} fallback={metadataFallback} />
-                  <MetadataRow label={t('pages.tasks.completed')} value={selectedTask.result.completed_at} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.exitCode')} value={selectedTask.result?.exit_code ?? selectedTask.exit_code ?? null} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.failure')} value={selectedTask.result?.failure_category ?? null} fallback={metadataFallback} />
+                  <MetadataRow label={t('pages.tasks.completed')} value={selectedTask.result?.completed_at ?? selectedTask.completed_at ?? null} fallback={metadataFallback} />
                 </div>
               </section>
             </div>

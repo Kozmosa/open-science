@@ -35,7 +35,7 @@ def test_create_task(service: AgenticResearcherService) -> None:
         title="Test Task",
     )
     assert task.task_id is not None
-    assert task.status == TaskStatus.PENDING
+    assert task.status == TaskStatus.QUEUED
     assert task.researcher_type == AgenticResearcherType.VANILLA
     assert task.harness_engine == HarnessEngineType.CLAUDE_CODE
     assert task.user_skills == ["test-skill"]
@@ -74,6 +74,47 @@ def test_list_tasks(service: AgenticResearcherService) -> None:
         )
     tasks = service.list_tasks(project_id="proj-001")
     assert len(tasks) == 3
+
+
+def test_list_tasks_with_filters(service: AgenticResearcherService) -> None:
+    researcher = vanilla(engine=HarnessEngineType.CLAUDE_CODE)
+    task = service.create_task(
+        project_id="proj-001",
+        workspace_id="ws-001",
+        environment_id="env-001",
+        researcher=researcher,
+        prompt="Test prompt",
+        owner_user_id="user-001",
+    )
+    # Cancel one task - it should be excluded when include_archived=False
+    service.cancel_task(task.task_id)
+
+    # Default: exclude cancelled (archived)
+    tasks = service.list_tasks(project_id="proj-001", include_archived=False)
+    assert len(tasks) == 0
+
+    # Include archived
+    tasks = service.list_tasks(project_id="proj-001", include_archived=True)
+    assert len(tasks) == 1
+
+    # Limit
+    for i in range(5):
+        service.create_task(
+            project_id="proj-001",
+            workspace_id="ws-001",
+            environment_id="env-001",
+            researcher=researcher,
+            prompt=f"Prompt {i}",
+            owner_user_id="user-001",
+        )
+    tasks = service.list_tasks(project_id="proj-001", limit=2)
+    assert len(tasks) == 2
+
+    # Sort by updated
+    tasks = service.list_tasks(project_id="proj-001", sort="updated")
+    assert len(tasks) == 5
+    # Most recently updated should be last created (updated_at set on creation)
+    assert tasks[0].prompt == "Prompt 4"
 
 
 def test_cancel_task(service: AgenticResearcherService) -> None:
