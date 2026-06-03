@@ -74,6 +74,7 @@ class TestAdminApi:
             resp = await client.get("/admin/users", headers=headers)
             assert resp.status_code in (403, 404)  # 403 if route in test app, 404 otherwise
 
+
 def _ensure_user(auth_svc, username, password):
     """Create and activate a user, return their id."""
     try:

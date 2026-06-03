@@ -38,8 +38,16 @@ def _get_api_config() -> tuple[str, str, str]:
         or os.environ.get("DEEPSEEK_API_KEY")
         or ""
     )
-    base_url = os.environ.get("ANTHROPIC_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL") or _DEFAULT_BASE_URL
-    model = os.environ.get("AINRF_LITERATURE_MODEL") or os.environ.get("ANTHROPIC_MODEL") or _DEFAULT_MODEL
+    base_url = (
+        os.environ.get("ANTHROPIC_BASE_URL")
+        or os.environ.get("DEEPSEEK_BASE_URL")
+        or _DEFAULT_BASE_URL
+    )
+    model = (
+        os.environ.get("AINRF_LITERATURE_MODEL")
+        or os.environ.get("ANTHROPIC_MODEL")
+        or _DEFAULT_MODEL
+    )
     return api_key, base_url, model
 
 

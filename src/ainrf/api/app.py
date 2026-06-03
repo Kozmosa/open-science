@@ -110,11 +110,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 # Generate secure random password
                 import secrets
                 import string
+
                 alphabet = string.ascii_letters + string.digits + string.punctuation
-                initial_password = ''.join(secrets.choice(alphabet) for _ in range(24))
+                initial_password = "".join(secrets.choice(alphabet) for _ in range(24))
 
                 admin_user = auth_service.register(
-                    username="admin", display_name="Administrator", password=initial_password,
+                    username="admin",
+                    display_name="Administrator",
+                    password=initial_password,
                     must_change_password=True,
                 )
                 with auth_service._connect() as conn:
@@ -137,7 +140,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     "Username: admin\n"
                     f"Password: (saved to {password_file})\n"
                     "You will be prompted to change the password on first login.\n"
-                    + "=" * 60 + "\n"
+                    + "=" * 60
+                    + "\n"
                 )
             # Fix existing admin users with wrong role (migration from bug)
             with auth_service._connect() as conn:

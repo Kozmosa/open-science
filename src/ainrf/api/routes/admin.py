@@ -41,9 +41,11 @@ async def list_users(request: Request) -> AdminUserListResponse:
     require_admin(user)
     service = _get_service(request)
     users = service.list_users()
-    return AdminUserListResponse.model_validate({
-        "items": [_serialize_admin_user(u) for u in users],
-    })
+    return AdminUserListResponse.model_validate(
+        {
+            "items": [_serialize_admin_user(u) for u in users],
+        }
+    )
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserResponse)
@@ -66,9 +68,7 @@ async def update_user(
 
 
 @router.put("/users/{user_id}/password", status_code=204)
-async def reset_password(
-    user_id: str, payload: AdminPasswordResetRequest, request: Request
-):
+async def reset_password(user_id: str, payload: AdminPasswordResetRequest, request: Request):
     user = get_current_user(request)
     require_admin(user)
     service = _get_service(request)

@@ -89,9 +89,7 @@ class AuthService:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_env_access_user ON environment_access(user_id)"
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)"
             )
@@ -116,7 +114,12 @@ class AuthService:
     # --- Registration ---
 
     def register(
-        self, *, username: str, display_name: str, password: str, must_change_password: bool = False,
+        self,
+        *,
+        username: str,
+        display_name: str,
+        password: str,
+        must_change_password: bool = False,
     ) -> User:
         self.initialize()
         with self._connect() as conn:
@@ -422,7 +425,9 @@ def _row_to_user(row: sqlite3.Row) -> User:
         created_at=row["created_at"],
         activated_at=row["activated_at"],
         last_login_at=row["last_login_at"],
-        must_change_password=bool(row["must_change_password"]) if "must_change_password" in row.keys() else False,
+        must_change_password=bool(row["must_change_password"])
+        if "must_change_password" in row.keys()
+        else False,
     )
 
 

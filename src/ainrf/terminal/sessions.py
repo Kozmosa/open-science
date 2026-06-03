@@ -781,8 +781,8 @@ class SessionManager:
             # Chunk to stay under SQLite's SQLITE_MAX_VARIABLE_NUMBER (default 999)
             CHUNK = 500
             for i in range(0, len(binding_ids), CHUNK):
-                chunk = binding_ids[i:i + CHUNK]
-                placeholders = ','.join('?' * len(chunk))
+                chunk = binding_ids[i : i + CHUNK]
+                placeholders = ",".join("?" * len(chunk))
                 rows = conn.execute(
                     f"SELECT * FROM user_session_pairs WHERE binding_id IN ({placeholders})",
                     chunk,
@@ -915,10 +915,10 @@ class SessionManager:
             detail=detail,
         )
 
-
     def resize_tmux_window(self, *, session_name: str, cols: int, rows: int) -> None:
         """Resize the tmux window dimensions."""
         self._tmux_adapter.resize_window(session_name=session_name, cols=cols, rows=rows)
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path)
         connection.row_factory = sqlite3.Row

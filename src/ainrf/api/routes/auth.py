@@ -79,6 +79,7 @@ async def me(request: Request) -> UserInfoResponse:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return UserInfoResponse.model_validate(user)
 
+
 @router.post("/change-password", status_code=204)
 async def change_password(payload: ChangePasswordRequest, request: Request):
     """Change password. Requires current password. Clears must_change_password flag."""

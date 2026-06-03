@@ -99,6 +99,7 @@ async def _wait_until_healthy_async(host: str, port: int, timeout_seconds: float
 def _wait_until_healthy(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
     """Deprecated: prefer _wait_until_healthy_async. Kept for sync callers."""
     import anyio
+
     return anyio.run(_wait_until_healthy_async, host, port, timeout_seconds)
 
 

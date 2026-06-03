@@ -52,8 +52,12 @@ class LiteratureService:
                     PRIMARY KEY (paper_id, subscription_id)
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_sub ON literature_papers(subscription_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_subs_user ON literature_subscriptions(user_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_papers_sub ON literature_papers(subscription_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_subs_user ON literature_subscriptions(user_id)"
+            )
             conn.commit()
         self._initialized = True
 
@@ -62,9 +66,12 @@ class LiteratureService:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def create_subscription(self, user_id, label="", keywords=None, arxiv_categories=None, frequency="daily"):
+    def create_subscription(
+        self, user_id, label="", keywords=None, arxiv_categories=None, frequency="daily"
+    ):
         sub = LiteratureSubscription(
-            user_id=user_id, label=label,
+            user_id=user_id,
+            label=label,
             keywords=keywords or [],
             arxiv_categories=arxiv_categories or [],
             frequency=frequency,
@@ -73,10 +80,16 @@ class LiteratureService:
             conn.execute(
                 "INSERT INTO literature_subscriptions VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
-                    sub.subscription_id, sub.user_id, sub.label,
-                    json.dumps(sub.keywords), json.dumps(sub.arxiv_categories),
-                    json.dumps(sub.seed_paper_ids), sub.frequency, int(sub.is_active),
-                    sub.created_at, sub.last_fetched_at,
+                    sub.subscription_id,
+                    sub.user_id,
+                    sub.label,
+                    json.dumps(sub.keywords),
+                    json.dumps(sub.arxiv_categories),
+                    json.dumps(sub.seed_paper_ids),
+                    sub.frequency,
+                    int(sub.is_active),
+                    sub.created_at,
+                    sub.last_fetched_at,
                 ),
             )
             conn.commit()
@@ -92,7 +105,8 @@ class LiteratureService:
     def get_subscription(self, subscription_id):
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM literature_subscriptions WHERE subscription_id = ?", (subscription_id,)
+                "SELECT * FROM literature_subscriptions WHERE subscription_id = ?",
+                (subscription_id,),
             ).fetchone()
         return self._row_to_sub(row) if row else None
 
@@ -215,12 +229,16 @@ class LiteratureService:
                     (task_id, paper_id),
                 )
             conn.commit()
-            row = conn.execute(
-                "SELECT * FROM literature_papers WHERE paper_id = ? AND subscription_id = ?",
-                (paper_id, subscription_id or ""),
-            ).fetchone() if subscription_id else conn.execute(
-                "SELECT * FROM literature_papers WHERE paper_id = ?", (paper_id,)
-            ).fetchone()
+            row = (
+                conn.execute(
+                    "SELECT * FROM literature_papers WHERE paper_id = ? AND subscription_id = ?",
+                    (paper_id, subscription_id or ""),
+                ).fetchone()
+                if subscription_id
+                else conn.execute(
+                    "SELECT * FROM literature_papers WHERE paper_id = ?", (paper_id,)
+                ).fetchone()
+            )
         return self._row_to_paper(row) if row else None
 
     def paper_exists(self, paper_id, subscription_id=None):
@@ -244,10 +262,21 @@ class LiteratureService:
                     conn.execute(
                         """INSERT INTO literature_papers VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
-                            p.paper_id, p.subscription_id, p.title, p.title_zh,
-                            json.dumps(p.authors), p.abstract, p.journal, p.published_at,
-                            p.arxiv_category, p.ai_summary, p.ai_practice_note,
-                            int(p.is_read), int(p.is_converted_to_task), p.task_id, p.created_at,
+                            p.paper_id,
+                            p.subscription_id,
+                            p.title,
+                            p.title_zh,
+                            json.dumps(p.authors),
+                            p.abstract,
+                            p.journal,
+                            p.published_at,
+                            p.arxiv_category,
+                            p.ai_summary,
+                            p.ai_practice_note,
+                            int(p.is_read),
+                            int(p.is_converted_to_task),
+                            p.task_id,
+                            p.created_at,
                         ),
                     )
                     count += 1

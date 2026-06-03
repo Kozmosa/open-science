@@ -136,13 +136,19 @@ async def trigger_fetch(subscription_id: str, request: Request):
     async def _fetch_and_store():
         try:
             papers = await fetch_for_subscription(sub)
-            new_papers = [p for p in papers if not svc.paper_exists(p.paper_id, sub.subscription_id)]
+            new_papers = [
+                p for p in papers if not svc.paper_exists(p.paper_id, sub.subscription_id)
+            ]
             if new_papers:
                 svc.insert_papers(new_papers)
             svc.update_last_fetched(sub.subscription_id)
             task_status["status"] = "completed"
-            logger.info("fetch complete: subscription=%s papers=%d new=%d",
-                         subscription_id, len(papers), len(new_papers))
+            logger.info(
+                "fetch complete: subscription=%s papers=%d new=%d",
+                subscription_id,
+                len(papers),
+                len(new_papers),
+            )
         except Exception as exc:
             task_status["status"] = "failed"
             task_status["error"] = str(exc)

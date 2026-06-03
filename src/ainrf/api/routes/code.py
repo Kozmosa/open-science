@@ -206,14 +206,14 @@ async def proxy_code_server(request: Request, path: str) -> Response:
     if content_length and int(content_length) > MAX_REQUEST_BODY_SIZE:
         raise HTTPException(
             status_code=413,
-            detail=f"Request body size exceeds maximum of {MAX_REQUEST_BODY_SIZE} bytes"
+            detail=f"Request body size exceeds maximum of {MAX_REQUEST_BODY_SIZE} bytes",
         )
 
     request_body = await request.body()
     if len(request_body) > MAX_REQUEST_BODY_SIZE:
         raise HTTPException(
             status_code=413,
-            detail=f"Request body size exceeds maximum of {MAX_REQUEST_BODY_SIZE} bytes"
+            detail=f"Request body size exceeds maximum of {MAX_REQUEST_BODY_SIZE} bytes",
         )
 
     try:
@@ -232,7 +232,7 @@ async def proxy_code_server(request: Request, path: str) -> Response:
             if resp_content_length and int(resp_content_length) > MAX_RESPONSE_SIZE:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Upstream response size exceeds maximum of {MAX_RESPONSE_SIZE} bytes"
+                    detail=f"Upstream response size exceeds maximum of {MAX_RESPONSE_SIZE} bytes",
                 )
 
     except httpx.TimeoutException as exc:

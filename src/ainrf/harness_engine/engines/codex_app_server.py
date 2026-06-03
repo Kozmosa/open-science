@@ -157,7 +157,11 @@ class CodexAppServerEngine(HarnessEngine):
         session: CodexSession,
         emit: EngineEmit,
     ) -> None:
-        if session.process is not None and session.process.returncode is None and session.initialized:
+        if (
+            session.process is not None
+            and session.process.returncode is None
+            and session.initialized
+        ):
             return
 
         command_text = context.codex_app_server_command or _DEFAULT_APP_SERVER_COMMAND
@@ -275,7 +279,9 @@ class CodexAppServerEngine(HarnessEngine):
                 thread_id = thread.get("id")
                 if isinstance(thread_id, str):
                     session.thread_id = thread_id
-            await emit(EngineEvent(event_type="system", payload={"subtype": "task_started", **params}))
+            await emit(
+                EngineEvent(event_type="system", payload={"subtype": "task_started", **params})
+            )
             return
         if method == "turn/started":
             turn = params.get("turn", {})
@@ -283,7 +289,9 @@ class CodexAppServerEngine(HarnessEngine):
                 turn_id = turn.get("id")
                 if isinstance(turn_id, str):
                     session.turn_id = turn_id
-            await emit(EngineEvent(event_type="system", payload={"subtype": "turn_started", **params}))
+            await emit(
+                EngineEvent(event_type="system", payload={"subtype": "turn_started", **params})
+            )
             return
         if method == "turn/completed":
             await self._handle_turn_completed(session, params, emit)
@@ -307,7 +315,9 @@ class CodexAppServerEngine(HarnessEngine):
             )
             return
         if method in {"item/reasoning/summaryTextDelta", "item/reasoning/textDelta"}:
-            await emit(EngineEvent(event_type="thinking", payload={"content": params.get("delta", "")}))
+            await emit(
+                EngineEvent(event_type="thinking", payload={"content": params.get("delta", "")})
+            )
             return
         if method == "item/commandExecution/outputDelta":
             await emit(
@@ -346,16 +356,26 @@ class CodexAppServerEngine(HarnessEngine):
         session.turn_done.set()
         if session.turn_status == "failed":
             session.had_error = True
-            await emit(EngineEvent(event_type="system", payload={"subtype": "task_failed", "turn": turn}))
-            await emit(EngineEvent(event_type="status", payload={"status": "failed", "exit_code": None}))
+            await emit(
+                EngineEvent(event_type="system", payload={"subtype": "task_failed", "turn": turn})
+            )
+            await emit(
+                EngineEvent(event_type="status", payload={"status": "failed", "exit_code": None})
+            )
         elif session.turn_status == "interrupted" and session.pause_requested:
-            await emit(EngineEvent(event_type="system", payload={"subtype": "task_paused", "turn": turn}))
+            await emit(
+                EngineEvent(event_type="system", payload={"subtype": "task_paused", "turn": turn})
+            )
         else:
             session.terminal_emitted = True
             await emit(
-                EngineEvent(event_type="system", payload={"subtype": "task_completed", "turn": turn})
+                EngineEvent(
+                    event_type="system", payload={"subtype": "task_completed", "turn": turn}
+                )
             )
-            await emit(EngineEvent(event_type="status", payload={"status": "succeeded", "exit_code": 0}))
+            await emit(
+                EngineEvent(event_type="status", payload={"status": "succeeded", "exit_code": 0})
+            )
 
     async def _handle_server_request(
         self,
@@ -435,7 +455,11 @@ class CodexAppServerEngine(HarnessEngine):
         if item_type == "agentMessage":
             text = item.get("text")
             if isinstance(text, str) and text:
-                await emit(EngineEvent(event_type="message", payload={"role": "assistant", "content": text}))
+                await emit(
+                    EngineEvent(
+                        event_type="message", payload={"role": "assistant", "content": text}
+                    )
+                )
         elif item_type == "plan":
             text = item.get("text")
             if isinstance(text, str) and text:

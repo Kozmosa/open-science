@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 def _new_id() -> str:
     import uuid
+
     return uuid.uuid4().hex[:12]
 
 

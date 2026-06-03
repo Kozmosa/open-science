@@ -160,11 +160,20 @@ class AgenticResearcherService:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    task.task_id, task.project_id, task.workspace_id, task.environment_id,
-                    task.researcher_type.value, task.harness_engine.value,
-                    json.dumps(task.user_skills), json.dumps(task.user_mcp_servers),
-                    task.status.value, task.title, task.prompt,
-                    now, now, task.owner_user_id,
+                    task.task_id,
+                    task.project_id,
+                    task.workspace_id,
+                    task.environment_id,
+                    task.researcher_type.value,
+                    task.harness_engine.value,
+                    json.dumps(task.user_skills),
+                    json.dumps(task.user_mcp_servers),
+                    task.status.value,
+                    task.title,
+                    task.prompt,
+                    now,
+                    now,
+                    task.owner_user_id,
                 ),
             )
             conn.commit()
@@ -245,7 +254,9 @@ class AgenticResearcherService:
             self.schedule_task(task_id)
         return event
 
-    def get_output(self, task_id: str, after_seq: int = 0, limit: int = 200) -> list[TaskOutputEvent]:
+    def get_output(
+        self, task_id: str, after_seq: int = 0, limit: int = 200
+    ) -> list[TaskOutputEvent]:
         with closing(self._connect()) as conn:
             rows = conn.execute(
                 """
@@ -302,9 +313,7 @@ class AgenticResearcherService:
 
     def get_task(self, task_id: str) -> Task:
         with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
         if row is None:
             raise TaskNotFoundError(f"Task not found: {task_id}")
         return self._row_to_task(row)
@@ -561,7 +570,9 @@ class AgenticResearcherService:
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
             started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] else None,
-            completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
+            completed_at=datetime.fromisoformat(row["completed_at"])
+            if row["completed_at"]
+            else None,
             latest_output_seq=row["latest_output_seq"],
             exit_code=row["exit_code"],
             error_summary=row["error_summary"],

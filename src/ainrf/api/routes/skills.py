@@ -140,6 +140,7 @@ async def import_skill(
             "git.sr.ht",
         ]
         import urllib.parse
+
         parsed_url = urllib.parse.urlparse(payload.url)
         domain = parsed_url.netloc.lower().replace("www.", "")
 
@@ -147,7 +148,7 @@ async def import_skill(
         if not any(domain.endswith(allowed) for allowed in ALLOWED_GIT_DOMAINS):
             raise HTTPException(
                 status_code=403,
-                detail=f"Git URL domain '{domain}' not in allowed list: {', '.join(ALLOWED_GIT_DOMAINS)}"
+                detail=f"Git URL domain '{domain}' not in allowed list: {', '.join(ALLOWED_GIT_DOMAINS)}",
             )
 
         tmp_clone = tempfile.mkdtemp(prefix="skill-import-")
@@ -186,7 +187,7 @@ async def import_skill(
         if not any(src_dir.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()):
             raise HTTPException(
                 status_code=403,
-                detail=f"Local path must be within allowed directories: {', '.join(str(d) for d in allowed_dirs)}"
+                detail=f"Local path must be within allowed directories: {', '.join(str(d) for d in allowed_dirs)}",
             )
 
         if not src_dir.exists():
