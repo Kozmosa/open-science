@@ -44,7 +44,17 @@ def _get_service(request: Request) -> AgenticResearcherService:
     return service
 
 
-def _task_to_response(task: Task) -> TaskSummaryResponse:
+def _task_to_response(
+    task: Task,
+    service: AgenticResearcherService | None = None,
+) -> TaskSummaryResponse:
+    runtime = service.get_runtime_summary(task) if service is not None else {}
+    working_directory_value = runtime.get("working_directory")
+    command_value = runtime.get("command")
+    working_directory = (
+        working_directory_value if isinstance(working_directory_value, str) else None
+    )
+    command = [str(item) for item in command_value] if isinstance(command_value, list) else []
     return TaskSummaryResponse(
         task_id=task.task_id,
         project_id=task.project_id,
@@ -63,6 +73,8 @@ def _task_to_response(task: Task) -> TaskSummaryResponse:
         latest_output_seq=task.latest_output_seq,
         exit_code=task.exit_code,
         error_summary=task.error_summary,
+        working_directory=working_directory,
+        command=command,
     )
 
 
@@ -190,7 +202,7 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return _task_to_response(task)
+    return _task_to_response(task, service)
 
 
 @router.get("")
@@ -212,7 +224,7 @@ async def list_tasks(
         sort=sort,
     )
     return TaskListResponse(
-        items=[_task_to_response(t) for t in tasks],
+        items=[_task_to_response(t, service) for t in tasks],
         total=len(tasks),
     )
 
@@ -220,7 +232,7 @@ async def list_tasks(
 @router.get("/{task_id}")
 async def get_task(request: Request, task_id: str) -> TaskSummaryResponse:
     _, task = _assert_task_owner(request, task_id)
-    return _task_to_response(task)
+    return _task_to_response(task, _get_service(request))
 
 
 @router.post("/{task_id}/cancel", status_code=204)
@@ -277,7 +289,7 @@ async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
     except TaskOperationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    return _task_to_response(cancelled)
+    return _task_to_response(cancelled, service)
 
 
 @router.delete("/{task_id}/permanent", status_code=204)
@@ -306,7 +318,7 @@ async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return TaskRetryResponse(
-        new_task=_task_to_response(new_task),
+        new_task=_task_to_response(new_task, service),
         archived_task_id=task_id,
         edge_id="",
     )

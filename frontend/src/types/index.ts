@@ -184,6 +184,8 @@ export interface TaskSummary {
   workspace_summary?: WorkspaceSummary;
   environment_summary?: TaskEnvironmentSummary;
   latest_output_seq?: number;
+  working_directory?: string | null;
+  command?: string[];
 }
 
 export interface ResearchAgentProfileSnapshot {

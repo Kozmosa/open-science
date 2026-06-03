@@ -120,7 +120,6 @@ export default function TaskDetail({
   const showResume =
     selectedTask?.status === 'paused' &&
     interactiveEngines.has(engine);
-
   if (detailError) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -143,6 +142,17 @@ export default function TaskDetail({
       </section>
     );
   }
+
+  const command = selectedTask.command?.length
+    ? selectedTask.command.join(' ')
+    : selectedTask.runtime?.command?.length
+      ? selectedTask.runtime.command.join(' ')
+      : null;
+  const workingDirectory =
+    selectedTask.working_directory ??
+    selectedTask.runtime?.working_directory ??
+    selectedTask.binding?.resolved_workdir ??
+    null;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -250,7 +260,8 @@ export default function TaskDetail({
             <div className="space-y-5">
               <section>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-                  <MetadataRow label="Workdir" value={selectedTask.runtime?.working_directory ?? selectedTask.binding?.resolved_workdir ?? null} fallback={metadataFallback} />
+                  <MetadataRow label="Workdir" value={workingDirectory} fallback={metadataFallback} />
+                  <MetadataRow label="Command" value={command} fallback={metadataFallback} />
                   <MetadataRow label="Task input" value={selectedTask.prompt ?? selectedTask.binding?.task_input ?? null} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.taskId')} value={selectedTask.task_id} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.created')} value={selectedTask.created_at} fallback={metadataFallback} />

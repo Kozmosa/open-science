@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from claude_agent_sdk import ResultMessage, StreamEvent
 
 from ainrf.harness_engine import (
     EngineEvent,
@@ -13,9 +14,9 @@ from ainrf.harness_engine import (
     OutputEvent,
     get_engine,
 )
-from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine
+from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine, AgentSession
 from ainrf.harness_engine.engines.claude_code import ClaudeCodeEngine
-from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine
+from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, CodexSession
 
 
 def test_get_engine_claude_code() -> None:
@@ -52,6 +53,93 @@ def test_execution_context_creation() -> None:
     assert ctx.task_id == "task-001"
     assert ctx.prompt == "test prompt"
     assert ctx.system_prompt is None
+
+
+def test_claude_code_engine_scrubs_implicit_anthropic_env() -> None:
+    engine = ClaudeCodeEngine()
+    env = {
+        "ANTHROPIC_API_KEY": "stale",
+        "ANTHROPIC_AUTH_TOKEN": "stale",
+        "PATH": "/usr/bin",
+    }
+    context = ExecutionContext(
+        task_id="task-001",
+        working_directory="/tmp",
+        rendered_prompt="test prompt",
+    )
+
+    engine._remove_implicit_provider_env(env, context)
+
+    assert "ANTHROPIC_API_KEY" not in env
+    assert "ANTHROPIC_AUTH_TOKEN" not in env
+    assert env["PATH"] == "/usr/bin"
+
+
+def test_claude_code_engine_keeps_explicit_anthropic_env() -> None:
+    engine = ClaudeCodeEngine()
+    env = {"ANTHROPIC_API_KEY": "explicit"}
+    context = ExecutionContext(
+        task_id="task-001",
+        working_directory="/tmp",
+        rendered_prompt="test prompt",
+        api_key="explicit",
+    )
+
+    engine._remove_implicit_provider_env(env, context)
+
+    assert env["ANTHROPIC_API_KEY"] == "explicit"
+
+
+def test_agent_sdk_ignores_partial_stream_deltas() -> None:
+    engine = AgentSdkEngine()
+    session = AgentSession(task_id="task-001")
+    event = StreamEvent(
+        uuid="event-001",
+        session_id="session-001",
+        event={"type": "content_block_delta", "delta": {"text": "Hello"}},
+    )
+
+    assert engine._convert_sdk_message(event, session) == []
+
+
+def test_agent_sdk_failed_result_does_not_require_extra_stderr() -> None:
+    engine = AgentSdkEngine()
+    session = AgentSession(task_id="task-001")
+    result = ResultMessage(
+        subtype="result",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=True,
+        num_turns=1,
+        session_id="session-001",
+        errors=["Failed to authenticate"],
+    )
+
+    events = engine._convert_sdk_message(result, session)
+
+    assert session.had_error is True
+    assert session.terminal_emitted is True
+    assert [event.event_type for event in events] == ["system", "status"]
+
+
+@pytest.mark.anyio
+async def test_codex_app_server_ignores_partial_agent_message_delta() -> None:
+    engine = CodexAppServerEngine()
+    emitted: list[EngineEvent] = []
+
+    async def emit(event: EngineEvent) -> None:
+        emitted.append(event)
+
+    await engine._handle_message(
+        session=CodexSession(task_id="task-001"),
+        payload={
+            "method": "item/agentMessage/delta",
+            "params": {"delta": "Hello"},
+        },
+        emit=emit,
+    )
+
+    assert emitted == []
 
 
 def test_engine_event_creation() -> None:

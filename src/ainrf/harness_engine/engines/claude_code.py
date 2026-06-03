@@ -19,6 +19,14 @@ from ainrf.harness_engine.base import (
 _SESSION_META_DIR = Path.home() / ".claude" / "usage-data" / "session-meta"
 _POLL_TIMEOUT_SEC = 30
 _POLL_INTERVAL_SEC = 1.0
+_ANTHROPIC_PROVIDER_ENV_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+)
 
 
 def _find_session_meta(started_at: float) -> dict[str, Any] | None:
@@ -66,6 +74,7 @@ class ClaudeCodeEngine(HarnessEngine):
             "bypassPermissions",
         ]
         env = os.environ.copy()
+        self._remove_implicit_provider_env(env, context)
         if context.api_base_url:
             env["ANTHROPIC_BASE_URL"] = context.api_base_url
         if context.api_key:
@@ -101,7 +110,16 @@ class ClaudeCodeEngine(HarnessEngine):
                 await stdin.drain()
             stdin.close()
 
-            await emit(EngineEvent(event_type="system", payload={"subtype": "task_started"}))
+            await emit(
+                EngineEvent(
+                    event_type="system",
+                    payload={
+                        "subtype": "task_started",
+                        "command": command,
+                        "cwd": context.working_directory,
+                    },
+                )
+            )
 
             async def read_stream(
                 stream: asyncio.StreamReader,
@@ -112,16 +130,21 @@ class ClaudeCodeEngine(HarnessEngine):
                     line = await stream.readline()
                     if not line:
                         break
-                    await emit(
-                        EngineEvent(
-                            event_type="message",
-                            payload={
-                                "role": role,
-                                "kind": kind,
-                                "content": line.decode("utf-8", errors="replace"),
-                            },
+                    content = line.decode("utf-8", errors="replace")
+                    if kind == "stderr":
+                        await emit(
+                            EngineEvent(
+                                event_type="error",
+                                payload={"content": content, "stream": kind},
+                            )
                         )
-                    )
+                    else:
+                        await emit(
+                            EngineEvent(
+                                event_type="message",
+                                payload={"role": role, "kind": kind, "content": content},
+                            )
+                        )
 
             await asyncio.gather(
                 read_stream(stdout, "stdout", "assistant"),
@@ -165,6 +188,26 @@ class ClaudeCodeEngine(HarnessEngine):
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
+
+    def _remove_implicit_provider_env(
+        self,
+        env: dict[str, str],
+        context: ExecutionContext,
+    ) -> None:
+        has_explicit_provider = any(
+            value
+            for value in (
+                context.api_base_url,
+                context.api_key,
+                context.default_opus_model,
+                context.default_sonnet_model,
+                context.default_haiku_model,
+            )
+        ) or any(key in (context.env_overrides or {}) for key in _ANTHROPIC_PROVIDER_ENV_KEYS)
+        if has_explicit_provider:
+            return
+        for key in _ANTHROPIC_PROVIDER_ENV_KEYS:
+            env.pop(key, None)
 
     async def _poll_session_meta(self, started_at: float) -> dict[str, Any] | None:
         deadline = time.time() + _POLL_TIMEOUT_SEC
