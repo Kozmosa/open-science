@@ -189,10 +189,11 @@ async def test_import_skill_local_success(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_import_skill_local_not_found(tmp_path: Path) -> None:
     skills_root = tmp_path / "skills"
+    missing_path = tmp_path / "missing-skill"
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.post(
             "/skills/import",
-            json={"source": "local", "local_path": "/nonexistent/path"},
+            json={"source": "local", "local_path": str(missing_path)},
         )
 
     assert response.status_code == 400
@@ -259,7 +260,10 @@ async def test_import_skill_with_override(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 @pytest.mark.skipif(not git_available, reason="git not installed")
-async def test_import_skill_git_success(tmp_path: Path) -> None:
+async def test_import_skill_git_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     skills_root = tmp_path / "skills"
     repo_dir = tmp_path / "source-repo"
     repo_dir.mkdir()
@@ -283,10 +287,24 @@ async def test_import_skill_git_success(tmp_path: Path) -> None:
         capture_output=True,
     )
 
+    def fake_run(
+        command: list[str],
+        *,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        _ = capture_output, text, timeout
+        clone_dir = Path(command[-1])
+        shutil.copytree(repo_dir, clone_dir, dirs_exist_ok=True)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("ainrf.api.routes.skills.subprocess.run", fake_run)
+
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.post(
             "/skills/import",
-            json={"source": "git", "url": f"file://{repo_dir}"},
+            json={"source": "git", "url": "https://github.com/example/git-skill.git"},
         )
 
     assert response.status_code == 200

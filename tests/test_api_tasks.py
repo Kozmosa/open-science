@@ -1,1040 +1,145 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 from pathlib import Path
-from typing import Any
 
 import httpx
 import pytest
 from fastapi import FastAPI
 
+from ainrf.agentic_researcher import AgenticResearcherService, HarnessEngineType
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
+from ainrf.harness_engine.base import EngineEmit
 from tests.testutil import get_jwt_headers
-from ainrf.task_harness.launcher import LaunchPayload
-from ainrf.task_harness.models import TaskHarnessStatus
-
-# API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
-_LIVE_CLAUDE_TASK_ENV = "AINRF_RUN_LIVE_CLAUDE_TASK"
-_LIVE_CODEX_APP_SERVER_TASK_ENV = "AINRF_RUN_LIVE_CODEX_APP_SERVER_TASK"
 
 
-class FakeStream:
-    def __init__(self, chunks: list[str]) -> None:
-        self._chunks = chunks
+class FakeEngine(HarnessEngine):
+    def __init__(self) -> None:
+        self.pending_prompts: list[str] = []
 
-    async def read(self, _size: int) -> str:
-        await asyncio.sleep(0)
-        if not self._chunks:
-            return ""
-        return self._chunks.pop(0)
+    @property
+    def engine_type(self) -> HarnessEngineType:
+        return HarnessEngineType.CLAUDE_CODE
 
+    async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        prompt = self.pending_prompts.pop(0) if self.pending_prompts else context.rendered_prompt
+        await emit(
+            EngineEvent(
+                event_type="message",
+                payload={"role": "assistant", "content": f"ran: {prompt}"},
+            )
+        )
+        await emit(
+            EngineEvent(
+                event_type="status",
+                payload={"status": "succeeded", "exit_code": 0},
+            )
+        )
 
-class FakeRunningProcess:
-    def __init__(
-        self,
-        *,
-        stdout_chunks: list[str] | None = None,
-        stderr_chunks: list[str] | None = None,
-        exit_code: int = 0,
-    ) -> None:
-        self.stdout = FakeStream(stdout_chunks or [])
-        self.stderr = FakeStream(stderr_chunks or [])
-        self._exit_code = exit_code
-        self.terminated = False
+    async def send_input(self, task_id: str, text: str) -> None:
+        _ = task_id
+        self.pending_prompts.append(text)
 
-    async def wait(self) -> int:
-        await asyncio.sleep(0.01)
-        return self._exit_code
-
-    async def terminate(self) -> None:
-        self.terminated = True
-
-    async def kill(self) -> None:
-        self.terminated = True
-
-    async def cleanup(self) -> None:
-        return None
+    async def cancel(self, task_id: str) -> None:
+        _ = task_id
 
 
-def make_app(tmp_path: Path) -> FastAPI:
-    return create_app(
+def make_app(tmp_path: Path, engine: FakeEngine) -> FastAPI:
+    app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
             state_root=tmp_path,
-            terminal_command=("/bin/bash", "-l"),
         )
     )
+    service = AgenticResearcherService(
+        state_root=tmp_path,
+        workspace_service=app.state.workspace_service,
+        engine_factory=lambda _name: engine,
+    )
+    service.initialize()
+    app.state.agentic_researcher_service = service
+    return app
 
 
 async def wait_for_status(
     client: httpx.AsyncClient,
     task_id: str,
-    expected: TaskHarnessStatus,
-    *,
-    headers: dict[str, str] | None = None,
-    attempts: int = 40,
-    delay_seconds: float = 0.05,
-) -> dict[str, Any]:
-    req_headers = headers or {}
-    for _ in range(attempts):
-        response = await client.get(f"/tasks/{task_id}", headers=req_headers)
+    status: str,
+) -> dict:
+    payload: dict = {}
+    for _ in range(20):
+        response = await client.get(f"/tasks/{task_id}")
         assert response.status_code == 200
         payload = response.json()
-        if payload["status"] == expected.value:
+        if payload["status"] == status:
             return payload
-        await asyncio.sleep(delay_seconds)
-    raise AssertionError(f"Task {task_id} did not reach {expected.value}")
-
-
-async def wait_for_final_status(
-    client: httpx.AsyncClient,
-    task_id: str,
-    *,
-    headers: dict[str, str] | None = None,
-    attempts: int = 240,
-    delay_seconds: float = 0.5,
-) -> dict[str, Any]:
-    req_headers = headers or {}
-    final_statuses = {TaskHarnessStatus.SUCCEEDED.value, TaskHarnessStatus.FAILED.value}
-    for _ in range(attempts):
-        response = await client.get(f"/tasks/{task_id}", headers=req_headers)
-        assert response.status_code == 200
-        payload = response.json()
-        if payload["status"] in final_statuses:
-            return payload
-        await asyncio.sleep(delay_seconds)
-    raise AssertionError(f"Task {task_id} did not reach a final status")
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"Task {task_id} did not reach {status}: {payload}")
 
 
 @pytest.mark.anyio
-async def test_task_harness_routes_create_list_detail_output_and_workspaces(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab",
-        display_name="GPU Lab",
-        host="127.0.0.1",
-        default_workdir="/workspace/project",
-        task_harness_profile="Use the configured GPU environment.",
-    )
-
-    def fake_build_local_launcher(
-        *,
-        working_directory: str,
-        prompt_file: Path,
-        rendered_prompt: str,
-        settings_path: str | None = None,
-    ) -> tuple[LaunchPayload, object]:
-        _ = prompt_file, rendered_prompt, settings_path
-        payload = LaunchPayload(
-            runner_kind="local-process",
-            working_directory=working_directory,
-            command=["claude", "-p"],
-            prompt_file=str(prompt_file),
-        )
-
-        async def launch() -> FakeRunningProcess:
-            return FakeRunningProcess(stdout_chunks=["hello\n"], stderr_chunks=["warn\n"])
-
-        return payload, launch
-
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.build_local_launcher",
-        fake_build_local_launcher,
-    )
-
+async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
+        headers=headers,
     ) as client:
-        workspaces = await client.get("/workspaces", headers=jwt_headers)
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-001",
+            label="Task workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the task workspace.",
+            owner_user_id=None,
+        )
         create_response = await client.post(
             "/tasks",
-            headers=jwt_headers,
             json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Train model\nUse three epochs.",
-            },
-        )
-
-        assert workspaces.status_code == 200
-        assert workspaces.json()["items"][0]["workspace_id"] == "workspace-default"
-        assert create_response.status_code == 201
-        created = create_response.json()
-        assert created["status"] == "queued"
-        assert created["title"] == "Train model"
-
-        detail = await wait_for_status(
-            client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers
-        )
-        listed = await client.get("/tasks", headers=jwt_headers)
-        output = await client.get(f"/tasks/{created['task_id']}/output", headers=jwt_headers)
-        workspace_detail = await client.get("/workspaces/workspace-default", headers=jwt_headers)
-
-    assert listed.status_code == 200
-    assert listed.json()["items"][0]["workspace_summary"]["workspace_id"] == "workspace-default"
-    assert detail["binding"]["resolved_workdir"] == str(
-        Path.home() / ".ainrf_workspaces" / "default"
-    )
-    assert detail["prompt"]["layer_order"] == [
-        "global_harness_system",
-        "workspace",
-        "environment",
-        "task_profile",
-        "task_input",
-    ]
-    assert detail["runtime"]["runner_kind"] == "local-process"
-    assert detail["result"]["exit_code"] == 0
-    assert output.status_code == 200
-    assert [item["kind"] for item in output.json()["items"]] == [
-        "lifecycle",
-        "lifecycle",
-        "lifecycle",
-        "stdout",
-        "stderr",
-        "lifecycle",
-    ]
-    assert output.json()["next_seq"] == 6
-    assert workspace_detail.status_code == 200
-    assert workspace_detail.json()["label"] == "Repository Default"
-
-
-@pytest.mark.anyio
-async def test_task_harness_route_accepts_three_layer_task_payload(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="profile-lab",
-        display_name="Profile Lab",
-        host="127.0.0.1",
-        default_workdir="/workspace/project",
-        task_harness_profile="Use the configured profile lab environment.",
-    )
-    recorded: dict[str, str] = {}
-
-    def fake_build_local_launcher(
-        *,
-        working_directory: str,
-        prompt_file: Path,
-        rendered_prompt: str,
-        settings_path: str,
-    ) -> tuple[LaunchPayload, object]:
-        _ = prompt_file, rendered_prompt
-        recorded["settings_path"] = settings_path
-        payload = LaunchPayload(
-            runner_kind="local-process",
-            working_directory=working_directory,
-            command=["claude", "--settings", settings_path],
-            prompt_file=str(prompt_file),
-        )
-
-        async def launch() -> FakeRunningProcess:
-            return FakeRunningProcess(stdout_chunks=["structured hello\n"])
-
-        return payload, launch
-
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.build_local_launcher",
-        fake_build_local_launcher,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        create_response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "ignored legacy input",
-                "title": "Structured API task",
-                "execution_engine": "claude-code",
-                "research_agent_profile": {
-                    "profile_id": "agent-literature",
-                    "label": "Literature Agent",
-                    "system_prompt": "Prefer careful literature synthesis.",
-                    "skills_prompt": "Use citation and repo-inspection skills.",
-                    "settings_json": {"permissions": {"allow": ["Read", "Grep"]}},
-                },
-                "task_configuration": {
-                    "mode": "structured_research",
-                    "template_id": "structured-research-default",
-                    "template_vars": {
-                        "research_goal": "Compare task harness designs",
-                        "context": "AINRF runtime refactor",
-                        "constraints": "Keep Claude Code as the only enabled engine",
-                        "deliverables": "Architecture notes and implementation steps",
-                        "validation_plan": "Run unit tests and build",
-                    },
-                },
-            },
-        )
-
-        assert create_response.status_code == 201
-        detail = await wait_for_status(
-            client,
-            create_response.json()["task_id"],
-            TaskHarnessStatus.SUCCEEDED,
-            headers=jwt_headers,
-        )
-
-    assert recorded["settings_path"] == detail["research_agent_profile"]["settings_artifact_path"]
-    assert detail["execution_engine"] == "claude-code"
-    assert detail["research_agent_profile"]["profile_id"] == "agent-literature"
-    assert detail["task_configuration"]["mode"] == "structured_research"
-    assert "Compare task harness designs" in detail["task_configuration"]["rendered_task_input"]
-    assert detail["binding"]["task_input"] == detail["task_configuration"]["rendered_task_input"]
-    assert "research_agent_system" in detail["prompt"]["layer_order"]
-    assert "research_agent_skills" in detail["prompt"]["layer_order"]
-    assert detail["runtime"]["command"] == ["claude", "--settings", recorded["settings_path"]]
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="cpu-lab",
-        display_name="CPU Lab",
-        host="127.0.0.1",
-        default_workdir="/workspace/project",
-        task_harness_profile="",
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        create_response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Inspect CPU environment",
-            },
-        )
-
-        assert create_response.status_code == 201
-        detail = await wait_for_status(
-            client, create_response.json()["task_id"], TaskHarnessStatus.FAILED, headers=jwt_headers
-        )
-
-    assert detail["result"]["failure_category"] == "startup failure"
-    assert "profile is empty" in detail["error_summary"]
-
-
-@pytest.mark.anyio
-async def test_task_harness_stream_endpoint_emits_new_events(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab",
-        display_name="GPU Lab",
-        host="127.0.0.1",
-        default_workdir="/workspace/project",
-        task_harness_profile="Use the configured GPU environment.",
-    )
-
-    def fake_build_local_launcher(
-        *,
-        working_directory: str,
-        prompt_file: Path,
-        rendered_prompt: str,
-        settings_path: str | None = None,
-    ) -> tuple[LaunchPayload, object]:
-        _ = prompt_file, rendered_prompt, settings_path
-        payload = LaunchPayload(
-            runner_kind="local-process",
-            working_directory=working_directory,
-            command=["claude", "-p"],
-            prompt_file=str(prompt_file),
-        )
-
-        async def launch() -> FakeRunningProcess:
-            return FakeRunningProcess(stdout_chunks=["hello\n"], stderr_chunks=[])
-
-        return payload, launch
-
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.build_local_launcher",
-        fake_build_local_launcher,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-        timeout=5.0,
-    ) as client:
-        create_response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Stream this task",
-            },
-        )
-        task_id = create_response.json()["task_id"]
-        async with client.stream(
-            "GET",
-            f"/tasks/{task_id}/stream?after_seq=1",
-            headers=jwt_headers,
-        ) as response:
-            assert response.status_code == 200
-            body = ""
-            async for line in response.aiter_lines():
-                body += line + "\n"
-                if '"kind":"stdout"' in body:
-                    break
-
-    assert '"kind":"stdout"' in body
-    assert "hello\\n" in body
-
-
-@pytest.mark.anyio
-async def test_task_harness_remote_path_runs_without_readiness_precheck(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="ssh-lab",
-        display_name="SSH Lab",
-        host="gpu-server-01",
-        default_workdir="/workspace/project",
-        task_harness_profile="Use the configured SSH environment.",
-    )
-    recorded: dict[str, str] = {}
-
-    class FakeExecutor:
-        async def close(self) -> None:
-            pass
-
-    fake_executor = FakeExecutor()
-
-    def fake_build_ssh_executor(*_args: object, project_dir: str) -> object:
-        recorded["project_dir"] = project_dir
-        return fake_executor
-
-    async def fake_build_remote_launcher(
-        *,
-        executor: object,
-        task_id: str,
-        local_task_dir: Path,
-        working_directory: str,
-        prompt_file: Path,
-        settings_path: Path | None = None,
-        ainrf_dir: Path | None = None,
-    ) -> tuple[LaunchPayload, object]:
-        _ = settings_path, ainrf_dir
-        assert executor is fake_executor
-        assert task_id
-        assert local_task_dir.exists()
-        assert prompt_file.exists()
-        payload = LaunchPayload(
-            runner_kind="ssh-process",
-            working_directory=working_directory,
-            command=["/remote/launch.sh", "/remote/prompt.txt", working_directory],
-            prompt_file="/remote/prompt.txt",
-            helper_path="/remote/launch.sh",
-        )
-
-        async def launch() -> FakeRunningProcess:
-            return FakeRunningProcess(stdout_chunks=["remote hello\n"])
-
-        return payload, launch
-
-    monkeypatch.setattr("ainrf.task_harness.service.build_ssh_executor", fake_build_ssh_executor)
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.build_remote_launcher",
-        fake_build_remote_launcher,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        create_response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Run through the remote launcher path.",
-            },
-        )
-        assert create_response.status_code == 201
-        created = create_response.json()
-        detail = await wait_for_status(
-            client, created["task_id"], TaskHarnessStatus.SUCCEEDED, headers=jwt_headers
-        )
-        output = await client.get(f"/tasks/{created['task_id']}/output", headers=jwt_headers)
-
-    assert recorded["project_dir"] == str(Path.home() / ".ainrf_workspaces" / "default")
-    assert detail["runtime"]["runner_kind"] == "ssh-process"
-    assert detail["runtime"]["helper_path"] == "/remote/launch.sh"
-    assert any(item["content"] == "remote hello\n" for item in output.json()["items"])
-
-
-@pytest.mark.anyio
-async def test_create_task_with_kimi_engine(
-    tmp_path: Path,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="local",
-        display_name="Local",
-        host="localhost",
-        default_workdir="/tmp",
-        task_harness_profile="test",
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        kimi_settings = {
-            "env": {
-                "ANTHROPIC_AUTH_TOKEN": "sk-xxxx",
-                "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-for-coding",
-            },
-            "model": "kimi-for-coding",
-        }
-        response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "execution_engine": "kimi-claude-code",
-                "task_input": "Run with Kimi.",
-                "research_agent_profile": {
-                    "profile_id": "kimi-claude-code-default",
-                    "label": "Kimi Claude Code Default",
-                    "settings_json": kimi_settings,
-                },
-            },
-        )
-        assert response.status_code == 201
-        created = response.json()
-        assert created["execution_engine"] == "claude-code"
-
-        task_dir = tmp_path / "runtime" / "task-harness" / "tasks" / created["task_id"]
-        settings_path = task_dir / "claude-settings.json"
-        assert settings_path.exists()
-        data = json.loads(settings_path.read_text())
-        assert data["env"]["ANTHROPIC_BASE_URL"] == "https://api.kimi.com/coding/"
-        assert data["model"] == "kimi-for-coding"
-
-
-@pytest.mark.anyio
-async def test_create_task_with_codex_app_server_engine(
-    tmp_path: Path,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="local",
-        display_name="Local",
-        host="localhost",
-        default_workdir="/tmp",
-        task_harness_profile="test",
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "execution_engine": "codex-app-server",
-                "task_input": "Run with Codex App Server.",
-                "research_agent_profile": {
-                    "profile_id": "codex-app-server-default",
-                    "label": "Codex App Server Default",
-                    "codex_model": "gpt-5-codex",
-                    "codex_app_server_command": "codex app-server --listen stdio://",
-                    "codex_approval_policy": "never",
-                    "codex_config_toml": 'model = "custom-provider"\n',
-                    "codex_auth_json": '{"token":"override"}\n',
-                },
-            },
-        )
-
-        assert response.status_code == 201
-        created = response.json()
-        assert created["execution_engine"] == "codex-app-server"
-
-        detail_response = await client.get(f"/tasks/{created['task_id']}", headers=jwt_headers)
-        assert detail_response.status_code == 200
-        detail = detail_response.json()
-
-    assert detail["execution_engine"] == "codex-app-server"
-    assert detail["research_agent_profile"]["profile_id"] == "codex-app-server-default"
-    assert detail["research_agent_profile"]["codex_model"] == "gpt-5-codex"
-    assert (
-        detail["research_agent_profile"]["codex_app_server_command"]
-        == "codex app-server --listen stdio://"
-    )
-    assert detail["research_agent_profile"]["codex_approval_policy"] == "never"
-    assert detail["runtime"]["codex_home"].endswith("/codex-home")
-    assert detail["research_agent_profile"]["codex_config_toml"] == 'model = "custom-provider"\n'
-    assert detail["research_agent_profile"]["codex_auth_json"] == '{"token":"override"}\n'
-
-
-@pytest.mark.anyio
-@pytest.mark.skipif(
-    os.environ.get(_LIVE_CODEX_APP_SERVER_TASK_ENV) != "1",
-    reason="Set AINRF_RUN_LIVE_CODEX_APP_SERVER_TASK=1 to run the real Codex App Server smoke test",
-)
-async def test_task_harness_live_codex_app_server_task_output_and_followup(
-    tmp_path: Path,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    workdir = tmp_path / "live-codex-workdir"
-    workdir.mkdir(parents=True, exist_ok=True)
-    environment = app.state.environment_service.create_environment(
-        alias="live-codex-local",
-        display_name="Live Codex Local",
-        host="127.0.0.1",
-        default_workdir=str(workdir),
-        task_harness_profile="Use the configured localhost environment.",
-    )
-    marker = "HELLO_FROM_CODEX_APP_SERVER_TASK_20260512"
-    followup_marker = "FOLLOWUP_FROM_CODEX_APP_SERVER_TASK_20260512"
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-        timeout=180.0,
-    ) as client:
-        create_response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "execution_engine": "codex-app-server",
-                "task_input": (
-                    f"Reply with exactly {marker} on a single line. "
-                    "Do not add punctuation, explanation, or code fences."
-                ),
-                "research_agent_profile": {
-                    "profile_id": "codex-app-server-live",
-                    "label": "Codex App Server Live",
-                    "codex_model": "gpt-5-codex",
-                    "codex_app_server_command": "codex app-server --listen stdio://",
-                    "codex_approval_policy": "never",
-                },
+                "project_id": "proj-001",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Smoke task",
+                "prompt": "Initial prompt",
+                "skills": [],
             },
         )
         assert create_response.status_code == 201
         task_id = create_response.json()["task_id"]
-        detail = await wait_for_final_status(client, task_id, attempts=360, delay_seconds=0.5)
-        output = await client.get(f"/tasks/{task_id}/output", headers=jwt_headers)
 
-        output_items = output.json()["items"]
-        combined_output = "".join(item["content"] for item in output_items)
-        print(f"Live Codex App Server task {task_id} first pass output:\n{combined_output}")
-        assert detail["status"] == TaskHarnessStatus.SUCCEEDED.value, combined_output
-        assert detail["execution_engine"] == "codex-app-server"
-        assert detail["runtime"]["codex_home"] is not None
-        assert marker in combined_output, combined_output
+        detail = await wait_for_status(client, task_id, "succeeded")
+        assert detail["latest_output_seq"] == 2
+
+        output = await client.get(f"/tasks/{task_id}/output")
+        assert output.status_code == 200
+        assert [item["content"] for item in output.json()["items"]] == [
+            "ran: Initial prompt",
+            '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
+        ]
+
+        async with client.stream("GET", f"/tasks/{task_id}/stream?after_seq=1") as stream:
+            stream_text = await stream.aread()
+        decoded_stream = stream_text.decode("utf-8")
+        assert "event: output" in decoded_stream
+        assert "ran: Initial prompt" not in decoded_stream
+        assert "event: done" in decoded_stream
 
         prompt_response = await client.post(
             f"/tasks/{task_id}/prompt",
-            headers=jwt_headers,
-            json={
-                "prompt": (
-                    f"Reply with exactly {followup_marker} on a single line. "
-                    "Do not add punctuation, explanation, or code fences."
-                )
-            },
+            json={"prompt": "Follow up"},
         )
         assert prompt_response.status_code == 200
-        prompt_seq = prompt_response.json()["sequence"]
+        assert prompt_response.json()["sequence"] == 3
 
-        for _ in range(360):
-            after_prompt_output = await client.get(
-                f"/tasks/{task_id}/output?after_seq={prompt_seq - 1}",
-                headers=jwt_headers,
-            )
-            assert after_prompt_output.status_code == 200
-            after_items = after_prompt_output.json()["items"]
-            after_combined_output = "".join(item["content"] for item in after_items)
-            if followup_marker in after_combined_output:
-                break
-            await asyncio.sleep(0.5)
-        else:
-            raise AssertionError(
-                f"Task {task_id} did not emit follow-up marker {followup_marker}"
-            )
-
-        final_detail_response = await client.get(f"/tasks/{task_id}", headers=jwt_headers)
-        assert final_detail_response.status_code == 200
-        final_detail = final_detail_response.json()
-
-    assert final_detail["execution_engine"] == "codex-app-server"
-    assert final_detail["research_agent_profile"]["codex_model"] == "gpt-5-codex"
-    assert final_detail["runtime"]["codex_home"] is not None
-    assert followup_marker in after_combined_output, after_combined_output
-    assert any(
-        item["kind"] == "system" and followup_marker in item["content"]
-        for item in after_items
-    ) or any(
-        item["kind"] == "message" and followup_marker in item["content"]
-        for item in after_items
-    ), after_items
-
-
-@pytest.mark.anyio
-@pytest.mark.skipif(
-    os.environ.get(_LIVE_CLAUDE_TASK_ENV) != "1",
-    reason="Set AINRF_RUN_LIVE_CLAUDE_TASK=1 to run the real Claude task smoke test",
-)
-async def test_task_harness_live_claude_task_output(tmp_path: Path) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="live-local",
-        display_name="Live Local",
-        host="127.0.0.1",
-        default_workdir=str(Path.cwd()),
-        task_harness_profile="Use the configured localhost environment.",
-    )
-    marker = "HELLO_FROM_CLAUDE_TASK_20260423"
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-        timeout=60.0,
-    ) as client:
-        create_response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": (
-                    f"Reply with exactly {marker} on a single line. "
-                    "Do not add punctuation, explanation, or code fences."
-                ),
-            },
-        )
-        assert create_response.status_code == 201
-        task_id = create_response.json()["task_id"]
-        detail = await wait_for_final_status(client, task_id, headers=jwt_headers)
-        output = await client.get(f"/tasks/{task_id}/output", headers=jwt_headers)
-
-    output_items = output.json()["items"]
-    combined_output = "".join(item["content"] for item in output_items)
-    print(f"Live Claude task {task_id} output:\n{combined_output}")
-    assert detail["status"] == TaskHarnessStatus.SUCCEEDED.value, combined_output
-    assert marker in combined_output, combined_output
-
-
-@pytest.mark.anyio
-async def test_create_task_rejects_reproduce_baseline_without_aris_skill(tmp_path: Path) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="local",
-        display_name="Local",
-        host="127.0.0.1",
-        default_workdir="/tmp",
-        task_harness_profile="test",
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Reproduce baseline",
-                "task_configuration": {
-                    "mode": "reproduce_baseline",
-                    "template_id": "reproduce-baseline-default",
-                    "template_vars": {"paper_path": "papers/target.pdf"},
-                },
-            },
-        )
-        assert response.status_code == 409
-        assert "ARIS skill" in response.json()["detail"]
-
-
-@pytest.mark.anyio
-async def test_create_task_rejects_discover_ideas_without_aris_skill(tmp_path: Path) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="local",
-        display_name="Local",
-        host="127.0.0.1",
-        default_workdir="/tmp",
-        task_harness_profile="test",
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Discover ideas",
-                "task_configuration": {
-                    "mode": "discover_ideas",
-                    "template_id": "discover-ideas-default",
-                    "template_vars": {"topic": "graph neural networks"},
-                },
-            },
-        )
-        assert response.status_code == 409
-        assert "ARIS skill" in response.json()["detail"]
-
-
-@pytest.mark.anyio
-async def test_create_task_rejects_validate_ideas_without_aris_skill(tmp_path: Path) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="local",
-        display_name="Local",
-        host="127.0.0.1",
-        default_workdir="/tmp",
-        task_harness_profile="test",
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        response = await client.post(
-            "/tasks",
-            headers=jwt_headers,
-            json={
-                "workspace_id": "workspace-default",
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Validate ideas",
-                "task_configuration": {
-                    "mode": "validate_ideas",
-                    "template_id": "validate-ideas-default",
-                    "template_vars": {"idea_source": "A novel GNN approach"},
-                },
-            },
-        )
-        assert response.status_code == 409
-        assert "ARIS skill" in response.json()["detail"]
-
-
-@pytest.mark.anyio
-async def test_retry_task_archives_old_and_creates_new(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab",
-        display_name="GPU Lab",
-        host="127.0.0.1",
-        default_workdir="/workspace/project",
-        task_harness_profile="Use the configured GPU environment.",
-    )
-
-    def fake_build_local_launcher(
-        *,
-        working_directory: str,
-        prompt_file: Path,
-        rendered_prompt: str,
-        settings_path: str | None = None,
-    ) -> tuple[LaunchPayload, object]:
-        payload = LaunchPayload(
-            runner_kind="local-process",
-            working_directory=working_directory,
-            command=["true"],
-            prompt_file=str(prompt_file),
-        )
-        return payload, None
-
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.build_local_launcher",
-        fake_build_local_launcher,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        workspace_response = await client.get("/workspaces", headers=jwt_headers)
-        workspace_id = workspace_response.json()["items"][0]["workspace_id"]
-
-        create_response = await client.post(
-            "/tasks",
-            json={
-                "workspace_id": workspace_id,
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Test task",
-                "title": "Retry test",
-                "execution_engine": "claude-code",
-                "auto_connect": False,
-            },
-            headers=jwt_headers,
-        )
-        assert create_response.status_code == 201
-        task_id = create_response.json()["task_id"]
-
-        # Manually mark task as failed
-        service = app.state.task_harness_service
-        with service._connect() as conn:
-            from ainrf.environments.models import utc_now
-            now = utc_now()
-            conn.execute(
-                "UPDATE task_harness_tasks SET status = 'failed', updated_at = ?, completed_at = ? WHERE task_id = ?",
-                (now.isoformat(), now.isoformat(), task_id),
-            )
-            conn.commit()
-
-        # Retry
-        retry_response = await client.post(
-            f"/tasks/{task_id}/retry",
-            json={},
-            headers=jwt_headers,
-        )
-        assert retry_response.status_code == 200
-        data = retry_response.json()
-
-        assert data["archived_task_id"] == task_id
-        assert data["new_task"]["task_id"] != task_id
-        assert data["new_task"]["status"] == "queued"
-        assert data["edge_id"] != ""
-
-        # Verify old task is archived
-        old_task_response = await client.get(f"/tasks/{task_id}", headers=jwt_headers)
-        assert old_task_response.status_code == 200
-        # archived tasks still accessible by ID
-
-        # Verify old task not in default list
-        list_response = await client.get("/tasks", headers=jwt_headers)
-        task_ids = [t["task_id"] for t in list_response.json()["items"]]
-        assert task_id not in task_ids
-        assert data["new_task"]["task_id"] in task_ids
-
-
-@pytest.mark.anyio
-async def test_retry_task_invalid_status_returns_409(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app)
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab",
-        display_name="GPU Lab",
-        host="127.0.0.1",
-        default_workdir="/workspace/project",
-        task_harness_profile="Use the configured GPU environment.",
-    )
-
-    def fake_build_local_launcher(
-        *,
-        working_directory: str,
-        prompt_file: Path,
-        rendered_prompt: str,
-        settings_path: str | None = None,
-    ) -> tuple[LaunchPayload, object]:
-        payload = LaunchPayload(
-            runner_kind="local-process",
-            working_directory=working_directory,
-            command=["true"],
-            prompt_file=str(prompt_file),
-        )
-        return payload, None
-
-    monkeypatch.setattr(
-        "ainrf.task_harness.service.build_local_launcher",
-        fake_build_local_launcher,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        workspace_response = await client.get("/workspaces", headers=jwt_headers)
-        workspace_id = workspace_response.json()["items"][0]["workspace_id"]
-
-        create_response = await client.post(
-            "/tasks",
-            json={
-                "workspace_id": workspace_id,
-                "environment_id": environment.id,
-                "task_profile": "claude-code",
-                "task_input": "Test task",
-                "title": "Retry test",
-                "execution_engine": "claude-code",
-                "auto_connect": False,
-            },
-            headers=jwt_headers,
-        )
-        assert create_response.status_code == 201
-        task_id = create_response.json()["task_id"]
-        # Task is QUEUED — not failed or cancelled
-
-        # Force task back to QUEUED status (it may have auto-executed)
-        service = app.state.task_harness_service
-        with service._connect() as conn:
-            conn.execute(
-                "UPDATE task_harness_tasks SET status = 'queued' WHERE task_id = ?",
-                (task_id,),
-            )
-            conn.commit()
-
-        retry_response = await client.post(
-            f"/tasks/{task_id}/retry",
-            json={},
-            headers=jwt_headers,
-        )
-        assert retry_response.status_code == 409
+        detail = await wait_for_status(client, task_id, "succeeded")
+        assert detail["latest_output_seq"] == 5
+        output = await client.get(f"/tasks/{task_id}/output?after_seq=3")
+        assert [item["content"] for item in output.json()["items"]] == [
+            "ran: Follow up",
+            '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
+        ]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import sys
 from pathlib import Path
 
 STATE_ROOT = Path.home() / ".ainrf" / "runtime"
@@ -68,7 +67,11 @@ def get_indexed_columns(conn: sqlite3.Connection) -> dict[str, set[str]]:
 
 def analyze_db(db_path: Path) -> dict:
     """Analyze a single SQLite database. Returns findings dict."""
-    findings: dict[str, list[str]] = {"missing_indexes": [], "full_scans": [], "tables": []}
+    findings: dict[str, list[str] | str] = {
+        "missing_indexes": [],
+        "full_scans": [],
+        "tables": [],
+    }
     if not db_path.exists():
         findings["error"] = f"Database not found: {db_path}"
         return findings
