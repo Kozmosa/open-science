@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, Callable
+
 from ainrf.agentic_researcher.models import AgenticResearcher, HarnessEngineType
 
 ARIS_SYSTEM_PROMPT = """You are an ARIS (AI Research Intelligence System) researcher.
@@ -14,18 +16,16 @@ def vanilla(engine: HarnessEngineType, user_skills: list[str] | None = None) -> 
 
 def aris(engine: HarnessEngineType) -> AgenticResearcher:
     """创建 ARIS researcher - 默认挂载 ARIS skills"""
-    researcher = AgenticResearcher.aris(engine=engine)
-    researcher.system_prompt = ARIS_SYSTEM_PROMPT
-    return researcher
+    return AgenticResearcher.aris(engine=engine, system_prompt=ARIS_SYSTEM_PROMPT)
 
 
-_PRESETS: dict[str, callable] = {
+_PRESETS: dict[str, Callable[..., AgenticResearcher]] = {
     "vanilla": vanilla,
     "aris-researcher": aris,
 }
 
 
-def get_preset(name: str, engine: HarnessEngineType, **kwargs) -> AgenticResearcher:
+def get_preset(name: str, engine: HarnessEngineType, **kwargs: Any) -> AgenticResearcher:
     preset = _PRESETS.get(name)
     if preset is None:
         raise ValueError(f"Unknown researcher preset: {name}")

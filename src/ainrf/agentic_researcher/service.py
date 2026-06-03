@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -34,7 +35,7 @@ class AgenticResearcherService:
         if self._initialized:
             return
         self._runtime_root.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS tasks (
                     task_id TEXT PRIMARY KEY,
@@ -111,7 +112,7 @@ class AgenticResearcherService:
             created_at=datetime.fromisoformat(now),
             updated_at=datetime.fromisoformat(now),
         )
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 INSERT INTO tasks (
@@ -128,10 +129,11 @@ class AgenticResearcherService:
                     now, now, task.owner_user_id,
                 ),
             )
+            conn.commit()
         return task
 
     def get_task(self, task_id: str) -> Task:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             row = conn.execute(
                 "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
             ).fetchone()
@@ -149,7 +151,7 @@ class AgenticResearcherService:
             query += " AND owner_user_id = ?"
             params.append(user_id)
         query += " ORDER BY created_at DESC"
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_task(row) for row in rows]
 
@@ -158,11 +160,12 @@ class AgenticResearcherService:
         if task.status not in {TaskStatus.PENDING, TaskStatus.RUNNING}:
             raise TaskOperationError(f"Cannot cancel task with status: {task.status}")
         now = self._now()
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 "UPDATE tasks SET status = ?, updated_at = ?, completed_at = ? WHERE task_id = ?",
                 (TaskStatus.CANCELLED.value, now, now, task_id),
             )
+            conn.commit()
         task.status = TaskStatus.CANCELLED
         task.updated_at = datetime.fromisoformat(now)
         task.completed_at = datetime.fromisoformat(now)
