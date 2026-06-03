@@ -52,7 +52,7 @@ import type { ChangePasswordRequest,
   SkillRegistryUpdateRequest,
   SkillRegistryUpdateResponse,
   SystemHealth,
-  TaskCreateRequest,
+  TaskCreatePayload,
   TaskListResponse,
   TaskOutputListResponse,
   TaskRecord,
@@ -266,7 +266,7 @@ export const getTasks = (params: {
 export const getTask = (taskId: string): Promise<TaskRecord> =>
   USE_MOCK ? Promise.resolve(mockGetTask(taskId)) : api.get<TaskRecord>(`/tasks/${taskId}`);
 
-export const createTask = (payload: TaskCreateRequest): Promise<TaskSummary> =>
+export const createTask = (payload: TaskCreatePayload): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCreateTask(payload)) : api.post<TaskSummary>('/tasks', payload);
 
 export const archiveTask = (taskId: string): Promise<TaskSummary> =>

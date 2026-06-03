@@ -7,21 +7,16 @@ import {
   cancelTask,
   createTask,
   deleteTask,
-  getProjects,
-  getSkills,
   getTask,
   getTasks,
-  getWorkspaces,
   retryTask,
 } from '../api';
 import { Button, Modal, Select } from '../components/ui';
-import { useEnvironmentSelection } from '../components';
 import { useToast } from '../components/common/Toast';
 import { useT } from '../i18n';
 import { PageShell, SplitPane } from '../components/layout';
-import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
 import { extractErrorMessage } from '../utils/error';
-import type { TaskCreateRequest, TaskListResponse } from '../types';
+import type { TaskCreatePayload, TaskListResponse } from '../types';
 import TaskCreateForm from './tasks/TaskCreateForm';
 import TaskDetail from './tasks/TaskDetail';
 import TaskList from './tasks/TaskList';
@@ -33,11 +28,6 @@ function TasksPage() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const environmentSelection = useEnvironmentSelection();
-  const { settings } = useSettings();
-  const workspacesQuery = useQuery({ queryKey: ['workspaces'], queryFn: getWorkspaces });
-  const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: getProjects });
-  const skillsQuery = useQuery({ queryKey: ['skills'], queryFn: getSkills });
   const [showArchived, setShowArchived] = useState(false);
   const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
   const tasksQuery = useQuery({
@@ -46,20 +36,8 @@ function TasksPage() {
     refetchInterval: 5000,
   });
 
-  const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
-  const environments = environmentSelection.environments;
   const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
-  const availableSkills = useMemo(() => skillsQuery.data?.items ?? [], [skillsQuery.data]);
-  const projects = useMemo(() => projectsQuery.data?.items ?? [], [projectsQuery.data]);
 
-  const defaultProjectSettings = settings.projectDefaults.default;
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(
-    defaultProjectSettings?.defaultWorkspaceId ??
-      defaultProjectSettings?.selection?.lastWorkspaceId ??
-      ''
-  );
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('default');
-  const [draftResetVersion, setDraftResetVersion] = useState(0);
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const [taskSidebarWidth, setTaskSidebarWidth] = useState(320);
@@ -105,7 +83,7 @@ function TasksPage() {
   const { outputItems, outputError } = useTaskOutputStream(effectiveSelectedTaskId);
 
   const createMutation = useMutation({
-    mutationFn: (payload: TaskCreateRequest) => createTask(payload),
+    mutationFn: (payload: TaskCreatePayload) => createTask(payload),
     onSuccess: (task) => {
       queryClient.setQueryData<TaskListResponse>(['tasks', showArchived, taskSort], (current) => ({
         items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
@@ -115,7 +93,6 @@ function TasksPage() {
       }));
       selectTask(task.task_id);
       closeCreateDialog();
-      setDraftResetVersion((current) => current + 1);
       void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
       void queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
     },
@@ -168,33 +145,6 @@ function TasksPage() {
     },
   });
 
-  const effectiveWorkspaceId = selectedWorkspaceId || workspaces[0]?.workspace_id || '';
-  const effectiveEnvironmentId = environmentSelection.selectedEnvironmentId || environments[0]?.id || '';
-  const selectedWorkspace =
-    workspaces.find((workspace) => workspace.workspace_id === effectiveWorkspaceId) ?? null;
-  const selectedEnvironment = environmentSelection.selectedEnvironment;
-  const draftDefaults = useMemo(() => {
-    const environmentDefaults =
-      (environmentSelection.selectedEnvironmentId
-        ? settings.projectDefaults.default?.environmentDefaults?.[
-            environmentSelection.selectedEnvironmentId
-          ]
-        : null) ?? createEmptyEnvironmentTaskDefaults();
-
-    return {
-      title: environmentDefaults.titleTemplate,
-      task_input: environmentDefaults.taskInputTemplate,
-      executionEngineId: settings.taskConfiguration.defaultExecutionEngineId,
-      researchAgentProfileId: environmentDefaults.researchAgentProfileId,
-      taskConfigurationId: environmentDefaults.taskConfigurationId,
-    };
-  }, [
-    environmentSelection.selectedEnvironmentId,
-    settings.projectDefaults.default?.environmentDefaults,
-    settings.taskConfiguration.defaultExecutionEngineId,
-  ]);
-
-  const createError = extractErrorMessage(createMutation.error);
   const tasksError = extractErrorMessage(tasksQuery.error);
   const detailError = extractErrorMessage(selectedTaskQuery.error);
 
@@ -293,26 +243,8 @@ function TasksPage() {
         size="lg"
       >
         <TaskCreateForm
-          key={`${effectiveEnvironmentId}:${draftResetVersion}`}
-          workspaces={workspaces}
-          environments={environments}
-          projects={projects}
-          selectedWorkspaceId={effectiveWorkspaceId}
-          selectedEnvironmentId={effectiveEnvironmentId}
-          selectedProjectId={selectedProjectId}
-          selectedWorkspace={selectedWorkspace}
-          selectedEnvironment={selectedEnvironment}
-          draftDefaults={draftDefaults}
-          researchAgentProfiles={settings.taskConfiguration.researchAgentProfiles}
-          taskConfigurations={settings.taskConfiguration.taskConfigurations}
-          availableSkills={availableSkills}
-          isSubmitting={createMutation.isPending}
-          createError={createError}
-          onSelectWorkspace={setSelectedWorkspaceId}
-          onSelectEnvironment={environmentSelection.onSelectEnvironment}
-          onSelectProject={setSelectedProjectId}
           onSubmit={(payload) => createMutation.mutate(payload)}
-          onClose={closeCreateDialog}
+          onCancel={closeCreateDialog}
         />
       </Modal>
     </>

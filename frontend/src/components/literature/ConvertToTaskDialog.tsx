@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Button, Select } from '../ui';
 import { useT } from '../../i18n';
-import type { TaskCreateRequest, WorkspaceRecord, EnvironmentRecord } from '../../types';
+import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '../../types';
 
 interface Props {
   paperTitle: string;
@@ -10,7 +10,7 @@ interface Props {
   environments: EnvironmentRecord[];
   isOpen: boolean;
   isSubmitting: boolean;
-  onConfirm: (payload: TaskCreateRequest) => void;
+  onConfirm: (payload: TaskCreatePayload) => void;
   onCancel: () => void;
 }
 
@@ -28,7 +28,8 @@ export default function ConvertToTaskDialog({
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
-  const [executionEngine, setExecutionEngine] = useState('claude-code');
+  const [harnessEngine, setHarnessEngine] = useState('claude-code');
+  const [researcherType, setResearcherType] = useState<'vanilla' | 'aris-researcher'>('vanilla');
 
   const effectiveWorkspaceId = useMemo(
     () => selectedWorkspaceId || workspaces[0]?.workspace_id || '',
@@ -46,10 +47,12 @@ export default function ConvertToTaskDialog({
       project_id: 'default',
       workspace_id: effectiveWorkspaceId,
       environment_id: effectiveEnvironmentId,
-      task_profile: 'claude-code',
+      researcher_type: researcherType,
+      harness_engine: harnessEngine as 'claude-code' | 'agent-sdk' | 'codex-app-server',
+      prompt: paperAbstract,
       title: paperTitle.slice(0, 200),
-      task_input: paperAbstract,
-      execution_engine: executionEngine,
+      skills: [],
+      mcp_servers: [],
     });
   };
 
@@ -97,15 +100,29 @@ export default function ConvertToTaskDialog({
 
           <div>
             <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
-              {t('pages.tasks.profileLabel')}
+              Researcher Type
             </label>
             <Select
-              value={executionEngine}
-              onChange={(e) => setExecutionEngine(e.target.value)}
+              value={researcherType}
+              onChange={(e) => setResearcherType(e.target.value as 'vanilla' | 'aris-researcher')}
+              className="w-full text-xs py-2"
+            >
+              <option value="vanilla">Vanilla</option>
+              <option value="aris-researcher">ARIS Researcher</option>
+            </Select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+              Execution Engine
+            </label>
+            <Select
+              value={harnessEngine}
+              onChange={(e) => setHarnessEngine(e.target.value)}
               className="w-full text-xs py-2"
             >
               <option value="claude-code">Claude Code</option>
-              <option value="agent-sdk">Claude Agent SDK</option>
+              <option value="agent-sdk">Agent SDK</option>
               <option value="codex-app-server">Codex App Server</option>
             </Select>
           </div>

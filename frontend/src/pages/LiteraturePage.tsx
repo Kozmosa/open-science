@@ -8,7 +8,7 @@ import { useEnvironmentSelection } from '../components';
 import SubscriptionSidebar from '../components/literature/SubscriptionSidebar';
 import PaperFeed from '../components/literature/PaperFeed';
 import ConvertToTaskDialog from '../components/literature/ConvertToTaskDialog';
-import type { TaskCreateRequest } from '../types';
+import type { TaskCreatePayload } from '../types';
 
 interface PendingConversion {
   paperId: string;
@@ -39,7 +39,7 @@ export default function LiteraturePage() {
   const environments = environmentSelection.environments;
 
   const convertMutation = useMutation({
-    mutationFn: async ({ paperId, subscriptionId, payload }: { paperId: string; subscriptionId: string; payload: TaskCreateRequest }) => {
+    mutationFn: async ({ paperId, subscriptionId, payload }: { paperId: string; subscriptionId: string; payload: TaskCreatePayload }) => {
       const task = await createTask(payload);
       await convertPaperToTask(paperId, task.task_id, subscriptionId);
       return task;
@@ -57,7 +57,7 @@ export default function LiteraturePage() {
     setPendingConversion({ paperId, subscriptionId, title, abstract });
   }, []);
 
-  const handleConfirmConversion = useCallback((payload: TaskCreateRequest) => {
+  const handleConfirmConversion = useCallback((payload: TaskCreatePayload) => {
     if (!pendingConversion) return;
     convertMutation.mutate({
       paperId: pendingConversion.paperId,
