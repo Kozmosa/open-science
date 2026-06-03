@@ -16,6 +16,7 @@ function StatusDot({ status }: { status: string }) {
     succeeded: 'bg-emerald-500',
     failed: 'bg-red-500',
     cancelled: 'bg-amber-500',
+    paused: 'bg-purple-400',
   };
   return <span className={`inline-block h-2 w-2 rounded-full ${colorMap[status] ?? 'bg-gray-400'}`} />;
 }
@@ -37,7 +38,7 @@ function TaskNode({ data, selected }: NodeProps<TaskNodeType>) {
         <span className="text-sm font-medium truncate text-[var(--text)]">{task.title}</span>
       </div>
       <div className="text-[11px] text-[var(--text-secondary)]">
-        {task.environment_summary.alias} · {formatTime(task.created_at)}
+        {task.environment_summary?.alias ?? task.environment_id} · {formatTime(task.created_at)}
       </div>
       <Handle id="source" type="source" position={Position.Right} className="!bg-[var(--apple-blue)] !w-2 !h-2" />
     </div>

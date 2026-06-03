@@ -1,8 +1,7 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
 import { createTestQueryClient, renderWithProviders } from '../../src/test/render';
-import { createDefaultWebUiSettings, settingsStorageKey } from '../../src/settings';
 import type {
   EnvironmentRecord,
   TaskOutputEvent,
@@ -76,19 +75,18 @@ const environment: EnvironmentRecord = {
   latest_detection: null,
 };
 
-const secondaryEnvironment: EnvironmentRecord = {
-  ...environment,
-  id: 'env-2',
-  alias: 'cpu-lab',
-  display_name: 'CPU Lab',
-  host: 'cpu.example.com',
-};
-
 const taskSummary: TaskSummary = {
   task_id: 'task-1',
   project_id: 'default',
+  workspace_id: workspace.workspace_id,
+  environment_id: environment.id,
   title: 'Train model',
   task_profile: 'claude-code',
+  researcher_type: 'vanilla',
+  harness_engine: 'claude-code',
+  prompt: 'Train model\nUse three epochs.',
+  owner_user_id: 'user-1',
+  exit_code: null,
   status: 'running',
   workspace_summary: {
     workspace_id: workspace.workspace_id,
@@ -142,7 +140,7 @@ const taskRecord: TaskRecord = {
     resolved_workdir: '/workspace/project',
     snapshot_path: '.ainrf/runtime/task-harness/tasks/task-1/binding_snapshot.json',
   },
-  prompt: {
+  prompt_detail: {
     rendered_prompt: '[Task input]\nTrain model',
     layer_order: ['global_harness_system', 'workspace', 'environment', 'task_profile', 'task_input'],
     layers: [
@@ -196,7 +194,7 @@ function createOutputPage(
   };
 }
 
-vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('../../src/api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
   getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
@@ -297,8 +295,8 @@ describe('TasksPage', () => {
         resolved_workdir: '/workspace/created',
         snapshot_path: '.ainrf/runtime/task-harness/tasks/task-2/binding_snapshot.json',
       },
-      prompt: {
-        ...taskRecord.prompt!,
+      prompt_detail: {
+        ...taskRecord.prompt_detail!,
         rendered_prompt: '[Task input]\nImplement harness',
         manifest_path: '.ainrf/runtime/task-harness/tasks/task-2/prompt_layer_manifest.json',
         layers: [
@@ -334,9 +332,12 @@ describe('TasksPage', () => {
 
     renderWithProviders(<TasksPage />, { client });
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
-    await waitFor(() => expect(screen.getByLabelText('Environment')).toHaveValue('env-1'));
+    await waitFor(() => expect(screen.getByLabelText('Execution Engine')).toHaveValue('claude-code'));
 
-    fireEvent.change(screen.getByLabelText('Task input'), {
+    fireEvent.change(screen.getByLabelText('Skills'), {
+      target: { value: 'analysis, code-review' },
+    });
+    fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Implement harness\nMake it stream output.' },
     });
     await waitFor(() =>
@@ -347,21 +348,15 @@ describe('TasksPage', () => {
     await waitFor(() => {
       const payload = mockCreateTask.mock.calls[0]?.[0];
       expect(payload).toMatchObject({
+        project_id: '',
         workspace_id: 'workspace-default',
         environment_id: 'env-1',
-        task_profile: 'claude-code',
-        task_input: 'Implement harness\nMake it stream output.',
+        researcher_type: 'vanilla',
+        harness_engine: 'claude-code',
+        prompt: 'Implement harness\nMake it stream output.',
+        skills: ['analysis', 'code-review'],
+        mcp_servers: [],
         title: undefined,
-        execution_engine: 'claude-code',
-        research_agent_profile: {
-          profile_id: 'claude-code-default',
-          label: 'Claude Code Default',
-        },
-        task_configuration: {
-          mode: 'raw_prompt',
-          template_id: 'raw-prompt',
-          raw_prompt: 'Implement harness\nMake it stream output.',
-        },
       });
     });
     expect(await screen.findByRole('heading', { name: 'Implement harness' })).toBeInTheDocument();
@@ -496,8 +491,20 @@ describe('TasksPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New task' }));
     expect(screen.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Dialog task' } });
-    fireEvent.change(screen.getByLabelText('Task input'), { target: { value: 'Dialog task body' } });
+    fireEvent.change(screen.getByLabelText('Execution Engine'), { target: { value: 'agent-sdk' } });
+    fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Dialog task body' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(mockCreateTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Dialog task',
+          prompt: 'Dialog task body',
+          harness_engine: 'agent-sdk',
+          researcher_type: 'vanilla',
+        })
+      );
+    });
 
     await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-created-dialog'));
     expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument();
@@ -535,14 +542,14 @@ describe('TasksPage', () => {
     await waitFor(() => expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-review', 1));
   });
 
-  it('closes the create dialog with Escape and focuses the task input on open', async () => {
+  it('closes the create dialog with Escape', async () => {
     renderWithProviders(<TasksPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Create task' });
     expect(dialog).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByLabelText('Task input')).toHaveFocus());
+    await waitFor(() => expect(screen.getByLabelText('Close')).toHaveFocus());
 
     fireEvent.keyDown(dialog, { key: 'Escape' });
     fireEvent.transitionEnd(dialog, { propertyName: 'opacity' });
@@ -618,57 +625,38 @@ describe('TasksPage', () => {
 
     // Shift+Tab from first focusable should cycle to last
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
-    expect(screen.getByRole('button', { name: 'Reset draft' })).toHaveFocus();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
 
-    fireEvent.click(screen.getByLabelText('Close create task'));
+    fireEvent.click(screen.getByLabelText('Close'));
     fireEvent.transitionEnd(dialog, { propertyName: 'opacity' });
 
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
-  it('prefills the draft from environment settings and resets when the environment changes', async () => {
-    const settings = createDefaultWebUiSettings();
-    settings.projectDefaults.default.defaultEnvironmentId = 'env-1';
-    settings.projectDefaults.default.environmentDefaults['env-1'] = {
-      titleTemplate: 'GPU batch',
-      taskInputTemplate: 'Run the GPU validation checklist.',
-      researchAgentProfileId: 'claude-code-default',
-      taskConfigurationId: 'raw-prompt',
-    };
-    settings.projectDefaults.default.environmentDefaults['env-2'] = {
-      titleTemplate: 'CPU fallback',
-      taskInputTemplate: 'Run the CPU fallback checklist.',
-      researchAgentProfileId: 'claude-code-default',
-      taskConfigurationId: 'raw-prompt',
-    };
-    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
-    mockGetEnvironments.mockResolvedValue({ items: [environment, secondaryEnvironment] });
-
+  it('creates ARIS tasks without vanilla-only skills', async () => {
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
-    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('GPU batch'));
-    expect(screen.getByLabelText('Task input')).toHaveValue('Run the GPU validation checklist.');
-
-    fireEvent.change(screen.getByLabelText('Title'), {
-      target: { value: 'edited title' },
+    fireEvent.click(screen.getByLabelText('ARIS Researcher'));
+    fireEvent.change(screen.getByLabelText('Execution Engine'), {
+      target: { value: 'codex-app-server' },
     });
-
-    fireEvent.change(screen.getByLabelText('Environment'), {
-      target: { value: 'env-2' },
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'Run the ARIS checklist.' },
     });
-
-    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('CPU fallback'));
-    expect(screen.getByLabelText('Task input')).toHaveValue('Run the CPU fallback checklist.');
-
-    fireEvent.change(screen.getByLabelText('Task input'), {
-      target: { value: 'temporary override' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Reset draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() =>
-      expect(screen.getByLabelText('Task input')).toHaveValue('Run the CPU fallback checklist.')
+      expect(mockCreateTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          researcher_type: 'aris-researcher',
+          harness_engine: 'codex-app-server',
+          prompt: 'Run the ARIS checklist.',
+          skills: [],
+        })
+      )
     );
+    expect(screen.queryByLabelText('Skills')).not.toBeInTheDocument();
   });
 
   it('renders prompt and replayed output for the selected task', async () => {

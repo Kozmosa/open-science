@@ -325,20 +325,13 @@ function agentSessionName(environmentId: string): string {
 function cloneTask(task: TaskRecord): TaskRecord {
   return {
     ...task,
-    workspace_summary: { ...task.workspace_summary },
-    environment_summary: { ...task.environment_summary },
+    workspace_summary: task.workspace_summary ? { ...task.workspace_summary } : undefined,
+    environment_summary: task.environment_summary ? { ...task.environment_summary } : undefined,
     binding: task.binding
       ? {
           ...task.binding,
           workspace: { ...task.binding.workspace },
           environment: { ...task.binding.environment },
-        }
-      : null,
-    prompt: task.prompt
-      ? {
-          ...task.prompt,
-          layer_order: [...task.prompt.layer_order],
-          layers: task.prompt.layers.map((layer) => ({ ...layer })),
         }
       : null,
     runtime: task.runtime
@@ -347,15 +340,15 @@ function cloneTask(task: TaskRecord): TaskRecord {
           command: [...task.runtime.command],
         }
       : null,
-    result: { ...task.result },
+    result: task.result ? { ...task.result } : undefined,
   };
 }
 
 function cloneTaskSummary(task: TaskSummary): TaskSummary {
   return {
     ...task,
-    workspace_summary: { ...task.workspace_summary },
-    environment_summary: { ...task.environment_summary },
+    workspace_summary: task.workspace_summary ? { ...task.workspace_summary } : undefined,
+    environment_summary: task.environment_summary ? { ...task.environment_summary } : undefined,
   };
 }
 
@@ -595,7 +588,9 @@ export function mockGetSessionPairs(environmentId?: string): UserSessionPairList
     : Array.from(
         new Set([
           ...Object.keys(mockTerminalSessions),
-          ...Object.values(mockTasks).map((task) => task.environment_summary.environment_id),
+          ...Object.values(mockTasks).map(
+            (task) => task.environment_summary?.environment_id ?? task.environment_id
+          ),
         ])
       );
   const items: UserSessionPair[] = [];
@@ -606,7 +601,7 @@ export function mockGetSessionPairs(environmentId?: string): UserSessionPairList
     }
     const terminalSession = mockTerminalSessions[currentEnvironmentId];
     const tasks = Object.values(mockTasks).filter(
-      (task) => task.environment_summary.environment_id === currentEnvironmentId
+      (task) => (task.environment_summary?.environment_id ?? task.environment_id) === currentEnvironmentId
     );
     const latestTask = tasks[0] ?? null;
     items.push({
@@ -757,17 +752,30 @@ export function mockGetTask(taskId: string): TaskRecord {
 }
 
 export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
+  const legacyPayload = payload as TaskCreatePayload & {
+    task_input?: string;
+    task_profile?: string;
+  };
+  const prompt = payload.prompt ?? legacyPayload.task_input ?? '';
+  const harnessEngine = payload.harness_engine ?? legacyPayload.task_profile ?? 'claude-code';
   const environment = findEnvironment(payload.environment_id);
   const workspace = findWorkspace(payload.workspace_id);
   const timestamp = nowIso();
   const taskId = `task-${++mockTaskCounter}`;
-  const title = payload.title?.trim() ? payload.title.trim() : deriveTaskTitle(payload.prompt);
+  const title = payload.title?.trim() ? payload.title.trim() : deriveTaskTitle(prompt);
   const resolvedWorkdir = workspace.default_workdir ?? environment.default_workdir ?? MOCK_STATE_ROOT;
   const task: TaskRecord = {
     task_id: taskId,
     project_id: payload.project_id ?? DEFAULT_PROJECT_ID,
+    workspace_id: workspace.workspace_id,
+    environment_id: environment.id,
     title,
-    task_profile: payload.harness_engine,
+    task_profile: harnessEngine,
+    researcher_type: payload.researcher_type ?? 'vanilla',
+    harness_engine: harnessEngine,
+    prompt,
+    owner_user_id: MOCK_APP_USER_ID,
+    exit_code: null,
     status: 'queued',
     workspace_summary: {
       workspace_id: workspace.workspace_id,
@@ -802,68 +810,11 @@ export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
         host: environment.host,
         default_workdir: environment.default_workdir,
       },
-      task_profile: payload.harness_engine,
+      task_profile: harnessEngine,
       title,
-      task_input: payload.prompt,
+      task_input: prompt,
       resolved_workdir: resolvedWorkdir,
       snapshot_path: `.ainrf/runtime/task-harness/tasks/${taskId}/binding_snapshot.json`,
-    },
-    prompt: {
-      rendered_prompt: [
-        '[Global harness/system]',
-        'You are running inside AINRF Task Harness v1.',
-        '',
-        '[Workspace]',
-        workspace.workspace_prompt,
-        '',
-        '[Environment]',
-        environment.task_harness_profile ?? '',
-        '',
-        '[Task profile]',
-        'Use Claude Code style execution.',
-        '',
-        '[Task input]',
-        payload.prompt,
-      ].join('\n'),
-      layer_order: ['global_harness_system', 'workspace', 'environment', 'task_profile', 'task_input'],
-      layers: [
-        {
-          position: 1,
-          name: 'global_harness_system',
-          label: 'Global harness/system',
-          content: 'You are running inside AINRF Task Harness v1.',
-          char_count: 42,
-        },
-        {
-          position: 2,
-          name: 'workspace',
-          label: 'Workspace',
-          content: workspace.workspace_prompt,
-          char_count: workspace.workspace_prompt.length,
-        },
-        {
-          position: 3,
-          name: 'environment',
-          label: 'Environment',
-          content: environment.task_harness_profile ?? '',
-          char_count: (environment.task_harness_profile ?? '').length,
-        },
-        {
-          position: 4,
-          name: 'task_profile',
-          label: 'Task profile',
-          content: 'Use Claude Code style execution.',
-          char_count: 32,
-        },
-        {
-          position: 5,
-          name: 'task_input',
-          label: 'Task input',
-          content: payload.prompt,
-          char_count: payload.prompt.length,
-        },
-      ],
-      manifest_path: `.ainrf/runtime/task-harness/tasks/${taskId}/prompt_layer_manifest.json`,
     },
     runtime: {
       runner_kind: null,

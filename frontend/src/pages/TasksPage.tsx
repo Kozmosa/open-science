@@ -7,8 +7,11 @@ import {
   cancelTask,
   createTask,
   deleteTask,
+  getEnvironments,
+  getProjects,
   getTask,
   getTasks,
+  getWorkspaces,
   retryTask,
 } from '../api';
 import { Button, Modal, Select } from '../components/ui';
@@ -145,6 +148,24 @@ function TasksPage() {
     },
   });
 
+  // Fetch defaults for task creation
+  const projectsQuery = useQuery({
+    queryKey: ['projects'],
+    queryFn: getProjects,
+  });
+  const workspacesQuery = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: getWorkspaces,
+  });
+  const environmentsQuery = useQuery({
+    queryKey: ['environments'],
+    queryFn: getEnvironments,
+  });
+
+  const defaultProjectId = projectsQuery.data?.items[0]?.project_id ?? '';
+  const defaultWorkspaceId = workspacesQuery.data?.items[0]?.workspace_id ?? '';
+  const defaultEnvironmentId = environmentsQuery.data?.items[0]?.id ?? '';
+
   const tasksError = extractErrorMessage(tasksQuery.error);
   const detailError = extractErrorMessage(selectedTaskQuery.error);
 
@@ -243,6 +264,9 @@ function TasksPage() {
         size="lg"
       >
         <TaskCreateForm
+          projectId={defaultProjectId}
+          workspaceId={defaultWorkspaceId}
+          environmentId={defaultEnvironmentId}
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
         />

@@ -164,6 +164,8 @@ export interface TaskEnvironmentSummary {
 export interface TaskSummary {
   task_id: string;
   project_id: string;
+  workspace_id: string;
+  environment_id: string;
   title: string;
   status: TaskStatus;
   created_at: string;
@@ -174,7 +176,7 @@ export interface TaskSummary {
   // New agentic-researcher API fields (flat structure)
   researcher_type?: string;
   harness_engine?: string;
-  prompt?: string;
+  prompt: string;
   owner_user_id?: string;
   exit_code?: number | null;
   // Legacy fields for backward compatibility
@@ -268,7 +270,7 @@ export interface TaskResultSummary {
 
 export interface TaskRecord extends TaskSummary {
   binding?: TaskBindingSummary | null;
-  prompt?: TaskPromptSummary | null;
+  prompt_detail?: TaskPromptSummary | null;
   runtime?: TaskRuntimeSummary | null;
   result?: TaskResultSummary;
   execution_engine?: string;
