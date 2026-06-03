@@ -139,7 +139,7 @@ async def stream_file(
                 await executor.close()
                 raise HTTPException(
                     status_code=413,
-                    detail=f"File size {file_size} exceeds maximum allowed size of {MAX_REMOTE_FILE_SIZE} bytes"
+                    detail=f"File size {file_size} exceeds maximum allowed size of {MAX_REMOTE_FILE_SIZE} bytes",
                 )
     except (ValueError, HTTPException):
         await executor.close()
@@ -191,7 +191,7 @@ async def upload_file(
                 if total_size > MAX_UPLOAD_SIZE:
                     raise HTTPException(
                         status_code=413,
-                        detail=f"File size exceeds maximum allowed size of {MAX_UPLOAD_SIZE} bytes"
+                        detail=f"File size exceeds maximum allowed size of {MAX_UPLOAD_SIZE} bytes",
                     )
                 tmp.write(chunk)
 

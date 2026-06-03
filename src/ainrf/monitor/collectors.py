@@ -165,6 +165,7 @@ class LocalCollector:
 
     async def _read_meminfo_async(self) -> MemoryInfo:
         from anyio import to_thread
+
         return await to_thread.run_sync(self._read_meminfo)
 
     def _read_meminfo(self) -> MemoryInfo:

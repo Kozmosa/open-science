@@ -85,7 +85,9 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
     elif payload.researcher_type == "aris-researcher":
         researcher = aris(engine=engine_type)
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown researcher type: {payload.researcher_type}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown researcher type: {payload.researcher_type}"
+        )
 
     try:
         task = service.create_task(

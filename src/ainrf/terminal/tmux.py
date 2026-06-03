@@ -15,20 +15,26 @@ from ainrf.terminal.models import UserEnvironmentBinding
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND, TERMINAL_SSH_TARGET_KIND
 
 
-
-
 _LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 _REMOTE_TMUX_MISSING_MARKER = "__AINRF_REMOTE_TMUX_MISSING__"
 _TMUX_UNSAFE_SESSION_TARGET_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
 class TmuxCommandError(RuntimeError):
     pass
+
+
 class TmuxProbeTimeoutError(TmuxCommandError):
     pass
+
+
 @dataclass(slots=True)
 class _CommandResult:
     returncode: int
     stdout: str
     stderr: str
+
+
 @dataclass(slots=True)
 class TmuxWindowInfo:
     window_id: str
@@ -36,6 +42,8 @@ class TmuxWindowInfo:
     is_dead: bool = False
     exit_status: int | None = None
     current_path: str | None = None
+
+
 class TmuxAdapter:
     def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
@@ -58,7 +66,6 @@ class TmuxAdapter:
         ):
             return TERMINAL_LOCAL_TARGET_KIND
         return TERMINAL_SSH_TARGET_KIND
-
 
     @staticmethod
     def session_target_for(session_name: str) -> str:
@@ -572,7 +579,6 @@ class TmuxAdapter:
         )
         if result.returncode != 0:
             pass  # best-effort: resize failure is non-fatal
-
 
     def _build_ssh_command(
         self,

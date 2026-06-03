@@ -76,9 +76,7 @@ class SessionService:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_attempts_parent ON task_attempts(parent_attempt_id)"
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_attempts_status ON task_attempts(status)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_attempts_status ON task_attempts(status)")
             try:
                 conn.execute("ALTER TABLE task_sessions ADD COLUMN owner_user_id TEXT")
             except sqlite3.OperationalError:
@@ -199,13 +197,15 @@ class SessionService:
             rows = conn.execute(query, params).fetchall()
         result: dict[str, list[dict[str, object]]] = {sid: [] for sid in session_ids}
         for r in rows:
-            result[r["session_id"]].append({
-                "attempt_seq": r["attempt_seq"],
-                "status": r["status"],
-                "duration_ms": r["duration_ms"],
-                "intervention_reason": r["intervention_reason"],
-                "created_at": r["created_at"],
-            })
+            result[r["session_id"]].append(
+                {
+                    "attempt_seq": r["attempt_seq"],
+                    "status": r["status"],
+                    "duration_ms": r["duration_ms"],
+                    "intervention_reason": r["intervention_reason"],
+                    "created_at": r["created_at"],
+                }
+            )
         return result
 
     def get_session(self, session_id: str) -> Session:

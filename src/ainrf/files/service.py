@@ -252,9 +252,7 @@ class FileBrowserService:
 
         stat = await to_thread.run_sync(target.stat)
         if stat.st_size > self._max_file_size:
-            raise FileTooLargeError(
-                f"File exceeds {self._max_file_size // 1_048_576} MB limit"
-            )
+            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1_048_576} MB limit")
 
         data = await to_thread.run_sync(target.read_bytes)
         return self._build_file_content(path, data)

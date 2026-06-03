@@ -388,10 +388,34 @@ async def terminal_session_exec(
     try:
         # Validate command against allowlist for security
         ALLOWED_COMMANDS = {
-            "ls", "cat", "pwd", "echo", "cd", "mkdir", "touch", "rm", "mv", "cp",
-            "grep", "find", "tail", "head", "wc", "sort", "uniq", "diff",
-            "git", "python", "python3", "node", "npm", "pip", "uv",
-            "bash", "sh", "zsh",
+            "ls",
+            "cat",
+            "pwd",
+            "echo",
+            "cd",
+            "mkdir",
+            "touch",
+            "rm",
+            "mv",
+            "cp",
+            "grep",
+            "find",
+            "tail",
+            "head",
+            "wc",
+            "sort",
+            "uniq",
+            "diff",
+            "git",
+            "python",
+            "python3",
+            "node",
+            "npm",
+            "pip",
+            "uv",
+            "bash",
+            "sh",
+            "zsh",
         }
 
         # Extract base command (first element)
@@ -402,7 +426,7 @@ async def terminal_session_exec(
         if base_cmd not in ALLOWED_COMMANDS:
             raise HTTPException(
                 status_code=403,
-                detail=f"Command '{base_cmd}' not in allowed list. Contact administrator to add it."
+                detail=f"Command '{base_cmd}' not in allowed list. Contact administrator to add it.",
             )
 
         result = await exec_command(
@@ -558,8 +582,11 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                             rows=rows,
                         )
                     except Exception as exc:
-                        logger.warning("Failed to resize tmux window for session %s: %s",
-                                     attachment.session_name, exc)
+                        logger.warning(
+                            "Failed to resize tmux window for session %s: %s",
+                            attachment.session_name,
+                            exc,
+                        )
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:

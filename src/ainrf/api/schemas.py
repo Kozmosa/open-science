@@ -1061,7 +1061,9 @@ class EnvironmentAccessListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[EnvironmentAccessResponse]
 
+
 # ── Change Password schema ──────────────────────────────────
+
 
 class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")

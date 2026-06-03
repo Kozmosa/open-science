@@ -61,10 +61,19 @@ class LiteratureScheduler:
         for sub in due_subs:
             try:
                 papers = await fetch_for_subscription(sub)
-                new = [p for p in papers if not self._service.paper_exists(p.paper_id, sub.subscription_id)]
+                new = [
+                    p
+                    for p in papers
+                    if not self._service.paper_exists(p.paper_id, sub.subscription_id)
+                ]
                 if new:
                     count = self._service.insert_papers(new)
-                    logger.info("Literature fetch: sub=%s total=%d new=%d", sub.subscription_id, len(papers), count)
+                    logger.info(
+                        "Literature fetch: sub=%s total=%d new=%d",
+                        sub.subscription_id,
+                        len(papers),
+                        count,
+                    )
                 self._service.update_last_fetched(sub.subscription_id)
             except Exception as exc:
                 logger.error("Literature fetch failed: sub=%s error=%s", sub.subscription_id, exc)
