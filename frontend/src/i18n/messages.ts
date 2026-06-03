@@ -330,8 +330,11 @@ export const messages = {
         actions: {
           cancel: 'Cancel',
           archive: 'Archive',
+          retry: 'Retry',
           showArchived: 'Show archived',
         },
+        retrySuccess: 'Task retried successfully',
+        retryFailed: 'Failed to retry task',
         sort: {
           updated: 'Updated (newest)',
           created: 'Created (newest)',
@@ -1237,8 +1240,11 @@ export const messages = {
         actions: {
           cancel: '取消',
           archive: '归档',
+          retry: '重试',
           showArchived: '显示已归档',
         },
+        retrySuccess: '任务已重试',
+        retryFailed: '重试失败',
         sort: {
           updated: '更新时间（从新到旧）',
           created: '创建时间（从新到旧）',

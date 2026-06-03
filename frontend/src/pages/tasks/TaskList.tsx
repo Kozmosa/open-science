@@ -14,6 +14,7 @@ interface Props {
   onArchiveTask: (taskId: string) => void;
   onCancelTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onRetryTask: (taskId: string) => void;
 }
 
 function matchesTask(task: TaskSummary, query: string): boolean {
@@ -43,12 +44,14 @@ export default function TaskList({
   onArchiveTask,
   onCancelTask,
   onDeleteTask,
+  onRetryTask,
 }: Props) {
   const t = useT();
   const filteredTasks = tasks.filter((task) => matchesTask(task, searchQuery));
 
   const canCancel = (status: string) => status === 'queued' || status === 'starting' || status === 'running';
   const canArchive = (status: string) => status === 'succeeded' || status === 'failed' || status === 'cancelled';
+  const canRetry = (status: string) => status === 'failed' || status === 'cancelled';
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -85,6 +88,7 @@ export default function TaskList({
               <button
                 key={task.task_id}
                 type="button"
+                data-task-id={task.task_id}
                 onClick={() => onSelectTask(task.task_id)}
                 className={[
                   'group flex w-full flex-col gap-2 rounded-lg border px-3 py-3 text-left transition',
@@ -115,6 +119,25 @@ export default function TaskList({
                         className="whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.cancel')}
+                      </span>
+                    ) : null}
+                    {canRetry(task.status) && !showArchived ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRetryTask(task.task_id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.stopPropagation();
+                            onRetryTask(task.task_id);
+                          }
+                        }}
+                        className="whitespace-nowrap rounded-md border border-[var(--apple-blue)]/30 bg-[var(--apple-blue)]/5 px-2 py-0.5 text-[11px] font-medium text-[var(--apple-blue)] opacity-0 transition hover:bg-[var(--apple-blue)]/15 group-hover:opacity-100"
+                      >
+                        {t('pages.tasks.actions.retry')}
                       </span>
                     ) : null}
                     {canArchive(task.status) && !showArchived ? (

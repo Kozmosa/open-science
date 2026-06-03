@@ -20,6 +20,8 @@ from ainrf.api.schemas import (
     TaskOutputListResponse,
     TaskPromptRequest,
     TaskPromptSendResponse,
+    TaskRetryRequest,
+    TaskRetryResponse,
     TaskSummaryResponse,
 )
 from ainrf.sessions import SessionService
@@ -458,6 +460,35 @@ async def resume_task(task_id: str, request: Request) -> TaskSummaryResponse:
     except Exception as exc:
         raise _translate_task_error(exc) from exc
     return TaskSummaryResponse.model_validate(_serialize_task_summary(task))
+
+
+@router.post("/{task_id}/retry", response_model=TaskRetryResponse)
+async def retry_task(
+    task_id: str,
+    payload: TaskRetryRequest,
+    request: Request,
+) -> TaskRetryResponse:
+    user = get_current_user(request)
+    service = _get_task_harness_service(request)
+    try:
+        task = service.get_task(task_id)
+        if not check_resource_owner(user, task.owner_user_id):
+            raise HTTPException(status_code=404, detail="Task not found")
+        result = service.retry_task(
+            task_id=task_id,
+            task_input=payload.task_input,
+            environment_id=payload.environment_id,
+            owner_user_id=user["id"],
+        )
+    except Exception as exc:
+        raise _translate_task_error(exc) from exc
+    return TaskRetryResponse.model_validate(
+        {
+            "new_task": _serialize_task_summary(result["new_task"]),
+            "archived_task_id": result["archived_task_id"],
+            "edge_id": result["edge_id"],
+        }
+    )
 
 
 @router.post("/{task_id}/prompt", response_model=TaskPromptSendResponse)

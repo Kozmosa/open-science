@@ -584,6 +584,21 @@ class TaskEdgeCreateRequest(BaseModel):
     target_task_id: str = Field(min_length=1)
 
 
+class TaskRetryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_input: str | None = None
+    environment_id: str | None = None
+
+
+class TaskRetryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    new_task: TaskSummaryResponse
+    archived_task_id: str
+    edge_id: str
+
+
 class ResearchAgentProfileSnapshotResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

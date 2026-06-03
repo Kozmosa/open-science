@@ -12,9 +12,11 @@ import {
   getTask,
   getTasks,
   getWorkspaces,
+  retryTask,
 } from '../api';
 import { Button, Modal, Select } from '../components/ui';
 import { useEnvironmentSelection } from '../components';
+import { useToast } from '../components/common/Toast';
 import { useT } from '../i18n';
 import { PageShell, SplitPane } from '../components/layout';
 import { createEmptyEnvironmentTaskDefaults, useSettings } from '../settings';
@@ -28,6 +30,7 @@ import { useTaskOutputStream } from './tasks/useTaskOutputStream';
 
 function TasksPage() {
   const t = useT();
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const environmentSelection = useEnvironmentSelection();
@@ -152,6 +155,19 @@ function TasksPage() {
     },
   });
 
+  const retryMutation = useMutation({
+    mutationFn: (taskId: string) => retryTask(taskId),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['task-edges'] });
+      selectTask(data.new_task.task_id);
+      showToast(t('pages.tasks.retrySuccess'), 'success');
+    },
+    onError: () => {
+      showToast(t('pages.tasks.retryFailed'), 'error');
+    },
+  });
+
   const effectiveWorkspaceId = selectedWorkspaceId || workspaces[0]?.workspace_id || '';
   const effectiveEnvironmentId = environmentSelection.selectedEnvironmentId || environments[0]?.id || '';
   const selectedWorkspace =
@@ -253,6 +269,7 @@ function TasksPage() {
             onArchiveTask={(taskId) => archiveMutation.mutate(taskId)}
             onCancelTask={(taskId) => cancelMutation.mutate(taskId)}
             onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
+            onRetryTask={(taskId) => retryMutation.mutate(taskId)}
           />
         </>}
         sidebarWidth={taskSidebarWidth}
