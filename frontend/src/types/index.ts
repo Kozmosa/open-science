@@ -79,6 +79,9 @@ export interface UserSessionPairListResponse {
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'paused';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 
+export type ResearcherType = 'vanilla' | 'aris-researcher';
+export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
+
 export interface TaskRetryResponse {
   new_task: TaskSummary;
   archived_task_id: string;
@@ -326,6 +329,18 @@ export interface TaskCreateRequest {
     template_vars?: Record<string, unknown>;
     raw_prompt?: string | null;
   } | null;
+}
+
+export interface TaskCreatePayload {
+  project_id: string;
+  workspace_id: string;
+  environment_id: string;
+  researcher_type: ResearcherType;
+  harness_engine: HarnessEngine;
+  prompt: string;
+  skills: string[];
+  mcp_servers: string[];
+  title?: string;
 }
 
 export interface TaskOutputEvent {

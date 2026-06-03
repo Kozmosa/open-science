@@ -29,7 +29,7 @@ import type {
   SkillListResponse,
   SkillPreview,
   SystemHealth,
-  TaskCreateRequest,
+  TaskCreatePayload,
   TaskListResponse,
   TaskRecord,
   TaskOutputEvent,
@@ -756,18 +756,18 @@ export function mockGetTask(taskId: string): TaskRecord {
   return cloneTask(task);
 }
 
-export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
+export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
   const environment = findEnvironment(payload.environment_id);
   const workspace = findWorkspace(payload.workspace_id);
   const timestamp = nowIso();
   const taskId = `task-${++mockTaskCounter}`;
-  const title = payload.title?.trim() ? payload.title.trim() : deriveTaskTitle(payload.task_input);
+  const title = payload.title?.trim() ? payload.title.trim() : deriveTaskTitle(payload.prompt);
   const resolvedWorkdir = workspace.default_workdir ?? environment.default_workdir ?? MOCK_STATE_ROOT;
   const task: TaskRecord = {
     task_id: taskId,
     project_id: payload.project_id ?? DEFAULT_PROJECT_ID,
     title,
-    task_profile: payload.task_profile,
+    task_profile: payload.harness_engine,
     status: 'queued',
     workspace_summary: {
       workspace_id: workspace.workspace_id,
@@ -802,9 +802,9 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
         host: environment.host,
         default_workdir: environment.default_workdir,
       },
-      task_profile: payload.task_profile,
+      task_profile: payload.harness_engine,
       title,
-      task_input: payload.task_input,
+      task_input: payload.prompt,
       resolved_workdir: resolvedWorkdir,
       snapshot_path: `.ainrf/runtime/task-harness/tasks/${taskId}/binding_snapshot.json`,
     },
@@ -823,7 +823,7 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
         'Use Claude Code style execution.',
         '',
         '[Task input]',
-        payload.task_input,
+        payload.prompt,
       ].join('\n'),
       layer_order: ['global_harness_system', 'workspace', 'environment', 'task_profile', 'task_input'],
       layers: [
@@ -859,8 +859,8 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
           position: 5,
           name: 'task_input',
           label: 'Task input',
-          content: payload.task_input,
-          char_count: payload.task_input.length,
+          content: payload.prompt,
+          char_count: payload.prompt.length,
         },
       ],
       manifest_path: `.ainrf/runtime/task-harness/tasks/${taskId}/prompt_layer_manifest.json`,
