@@ -13,10 +13,13 @@ from ainrf.agentic_researcher import (
     aris,
     vanilla,
 )
+from ainrf.agentic_researcher.models import Task, TaskOutputEvent
 from ainrf.agentic_researcher.service import TaskNotFoundError, TaskOperationError
 from ainrf.api.schemas import (
+    MessageItemResponse,
     TaskCreateRequest,
     TaskListResponse,
+    TaskMessagesResponse,
     TaskOutputItemResponse,
     TaskOutputResponse,
     TaskPauseResponse,
@@ -41,7 +44,7 @@ def _get_service(request: Request) -> AgenticResearcherService:
     return service
 
 
-def _task_to_response(task) -> TaskSummaryResponse:
+def _task_to_response(task: Task) -> TaskSummaryResponse:
     return TaskSummaryResponse(
         task_id=task.task_id,
         project_id=task.project_id,
@@ -63,7 +66,7 @@ def _task_to_response(task) -> TaskSummaryResponse:
     )
 
 
-def _assert_task_owner(request: Request, task_id: str):
+def _assert_task_owner(request: Request, task_id: str) -> tuple[AgenticResearcherService, Task]:
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -72,6 +75,90 @@ def _assert_task_owner(request: Request, task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     check_resource_ownership(user, task.owner_user_id)
     return service, task
+
+
+def _assert_task_stream_access(
+    request: Request,
+    task_id: str,
+) -> tuple[AgenticResearcherService, Task]:
+    service = _get_service(request)
+    try:
+        task = service.get_task(task_id)
+    except TaskNotFoundError:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if getattr(request.state, "auth_scheme", None) == "api_key":
+        return service, task
+
+    user = get_current_user(request)
+    check_resource_ownership(user, task.owner_user_id)
+    return service, task
+
+
+def _output_item_to_message(item: TaskOutputEvent) -> MessageItemResponse | None:
+    try:
+        parsed = json.loads(item.content)
+    except json.JSONDecodeError:
+        parsed = {"content": item.content}
+    payload = parsed if isinstance(parsed, dict) else {"content": item.content}
+
+    metadata = {
+        "timestamp": item.created_at.isoformat(),
+        "sequence": item.seq,
+    }
+    message_id = f"{item.task_id}-{item.seq}"
+
+    if item.kind == "message":
+        message_type = "user" if payload.get("role") == "user" else "assistant"
+        return MessageItemResponse(
+            id=message_id,
+            type=message_type,
+            content=str(payload.get("content") or ""),
+            metadata=metadata,
+        )
+    if item.kind == "thinking":
+        return MessageItemResponse(
+            id=message_id,
+            type="thinking",
+            content=str(payload.get("content") or ""),
+            metadata={**metadata, "isFolded": True},
+        )
+    if item.kind == "tool_call":
+        return MessageItemResponse(
+            id=message_id,
+            type="tool_call",
+            content={"name": payload.get("name"), "arguments": payload.get("arguments")},
+            metadata={**metadata, "isFolded": True},
+        )
+    if item.kind == "tool_result":
+        return MessageItemResponse(
+            id=message_id,
+            type="tool_result",
+            content={"tool_use_id": payload.get("tool_use_id"), "content": payload.get("content")},
+            metadata={**metadata, "isFolded": True},
+        )
+    if item.kind in {"system", "lifecycle"}:
+        return MessageItemResponse(
+            id=message_id,
+            type="system_event",
+            content=str(payload.get("subtype") or payload.get("content") or item.kind),
+            metadata=metadata,
+        )
+    if item.kind == "stdout":
+        return MessageItemResponse(
+            id=message_id,
+            type="assistant",
+            content=str(payload.get("content") or item.content),
+            metadata=metadata,
+        )
+    if item.kind == "stderr":
+        return MessageItemResponse(
+            id=message_id,
+            type="system_event",
+            content=f"[stderr] {payload.get('content') or item.content}",
+            metadata=metadata,
+        )
+    return None
 
 
 @router.post("", status_code=201)
@@ -258,13 +345,33 @@ async def get_task_output(
     )
 
 
+@router.get("/{task_id}/messages")
+async def get_task_messages(
+    request: Request,
+    task_id: str,
+    after_seq: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+) -> TaskMessagesResponse:
+    service, _ = _assert_task_owner(request, task_id)
+    items = service.get_output(task_id, after_seq=after_seq, limit=limit + 1)
+    visible_items = items[:limit]
+    messages = [
+        message for item in visible_items if (message := _output_item_to_message(item)) is not None
+    ]
+    return TaskMessagesResponse(
+        messages=messages,
+        has_more=len(items) > limit,
+        next_sequence=visible_items[-1].seq if len(items) > limit and visible_items else None,
+    )
+
+
 @router.get("/{task_id}/stream")
 async def stream_task_output(
     request: Request,
     task_id: str,
     after_seq: int = Query(0, ge=0),
 ) -> StreamingResponse:
-    service, _ = _assert_task_owner(request, task_id)
+    service, _ = _assert_task_stream_access(request, task_id)
 
     async def event_stream():
         cursor = after_seq
