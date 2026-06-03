@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shlex
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
@@ -445,6 +446,28 @@ class AgenticResearcherService:
             ),
         )
 
+    def get_runtime_summary(self, task: Task) -> dict[str, object]:
+        context = self._build_execution_context(task)
+        command = self._runtime_command(context)
+        return {
+            "working_directory": context.working_directory,
+            "command": command,
+        }
+
+    def _runtime_command(self, context: ExecutionContext) -> list[str]:
+        if context.engine_type == HarnessEngineType.CLAUDE_CODE:
+            return [
+                "claude",
+                "-p",
+                "--no-session-persistence",
+                "--permission-mode",
+                "bypassPermissions",
+            ]
+        if context.engine_type == HarnessEngineType.CODEX_APP_SERVER:
+            command_text = context.codex_app_server_command or "codex app-server --listen stdio://"
+            return shlex.split(command_text)
+        return ["claude-agent-sdk", "query"]
+
     def _resolve_working_directory(self, task: Task) -> Path:
         if self._workspace_service is not None:
             workspace = self._workspace_service.get_workspace(task.workspace_id)
@@ -502,6 +525,8 @@ class AgenticResearcherService:
 
     def _event_content(self, event: EngineEvent) -> str:
         content = event.payload.get("content")
+        if content is None:
+            content = event.payload.get("message")
         if isinstance(content, str):
             return content
         return json.dumps(

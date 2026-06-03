@@ -129,7 +129,11 @@ function AppRoutes() {
     );
   }
 
-  const content = <AuthenticatedRoutes />;
+  const content = (
+    <SettingsProvider>
+      <AuthenticatedRoutes />
+    </SettingsProvider>
+  );
   return PROFILER_ENABLED ? <Profiler id="AppRoutes" onRender={onRender}>{content}</Profiler> : content;
 }
 
@@ -137,15 +141,13 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <SettingsProvider>
-          <ToastProvider>
-            <BrowserRouter>
-              <AuthProvider>
-                <AppRoutes />
-              </AuthProvider>
-            </BrowserRouter>
-          </ToastProvider>
-        </SettingsProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </BrowserRouter>
+        </ToastProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

@@ -46,6 +46,14 @@ logger = logging.getLogger(__name__)
 McpServerConfig = (
     McpStdioServerConfig | McpSSEServerConfig | McpHttpServerConfig | McpSdkServerConfig
 )
+_ANTHROPIC_PROVIDER_ENV_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+)
 
 
 def _build_token_usage(sdk_msg: object) -> dict[str, Any] | None:
@@ -114,6 +122,19 @@ class AgentSdkEngine(HarnessEngine):
             env.update(context.env_overrides)
         return env
 
+    def _implicit_provider_env_keys(self, context: ExecutionContext) -> tuple[str, ...]:
+        has_explicit_provider = any(
+            value
+            for value in (
+                context.api_base_url,
+                context.api_key,
+                context.default_opus_model,
+                context.default_sonnet_model,
+                context.default_haiku_model,
+            )
+        ) or any(key in (context.env_overrides or {}) for key in _ANTHROPIC_PROVIDER_ENV_KEYS)
+        return () if has_explicit_provider else _ANTHROPIC_PROVIDER_ENV_KEYS
+
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         async with self._lock:
             session = self._sessions.get(context.task_id)
@@ -166,6 +187,9 @@ class AgentSdkEngine(HarnessEngine):
         async with self._run_lock:
             env_overrides = self._provider_env(context)
             saved_env: dict[str, str | None] = {}
+            for key in self._implicit_provider_env_keys(context):
+                saved_env[key] = os.environ.get(key)
+                os.environ.pop(key, None)
             for key, value in env_overrides.items():
                 saved_env[key] = os.environ.get(key)
                 os.environ[key] = value
@@ -202,7 +226,7 @@ class AgentSdkEngine(HarnessEngine):
 
             if session.abort_event.is_set():
                 raise asyncio.CancelledError("Task aborted")
-            if session.had_error:
+            if session.had_error and not session.terminal_emitted:
                 raise RuntimeError("Agent SDK session completed with errors")
 
             if session.should_pause_after_turn:
@@ -308,22 +332,7 @@ class AgentSdkEngine(HarnessEngine):
         if isinstance(sdk_msg, ResultMessage):
             return self._convert_result_message(sdk_msg, session)
         if isinstance(sdk_msg, StreamEvent):
-            event_type = sdk_msg.event.get("type")
-            if event_type == "content_block_delta":
-                delta = sdk_msg.event.get("delta", {})
-                if isinstance(delta, dict):
-                    text = delta.get("text")
-                    if isinstance(text, str) and text:
-                        events.append(
-                            EngineEvent(
-                                event_type="message",
-                                payload={
-                                    "role": "assistant",
-                                    "content": text,
-                                    "streaming": True,
-                                },
-                            )
-                        )
+            _ = sdk_msg
             return events
         if isinstance(sdk_msg, RateLimitEvent):
             return [

@@ -549,6 +549,8 @@ class TaskSummaryResponse(BaseModel):
     latest_output_seq: int = 0
     exit_code: int | None = None
     error_summary: str | None = None
+    working_directory: str | None = None
+    command: list[str] = Field(default_factory=list)
 
 
 class TaskListResponse(BaseModel):

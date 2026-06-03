@@ -303,16 +303,6 @@ class CodexAppServerEngine(HarnessEngine):
             await self._handle_item_completed(params, emit)
             return
         if method == "item/agentMessage/delta":
-            await emit(
-                EngineEvent(
-                    event_type="message",
-                    payload={
-                        "role": "assistant",
-                        "content": params.get("delta", ""),
-                        "streaming": True,
-                    },
-                )
-            )
             return
         if method in {"item/reasoning/summaryTextDelta", "item/reasoning/textDelta"}:
             await emit(
