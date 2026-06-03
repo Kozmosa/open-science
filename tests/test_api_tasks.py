@@ -250,6 +250,45 @@ def test_agentic_researcher_initialization_migrates_legacy_pending_status(
 
 
 @pytest.mark.anyio
+async def test_task_list_uses_fallback_workdir_for_missing_legacy_workspace(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app, user_id="user-001")
+    service: AgenticResearcherService = app.state.agentic_researcher_service
+    task = service.create_task(
+        project_id="proj-001",
+        workspace_id="default-workspace",
+        environment_id="env-001",
+        researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
+        prompt="Legacy prompt",
+        owner_user_id="user-001",
+        title="Legacy workspace task",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        response = await client.get("/tasks?include_archived=false&limit=200&sort=updated")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"][0]["task_id"] == task.task_id
+    assert payload["items"][0]["working_directory"] == str(
+        tmp_path / "workspace" / "default-workspace"
+    )
+    assert payload["items"][0]["command"] == [
+        "claude",
+        "-p",
+        "--no-session-persistence",
+        "--permission-mode",
+        "bypassPermissions",
+    ]
+
+
+@pytest.mark.anyio
 async def test_project_tasks_endpoint_uses_task_filters(tmp_path: Path) -> None:
     app = make_app(tmp_path, FakeEngine())
     headers = get_jwt_headers(app)

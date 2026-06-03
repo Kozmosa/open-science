@@ -21,6 +21,7 @@ from ainrf.agentic_researcher.models import (
 )
 from ainrf.harness_engine import EngineEvent, ExecutionContext, get_engine
 from ainrf.harness_engine.base import HarnessEngine
+from ainrf.workspaces.service import WorkspaceNotFoundError
 
 if TYPE_CHECKING:
     from ainrf.workspaces import WorkspaceRegistryService
@@ -470,8 +471,11 @@ class AgenticResearcherService:
 
     def _resolve_working_directory(self, task: Task) -> Path:
         if self._workspace_service is not None:
-            workspace = self._workspace_service.get_workspace(task.workspace_id)
-            if workspace.default_workdir:
+            try:
+                workspace = self._workspace_service.get_workspace(task.workspace_id)
+            except WorkspaceNotFoundError:
+                workspace = None
+            if workspace is not None and workspace.default_workdir:
                 path = Path(workspace.default_workdir)
                 path.mkdir(parents=True, exist_ok=True)
                 return path
