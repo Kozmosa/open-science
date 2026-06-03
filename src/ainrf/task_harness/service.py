@@ -686,6 +686,50 @@ class TaskHarnessService:
             connection.commit()
         return self._load_list_item(task_id)
 
+    def retry_task(
+        self,
+        task_id: str,
+        *,
+        task_input: str | None = None,
+        environment_id: str | None = None,
+        owner_user_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.initialize()
+        old_task = self.get_task(task_id)
+        if old_task.status not in {TaskHarnessStatus.FAILED, TaskHarnessStatus.CANCELLED}:
+            raise TaskHarnessError(
+                f"Only failed or cancelled tasks can be retried. Current status: {old_task.status}"
+            )
+
+        self.archive_task(task_id)
+
+        new_task = self.create_task(
+            project_id=old_task.project_id,
+            workspace_id=old_task.workspace_summary.workspace_id,
+            environment_id=environment_id or old_task.environment_summary.environment_id,
+            task_profile=old_task.task_profile,
+            task_input=task_input if task_input is not None else (old_task.binding.task_input if old_task.binding else old_task.title),
+            title=old_task.title,
+            execution_engine=old_task.execution_engine,
+            auto_connect=False,
+            session_id=None,
+            owner_user_id=owner_user_id,
+            research_agent_profile=asdict(old_task.research_agent_profile) if old_task.research_agent_profile is not None else None,
+            task_configuration=asdict(old_task.task_configuration) if old_task.task_configuration is not None else None,
+        )
+
+        edge = self.create_task_edge(
+            project_id=old_task.project_id,
+            source_task_id=task_id,
+            target_task_id=new_task.task_id,
+        )
+
+        return {
+            "new_task": new_task,
+            "archived_task_id": task_id,
+            "edge_id": edge.edge_id,
+        }
+
     def delete_task(self, task_id: str) -> None:
         """Permanently delete a task row and its artifact directory."""
         self.initialize()

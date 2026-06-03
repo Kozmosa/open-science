@@ -79,6 +79,12 @@ export interface UserSessionPairListResponse {
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'paused';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 
+export interface TaskRetryResponse {
+  new_task: TaskSummary;
+  archived_task_id: string;
+  edge_id: string;
+}
+
 export interface ProjectRecord {
   project_id: string;
   name: string;

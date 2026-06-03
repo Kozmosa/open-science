@@ -867,3 +867,174 @@ async def test_create_task_rejects_validate_ideas_without_aris_skill(tmp_path: P
         )
         assert response.status_code == 409
         assert "ARIS skill" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_retry_task_archives_old_and_creates_new(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="127.0.0.1",
+        default_workdir="/workspace/project",
+        task_harness_profile="Use the configured GPU environment.",
+    )
+
+    def fake_build_local_launcher(
+        *,
+        working_directory: str,
+        prompt_file: Path,
+        rendered_prompt: str,
+        settings_path: str | None = None,
+    ) -> tuple[LaunchPayload, object]:
+        payload = LaunchPayload(
+            runner_kind="local-process",
+            working_directory=working_directory,
+            command=["true"],
+            prompt_file=str(prompt_file),
+        )
+        return payload, None
+
+    monkeypatch.setattr(
+        "ainrf.task_harness.service.build_local_launcher",
+        fake_build_local_launcher,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        workspace_response = await client.get("/workspaces", headers=jwt_headers)
+        workspace_id = workspace_response.json()["items"][0]["workspace_id"]
+
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "workspace_id": workspace_id,
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": "Test task",
+                "title": "Retry test",
+                "execution_engine": "claude-code",
+                "auto_connect": False,
+            },
+            headers=jwt_headers,
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+
+        # Manually mark task as failed
+        service = app.state.task_harness_service
+        with service._connect() as conn:
+            from ainrf.environments.models import utc_now
+            now = utc_now()
+            conn.execute(
+                "UPDATE task_harness_tasks SET status = 'failed', updated_at = ?, completed_at = ? WHERE task_id = ?",
+                (now.isoformat(), now.isoformat(), task_id),
+            )
+            conn.commit()
+
+        # Retry
+        retry_response = await client.post(
+            f"/tasks/{task_id}/retry",
+            json={},
+            headers=jwt_headers,
+        )
+        assert retry_response.status_code == 200
+        data = retry_response.json()
+
+        assert data["archived_task_id"] == task_id
+        assert data["new_task"]["task_id"] != task_id
+        assert data["new_task"]["status"] == "queued"
+        assert data["edge_id"] != ""
+
+        # Verify old task is archived
+        old_task_response = await client.get(f"/tasks/{task_id}", headers=jwt_headers)
+        assert old_task_response.status_code == 200
+        # archived tasks still accessible by ID
+
+        # Verify old task not in default list
+        list_response = await client.get("/tasks", headers=jwt_headers)
+        task_ids = [t["task_id"] for t in list_response.json()["items"]]
+        assert task_id not in task_ids
+        assert data["new_task"]["task_id"] in task_ids
+
+
+@pytest.mark.anyio
+async def test_retry_task_invalid_status_returns_409(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = make_app(tmp_path)
+    jwt_headers = get_jwt_headers(app)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="127.0.0.1",
+        default_workdir="/workspace/project",
+        task_harness_profile="Use the configured GPU environment.",
+    )
+
+    def fake_build_local_launcher(
+        *,
+        working_directory: str,
+        prompt_file: Path,
+        rendered_prompt: str,
+        settings_path: str | None = None,
+    ) -> tuple[LaunchPayload, object]:
+        payload = LaunchPayload(
+            runner_kind="local-process",
+            working_directory=working_directory,
+            command=["true"],
+            prompt_file=str(prompt_file),
+        )
+        return payload, None
+
+    monkeypatch.setattr(
+        "ainrf.task_harness.service.build_local_launcher",
+        fake_build_local_launcher,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        workspace_response = await client.get("/workspaces", headers=jwt_headers)
+        workspace_id = workspace_response.json()["items"][0]["workspace_id"]
+
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "workspace_id": workspace_id,
+                "environment_id": environment.id,
+                "task_profile": "claude-code",
+                "task_input": "Test task",
+                "title": "Retry test",
+                "execution_engine": "claude-code",
+                "auto_connect": False,
+            },
+            headers=jwt_headers,
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        # Task is QUEUED — not failed or cancelled
+
+        # Force task back to QUEUED status (it may have auto-executed)
+        service = app.state.task_harness_service
+        with service._connect() as conn:
+            conn.execute(
+                "UPDATE task_harness_tasks SET status = 'queued' WHERE task_id = ?",
+                (task_id,),
+            )
+            conn.commit()
+
+        retry_response = await client.post(
+            f"/tasks/{task_id}/retry",
+            json={},
+            headers=jwt_headers,
+        )
+        assert retry_response.status_code == 409

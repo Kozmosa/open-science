@@ -56,6 +56,7 @@ import type { ChangePasswordRequest,
   TaskListResponse,
   TaskOutputListResponse,
   TaskRecord,
+  TaskRetryResponse,
   TaskSummary,
   TerminalSession,
   UserInfo,
@@ -276,6 +277,9 @@ export const deleteTask = (taskId: string): Promise<void> =>
 
 export const cancelTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCancelTask(taskId)) : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {});
+
+export const retryTask = (taskId: string): Promise<TaskRetryResponse> =>
+  api.post<TaskRetryResponse>(`/tasks/${taskId}/retry`, {});
 
 export const getProjectTasks = (
   projectId: string,
