@@ -52,9 +52,10 @@ def _extract_json(text: str) -> dict | None:
         if text.endswith("```"):
             text = text[:-3]
     try:
-        return json_repair.repair_json(text, return_json=True)
+        repaired = json_repair.repair_json(text, return_json=True)
     except Exception:
         return None
+    return repaired if isinstance(repaired, dict) else None
 
 
 async def _summarize_papers(papers: list[LiteraturePaper]) -> None:

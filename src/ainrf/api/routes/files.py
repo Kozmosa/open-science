@@ -201,7 +201,7 @@ async def upload_file(
             local_temp_path=tmp_path,
             workspace_id=workspace_id,
         )
-        return result
+        return FileUploadResponse(path=result.path, size=result.size)
     except HTTPException:
         raise
     except Exception as exc:
@@ -209,4 +209,3 @@ async def upload_file(
     finally:
         if tmp_path:
             tmp_path.unlink(missing_ok=True)
-    return FileUploadResponse(path=result.path, size=result.size)

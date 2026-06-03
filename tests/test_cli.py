@@ -237,7 +237,10 @@ def test_serve_rejects_malformed_config_with_validation_error(tmp_path: Path) ->
 
     assert result.exit_code != 0
     assert "Invalid runtime config" in result.output
-    assert str(config_path) in result.output
+    compact_output = "".join(
+        char for char in result.output if not char.isspace() and char not in "│╭╮╰╯─"
+    )
+    assert str(config_path) in compact_output
 
 
 def test_python_module_entrypoint() -> None:

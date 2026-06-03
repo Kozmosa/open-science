@@ -184,12 +184,11 @@ class AgenticResearcherService:
         if task.status != TaskStatus.QUEUED:
             raise TaskOperationError(f"Cannot run task with status: {task.status}")
 
-        await self._set_status(task_id, TaskStatus.STARTING, started=True)
-        context = self._build_execution_context(task)
-        engine = self._get_engine(task.harness_engine)
-        await self._set_status(task_id, TaskStatus.RUNNING)
-
         try:
+            await self._set_status(task_id, TaskStatus.STARTING, started=True)
+            context = self._build_execution_context(task)
+            engine = self._get_engine(task.harness_engine)
+            await self._set_status(task_id, TaskStatus.RUNNING)
             await engine.start(context, lambda event: self._handle_engine_event(task_id, event))
             latest = self.get_task(task_id)
             if latest.status in {TaskStatus.STARTING, TaskStatus.RUNNING}:

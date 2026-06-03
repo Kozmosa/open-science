@@ -589,6 +589,7 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                                     "return_code": process_return_code,
                                 }
                             )
+                    task_group.cancel_scope.cancel()
                     return
                 buffered_output_bytes -= len(chunk)
                 try_enqueue_output_complete()
