@@ -8,7 +8,7 @@ import TaskInputBar from './TaskInputBar';
 import { useTaskMessages } from './useTaskMessages';
 import { useTaskActions } from './useTaskActions';
 
-const interactiveEngines = new Set(['agent-sdk', 'codex-app-server']);
+const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
 
 interface Props {
   selectedTask: TaskRecord | null;
@@ -250,6 +250,8 @@ export default function TaskDetail({
             <div className="space-y-5">
               <section>
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
+                  <MetadataRow label="Workdir" value={selectedTask.runtime?.working_directory ?? selectedTask.binding?.resolved_workdir ?? null} fallback={metadataFallback} />
+                  <MetadataRow label="Task input" value={selectedTask.prompt ?? selectedTask.binding?.task_input ?? null} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.taskId')} value={selectedTask.task_id} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.created')} value={selectedTask.created_at} fallback={metadataFallback} />
                   <MetadataRow label={t('pages.tasks.updated')} value={selectedTask.updated_at} fallback={metadataFallback} />

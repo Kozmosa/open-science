@@ -6,10 +6,13 @@ import { useT } from '../i18n';
 import { PageShell, SplitPane } from '../components/layout';
 import {
   createTask,
+  getEnvironments,
+  getProject,
   getProjects,
   getProjectTasks,
   getTask,
   getTaskEdges,
+  getWorkspaces,
 } from '../api';
 import { extractErrorMessage } from '../utils/error';
 import type { TaskCreatePayload, TaskRecord } from '../types';
@@ -60,6 +63,27 @@ export default function ProjectsPage() {
     enabled: selectedTaskId !== null,
   });
   const selectedTask: TaskRecord | null = selectedTaskQuery.data ?? null;
+
+  // Fetch defaults for task creation
+  const projectDetailQuery = useQuery({
+    queryKey: ['project', effectiveProjectId],
+    queryFn: () => getProject(effectiveProjectId ?? ''),
+    enabled: effectiveProjectId !== null,
+  });
+  const workspacesQuery = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: getWorkspaces,
+  });
+  const environmentsQuery = useQuery({
+    queryKey: ['environments'],
+    queryFn: getEnvironments,
+  });
+
+  const projectDetail = projectDetailQuery.data ?? null;
+  const defaultWorkspaceId =
+    projectDetail?.default_workspace_id ?? workspacesQuery.data?.items[0]?.workspace_id ?? '';
+  const defaultEnvironmentId =
+    projectDetail?.default_environment_id ?? environmentsQuery.data?.items[0]?.id ?? '';
   const handleResetLayout = useCallback(() => {
     if (effectiveProjectId) {
       localStorage.removeItem(`ainrf:project-layout:${effectiveProjectId}`);
@@ -146,6 +170,9 @@ export default function ProjectsPage() {
         size="lg"
       >
         <TaskCreateForm
+          projectId={effectiveProjectId ?? ''}
+          workspaceId={defaultWorkspaceId}
+          environmentId={defaultEnvironmentId}
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
         />
