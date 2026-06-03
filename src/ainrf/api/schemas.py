@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -417,17 +417,15 @@ class TaskConfigurationSnapshotRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    project_id: str = Field(default="default", min_length=1)
+    project_id: str
     workspace_id: str
     environment_id: str
-    task_profile: str = Field(default="claude-code", min_length=1)
-    task_input: str = Field(min_length=1, max_length=100000)
+    researcher_type: Literal["vanilla", "aris-researcher"]
+    harness_engine: Literal["claude-code", "agent-sdk", "codex-app-server"]
+    prompt: str = Field(min_length=1)
+    skills: list[str] = []
+    mcp_servers: list[str] = []
     title: str | None = None
-    execution_engine: str | None = None
-    auto_connect: bool = Field(default=False)
-    session_id: str | None = None
-    research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
-    task_configuration: TaskConfigurationSnapshotRequest | None = None
 
 
 class WorkspaceResponse(BaseModel):
@@ -536,29 +534,27 @@ class TaskSummaryResponse(BaseModel):
 
     task_id: str
     project_id: str
+    workspace_id: str
+    environment_id: str
+    researcher_type: str
+    harness_engine: str
+    status: str
     title: str
-    task_profile: str
-    status: TaskStatus
-    workspace_summary: WorkspaceSummaryResponse
-    environment_summary: EnvironmentSummaryResponse
+    prompt: str
     created_at: str
     updated_at: str
     started_at: str | None = None
     completed_at: str | None = None
+    owner_user_id: str
+    exit_code: int | None = None
     error_summary: str | None = None
-    latest_output_seq: int = 0
-    execution_engine: str = "claude-code"
-    session_id: str | None = None
-    owner_user_id: str | None = None
 
 
 class TaskListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[TaskSummaryResponse]
-    total: int | None = None
-    has_more: bool = False
-    next_cursor: str | None = None
+    total: int
 
 
 class TaskEdgeResponse(BaseModel):
@@ -722,21 +718,20 @@ class TaskDetailResponse(BaseModel):
     owner_user_id: str | None = None
 
 
-class TaskOutputEventResponse(BaseModel):
+class TaskOutputItemResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    task_id: str
-    seq: int
     kind: str
     content: str
+    seq: int
     created_at: str
 
 
-class TaskOutputListResponse(BaseModel):
+class TaskOutputResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    items: list[TaskOutputEventResponse]
-    next_seq: int
+    items: list[TaskOutputItemResponse]
+    has_more: bool = False
 
 
 class CodeServerSessionRequest(BaseModel):
