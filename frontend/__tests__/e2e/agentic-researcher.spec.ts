@@ -10,6 +10,7 @@ const WORKSPACE = {
 }
 
 const ENVIRONMENT = {
+  id: 'env-001',
   environment_id: 'env-001',
   alias: 'local',
   display_name: 'Local',
@@ -30,25 +31,47 @@ const EMPTY_LIST = { items: [], total: 0, has_more: false }
 const VANILLA_TASK_SUMMARY = {
   task_id: 'task-vanilla-001',
   project_id: 'proj-001',
+  workspace_id: 'ws-001',
+  environment_id: 'env-001',
   title: 'Vanilla research task',
   task_profile: 'claude-code',
+  researcher_type: 'vanilla',
+  harness_engine: 'claude-code',
+  prompt: 'Research the latest advances in LLM reasoning',
+  owner_user_id: 'user-001',
+  exit_code: null,
   status: 'queued' as const,
   workspace_summary: WORKSPACE,
   environment_summary: ENVIRONMENT,
   created_at: '2026-06-03T10:00:00Z',
   updated_at: '2026-06-03T10:00:00Z',
+  started_at: null,
+  completed_at: null,
+  error_summary: null,
+  latest_output_seq: 0,
 }
 
 const ARIS_TASK_SUMMARY = {
   task_id: 'task-aris-001',
   project_id: 'proj-001',
+  workspace_id: 'ws-001',
+  environment_id: 'env-001',
   title: 'ARIS research task',
   task_profile: 'agent-sdk',
+  researcher_type: 'aris-researcher',
+  harness_engine: 'agent-sdk',
+  prompt: 'Analyze the ARIS framework for agentic research',
+  owner_user_id: 'user-001',
+  exit_code: null,
   status: 'queued' as const,
   workspace_summary: WORKSPACE,
   environment_summary: ENVIRONMENT,
   created_at: '2026-06-03T10:01:00Z',
   updated_at: '2026-06-03T10:01:00Z',
+  started_at: null,
+  completed_at: null,
+  error_summary: null,
+  latest_output_seq: 0,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -90,11 +113,11 @@ async function setupTasksMock(
   // Auxiliary endpoints TasksPage fetches on mount
   await page.route('**/api/projects**', async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{ project_id: 'proj-001', name: 'Default', description: null, default_workspace_id: 'ws-001', default_environment_id: 'env-001', created_at: '2026-06-03T10:00:00Z', updated_at: '2026-06-03T10:00:00Z' }], total: 1 }) })
   })
   await page.route('**/api/workspaces**', async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [WORKSPACE], total: 1 }) })
   })
   await page.route('**/api/skills**', async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
@@ -102,7 +125,7 @@ async function setupTasksMock(
   })
   await page.route('**/api/environments**', async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [ENVIRONMENT], total: 1 }) })
   })
   await page.route('**/api/settings/**', async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
@@ -118,7 +141,7 @@ async function setupTasksMock(
       const record = {
         ...match,
         binding: null,
-        prompt: null,
+        prompt_detail: null,
         runtime: null,
         result: { exit_code: null, failure_category: null, error_summary: null, completed_at: null },
       }
@@ -131,7 +154,7 @@ async function setupTasksMock(
   // Task output: GET /tasks/{id}/output
   await page.route(/\/api\/tasks\/[^/?]+\/output/, async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false }) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false, next_seq: 0 }) })
   })
 
   // Tasks list: GET /tasks?*
@@ -205,7 +228,7 @@ test.describe('AgenticResearcher', () => {
     await titleField.fill('Vanilla research task')
 
     // Submit the form
-    const createBtn = page.getByRole('button', { name: 'Create' })
+    const createBtn = page.getByRole('button', { name: 'Create task' })
     await createBtn.click()
 
     // Verify the create API was called with correct payload
@@ -215,9 +238,9 @@ test.describe('AgenticResearcher', () => {
       harness_engine: 'claude-code',
       prompt: 'Research the latest advances in LLM reasoning',
       skills: ['web-search', 'citation'],
-      project_id: 'default-project',
-      workspace_id: 'default-workspace',
-      environment_id: 'default-environment',
+      project_id: 'proj-001',
+      workspace_id: 'ws-001',
+      environment_id: 'env-001',
     })
 
     // Verify the new task appears in the list
@@ -278,7 +301,7 @@ test.describe('AgenticResearcher', () => {
     await titleField.fill('ARIS research task')
 
     // Submit the form
-    const createBtn = page.getByRole('button', { name: 'Create' })
+    const createBtn = page.getByRole('button', { name: 'Create task' })
     await createBtn.click()
 
     // Verify the create API was called with correct payload
@@ -288,9 +311,9 @@ test.describe('AgenticResearcher', () => {
       harness_engine: 'agent-sdk',
       prompt: 'Analyze the ARIS framework for agentic research',
       skills: [],
-      project_id: 'default-project',
-      workspace_id: 'default-workspace',
-      environment_id: 'default-environment',
+      project_id: 'proj-001',
+      workspace_id: 'ws-001',
+      environment_id: 'env-001',
     })
 
     // Verify the new task appears in the list

@@ -7,7 +7,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from ainrf.agentic_researcher import AgenticResearcherService, HarnessEngineType
+from ainrf.agentic_researcher import AgenticResearcherService, HarnessEngineType, vanilla
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
@@ -143,3 +143,63 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
             "ran: Follow up",
             '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
         ]
+
+
+@pytest.mark.anyio
+async def test_project_tasks_endpoint_uses_task_filters(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-001",
+            label="Project task workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the task workspace.",
+            owner_user_id=None,
+        )
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-001",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Visible task",
+                "prompt": "Visible prompt",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        owner_user_id = create_response.json()["owner_user_id"]
+
+        service: AgenticResearcherService = app.state.agentic_researcher_service
+        archived = service.create_task(
+            project_id="proj-001",
+            workspace_id=workspace.workspace_id,
+            environment_id="env-001",
+            researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
+            prompt="Archived prompt",
+            owner_user_id=owner_user_id,
+            title="Archived task",
+        )
+        service.cancel_task(archived.task_id)
+
+        default_response = await client.get("/projects/proj-001/tasks")
+        assert default_response.status_code == 200
+        assert [item["title"] for item in default_response.json()["items"]] == ["Visible task"]
+
+        archived_response = await client.get(
+            "/projects/proj-001/tasks",
+            params={"include_archived": "true", "limit": "1", "sort": "created"},
+        )
+        assert archived_response.status_code == 200
+        archived_payload = archived_response.json()
+        assert archived_payload["total"] == 1
+        assert archived_payload["items"][0]["project_id"] == "proj-001"
+        assert archived_payload["items"][0]["workspace_id"] == workspace.workspace_id

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json as json_mod
 from dataclasses import asdict
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from ainrf.api.schemas import (
     CollaboratorListResponse,
@@ -18,7 +18,9 @@ from ainrf.api.schemas import (
     ProjectListResponse,
     ProjectResponse,
     ProjectUpdateRequest,
+    TaskListResponse,
 )
+from ainrf.api.routes.tasks import _task_to_response
 from ainrf.auth.permissions import check_resource_ownership, get_current_user
 from ainrf.environments import (
     EnvironmentNotFoundError,
@@ -58,6 +60,13 @@ def _get_auth_service(request: Request):
     service = getattr(request.app.state, "auth_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="auth service not initialized")
+    return service
+
+
+def _get_agentic_researcher_service(request: Request):
+    service = getattr(request.app.state, "agentic_researcher_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="AgenticResearcher service not initialized")
     return service
 
 
@@ -307,6 +316,38 @@ async def get_project_cost_summary(project_id: str, request: Request) -> Project
             "session_count": len(sessions),
             "by_model": by_model,
         }
+    )
+
+
+@router.get("/{project_id}/tasks", response_model=TaskListResponse)
+async def list_project_tasks(
+    project_id: str,
+    request: Request,
+    include_archived: bool = Query(False),
+    limit: int = Query(200, ge=1, le=1000),
+    sort: str = Query("updated"),
+) -> TaskListResponse:
+    """List tasks belonging to a specific project."""
+    user = get_current_user(request)
+    service = _get_agentic_researcher_service(request)
+
+    try:
+        tasks = service.list_tasks(
+            project_id=project_id,
+            user_id=user["id"],
+            include_archived=include_archived,
+            limit=limit,
+            sort=sort,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list tasks: {exc}",
+        ) from exc
+
+    return TaskListResponse(
+        items=[_task_to_response(task) for task in tasks],
+        total=len(tasks),
     )
 
 
