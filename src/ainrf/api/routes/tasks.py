@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+import json
+
 from fastapi import APIRouter, HTTPException, Query, Request
+from starlette.responses import StreamingResponse
 
 from ainrf.agentic_researcher import (
     AgenticResearcherService,
-    AgenticResearcherType,
     HarnessEngineType,
+    TaskStatus,
     aris,
     vanilla,
 )
@@ -13,7 +17,12 @@ from ainrf.agentic_researcher.service import TaskNotFoundError, TaskOperationErr
 from ainrf.api.schemas import (
     TaskCreateRequest,
     TaskListResponse,
+    TaskOutputItemResponse,
     TaskOutputResponse,
+    TaskPauseResponse,
+    TaskPromptRequest,
+    TaskPromptSendResponse,
+    TaskResumeResponse,
     TaskRetryResponse,
     TaskSummaryResponse,
 )
@@ -48,9 +57,21 @@ def _task_to_response(task) -> TaskSummaryResponse:
         started_at=task.started_at.isoformat() if task.started_at else None,
         completed_at=task.completed_at.isoformat() if task.completed_at else None,
         owner_user_id=task.owner_user_id,
+        latest_output_seq=task.latest_output_seq,
         exit_code=task.exit_code,
         error_summary=task.error_summary,
     )
+
+
+def _assert_task_owner(request: Request, task_id: str):
+    user = get_current_user(request)
+    service = _get_service(request)
+    try:
+        task = service.get_task(task_id)
+    except TaskNotFoundError:
+        raise HTTPException(status_code=404, detail="Task not found")
+    check_resource_ownership(user, task.owner_user_id)
+    return service, task
 
 
 @router.post("", status_code=201)
@@ -76,6 +97,7 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
             owner_user_id=user["id"],
             title=payload.title,
         )
+        service.schedule_task(task.task_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -108,51 +130,61 @@ async def list_tasks(
 
 @router.get("/{task_id}")
 async def get_task(request: Request, task_id: str) -> TaskSummaryResponse:
-    user = get_current_user(request)
-    service = _get_service(request)
-
-    try:
-        task = service.get_task(task_id)
-    except TaskNotFoundError:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    check_resource_ownership(user, task.owner_user_id)
+    _, task = _assert_task_owner(request, task_id)
     return _task_to_response(task)
 
 
 @router.post("/{task_id}/cancel", status_code=204)
 async def cancel_task(request: Request, task_id: str) -> None:
-    user = get_current_user(request)
-    service = _get_service(request)
+    service, _ = _assert_task_owner(request, task_id)
 
     try:
-        task = service.get_task(task_id)
-    except TaskNotFoundError:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    check_resource_ownership(user, task.owner_user_id)
-
-    try:
-        service.cancel_task(task_id)
+        await service.cancel_running_task(task_id)
     except TaskOperationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/{task_id}/pause")
+async def pause_task(request: Request, task_id: str) -> TaskPauseResponse:
+    service, _ = _assert_task_owner(request, task_id)
+    try:
+        task = await service.pause_task(task_id)
+    except TaskOperationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return TaskPauseResponse(task_id=task.task_id, status=task.status.value)
+
+
+@router.post("/{task_id}/resume")
+async def resume_task(request: Request, task_id: str) -> TaskResumeResponse:
+    service, _ = _assert_task_owner(request, task_id)
+    try:
+        task = await service.resume_task(task_id)
+    except TaskOperationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return TaskResumeResponse(task_id=task.task_id, status=task.status.value)
+
+
+@router.post("/{task_id}/prompt")
+async def send_task_prompt(
+    request: Request,
+    task_id: str,
+    payload: TaskPromptRequest,
+) -> TaskPromptSendResponse:
+    service, _ = _assert_task_owner(request, task_id)
+    try:
+        event = await service.send_prompt(task_id, payload.prompt)
+    except TaskOperationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return TaskPromptSendResponse(task_id=task_id, sequence=event.seq)
 
 
 @router.delete("/{task_id}", status_code=200)
 async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
     """Archive (cancel) a task."""
-    user = get_current_user(request)
-    service = _get_service(request)
+    service, _ = _assert_task_owner(request, task_id)
 
     try:
-        task = service.get_task(task_id)
-    except TaskNotFoundError:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    check_resource_ownership(user, task.owner_user_id)
-
-    try:
-        cancelled = service.cancel_task(task_id)
+        cancelled = await service.cancel_running_task(task_id)
     except TaskOperationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -162,15 +194,7 @@ async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
 @router.delete("/{task_id}/permanent", status_code=204)
 async def delete_task(request: Request, task_id: str) -> None:
     """Permanently delete a task."""
-    user = get_current_user(request)
-    service = _get_service(request)
-
-    try:
-        task = service.get_task(task_id)
-    except TaskNotFoundError:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    check_resource_ownership(user, task.owner_user_id)
+    service, _ = _assert_task_owner(request, task_id)
     service.delete_task(task_id)
 
 
@@ -215,5 +239,58 @@ async def get_task_output(
 
     check_resource_ownership(user, task.owner_user_id)
 
-    # TODO: implement output retrieval
-    return TaskOutputResponse(items=[], next_seq=0)
+    items = service.get_output(task_id, after_seq=after_seq)
+    next_seq = items[-1].seq if items else after_seq
+    return TaskOutputResponse(
+        items=[
+            TaskOutputItemResponse(
+                task_id=item.task_id,
+                kind=item.kind,
+                content=item.content,
+                seq=item.seq,
+                created_at=item.created_at.isoformat(),
+            )
+            for item in items
+        ],
+        next_seq=next_seq,
+    )
+
+
+@router.get("/{task_id}/stream")
+async def stream_task_output(
+    request: Request,
+    task_id: str,
+    after_seq: int = Query(0, ge=0),
+) -> StreamingResponse:
+    service, _ = _assert_task_owner(request, task_id)
+
+    async def event_stream():
+        cursor = after_seq
+        while True:
+            if await request.is_disconnected():
+                break
+            items = service.get_output(task_id, after_seq=cursor)
+            for item in items:
+                cursor = item.seq
+                payload = TaskOutputItemResponse(
+                    task_id=item.task_id,
+                    kind=item.kind,
+                    content=item.content,
+                    seq=item.seq,
+                    created_at=item.created_at.isoformat(),
+                ).model_dump()
+                yield f"event: output\ndata: {json.dumps(payload, ensure_ascii=True)}\n\n"
+            task = service.get_task(task_id)
+            if not items and task.status in {
+                TaskStatus.SUCCEEDED,
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+            }:
+                yield (
+                    "event: done\n"
+                    f"data: {json.dumps({'task_id': task_id, 'status': task.status.value})}\n\n"
+                )
+                break
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

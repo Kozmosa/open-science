@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from ainrf.harness_engine.base import OutputEvent
+from ainrf.harness_engine.base import EngineEvent, OutputEvent
 
-__all__ = ["OutputEvent"]
+__all__ = ["EngineEvent", "OutputEvent"]

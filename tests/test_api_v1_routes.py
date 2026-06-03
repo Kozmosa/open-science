@@ -134,8 +134,6 @@ async def test_lifespan_attaches_environment_aware_code_server_manager(
             state_root=tmp_path,
         )
     )
-    jwt_headers = get_jwt_headers(app)
-
     async with app.router.lifespan_context(app):
         manager = app.state.code_server_manager
         assert manager is app.state.code_server_supervisor
@@ -152,7 +150,6 @@ async def test_lifespan_records_startup_runtime_readiness(
             state_root=tmp_path,
         )
     )
-    jwt_headers = get_jwt_headers(app)
     monkeypatch.setattr(
         "ainrf.api.app.check_runtime_readiness",
         lambda code_server_path=None: type(
@@ -194,7 +191,6 @@ async def test_lifespan_records_readiness_even_when_code_server_missing(
             state_root=tmp_path,
         )
     )
-    jwt_headers = get_jwt_headers(app)
     monkeypatch.setattr(
         "ainrf.api.app.check_runtime_readiness",
         lambda code_server_path=None: type(
@@ -236,7 +232,6 @@ async def test_health_uses_startup_runtime_readiness_snapshot(
             state_root=tmp_path,
         )
     )
-    jwt_headers = get_jwt_headers(app)
     app.state.runtime_readiness = {
         "ready": False,
         "dependencies": {"tmux": {"available": False, "path": None, "detail": "Install tmux."}},

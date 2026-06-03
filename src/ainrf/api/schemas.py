@@ -546,6 +546,7 @@ class TaskSummaryResponse(BaseModel):
     started_at: str | None = None
     completed_at: str | None = None
     owner_user_id: str
+    latest_output_seq: int = 0
     exit_code: int | None = None
     error_summary: str | None = None
 
@@ -721,6 +722,7 @@ class TaskDetailResponse(BaseModel):
 class TaskOutputItemResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    task_id: str
     kind: str
     content: str
     seq: int

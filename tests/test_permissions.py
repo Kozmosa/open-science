@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+import tempfile
+from pathlib import Path
 
 
 class TestPermissionHelpers:
@@ -27,7 +29,6 @@ class TestPermissionHelpers:
 
     def test_check_resource_ownership_admin_sees_all(self):
         from ainrf.auth.permissions import check_resource_ownership
-        from fastapi import HTTPException
 
         # admin should not raise for any owner
         check_resource_ownership({"id": "admin1", "role": "admin"}, "owner_xyz")
@@ -72,11 +73,6 @@ class TestAdminApi:
             headers = get_jwt_headers(client, user_id="member_user", role="member")
             resp = await client.get("/admin/users", headers=headers)
             assert resp.status_code in (403, 404)  # 403 if route in test app, 404 otherwise
-
-
-import tempfile
-from pathlib import Path
-
 
 def _ensure_user(auth_svc, username, password):
     """Create and activate a user, return their id."""

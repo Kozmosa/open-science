@@ -127,14 +127,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 auth_service._grant_seed_environments(admin_user.id)
 
                 # Write password to protected file instead of stdout
-                import os
-                from pathlib import Path
-                from ainrf.runtime.config import RuntimeConfig
-                config = RuntimeConfig.load()
-                state_root = Path(os.path.expanduser(config.state_root))
-                password_file = state_root / "admin_initial_password.txt"
+                password_file = app.state.api_config.state_root / "admin_initial_password.txt"
                 password_file.write_text(f"Initial admin password: {initial_password}\n")
-                os.chmod(password_file, 0o600)
+                password_file.chmod(0o600)
 
                 print(
                     "\n" + "=" * 60 + "\n"
@@ -209,7 +204,10 @@ def create_app(
     app.state.session_service = SessionService(
         state_root=api_config.state_root,
     )
-    agentic_researcher_service = AgenticResearcherService(state_root=api_config.state_root)
+    agentic_researcher_service = AgenticResearcherService(
+        state_root=api_config.state_root,
+        workspace_service=app.state.workspace_service,
+    )
     agentic_researcher_service.initialize()
     app.state.agentic_researcher_service = agentic_researcher_service
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)

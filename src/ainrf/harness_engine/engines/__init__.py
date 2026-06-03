@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ainrf.harness_engine.base import HarnessEngine, HarnessEngineType
+from ainrf.harness_engine.base import HarnessEngine
 
 _ENGINES: dict[str, str] = {
     "claude-code": "ainrf.harness_engine.engines.claude_code:ClaudeCodeEngine",
