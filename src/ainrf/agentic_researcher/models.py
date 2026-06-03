@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+
+from ainrf.harness_engine.base import HarnessEngineType
+
+
+class AgenticResearcherType(StrEnum):
+    VANILLA = "vanilla"
+    ARIS = "aris-researcher"
+
+
+class TaskStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class AgenticResearcher:
+    type: AgenticResearcherType
+    harness_engine: HarnessEngineType
+    skills: list[str]
+    mcp_servers: list[str]
+    system_prompt: str | None
+
+    @classmethod
+    def vanilla(
+        cls,
+        engine: HarnessEngineType,
+        user_skills: list[str] | None = None,
+    ) -> AgenticResearcher:
+        return cls(
+            type=AgenticResearcherType.VANILLA,
+            harness_engine=engine,
+            skills=user_skills or [],
+            mcp_servers=[],
+            system_prompt=None,
+        )
+
+    @classmethod
+    def aris(cls, engine: HarnessEngineType) -> AgenticResearcher:
+        return cls(
+            type=AgenticResearcherType.ARIS,
+            harness_engine=engine,
+            skills=["research-pipeline", "research-lit", "research-refine-pipeline"],
+            mcp_servers=[],
+            system_prompt=None,
+        )
+
+
+@dataclass
+class Task:
+    task_id: str
+    project_id: str
+    workspace_id: str
+    environment_id: str
+    researcher_type: AgenticResearcherType
+    harness_engine: HarnessEngineType
+    status: TaskStatus
+    title: str
+    prompt: str
+    user_skills: list[str]
+    user_mcp_servers: list[str]
+    owner_user_id: str
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    exit_code: int | None = None
+    error_summary: str | None = None
