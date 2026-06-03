@@ -27,7 +27,7 @@ function matchesTask(task: TaskSummary, query: string): boolean {
     task.title,
     task.task_id,
     task.status,
-    task.task_profile,
+    task.researcher_type ?? task.task_profile ?? '',
   ].some((value) => value.toLowerCase().includes(normalizedQuery));
 }
 
@@ -184,7 +184,7 @@ export default function TaskList({
                   </span>
                 </span>
                 <span className="truncate text-xs text-[var(--text-secondary)]">
-                  {task.task_profile}
+                  {task.researcher_type ?? task.task_profile ?? 'researcher'}
                 </span>
                 <span className="truncate text-[11px] text-[var(--text-tertiary)]">
                   {t('pages.tasks.updatedAt', { time: task.updated_at })}

@@ -13,11 +13,13 @@ class AgenticResearcherType(StrEnum):
 
 
 class TaskStatus(StrEnum):
-    PENDING = "pending"
+    QUEUED = "queued"
+    STARTING = "starting"
     RUNNING = "running"
-    COMPLETED = "completed"
+    SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    PAUSED = "paused"
 
 
 @dataclass

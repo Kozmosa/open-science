@@ -165,16 +165,23 @@ export interface TaskSummary {
   task_id: string;
   project_id: string;
   title: string;
-  task_profile: string;
   status: TaskStatus;
-  workspace_summary: WorkspaceSummary;
-  environment_summary: TaskEnvironmentSummary;
   created_at: string;
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
   error_summary: string | null;
-  latest_output_seq: number;
+  // New agentic-researcher API fields (flat structure)
+  researcher_type?: string;
+  harness_engine?: string;
+  prompt?: string;
+  owner_user_id?: string;
+  exit_code?: number | null;
+  // Legacy fields for backward compatibility
+  task_profile?: string;
+  workspace_summary?: WorkspaceSummary;
+  environment_summary?: TaskEnvironmentSummary;
+  latest_output_seq?: number;
 }
 
 export interface ResearchAgentProfileSnapshot {
@@ -260,10 +267,10 @@ export interface TaskResultSummary {
 }
 
 export interface TaskRecord extends TaskSummary {
-  binding: TaskBindingSummary | null;
-  prompt: TaskPromptSummary | null;
-  runtime: TaskRuntimeSummary | null;
-  result: TaskResultSummary;
+  binding?: TaskBindingSummary | null;
+  prompt?: TaskPromptSummary | null;
+  runtime?: TaskRuntimeSummary | null;
+  result?: TaskResultSummary;
   execution_engine?: string;
   research_agent_profile?: ResearchAgentProfileSnapshot | null;
   task_configuration?: TaskConfigurationSnapshot | null;

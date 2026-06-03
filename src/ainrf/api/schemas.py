@@ -732,6 +732,7 @@ class TaskOutputResponse(BaseModel):
 
     items: list[TaskOutputItemResponse]
     has_more: bool = False
+    next_seq: int = 0
 
 
 class CodeServerSessionRequest(BaseModel):

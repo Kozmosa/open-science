@@ -14,6 +14,7 @@ from ainrf.api.schemas import (
     TaskCreateRequest,
     TaskListResponse,
     TaskOutputResponse,
+    TaskRetryResponse,
     TaskSummaryResponse,
 )
 from ainrf.auth.permissions import (
@@ -84,12 +85,21 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
 @router.get("")
 async def list_tasks(
     request: Request,
-    project_id: str = Query(...),
+    project_id: str | None = Query(None),
+    include_archived: bool = Query(False),
+    limit: int = Query(200, ge=1, le=1000),
+    sort: str = Query("updated"),
 ) -> TaskListResponse:
     user = get_current_user(request)
     service = _get_service(request)
 
-    tasks = service.list_tasks(project_id=project_id, user_id=user["id"])
+    tasks = service.list_tasks(
+        project_id=project_id,
+        user_id=user["id"],
+        include_archived=include_archived,
+        limit=limit,
+        sort=sort,
+    )
     return TaskListResponse(
         items=[_task_to_response(t) for t in tasks],
         total=len(tasks),
@@ -128,6 +138,67 @@ async def cancel_task(request: Request, task_id: str) -> None:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.delete("/{task_id}", status_code=200)
+async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
+    """Archive (cancel) a task."""
+    user = get_current_user(request)
+    service = _get_service(request)
+
+    try:
+        task = service.get_task(task_id)
+    except TaskNotFoundError:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    check_resource_ownership(user, task.owner_user_id)
+
+    try:
+        cancelled = service.cancel_task(task_id)
+    except TaskOperationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return _task_to_response(cancelled)
+
+
+@router.delete("/{task_id}/permanent", status_code=204)
+async def delete_task(request: Request, task_id: str) -> None:
+    """Permanently delete a task."""
+    user = get_current_user(request)
+    service = _get_service(request)
+
+    try:
+        task = service.get_task(task_id)
+    except TaskNotFoundError:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    check_resource_ownership(user, task.owner_user_id)
+    service.delete_task(task_id)
+
+
+@router.post("/{task_id}/retry", status_code=201)
+async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
+    """Retry a failed or cancelled task by creating a new copy."""
+    user = get_current_user(request)
+    service = _get_service(request)
+
+    try:
+        old_task = service.get_task(task_id)
+    except TaskNotFoundError:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    check_resource_ownership(user, old_task.owner_user_id)
+
+    try:
+        new_task = service.retry_task(task_id)
+    except TaskOperationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return TaskRetryResponse(
+        new_task=_task_to_response(new_task),
+        archived_task_id=task_id,
+        edge_id="",
+    )
+
+
 @router.get("/{task_id}/output")
 async def get_task_output(
     request: Request,
@@ -145,4 +216,4 @@ async def get_task_output(
     check_resource_ownership(user, task.owner_user_id)
 
     # TODO: implement output retrieval
-    return TaskOutputResponse(items=[])
+    return TaskOutputResponse(items=[], next_seq=0)
