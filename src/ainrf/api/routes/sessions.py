@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
-from ainrf.auth.permissions import check_resource_owner, get_current_user, is_admin
+from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
 from ainrf.api.schemas import (
     AttemptListResponse,
     SessionCreateRequest,
@@ -127,8 +127,7 @@ async def get_session(session_id: str, request: Request) -> SessionDetailRespons
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
-        if not check_resource_owner(user, s.owner_user_id):
-            raise HTTPException(status_code=404, detail="Session not found")
+        check_resource_ownership(user, s.owner_user_id)
         attempts = service.list_attempts(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc
@@ -148,8 +147,7 @@ async def update_session(
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
-        if not check_resource_owner(user, s.owner_user_id):
-            raise HTTPException(status_code=404, detail="Session not found")
+        check_resource_ownership(user, s.owner_user_id)
         s = service.update_session(session_id, title=payload.title, status=payload.status)
     except Exception as exc:
         raise _translate_error(exc) from exc
@@ -162,8 +160,7 @@ async def delete_session(session_id: str, request: Request) -> Response:
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
-        if not check_resource_owner(user, s.owner_user_id):
-            raise HTTPException(status_code=404, detail="Session not found")
+        check_resource_ownership(user, s.owner_user_id)
         service.delete_session(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc
@@ -176,8 +173,7 @@ async def list_attempts(session_id: str, request: Request) -> AttemptListRespons
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
-        if not check_resource_owner(user, s.owner_user_id):
-            raise HTTPException(status_code=404, detail="Session not found")
+        check_resource_ownership(user, s.owner_user_id)
         attempts = service.list_attempts(session_id)
     except Exception as exc:
         raise _translate_error(exc) from exc

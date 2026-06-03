@@ -19,7 +19,7 @@ from ainrf.api.schemas import (
     ProjectResponse,
     ProjectUpdateRequest,
 )
-from ainrf.auth.permissions import check_resource_owner, get_current_user
+from ainrf.auth.permissions import check_resource_ownership, get_current_user
 from ainrf.environments import (
     EnvironmentNotFoundError,
     InMemoryEnvironmentService,
@@ -328,8 +328,7 @@ async def add_collaborator(
 ) -> CollaboratorResponse:
     user = get_current_user(request)
     proj = _get_project_service(request).get_project(project_id)
-    if not check_resource_owner(user, proj.owner_user_id):
-        raise HTTPException(status_code=404, detail="Project not found")
+    check_resource_ownership(user, proj.owner_user_id)
     auth_svc = _get_auth_service(request)
     auth_svc.add_collaborator(
         project_id=project_id, user_id=payload.user_id, role=payload.role, added_by=user["id"]
@@ -343,8 +342,7 @@ async def add_collaborator(
 async def remove_collaborator(project_id: str, user_id: str, request: Request) -> Response:
     user = get_current_user(request)
     proj = _get_project_service(request).get_project(project_id)
-    if not check_resource_owner(user, proj.owner_user_id):
-        raise HTTPException(status_code=404, detail="Project not found")
+    check_resource_ownership(user, proj.owner_user_id)
     auth_svc = _get_auth_service(request)
     auth_svc.remove_collaborator(project_id, user_id)
     return Response(status_code=204)
