@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Button, FormField, Input, Select, Textarea } from '../../components/ui';
+import { useT } from '../../i18n';
 import type { TaskCreatePayload, ResearcherType, HarnessEngine } from '../../types';
 
 const FIELD_IDS = {
@@ -25,14 +27,20 @@ export default function TaskCreateForm({
   onSubmit,
   onCancel,
 }: Props) {
+  const t = useT();
   const [researcherType, setResearcherType] = useState<ResearcherType>('vanilla');
   const [harnessEngine, setHarnessEngine] = useState<HarnessEngine>('claude-code');
   const [prompt, setPrompt] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [title, setTitle] = useState('');
 
+  const canSubmit = workspaceId !== '' && environmentId !== '' && prompt.trim() !== '';
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit) {
+      return;
+    }
     onSubmit({
       project_id: projectId,
       workspace_id: workspaceId,
@@ -47,12 +55,12 @@ export default function TaskCreateForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <span className="block text-sm font-medium mb-1">
-          Researcher Type
-        </span>
-        <div className="flex gap-4">
+    <form onSubmit={handleSubmit} className="space-y-4 text-[var(--text)]">
+      <fieldset className="space-y-2" aria-labelledby="task-create-researcher-type-label">
+        <legend id="task-create-researcher-type-label" className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+          {t('pages.tasks.create.researcherType')}
+        </legend>
+        <div className="flex flex-wrap gap-4 text-sm text-[var(--text-secondary)]">
           <label htmlFor={FIELD_IDS.researcherVanilla} className="flex items-center gap-2">
             <input
               id={FIELD_IDS.researcherVanilla}
@@ -62,7 +70,7 @@ export default function TaskCreateForm({
               checked={researcherType === 'vanilla'}
               onChange={(e) => setResearcherType(e.target.value as ResearcherType)}
             />
-            <span>Vanilla</span>
+            <span>{t('pages.tasks.create.researcherVanilla')}</span>
           </label>
           <label htmlFor={FIELD_IDS.researcherAris} className="flex items-center gap-2">
             <input
@@ -73,86 +81,69 @@ export default function TaskCreateForm({
               checked={researcherType === 'aris-researcher'}
               onChange={(e) => setResearcherType(e.target.value as ResearcherType)}
             />
-            <span>ARIS Researcher</span>
+            <span>{t('pages.tasks.create.researcherAris')}</span>
           </label>
         </div>
-      </div>
+      </fieldset>
 
-      <div>
-        <label htmlFor={FIELD_IDS.harnessEngine} className="block text-sm font-medium mb-1">
-          Execution Engine
-        </label>
-        <select
+      <FormField label={t('pages.tasks.create.executionEngine')}>
+        <Select
           id={FIELD_IDS.harnessEngine}
           value={harnessEngine}
           onChange={(e) => setHarnessEngine(e.target.value as HarnessEngine)}
-          className="w-full rounded border px-3 py-2"
         >
-          <option value="claude-code">Claude Code</option>
-          <option value="agent-sdk">Agent SDK</option>
-          <option value="codex-app-server">Codex App Server</option>
-        </select>
-      </div>
+          <option value="claude-code">{t('pages.tasks.create.engineClaudeCode')}</option>
+          <option value="agent-sdk">{t('pages.tasks.create.engineAgentSdk')}</option>
+          <option value="codex-app-server">{t('pages.tasks.create.engineCodexAppServer')}</option>
+        </Select>
+      </FormField>
 
       {researcherType === 'vanilla' && (
-        <div>
-          <label htmlFor={FIELD_IDS.skills} className="block text-sm font-medium mb-1">
-            Skills
-          </label>
-          <input
+        <FormField label={t('pages.tasks.skillsLabel')}>
+          <Input
             id={FIELD_IDS.skills}
             type="text"
-            placeholder="skill1, skill2, ..."
+            placeholder={t('pages.tasks.create.skillsPlaceholder')}
             value={skills.join(', ')}
-            onChange={(e) => setSkills(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-            className="w-full rounded border px-3 py-2"
+            onChange={(e) => setSkills(e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
           />
-        </div>
+        </FormField>
       )}
 
-      <div>
-        <label htmlFor={FIELD_IDS.title} className="block text-sm font-medium mb-1">
-          Title
-        </label>
-        <input
+      <FormField label={t('pages.tasks.titleLabel')}>
+        <Input
           id={FIELD_IDS.title}
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Optional task title"
-          className="w-full rounded border px-3 py-2"
+          placeholder={t('pages.tasks.create.titlePlaceholder')}
         />
-      </div>
+      </FormField>
 
-      <div>
-        <label htmlFor={FIELD_IDS.prompt} className="block text-sm font-medium mb-1">
-          Prompt
-        </label>
-        <textarea
+      <FormField label={t('pages.tasks.create.promptLabel')}>
+        <Textarea
           id={FIELD_IDS.prompt}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={6}
-          className="w-full rounded border px-3 py-2"
-          placeholder="Enter your research prompt..."
+          placeholder={t('pages.tasks.create.promptPlaceholder')}
           required
         />
-      </div>
+      </FormField>
+
+      {workspaceId === '' || environmentId === '' ? (
+        <p className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] px-3 py-2 text-xs text-[var(--warning-foreground)]">
+          {t('pages.tasks.create.missingBinding')}
+        </p>
+      ) : null}
 
       <div className="flex gap-2">
-        <button
-          type="submit"
-          className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-        >
-          Create task
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded border px-4 py-2 hover:bg-gray-50"
-        >
-          Cancel
-        </button>
+        <Button type="submit" disabled={!canSubmit}>
+          {t('pages.tasks.createAction')}
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          {t('common.cancel')}
+        </Button>
       </div>
     </form>
   );

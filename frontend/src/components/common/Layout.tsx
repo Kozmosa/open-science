@@ -92,8 +92,8 @@ function Layout({ children }: Props) {
   const pageTitle = pageTitleKey ? t(pageTitleKey as any) : '';
 
   useEffect(() => {
-    document.title = pageTitle ? `${pageTitle} - AINRF` : 'AINRF学术系统';
-  }, [pageTitle]);
+    document.title = pageTitle ? `${pageTitle} - AINRF` : t('common.appName');
+  }, [pageTitle, t]);
 
   const asideWidth = useMemo(() => (isCollapsed ? 'w-[56px]' : 'w-[248px]'), [isCollapsed]);
   const navigationItems: NavigationItem[] = [
@@ -190,8 +190,8 @@ function Layout({ children }: Props) {
 
           {user && (
             <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-[var(--sidebar-border)]">
-              {!isCollapsed && <span className="text-gray-600 truncate">{user.display_name}</span>}
-              <button type="button" onClick={() => setShowLogoutConfirm(true)} className="text-gray-400 hover:text-gray-600 ml-auto">
+              {!isCollapsed && <span className="truncate text-[var(--text-secondary)]" title={user.display_name}>{user.display_name}</span>}
+              <button type="button" onClick={() => setShowLogoutConfirm(true)} className="ml-auto text-[var(--text-tertiary)] hover:text-[var(--sidebar-foreground)]">
                 {t('auth.logout')}
               </button>
             </div>
@@ -276,7 +276,7 @@ function Layout({ children }: Props) {
               <button
                 type="button"
                 onClick={() => { setShowLogoutConfirm(false); logout(); }}
-                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700"
+                className="px-3 py-1.5 text-xs rounded-lg bg-[var(--danger)] text-[var(--destructive-foreground)] hover:opacity-90"
               >
                 {t('common.logOut')}
               </button>

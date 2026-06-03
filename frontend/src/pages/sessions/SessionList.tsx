@@ -33,7 +33,7 @@ export function SessionList({ sessions, selectedId, onSelect, loading, hasNextPa
     <div className="flex flex-col gap-3 p-2 min-h-0">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{t('pages.sessions.sidebarTitle')}</h3>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-[var(--text-secondary)]">
           {t('pages.sessions.sidebarCount', { count: sessions.length })}
         </span>
       </div>
@@ -43,9 +43,9 @@ export function SessionList({ sessions, selectedId, onSelect, loading, hasNextPa
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
       />
       {loading && filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 px-1">{t('common.loading')}</p>
+        <p className="px-1 text-sm text-[var(--text-tertiary)]">{t('common.loading')}</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 px-1">{t('pages.sessions.empty')}</p>
+        <p className="px-1 text-sm text-[var(--text-tertiary)]">{t('pages.sessions.empty')}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {filtered.map((s) => (
@@ -53,17 +53,17 @@ export function SessionList({ sessions, selectedId, onSelect, loading, hasNextPa
               <button
                 type="button"
                 onClick={() => onSelect(s.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                   selectedId === s.id
-                    ? 'bg-blue-50 border border-blue-200'
-                    : 'hover:bg-gray-50 border border-transparent'
+                    ? 'border border-[var(--info-border)] bg-[var(--info-soft)]'
+                    : 'border border-transparent hover:bg-[var(--bg-secondary)]'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <StatusDot status={STATUS_COLOR[s.status] ?? 'idle'} />
-                  <span className="font-medium truncate">{s.title}</span>
+                  <span className="truncate font-medium text-[var(--text)]" title={s.title}>{s.title}</span>
                 </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                <div className="mt-1 flex items-center gap-3 text-xs text-[var(--text-secondary)]">
                   <span>{t('pages.sessions.taskCount', { count: s.task_count })}</span>
                   <span>${s.total_cost_usd.toFixed(2)}</span>
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { buildTaskStreamUrl, getTaskOutput } from '../../api';
+import { useT } from '../../i18n';
 import type { TaskOutputEvent } from '../../types';
 import { getNextOutputSeq, mergeOutputItems } from './output';
 
@@ -13,6 +14,7 @@ interface TaskOutputStreamState {
 
 export function useTaskOutputStream(taskId: string | null): TaskOutputStreamState {
   const queryClient = useQueryClient();
+  const t = useT();
   const [outputItems, setOutputItems] = useState<TaskOutputEvent[]>([]);
   const [outputError, setOutputError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -72,7 +74,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
           updateNextSeq(page.next_seq);
         } catch (error) {
           if (active) {
-            setOutputError(error instanceof Error ? error.message : 'Unable to replay task output');
+            setOutputError(error instanceof Error ? error.message : t('pages.tasks.output.replayFailed'));
           }
         } finally {
           refillPromiseRef.current = null;
@@ -103,7 +105,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
             void queryClient.invalidateQueries({ queryKey: ['task', taskId] });
           }
         } catch (error) {
-          setOutputError(error instanceof Error ? error.message : 'Unable to parse task output');
+          setOutputError(error instanceof Error ? error.message : t('pages.tasks.output.parseFailed'));
         }
       };
       source.onerror = () => {
@@ -134,7 +136,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
         openStream();
       } catch (error) {
         if (active) {
-          setOutputError(error instanceof Error ? error.message : 'Unable to load task output');
+          setOutputError(error instanceof Error ? error.message : t('pages.tasks.output.loadFailed'));
         }
       }
     })();
@@ -143,7 +145,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
       active = false;
       closeCurrentStream();
     };
-  }, [queryClient, taskId]);
+  }, [queryClient, taskId, t]);
 
   return { outputItems, outputError };
 }

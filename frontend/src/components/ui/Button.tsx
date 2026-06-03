@@ -14,7 +14,7 @@ const variantClasses: Record<NonNullable<Props['variant']>, string> = {
   secondary:
     'inline-flex items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)] disabled:cursor-not-allowed disabled:opacity-40',
   danger:
-    'inline-flex items-center justify-center rounded-lg bg-[#ff3b30] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#d32f2f] disabled:cursor-not-allowed disabled:opacity-40',
+    'inline-flex items-center justify-center rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-[var(--destructive-foreground)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40',
   ghost:
     'inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-[var(--muted-foreground)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40',
 };

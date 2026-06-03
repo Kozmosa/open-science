@@ -453,6 +453,14 @@ describe('TasksPage', () => {
     expect(screen.getByLabelText('搜索任务')).toBeInTheDocument();
     expect(await screen.findByText('任务工作区')).toBeInTheDocument();
     expect(screen.getByText('摘要')).toBeInTheDocument();
+    expect(screen.getByText('工作目录')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '新建任务' }));
+    expect(screen.getByRole('dialog', { name: '创建任务' })).toBeInTheDocument();
+    expect(screen.getByLabelText('研究员类型')).toBeInTheDocument();
+    expect(screen.getByLabelText('执行引擎')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('可选任务标题')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('输入研究任务提示词…')).toBeInTheDocument();
   });
 
   it('creates a task from a dialog and selects it through the URL', async () => {

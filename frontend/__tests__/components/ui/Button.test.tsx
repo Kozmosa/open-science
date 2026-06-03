@@ -28,4 +28,14 @@ describe('Button', () => {
     expect(button).toHaveClass('px-3');
     expect(button).toHaveClass('text-xs');
   });
+
+  it('uses semantic danger tokens instead of fixed red palette classes', () => {
+    render(<Button variant="danger">Delete</Button>);
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass(
+      'bg-[var(--danger)]',
+      'text-[var(--destructive-foreground)]',
+      'hover:opacity-90'
+    );
+  });
 });

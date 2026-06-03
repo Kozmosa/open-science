@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { changePassword } from '../api';
 import { useT } from '../i18n';
+import { Button, Input } from '../components/ui';
 
 export default function ChangePasswordPage() {
   const t = useT();
@@ -48,13 +49,12 @@ export default function ChangePasswordPage() {
         <p className="text-xs text-[var(--text-secondary)] text-center mb-6">
           {t('auth.mustChangePassword')}
         </p>
-        {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
+        {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-[var(--text-secondary)]">{t('auth.currentPassword')}</span>
-            <input
+            <Input
               type="password"
-              className="px-3 py-2 rounded-lg text-sm bg-[var(--bg)] border border-[var(--border)]"
               value={oldPassword}
               onChange={(e) => setOldPassword(e.target.value)}
               autoFocus
@@ -62,29 +62,26 @@ export default function ChangePasswordPage() {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-[var(--text-secondary)]">{t('auth.newPassword')}</span>
-            <input
+            <Input
               type="password"
-              className="px-3 py-2 rounded-lg text-sm bg-[var(--bg)] border border-[var(--border)]"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-[var(--text-secondary)]">{t('auth.confirmPassword')}</span>
-            <input
+            <Input
               type="password"
-              className="px-3 py-2 rounded-lg text-sm bg-[var(--bg)] border border-[var(--border)]"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
             />
           </label>
-          <button
+          <Button
             type="submit"
             disabled={submitting || !oldPassword || !newPassword || !confirm}
-            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-blue-700 transition-colors"
           >
             {submitting ? t('common.loading') : t('auth.changePassword')}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

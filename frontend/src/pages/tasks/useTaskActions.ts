@@ -1,16 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { pauseTask, resumeTask, sendTaskPrompt } from '../../api';
 import { useToast } from '../../components/common/Toast';
+import { useT } from '../../i18n';
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
-  return 'An unexpected error occurred';
+  return fallback;
 }
 
 export function useTaskActions(taskId: string | null) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const t = useT();
 
   const pause = useMutation({
     mutationFn: () => pauseTask(taskId!),
@@ -20,7 +22,7 @@ export function useTaskActions(taskId: string | null) {
       queryClient.invalidateQueries({ queryKey: ['task-messages', taskId] });
     },
     onError: (error) => {
-      showToast(`Pause failed: ${getErrorMessage(error)}`, 'error');
+      showToast(t('pages.tasks.actions.pauseFailed', { error: getErrorMessage(error, t('pages.tasks.actions.unexpectedError')) }), 'error');
     },
   });
 
@@ -32,7 +34,7 @@ export function useTaskActions(taskId: string | null) {
       queryClient.invalidateQueries({ queryKey: ['task-messages', taskId] });
     },
     onError: (error) => {
-      showToast(`Resume failed: ${getErrorMessage(error)}`, 'error');
+      showToast(t('pages.tasks.actions.resumeFailed', { error: getErrorMessage(error, t('pages.tasks.actions.unexpectedError')) }), 'error');
     },
   });
 
@@ -44,7 +46,7 @@ export function useTaskActions(taskId: string | null) {
       queryClient.invalidateQueries({ queryKey: ['task-messages', taskId] });
     },
     onError: (error) => {
-      showToast(`Send prompt failed: ${getErrorMessage(error)}`, 'error');
+      showToast(t('pages.tasks.actions.sendPromptFailed', { error: getErrorMessage(error, t('pages.tasks.actions.unexpectedError')) }), 'error');
     },
   });
 
@@ -52,7 +54,7 @@ export function useTaskActions(taskId: string | null) {
     pause: () => taskId && pause.mutate(),
     resume: () => taskId && resume.mutate(),
     sendPrompt: (prompt: string) => {
-      if (!taskId) return Promise.reject(new Error('No task selected'));
+      if (!taskId) return Promise.reject(new Error(t('pages.tasks.actions.noTaskSelected')));
       return sendPrompt.mutateAsync(prompt);
     },
     isPending: pause.isPending || resume.isPending || sendPrompt.isPending,
