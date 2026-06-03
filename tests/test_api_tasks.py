@@ -289,6 +289,45 @@ async def test_task_list_uses_fallback_workdir_for_missing_legacy_workspace(
 
 
 @pytest.mark.anyio
+async def test_admin_task_lists_include_tasks_from_other_owners(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app, username="admin-viewer", password="admin-pass")
+    service: AgenticResearcherService = app.state.agentic_researcher_service
+    workspace = app.state.workspace_service.create_workspace(
+        project_id="proj-001",
+        label="Task workspace",
+        description=None,
+        default_workdir=str(tmp_path / "workspace"),
+        workspace_prompt="Use the task workspace.",
+        owner_user_id=None,
+    )
+    task = service.create_task(
+        project_id="proj-001",
+        workspace_id=workspace.workspace_id,
+        environment_id="env-001",
+        researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
+        prompt="Owned by another user",
+        owner_user_id="other-user",
+        title="Cross-owner task",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        all_tasks = await client.get("/tasks?include_archived=false&limit=200&sort=updated")
+        project_tasks = await client.get(
+            "/projects/proj-001/tasks?include_archived=false&limit=200&sort=updated"
+        )
+
+    assert all_tasks.status_code == 200
+    assert [item["task_id"] for item in all_tasks.json()["items"]] == [task.task_id]
+    assert project_tasks.status_code == 200
+    assert [item["task_id"] for item in project_tasks.json()["items"]] == [task.task_id]
+
+
+@pytest.mark.anyio
 async def test_project_tasks_endpoint_uses_task_filters(tmp_path: Path) -> None:
     app = make_app(tmp_path, FakeEngine())
     headers = get_jwt_headers(app)

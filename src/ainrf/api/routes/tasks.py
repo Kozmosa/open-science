@@ -44,6 +44,13 @@ def _get_service(request: Request) -> AgenticResearcherService:
     return service
 
 
+def _task_list_owner_filter(user: dict) -> str | None:
+    if user.get("role") == "admin":
+        return None
+    user_id = user.get("id")
+    return user_id if isinstance(user_id, str) else None
+
+
 def _task_to_response(
     task: Task,
     service: AgenticResearcherService | None = None,
@@ -218,7 +225,7 @@ async def list_tasks(
 
     tasks = service.list_tasks(
         project_id=project_id,
-        user_id=user["id"],
+        user_id=_task_list_owner_filter(user),
         include_archived=include_archived,
         limit=limit,
         sort=sort,

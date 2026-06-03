@@ -20,7 +20,7 @@ from ainrf.api.schemas import (
     ProjectUpdateRequest,
     TaskListResponse,
 )
-from ainrf.api.routes.tasks import _task_to_response
+from ainrf.api.routes.tasks import _task_list_owner_filter, _task_to_response
 from ainrf.auth.permissions import check_resource_ownership, get_current_user
 from ainrf.environments import (
     EnvironmentNotFoundError,
@@ -334,7 +334,7 @@ async def list_project_tasks(
     try:
         tasks = service.list_tasks(
             project_id=project_id,
-            user_id=user["id"],
+            user_id=_task_list_owner_filter(user),
             include_archived=include_archived,
             limit=limit,
             sort=sort,
@@ -346,7 +346,7 @@ async def list_project_tasks(
         ) from exc
 
     return TaskListResponse(
-        items=[_task_to_response(task) for task in tasks],
+        items=[_task_to_response(task, service) for task in tasks],
         total=len(tasks),
     )
 
