@@ -77,6 +77,8 @@
 - `docs/`：AINRF 产品文档、研究知识库与历史设计材料。
 - `frontend/`：AINRF WebUI 前端。
 - `src/ainrf/`：AINRF Python 包、CLI 入口、后端 API、日志与运行时代码。
+- `src/ainrf/agentic_researcher/`：AINRF 任务管理门面，提供统一的任务 CRUD 和研究员预设
+- `src/ainrf/harness_engine/`：AINRF 执行引擎抽象，封装 claude-code、agent-sdk、codex-app-server
 - `tests/`：CLI smoke tests 与后续 Python 测试。
 - `scripts/`：本地构建与预览辅助脚本。
 - `site/`、`.cache/html-notes/`：生成产物，仅由构建流程维护。

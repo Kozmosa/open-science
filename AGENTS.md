@@ -69,6 +69,18 @@ Formatting and linting are enforced with `ruff`; static type checking must pass 
 
 ## Architecture
 
+### AgenticResearcher 架构
+
+任务系统采用两层架构：
+
+- `agentic_researcher/` - 研究员层，负责任务管理和预设配置
+- `harness_engine/` - 执行引擎层，负责底层执行能力
+
+废弃的模块：
+
+- `tasks/` - 旧的 ManagedTask 系统（已删除）
+- `task_harness/` - 旧的 TaskHarness 系统（已删除）
+
 ### Build Pipeline
 
 `scripts/build_html_notes.py` is the core docs build script. It:
