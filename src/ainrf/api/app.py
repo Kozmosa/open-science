@@ -23,7 +23,6 @@ from ainrf.api.routes.settings import router as settings_router
 from ainrf.api.routes.skill_registries import router as skill_registries_router
 from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.tasks import router as tasks_router
-from ainrf.api.routes.tasks import task_edges_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.auth import AuthService
@@ -37,6 +36,7 @@ from ainrf.projects import ProjectRegistryService
 from ainrf.runtime.readiness import check_runtime_readiness
 from ainrf.sessions import SessionService
 from ainrf.skills import SkillsDiscoveryService
+from ainrf.agentic_researcher import AgenticResearcherService
 from ainrf.task_harness import TaskHarnessService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
@@ -61,7 +61,6 @@ ROUTERS: tuple[APIRouter, ...] = (
     workspaces_router,
     terminal_router,
     tasks_router,
-    task_edges_router,
     sessions_router,
     code_router,
     literature_router,
@@ -221,6 +220,9 @@ def create_app(
         skill_root=default_workspace_dir / "skills",
         session_service=app.state.session_service,
     )
+    agentic_researcher_service = AgenticResearcherService(state_root=api_config.state_root)
+    agentic_researcher_service.initialize()
+    app.state.agentic_researcher_service = agentic_researcher_service
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
     for router in ROUTERS:
