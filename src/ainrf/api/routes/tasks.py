@@ -17,7 +17,7 @@ from ainrf.api.schemas import (
     TaskSummaryResponse,
 )
 from ainrf.auth.permissions import (
-    check_resource_owner,
+    check_resource_ownership,
     get_current_user,
 )
 
@@ -106,8 +106,7 @@ async def get_task(request: Request, task_id: str) -> TaskSummaryResponse:
     except TaskNotFoundError:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if not check_resource_owner(user, task.owner_user_id):
-        raise HTTPException(status_code=404, detail="Task not found")
+    check_resource_ownership(user, task.owner_user_id)
     return _task_to_response(task)
 
 
@@ -121,8 +120,7 @@ async def cancel_task(request: Request, task_id: str) -> None:
     except TaskNotFoundError:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if not check_resource_owner(user, task.owner_user_id):
-        raise HTTPException(status_code=404, detail="Task not found")
+    check_resource_ownership(user, task.owner_user_id)
 
     try:
         service.cancel_task(task_id)
@@ -144,8 +142,7 @@ async def get_task_output(
     except TaskNotFoundError:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if not check_resource_owner(user, task.owner_user_id):
-        raise HTTPException(status_code=404, detail="Task not found")
+    check_resource_ownership(user, task.owner_user_id)
 
     # TODO: implement output retrieval
     return TaskOutputResponse(items=[])

@@ -5,7 +5,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from ainrf.auth.permissions import check_resource_owner, get_current_user, is_admin
+from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
 from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
 from ainrf.workspaces import (
     WorkspaceDeletionError,
@@ -103,8 +103,7 @@ async def read_workspace(workspace_id: str, request: Request) -> WorkspaceRespon
     service = _get_workspace_service(request)
     try:
         workspace = service.get_workspace(workspace_id)
-        if not check_resource_owner(user, workspace.owner_user_id):
-            raise HTTPException(status_code=404, detail="Workspace not found")
+        check_resource_ownership(user, workspace.owner_user_id)
         return _serialize_workspace(workspace)
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
@@ -120,8 +119,7 @@ async def update_workspace(
     service = _get_workspace_service(request)
     try:
         workspace = service.get_workspace(workspace_id)
-        if not check_resource_owner(user, workspace.owner_user_id):
-            raise HTTPException(status_code=404, detail="Workspace not found")
+        check_resource_ownership(user, workspace.owner_user_id)
         workspace = service.update_workspace(
             workspace_id,
             project_id=payload.project_id,
@@ -141,8 +139,7 @@ async def delete_workspace(workspace_id: str, request: Request) -> Response:
     service = _get_workspace_service(request)
     try:
         workspace = service.get_workspace(workspace_id)
-        if not check_resource_owner(user, workspace.owner_user_id):
-            raise HTTPException(status_code=404, detail="Workspace not found")
+        check_resource_ownership(user, workspace.owner_user_id)
         service.delete_workspace(workspace_id)
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc

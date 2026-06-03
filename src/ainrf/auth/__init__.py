@@ -8,7 +8,7 @@ from ainrf.auth.models import (
     UserStatus,
 )
 from ainrf.auth.permissions import (
-    check_resource_owner,
+    check_resource_ownership,
     get_current_user,
     is_admin,
     require_admin,
@@ -23,7 +23,7 @@ __all__ = [
     "User",
     "UserRole",
     "UserStatus",
-    "check_resource_owner",
+    "check_resource_ownership",
     "get_current_user",
     "is_admin",
     "require_admin",

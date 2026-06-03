@@ -25,26 +25,34 @@ class TestPermissionHelpers:
 
         require_admin({"id": "u1", "role": "admin"})  # no exception
 
-    def test_check_resource_owner_admin_sees_all(self):
-        from ainrf.auth.permissions import check_resource_owner
+    def test_check_resource_ownership_admin_sees_all(self):
+        from ainrf.auth.permissions import check_resource_ownership
+        from fastapi import HTTPException
 
-        assert check_resource_owner({"id": "admin1", "role": "admin"}, "owner_xyz") is True
-        assert check_resource_owner({"id": "admin1", "role": "admin"}, None) is True
+        # admin should not raise for any owner
+        check_resource_ownership({"id": "admin1", "role": "admin"}, "owner_xyz")
+        check_resource_ownership({"id": "admin1", "role": "admin"}, None)
 
-    def test_check_resource_owner_member_own(self):
-        from ainrf.auth.permissions import check_resource_owner
+    def test_check_resource_ownership_member_own(self):
+        from ainrf.auth.permissions import check_resource_ownership
 
-        assert check_resource_owner({"id": "u1", "role": "member"}, "u1") is True
+        check_resource_ownership({"id": "u1", "role": "member"}, "u1")  # no exception
 
-    def test_check_resource_owner_member_other(self):
-        from ainrf.auth.permissions import check_resource_owner
+    def test_check_resource_ownership_member_other(self):
+        from ainrf.auth.permissions import check_resource_ownership
+        from fastapi import HTTPException
 
-        assert check_resource_owner({"id": "u1", "role": "member"}, "u2") is False
+        with pytest.raises(HTTPException) as exc:
+            check_resource_ownership({"id": "u1", "role": "member"}, "u2")
+        assert exc.value.status_code == 403
 
-    def test_check_resource_owner_member_null(self):
-        from ainrf.auth.permissions import check_resource_owner
+    def test_check_resource_ownership_member_null(self):
+        from ainrf.auth.permissions import check_resource_ownership
+        from fastapi import HTTPException
 
-        assert check_resource_owner({"id": "u1", "role": "member"}, None) is False
+        with pytest.raises(HTTPException) as exc:
+            check_resource_ownership({"id": "u1", "role": "member"}, None)
+        assert exc.value.status_code == 403
 
 
 @pytest.mark.anyio
