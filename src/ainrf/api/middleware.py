@@ -51,6 +51,7 @@ def build_jwt_auth_middleware(
                 return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
             request.state.current_user = user
+            request.state.auth_scheme = "bearer"
             return await call_next(request)
 
         # Fallback: API key in query string (needed for native EventSource/SSE)
@@ -63,6 +64,7 @@ def build_jwt_auth_middleware(
                 "role": "user",  # API keys get user role, not admin
                 "display_name": "API Key",
             }
+            request.state.auth_scheme = "api_key"
             return await call_next(request)
 
         return JSONResponse({"detail": "Unauthorized"}, status_code=401)

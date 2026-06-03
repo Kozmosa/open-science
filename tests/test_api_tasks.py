@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import httpx
 import pytest
 from fastapi import FastAPI
 
-from ainrf.agentic_researcher import AgenticResearcherService, HarnessEngineType, vanilla
+from ainrf.agentic_researcher import (
+    AgenticResearcherService,
+    HarnessEngineType,
+    TaskStatus,
+    vanilla,
+)
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
@@ -122,6 +129,16 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
             '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
         ]
 
+        messages = await client.get(f"/tasks/{task_id}/messages?after_seq=0&limit=200")
+        assert messages.status_code == 200
+        messages_payload = messages.json()
+        assert messages_payload["has_more"] is False
+        assert messages_payload["next_sequence"] is None
+        assert [(item["type"], item["content"]) for item in messages_payload["messages"]] == [
+            ("assistant", "ran: Initial prompt"),
+            ("system_event", "lifecycle"),
+        ]
+
         async with client.stream("GET", f"/tasks/{task_id}/stream?after_seq=1") as stream:
             stream_text = await stream.aread()
         decoded_stream = stream_text.decode("utf-8")
@@ -143,6 +160,93 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
             "ran: Follow up",
             '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
         ]
+
+
+@pytest.mark.anyio
+async def test_task_stream_allows_query_api_key_for_eventsource(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as authed_client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-001",
+            label="Task workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the task workspace.",
+            owner_user_id=None,
+        )
+        create_response = await authed_client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-001",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Stream task",
+                "prompt": "Initial prompt",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        await wait_for_status(authed_client, task_id, "succeeded")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as eventsource_client:
+        async with eventsource_client.stream(
+            "GET",
+            f"/tasks/{task_id}/stream?after_seq=1&api_key=secret-key",
+        ) as stream:
+            assert stream.status_code == 200
+            stream_text = await stream.aread()
+
+    decoded_stream = stream_text.decode("utf-8")
+    assert "event: output" in decoded_stream
+    assert "event: done" in decoded_stream
+
+
+def test_agentic_researcher_initialization_migrates_legacy_pending_status(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    service: AgenticResearcherService = app.state.agentic_researcher_service
+    workspace = app.state.workspace_service.create_workspace(
+        project_id="proj-001",
+        label="Task workspace",
+        description=None,
+        default_workdir=str(tmp_path / "workspace"),
+        workspace_prompt="Use the task workspace.",
+        owner_user_id=None,
+    )
+    task = service.create_task(
+        project_id="proj-001",
+        workspace_id=workspace.workspace_id,
+        environment_id="env-001",
+        researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
+        prompt="Legacy prompt",
+        owner_user_id="user-001",
+        title="Legacy task",
+    )
+    with closing(sqlite3.connect(service._db_path)) as conn:
+        conn.execute("UPDATE tasks SET status = 'pending' WHERE task_id = ?", (task.task_id,))
+        conn.commit()
+
+    restarted = AgenticResearcherService(
+        state_root=tmp_path,
+        workspace_service=app.state.workspace_service,
+        engine_factory=lambda _name: FakeEngine(),
+    )
+    restarted.initialize()
+
+    migrated = restarted.get_task(task.task_id)
+    assert migrated.status == TaskStatus.QUEUED
 
 
 @pytest.mark.anyio

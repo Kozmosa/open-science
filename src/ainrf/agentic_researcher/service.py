@@ -94,6 +94,7 @@ class AgenticResearcherService:
                 "latest_output_seq",
                 "ALTER TABLE tasks ADD COLUMN latest_output_seq INTEGER NOT NULL DEFAULT 0",
             )
+            self._migrate_legacy_task_statuses(conn)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
@@ -115,6 +116,17 @@ class AgenticResearcherService:
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})")}
         if column_name not in columns:
             conn.execute(ddl)
+
+    def _migrate_legacy_task_statuses(self, conn: sqlite3.Connection) -> None:
+        legacy_statuses = {
+            "pending": TaskStatus.QUEUED.value,
+            "canceled": TaskStatus.CANCELLED.value,
+        }
+        for legacy, current in legacy_statuses.items():
+            conn.execute(
+                "UPDATE tasks SET status = ? WHERE status = ?",
+                (current, legacy),
+            )
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
