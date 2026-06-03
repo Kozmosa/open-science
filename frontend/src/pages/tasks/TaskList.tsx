@@ -27,9 +27,7 @@ function matchesTask(task: TaskSummary, query: string): boolean {
     task.title,
     task.task_id,
     task.status,
-    task.workspace_summary.label,
-    task.environment_summary.alias,
-    task.environment_summary.display_name,
+    task.task_profile,
   ].some((value) => value.toLowerCase().includes(normalizedQuery));
 }
 
@@ -186,7 +184,7 @@ export default function TaskList({
                   </span>
                 </span>
                 <span className="truncate text-xs text-[var(--text-secondary)]">
-                  {task.workspace_summary.label} · {task.environment_summary.alias}
+                  {task.task_profile}
                 </span>
                 <span className="truncate text-[11px] text-[var(--text-tertiary)]">
                   {t('pages.tasks.updatedAt', { time: task.updated_at })}
