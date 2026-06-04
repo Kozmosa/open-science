@@ -166,7 +166,7 @@ export function ToolCallBlock({ message }: { message: MessageItem }) {
 export function ToolResultBlock({ message }: { message: MessageItem }) {
   const [isOpen, setIsOpen] = useState(message.metadata.isFolded !== true);
   const t = useT();
-  const content = typeof message.content === 'object' ? message.content : {};
+  const content = typeof message.content === 'object' ? message.content : String(message.content ?? '');
   return (
     <div className="my-1 flex flex-col items-start pl-4">
       <button
@@ -179,7 +179,11 @@ export function ToolResultBlock({ message }: { message: MessageItem }) {
       </button>
       {isOpen && (
         <div className="mt-1 w-full rounded-lg border-l-2 border-[var(--success)] bg-[var(--bg-secondary)] px-3 py-2">
-          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--text-secondary)]">{JSON.stringify(content, null, 2)}</pre>
+          {typeof content === 'string' ? (
+            <RenderedMessageText content={content} className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--text-secondary)]" />
+          ) : (
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--text-secondary)]">{JSON.stringify(content, null, 2)}</pre>
+          )}
         </div>
       )}
     </div>

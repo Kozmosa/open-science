@@ -84,6 +84,7 @@ export const messages = {
       newSubscription: 'New Subscription',
       label: 'Label',
       keywords: 'Keywords (comma separated)',
+      keywordsPlaceholder: 'machine learning, NLP',
       categories: 'Categories',
       frequency: 'Frequency',
       daily: 'Daily',
@@ -157,11 +158,11 @@ export const messages = {
         description: 'System resource monitoring and usage',
       },
       sessions: {
-        label: 'Runs',
+        label: 'Task Runs',
         description: 'Task run history from real agent tasks',
       },
       timeline: {
-        label: 'Timeline',
+        label: 'Task Timeline',
         description: 'Task run timeline from real agent tasks',
       },
       settings: {
@@ -508,6 +509,14 @@ export const messages = {
           defaultSonnetModelLabel: 'Sonnet Model',
           defaultHaikuModelLabel: 'Haiku Model',
           envOverridesLabel: 'Env Overrides (JSON)',
+          placeholders: {
+            apiBaseUrl: 'https://api.anthropic.com/',
+            apiKey: 'sk-...',
+            opusModel: 'claude-opus-4-7',
+            sonnetModel: 'claude-sonnet-4-6',
+            haikuModel: 'claude-haiku-4-5',
+            envOverrides: '{\n  "CUSTOM_VAR": "value"\n}',
+          },
         },
         skillRepository: {
           title: 'Skill Repository',
@@ -534,6 +543,10 @@ export const messages = {
           importing: 'Importing…',
           cancel: 'Cancel',
           noSkills: 'No skills found in the repository.',
+          placeholders: {
+            url: 'https://github.com/example/skill-repo.git',
+            path: '/path/to/skill',
+          },
         },
         defaultWorkspace: {
           title: 'Default Workspace',
@@ -592,6 +605,15 @@ export const messages = {
           updateTitle: 'Update {{name}}',
           updateWarning: 'This will replace existing files. Continue?',
           forceUpdate: 'Force Update',
+          placeholders: {
+            baseUrl: 'https://api.openai.com/',
+            apiKey: 'sk-...',
+            model: 'gpt-5-codex',
+            command: 'codex app-server --listen stdio://',
+            approval: 'never',
+            config: 'model = "gpt-5-codex"',
+            auth: '{\n  "OPENAI_API_KEY": "sk-..."\n}',
+          },
         },
         appearance: {
           title: 'Appearance',
@@ -633,6 +655,17 @@ export const messages = {
           confirmDelete: 'Delete provider "{{name}}"?',
           fillFromProvider: 'Fill from provider',
           customOption: 'Custom',
+          placeholders: {
+            name: 'e.g. Kimi Coding',
+            anthropicBaseUrl: 'https://api.anthropic.com/',
+            openAiBaseUrl: 'https://api.openai.com/',
+            apiKey: 'sk-...',
+            opusModel: 'claude-opus-4-7',
+            sonnetModel: 'claude-sonnet-4-6',
+            haikuModel: 'claude-haiku-4-5',
+            defaultModel: 'gpt-4o',
+          },
+          updateFailed: 'Update failed',
         },
       },
       placeholder: {
@@ -1088,6 +1121,7 @@ export const messages = {
       newSubscription: '新建订阅',
       label: '标签',
       keywords: '关键词（逗号分隔）',
+      keywordsPlaceholder: '机器学习, NLP',
       categories: '分类',
       frequency: '频率',
       daily: '每日',
@@ -1161,11 +1195,11 @@ export const messages = {
         description: '系统资源占用与使用情况',
       },
       sessions: {
-        label: '运行',
+        label: '任务运行',
         description: '来自真实 Agent 任务的运行历史',
       },
       timeline: {
-        label: '时间线',
+        label: '任务时间线',
         description: '来自真实 Agent 任务的运行时间线',
       },
       settings: {
@@ -1499,6 +1533,14 @@ export const messages = {
           defaultSonnetModelLabel: 'Sonnet 模型',
           defaultHaikuModelLabel: 'Haiku 模型',
           envOverridesLabel: '环境变量覆盖 (JSON)',
+          placeholders: {
+            apiBaseUrl: 'https://api.anthropic.com/',
+            apiKey: 'sk-...',
+            opusModel: 'claude-opus-4-7',
+            sonnetModel: 'claude-sonnet-4-6',
+            haikuModel: 'claude-haiku-4-5',
+            envOverrides: '{\n  "CUSTOM_VAR": "value"\n}',
+          },
         },
         skillRepository: {
           title: 'Skill 仓库',
@@ -1525,6 +1567,10 @@ export const messages = {
           importing: '导入中…',
           cancel: '取消',
           noSkills: '仓库中未找到任何技能。',
+          placeholders: {
+            url: 'https://github.com/example/skill-repo.git',
+            path: '/path/to/skill',
+          },
         },
         defaultWorkspace: {
           title: '默认工作区',
@@ -1583,6 +1629,15 @@ export const messages = {
           updateTitle: '更新 {{name}}',
           updateWarning: '此操作将覆盖现有文件，是否继续？',
           forceUpdate: '强制更新',
+          placeholders: {
+            baseUrl: 'https://api.openai.com/',
+            apiKey: 'sk-...',
+            model: 'gpt-5-codex',
+            command: 'codex app-server --listen stdio://',
+            approval: 'never',
+            config: 'model = "gpt-5-codex"',
+            auth: '{\n  "OPENAI_API_KEY": "sk-..."\n}',
+          },
         },
         appearance: {
           title: '外观',
@@ -1624,6 +1679,17 @@ export const messages = {
           confirmDelete: '删除提供商「{{name}}」？',
           fillFromProvider: '从提供商填充',
           customOption: '自定义',
+          placeholders: {
+            name: '例如 Kimi Coding',
+            anthropicBaseUrl: 'https://api.anthropic.com/',
+            openAiBaseUrl: 'https://api.openai.com/',
+            apiKey: 'sk-...',
+            opusModel: 'claude-opus-4-7',
+            sonnetModel: 'claude-sonnet-4-6',
+            haikuModel: 'claude-haiku-4-5',
+            defaultModel: 'gpt-4o',
+          },
+          updateFailed: '更新失败',
         },
       },
       placeholder: {

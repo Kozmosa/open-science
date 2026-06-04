@@ -107,4 +107,26 @@ describe('ConvertToTaskDialog', () => {
       expect(payload?.prompt).toContain('https://arxiv.org/abs/2401.00001');
     });
   });
+
+  it('localizes researcher and engine controls in Chinese', () => {
+    renderWithProviders(
+      <ConvertToTaskDialog
+        isOpen
+        isSubmitting={false}
+        paperId="2401.00001"
+        paperTitle="Paper title"
+        paperAbstract="Paper abstract"
+        workspaces={[workspace]}
+        environments={[environment]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+      { locale: 'zh' }
+    );
+
+    expect(screen.getByLabelText('研究员类型')).toBeInTheDocument();
+    expect(screen.getByLabelText('执行引擎')).toBeInTheDocument();
+    expect(screen.queryByText('Researcher Type')).not.toBeInTheDocument();
+    expect(screen.queryByText('Execution Engine')).not.toBeInTheDocument();
+  });
 });

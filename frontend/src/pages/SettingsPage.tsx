@@ -486,7 +486,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, apiBaseUrl: event.target.value }))
                   }
-                  placeholder="https://api.anthropic.com/"
+                  placeholder={t('pages.settings.taskConfiguration.placeholders.apiBaseUrl')}
                 />
               </FormField>
               <FormField label={t('pages.settings.taskConfiguration.apiKeyLabel')}>
@@ -497,7 +497,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, apiKey: event.target.value }))
                   }
-                  placeholder="sk-..."
+                  placeholder={t('pages.settings.taskConfiguration.placeholders.apiKey')}
                 />
               </FormField>
             </div>
@@ -509,7 +509,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, defaultOpusModel: event.target.value }))
                   }
-                  placeholder="claude-opus-4-7"
+                  placeholder={t('pages.settings.taskConfiguration.placeholders.opusModel')}
                 />
               </FormField>
               <FormField label={t('pages.settings.taskConfiguration.defaultSonnetModelLabel')}>
@@ -519,7 +519,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, defaultSonnetModel: event.target.value }))
                   }
-                  placeholder="claude-sonnet-4-6"
+                  placeholder={t('pages.settings.taskConfiguration.placeholders.sonnetModel')}
                 />
               </FormField>
               <FormField label={t('pages.settings.taskConfiguration.defaultHaikuModelLabel')}>
@@ -529,7 +529,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, defaultHaikuModel: event.target.value }))
                   }
-                  placeholder="claude-haiku-4-5"
+                  placeholder={t('pages.settings.taskConfiguration.placeholders.haikuModel')}
                 />
               </FormField>
             </div>
@@ -541,7 +541,7 @@ function TaskConfigurationSection({
                   setProfileDraft((current) => ({ ...current, envOverrides: event.target.value }))
                 }
                 className="min-h-20 font-mono text-xs"
-                placeholder={'{\n  "CUSTOM_VAR": "value"\n}'}
+                placeholder={t('pages.settings.taskConfiguration.placeholders.envOverrides')}
               />
             </FormField>
           </>
@@ -588,7 +588,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, codexBaseUrl: event.target.value }))
                   }
-                  placeholder="https://api.openai.com/"
+                  placeholder={t('pages.settings.codex.placeholders.baseUrl')}
                 />
               </FormField>
               <FormField label={t('pages.settings.codex.apiKey')}>
@@ -599,7 +599,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, codexApiKey: event.target.value }))
                   }
-                  placeholder="sk-..."
+                  placeholder={t('pages.settings.codex.placeholders.apiKey')}
                 />
               </FormField>
             </div>
@@ -611,7 +611,7 @@ function TaskConfigurationSection({
                   onChange={(event) =>
                     setProfileDraft((current) => ({ ...current, codexModel: event.target.value }))
                   }
-                  placeholder="gpt-5-codex"
+                  placeholder={t('pages.settings.codex.placeholders.model')}
                 />
               </FormField>
               <FormField label={t('pages.settings.codex.command')}>
@@ -624,7 +624,7 @@ function TaskConfigurationSection({
                       codexAppServerCommand: event.target.value,
                     }))
                   }
-                  placeholder="codex app-server --listen stdio://"
+                  placeholder={t('pages.settings.codex.placeholders.command')}
                 />
               </FormField>
               <FormField label={t('pages.settings.codex.approval')}>
@@ -637,7 +637,7 @@ function TaskConfigurationSection({
                       codexApprovalPolicy: event.target.value,
                     }))
                   }
-                  placeholder="never"
+                  placeholder={t('pages.settings.codex.placeholders.approval')}
                 />
               </FormField>
             </div>
@@ -653,7 +653,7 @@ function TaskConfigurationSection({
                   }))
                 }
                 className="min-h-24 font-mono text-xs"
-                placeholder={'model = "gpt-5-codex"'}
+                placeholder={t('pages.settings.codex.placeholders.config')}
               />
             </FormField>
             <FormField label={t('pages.settings.codex.auth')}>
@@ -668,7 +668,7 @@ function TaskConfigurationSection({
                   }))
                 }
                 className="min-h-24 font-mono text-xs"
-                placeholder={'{\n  "OPENAI_API_KEY": "sk-..."\n}'}
+                placeholder={t('pages.settings.codex.placeholders.auth')}
               />
             </FormField>
           </>
@@ -1036,7 +1036,7 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
       if (err.status === 409) {
         setShowDirtyConfirm(true);
       } else {
-        alert(err.message || 'Update failed');
+        alert(err.message || t('pages.settings.llmProviders.updateFailed'));
         setShowDirtyConfirm(false);
         setPendingRegistryId(null);
       }
@@ -1137,7 +1137,7 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
                 type="text"
                 value={importUrl}
                 onChange={(event) => setImportUrl(event.target.value)}
-                placeholder="https://github.com/example/skill-repo.git"
+                placeholder={t('pages.settings.skillRepository.placeholders.url')}
               />
             </FormField>
           ) : (
@@ -1147,7 +1147,7 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
                 type="text"
                 value={importPath}
                 onChange={(event) => setImportPath(event.target.value)}
-                placeholder="/path/to/skill"
+                placeholder={t('pages.settings.skillRepository.placeholders.path')}
               />
             </FormField>
           )}

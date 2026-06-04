@@ -113,7 +113,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
               aria-label={t('pages.settings.llmProviders.nameLabel')}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Kimi Coding"
+              placeholder={t('pages.settings.llmProviders.placeholders.name')}
             />
           </FormField>
 
@@ -134,7 +134,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
               aria-label={t('pages.settings.llmProviders.baseUrlLabel')}
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={format === 'anthropic' ? 'https://api.anthropic.com/' : 'https://api.openai.com/'}
+              placeholder={format === 'anthropic' ? t('pages.settings.llmProviders.placeholders.anthropicBaseUrl') : t('pages.settings.llmProviders.placeholders.openAiBaseUrl')}
             />
           </FormField>
 
@@ -144,7 +144,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
+              placeholder={t('pages.settings.llmProviders.placeholders.apiKey')}
             />
           </FormField>
 
@@ -155,7 +155,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
                   aria-label={t('pages.settings.llmProviders.opusModelLabel')}
                   value={opusModel}
                   onChange={(e) => setOpusModel(e.target.value)}
-                  placeholder="claude-opus-4-7"
+                  placeholder={t('pages.settings.llmProviders.placeholders.opusModel')}
                 />
               </FormField>
               <FormField label={t('pages.settings.llmProviders.sonnetModelLabel')}>
@@ -163,7 +163,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
                   aria-label={t('pages.settings.llmProviders.sonnetModelLabel')}
                   value={sonnetModel}
                   onChange={(e) => setSonnetModel(e.target.value)}
-                  placeholder="claude-sonnet-4-6"
+                  placeholder={t('pages.settings.llmProviders.placeholders.sonnetModel')}
                 />
               </FormField>
               <FormField label={t('pages.settings.llmProviders.haikuModelLabel')}>
@@ -171,7 +171,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
                   aria-label={t('pages.settings.llmProviders.haikuModelLabel')}
                   value={haikuModel}
                   onChange={(e) => setHaikuModel(e.target.value)}
-                  placeholder="claude-haiku-4-5"
+                  placeholder={t('pages.settings.llmProviders.placeholders.haikuModel')}
                 />
               </FormField>
             </div>
@@ -181,7 +181,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
                 aria-label={t('pages.settings.llmProviders.defaultModelLabel')}
                 value={defaultModel}
                 onChange={(e) => setDefaultModel(e.target.value)}
-                placeholder="gpt-4o"
+                placeholder={t('pages.settings.llmProviders.placeholders.defaultModel')}
               />
             </FormField>
           )}
