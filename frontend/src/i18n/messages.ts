@@ -280,6 +280,12 @@ export const messages = {
         createAction: 'Create task',
         creatingAction: 'Creating…',
         create: {
+          taskPreset: 'Task preset',
+          presets: {
+            rawPrompt: 'Raw Prompt',
+            structuredResearch: 'Structured Research',
+            reproduceBaseline: 'Reproduce Baseline',
+          },
           researcherType: 'Researcher Type',
           researcherVanilla: 'Vanilla',
           researcherAris: 'ARIS Researcher',
@@ -1260,6 +1266,12 @@ export const messages = {
         createAction: '创建任务',
         creatingAction: '创建中…',
         create: {
+          taskPreset: '任务预设',
+          presets: {
+            rawPrompt: '原始提示词',
+            structuredResearch: '结构化研究',
+            reproduceBaseline: '复现实验基线',
+          },
           researcherType: '研究员类型',
           researcherVanilla: 'Vanilla',
           researcherAris: 'ARIS Researcher',

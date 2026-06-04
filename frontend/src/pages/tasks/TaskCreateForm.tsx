@@ -3,11 +3,13 @@ import { Button, FormField, Input, Select, Textarea } from '../../components/ui'
 import { useT } from '../../i18n';
 import type { EnvironmentRecord, ProjectRecord, SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine, WorkspaceRecord } from '../../types';
 import TaskSkillPicker from './TaskSkillPicker';
+import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from './taskPresets';
 
 const FIELD_IDS = {
   project: 'task-create-project',
   workspace: 'task-create-workspace',
   environment: 'task-create-environment',
+  taskPreset: 'task-create-preset',
   researcherVanilla: 'task-create-researcher-vanilla',
   researcherAris: 'task-create-researcher-aris',
   harnessEngine: 'task-create-harness-engine',
@@ -44,6 +46,7 @@ export default function TaskCreateForm({
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(workspaceId);
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(environmentId);
+  const [selectedTaskPresetId, setSelectedTaskPresetId] = useState<TaskPresetId>('raw-prompt');
   const [researcherType, setResearcherType] = useState<ResearcherType>('vanilla');
   const [harnessEngine, setHarnessEngine] = useState<HarnessEngine>('claude-code');
   const [prompt, setPrompt] = useState('');
@@ -72,6 +75,14 @@ export default function TaskCreateForm({
       setSelectedEnvironmentId(project.default_environment_id);
     }
   };
+
+  const applyTaskPreset = (presetId: TaskPresetId) => {
+    const preset = getTaskPreset(presetId);
+    setSelectedTaskPresetId(preset.id);
+    setResearcherType(preset.researcherType);
+    setHarnessEngine(preset.harnessEngine);
+  };
+
 
   const canSubmit = selectedProjectId !== '' && selectedWorkspaceId !== '' && selectedEnvironmentId !== '' && prompt.trim() !== '';
 
@@ -141,6 +152,20 @@ export default function TaskCreateForm({
           </Select>
         </FormField>
       </div>
+
+      <FormField label={t('pages.tasks.create.taskPreset')}>
+        <Select
+          id={FIELD_IDS.taskPreset}
+          value={selectedTaskPresetId}
+          onChange={(e) => applyTaskPreset(e.target.value as TaskPresetId)}
+        >
+          {TASK_PRESET_OPTIONS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {t(preset.labelKey)}
+            </option>
+          ))}
+        </Select>
+      </FormField>
 
       <fieldset className="space-y-2" aria-labelledby="task-create-researcher-type-label">
         <legend id="task-create-researcher-type-label" className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
