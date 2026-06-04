@@ -31,7 +31,9 @@ def _new_id() -> str:
 
 
 class AuthService:
-    def __init__(self, *, state_root: Path, login_max_failures: int = 10, login_lockout_hours: int = 24) -> None:
+    def __init__(
+        self, *, state_root: Path, login_max_failures: int = 10, login_lockout_hours: int = 24
+    ) -> None:
         self._runtime_root = state_root / "runtime"
         self._db_path = self._runtime_root / "auth.sqlite3"
         self._initialized = False
@@ -231,7 +233,7 @@ class AuthService:
             )
         if ip_failures >= self._login_max_failures * 3:
             raise self.AccountLockedError(
-                f"IP locked: too many failed login attempts from this address."
+                "IP locked: too many failed login attempts from this address."
             )
 
     def record_login_attempt(self, *, username: str, ip_address: str, success: bool) -> None:
@@ -247,9 +249,7 @@ class AuthService:
             # Cleanup attempts older than 2x lockout window to bound table growth
             cutoff = datetime.now(timezone.utc).timestamp() - self._login_lockout_hours * 3600 * 2
             cutoff_iso = datetime.fromtimestamp(cutoff, tz=timezone.utc).isoformat()
-            conn.execute(
-                "DELETE FROM login_attempts WHERE attempted_at < ?", (cutoff_iso,)
-            )
+            conn.execute("DELETE FROM login_attempts WHERE attempted_at < ?", (cutoff_iso,))
             conn.commit()
 
     # --- Refresh ---

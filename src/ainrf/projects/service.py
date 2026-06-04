@@ -169,11 +169,7 @@ class ProjectRegistryService:
     def list_task_edges(self, project_id: str) -> list[TaskEdgeRecord]:
         self.initialize()
         self.get_project(project_id)
-        return [
-            edge
-            for edge in self._task_edges.values()
-            if edge.project_id == project_id
-        ]
+        return [edge for edge in self._task_edges.values() if edge.project_id == project_id]
 
     def create_task_edge(
         self,

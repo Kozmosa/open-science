@@ -511,7 +511,7 @@ class CodexAppServerEngine(HarnessEngine):
                 "approvalPolicy": context.codex_approval_policy or "never",
                 "input": [{"type": "text", "text": prompt}],
                 "sandboxPolicy": {"type": "dangerFullAccess"},
-            }
+            },
         )
         turn = result.get("turn", {})
         if isinstance(turn, dict):

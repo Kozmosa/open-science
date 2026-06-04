@@ -106,17 +106,23 @@ class TestLoginLockoutViaApi:
         )
         try:
             # First bad login
-            resp = await client.post("/auth/login", json={"username": "locktest", "password": "wrong"})
+            resp = await client.post(
+                "/auth/login", json={"username": "locktest", "password": "wrong"}
+            )
             assert resp.status_code == 401
             assert "locked" not in resp.json()["detail"].lower()
 
             # Second bad login
-            resp = await client.post("/auth/login", json={"username": "locktest", "password": "wrong"})
+            resp = await client.post(
+                "/auth/login", json={"username": "locktest", "password": "wrong"}
+            )
             assert resp.status_code == 401
             assert "locked" not in resp.json()["detail"].lower()
 
             # Third attempt — should be locked (2 failures recorded, check raises before login)
-            resp = await client.post("/auth/login", json={"username": "locktest", "password": "pw123"})
+            resp = await client.post(
+                "/auth/login", json={"username": "locktest", "password": "pw123"}
+            )
             assert resp.status_code == 401
             assert "locked" in resp.json()["detail"].lower()
         finally:

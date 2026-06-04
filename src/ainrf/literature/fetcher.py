@@ -106,13 +106,12 @@ async def _summarize_papers(papers: list[LiteraturePaper]) -> None:
         await asyncio.sleep(random.uniform(_RATE_DELAY_MIN, _RATE_DELAY_MAX))
 
 
-
 def _fetch_arxiv_papers(sub: LiteratureSubscription) -> list[LiteraturePaper]:
     client = arxiv.Client()
     query_parts: list[str] = []
 
     if sub.keywords:
-        query_parts.append("(" + " AND ".join(f'\"{kw}\"' for kw in sub.keywords) + ")")
+        query_parts.append("(" + " AND ".join(f'"{kw}"' for kw in sub.keywords) + ")")
     if sub.arxiv_categories:
         query_parts.append("(" + " OR ".join(f"cat:{cat}" for cat in sub.arxiv_categories) + ")")
 

@@ -28,7 +28,9 @@ def _get_fetch_tasks(request: Request) -> dict[str, tuple[object, dict[str, str 
     return request.app.state._literature_tasks
 
 
-def _get_user_subscription(request: Request, subscription_id: str) -> tuple[LiteratureService, LiteratureSubscription]:
+def _get_user_subscription(
+    request: Request, subscription_id: str
+) -> tuple[LiteratureService, LiteratureSubscription]:
     user_id = _get_user_id(request)
     service = _get_service(request)
     sub = service.get_subscription(subscription_id)
