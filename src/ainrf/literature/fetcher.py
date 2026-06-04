@@ -106,24 +106,13 @@ async def _summarize_papers(papers: list[LiteraturePaper]) -> None:
         await asyncio.sleep(random.uniform(_RATE_DELAY_MIN, _RATE_DELAY_MAX))
 
 
-async def fetch_for_subscription(
-    sub: LiteratureSubscription,
-) -> list[LiteraturePaper]:
-    """Fetch papers for a single subscription.
 
-    Queries arXiv with the subscription's keywords and categories,
-    then optionally summarizes each paper via the configured LLM API.
-    API configuration is read from environment variables:
-    - ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / DEEPSEEK_API_KEY
-    - ANTHROPIC_BASE_URL / DEEPSEEK_BASE_URL (default: https://api.deepseek.com)
-    - AINRF_LITERATURE_MODEL / ANTHROPIC_MODEL (default: deepseek-v4-flash)
-    """
+def _fetch_arxiv_papers(sub: LiteratureSubscription) -> list[LiteraturePaper]:
     client = arxiv.Client()
     query_parts: list[str] = []
 
     if sub.keywords:
-        # Wrap each keyword phrase in double quotes for exact phrase matching
-        query_parts.append("(" + " AND ".join(f'"{kw}"' for kw in sub.keywords) + ")")
+        query_parts.append("(" + " AND ".join(f'\"{kw}\"' for kw in sub.keywords) + ")")
     if sub.arxiv_categories:
         query_parts.append("(" + " OR ".join(f"cat:{cat}" for cat in sub.arxiv_categories) + ")")
 
@@ -151,6 +140,22 @@ async def fetch_for_subscription(
             )
     except Exception:
         pass
+    return papers
+
+
+async def fetch_for_subscription(
+    sub: LiteratureSubscription,
+) -> list[LiteraturePaper]:
+    """Fetch papers for a single subscription.
+
+    Queries arXiv with the subscription's keywords and categories,
+    then optionally summarizes each paper via the configured LLM API.
+    API configuration is read from environment variables:
+    - ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / DEEPSEEK_API_KEY
+    - ANTHROPIC_BASE_URL / DEEPSEEK_BASE_URL (default: https://api.deepseek.com)
+    - AINRF_LITERATURE_MODEL / ANTHROPIC_MODEL (default: deepseek-v4-flash)
+    """
+    papers = await asyncio.to_thread(_fetch_arxiv_papers, sub)
 
     if papers:
         await _summarize_papers(papers)
