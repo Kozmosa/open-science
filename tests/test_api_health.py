@@ -15,7 +15,7 @@ from tests.testutil import get_jwt_headers
 async def test_health_reports_container_probe_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def fake_ping(self: object) -> ContainerHealth:
+    async def fake_ping(self: object, **kwargs: object) -> ContainerHealth:
         return ContainerHealth(
             ssh_ok=True,
             claude_ok=True,
@@ -47,7 +47,7 @@ async def test_health_reports_container_probe_success(
 async def test_health_reports_degraded_container_probe(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def fake_ping(self: object) -> ContainerHealth:
+    async def fake_ping(self: object, **kwargs: object) -> ContainerHealth:
         return ContainerHealth(
             ssh_ok=False,
             claude_ok=False,

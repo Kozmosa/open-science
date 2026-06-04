@@ -49,6 +49,9 @@ packages = ["src/ainrf"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:Benchmarks are automatically disabled because xdist plugin is active:pytest_benchmark.logger.PytestBenchmarkWarning",
+]
 
 [tool.ruff]
 line-length = 100
