@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getSession, getSessions } from '../api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getTask, getTasks } from '../api';
 import PageShell from '../components/layout/PageShell';
 import SplitPane from '../components/layout/SplitPane';
 import { SessionDetail } from './sessions/SessionDetail';
@@ -11,29 +11,27 @@ export default function SessionsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(320);
 
-  const sessionsQuery = useInfiniteQuery({
-    queryKey: ['sessions'],
-    queryFn: ({ pageParam }) => getSessions({ cursor: pageParam, limit: 50 }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.has_more ? (lastPage.next_cursor ?? undefined) : undefined,
+  const tasksQuery = useQuery({
+    queryKey: ['session-task-runs'],
+    queryFn: () => getTasks({ includeArchived: false, limit: 200, sort: 'updated' }),
     refetchInterval: 10000,
   });
 
-  const sessions = useMemo(
-    () => sessionsQuery.data?.pages.flatMap((p) => p.items) ?? [],
-    [sessionsQuery.data],
+  const tasks = useMemo(
+    () => tasksQuery.data?.items ?? [],
+    [tasksQuery.data],
   );
 
   const detailQuery = useQuery({
-    queryKey: ['session', selectedId],
-    queryFn: () => getSession(selectedId!),
+    queryKey: ['task', selectedId],
+    queryFn: () => getTask(selectedId!),
     enabled: selectedId !== null,
   });
 
   const handleSelect = useCallback(
     (id: string) => {
       setSelectedId(id);
-      queryClient.invalidateQueries({ queryKey: ['session', id] });
+      queryClient.invalidateQueries({ queryKey: ['task', id] });
     },
     [queryClient],
   );
@@ -43,13 +41,10 @@ export default function SessionsPage() {
       <SplitPane
         sidebar={
           <SessionList
-            sessions={sessions}
+            tasks={tasks}
             selectedId={selectedId}
             onSelect={handleSelect}
-            loading={sessionsQuery.isLoading}
-            hasNextPage={sessionsQuery.hasNextPage}
-            isFetchingNextPage={sessionsQuery.isFetchingNextPage}
-            onLoadMore={() => sessionsQuery.fetchNextPage()}
+            loading={tasksQuery.isLoading}
           />
         }
         sidebarWidth={sidebarWidth}

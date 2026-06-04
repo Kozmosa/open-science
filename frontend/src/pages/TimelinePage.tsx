@@ -1,36 +1,57 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getProjects, getSessions, getSessionsBatchDetail } from '../api';
+import { getProjects, getTasks } from '../api';
 import PageShell from '../components/layout/PageShell';
 import SectionStack from '../components/layout/SectionStack';
 import { GanttChart } from './timeline/GanttChart';
 import { TimelineControls } from './timeline/TimelineControls';
+import type { TaskSummary } from '../types';
+
+function taskStartTime(task: TaskSummary): number {
+  return new Date(task.started_at ?? task.created_at).getTime();
+}
+
+function dateStart(value: string): number | null {
+  return value ? new Date(`${value}T00:00:00`).getTime() : null;
+}
+
+function dateEnd(value: string): number | null {
+  return value ? new Date(`${value}T23:59:59.999`).getTime() : null;
+}
 
 export default function TimelinePage() {
-  // Will be wired in Task 2+3
   const [projectId, setProjectId] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
 
-  const sessionsQuery = useQuery({
-    queryKey: ['sessions', projectId],
-    queryFn: () => getSessions({ projectId: projectId ?? undefined }),
+  const tasksQuery = useQuery({
+    queryKey: ['timeline-task-runs'],
+    queryFn: () => getTasks({ includeArchived: false, limit: 1000, sort: 'created' }),
     refetchInterval: 15000,
   });
 
-  const sessions = useMemo(
-    () => sessionsQuery.data?.items ?? [],
-    [sessionsQuery.data],
+  const allTasks = useMemo(
+    () => tasksQuery.data?.items ?? [],
+    [tasksQuery.data],
   );
 
-  const detailQuery = useQuery({
-    queryKey: ['session-batch-detail', sessions.map((s) => s.id)],
-    queryFn: () => getSessionsBatchDetail(sessions.map((s) => s.id)),
-    enabled: sessions.length > 0,
-    refetchInterval: 30000,
-  });
-
-  const details = useMemo(() => detailQuery.data?.items ?? {}, [detailQuery.data]);
+  const tasks = useMemo(() => {
+    const min = dateStart(fromDate);
+    const max = dateEnd(toDate);
+    return allTasks.filter((task) => {
+      if (projectId !== null && task.project_id !== projectId) {
+        return false;
+      }
+      const start = taskStartTime(task);
+      if (min !== null && start < min) {
+        return false;
+      }
+      if (max !== null && start > max) {
+        return false;
+      }
+      return true;
+    });
+  }, [allTasks, fromDate, projectId, toDate]);
 
   const projectsQuery = useQuery({
     queryKey: ['projects'],
@@ -47,10 +68,10 @@ export default function TimelinePage() {
           toDate={toDate}
           onFromDateChange={setFromDate}
           onToDateChange={setToDate}
-          sessions={sessions}
+          tasks={tasks}
           projects={projectsQuery.data?.items ?? []}
         />
-        <GanttChart sessions={sessions} details={details} loading={sessionsQuery.isLoading} />
+        <GanttChart tasks={tasks} loading={tasksQuery.isLoading} />
       </SectionStack>
     </PageShell>
   );

@@ -1,26 +1,36 @@
 import SectionStack from '../../components/layout/SectionStack';
 import { semanticToneClasses } from '../../components/ui/theme';
 import { useT } from '../../i18n';
-import type { SessionDetailRecord, TokenUsage } from '../../types';
-import { AttemptChain } from './AttemptChain';
+import type { TaskRecord } from '../../types';
 
 interface Props {
-  detail: SessionDetailRecord | null;
+  detail: TaskRecord | null;
   loading: boolean;
   selectedId: string | null;
 }
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
-  active: semanticToneClasses.success,
-  completed: semanticToneClasses.warning,
-  archived: semanticToneClasses.muted,
+  queued: semanticToneClasses.muted,
+  starting: semanticToneClasses.warning,
+  running: semanticToneClasses.info,
+  paused: semanticToneClasses.warning,
+  succeeded: semanticToneClasses.success,
+  failed: semanticToneClasses.danger,
+  cancelled: semanticToneClasses.muted,
 };
 
-function formatDuration(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+function formatDate(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleString() : '—';
+}
+
+function DetailRow({ label, value }: { label: string; value: string | number | null | undefined }) {
+  const text = value == null || value === '' ? '—' : String(value);
+  return (
+    <div className="flex items-start gap-3 border-b border-[var(--border)] py-2 last:border-0">
+      <span className="w-32 shrink-0 text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]">{label}</span>
+      <span className="min-w-0 flex-1 break-words text-sm text-[var(--text)]" title={text}>{text}</span>
+    </div>
+  );
 }
 
 export function SessionDetail({ detail, loading, selectedId }: Props) {
@@ -50,40 +60,41 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
     );
   }
 
+  const engine = detail.harness_engine ?? detail.execution_engine ?? detail.task_profile ?? 'agent';
+  const workdir = detail.working_directory ?? detail.runtime?.working_directory ?? detail.binding?.resolved_workdir ?? null;
+  const command = detail.command?.length ? detail.command.join(' ') : detail.runtime?.command?.join(' ') ?? null;
+
   return (
     <div className="p-4">
       <SectionStack gap={4}>
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-[var(--text)]" title={detail.title}>{detail.title}</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="min-w-0 truncate text-lg font-semibold text-[var(--text)]" title={detail.title}>{detail.title}</h2>
           <span
-            className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE_CLASSES[detail.status] ?? STATUS_BADGE_CLASSES.archived}`}
+            className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE_CLASSES[detail.status] ?? STATUS_BADGE_CLASSES.cancelled}`}
           >
-            {t(`pages.sessions.status.${detail.status}`)}
+            {t(`pages.tasks.status.${detail.status}`)}
           </span>
         </div>
 
-        <div className="flex items-center gap-6 text-sm text-[var(--text-secondary)]">
-          <span>{t('pages.sessions.taskCount', { count: detail.task_count })}</span>
-          <span>
-            {t('pages.sessions.totalDuration', {
-              duration: formatDuration(detail.total_duration_ms),
-            })}
-          </span>
-          <span>${detail.total_cost_usd.toFixed(2)}</span>
-          {(() => {
-            const totalTok = detail.attempts.reduce((sum, a) => {
-              if (!a.token_usage_json) return sum;
-              try {
-                const tu = JSON.parse(a.token_usage_json) as TokenUsage;
-                const t = tu.total;
-                return sum + (t.input_tokens || 0) + (t.output_tokens || 0) + (t.cache_creation_input_tokens || 0) + (t.cache_read_input_tokens || 0);
-              } catch { return sum; }
-            }, 0);
-            return totalTok > 0 ? <span>{totalTok >= 1000 ? `${(totalTok / 1000).toFixed(1)}K tokens` : `${totalTok} tokens`}</span> : null;
-          })()}
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <DetailRow label={t('pages.sessions.detail.prompt')} value={detail.prompt} />
+          <DetailRow label={t('pages.sessions.detail.engine')} value={engine} />
+          <DetailRow label={t('pages.sessions.detail.project')} value={detail.project_id} />
+          <DetailRow label={t('pages.sessions.detail.workspace')} value={detail.workspace_id} />
+          <DetailRow label={t('pages.sessions.detail.environment')} value={detail.environment_id} />
+          <DetailRow label={t('pages.sessions.detail.workdir')} value={workdir} />
+          <DetailRow label={t('pages.sessions.detail.command')} value={command} />
+          <DetailRow label={t('pages.sessions.detail.started')} value={formatDate(detail.started_at)} />
+          <DetailRow label={t('pages.sessions.detail.completed')} value={formatDate(detail.completed_at)} />
+          <DetailRow label={t('pages.sessions.detail.outputSeq')} value={detail.latest_output_seq ?? 0} />
+          <DetailRow label={t('pages.sessions.detail.exitCode')} value={detail.exit_code} />
         </div>
 
-        <AttemptChain attempts={detail.attempts} />
+        {detail.error_summary ? (
+          <div className={`rounded-lg border px-3 py-2 text-sm ${semanticToneClasses.danger}`}>
+            {detail.error_summary}
+          </div>
+        ) : null}
       </SectionStack>
     </div>
   );
