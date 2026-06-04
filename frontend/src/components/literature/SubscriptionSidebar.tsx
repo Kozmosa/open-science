@@ -181,7 +181,7 @@ export default function SubscriptionSidebar({
               value={form.keywords}
               onChange={(e) => setForm((p) => ({ ...p, keywords: e.target.value }))}
               className="py-2 text-xs"
-              placeholder="machine learning, NLP"
+              placeholder={t('literature.keywordsPlaceholder')}
             />
           </div>
           <div>

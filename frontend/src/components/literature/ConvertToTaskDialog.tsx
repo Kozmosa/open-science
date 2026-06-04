@@ -4,6 +4,14 @@ import { useT } from '../../i18n';
 import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '../../types';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../../pages/tasks/taskPresets';
 
+const FIELD_IDS = {
+  taskPreset: 'convert-task-preset',
+  workspace: 'convert-task-workspace',
+  environment: 'convert-task-environment',
+  researcherType: 'convert-task-researcher-type',
+  harnessEngine: 'convert-task-harness-engine',
+};
+
 function arxivAbsUrl(paperId: string): string {
   return paperId ? `https://arxiv.org/abs/${paperId}` : '';
 }
@@ -139,11 +147,12 @@ export default function ConvertToTaskDialog({
             <p className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-3">{paperAbstract}</p>
           </div>
 
-          <label className="block">
+          <label className="block" htmlFor={FIELD_IDS.taskPreset}>
             <span className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.create.taskPreset')}
             </span>
             <Select
+              id={FIELD_IDS.taskPreset}
               value={selectedTaskPresetId}
               onChange={(e) => applyTaskPreset(e.target.value as TaskPresetId)}
               className="w-full text-xs py-2"
@@ -155,10 +164,11 @@ export default function ConvertToTaskDialog({
           </label>
 
           <div>
-            <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+            <label htmlFor={FIELD_IDS.workspace} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.workspaceLabel')}
             </label>
             <Select
+              id={FIELD_IDS.workspace}
               value={effectiveWorkspaceId}
               onChange={(e) => setSelectedWorkspaceId(e.target.value)}
               className="w-full text-xs py-2"
@@ -170,10 +180,11 @@ export default function ConvertToTaskDialog({
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+            <label htmlFor={FIELD_IDS.environment} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.environmentLabel')}
             </label>
             <Select
+              id={FIELD_IDS.environment}
               value={effectiveEnvironmentId}
               onChange={(e) => setSelectedEnvironmentId(e.target.value)}
               className="w-full text-xs py-2"
@@ -185,31 +196,33 @@ export default function ConvertToTaskDialog({
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
-              Researcher Type
+            <label htmlFor={FIELD_IDS.researcherType} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+              {t('pages.tasks.create.researcherType')}
             </label>
             <Select
+              id={FIELD_IDS.researcherType}
               value={researcherType}
               onChange={(e) => setResearcherType(e.target.value as 'vanilla' | 'aris-researcher')}
               className="w-full text-xs py-2"
             >
-              <option value="vanilla">Vanilla</option>
-              <option value="aris-researcher">ARIS Researcher</option>
+              <option value="vanilla">{t('pages.tasks.create.researcherVanilla')}</option>
+              <option value="aris-researcher">{t('pages.tasks.create.researcherAris')}</option>
             </Select>
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
-              Execution Engine
+            <label htmlFor={FIELD_IDS.harnessEngine} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+              {t('pages.tasks.create.executionEngine')}
             </label>
             <Select
+              id={FIELD_IDS.harnessEngine}
               value={harnessEngine}
               onChange={(e) => setHarnessEngine(e.target.value as 'claude-code' | 'agent-sdk' | 'codex-app-server')}
               className="w-full text-xs py-2"
             >
-              <option value="claude-code">Claude Code</option>
-              <option value="agent-sdk">Agent SDK</option>
-              <option value="codex-app-server">Codex App Server</option>
+              <option value="claude-code">{t('pages.tasks.create.engineClaudeCode')}</option>
+              <option value="agent-sdk">{t('pages.tasks.create.engineAgentSdk')}</option>
+              <option value="codex-app-server">{t('pages.tasks.create.engineCodexAppServer')}</option>
             </Select>
           </div>
         </div>
