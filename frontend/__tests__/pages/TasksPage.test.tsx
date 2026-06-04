@@ -864,6 +864,33 @@ describe('TasksPage', () => {
     expect(screen.queryByText('older line')).not.toBeInTheDocument();
   });
 
+  it('does not refetch task metadata for non-status lifecycle stream events', async () => {
+    renderWithProviders(<TasksPage />);
+    await screen.findByText('Train model');
+    const source = MockEventSource.instances[0];
+    const taskCallsAfterInitialLoad = mockGetTask.mock.calls.length;
+    const listCallsAfterInitialLoad = mockGetTasks.mock.calls.length;
+
+    await act(async () => {
+      source.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(
+            createOutputEvent(2, {
+              kind: 'lifecycle',
+              content: '{"event_type":"system","payload":{"subtype":"turn_started"},"token_usage":null}',
+            })
+          ),
+        })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockGetTask).toHaveBeenCalledTimes(taskCallsAfterInitialLoad);
+    expect(mockGetTasks).toHaveBeenCalledTimes(listCallsAfterInitialLoad);
+    expect(MockEventSource.instances).toHaveLength(1);
+  });
+
   it('fills SSE gaps by replaying missing output before continuing', async () => {
     mockGetTaskOutput
       .mockResolvedValueOnce(
