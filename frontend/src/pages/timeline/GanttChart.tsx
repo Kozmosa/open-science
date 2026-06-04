@@ -1,12 +1,19 @@
 import { useMemo } from 'react';
-import type { AttemptRecord, SessionRecord } from '../../types';
+import type { TaskSummary } from '../../types';
 import { useT } from '../../i18n';
 import { GanttRow } from './GanttRow';
 
 interface Props {
-  sessions: SessionRecord[];
-  details: Record<string, AttemptRecord[]>;
+  tasks: TaskSummary[];
   loading: boolean;
+}
+
+function getTaskStart(task: TaskSummary): number {
+  return new Date(task.started_at ?? task.created_at).getTime();
+}
+
+function getTaskEnd(task: TaskSummary): number {
+  return new Date(task.completed_at ?? task.updated_at ?? task.started_at ?? task.created_at).getTime();
 }
 
 function getTimeLabel(span: number): string {
@@ -21,7 +28,7 @@ function generateTimeLabels(
   unit: string,
 ): { label: string; leftPct: number }[] {
   const labels: { label: string; leftPct: number }[] = [];
-  const span = maxTime - minTime;
+  const span = maxTime - minTime || 1;
   if (unit === 'hour') {
     const step = 3600000;
     let cur = Math.floor(minTime / step) * step;
@@ -58,69 +65,58 @@ function generateTimeLabels(
   return labels;
 }
 
-export function GanttChart({ sessions, details, loading }: Props) {
+export function GanttChart({ tasks, loading }: Props) {
   const t = useT();
-  const { minTime, span, timeLabels, detailMap } = useMemo(() => {
-    const allAttempts = Object.values(details).flat();
-    const times = allAttempts
-      .map((a) => (a.started_at ? new Date(a.started_at).getTime() : null))
-      .filter(Boolean) as number[];
-    if (times.length === 0) {
+  const { minTime, span, timeLabels } = useMemo(() => {
+    if (tasks.length === 0) {
       const now = Date.now();
       return {
         minTime: now - 3600000,
         span: 7200000,
         timeLabels: [] as { label: string; leftPct: number }[],
-        detailMap: details,
       };
     }
 
-    const min = Math.min(...times);
-    const max = Math.max(
-      ...allAttempts.map((a) =>
-        a.finished_at ? new Date(a.finished_at).getTime() : Date.now(),
-      ),
-    );
+    const min = Math.min(...tasks.map(getTaskStart));
+    const max = Math.max(...tasks.map((task) => Math.max(getTaskEnd(task), getTaskStart(task) + 1)));
     const s = max - min || 1;
     return {
       minTime: min,
       span: s,
       timeLabels: generateTimeLabels(min, max, getTimeLabel(s)),
-      detailMap: details,
     };
-  }, [details]);
+  }, [tasks]);
 
   if (loading) {
-    return <p className="text-sm text-gray-400 p-4">{t('pages.sessions.timeline.loading')}</p>;
+    return <p className="p-4 text-sm text-[var(--text-tertiary)]">{t('pages.sessions.timeline.loading')}</p>;
   }
 
-  if (sessions.length === 0) {
-    return <p className="text-sm text-gray-400 p-4">{t('pages.sessions.timeline.empty')}</p>;
+  if (tasks.length === 0) {
+    return <p className="p-4 text-sm text-[var(--text-tertiary)]">{t('pages.sessions.timeline.empty')}</p>;
   }
 
   return (
-    <div className="w-full border border-[var(--border)] rounded-lg overflow-x-auto overflow-y-auto">
-      <div className="flex bg-[var(--bg)] border-b border-[var(--border)]">
-        <div className="w-[260px] min-w-[260px] p-2 border-r-2 border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)]">
+    <div className="w-full overflow-x-auto overflow-y-auto rounded-lg border border-[var(--border)]">
+      <div className="flex border-b border-[var(--border)] bg-[var(--bg)]">
+        <div className="w-[280px] min-w-[280px] border-r-2 border-[var(--border)] p-2 text-xs font-semibold text-[var(--text-secondary)]">
           {t('pages.sessions.timeline.title')}
         </div>
-        <div className="flex-1 relative h-8">
-          {timeLabels.map((tl, i) => (
+        <div className="relative h-8 flex-1">
+          {timeLabels.map((tl) => (
             <div
-              key={i}
-              className="absolute top-0 text-[9px] text-gray-400 whitespace-nowrap"
-              style={{ left: `${tl.leftPct}%`, transform: i > 0 ? 'translateX(-50%)' : 'none' }}
+              key={`${tl.label}-${tl.leftPct}`}
+              className="absolute top-0 whitespace-nowrap text-[9px] text-[var(--text-tertiary)]"
+              style={{ left: `${tl.leftPct}%`, transform: tl.leftPct > 0 ? 'translateX(-50%)' : 'none' }}
             >
               {tl.label}
             </div>
           ))}
         </div>
       </div>
-      {sessions.map((s) => (
+      {tasks.map((task) => (
         <GanttRow
-          key={s.id}
-          session={s}
-          attempts={detailMap[s.id] ?? []}
+          key={task.task_id}
+          task={task}
           minTime={minTime}
           span={span}
         />

@@ -1,5 +1,5 @@
 import { useT } from '../../i18n';
-import type { SessionRecord, ProjectRecord } from '../../types';
+import type { ProjectRecord, TaskSummary } from '../../types';
 
 interface Props {
   projectId: string | null;
@@ -8,7 +8,7 @@ interface Props {
   toDate: string;
   onFromDateChange: (d: string) => void;
   onToDateChange: (d: string) => void;
-  sessions: SessionRecord[];
+  tasks: TaskSummary[];
   projects: ProjectRecord[];
 }
 
@@ -28,19 +28,18 @@ export function TimelineControls({
   toDate,
   onFromDateChange,
   onToDateChange,
-  sessions,
+  tasks,
   projects,
 }: Props) {
   const t = useT();
 
-  const totalCost = sessions.reduce((sum, s) => sum + s.total_cost_usd, 0);
-
   return (
-    <div className="flex w-full flex-wrap items-center gap-3 p-3 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-sm">
+    <div className="flex w-full flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3 text-sm">
       <select
         value={projectId ?? ''}
         onChange={(e) => onProjectChange(e.target.value || null)}
-        className="px-2 py-1 border border-[var(--border)] rounded text-sm"
+        className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)]"
+        aria-label={t('pages.sessions.timeline.projectFilter')}
       >
         <option value="">{t('pages.sessions.timeline.allProjects')}</option>
         {projects.map((p) => (
@@ -58,7 +57,7 @@ export function TimelineControls({
           type="date"
           value={fromDate}
           onChange={(e) => onFromDateChange(e.target.value)}
-          className="px-1 py-0.5 border border-[var(--border)] rounded text-xs"
+          className="rounded border border-[var(--border)] bg-[var(--surface)] px-1 py-0.5 text-xs text-[var(--text)]"
         />
       </label>
       <label className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
@@ -67,7 +66,7 @@ export function TimelineControls({
           type="date"
           value={toDate}
           onChange={(e) => onToDateChange(e.target.value)}
-          className="px-1 py-0.5 border border-[var(--border)] rounded text-xs"
+          className="rounded border border-[var(--border)] bg-[var(--surface)] px-1 py-0.5 text-xs text-[var(--text)]"
         />
       </label>
 
@@ -79,7 +78,7 @@ export function TimelineControls({
           onFromDateChange(todayStr());
           onToDateChange(todayStr());
         }}
-        className="px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
+        className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg-secondary)]"
       >
         {t('pages.sessions.timeline.today')}
       </button>
@@ -89,7 +88,7 @@ export function TimelineControls({
           onFromDateChange(daysAgoStr(7));
           onToDateChange(todayStr());
         }}
-        className="px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
+        className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg-secondary)]"
       >
         {t('pages.sessions.timeline.past7Days')}
       </button>
@@ -99,7 +98,7 @@ export function TimelineControls({
           onFromDateChange(daysAgoStr(30));
           onToDateChange(todayStr());
         }}
-        className="px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded hover:bg-[var(--bg-secondary)]"
+        className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg-secondary)]"
       >
         {t('pages.sessions.timeline.past30Days')}
       </button>
@@ -107,10 +106,7 @@ export function TimelineControls({
       <span className="flex-1" />
 
       <span className="text-xs text-[var(--text-secondary)]">
-        {t('pages.sessions.timeline.sessionCount', { count: sessions.length })}
-        {totalCost > 0
-          ? ` · ${t('pages.sessions.timeline.totalCost', { cost: `$${totalCost.toFixed(2)}` })}`
-          : ''}
+        {t('pages.sessions.timeline.taskCount', { count: tasks.length })}
       </span>
     </div>
   );

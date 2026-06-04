@@ -5,99 +5,97 @@ import SessionsPage from '../../src/pages/SessionsPage';
 import * as api from '../../src/api';
 
 vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
-  getSessions: vi.fn(),
-  getSession: vi.fn(),
+  getTasks: vi.fn(),
+  getTask: vi.fn(),
 }));
 
-const mockGetSessions = vi.mocked(api.getSessions);
-const mockGetSession = vi.mocked(api.getSession);
+const mockGetTasks = vi.mocked(api.getTasks);
+const mockGetTask = vi.mocked(api.getTask);
+
+const taskSummary = {
+  task_id: 'task-1',
+  project_id: 'p1',
+  workspace_id: 'workspace-1',
+  environment_id: 'env-1',
+  researcher_type: 'vanilla',
+  harness_engine: 'codex-app-server',
+  status: 'succeeded' as const,
+  title: 'Train model',
+  prompt: 'Train the model.',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:05:00Z',
+  started_at: '2026-01-01T00:01:00Z',
+  completed_at: '2026-01-01T00:05:00Z',
+  owner_user_id: 'user-1',
+  latest_output_seq: 12,
+  exit_code: 0,
+  error_summary: null,
+  working_directory: '/workspace/project',
+  command: ['codex', 'exec'],
+};
+
+const taskRecord = {
+  ...taskSummary,
+  binding: {
+    project_id: 'p1',
+    workspace_id: 'workspace-1',
+    environment_id: 'env-1',
+    profile_id: 'vanilla',
+    title: 'Train model',
+    task_input: 'Train the model.',
+    resolved_workdir: '/workspace/project',
+    environment: { id: 'env-1', alias: 'gpu-lab', display_name: 'GPU Lab', target_kind: 'ssh', working_directory: '/workspace/project' },
+  },
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  mockGetSessions.mockResolvedValue({ items: [] });
-  mockGetSession.mockResolvedValue({
-    id: 's1',
-    project_id: 'p1',
-    title: 'Test',
-    status: 'active',
-    task_count: 0,
-    total_duration_ms: 0,
-    total_cost_usd: 0,
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    attempts: [],
-  });
+  mockGetTasks.mockResolvedValue({ items: [taskSummary], total: 1 });
+  mockGetTask.mockResolvedValue(taskRecord);
 });
 
 describe('SessionsPage', () => {
-  it('renders the session list sidebar', async () => {
-    mockGetSessions.mockResolvedValue({
-      items: [
-        {
-          id: 's1',
-          project_id: 'p1',
-          title: 'My Session',
-          status: 'active',
-          task_count: 2,
-          total_duration_ms: 5000,
-          total_cost_usd: 1.5,
-          created_at: '2026-01-01T00:00:00Z',
-          updated_at: '2026-01-01T00:00:00Z',
-        },
-      ],
-    });
-
+  it('renders the task run list sidebar from real tasks', async () => {
     renderWithProviders(<SessionsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('My Session')).toBeInTheDocument();
+      expect(mockGetTasks).toHaveBeenCalledWith({ includeArchived: false, limit: 200, sort: 'updated' });
+      expect(screen.getByText('Train model')).toBeInTheDocument();
+      expect(screen.getByText(/codex-app-server/)).toBeInTheDocument();
     });
   });
 
-  it('shows empty state when no sessions', async () => {
+  it('shows empty state when no task runs exist', async () => {
+    mockGetTasks.mockResolvedValue({ items: [], total: 0 });
     renderWithProviders(<SessionsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('No sessions yet')).toBeInTheDocument();
+      expect(screen.getByText('No task runs yet')).toBeInTheDocument();
     });
   });
 
-  it('prompts to select a session initially', async () => {
+  it('prompts to select a task run initially', async () => {
     renderWithProviders(<SessionsPage />);
 
     await waitFor(() => {
       expect(
-        screen.getByText('Select a session to view details'),
+        screen.getByText('Select a task run to view details'),
       ).toBeInTheDocument();
     });
   });
 
-  it('loads session detail on click', async () => {
-    mockGetSessions.mockResolvedValue({
-      items: [
-        {
-          id: 's1',
-          project_id: 'p1',
-          title: 'My Session',
-          status: 'active',
-          task_count: 1,
-          total_duration_ms: 1000,
-          total_cost_usd: 0.5,
-          created_at: '2026-01-01T00:00:00Z',
-          updated_at: '2026-01-01T00:00:00Z',
-        },
-      ],
-    });
-
+  it('loads task detail on click', async () => {
     renderWithProviders(<SessionsPage />);
 
     await waitFor(() => {
-      fireEvent.click(screen.getByText('My Session'));
+      fireEvent.click(screen.getByText('Train model'));
     });
 
     await waitFor(() => {
-      expect(mockGetSession).toHaveBeenCalledWith('s1');
+      expect(mockGetTask).toHaveBeenCalledWith('task-1');
+      expect(screen.getByText('Train the model.')).toBeInTheDocument();
+      expect(screen.getByText('/workspace/project')).toBeInTheDocument();
     });
   });
 });
