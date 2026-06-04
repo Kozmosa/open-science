@@ -164,6 +164,50 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
         ]
 
 
+@pytest.mark.anyio
+async def test_archive_succeeded_task_hides_it_from_default_list(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-archive",
+            label="Archive workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the archive workspace.",
+            owner_user_id=None,
+        )
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-archive",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Archive me",
+                "prompt": "Finish then archive.",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        await wait_for_status(client, task_id, "succeeded")
+
+        archive_response = await client.delete(f"/tasks/{task_id}")
+        assert archive_response.status_code == 200
+        assert archive_response.json()["status"] == "cancelled"
+
+        default_list = await client.get("/tasks?include_archived=false")
+        assert task_id not in [item["task_id"] for item in default_list.json()["items"]]
+        archived_list = await client.get("/tasks?include_archived=true")
+        assert task_id in [item["task_id"] for item in archived_list.json()["items"]]
+
+
 
 @pytest.mark.anyio
 async def test_task_messages_normalize_wrapped_codex_events_and_drop_user_echo(

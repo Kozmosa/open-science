@@ -4,8 +4,9 @@ import type { HarnessEngine, ResearcherType } from '../../types';
 export type TaskPresetLabelKey =
   | 'pages.tasks.create.presets.rawPrompt'
   | 'pages.tasks.create.presets.structuredResearch'
-  | 'pages.tasks.create.presets.reproduceBaseline';
-export type TaskPresetId = 'raw-prompt' | 'structured-research-default' | 'reproduce-baseline-default';
+  | 'pages.tasks.create.presets.reproduceBaseline'
+  | 'pages.tasks.create.presets.overview';
+export type TaskPresetId = 'raw-prompt' | 'structured-research-default' | 'reproduce-baseline-default' | 'overview';
 
 export interface TaskPresetOption {
   id: TaskPresetId;
@@ -32,6 +33,12 @@ export const TASK_PRESET_OPTIONS: TaskPresetOption[] = [
     labelKey: 'pages.tasks.create.presets.reproduceBaseline',
     researcherType: 'vanilla',
     harnessEngine: 'codex-app-server',
+  },
+  {
+    id: 'overview',
+    labelKey: 'pages.tasks.create.presets.overview',
+    researcherType: 'vanilla',
+    harnessEngine: 'claude-code',
   },
 ];
 

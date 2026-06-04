@@ -97,6 +97,7 @@ export default function LiteraturePage() {
       <ConvertToTaskDialog
         isOpen={pendingConversion !== null}
         isSubmitting={convertMutation.isPending}
+        paperId={pendingConversion?.paperId ?? ''}
         paperTitle={pendingConversion?.title ?? ''}
         paperAbstract={pendingConversion?.abstract ?? ''}
         workspaces={workspaces}

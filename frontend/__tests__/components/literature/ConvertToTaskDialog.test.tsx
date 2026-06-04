@@ -53,13 +53,14 @@ describe('ConvertToTaskDialog', () => {
         paperAbstract="Paper abstract"
         workspaces={[workspace]}
         environments={[environment]}
+        paperId="2401.00001"
         onConfirm={onConfirm}
         onCancel={vi.fn()}
       />
     );
 
     const presetSelect = screen.getByLabelText('Task preset');
-    expect(within(presetSelect).getAllByRole('option')).toHaveLength(3);
+    expect(within(presetSelect).getAllByRole('option')).toHaveLength(4);
     fireEvent.change(presetSelect, { target: { value: 'structured-research-default' } });
     fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
 
@@ -67,8 +68,43 @@ describe('ConvertToTaskDialog', () => {
       expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({
         researcher_type: 'aris-researcher',
         harness_engine: 'claude-code',
-        prompt: 'Paper abstract',
       }));
+      const payload = onConfirm.mock.calls[0]?.[0];
+      expect(payload?.prompt).toContain('/research-pipeline');
+      expect(payload?.prompt).toContain('https://arxiv.org/pdf/2401.00001');
+      expect(payload?.prompt).toContain('Paper abstract');
+    });
+  });
+
+  it('builds an overview prompt that asks for a saved Chinese markdown guide', async () => {
+    const onConfirm = vi.fn<(payload: TaskCreatePayload) => void>();
+
+    renderWithProviders(
+      <ConvertToTaskDialog
+        isOpen
+        isSubmitting={false}
+        paperId="2401.00001"
+        paperTitle="Paper title"
+        paperAbstract="Paper abstract"
+        workspaces={[workspace]}
+        environments={[environment]}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Task preset'), { target: { value: 'overview' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
+
+    await waitFor(() => {
+      const payload = onConfirm.mock.calls[0]?.[0];
+      expect(payload).toEqual(expect.objectContaining({
+        researcher_type: 'vanilla',
+        harness_engine: 'claude-code',
+      }));
+      expect(payload?.prompt).toContain('中文的文献导读 Markdown');
+      expect(payload?.prompt).toContain('保存到工作区磁盘');
+      expect(payload?.prompt).toContain('https://arxiv.org/abs/2401.00001');
     });
   });
 });
