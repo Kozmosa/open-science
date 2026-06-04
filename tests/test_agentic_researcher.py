@@ -189,11 +189,13 @@ async def test_run_task_persists_output_and_succeeds(tmp_path: Path) -> None:
     completed = svc.get_task(task.task_id)
     assert completed.status == TaskStatus.SUCCEEDED
     output = svc.get_output(task.task_id)
+    assert [item.kind for item in output] == ["message", "message", "lifecycle"]
     assert [item.content for item in output] == [
-        "ran: Test prompt",
+        '{"role": "user", "content": "Test prompt"}',
+        '{"role": "assistant", "content": "ran: Test prompt"}',
         '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
     ]
-    assert completed.latest_output_seq == 2
+    assert completed.latest_output_seq == 3
 
 
 @pytest.mark.anyio
@@ -218,18 +220,19 @@ async def test_send_prompt_to_succeeded_task_schedules_followup(tmp_path: Path) 
 
     for _ in range(20):
         current = svc.get_task(task.task_id)
-        if current.status == TaskStatus.SUCCEEDED and current.latest_output_seq >= 5:
+        if current.status == TaskStatus.SUCCEEDED and current.latest_output_seq >= 6:
             break
         await asyncio.sleep(0.05)
 
     completed = svc.get_task(task.task_id)
     output = svc.get_output(task.task_id)
-    assert prompt_event.seq == 3
+    assert prompt_event.seq == 4
     assert completed.status == TaskStatus.SUCCEEDED
     assert [item.content for item in output] == [
-        "ran: Initial prompt",
+        '{"role": "user", "content": "Initial prompt"}',
+        '{"role": "assistant", "content": "ran: Initial prompt"}',
         '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
         '{"role": "user", "content": "Follow up"}',
-        "ran: Follow up",
+        '{"role": "assistant", "content": "ran: Follow up"}',
         '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
     ]

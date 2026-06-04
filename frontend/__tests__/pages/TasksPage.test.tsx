@@ -20,6 +20,7 @@ import {
   getProjects,
   getSkills,
   getTask,
+  getTaskMessages,
   getTaskOutput,
   getTasks,
   getWorkspaces,
@@ -232,6 +233,7 @@ vi.mock('../../src/api', () => ({
   getSkills: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
+  getTaskMessages: vi.fn(),
   getTasks: vi.fn(),
   getWorkspaces: vi.fn(),
 }));
@@ -244,6 +246,7 @@ const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentRefer
 const mockGetProjects = vi.mocked(getProjects);
 const mockGetTask = vi.mocked(getTask);
 const mockGetTaskOutput = vi.mocked(getTaskOutput);
+const mockGetTaskMessages = vi.mocked(getTaskMessages);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetTasks = vi.mocked(getTasks);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
@@ -267,6 +270,7 @@ beforeEach(() => {
   mockGetTaskOutput.mockReset();
   mockGetSkills.mockReset();
   mockGetTasks.mockReset();
+  mockGetTaskMessages.mockReset();
   mockGetWorkspaces.mockReset();
 
   mockBuildTaskStreamUrl.mockImplementation(
@@ -282,6 +286,7 @@ beforeEach(() => {
   mockGetProjects.mockResolvedValue({ items: [] });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
+  mockGetTaskMessages.mockResolvedValue({ messages: [], has_more: false, next_sequence: null });
   mockGetTask.mockResolvedValue(taskRecord);
   mockGetTaskOutput.mockImplementation(async (taskId) =>
     createOutputPage([
@@ -647,6 +652,34 @@ describe('TasksPage', () => {
 
     expect(await screen.findByText('retained line 505')).toBeInTheDocument();
     expect(screen.queryByText('retained line 1')).not.toBeInTheDocument();
+  });
+
+  it('renders codex user echoes and wrapped tool events with normalized chat roles', async () => {
+    mockGetTaskOutput.mockResolvedValue(
+      createOutputPage([
+        createOutputEvent(1, { kind: 'message', content: 'hello codex' }),
+        createOutputEvent(2, {
+          kind: 'message',
+          content: '{"role":"user","content":"tell me the time"}',
+        }),
+        createOutputEvent(3, { kind: 'message', content: 'tell me the time' }),
+        createOutputEvent(4, {
+          kind: 'tool_call',
+          content: '{"event_type":"tool_call","payload":{"id":"call-1","name":"commandExecution","arguments":{"command":"date"}},"token_usage":null}',
+        }),
+        createOutputEvent(5, {
+          kind: 'tool_result',
+          content: '{"event_type":"tool_result","payload":{"tool_use_id":"call-1","content":{"status":"failed"},"is_error":true},"token_usage":null}',
+        }),
+      ])
+    );
+
+    renderWithProviders(<TasksPage />);
+
+    expect(await screen.findByText('hello codex')).toBeInTheDocument();
+    expect(screen.getAllByText('tell me the time')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /tool call|tool result/i }));
+    expect(await screen.findByText(/commandExecution/)).toBeInTheDocument();
   });
 
   it('coalesces repeated stream gaps into one replay request while refill is in flight', async () => {

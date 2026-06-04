@@ -408,13 +408,8 @@ class CodexAppServerEngine(HarnessEngine):
             return
         item_type = item.get("type")
         if item_type == "userMessage":
-            await emit(
-                EngineEvent(
-                    event_type="message",
-                    payload={"role": "user", "content": self._extract_user_text(item)},
-                )
-            )
-        elif item_type == "commandExecution":
+            return
+        if item_type == "commandExecution":
             await emit(
                 EngineEvent(
                     event_type="tool_call",
@@ -471,6 +466,7 @@ class CodexAppServerEngine(HarnessEngine):
             "cwd": context.working_directory,
             "approvalPolicy": context.codex_approval_policy or "never",
             "personality": "pragmatic",
+            "sandbox": "danger-full-access",
         }
         model = context.codex_model or context.model
         if model:
@@ -491,6 +487,7 @@ class CodexAppServerEngine(HarnessEngine):
             "approvalPolicy": context.codex_approval_policy or "never",
             "personality": "pragmatic",
             "excludeTurns": True,
+            "sandbox": "danger-full-access",
         }
         model = context.codex_model or context.model
         if model:
@@ -513,7 +510,8 @@ class CodexAppServerEngine(HarnessEngine):
                 "threadId": session.thread_id,
                 "approvalPolicy": context.codex_approval_policy or "never",
                 "input": [{"type": "text", "text": prompt}],
-            },
+                "sandboxPolicy": {"type": "dangerFullAccess"},
+            }
         )
         turn = result.get("turn", {})
         if isinstance(turn, dict):

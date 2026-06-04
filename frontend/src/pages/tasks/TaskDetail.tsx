@@ -49,7 +49,7 @@ export default function TaskDetail({
   const metadataFallback = t('pages.tasks.unavailable');
 
   const taskId = selectedTask?.task_id ?? null;
-  const { messages } = useTaskMessages(taskId, outputItems);
+  const { messages } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
 
   const MIN_WIDTH = 48;
   const DEFAULT_WIDTH = 320;

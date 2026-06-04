@@ -114,12 +114,24 @@ def _assert_task_stream_access(
     return service, task
 
 
-def _output_item_to_message(item: TaskOutputEvent) -> MessageItemResponse | None:
+def _parse_output_payload(content: str) -> dict:
     try:
-        parsed = json.loads(item.content)
+        parsed = json.loads(content)
     except json.JSONDecodeError:
-        parsed = {"content": item.content}
-    payload = parsed if isinstance(parsed, dict) else {"content": item.content}
+        return {"content": content}
+    payload = parsed if isinstance(parsed, dict) else {"content": content}
+    wrapped_payload = payload.get("payload")
+    if isinstance(wrapped_payload, dict) and isinstance(payload.get("event_type"), str):
+        return wrapped_payload
+    return payload
+
+
+def _output_item_to_message(
+    item: TaskOutputEvent,
+    *,
+    initial_prompt: str | None = None,
+) -> MessageItemResponse | None:
+    payload = _parse_output_payload(item.content)
 
     metadata = {
         "timestamp": item.created_at.isoformat(),
@@ -128,11 +140,13 @@ def _output_item_to_message(item: TaskOutputEvent) -> MessageItemResponse | None
     message_id = f"{item.task_id}-{item.seq}"
 
     if item.kind == "message":
-        message_type = "user" if payload.get("role") == "user" else "assistant"
+        content = str(payload.get("content") or "")
+        role = payload.get("role")
+        message_type = "user" if role == "user" or content == initial_prompt else "assistant"
         return MessageItemResponse(
             id=message_id,
             type=message_type,
-            content=str(payload.get("content") or ""),
+            content=content,
             metadata=metadata,
         )
     if item.kind == "thinking":
@@ -178,6 +192,25 @@ def _output_item_to_message(item: TaskOutputEvent) -> MessageItemResponse | None
             metadata=metadata,
         )
     return None
+
+
+def _output_items_to_messages(
+    items: list[TaskOutputEvent],
+    task: Task,
+) -> list[MessageItemResponse]:
+    messages: list[MessageItemResponse] = []
+    seen_user_content: set[str] = set()
+    for item in items:
+        message = _output_item_to_message(item, initial_prompt=task.prompt)
+        if message is None:
+            continue
+        if message.type == "assistant" and isinstance(message.content, str):
+            if message.content in seen_user_content:
+                continue
+        if message.type == "user" and isinstance(message.content, str):
+            seen_user_content.add(message.content)
+        messages.append(message)
+    return messages
 
 
 @router.post("", status_code=201)
@@ -371,12 +404,10 @@ async def get_task_messages(
     after_seq: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=1000),
 ) -> TaskMessagesResponse:
-    service, _ = _assert_task_owner(request, task_id)
+    service, task = _assert_task_owner(request, task_id)
     items = service.get_output(task_id, after_seq=after_seq, limit=limit + 1)
     visible_items = items[:limit]
-    messages = [
-        message for item in visible_items if (message := _output_item_to_message(item)) is not None
-    ]
+    messages = _output_items_to_messages(visible_items, task)
     return TaskMessagesResponse(
         messages=messages,
         has_more=len(items) > limit,
