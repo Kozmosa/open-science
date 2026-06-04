@@ -8,10 +8,14 @@ from pathlib import Path
 from threading import Lock
 
 from ainrf.environments.models import utc_now
-from ainrf.projects.models import ProjectRecord
+from ainrf.projects.models import ProjectRecord, TaskEdgeRecord
 
 
 class ProjectNotFoundError(LookupError):
+    pass
+
+
+class TaskEdgeNotFoundError(LookupError):
     pass
 
 
@@ -20,8 +24,10 @@ class ProjectRegistryService:
         self._state_root = state_root
         self._runtime_root = state_root / "runtime"
         self._registry_path = self._runtime_root / "projects.json"
+        self._task_edges_path = self._runtime_root / "task_edges.json"
         self._lock = Lock()
         self._projects: dict[str, ProjectRecord] = {}
+        self._task_edges: dict[str, TaskEdgeRecord] = {}
         self._initialized = False
 
     def initialize(self) -> None:
@@ -45,6 +51,18 @@ class ProjectRegistryService:
                         owner_user_id=item.get("owner_user_id"),
                     )
                     for item in payload.get("items", [])
+                }
+            if self._task_edges_path.exists():
+                edge_payload = json.loads(self._task_edges_path.read_text(encoding="utf-8"))
+                self._task_edges = {
+                    item["edge_id"]: TaskEdgeRecord(
+                        edge_id=item["edge_id"],
+                        project_id=item["project_id"],
+                        source_task_id=item["source_task_id"],
+                        target_task_id=item["target_task_id"],
+                        created_at=datetime.fromisoformat(item["created_at"]),
+                    )
+                    for item in edge_payload.get("items", [])
                 }
             if not self._projects:
                 seed = self._build_seed_project()
@@ -141,6 +159,57 @@ class ProjectRegistryService:
                 raise ValueError("Last project cannot be deleted")
             del self._projects[project_id]
             self._persist()
+            self._task_edges = {
+                edge_id: edge
+                for edge_id, edge in self._task_edges.items()
+                if edge.project_id != project_id
+            }
+            self._persist_task_edges()
+
+    def list_task_edges(self, project_id: str) -> list[TaskEdgeRecord]:
+        self.initialize()
+        self.get_project(project_id)
+        return [
+            edge
+            for edge in self._task_edges.values()
+            if edge.project_id == project_id
+        ]
+
+    def create_task_edge(
+        self,
+        project_id: str,
+        *,
+        source_task_id: str,
+        target_task_id: str,
+    ) -> TaskEdgeRecord:
+        self.initialize()
+        self.get_project(project_id)
+        with self._lock:
+            for edge in self._task_edges.values():
+                if (
+                    edge.project_id == project_id
+                    and edge.source_task_id == source_task_id
+                    and edge.target_task_id == target_task_id
+                ):
+                    return edge
+            edge = TaskEdgeRecord(
+                edge_id=f"edge-{uuid.uuid4().hex[:12]}",
+                project_id=project_id,
+                source_task_id=source_task_id,
+                target_task_id=target_task_id,
+                created_at=utc_now(),
+            )
+            self._task_edges[edge.edge_id] = edge
+            self._persist_task_edges()
+            return edge
+
+    def delete_task_edge(self, edge_id: str) -> None:
+        self.initialize()
+        with self._lock:
+            if edge_id not in self._task_edges:
+                raise TaskEdgeNotFoundError(edge_id)
+            del self._task_edges[edge_id]
+            self._persist_task_edges()
 
     def _build_seed_project(self) -> ProjectRecord:
         now = utc_now()
@@ -166,6 +235,21 @@ class ProjectRegistryService:
             ]
         }
         self._registry_path.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _persist_task_edges(self) -> None:
+        payload = {
+            "items": [
+                {
+                    **asdict(edge),
+                    "created_at": edge.created_at.isoformat(),
+                }
+                for edge in self._task_edges.values()
+            ]
+        }
+        self._task_edges_path.write_text(
             json.dumps(payload, ensure_ascii=True, indent=2) + "\n",
             encoding="utf-8",
         )
