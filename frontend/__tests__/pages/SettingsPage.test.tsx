@@ -36,7 +36,6 @@ vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
 
 vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getEnvironments: vi.fn(),
-  getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
   getWorkspaces: vi.fn(),

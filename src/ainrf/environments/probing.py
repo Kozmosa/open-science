@@ -33,7 +33,7 @@ class EnvironmentProbeOutcome:
     ssh_unavailable: bool = False
 
 
-_LOCALHOST_SSH_ATTEMPTS = 3
+_LOCALHOST_SSH_ATTEMPTS = 1
 _LOCALHOST_SSH_CONNECT_TIMEOUT_SECONDS = 1
 _PROBE_COMMAND_TIMEOUT_SECONDS = 30.0
 

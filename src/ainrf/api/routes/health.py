@@ -36,7 +36,7 @@ async def health_check(request: Request) -> JSONResponse | HealthResponse:
         )
 
     executor = SSHExecutor(container_config)
-    health = await executor.ping()
+    health = await executor.ping(timeout=2)
     response = HealthResponse(
         status=ApiStatus.OK if health.ssh_ok else ApiStatus.DEGRADED,
         container_health={

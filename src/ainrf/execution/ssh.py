@@ -168,8 +168,10 @@ class SSHExecutor:
 
         return installed_version
 
-    async def ping(self) -> ContainerHealth:
-        deadline = asyncio.get_running_loop().time() + float(self._container.connect_timeout)
+    async def ping(self, *, timeout: float | None = None) -> ContainerHealth:
+        deadline = asyncio.get_running_loop().time() + float(
+            timeout if timeout is not None else self._container.connect_timeout
+        )
         try:
             await self._ensure_connection(deadline=deadline)
         except SSHConnectionError as exc:
