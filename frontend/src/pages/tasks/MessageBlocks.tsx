@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useLocale, useT } from '../../i18n';
+import { workspaceFileBrowserHref } from '../../utils/workspaceFileLinks';
 import type { MessageItem } from '../../types';
 
 function browserLocale(locale: 'en' | 'zh'): string {
@@ -41,6 +44,39 @@ function messageTypeLabel(type: string, t: ReturnType<typeof useT>): string {
   }
 }
 
+const markdownLinkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
+
+function RenderedMessageText({ content, className }: { content: string; className: string }) {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  for (const match of content.matchAll(markdownLinkPattern)) {
+    const [fullMatch, label, target] = match;
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      nodes.push(content.slice(lastIndex, index));
+    }
+    const workspaceHref = workspaceFileBrowserHref(target);
+    if (workspaceHref) {
+      nodes.push(
+        <Link
+          key={`${target}-${index}`}
+          to={workspaceHref}
+          className="underline decoration-[var(--apple-blue)] underline-offset-2 hover:text-[var(--apple-blue)]"
+        >
+          {label}
+        </Link>
+      );
+    } else {
+      nodes.push(fullMatch);
+    }
+    lastIndex = index + fullMatch.length;
+  }
+  if (lastIndex < content.length) {
+    nodes.push(content.slice(lastIndex));
+  }
+  return <pre className={className}>{nodes}</pre>;
+}
+
 export function SystemEventBlock({ message }: { message: MessageItem }) {
   const locale = useLocale();
   const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
@@ -73,7 +109,7 @@ export function AssistantMessage({ message }: { message: MessageItem }) {
   return (
     <div className="my-2 flex justify-start">
       <div className="max-w-[80%] rounded-2xl rounded-tl-sm bg-[var(--bg-secondary)] px-4 py-2">
-        <pre className="whitespace-pre-wrap break-words font-sans text-sm text-[var(--text)]">{content}</pre>
+        <RenderedMessageText content={content} className="whitespace-pre-wrap break-words font-sans text-sm text-[var(--text)]" />
         <div className="mt-1 text-right text-[10px] text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp, locale)}</div>
       </div>
     </div>
