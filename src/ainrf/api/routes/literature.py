@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ainrf.auth.permissions import get_current_user
+from ainrf.literature.models import LiteratureSubscription
 from ainrf.literature.service import LiteratureService
 
 router = APIRouter(prefix="/literature", tags=["literature"])
@@ -19,6 +20,21 @@ def _get_service(request: Request) -> LiteratureService:
 
 def _get_user_id(request: Request) -> str:
     return get_current_user(request)["id"]
+
+
+def _get_fetch_tasks(request: Request) -> dict[str, tuple[object, dict[str, str | None]]]:
+    if not hasattr(request.app.state, "_literature_tasks"):
+        request.app.state._literature_tasks = {}
+    return request.app.state._literature_tasks
+
+
+def _get_user_subscription(request: Request, subscription_id: str) -> tuple[LiteratureService, LiteratureSubscription]:
+    user_id = _get_user_id(request)
+    service = _get_service(request)
+    sub = service.get_subscription(subscription_id)
+    if sub is None or sub.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return service, sub
 
 
 @router.get("/subscriptions")
@@ -114,6 +130,17 @@ async def convert_to_task(paper_id: str, request: Request):
     return paper.to_dict()
 
 
+@router.get("/subscriptions/{subscription_id}/fetch-status")
+async def get_fetch_status(subscription_id: str, request: Request):
+    """Return manual fetch status for a subscription."""
+    _service, _sub = _get_user_subscription(request, subscription_id)
+    task_entry = _get_fetch_tasks(request).get(subscription_id)
+    if task_entry is None:
+        return {"status": "idle", "error": None}
+    _task, task_status = task_entry
+    return {"status": task_status["status"], "error": task_status["error"]}
+
+
 @router.post("/subscriptions/{subscription_id}/fetch", status_code=202)
 async def trigger_fetch(subscription_id: str, request: Request):
     """Manually trigger paper fetching for a subscription."""
@@ -122,12 +149,10 @@ async def trigger_fetch(subscription_id: str, request: Request):
 
     logger = logging.getLogger(__name__)
 
-    user_id = _get_user_id(request)
-    svc = _get_service(request)
-    sub = svc.get_subscription(subscription_id)
-    if sub is None or sub.user_id != user_id:
-        raise HTTPException(status_code=404, detail="Subscription not found")
-
+    svc, sub = _get_user_subscription(request, subscription_id)
+    existing = _get_fetch_tasks(request).get(subscription_id)
+    if existing is not None and existing[1]["status"] == "running":
+        return {"status": "fetch_running", "subscription_id": subscription_id}
     from ainrf.literature.fetcher import fetch_for_subscription
 
     # Store background task status for user to query
@@ -155,9 +180,6 @@ async def trigger_fetch(subscription_id: str, request: Request):
             logger.error("fetch failed: subscription=%s error=%s", subscription_id, exc)
 
     task = asyncio.create_task(_fetch_and_store())
-    # Store task reference to prevent premature garbage collection
-    if not hasattr(request.app.state, "_literature_tasks"):
-        request.app.state._literature_tasks = {}
-    request.app.state._literature_tasks[subscription_id] = (task, task_status)
+    _get_fetch_tasks(request)[subscription_id] = (task, task_status)
 
     return {"status": "fetch_started", "subscription_id": subscription_id}

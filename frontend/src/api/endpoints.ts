@@ -655,3 +655,8 @@ export const triggerLiteratureFetch = (subscriptionId: string): Promise<{ status
   USE_MOCK
     ? Promise.resolve({ status: 'fetch_started' })
     : api.post(`/literature/subscriptions/${subscriptionId}/fetch`, {});
+
+export const getLiteratureFetchStatus = (subscriptionId: string): Promise<{ status: string; error: string | null }> =>
+  USE_MOCK
+    ? Promise.resolve({ status: 'completed', error: null })
+    : api.get(`/literature/subscriptions/${subscriptionId}/fetch-status`);

@@ -2,7 +2,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button, Select } from '../../components/ui';
-import { getLiteraturePapers, triggerLiteratureFetch } from '../../api';
+import { getLiteratureFetchStatus, getLiteraturePapers, triggerLiteratureFetch } from '../../api';
 import { useT } from '../../i18n';
 import type { LiteratureSubscription } from '../../types';
 import PaperCard from './PaperCard';
@@ -12,6 +12,13 @@ interface Props {
   selectedSubscriptionId?: string;
   onSubscriptionChange?: (id: string | undefined) => void;
   onConvertToTask: (paperId: string, subscriptionId: string, title: string, abstract: string) => void;
+}
+
+const FETCH_POLL_INTERVAL_MS = 1000;
+const FETCH_POLL_ATTEMPTS = 60;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 export default function PaperFeed({ subscriptions, selectedSubscriptionId, onSubscriptionChange, onConvertToTask }: Props) {
@@ -28,11 +35,22 @@ export default function PaperFeed({ subscriptions, selectedSubscriptionId, onSub
   });
 
   const fetchMutation = useMutation({
-    mutationFn: () => {
-      if (selectedSubscriptionId) {
-        return triggerLiteratureFetch(selectedSubscriptionId);
+    mutationFn: async () => {
+      if (!selectedSubscriptionId) {
+        return { status: 'skipped' };
       }
-      return Promise.resolve({ status: 'skipped' });
+      await triggerLiteratureFetch(selectedSubscriptionId);
+      for (let attempt = 0; attempt < FETCH_POLL_ATTEMPTS; attempt += 1) {
+        const status = await getLiteratureFetchStatus(selectedSubscriptionId);
+        if (status.status === 'completed') {
+          return status;
+        }
+        if (status.status === 'failed') {
+          throw new Error(status.error ?? 'Literature fetch failed');
+        }
+        await wait(FETCH_POLL_INTERVAL_MS);
+      }
+      return { status: 'timeout' };
     },
   });
 
