@@ -270,6 +270,13 @@ async def test_task_token_usage_is_tracked_and_summarized(tmp_path: Path) -> Non
         listed = list_response.json()["items"][0]
         assert json.loads(listed["token_usage_json"])["total"]["input_tokens"] == 20
 
+        with closing(sqlite3.connect(tmp_path / "runtime" / "agentic_researcher.sqlite3")) as conn:
+            conn.execute(
+                "UPDATE tasks SET started_at = ?, completed_at = ? WHERE task_id = ?",
+                ("2026-01-01T00:00:00+00:00", "2026-01-01T00:02:00+00:00", task_id),
+            )
+            conn.commit()
+
         summary_response = await client.get("/tasks/token-usage")
         assert summary_response.status_code == 200
         assert summary_response.json() == {
@@ -302,6 +309,19 @@ async def test_task_token_usage_is_tracked_and_summarized(tmp_path: Path) -> Non
                     "cost_usd": 0.02,
                 }
             },
+            "total_duration_ms": 120000,
+            "median_duration_ms": 120000,
+            "top_tasks": [
+                {
+                    "task_id": task_id,
+                    "title": "Token task",
+                    "status": "succeeded",
+                    "harness_engine": "claude-code",
+                    "total_tokens": 34,
+                    "cost_usd": 0.02,
+                    "duration_ms": 120000,
+                }
+            ],
         }
 
 

@@ -808,9 +808,20 @@ export interface TaskTokenUsageSummary {
   tasks_with_usage: number;
   total_tokens: number;
   total_cost_usd: number;
+  total_duration_ms: number;
+  median_duration_ms: number | null;
   total: TokenUsage['total'];
   by_model: Record<string, TokenUsage['total'] & { tokens: number }>;
   by_engine: Record<string, { task_count: number; tasks_with_usage: number; tokens: number; cost_usd: number }>;
+  top_tasks: Array<{
+    task_id: string;
+    title: string;
+    status: string;
+    harness_engine: string;
+    total_tokens: number;
+    cost_usd: number;
+    duration_ms: number | null;
+  }>;
 }
 
 export interface ProjectCostSummary {

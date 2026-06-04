@@ -570,6 +570,9 @@ class TaskTokenUsageSummaryResponse(BaseModel):
     tasks_with_usage: int
     total_tokens: int
     total_cost_usd: float
+    total_duration_ms: int
+    median_duration_ms: int | None = None
+    top_tasks: list[dict[str, int | float | str | None]] = Field(default_factory=list)
     total: dict[str, int | float]
     by_model: dict[str, dict[str, int | float]] = Field(default_factory=dict)
     by_engine: dict[str, dict[str, int | float]] = Field(default_factory=dict)
