@@ -551,6 +551,7 @@ class TaskSummaryResponse(BaseModel):
     error_summary: str | None = None
     working_directory: str | None = None
     command: list[str] = Field(default_factory=list)
+    token_usage_json: str | None = None
 
 
 class TaskListResponse(BaseModel):
@@ -560,6 +561,18 @@ class TaskListResponse(BaseModel):
     total: int
 
 
+
+
+class TaskTokenUsageSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_count: int
+    tasks_with_usage: int
+    total_tokens: int
+    total_cost_usd: float
+    total: dict[str, int | float]
+    by_model: dict[str, dict[str, int | float]] = Field(default_factory=dict)
+    by_engine: dict[str, dict[str, int | float]] = Field(default_factory=dict)
 class TaskEdgeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

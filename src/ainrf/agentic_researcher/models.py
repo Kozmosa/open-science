@@ -80,6 +80,7 @@ class Task:
     latest_output_seq: int = 0
     exit_code: int | None = None
     error_summary: str | None = None
+    token_usage_json: str | None = None
 
 
 @dataclass

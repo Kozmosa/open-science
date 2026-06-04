@@ -186,6 +186,7 @@ export interface TaskSummary {
   latest_output_seq?: number;
   working_directory?: string | null;
   command?: string[];
+  token_usage_json?: string | null;
 }
 
 export interface ResearchAgentProfileSnapshot {
@@ -800,6 +801,16 @@ export interface TokenUsage {
     }
   >;
   source: 'agent-sdk' | 'claude-session-meta';
+}
+
+export interface TaskTokenUsageSummary {
+  task_count: number;
+  tasks_with_usage: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  total: TokenUsage['total'];
+  by_model: Record<string, TokenUsage['total'] & { tokens: number }>;
+  by_engine: Record<string, { task_count: number; tasks_with_usage: number; tokens: number; cost_usd: number }>;
 }
 
 export interface ProjectCostSummary {

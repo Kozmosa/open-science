@@ -28,6 +28,7 @@ from ainrf.api.schemas import (
     TaskResumeResponse,
     TaskRetryResponse,
     TaskSummaryResponse,
+    TaskTokenUsageSummaryResponse,
 )
 from ainrf.auth.permissions import (
     check_resource_ownership,
@@ -82,6 +83,7 @@ def _task_to_response(
         error_summary=task.error_summary,
         working_directory=working_directory,
         command=command,
+        token_usage_json=task.token_usage_json,
     )
 
 
@@ -267,6 +269,20 @@ async def list_tasks(
         items=[_task_to_response(t, service) for t in tasks],
         total=len(tasks),
     )
+
+
+@router.get("/token-usage", response_model=TaskTokenUsageSummaryResponse)
+async def get_task_token_usage_summary(
+    request: Request,
+    include_archived: bool = Query(True),
+) -> TaskTokenUsageSummaryResponse:
+    user = get_current_user(request)
+    service = _get_service(request)
+    summary = service.token_usage_summary(
+        user_id=_task_list_owner_filter(user),
+        include_archived=include_archived,
+    )
+    return TaskTokenUsageSummaryResponse.model_validate(summary)
 
 
 @router.get("/{task_id}")

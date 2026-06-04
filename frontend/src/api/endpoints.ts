@@ -58,6 +58,7 @@ import type { ChangePasswordRequest,
   TaskRecord,
   TaskRetryResponse,
   TaskSummary,
+  TaskTokenUsageSummary,
   TerminalSession,
   UserInfo,
   UserSessionPairListResponse,
@@ -265,6 +266,22 @@ export const getTasks = (params: {
 
 export const getTask = (taskId: string): Promise<TaskRecord> =>
   USE_MOCK ? Promise.resolve(mockGetTask(taskId)) : api.get<TaskRecord>(`/tasks/${taskId}`);
+
+export const getTaskTokenUsageSummary = (params: { includeArchived?: boolean } = {}): Promise<TaskTokenUsageSummary> => {
+  const searchParams = new URLSearchParams();
+  searchParams.set('include_archived', String(params.includeArchived ?? true));
+  return USE_MOCK
+    ? Promise.resolve({
+        task_count: 0,
+        tasks_with_usage: 0,
+        total_tokens: 0,
+        total_cost_usd: 0,
+        total: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, cost_usd: 0 },
+        by_model: {},
+        by_engine: {},
+      })
+    : api.get<TaskTokenUsageSummary>(`/tasks/token-usage?${searchParams.toString()}`);
+};
 
 export const createTask = (payload: TaskCreatePayload): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockCreateTask(payload)) : api.post<TaskSummary>('/tasks', payload);
