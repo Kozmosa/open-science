@@ -6,6 +6,37 @@ import type { TaskOutputEvent } from '../../types';
 import { getNextOutputSeq, mergeOutputItems } from './output';
 
 const maxOutputItems = 500;
+const taskMetadataSystemSubtypes = new Set(['task_paused', 'task_completed', 'task_failed']);
+
+function shouldRefreshTaskMetadata(item: TaskOutputEvent): boolean {
+  if (item.kind !== 'lifecycle') {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(item.content) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return true;
+    }
+    const event = parsed as Record<string, unknown>;
+    const eventType = event.event_type;
+    if (eventType === 'status') {
+      return true;
+    }
+    if (eventType !== 'system') {
+      return typeof eventType !== 'string';
+    }
+    const payload = event.payload;
+    if (!payload || typeof payload !== 'object') {
+      return true;
+    }
+    const subtype = (payload as Record<string, unknown>).subtype;
+    return typeof subtype === 'string' && taskMetadataSystemSubtypes.has(subtype);
+  } catch {
+    return true;
+  }
+}
+
 
 interface TaskOutputStreamState {
   outputItems: TaskOutputEvent[];
@@ -100,7 +131,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
           if (item.seq > nextSeqRef.current) {
             appendOutput([item]);
           }
-          if (item.kind === 'lifecycle') {
+          if (shouldRefreshTaskMetadata(item)) {
             void queryClient.invalidateQueries({ queryKey: ['tasks'] });
             void queryClient.invalidateQueries({ queryKey: ['task', taskId] });
           }
