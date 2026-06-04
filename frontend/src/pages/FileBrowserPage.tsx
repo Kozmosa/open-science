@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FolderOpen, RefreshCw } from 'lucide-react';
 import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
 import { FileTree, FileViewer } from '../components/file-browser';
@@ -12,8 +13,18 @@ import type { FileEntry, FileReadResponse } from '../types';
 const FILE_TREE_DEFAULT_WIDTH = 288;
 const FILE_TREE_MIN_WIDTH = 200;
 
+
+function normalizeRoutePath(path: string | null): string | null {
+  if (!path) return null;
+  return path.replace(/^\/+/, '');
+}
+
 export default function FileBrowserPage() {
   const t = useT();
+  const [searchParams] = useSearchParams();
+  const routeWorkspaceId = searchParams.get('workspace_id') ?? '';
+  const routeEnvironmentId = searchParams.get('environment_id');
+  const routePath = useMemo(() => normalizeRoutePath(searchParams.get('path')), [searchParams]);
   const queryClient = useQueryClient();
   const environmentSelection = useEnvironmentSelection();
   const selectedEnvironment = environmentSelection.selectedEnvironment;
@@ -25,7 +36,7 @@ export default function FileBrowserPage() {
   });
   const workspaces = workspacesQuery.data?.items ?? [];
 
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('');
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(routeWorkspaceId);
   const effectiveWorkspaceId = selectedWorkspaceId || workspaces[0]?.workspace_id || '';
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -80,6 +91,32 @@ export default function FileBrowserPage() {
     },
     [environmentId, effectiveWorkspaceId, rootQuery.data]
   );
+
+  const openedRouteKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (routeEnvironmentId && routeEnvironmentId !== environmentId) {
+      environmentSelection.onSelectEnvironment(routeEnvironmentId);
+    }
+  }, [environmentId, environmentSelection, routeEnvironmentId]);
+
+  useEffect(() => {
+    if (routeWorkspaceId && routeWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(routeWorkspaceId);
+    }
+  }, [routeWorkspaceId, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!environmentId || !effectiveWorkspaceId || !routePath) {
+      return;
+    }
+    const routeKey = `${environmentId}:${effectiveWorkspaceId}:${routePath}`;
+    if (openedRouteKeyRef.current === routeKey) {
+      return;
+    }
+    openedRouteKeyRef.current = routeKey;
+    void handleSelectFile(routePath);
+  }, [effectiveWorkspaceId, environmentId, handleSelectFile, routePath]);
 
   const handleRefresh = useCallback(() => {
     if (!environmentId) return;
