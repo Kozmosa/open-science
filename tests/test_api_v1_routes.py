@@ -65,6 +65,10 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
     }
     assert "/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/v1/projects/{project_id}/environment-refs" in payload["paths"]
+    assert "/projects/{project_id}/task-edges" in payload["paths"]
+    assert "/task-edges/{edge_id}" in payload["paths"]
+    assert "/v1/projects/{project_id}/task-edges" in payload["paths"]
+    assert "/v1/task-edges/{edge_id}" in payload["paths"]
     assert "/workspaces" in payload["paths"]
     assert "/workspaces/{workspace_id}" in payload["paths"]
     assert "/v1/workspaces" in payload["paths"]
@@ -101,6 +105,52 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
     assert "/v1/tasks/{task_id}/terminal/open" not in payload["paths"]
     assert "/v1/tasks/{task_id}/terminal/takeover" not in payload["paths"]
     assert "/v1/tasks/{task_id}/terminal/release" not in payload["paths"]
+
+
+@pytest.mark.anyio
+async def test_project_task_edges_are_persisted_and_idempotent(tmp_path: Path) -> None:
+    async with make_auth_client(tmp_path) as client:
+        empty_response = await client.get("/projects/default/task-edges")
+        assert empty_response.status_code == 200
+        assert empty_response.json() == {"items": []}
+
+        create_response = await client.post(
+            "/projects/default/task-edges",
+            json={"source_task_id": "task-a", "target_task_id": "task-b"},
+        )
+        assert create_response.status_code == 201
+        edge = create_response.json()
+        assert edge["project_id"] == "default"
+        assert edge["source_task_id"] == "task-a"
+        assert edge["target_task_id"] == "task-b"
+
+        duplicate_response = await client.post(
+            "/projects/default/task-edges",
+            json={"source_task_id": "task-a", "target_task_id": "task-b"},
+        )
+        assert duplicate_response.status_code == 201
+        assert duplicate_response.json()["edge_id"] == edge["edge_id"]
+
+        list_response = await client.get("/projects/default/task-edges")
+        assert list_response.status_code == 200
+        assert list_response.json()["items"] == [edge]
+
+        delete_response = await client.delete(f"/task-edges/{edge['edge_id']}")
+        assert delete_response.status_code == 204
+        assert (await client.get("/projects/default/task-edges")).json() == {"items": []}
+
+
+@pytest.mark.anyio
+async def test_project_task_edges_require_existing_project(tmp_path: Path) -> None:
+    async with make_auth_client(tmp_path) as client:
+        response = await client.get("/projects/missing/task-edges")
+        assert response.status_code == 404
+
+        create_response = await client.post(
+            "/projects/missing/task-edges",
+            json={"source_task_id": "task-a", "target_task_id": "task-b"},
+        )
+        assert create_response.status_code == 404
 
 
 @pytest.mark.anyio

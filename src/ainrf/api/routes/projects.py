@@ -18,6 +18,9 @@ from ainrf.api.schemas import (
     ProjectListResponse,
     ProjectResponse,
     ProjectUpdateRequest,
+    TaskEdgeCreateRequest,
+    TaskEdgeListResponse,
+    TaskEdgeResponse,
     TaskListResponse,
 )
 from ainrf.api.routes.tasks import _task_list_owner_filter, _task_to_response
@@ -29,10 +32,12 @@ from ainrf.environments import (
     ProjectReferenceConflictError,
     ProjectReferenceNotFoundError,
 )
-from ainrf.projects import ProjectNotFoundError, ProjectRegistryService
-from ainrf.projects.models import ProjectRecord
+from ainrf.projects import ProjectNotFoundError, ProjectRegistryService, TaskEdgeNotFoundError
+from ainrf.projects.models import ProjectRecord, TaskEdgeRecord
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+task_edges_router = APIRouter(prefix="/task-edges", tags=["projects"])
+
 
 
 def _get_project_service(request: Request) -> ProjectRegistryService:
@@ -85,6 +90,16 @@ def _serialize_reference(
     return ProjectEnvironmentReferenceResponse.model_validate(payload)
 
 
+def _serialize_task_edge(edge: TaskEdgeRecord) -> TaskEdgeResponse:
+    return TaskEdgeResponse(
+        edge_id=edge.edge_id,
+        project_id=edge.project_id,
+        source_task_id=edge.source_task_id,
+        target_task_id=edge.target_task_id,
+        created_at=edge.created_at.isoformat(),
+    )
+
+
 def _translate_project_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFoundError):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
@@ -93,6 +108,17 @@ def _translate_project_error(exc: Exception) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unexpected project error",
+    )
+
+
+def _translate_task_edge_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, ProjectNotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if isinstance(exc, TaskEdgeNotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task edge not found")
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unexpected task edge error",
     )
 
 
@@ -319,6 +345,54 @@ async def get_project_cost_summary(project_id: str, request: Request) -> Project
     )
 
 
+@router.get(
+    "/{project_id}/task-edges",
+    response_model=TaskEdgeListResponse,
+)
+async def list_project_task_edges(
+    project_id: str,
+    request: Request,
+) -> TaskEdgeListResponse:
+    get_current_user(request)
+    service = _get_project_service(request)
+    try:
+        edges = service.list_task_edges(project_id)
+    except Exception as exc:
+        raise _translate_task_edge_error(exc) from exc
+    return TaskEdgeListResponse(items=[_serialize_task_edge(edge) for edge in edges])
+
+
+@router.post(
+    "/{project_id}/task-edges",
+    response_model=TaskEdgeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project_task_edge(
+    project_id: str,
+    payload: TaskEdgeCreateRequest,
+    request: Request,
+) -> TaskEdgeResponse:
+    get_current_user(request)
+    service = _get_project_service(request)
+    try:
+        edge = service.create_task_edge(
+            project_id,
+            source_task_id=payload.source_task_id,
+            target_task_id=payload.target_task_id,
+        )
+    except Exception as exc:
+        raise _translate_task_edge_error(exc) from exc
+    return _serialize_task_edge(edge)
+
+
+@task_edges_router.delete("/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task_edge(edge_id: str, request: Request) -> None:
+    get_current_user(request)
+    service = _get_project_service(request)
+    try:
+        service.delete_task_edge(edge_id)
+    except Exception as exc:
+        raise _translate_task_edge_error(exc) from exc
 @router.get("/{project_id}/tasks", response_model=TaskListResponse)
 async def list_project_tasks(
     project_id: str,
