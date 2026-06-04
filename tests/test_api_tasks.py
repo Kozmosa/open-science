@@ -120,12 +120,13 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
         task_id = create_response.json()["task_id"]
 
         detail = await wait_for_status(client, task_id, "succeeded")
-        assert detail["latest_output_seq"] == 2
+        assert detail["latest_output_seq"] == 3
 
         output = await client.get(f"/tasks/{task_id}/output")
         assert output.status_code == 200
         assert [item["content"] for item in output.json()["items"]] == [
-            "ran: Initial prompt",
+            '{"role": "user", "content": "Initial prompt"}',
+            '{"role": "assistant", "content": "ran: Initial prompt"}',
             '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
         ]
 
@@ -135,6 +136,7 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
         assert messages_payload["has_more"] is False
         assert messages_payload["next_sequence"] is None
         assert [(item["type"], item["content"]) for item in messages_payload["messages"]] == [
+            ("user", "Initial prompt"),
             ("assistant", "ran: Initial prompt"),
             ("system_event", "lifecycle"),
         ]
@@ -143,7 +145,7 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
             stream_text = await stream.aread()
         decoded_stream = stream_text.decode("utf-8")
         assert "event: output" in decoded_stream
-        assert "ran: Initial prompt" not in decoded_stream
+        assert '"role": "user", "content": "Initial prompt"' not in decoded_stream
         assert "event: done" in decoded_stream
 
         prompt_response = await client.post(
@@ -151,16 +153,87 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
             json={"prompt": "Follow up"},
         )
         assert prompt_response.status_code == 200
-        assert prompt_response.json()["sequence"] == 3
+        assert prompt_response.json()["sequence"] == 4
 
         detail = await wait_for_status(client, task_id, "succeeded")
-        assert detail["latest_output_seq"] == 5
-        output = await client.get(f"/tasks/{task_id}/output?after_seq=3")
+        assert detail["latest_output_seq"] == 6
+        output = await client.get(f"/tasks/{task_id}/output?after_seq=4")
         assert [item["content"] for item in output.json()["items"]] == [
-            "ran: Follow up",
+            '{"role": "assistant", "content": "ran: Follow up"}',
             '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
         ]
 
+
+
+@pytest.mark.anyio
+async def test_task_messages_normalize_wrapped_codex_events_and_drop_user_echo(
+    tmp_path: Path,
+) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    service: AgenticResearcherService = app.state.agentic_researcher_service
+    workspace = app.state.workspace_service.create_workspace(
+        project_id="proj-001",
+        label="Task workspace",
+        description=None,
+        default_workdir=str(tmp_path / "workspace"),
+        workspace_prompt="Use the task workspace.",
+        owner_user_id=None,
+    )
+    task = service.create_task(
+        project_id="proj-001",
+        workspace_id=workspace.workspace_id,
+        environment_id="env-001",
+        researcher=vanilla(engine=HarnessEngineType.CODEX_APP_SERVER),
+        prompt="hello codex",
+        owner_user_id="user-001",
+        title="hello codex",
+    )
+    await service.append_output(task.task_id, "message", "hello codex")
+    await service.append_output(
+        task.task_id,
+        "message",
+        '{"role": "user", "content": "tell me the time"}',
+    )
+    await service.append_output(task.task_id, "message", "tell me the time")
+    await service.append_output(
+        task.task_id,
+        "tool_call",
+        '{"event_type": "tool_call", "payload": {"id": "call-1", "name": "commandExecution", "arguments": {"command": "date"}}, "token_usage": null}',
+    )
+    await service.append_output(
+        task.task_id,
+        "tool_result",
+        '{"event_type": "tool_result", "payload": {"tool_use_id": "call-1", "content": {"status": "failed"}, "is_error": true}, "token_usage": null}',
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        response = await client.get(f"/tasks/{task.task_id}/messages?after_seq=0&limit=200")
+
+    assert response.status_code == 200
+    messages = response.json()["messages"]
+    assert [(message["type"], message["content"]) for message in messages[:2]] == [
+        ("user", "hello codex"),
+        ("user", "tell me the time"),
+    ]
+    assert [message["type"] for message in messages] == [
+        "user",
+        "user",
+        "tool_call",
+        "tool_result",
+    ]
+    assert messages[2]["content"] == {
+        "name": "commandExecution",
+        "arguments": {"command": "date"},
+    }
+    assert messages[3]["content"] == {
+        "tool_use_id": "call-1",
+        "content": {"status": "failed"},
+    }
 
 @pytest.mark.anyio
 async def test_task_stream_allows_query_api_key_for_eventsource(tmp_path: Path) -> None:

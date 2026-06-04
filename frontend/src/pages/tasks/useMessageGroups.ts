@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import type { MessageItem, DisplayMessageItem } from '../../types';
 
 const NON_CHAT_TYPES = new Set(['system_event', 'thinking', 'tool_call', 'tool_result']);
@@ -44,25 +44,24 @@ export function useMessageGroups(messages: MessageItem[]) {
     return new Set(grouped.filter((g): g is Extract<typeof g, { kind: 'group' }> => g.kind === 'group').map(g => g.id));
   });
 
+  const knownGroupIdsRef = useRef<Set<string>>(new Set(grouped.filter((g): g is Extract<typeof g, { kind: 'group' }> => g.kind === 'group').map(g => g.id)));
+
   useEffect(() => {
+    const currentGroupIds = new Set(
+      grouped.filter((g): g is Extract<typeof g, { kind: 'group' }> => g.kind === 'group').map(g => g.id)
+    );
+    const knownGroupIds = knownGroupIdsRef.current;
+    const newGroupIds = [...currentGroupIds].filter(id => !knownGroupIds.has(id));
+    knownGroupIdsRef.current = currentGroupIds;
+
     setCollapsedState(prev => {
-      const currentGroupIds = new Set(
-        grouped.filter((g): g is Extract<typeof g, { kind: 'group' }> => g.kind === 'group').map(g => g.id)
-      );
       const next = new Set<string>();
-      let changed = false;
       for (const id of currentGroupIds) {
-        if (prev.has(id)) {
+        if (prev.has(id) || newGroupIds.includes(id)) {
           next.add(id);
-        } else {
-          next.add(id);
-          changed = true;
         }
       }
-      if (next.size !== prev.size) {
-        changed = true;
-      }
-      return changed ? next : prev;
+      return next.size === prev.size && [...next].every(id => prev.has(id)) ? prev : next;
     });
   }, [grouped]);
 

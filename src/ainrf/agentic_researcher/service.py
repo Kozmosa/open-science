@@ -212,6 +212,13 @@ class AgenticResearcherService:
             context = self._build_execution_context(task)
             engine = self._get_engine(task.harness_engine)
             await self._set_status(task_id, TaskStatus.RUNNING)
+            latest = self.get_task(task_id)
+            if latest.latest_output_seq == 0:
+                await self.append_output(
+                    task_id,
+                    "message",
+                    json.dumps({"role": "user", "content": task.prompt}, ensure_ascii=True),
+                )
             await engine.start(context, lambda event: self._handle_engine_event(task_id, event))
             latest = self.get_task(task_id)
             if latest.status in {TaskStatus.STARTING, TaskStatus.RUNNING}:
@@ -528,6 +535,8 @@ class AgenticResearcherService:
                     )
 
     def _event_content(self, event: EngineEvent) -> str:
+        if event.event_type in {"message", "thinking", "tool_call", "tool_result"}:
+            return json.dumps(event.payload, ensure_ascii=True)
         content = event.payload.get("content")
         if content is None:
             content = event.payload.get("message")

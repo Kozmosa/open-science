@@ -304,22 +304,7 @@ class AgentSdkEngine(HarnessEngine):
         if isinstance(sdk_msg, AssistantMessage):
             return self._convert_assistant_message(sdk_msg)
         if isinstance(sdk_msg, UserMessage):
-            content = sdk_msg.content
-            if isinstance(content, list):
-                text_parts: list[str] = []
-                for item in content:
-                    if isinstance(item, dict):
-                        item_data = cast(dict[str, object], item)
-                        text_parts.append(str(item_data.get("text", item)))
-                    else:
-                        text_parts.append(str(item))
-                content = "\n".join(text_parts)
-            return [
-                EngineEvent(
-                    event_type="message",
-                    payload={"role": "user", "content": content},
-                )
-            ]
+            return []
         if isinstance(sdk_msg, SystemMessage):
             subtype = sdk_msg.subtype
             payload = {"subtype": subtype, "data": sdk_msg.data}

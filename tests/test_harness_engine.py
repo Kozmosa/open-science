@@ -141,6 +141,73 @@ async def test_codex_app_server_ignores_partial_agent_message_delta() -> None:
 
     assert emitted == []
 
+@pytest.mark.anyio
+async def test_codex_app_server_suppresses_echoed_user_messages() -> None:
+    engine = CodexAppServerEngine()
+    emitted: list[EngineEvent] = []
+
+    async def emit(event: EngineEvent) -> None:
+        emitted.append(event)
+
+    await engine._handle_message(
+        session=CodexSession(task_id="task-001"),
+        payload={
+            "method": "item/started",
+            "params": {"item": {"type": "userMessage", "text": "hello"}},
+        },
+        emit=emit,
+    )
+
+    assert emitted == []
+
+
+@pytest.mark.anyio
+async def test_codex_app_server_starts_with_yolo_sandbox_defaults() -> None:
+    engine = CodexAppServerEngine()
+    session = CodexSession(task_id="task-001")
+    captured: list[tuple[str, dict]] = []
+
+    async def fake_rpc_request(
+        _session: CodexSession,
+        method: str,
+        params: dict,
+    ) -> dict:
+        captured.append((method, params))
+        if method == "thread/start":
+            return {"thread": {"id": "thread-001"}}
+        if method == "turn/start":
+            return {"turn": {"id": "turn-001"}}
+        return {}
+
+    engine._rpc_request = fake_rpc_request  # type: ignore[method-assign]
+    context = ExecutionContext(
+        task_id="task-001",
+        working_directory="/tmp",
+        rendered_prompt="hello",
+    )
+
+    await engine._start_thread(context, session)
+    await engine._start_turn(context, session, "hello")
+
+    assert captured[0] == (
+        "thread/start",
+        {
+            "cwd": "/tmp",
+            "approvalPolicy": "never",
+            "personality": "pragmatic",
+            "sandbox": "danger-full-access",
+        },
+    )
+    assert captured[1] == (
+        "turn/start",
+        {
+            "threadId": "thread-001",
+            "approvalPolicy": "never",
+            "input": [{"type": "text", "text": "hello"}],
+            "sandboxPolicy": {"type": "dangerFullAccess"},
+        },
+    )
+
 
 def test_engine_event_creation() -> None:
     event = EngineEvent(
