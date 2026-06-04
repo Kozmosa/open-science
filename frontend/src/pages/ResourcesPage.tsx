@@ -27,19 +27,27 @@ export default function ResourcesPage() {
   const snapshots = resourcesQuery.data?.items ?? [];
 
   const groups = useMemo(
-    () =>
-      snapshots.map((snapshot) => ({
+    () => [
+      {
+        id: 'global',
+        cards: [{ id: 'global:taskUsage', kind: 'taskUsage' }],
+      },
+      ...snapshots.map((snapshot) => ({
         id: snapshot.environment_id,
         cards: [
           { id: `${snapshot.environment_id}:system`, kind: 'system' },
           { id: `${snapshot.environment_id}:processes`, kind: 'processes' },
         ],
       })),
+    ],
     [snapshots]
   );
 
   const renderCard = useCallback(
     (_cardId: string, kind: string, groupId: string) => {
+      if (kind === 'taskUsage') {
+        return <TaskUsageCard summary={tokenUsageQuery.data ?? null} loading={tokenUsageQuery.isLoading} />;
+      }
       const snapshot = snapshots.find((s) => s.environment_id === groupId);
       if (!snapshot) return null;
       return kind === 'system' ? (
@@ -48,7 +56,7 @@ export default function ResourcesPage() {
         <AinrfProcessCard processes={snapshot.ainrf_processes} environment_name={snapshot.environment_name} />
       );
     },
-    [snapshots]
+    [snapshots, tokenUsageQuery.data, tokenUsageQuery.isLoading]
   );
 
   return (
@@ -72,7 +80,6 @@ export default function ResourcesPage() {
           <p className="text-sm text-[var(--text-tertiary)]">{t('pages.resources.noData')}</p>
         )}
 
-        <TaskUsageCard summary={tokenUsageQuery.data ?? null} loading={tokenUsageQuery.isLoading} />
 
         <CardGrid
           groups={groups}

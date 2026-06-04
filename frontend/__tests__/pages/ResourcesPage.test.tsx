@@ -128,6 +128,24 @@ describe('ResourcesPage', () => {
     expect(screen.getByText('20m')).toBeInTheDocument();
     expect(screen.getByText('Top Token Task')).toBeInTheDocument();
     expect(screen.getByText('34.6K tokens')).toBeInTheDocument();
+
+    expect(screen.getAllByTitle('Drag to reorder')).toHaveLength(3);
+
+  });
+
+  it('keeps the task usage card visible when an old resource card layout is stored', async () => {
+    window.localStorage.setItem(
+      'scholar-agent:resources-layout',
+      JSON.stringify({ cardOrder: ['system', 'processes'] })
+    );
+    mockGetResources.mockResolvedValue(mockResponse);
+
+    renderWithProviders(<ResourcesPage />);
+
+    expect(await screen.findByText('Task Usage')).toBeInTheDocument();
+    expect(await screen.findByText('Localhost')).toBeInTheDocument();
+    expect(screen.getAllByTitle('Drag to reorder')).toHaveLength(3);
+
   });
 
   it('shows empty state when no resource data is available', async () => {

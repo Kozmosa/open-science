@@ -1,14 +1,33 @@
 import { useState, useCallback } from 'react';
 
-export type CardKind = 'system' | 'processes';
+export type CardKind = 'taskUsage' | 'system' | 'processes';
 
 export interface CardLayout {
   cardOrder: CardKind[];
 }
 
+const defaultCardOrder: CardKind[] = ['taskUsage', 'system', 'processes'];
+
 const defaultLayout: CardLayout = {
-  cardOrder: ['system', 'processes'],
+  cardOrder: defaultCardOrder,
 };
+
+function isCardKind(value: unknown): value is CardKind {
+  return value === 'taskUsage' || value === 'system' || value === 'processes';
+}
+
+function normalizeCardOrder(value: unknown): CardKind[] | null {
+  if (!Array.isArray(value) || !value.every(isCardKind)) {
+    return null;
+  }
+  const seen = new Set<CardKind>();
+  const order = value.filter((kind): kind is CardKind => {
+    if (seen.has(kind)) return false;
+    seen.add(kind);
+    return true;
+  });
+  return [...order, ...defaultCardOrder.filter((kind) => !seen.has(kind))];
+}
 
 const storageKey = 'scholar-agent:resources-layout';
 
@@ -17,15 +36,9 @@ function readLayout(): CardLayout {
     const raw = window.localStorage.getItem(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw) as unknown;
-      if (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        Array.isArray((parsed as CardLayout).cardOrder) &&
-        (parsed as CardLayout).cardOrder.every(
-          (k): k is CardKind => k === 'system' || k === 'processes'
-        )
-      ) {
-        return parsed as CardLayout;
+      const order = typeof parsed === 'object' && parsed !== null ? normalizeCardOrder((parsed as CardLayout).cardOrder) : null;
+      if (order) {
+        return { cardOrder: order };
       }
     }
   } catch {
