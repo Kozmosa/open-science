@@ -9,6 +9,7 @@ import {
   deleteTask,
   getEnvironments,
   getProjects,
+  getSkills,
   getTask,
   getTasks,
   getWorkspaces,
@@ -161,6 +162,11 @@ function TasksPage() {
     queryKey: ['environments'],
     queryFn: getEnvironments,
   });
+  const skillsQuery = useQuery({
+    queryKey: ['skills'],
+    queryFn: getSkills,
+  });
+
 
   const defaultProjectId = projectsQuery.data?.items[0]?.project_id ?? '';
   const defaultWorkspaceId = workspacesQuery.data?.items[0]?.workspace_id ?? '';
@@ -267,6 +273,7 @@ function TasksPage() {
           projectId={defaultProjectId}
           workspaceId={defaultWorkspaceId}
           environmentId={defaultEnvironmentId}
+          availableSkills={skillsQuery.data?.items ?? []}
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
         />

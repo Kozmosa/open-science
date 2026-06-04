@@ -6,6 +6,7 @@ import type {
   EnvironmentRecord,
   TaskOutputEvent,
   TaskOutputListResponse,
+  SkillItem,
   TaskRecord,
   TaskSummary,
   WorkspaceRecord,
@@ -17,6 +18,7 @@ import {
   getEnvironments,
   getProjectEnvironmentReferences,
   getProjects,
+  getSkills,
   getTask,
   getTaskOutput,
   getTasks,
@@ -74,6 +76,32 @@ const environment: EnvironmentRecord = {
   code_server_path: null,
   latest_detection: null,
 };
+
+const availableSkills: SkillItem[] = [
+  {
+    skill_id: 'analysis',
+    label: 'Analysis',
+    description: 'Analyze the task context before acting.',
+    inject_mode: 'auto',
+    dependencies: [],
+    package: 'research',
+  },
+  {
+    skill_id: 'code-review',
+    label: 'Code Review',
+    description: 'Review code changes before completion.',
+    inject_mode: 'auto',
+    dependencies: [],
+    package: 'research',
+  },
+  {
+    skill_id: 'docs',
+    label: 'Docs',
+    description: 'Update documentation where needed.',
+    inject_mode: 'prompt_only',
+    dependencies: [],
+  },
+];
 
 const taskSummary: TaskSummary = {
   task_id: 'task-1',
@@ -216,6 +244,7 @@ const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentRefer
 const mockGetProjects = vi.mocked(getProjects);
 const mockGetTask = vi.mocked(getTask);
 const mockGetTaskOutput = vi.mocked(getTaskOutput);
+const mockGetSkills = vi.mocked(getSkills);
 const mockGetTasks = vi.mocked(getTasks);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
@@ -236,6 +265,7 @@ beforeEach(() => {
   mockGetProjects.mockReset();
   mockGetTask.mockReset();
   mockGetTaskOutput.mockReset();
+  mockGetSkills.mockReset();
   mockGetTasks.mockReset();
   mockGetWorkspaces.mockReset();
 
@@ -248,6 +278,7 @@ beforeEach(() => {
   });
   mockGetWorkspaces.mockResolvedValue({ items: [workspace] });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
+  mockGetSkills.mockResolvedValue({ items: availableSkills });
   mockGetProjects.mockResolvedValue({ items: [] });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
@@ -334,9 +365,9 @@ describe('TasksPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
     await waitFor(() => expect(screen.getByLabelText('Execution Engine')).toHaveValue('claude-code'));
 
-    fireEvent.change(screen.getByLabelText('Skills'), {
-      target: { value: 'analysis, code-review' },
-    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Show skills in research' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Analysis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Code Review' }));
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Implement harness\nMake it stream output.' },
     });
@@ -370,6 +401,39 @@ describe('TasksPage', () => {
 
     await waitFor(() => expect(screen.getByText('created line')).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: 'Implement harness' })).toBeInTheDocument();
+  });
+
+  it('shows grouped skill chips and toggles selected skills without using raw comma input', async () => {
+    mockGetTasks.mockResolvedValueOnce({ items: [] });
+    const client = createTestQueryClient();
+
+    mockCreateTask.mockResolvedValue({
+      ...taskSummary,
+      task_id: 'task-skill-picker',
+      title: 'Use selected skills for this task',
+      status: 'queued',
+    });
+    renderWithProviders(<TasksPage />, { client });
+    fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
+
+    expect(await screen.findByText('research')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('analysis, code-review')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show skills in research' }));
+    const analysisButton = screen.getByRole('button', { name: 'Select Analysis' });
+    fireEvent.click(analysisButton);
+    expect(screen.getByRole('button', { name: 'Deselect Analysis' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'Use selected skills for this task.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
+        skills: ['analysis'],
+      });
+    });
   });
 
   it('selects a task from the task query param and keeps selection in the URL', async () => {

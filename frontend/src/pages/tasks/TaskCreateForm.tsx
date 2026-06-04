@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Button, FormField, Input, Select, Textarea } from '../../components/ui';
 import { useT } from '../../i18n';
-import type { TaskCreatePayload, ResearcherType, HarnessEngine } from '../../types';
+import type { SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine } from '../../types';
+import TaskSkillPicker from './TaskSkillPicker';
 
 const FIELD_IDS = {
   researcherVanilla: 'task-create-researcher-vanilla',
   researcherAris: 'task-create-researcher-aris',
   harnessEngine: 'task-create-harness-engine',
-  skills: 'task-create-skills',
   title: 'task-create-title',
   prompt: 'task-create-prompt',
 };
@@ -16,6 +16,7 @@ interface Props {
   projectId: string;
   workspaceId: string;
   environmentId: string;
+  availableSkills: SkillItem[];
   onSubmit: (payload: TaskCreatePayload) => void;
   onCancel: () => void;
 }
@@ -25,6 +26,7 @@ export default function TaskCreateForm({
   workspaceId,
   environmentId,
   onSubmit,
+  availableSkills,
   onCancel,
 }: Props) {
   const t = useT();
@@ -99,15 +101,16 @@ export default function TaskCreateForm({
       </FormField>
 
       {researcherType === 'vanilla' && (
-        <FormField label={t('pages.tasks.skillsLabel')}>
-          <Input
-            id={FIELD_IDS.skills}
-            type="text"
-            placeholder={t('pages.tasks.create.skillsPlaceholder')}
-            value={skills.join(', ')}
-            onChange={(e) => setSkills(e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
+        <div className="space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.tasks.skillsLabel')}
+          </span>
+          <TaskSkillPicker
+            skills={availableSkills}
+            selectedSkillIds={skills}
+            onChange={setSkills}
           />
-        </FormField>
+        </div>
       )}
 
       <FormField label={t('pages.tasks.titleLabel')}>
