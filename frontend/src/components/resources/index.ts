@@ -3,4 +3,5 @@ export { default as CpuRing } from './CpuRing';
 export { default as MemoryBar } from './MemoryBar';
 export { default as SystemResourceCard } from './SystemResourceCard';
 export { default as AinrfProcessCard } from './AinrfProcessCard';
+export { default as TaskUsageCard } from './TaskUsageCard';
 export { default as DraggableResourceCard } from './DraggableResourceCard';

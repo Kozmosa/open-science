@@ -276,9 +276,12 @@ export const getTaskTokenUsageSummary = (params: { includeArchived?: boolean } =
         tasks_with_usage: 0,
         total_tokens: 0,
         total_cost_usd: 0,
+        total_duration_ms: 0,
+        median_duration_ms: null,
         total: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, cost_usd: 0 },
         by_model: {},
         by_engine: {},
+        top_tasks: [],
       })
     : api.get<TaskTokenUsageSummary>(`/tasks/token-usage?${searchParams.toString()}`);
 };

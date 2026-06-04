@@ -57,6 +57,9 @@ def _empty_token_summary() -> dict:
         "tasks_with_usage": 0,
         "total_tokens": 0,
         "total_cost_usd": 0.0,
+        "total_duration_ms": 0,
+        "median_duration_ms": None,
+        "top_tasks": [],
         "total": {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0},
         "by_model": {},
         "by_engine": {},
@@ -65,6 +68,25 @@ def _empty_token_summary() -> dict:
 
 def _token_total(total: dict) -> int:
     return sum(_int_number(total.get(field)) for field in TOKEN_TOTAL_FIELDS)
+
+
+def _duration_ms(started_at: str | None, completed_at: str | None) -> int | None:
+    if not started_at or not completed_at:
+        return None
+    start = datetime.fromisoformat(started_at)
+    end = datetime.fromisoformat(completed_at)
+    duration = int((end - start).total_seconds() * 1000)
+    return max(duration, 0)
+
+
+def _median(values: list[int]) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    if len(ordered) % 2 == 1:
+        return ordered[midpoint]
+    return (ordered[midpoint - 1] + ordered[midpoint]) // 2
 
 
 def _normalize_token_usage(usage: dict) -> dict:
@@ -463,7 +485,11 @@ class AgenticResearcherService:
         user_id: str | None = None,
         include_archived: bool = True,
     ) -> dict:
-        query = "SELECT harness_engine, status, token_usage_json FROM tasks WHERE 1=1"
+        query = """
+            SELECT task_id, title, harness_engine, status, started_at, completed_at, token_usage_json
+            FROM tasks
+            WHERE 1=1
+        """
         params: list[object] = []
         if user_id:
             query += " AND owner_user_id = ?"
@@ -477,7 +503,14 @@ class AgenticResearcherService:
             rows = conn.execute(query, params).fetchall()
 
         summary["task_count"] = len(rows)
+        durations: list[int] = []
+        top_tasks: list[dict] = []
         for row in rows:
+            duration_ms = _duration_ms(row["started_at"], row["completed_at"])
+            if duration_ms is not None:
+                durations.append(duration_ms)
+                summary["total_duration_ms"] += duration_ms
+
             usage_json = row["token_usage_json"]
             engine = row["harness_engine"]
             by_engine = summary["by_engine"].setdefault(
@@ -501,6 +534,25 @@ class AgenticResearcherService:
             by_engine["cost_usd"] += cost
             _add_token_totals(summary["total"], usage.get("total", {}))
             _add_model_usage(summary["by_model"], usage.get("by_model", {}))
+            if tokens > 0:
+                top_tasks.append(
+                    {
+                        "task_id": row["task_id"],
+                        "title": row["title"],
+                        "status": row["status"],
+                        "harness_engine": engine,
+                        "total_tokens": tokens,
+                        "cost_usd": round(cost, 6),
+                        "duration_ms": duration_ms,
+                    }
+                )
+
+        summary["median_duration_ms"] = _median(durations)
+        summary["top_tasks"] = sorted(
+            top_tasks,
+            key=lambda item: item["total_tokens"],
+            reverse=True,
+        )[:5]
 
         summary["total_cost_usd"] = round(summary["total_cost_usd"], 6)
         summary["total"]["cost_usd"] = round(summary["total"].get("cost_usd", 0.0), 6)

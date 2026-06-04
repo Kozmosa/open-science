@@ -3,13 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ResourcesPage from '../../src/pages/ResourcesPage';
 import type { ResourcesResponse } from '../../src/types';
 import { renderWithProviders } from '../../src/test/render';
-import { getResources } from '../../src/api';
+import { getResources, getTaskTokenUsageSummary } from '../../src/api';
 
 vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getResources: vi.fn(),
+  getTaskTokenUsageSummary: vi.fn(),
 }));
 
 const mockGetResources = vi.mocked(getResources);
+const mockGetTaskTokenUsageSummary = vi.mocked(getTaskTokenUsageSummary);
 
 const mockResponse: ResourcesResponse = {
   items: [
@@ -51,6 +53,29 @@ const mockResponse: ResourcesResponse = {
 
 beforeEach(() => {
   mockGetResources.mockReset();
+  mockGetTaskTokenUsageSummary.mockReset();
+  mockGetTaskTokenUsageSummary.mockResolvedValue({
+    task_count: 3,
+    tasks_with_usage: 2,
+    total_tokens: 123456,
+    total_cost_usd: 1.25,
+    total_duration_ms: 5400000,
+    median_duration_ms: 1200000,
+    total: { input_tokens: 100000, output_tokens: 20000, cache_creation_input_tokens: 2000, cache_read_input_tokens: 1456, cost_usd: 1.25 },
+    by_model: {},
+    by_engine: {},
+    top_tasks: [
+      {
+        task_id: 'task-top',
+        title: 'Top Token Task',
+        status: 'succeeded',
+        harness_engine: 'claude-code',
+        total_tokens: 34567,
+        cost_usd: 0.42,
+        duration_ms: 1800000,
+      },
+    ],
+  });
 });
 
 afterEach(() => {
@@ -90,6 +115,19 @@ describe('ResourcesPage', () => {
     expect(screen.getByText('16.0 GB / 64.0 GB (25%)')).toBeInTheDocument();
     expect(screen.getByText('12345')).toBeInTheDocument();
     expect(screen.getByText('ainrf')).toBeInTheDocument();
+  });
+
+  it('renders total task token usage and duration summary', async () => {
+    mockGetResources.mockResolvedValue(mockResponse);
+
+    renderWithProviders(<ResourcesPage />);
+
+    expect(await screen.findByText('Task Usage')).toBeInTheDocument();
+    expect(await screen.findByText('123.5K')).toBeInTheDocument();
+    expect(screen.getByText('1h 30m')).toBeInTheDocument();
+    expect(screen.getByText('20m')).toBeInTheDocument();
+    expect(screen.getByText('Top Token Task')).toBeInTheDocument();
+    expect(screen.getByText('34.6K tokens')).toBeInTheDocument();
   });
 
   it('shows empty state when no resource data is available', async () => {

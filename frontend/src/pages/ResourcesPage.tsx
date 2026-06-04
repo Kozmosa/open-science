@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getResources } from '../api';
-import { SystemResourceCard, AinrfProcessCard } from '../components/resources';
+import { getResources, getTaskTokenUsageSummary } from '../api';
+import { SystemResourceCard, AinrfProcessCard, TaskUsageCard } from '../components/resources';
 import { useT } from '../i18n';
 import { useCardLayout } from '../hooks/useCardLayout';
 import type { CardKind } from '../hooks/useCardLayout';
@@ -15,6 +15,12 @@ export default function ResourcesPage() {
     queryFn: getResources,
     refetchInterval: 5000,
     staleTime: 4000,
+  });
+  const tokenUsageQuery = useQuery({
+    queryKey: ['task-token-usage', { includeArchived: true }],
+    queryFn: () => getTaskTokenUsageSummary({ includeArchived: true }),
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
   const { layout, setLayout } = useCardLayout();
 
@@ -65,6 +71,8 @@ export default function ResourcesPage() {
         {snapshots.length === 0 && !resourcesQuery.isLoading && (
           <p className="text-sm text-[var(--text-tertiary)]">{t('pages.resources.noData')}</p>
         )}
+
+        <TaskUsageCard summary={tokenUsageQuery.data ?? null} loading={tokenUsageQuery.isLoading} />
 
         <CardGrid
           groups={groups}
