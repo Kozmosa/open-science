@@ -49,6 +49,9 @@ class ApiConfig:
     production: bool = False
     allowed_cidrs: tuple[str, ...] = ()
     max_request_body_bytes: int = 50 * 1024 * 1024  # 50 MB
+    max_concurrent_requests: int = 0  # 0 = unlimited
+    login_max_failures: int = 10
+    login_lockout_hours: int = 24
 
     @property
     def runtime_paths(self) -> RuntimePathConfig:
@@ -80,6 +83,9 @@ class ApiConfig:
         production = os.environ.get("AINRF_PRODUCTION", "").lower() in ("1", "true", "yes")
         raw_cidrs = os.environ.get("AINRF_ALLOWED_CIDRS", "")
         allowed_cidrs = tuple(c.strip() for c in raw_cidrs.split(",") if c.strip())
+        max_concurrent = int(os.environ.get("AINRF_MAX_CONCURRENT_REQUESTS", "0"))
+        login_max_failures = int(os.environ.get("AINRF_LOGIN_MAX_FAILURES", "10"))
+        login_lockout_hours = int(os.environ.get("AINRF_LOGIN_LOCKOUT_HOURS", "24"))
 
         return cls(
             api_key_hashes=api_key_hashes,
@@ -91,6 +97,9 @@ class ApiConfig:
             startup_cwd=startup_cwd,
             production=production,
             allowed_cidrs=allowed_cidrs,
+            max_concurrent_requests=max_concurrent,
+            login_max_failures=login_max_failures,
+            login_lockout_hours=login_lockout_hours,
         )
 
     @staticmethod

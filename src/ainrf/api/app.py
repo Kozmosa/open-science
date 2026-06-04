@@ -8,7 +8,7 @@ from anyio import to_thread
 from fastapi import APIRouter, FastAPI
 
 from ainrf.api.config import ApiConfig
-from ainrf.api.middleware import build_ip_allowlist_middleware, build_jwt_auth_middleware, build_request_size_middleware
+from ainrf.api.middleware import build_concurrency_limit_middleware, build_ip_allowlist_middleware, build_jwt_auth_middleware, build_request_size_middleware
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.code import router as code_router
@@ -192,7 +192,11 @@ def create_app(
     # 2. terminal (no deps)
     # 3. session_service (standalone)
     # 4. auth_service (standalone; middleware consumer)
-    auth_service = AuthService(state_root=api_config.state_root)
+    auth_service = AuthService(
+        state_root=api_config.state_root,
+        login_max_failures=api_config.login_max_failures,
+        login_lockout_hours=api_config.login_lockout_hours,
+    )
     app.state.auth_service = auth_service
     app.state.project_service = project_service
     app.state.environment_service = environment_service
@@ -229,10 +233,12 @@ def create_app(
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
     # Middleware order (outermost first):
     #   1. IP allowlist — reject unknown networks before anything else
-    #   2. Request body size limit
+    #   2. Request body size limit + concurrency guard
     #   3. JWT / API-key authentication
     app.middleware("http")(build_ip_allowlist_middleware(api_config.allowed_cidrs))
     app.middleware("http")(build_request_size_middleware(api_config.max_request_body_bytes))
+    if api_config.max_concurrent_requests > 0:
+        app.middleware("http")(build_concurrency_limit_middleware(api_config.max_concurrent_requests))
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
     for router in ROUTERS:
         app.include_router(router)

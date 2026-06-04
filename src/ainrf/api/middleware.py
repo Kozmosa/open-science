@@ -1,4 +1,4 @@
-"""Authentication, IP allowlist, and production-mode security middleware."""
+"""Authentication, IP allowlist, production-mode, and concurrency security middleware."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import Request
 from starlette.responses import JSONResponse, Response
+
 
 from ainrf.api.config import ApiConfig
 from ainrf.auth.service import AuthService
@@ -146,5 +147,39 @@ def build_request_size_middleware(
                     status_code=413,
                 )
         return await call_next(request)
-
     return request_size_middleware
+
+
+
+def build_concurrency_limit_middleware(
+    max_concurrent: int,
+) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
+    """Reject requests when the server is already handling max_concurrent in-flight requests.
+
+    Uses an asyncio.Semaphore so the limit is enforced across the single event loop.
+    Set max_concurrent=0 to disable (unlimited).
+    """
+    semaphore: asyncio.Semaphore | None = None
+
+    async def concurrency_limit_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        nonlocal semaphore
+        if max_concurrent <= 0:
+            return await call_next(request)
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(max_concurrent)
+        try:
+            await asyncio.wait_for(semaphore.acquire(), timeout=5.0)
+        except TimeoutError:
+            return JSONResponse(
+                {"detail": "Server is busy. Please retry later."},
+                status_code=503,
+            )
+        try:
+            return await call_next(request)
+        finally:
+            semaphore.release()
+
+    return concurrency_limit_middleware
