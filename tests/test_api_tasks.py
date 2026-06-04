@@ -54,8 +54,6 @@ class FakeEngine(HarnessEngine):
         _ = task_id
 
 
-
-
 class TokenEngine(FakeEngine):
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         await emit(
@@ -110,6 +108,8 @@ class TokenEngine(FakeEngine):
                 payload={"status": "succeeded", "exit_code": 0},
             )
         )
+
+
 def make_app(tmp_path: Path, engine: FakeEngine) -> FastAPI:
     app = create_app(
         ApiConfig(
@@ -369,7 +369,6 @@ async def test_archive_succeeded_task_hides_it_from_default_list(tmp_path: Path)
         assert task_id in [item["task_id"] for item in archived_list.json()["items"]]
 
 
-
 @pytest.mark.anyio
 async def test_task_messages_normalize_wrapped_codex_events_and_drop_user_echo(
     tmp_path: Path,
@@ -439,6 +438,7 @@ async def test_task_messages_normalize_wrapped_codex_events_and_drop_user_echo(
         "tool_use_id": "call-1",
         "content": {"status": "failed"},
     }
+
 
 @pytest.mark.anyio
 async def test_task_stream_allows_query_api_key_for_eventsource(tmp_path: Path) -> None:

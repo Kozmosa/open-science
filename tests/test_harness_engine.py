@@ -141,6 +141,7 @@ async def test_codex_app_server_ignores_partial_agent_message_delta() -> None:
 
     assert emitted == []
 
+
 @pytest.mark.anyio
 async def test_codex_app_server_suppresses_echoed_user_messages() -> None:
     engine = CodexAppServerEngine()

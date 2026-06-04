@@ -8,7 +8,12 @@ from anyio import to_thread
 from fastapi import APIRouter, FastAPI
 
 from ainrf.api.config import ApiConfig
-from ainrf.api.middleware import build_concurrency_limit_middleware, build_ip_allowlist_middleware, build_jwt_auth_middleware, build_request_size_middleware
+from ainrf.api.middleware import (
+    build_concurrency_limit_middleware,
+    build_ip_allowlist_middleware,
+    build_jwt_auth_middleware,
+    build_request_size_middleware,
+)
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.code import router as code_router
@@ -238,7 +243,9 @@ def create_app(
     app.middleware("http")(build_ip_allowlist_middleware(api_config.allowed_cidrs))
     app.middleware("http")(build_request_size_middleware(api_config.max_request_body_bytes))
     if api_config.max_concurrent_requests > 0:
-        app.middleware("http")(build_concurrency_limit_middleware(api_config.max_concurrent_requests))
+        app.middleware("http")(
+            build_concurrency_limit_middleware(api_config.max_concurrent_requests)
+        )
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
     for router in ROUTERS:
         app.include_router(router)

@@ -271,7 +271,6 @@ def test_container_add_interactive_persists_profile(tmp_path: Path) -> None:
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     profile = payload["container_profiles"]["gpu-main"]
     assert payload["default_container_profile"] == "gpu-main"
-    assert payload["container_profiles"]["localhost"]["host"] == "127.0.0.1"
     assert profile["host"] == "gpu-server-01"
     assert profile["port"] == 2222
     assert profile["user"] == "researcher"
@@ -291,8 +290,8 @@ def test_onboard_state_root_minimal_writes_config(
     assert config_path == config_path_for(tmp_path)
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     assert payload["api_key_hashes"] == [hash_api_key("bootstrap-secret")]
-    assert payload["default_container_profile"] == "localhost"
-    assert payload["container_profiles"]["localhost"]["host"] == "127.0.0.1"
+    # Minimal onboarding (no container config) should not invent a localhost SSH target.
+    assert "container_profiles" not in payload or payload["container_profiles"] == {}
 
 
 def test_onboard_state_root_records_runtime_readiness(
@@ -431,8 +430,7 @@ def test_onboard_state_root_confirm_true_writes_optional_container_profile(
 
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     profile = payload["container_profiles"]["gpu-main"]
-    assert payload["default_container_profile"] == "localhost"
-    assert payload["container_profiles"]["localhost"]["host"] == "127.0.0.1"
+    assert payload["default_container_profile"] == "gpu-main"
     assert profile["host"] == "gpu-server-01"
     assert profile["port"] == 2222
     assert profile["user"] == "researcher"

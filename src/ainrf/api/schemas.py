@@ -561,8 +561,6 @@ class TaskListResponse(BaseModel):
     total: int
 
 
-
-
 class TaskTokenUsageSummaryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -576,6 +574,8 @@ class TaskTokenUsageSummaryResponse(BaseModel):
     total: dict[str, int | float]
     by_model: dict[str, dict[str, int | float]] = Field(default_factory=dict)
     by_engine: dict[str, dict[str, int | float]] = Field(default_factory=dict)
+
+
 class TaskEdgeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

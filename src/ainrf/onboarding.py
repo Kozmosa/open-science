@@ -110,6 +110,8 @@ def onboard_state_root(state_root: Path, *, reset_existing: bool = False) -> Pat
             profiles = {}
         profiles[name] = profile
         payload["container_profiles"] = profiles
+        if not payload.get("default_container_profile"):
+            payload["default_container_profile"] = name
 
     save_runtime_config(config_path, payload)
     typer.echo(f"Saved onboarding config to `{config_path}`.")

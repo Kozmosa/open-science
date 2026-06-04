@@ -60,16 +60,16 @@ def normalize_runtime_config(payload: object) -> dict[str, Any]:
         normalized = {}
 
     raw_profiles = normalized.get("container_profiles")
-    if isinstance(raw_profiles, dict):
+    if isinstance(raw_profiles, dict) and raw_profiles:
         profiles: dict[str, Any] = cast(dict[str, Any], deepcopy(raw_profiles))
+        profiles.setdefault(DEFAULT_CONTAINER_PROFILE_NAME, build_default_container_profile())
+        normalized["container_profiles"] = profiles
+        default_profile = normalized.get("default_container_profile")
+        if not isinstance(default_profile, str) or not default_profile.strip():
+            normalized["default_container_profile"] = DEFAULT_CONTAINER_PROFILE_NAME
     else:
-        profiles = {}
-    profiles.setdefault(DEFAULT_CONTAINER_PROFILE_NAME, build_default_container_profile())
-    normalized["container_profiles"] = profiles
-
-    default_profile = normalized.get("default_container_profile")
-    if not isinstance(default_profile, str) or not default_profile.strip():
-        normalized["default_container_profile"] = DEFAULT_CONTAINER_PROFILE_NAME
+        # No explicit container_profiles — do not invent a localhost SSH target.
+        normalized.pop("container_profiles", None)
     return normalized
 
 
@@ -107,7 +107,7 @@ def _parse_container_profile(profile: object) -> ContainerConfig | None:
 
 def parse_container_config_from_runtime_config(payload: object) -> ContainerConfig | None:
     if not isinstance(payload, dict):
-        return _parse_container_profile(build_default_container_profile())
+        return None
 
     normalized = normalize_runtime_config(payload)
     raw_profiles = normalized.get("container_profiles")

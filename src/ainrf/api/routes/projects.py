@@ -39,7 +39,6 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 task_edges_router = APIRouter(prefix="/task-edges", tags=["projects"])
 
 
-
 def _get_project_service(request: Request) -> ProjectRegistryService:
     service = getattr(request.app.state, "project_service", None)
     if service is None:
@@ -393,6 +392,8 @@ async def delete_task_edge(edge_id: str, request: Request) -> None:
         service.delete_task_edge(edge_id)
     except Exception as exc:
         raise _translate_task_edge_error(exc) from exc
+
+
 @router.get("/{project_id}/tasks", response_model=TaskListResponse)
 async def list_project_tasks(
     project_id: str,

@@ -135,6 +135,7 @@ def build_request_size_middleware(
     max_bytes: int,
 ) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
     """Reject requests with Content-Length exceeding the limit."""
+
     async def request_size_middleware(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
@@ -147,8 +148,8 @@ def build_request_size_middleware(
                     status_code=413,
                 )
         return await call_next(request)
-    return request_size_middleware
 
+    return request_size_middleware
 
 
 def build_concurrency_limit_middleware(

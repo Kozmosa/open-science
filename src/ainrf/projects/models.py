@@ -16,7 +16,6 @@ class ProjectRecord:
     owner_user_id: str | None = None
 
 
-
 @dataclass(slots=True)
 class TaskEdgeRecord:
     edge_id: str

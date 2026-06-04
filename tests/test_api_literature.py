@@ -63,12 +63,16 @@ async def test_literature_fetch_status_reports_background_completion(
         assert trigger_response.status_code == 202
         assert trigger_response.json()["status"] == "fetch_started"
 
-        running_response = await client.get(f"/literature/subscriptions/{subscription_id}/fetch-status")
+        running_response = await client.get(
+            f"/literature/subscriptions/{subscription_id}/fetch-status"
+        )
         assert running_response.status_code == 200
         assert running_response.json()["status"] in {"running", "completed"}
 
         for _ in range(10):
-            status_response = await client.get(f"/literature/subscriptions/{subscription_id}/fetch-status")
+            status_response = await client.get(
+                f"/literature/subscriptions/{subscription_id}/fetch-status"
+            )
             if status_response.json()["status"] == "completed":
                 break
             await asyncio.sleep(0.01)

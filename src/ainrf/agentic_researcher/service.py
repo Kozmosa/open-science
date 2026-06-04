@@ -90,7 +90,9 @@ def _median(values: list[int]) -> int | None:
 
 
 def _normalize_token_usage(usage: dict) -> dict:
-    normalized_total: dict[str, int | float] = {field: _int_number(usage.get("total", {}).get(field)) for field in TOKEN_TOTAL_FIELDS}
+    normalized_total: dict[str, int | float] = {
+        field: _int_number(usage.get("total", {}).get(field)) for field in TOKEN_TOTAL_FIELDS
+    }
     normalized_total["cost_usd"] = _number(usage.get("total", {}).get("cost_usd"))
     normalized = {
         "source": usage.get("source", "unknown"),
@@ -99,10 +101,8 @@ def _normalize_token_usage(usage: dict) -> dict:
     by_model = usage.get("by_model")
     if isinstance(by_model, dict) and by_model:
         normalized["by_model"] = {
-            str(model): {
-                field: _int_number(model_usage.get(field))
-                for field in TOKEN_TOTAL_FIELDS
-            } | {"cost_usd": _number(model_usage.get("cost_usd"))}
+            str(model): {field: _int_number(model_usage.get(field)) for field in TOKEN_TOTAL_FIELDS}
+            | {"cost_usd": _number(model_usage.get("cost_usd"))}
             for model, model_usage in by_model.items()
             if isinstance(model_usage, dict)
         }
@@ -138,6 +138,8 @@ def _merge_token_usage(current: dict, incoming: dict) -> dict:
     if by_model:
         merged["by_model"] = by_model
     return merged
+
+
 class AgenticResearcherService:
     def __init__(
         self,
@@ -712,7 +714,9 @@ class AgenticResearcherService:
         content = self._event_content(event)
         await self.append_output(task_id, kind, content)
         if event.token_usage:
-            await self._record_token_usage(task_id, event.token_usage, replace=event.event_type != "token")
+            await self._record_token_usage(
+                task_id, event.token_usage, replace=event.event_type != "token"
+            )
         if event.event_type == "status":
             status = event.payload.get("status")
             exit_code = event.payload.get("exit_code")
@@ -746,7 +750,6 @@ class AgenticResearcherService:
                         exit_code=0,
                     )
 
-
     async def _record_token_usage(self, task_id: str, usage: dict, *, replace: bool) -> None:
         await asyncio.to_thread(self._record_token_usage_sync, task_id, usage, replace)
 
@@ -774,6 +777,7 @@ class AgenticResearcherService:
                 (json.dumps(merged, ensure_ascii=True), self._now(), task_id),
             )
             conn.commit()
+
     def _event_content(self, event: EngineEvent) -> str:
         if event.event_type in {"message", "thinking", "tool_call", "tool_result"}:
             return json.dumps(event.payload, ensure_ascii=True)

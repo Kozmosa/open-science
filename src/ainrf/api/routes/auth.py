@@ -55,9 +55,13 @@ async def login(payload: LoginRequest, request: Request) -> AuthTokenResponse:
     try:
         result = service.login(username=payload.username, password=payload.password)
     except Exception as exc:
-        service.record_login_attempt(username=payload.username, ip_address=client_ip or "unknown", success=False)
+        service.record_login_attempt(
+            username=payload.username, ip_address=client_ip or "unknown", success=False
+        )
         raise HTTPException(status_code=401, detail=str(exc)) from exc
-    service.record_login_attempt(username=payload.username, ip_address=client_ip or "unknown", success=True)
+    service.record_login_attempt(
+        username=payload.username, ip_address=client_ip or "unknown", success=True
+    )
     return AuthTokenResponse.model_validate(result)
 
 
