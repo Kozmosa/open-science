@@ -35,6 +35,87 @@ class TaskOperationError(RuntimeError):
     pass
 
 
+TOKEN_TOTAL_FIELDS = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+
+def _number(value: object) -> float:
+    return value if isinstance(value, int | float) else 0.0
+
+
+def _int_number(value: object) -> int:
+    return int(value) if isinstance(value, int | float) else 0
+
+
+def _empty_token_summary() -> dict:
+    return {
+        "task_count": 0,
+        "tasks_with_usage": 0,
+        "total_tokens": 0,
+        "total_cost_usd": 0.0,
+        "total": {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0},
+        "by_model": {},
+        "by_engine": {},
+    }
+
+
+def _token_total(total: dict) -> int:
+    return sum(_int_number(total.get(field)) for field in TOKEN_TOTAL_FIELDS)
+
+
+def _normalize_token_usage(usage: dict) -> dict:
+    normalized_total: dict[str, int | float] = {field: _int_number(usage.get("total", {}).get(field)) for field in TOKEN_TOTAL_FIELDS}
+    normalized_total["cost_usd"] = _number(usage.get("total", {}).get("cost_usd"))
+    normalized = {
+        "source": usage.get("source", "unknown"),
+        "total": normalized_total,
+    }
+    by_model = usage.get("by_model")
+    if isinstance(by_model, dict) and by_model:
+        normalized["by_model"] = {
+            str(model): {
+                field: _int_number(model_usage.get(field))
+                for field in TOKEN_TOTAL_FIELDS
+            } | {"cost_usd": _number(model_usage.get("cost_usd"))}
+            for model, model_usage in by_model.items()
+            if isinstance(model_usage, dict)
+        }
+    return normalized
+
+
+def _add_token_totals(target: dict, incoming: dict) -> None:
+    for field in TOKEN_TOTAL_FIELDS:
+        target[field] = _int_number(target.get(field)) + _int_number(incoming.get(field))
+    target["cost_usd"] = _number(target.get("cost_usd")) + _number(incoming.get("cost_usd"))
+
+
+def _add_model_usage(target: dict, incoming: dict) -> None:
+    if not isinstance(incoming, dict):
+        return
+    for model, model_usage in incoming.items():
+        if not isinstance(model_usage, dict):
+            continue
+        current = target.setdefault(
+            str(model),
+            {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0, "tokens": 0},
+        )
+        _add_token_totals(current, model_usage)
+        current["tokens"] = _token_total(current)
+
+
+def _merge_token_usage(current: dict, incoming: dict) -> dict:
+    merged = _normalize_token_usage(current)
+    normalized_incoming = _normalize_token_usage(incoming)
+    _add_token_totals(merged["total"], normalized_incoming.get("total", {}))
+    by_model: dict = dict(merged.get("by_model", {}))
+    _add_model_usage(by_model, normalized_incoming.get("by_model", {}))
+    if by_model:
+        merged["by_model"] = by_model
+    return merged
 class AgenticResearcherService:
     def __init__(
         self,
@@ -77,7 +158,8 @@ class AgenticResearcherService:
                     latest_output_seq INTEGER NOT NULL DEFAULT 0,
                     owner_user_id TEXT NOT NULL,
                     exit_code INTEGER,
-                    error_summary TEXT
+                    error_summary TEXT,
+                    token_usage_json TEXT
                 )
             """)
             conn.execute("""
@@ -95,6 +177,12 @@ class AgenticResearcherService:
                 "tasks",
                 "latest_output_seq",
                 "ALTER TABLE tasks ADD COLUMN latest_output_seq INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                conn,
+                "tasks",
+                "token_usage_json",
+                "ALTER TABLE tasks ADD COLUMN token_usage_json TEXT",
             )
             self._migrate_legacy_task_statuses(conn)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)")
@@ -369,6 +457,59 @@ class AgenticResearcherService:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_task(row) for row in rows]
 
+    def token_usage_summary(
+        self,
+        *,
+        user_id: str | None = None,
+        include_archived: bool = True,
+    ) -> dict:
+        query = "SELECT harness_engine, status, token_usage_json FROM tasks WHERE 1=1"
+        params: list[object] = []
+        if user_id:
+            query += " AND owner_user_id = ?"
+            params.append(user_id)
+        if not include_archived:
+            query += " AND status != ?"
+            params.append(TaskStatus.CANCELLED.value)
+
+        summary = _empty_token_summary()
+        with closing(self._connect()) as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        summary["task_count"] = len(rows)
+        for row in rows:
+            usage_json = row["token_usage_json"]
+            engine = row["harness_engine"]
+            by_engine = summary["by_engine"].setdefault(
+                engine,
+                {"task_count": 0, "tasks_with_usage": 0, "tokens": 0, "cost_usd": 0.0},
+            )
+            by_engine["task_count"] += 1
+            if not usage_json:
+                continue
+            try:
+                usage = json.loads(usage_json)
+            except json.JSONDecodeError:
+                continue
+            tokens = _token_total(usage.get("total", {}))
+            cost = _number(usage.get("total", {}).get("cost_usd"))
+            summary["tasks_with_usage"] += 1
+            summary["total_tokens"] += tokens
+            summary["total_cost_usd"] += cost
+            by_engine["tasks_with_usage"] += 1
+            by_engine["tokens"] += tokens
+            by_engine["cost_usd"] += cost
+            _add_token_totals(summary["total"], usage.get("total", {}))
+            _add_model_usage(summary["by_model"], usage.get("by_model", {}))
+
+        summary["total_cost_usd"] = round(summary["total_cost_usd"], 6)
+        summary["total"]["cost_usd"] = round(summary["total"].get("cost_usd", 0.0), 6)
+        for engine_usage in summary["by_engine"].values():
+            engine_usage["cost_usd"] = round(engine_usage["cost_usd"], 6)
+        for model_usage in summary["by_model"].values():
+            model_usage["cost_usd"] = round(model_usage["cost_usd"], 6)
+        return summary
+
     def cancel_task(self, task_id: str) -> Task:
         task = self.get_task(task_id)
         if task.status not in {TaskStatus.QUEUED, TaskStatus.STARTING, TaskStatus.RUNNING}:
@@ -518,6 +659,8 @@ class AgenticResearcherService:
         kind = "lifecycle" if event.event_type in {"status", "system"} else event.event_type
         content = self._event_content(event)
         await self.append_output(task_id, kind, content)
+        if event.token_usage:
+            await self._record_token_usage(task_id, event.token_usage, replace=event.event_type != "token")
         if event.event_type == "status":
             status = event.payload.get("status")
             exit_code = event.payload.get("exit_code")
@@ -551,6 +694,34 @@ class AgenticResearcherService:
                         exit_code=0,
                     )
 
+
+    async def _record_token_usage(self, task_id: str, usage: dict, *, replace: bool) -> None:
+        await asyncio.to_thread(self._record_token_usage_sync, task_id, usage, replace)
+
+    def _record_token_usage_sync(self, task_id: str, usage: dict, replace: bool) -> None:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT token_usage_json FROM tasks WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            if row is None:
+                raise TaskNotFoundError(f"Task not found: {task_id}")
+            current = None
+            if row["token_usage_json"]:
+                try:
+                    current = json.loads(row["token_usage_json"])
+                except json.JSONDecodeError:
+                    current = None
+            merged = (
+                _normalize_token_usage(usage)
+                if replace or current is None
+                else _merge_token_usage(current, usage)
+            )
+            conn.execute(
+                "UPDATE tasks SET token_usage_json = ?, updated_at = ? WHERE task_id = ?",
+                (json.dumps(merged, ensure_ascii=True), self._now(), task_id),
+            )
+            conn.commit()
     def _event_content(self, event: EngineEvent) -> str:
         if event.event_type in {"message", "thinking", "tool_call", "tool_result"}:
             return json.dumps(event.payload, ensure_ascii=True)
@@ -643,4 +814,5 @@ class AgenticResearcherService:
             latest_output_seq=row["latest_output_seq"],
             exit_code=row["exit_code"],
             error_summary=row["error_summary"],
+            token_usage_json=row["token_usage_json"],
         )

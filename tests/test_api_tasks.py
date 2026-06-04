@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -53,6 +54,62 @@ class FakeEngine(HarnessEngine):
         _ = task_id
 
 
+
+
+class TokenEngine(FakeEngine):
+    async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        await emit(
+            EngineEvent(
+                event_type="token",
+                payload={"turn": 1},
+                token_usage={
+                    "source": "agent-sdk",
+                    "total": {
+                        "input_tokens": 10,
+                        "output_tokens": 5,
+                        "cache_creation_input_tokens": 3,
+                        "cache_read_input_tokens": 2,
+                        "cost_usd": 0.01,
+                    },
+                    "by_model": {
+                        "claude-sonnet": {
+                            "input_tokens": 10,
+                            "output_tokens": 5,
+                            "cost_usd": 0.01,
+                        }
+                    },
+                },
+            )
+        )
+        await emit(
+            EngineEvent(
+                event_type="system",
+                payload={"subtype": "task_completed", "total_cost_usd": 0.02},
+                token_usage={
+                    "source": "agent-sdk",
+                    "total": {
+                        "input_tokens": 20,
+                        "output_tokens": 8,
+                        "cache_creation_input_tokens": 4,
+                        "cache_read_input_tokens": 2,
+                        "cost_usd": 0.02,
+                    },
+                    "by_model": {
+                        "claude-sonnet": {
+                            "input_tokens": 20,
+                            "output_tokens": 8,
+                            "cost_usd": 0.02,
+                        }
+                    },
+                },
+            )
+        )
+        await emit(
+            EngineEvent(
+                event_type="status",
+                payload={"status": "succeeded", "exit_code": 0},
+            )
+        )
 def make_app(tmp_path: Path, engine: FakeEngine) -> FastAPI:
     app = create_app(
         ApiConfig(
@@ -162,6 +219,90 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
             '{"role": "assistant", "content": "ran: Follow up"}',
             '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
         ]
+
+
+@pytest.mark.anyio
+async def test_task_token_usage_is_tracked_and_summarized(tmp_path: Path) -> None:
+    app = make_app(tmp_path, TokenEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-token",
+            label="Token workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Track tokens.",
+            owner_user_id=None,
+        )
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-token",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Token task",
+                "prompt": "Track token usage.",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        detail = await wait_for_status(client, task_id, "succeeded")
+
+        usage = json.loads(detail["token_usage_json"])
+        assert usage["source"] == "agent-sdk"
+        assert usage["total"] == {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_creation_input_tokens": 4,
+            "cache_read_input_tokens": 2,
+            "cost_usd": 0.02,
+        }
+        assert usage["by_model"]["claude-sonnet"]["output_tokens"] == 8
+
+        list_response = await client.get("/tasks?include_archived=false")
+        listed = list_response.json()["items"][0]
+        assert json.loads(listed["token_usage_json"])["total"]["input_tokens"] == 20
+
+        summary_response = await client.get("/tasks/token-usage")
+        assert summary_response.status_code == 200
+        assert summary_response.json() == {
+            "task_count": 1,
+            "tasks_with_usage": 1,
+            "total_tokens": 34,
+            "total_cost_usd": 0.02,
+            "total": {
+                "input_tokens": 20,
+                "output_tokens": 8,
+                "cache_creation_input_tokens": 4,
+                "cache_read_input_tokens": 2,
+                "cost_usd": 0.02,
+            },
+            "by_model": {
+                "claude-sonnet": {
+                    "input_tokens": 20,
+                    "output_tokens": 8,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "cost_usd": 0.02,
+                    "tokens": 28,
+                }
+            },
+            "by_engine": {
+                "claude-code": {
+                    "task_count": 1,
+                    "tasks_with_usage": 1,
+                    "tokens": 34,
+                    "cost_usd": 0.02,
+                }
+            },
+        }
 
 
 @pytest.mark.anyio
