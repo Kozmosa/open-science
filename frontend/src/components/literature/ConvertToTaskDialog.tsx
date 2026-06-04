@@ -4,7 +4,67 @@ import { useT } from '../../i18n';
 import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '../../types';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../../pages/tasks/taskPresets';
 
+function arxivAbsUrl(paperId: string): string {
+  return paperId ? `https://arxiv.org/abs/${paperId}` : '';
+}
+
+function arxivPdfUrl(paperId: string): string {
+  return paperId ? `https://arxiv.org/pdf/${paperId}` : '';
+}
+
+function buildStructuredResearchPrompt(paperId: string, title: string, abstract: string): string {
+  const absUrl = arxivAbsUrl(paperId);
+  const pdfUrl = arxivPdfUrl(paperId);
+  return `请使用 ARIS 的 /research-pipeline skill 对下面这篇论文进行系统研究。
+
+必须先阅读全文，再开始结构化分析。全文来源：
+- arXiv 页面：${absUrl}
+- 全文 PDF：${pdfUrl}
+
+论文标题：
+${title}
+
+论文摘要：
+${abstract}
+
+执行要求：
+1. 调用 /research-pipeline skill，围绕论文的问题定义、方法、实验、结论、局限和可复现性进行系统研究。
+2. 不要只基于摘要下结论；必须读取全文 PDF/原文页面后再分析。
+3. 输出中文研究报告 Markdown，包含：核心贡献、方法拆解、实验与证据、与相关工作的关系、局限性、可复现步骤、后续可转化为任务的行动项。
+4. 将最终 Markdown 报告保存到工作区磁盘，例如 docs/literature/${paperId || 'paper'}-structured-research.md。`;
+}
+
+function buildOverviewPrompt(paperId: string, title: string, abstract: string): string {
+  const absUrl = arxivAbsUrl(paperId);
+  return `请基于下面的论文标题、摘要和原文链接，产出一篇中文的文献导读 Markdown。
+
+论文标题：
+${title}
+
+论文摘要：
+${abstract}
+
+原文链接：${absUrl}
+
+要求：
+1. 面向需要快速判断是否精读的研究者，写成中文文献导读。
+2. 包含：一句话总结、研究问题、核心方法、主要发现、适合谁读、可能的启发、是否值得精读。
+3. 不需要做完整系统研究；不要调用复杂 pipeline。
+4. 注意保存到工作区磁盘，路径建议为 docs/literature/${paperId || 'paper'}-overview.md。`;
+}
+
+function buildPaperTaskPrompt(presetId: TaskPresetId, paperId: string, title: string, abstract: string): string {
+  if (presetId === 'structured-research-default') {
+    return buildStructuredResearchPrompt(paperId, title, abstract);
+  }
+  if (presetId === 'overview') {
+    return buildOverviewPrompt(paperId, title, abstract);
+  }
+  return abstract;
+}
+
 interface Props {
+  paperId: string;
   paperTitle: string;
   paperAbstract: string;
   workspaces: WorkspaceRecord[];
@@ -16,6 +76,7 @@ interface Props {
 }
 
 export default function ConvertToTaskDialog({
+  paperId,
   paperTitle,
   paperAbstract,
   workspaces,
@@ -59,7 +120,7 @@ export default function ConvertToTaskDialog({
       environment_id: effectiveEnvironmentId,
       researcher_type: researcherType,
       harness_engine: harnessEngine,
-      prompt: paperAbstract,
+      prompt: buildPaperTaskPrompt(selectedTaskPresetId, paperId, paperTitle, paperAbstract),
       title: paperTitle.slice(0, 200),
       skills: [],
       mcp_servers: [],

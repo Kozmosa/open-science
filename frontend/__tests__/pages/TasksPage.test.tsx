@@ -518,7 +518,7 @@ describe('TasksPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
     const presetSelect = await screen.findByLabelText('Task preset');
-    expect(within(presetSelect).getAllByRole('option')).toHaveLength(3);
+    expect(within(presetSelect).getAllByRole('option')).toHaveLength(4);
     fireEvent.change(presetSelect, { target: { value: 'reproduce-baseline-default' } });
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Reproduce the baseline experiment.' },

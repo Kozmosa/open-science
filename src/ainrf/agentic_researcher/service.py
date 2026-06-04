@@ -385,6 +385,23 @@ class AgenticResearcherService:
         task.completed_at = datetime.fromisoformat(now)
         return task
 
+    def archive_task(self, task_id: str) -> Task:
+        task = self.get_task(task_id)
+        if task.status in {TaskStatus.QUEUED, TaskStatus.STARTING, TaskStatus.RUNNING}:
+            raise TaskOperationError(f"Cannot archive active task with status: {task.status}")
+        if task.status == TaskStatus.CANCELLED:
+            return task
+        now = self._now()
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE tasks SET status = ?, updated_at = ? WHERE task_id = ?",
+                (TaskStatus.CANCELLED.value, now, task_id),
+            )
+            conn.commit()
+        task.status = TaskStatus.CANCELLED
+        task.updated_at = datetime.fromisoformat(now)
+        return task
+
     async def cancel_running_task(self, task_id: str) -> Task:
         task = self.get_task(task_id)
         if task.status == TaskStatus.RUNNING:

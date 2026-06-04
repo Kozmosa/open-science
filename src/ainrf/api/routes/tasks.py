@@ -324,12 +324,16 @@ async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
     """Archive (cancel) a task."""
     service, _ = _assert_task_owner(request, task_id)
 
+    task = service.get_task(task_id)
     try:
-        cancelled = await service.cancel_running_task(task_id)
+        if task.status in {TaskStatus.QUEUED, TaskStatus.STARTING, TaskStatus.RUNNING}:
+            archived = await service.cancel_running_task(task_id)
+        else:
+            archived = service.archive_task(task_id)
     except TaskOperationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    return _task_to_response(cancelled, service)
+    return _task_to_response(archived, service)
 
 
 @router.delete("/{task_id}/permanent", status_code=204)
