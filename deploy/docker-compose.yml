@@ -1,0 +1,57 @@
+# ── AINRF Production Deployment (Docker Compose) ─────────────────
+#
+# Usage:
+#   1. Copy this file and .env.example to your deploy directory
+#   2. Edit .env with your secrets
+#   3. docker compose up -d
+#
+# The Nginx container handles TLS termination, IP allowlisting,
+# static file serving, and WebSocket proxying.
+# ────────────────────────────────────────────────────────────────
+
+services:
+  ainrf:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      AINRF_PRODUCTION: "1"
+      AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
+      AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?Set AINRF_JWT_SECRET in .env}
+      AINRF_ALLOWED_CIDRS: "127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      AINRF_MAX_CONCURRENT_REQUESTS: "50"
+      AINRF_LOGIN_MAX_FAILURES: "10"
+      AINRF_LOGIN_LOCKOUT_HOURS: "24"
+    volumes:
+      - ainrf-state:/opt/ainrf/state
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ../deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls:/etc/nginx/tls:ro
+      - frontend-dist:/usr/share/nginx/html:ro
+    depends_on:
+      ainrf:
+        condition: service_healthy
+
+volumes:
+  ainrf-state:
+  frontend-dist:

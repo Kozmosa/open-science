@@ -45,10 +45,19 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
 @router.post("/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest, request: Request) -> AuthTokenResponse:
     service = _get_service(request)
+    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if not client_ip and request.client:
+        client_ip = request.client.host
+    try:
+        service.check_login_lockout(username=payload.username, ip_address=client_ip or "unknown")
+    except service.AccountLockedError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     try:
         result = service.login(username=payload.username, password=payload.password)
     except Exception as exc:
+        service.record_login_attempt(username=payload.username, ip_address=client_ip or "unknown", success=False)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    service.record_login_attempt(username=payload.username, ip_address=client_ip or "unknown", success=True)
     return AuthTokenResponse.model_validate(result)
 
 

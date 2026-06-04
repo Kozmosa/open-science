@@ -31,10 +31,12 @@ def _new_id() -> str:
 
 
 class AuthService:
-    def __init__(self, *, state_root: Path) -> None:
+    def __init__(self, *, state_root: Path, login_max_failures: int = 10, login_lockout_hours: int = 24) -> None:
         self._runtime_root = state_root / "runtime"
         self._db_path = self._runtime_root / "auth.sqlite3"
         self._initialized = False
+        self._login_max_failures = login_max_failures
+        self._login_lockout_hours = login_lockout_hours
 
     def initialize(self) -> None:
         if self._initialized:
@@ -95,6 +97,21 @@ class AuthService:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at)"
+            )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS login_attempts (
+                    id TEXT PRIMARY KEY,
+                    username TEXT NOT NULL,
+                    ip_address TEXT NOT NULL,
+                    success INTEGER NOT NULL,
+                    attempted_at TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_login_attempts_username_time ON login_attempts(username, attempted_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts(ip_address, attempted_at)"
             )
             # Migration: add must_change_password column
             try:
@@ -185,6 +202,55 @@ class AuthService:
             "refresh_token": plain_refresh,
             "user": _user_to_dict(user),
         }
+
+    # --- Login brute-force protection ---
+
+    class AccountLockedError(AuthError):
+        """Raised when an account or IP is temporarily locked due to too many failures."""
+
+    def check_login_lockout(self, *, username: str, ip_address: str) -> None:
+        """Raise AccountLockedError if the username or IP has too many recent failures."""
+        self.initialize()
+        cutoff = datetime.now(timezone.utc).timestamp() - self._login_lockout_hours * 3600
+        cutoff_iso = datetime.fromtimestamp(cutoff, tz=timezone.utc).isoformat()
+        with self._connect() as conn:
+            user_failures = conn.execute(
+                "SELECT COUNT(*) FROM login_attempts "
+                "WHERE username = ? AND success = 0 AND attempted_at > ?",
+                (username, cutoff_iso),
+            ).fetchone()[0]
+            ip_failures = conn.execute(
+                "SELECT COUNT(*) FROM login_attempts "
+                "WHERE ip_address = ? AND success = 0 AND attempted_at > ?",
+                (ip_address, cutoff_iso),
+            ).fetchone()[0]
+        if user_failures >= self._login_max_failures:
+            raise self.AccountLockedError(
+                f"Account locked: too many failed login attempts. "
+                f"Try again in {self._login_lockout_hours} hours or contact an admin."
+            )
+        if ip_failures >= self._login_max_failures * 3:
+            raise self.AccountLockedError(
+                f"IP locked: too many failed login attempts from this address."
+            )
+
+    def record_login_attempt(self, *, username: str, ip_address: str, success: bool) -> None:
+        """Record a login attempt for brute-force tracking."""
+        self.initialize()
+        now = _now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO login_attempts (id, username, ip_address, success, attempted_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (_new_id(), username, ip_address, int(success), now),
+            )
+            # Cleanup attempts older than 2x lockout window to bound table growth
+            cutoff = datetime.now(timezone.utc).timestamp() - self._login_lockout_hours * 3600 * 2
+            cutoff_iso = datetime.fromtimestamp(cutoff, tz=timezone.utc).isoformat()
+            conn.execute(
+                "DELETE FROM login_attempts WHERE attempted_at < ?", (cutoff_iso,)
+            )
+            conn.commit()
 
     # --- Refresh ---
 
