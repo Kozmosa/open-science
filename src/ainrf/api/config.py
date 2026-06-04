@@ -46,6 +46,9 @@ class ApiConfig:
     code_server_port: int = 18080
     code_server_workspace_dir: Path | None = None
     startup_cwd: Path = field(default_factory=Path.cwd)
+    production: bool = False
+    allowed_cidrs: tuple[str, ...] = ()
+    max_request_body_bytes: int = 50 * 1024 * 1024  # 50 MB
 
     @property
     def runtime_paths(self) -> RuntimePathConfig:
@@ -74,6 +77,10 @@ class ApiConfig:
         except ValueError:
             container_config = parse_container_config_from_runtime_config(payload)
 
+        production = os.environ.get("AINRF_PRODUCTION", "").lower() in ("1", "true", "yes")
+        raw_cidrs = os.environ.get("AINRF_ALLOWED_CIDRS", "")
+        allowed_cidrs = tuple(c.strip() for c in raw_cidrs.split(",") if c.strip())
+
         return cls(
             api_key_hashes=api_key_hashes,
             state_root=resolved_state_root,
@@ -82,6 +89,8 @@ class ApiConfig:
             if container_config
             else None,
             startup_cwd=startup_cwd,
+            production=production,
+            allowed_cidrs=allowed_cidrs,
         )
 
     @staticmethod

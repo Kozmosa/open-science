@@ -1,0 +1,60 @@
+# ── AINRF API systemd service ──────────────────────────────────────
+#
+# Usage:
+#   1. Copy to /etc/systemd/system/ainrf.service
+#   2. Edit User, Group, StateRoot, and Environment variables
+#   3. systemctl daemon-reload
+#   4. systemctl enable --now ainrf
+#
+# Logs: journalctl -u ainrf -f
+# ──────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=AINRF Research Agent API
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ainrf
+Group=ainrf
+
+WorkingDirectory=/opt/ainrf
+ExecStart=/opt/ainrf/.venv/bin/python -m ainrf serve \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    --state-root /opt/ainrf/state
+
+# ── Environment ────────────────────────────────────────────────
+# Production mode: disables docs, tightens auth exemptions.
+Environment=AINRF_PRODUCTION=1
+
+# IP allowlist (CIDRs). Requests from outside these ranges are
+# rejected at the application level (in addition to Nginx geo).
+Environment=AINRF_ALLOWED_CIDRS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1/32
+
+# JWT secret. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"
+Environment=AINRF_JWT_SECRET=CHANGE_ME_GENERATE_A_SECRET
+
+# API key hashes. Generate with:
+#   python -c "from hashlib import sha256; print(sha256(b'your-api-key').hexdigest())"
+Environment=AINRF_API_KEY_HASHES=CHANGE_ME_COMPUTE_SHA256
+
+# ── Hardening ──────────────────────────────────────────────────
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=2G
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/ainrf/state /opt/ainrf/.ainrf_workspaces
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

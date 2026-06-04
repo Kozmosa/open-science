@@ -71,6 +71,7 @@ def onboard(
 def serve(
     host: Annotated[str, typer.Option(help="Bind host for the API server.")] = "127.0.0.1",
     port: Annotated[int, typer.Option(help="Bind port for the API server.")] = 8000,
+    workers: Annotated[int, typer.Option(help="Number of uvicorn worker processes.")] = 1,
     daemon: Annotated[bool, typer.Option(help="Run the API server in the background.")] = False,
     state_root: Annotated[
         Path,
@@ -93,7 +94,7 @@ def serve(
         daemon_pid = run_server_daemon(host, port, state_root, resolved_pid_file, resolved_log_file)
         typer.echo(f"AINRF API daemon started (pid={daemon_pid}, port={port})")
         return
-    run_server(host, port, state_root)
+    run_server(host, port, state_root, workers=workers)
 
 
 @app.command()

@@ -97,7 +97,7 @@ def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 def test_serve_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_server(host: str, port: int, state_root: Path) -> None:
+    def fake_run_server(host: str, port: int, state_root: Path, *, workers: int = 1) -> None:
         captured["host"] = host
         captured["port"] = port
         captured["state_root"] = state_root
@@ -167,7 +167,7 @@ def test_serve_auto_onboards_before_running_server(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_server(host: str, port: int, state_root: Path) -> None:
+    def fake_run_server(host: str, port: int, state_root: Path, *, workers: int = 1) -> None:
         captured["host"] = host
         captured["port"] = port
         captured["state_root"] = state_root
