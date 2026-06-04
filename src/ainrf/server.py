@@ -14,7 +14,13 @@ import uvicorn
 from ainrf.api import ApiConfig, create_app
 
 
-def run_server(host: str, port: int, state_root: Path) -> None:
+def run_server(
+    host: str,
+    port: int,
+    state_root: Path,
+    *,
+    workers: int = 1,
+) -> None:
     app = create_app(ApiConfig.from_env(state_root))
     uvicorn.run(
         app,
@@ -23,6 +29,7 @@ def run_server(host: str, port: int, state_root: Path) -> None:
         log_level="info",
         ws_ping_interval=10.0,
         ws_ping_timeout=30.0,
+        workers=workers,
     )
 
 

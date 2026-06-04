@@ -8,7 +8,7 @@ from anyio import to_thread
 from fastapi import APIRouter, FastAPI
 
 from ainrf.api.config import ApiConfig
-from ainrf.api.middleware import build_jwt_auth_middleware
+from ainrf.api.middleware import build_ip_allowlist_middleware, build_jwt_auth_middleware, build_request_size_middleware
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.code import router as code_router
@@ -174,7 +174,18 @@ def create_app(
         str(default_workspace_dir),
         project_service=project_service,
     )
-    app = FastAPI(title="AINRF API", version="0.1.0", lifespan=lifespan)
+    # Disable interactive API docs in production.
+    docs_url = None if api_config.production else "/docs"
+    redoc_url = None if api_config.production else "/redoc"
+    openapi_url = None if api_config.production else "/openapi.json"
+    app = FastAPI(
+        title="AINRF API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
+    )
     app.state.api_config = api_config
     # Service initialization order:
     # 1. project/workspace (no deps)
@@ -216,6 +227,12 @@ def create_app(
     agentic_researcher_service.initialize()
     app.state.agentic_researcher_service = agentic_researcher_service
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
+    # Middleware order (outermost first):
+    #   1. IP allowlist — reject unknown networks before anything else
+    #   2. Request body size limit
+    #   3. JWT / API-key authentication
+    app.middleware("http")(build_ip_allowlist_middleware(api_config.allowed_cidrs))
+    app.middleware("http")(build_request_size_middleware(api_config.max_request_body_bytes))
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
     for router in ROUTERS:
         app.include_router(router)
