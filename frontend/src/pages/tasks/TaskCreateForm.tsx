@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, FormField, Input, Select, Textarea } from '../../components/ui';
 import { useT } from '../../i18n';
-import type { SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine } from '../../types';
+import type { EnvironmentRecord, ProjectRecord, SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine, WorkspaceRecord } from '../../types';
 import TaskSkillPicker from './TaskSkillPicker';
 
 const FIELD_IDS = {
+  project: 'task-create-project',
+  workspace: 'task-create-workspace',
+  environment: 'task-create-environment',
   researcherVanilla: 'task-create-researcher-vanilla',
   researcherAris: 'task-create-researcher-aris',
   harnessEngine: 'task-create-harness-engine',
@@ -16,7 +19,11 @@ interface Props {
   projectId: string;
   workspaceId: string;
   environmentId: string;
+  availableProjects: ProjectRecord[];
+  availableWorkspaces: WorkspaceRecord[];
+  availableEnvironments: EnvironmentRecord[];
   availableSkills: SkillItem[];
+  lockProject?: boolean;
   onSubmit: (payload: TaskCreatePayload) => void;
   onCancel: () => void;
 }
@@ -25,18 +32,48 @@ export default function TaskCreateForm({
   projectId,
   workspaceId,
   environmentId,
-  onSubmit,
+  availableProjects,
+  availableWorkspaces,
+  availableEnvironments,
   availableSkills,
+  lockProject = false,
+  onSubmit,
   onCancel,
 }: Props) {
   const t = useT();
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(workspaceId);
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(environmentId);
   const [researcherType, setResearcherType] = useState<ResearcherType>('vanilla');
   const [harnessEngine, setHarnessEngine] = useState<HarnessEngine>('claude-code');
   const [prompt, setPrompt] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [title, setTitle] = useState('');
 
-  const canSubmit = workspaceId !== '' && environmentId !== '' && prompt.trim() !== '';
+  useEffect(() => {
+    setSelectedProjectId(projectId);
+  }, [projectId]);
+
+  useEffect(() => {
+    setSelectedWorkspaceId(workspaceId);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    setSelectedEnvironmentId(environmentId);
+  }, [environmentId]);
+
+  const handleProjectChange = (nextProjectId: string) => {
+    setSelectedProjectId(nextProjectId);
+    const project = availableProjects.find(item => item.project_id === nextProjectId);
+    if (project?.default_workspace_id && availableWorkspaces.some(item => item.workspace_id === project.default_workspace_id)) {
+      setSelectedWorkspaceId(project.default_workspace_id);
+    }
+    if (project?.default_environment_id && availableEnvironments.some(item => item.id === project.default_environment_id)) {
+      setSelectedEnvironmentId(project.default_environment_id);
+    }
+  };
+
+  const canSubmit = selectedProjectId !== '' && selectedWorkspaceId !== '' && selectedEnvironmentId !== '' && prompt.trim() !== '';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,9 +81,9 @@ export default function TaskCreateForm({
       return;
     }
     onSubmit({
-      project_id: projectId,
-      workspace_id: workspaceId,
-      environment_id: environmentId,
+      project_id: selectedProjectId,
+      workspace_id: selectedWorkspaceId,
+      environment_id: selectedEnvironmentId,
       researcher_type: researcherType,
       harness_engine: harnessEngine,
       prompt,
@@ -58,6 +95,53 @@ export default function TaskCreateForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 text-[var(--text)]">
+      <div className="grid gap-3 md:grid-cols-3">
+        <FormField label={t('pages.tasks.projectLabel')}>
+          <Select
+            id={FIELD_IDS.project}
+            value={selectedProjectId}
+            onChange={(e) => handleProjectChange(e.target.value)}
+            disabled={lockProject || availableProjects.length === 0}
+          >
+            {availableProjects.map(project => (
+              <option key={project.project_id} value={project.project_id}>
+                {project.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <FormField label={t('pages.tasks.workspaceLabel')}>
+          <Select
+            id={FIELD_IDS.workspace}
+            value={selectedWorkspaceId}
+            onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+            disabled={availableWorkspaces.length === 0}
+          >
+            {availableWorkspaces.map(workspace => (
+              <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                {workspace.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <FormField label={t('pages.tasks.environmentLabel')}>
+          <Select
+            id={FIELD_IDS.environment}
+            value={selectedEnvironmentId}
+            onChange={(e) => setSelectedEnvironmentId(e.target.value)}
+            disabled={availableEnvironments.length === 0}
+          >
+            {availableEnvironments.map(environment => (
+              <option key={environment.id} value={environment.id}>
+                {environment.display_name || environment.alias}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      </div>
+
       <fieldset className="space-y-2" aria-labelledby="task-create-researcher-type-label">
         <legend id="task-create-researcher-type-label" className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
           {t('pages.tasks.create.researcherType')}
@@ -134,7 +218,7 @@ export default function TaskCreateForm({
         />
       </FormField>
 
-      {workspaceId === '' || environmentId === '' ? (
+      {selectedWorkspaceId === '' || selectedEnvironmentId === '' ? (
         <p className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] px-3 py-2 text-xs text-[var(--warning-foreground)]">
           {t('pages.tasks.create.missingBinding')}
         </p>

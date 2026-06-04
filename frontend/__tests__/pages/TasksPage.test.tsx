@@ -41,6 +41,16 @@ class MockEventSource {
   }
 }
 
+const project = {
+  project_id: 'default',
+  name: 'Default Project',
+  description: '',
+  default_workspace_id: 'workspace-default',
+  default_environment_id: 'env-1',
+  created_at: '2026-04-23T08:00:00Z',
+  updated_at: '2026-04-23T08:00:00Z',
+};
+
 const workspace: WorkspaceRecord = {
   workspace_id: 'workspace-default',
   project_id: 'default',
@@ -283,7 +293,7 @@ beforeEach(() => {
   mockGetWorkspaces.mockResolvedValue({ items: [workspace] });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
   mockGetSkills.mockResolvedValue({ items: availableSkills });
-  mockGetProjects.mockResolvedValue({ items: [] });
+  mockGetProjects.mockResolvedValue({ items: [project] });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
   mockGetTaskMessages.mockResolvedValue({ messages: [], has_more: false, next_sequence: null });
@@ -384,7 +394,7 @@ describe('TasksPage', () => {
     await waitFor(() => {
       const payload = mockCreateTask.mock.calls[0]?.[0];
       expect(payload).toMatchObject({
-        project_id: '',
+        project_id: 'default',
         workspace_id: 'workspace-default',
         environment_id: 'env-1',
         researcher_type: 'vanilla',
@@ -437,6 +447,59 @@ describe('TasksPage', () => {
     await waitFor(() => {
       expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
         skills: ['analysis'],
+      });
+    });
+  });
+
+  it('creates a task with user-selected project workspace and environment bindings', async () => {
+    const alternateWorkspace: WorkspaceRecord = {
+      ...workspace,
+      workspace_id: 'workspace-alt',
+      label: 'Alternate Workspace',
+      default_workdir: '/workspace/alternate',
+    };
+    const alternateEnvironment: EnvironmentRecord = {
+      ...environment,
+      id: 'env-2',
+      alias: 'cpu-lab',
+      display_name: 'CPU Lab',
+      default_workdir: '/workspace/cpu',
+    };
+    mockGetTasks.mockResolvedValueOnce({ items: [] });
+    mockGetProjects.mockResolvedValue({
+      items: [
+        { project_id: 'default', name: 'Default Project', description: '', default_workspace_id: 'workspace-default', default_environment_id: 'env-1', created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z' },
+        { project_id: 'project-alt', name: 'Alternate Project', description: '', default_workspace_id: null, default_environment_id: null, created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z' },
+      ],
+    });
+    mockGetWorkspaces.mockResolvedValue({ items: [workspace, alternateWorkspace] });
+    mockGetEnvironments.mockResolvedValue({ items: [environment, alternateEnvironment] });
+    mockCreateTask.mockResolvedValue({
+      ...taskSummary,
+      task_id: 'task-selected-bindings',
+      title: 'Selected bindings',
+      status: 'queued',
+      project_id: 'project-alt',
+      workspace_id: 'workspace-alt',
+      environment_id: 'env-2',
+    });
+
+    renderWithProviders(<TasksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Project')).toHaveValue('default'));
+    fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'project-alt' } });
+    fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'workspace-alt' } });
+    fireEvent.change(screen.getByLabelText('Environment'), { target: { value: 'env-2' } });
+    fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Run with selected bindings.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
+        project_id: 'project-alt',
+        workspace_id: 'workspace-alt',
+        environment_id: 'env-2',
+        prompt: 'Run with selected bindings.',
       });
     });
   });
