@@ -504,6 +504,36 @@ describe('TasksPage', () => {
     });
   });
 
+  it('applies the selected task preset when creating a task', async () => {
+    mockGetTasks.mockResolvedValueOnce({ items: [] });
+    mockCreateTask.mockResolvedValue({
+      ...taskSummary,
+      task_id: 'task-reproduce-preset',
+      title: 'Reproduce baseline',
+      status: 'queued',
+      harness_engine: 'codex-app-server',
+    });
+
+    renderWithProviders(<TasksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
+
+    const presetSelect = await screen.findByLabelText('Task preset');
+    expect(within(presetSelect).getAllByRole('option')).toHaveLength(3);
+    fireEvent.change(presetSelect, { target: { value: 'reproduce-baseline-default' } });
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'Reproduce the baseline experiment.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
+        researcher_type: 'vanilla',
+        harness_engine: 'codex-app-server',
+        prompt: 'Reproduce the baseline experiment.',
+      });
+    });
+  });
+
   it('selects a task from the task query param and keeps selection in the URL', async () => {
     const reviewRecord: TaskRecord = {
       ...taskRecord,

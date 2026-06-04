@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Button, Select } from '../ui';
 import { useT } from '../../i18n';
 import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '../../types';
+import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../../pages/tasks/taskPresets';
 
 interface Props {
   paperTitle: string;
@@ -28,7 +29,8 @@ export default function ConvertToTaskDialog({
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
-  const [harnessEngine, setHarnessEngine] = useState('claude-code');
+  const [selectedTaskPresetId, setSelectedTaskPresetId] = useState<TaskPresetId>('raw-prompt');
+  const [harnessEngine, setHarnessEngine] = useState<'claude-code' | 'agent-sdk' | 'codex-app-server'>('claude-code');
   const [researcherType, setResearcherType] = useState<'vanilla' | 'aris-researcher'>('vanilla');
 
   const effectiveWorkspaceId = useMemo(
@@ -40,6 +42,14 @@ export default function ConvertToTaskDialog({
     [selectedEnvironmentId, environments]
   );
 
+  const applyTaskPreset = (presetId: TaskPresetId) => {
+    const preset = getTaskPreset(presetId);
+    setSelectedTaskPresetId(preset.id);
+    setResearcherType(preset.researcherType);
+    setHarnessEngine(preset.harnessEngine);
+  };
+
+
   if (!isOpen) return null;
 
   const handleConfirm = () => {
@@ -48,7 +58,7 @@ export default function ConvertToTaskDialog({
       workspace_id: effectiveWorkspaceId,
       environment_id: effectiveEnvironmentId,
       researcher_type: researcherType,
-      harness_engine: harnessEngine as 'claude-code' | 'agent-sdk' | 'codex-app-server',
+      harness_engine: harnessEngine,
       prompt: paperAbstract,
       title: paperTitle.slice(0, 200),
       skills: [],
@@ -67,6 +77,21 @@ export default function ConvertToTaskDialog({
             <p className="text-xs font-medium text-[var(--text)] truncate">{paperTitle}</p>
             <p className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-3">{paperAbstract}</p>
           </div>
+
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
+              {t('pages.tasks.create.taskPreset')}
+            </span>
+            <Select
+              value={selectedTaskPresetId}
+              onChange={(e) => applyTaskPreset(e.target.value as TaskPresetId)}
+              className="w-full text-xs py-2"
+            >
+              {TASK_PRESET_OPTIONS.map((preset) => (
+                <option key={preset.id} value={preset.id}>{t(preset.labelKey)}</option>
+              ))}
+            </Select>
+          </label>
 
           <div>
             <label className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
@@ -118,7 +143,7 @@ export default function ConvertToTaskDialog({
             </label>
             <Select
               value={harnessEngine}
-              onChange={(e) => setHarnessEngine(e.target.value)}
+              onChange={(e) => setHarnessEngine(e.target.value as 'claude-code' | 'agent-sdk' | 'codex-app-server')}
               className="w-full text-xs py-2"
             >
               <option value="claude-code">Claude Code</option>
