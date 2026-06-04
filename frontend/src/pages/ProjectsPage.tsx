@@ -90,6 +90,9 @@ export default function ProjectsPage() {
     projectDetail?.default_workspace_id ?? workspacesQuery.data?.items[0]?.workspace_id ?? '';
   const defaultEnvironmentId =
     projectDetail?.default_environment_id ?? environmentsQuery.data?.items[0]?.id ?? '';
+  const availableProjects = projects;
+  const availableWorkspaces = workspacesQuery.data?.items ?? [];
+  const availableEnvironments = environmentsQuery.data?.items ?? [];
   const handleResetLayout = useCallback(() => {
     if (effectiveProjectId) {
       localStorage.removeItem(`ainrf:project-layout:${effectiveProjectId}`);
@@ -179,7 +182,11 @@ export default function ProjectsPage() {
           projectId={effectiveProjectId ?? ''}
           workspaceId={defaultWorkspaceId}
           environmentId={defaultEnvironmentId}
+          availableProjects={availableProjects}
+          availableWorkspaces={availableWorkspaces}
+          availableEnvironments={availableEnvironments}
           availableSkills={skillsQuery.data?.items ?? []}
+          lockProject
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
         />

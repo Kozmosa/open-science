@@ -171,6 +171,9 @@ function TasksPage() {
   const defaultProjectId = projectsQuery.data?.items[0]?.project_id ?? '';
   const defaultWorkspaceId = workspacesQuery.data?.items[0]?.workspace_id ?? '';
   const defaultEnvironmentId = environmentsQuery.data?.items[0]?.id ?? '';
+  const availableProjects = projectsQuery.data?.items ?? [];
+  const availableWorkspaces = workspacesQuery.data?.items ?? [];
+  const availableEnvironments = environmentsQuery.data?.items ?? [];
 
   const tasksError = extractErrorMessage(tasksQuery.error);
   const detailError = extractErrorMessage(selectedTaskQuery.error);
@@ -273,6 +276,9 @@ function TasksPage() {
           projectId={defaultProjectId}
           workspaceId={defaultWorkspaceId}
           environmentId={defaultEnvironmentId}
+          availableProjects={availableProjects}
+          availableWorkspaces={availableWorkspaces}
+          availableEnvironments={availableEnvironments}
           availableSkills={skillsQuery.data?.items ?? []}
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
