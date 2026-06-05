@@ -24,6 +24,7 @@ import type { ChangePasswordRequest,
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  FileUploadResponse,
   LiteratureSubscription,
   LiteraturePaper,
   ProjectCostSummary,
@@ -507,6 +508,24 @@ export const buildFileStreamUrl = (
   `/api/files/stream?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
     workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
   }`;
+export const uploadFile = (params: {
+  environmentId: string;
+  path: string;
+  workspaceId?: string;
+  file: File;
+}): Promise<FileUploadResponse> => {
+  if (USE_MOCK) {
+    return Promise.resolve({ path: params.path, size: params.file.size });
+  }
+  const formData = new FormData();
+  formData.append('environment_id', params.environmentId);
+  formData.append('path', params.path);
+  if (params.workspaceId) {
+    formData.append('workspace_id', params.workspaceId);
+  }
+  formData.append('file', params.file);
+  return api.post<FileUploadResponse>('/files/upload', formData);
+};
 
 export const getResources = (): Promise<ResourcesResponse> =>
   USE_MOCK ? Promise.resolve(mockGetResources()) : api.get<ResourcesResponse>('/resources');

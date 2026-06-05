@@ -561,6 +561,10 @@ export interface FileReadResponse {
   language: string | null;
   mime_type: string | null;
 }
+export interface FileUploadResponse {
+  path: string;
+  size: number;
+}
 
 export interface SkillItem {
   skill_id: string;
