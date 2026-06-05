@@ -16,7 +16,7 @@
 # ══════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Frontend build ────────────────────────────────────────
-FROM node:20-slim AS frontend-build
+FROM docker.1ms.run/node:20-slim AS frontend-build
 
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
@@ -25,9 +25,9 @@ COPY frontend/ ./
 RUN npm run build
 
 # ── Stage 2: Backend build ────────────────────────────────────────
-FROM python:3.13-slim AS backend-build
+FROM docker.1ms.run/python:3.13-slim AS backend-build
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.1ms.run/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /build
 COPY pyproject.toml ./
@@ -35,7 +35,7 @@ COPY src/ainrf/ src/ainrf/
 RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────
-FROM python:3.13-slim AS runtime
+FROM docker.1ms.run/python:3.13-slim AS runtime
 
 # Runtime dependencies only (no Node, no uv, no git)
 RUN apt-get update && \

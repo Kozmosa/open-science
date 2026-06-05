@@ -55,7 +55,7 @@ services:
 
   # ── Nginx Reverse Proxy ───────────────────────────────────────
   nginx:
-    image: nginx:1.27-alpine
+    image: docker.1ms.run/nginx:1.27-alpine
     restart: unless-stopped
     ports:
       - "${HTTPS_PORT:-443}:443"
