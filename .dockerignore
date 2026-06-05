@@ -42,6 +42,7 @@ deploy/*.service
 
 # Misc
 *.md
+!README.md
 !frontend/README.md
 .editorconfig
 .pre-commit-config.yaml
