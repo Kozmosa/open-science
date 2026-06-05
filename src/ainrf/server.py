@@ -12,6 +12,7 @@ import httpx
 import uvicorn
 
 from ainrf.api import ApiConfig, create_app
+from ainrf.logging import configure_logging
 
 
 def run_server(
@@ -21,6 +22,7 @@ def run_server(
     *,
     workers: int = 1,
 ) -> None:
+    configure_logging(state_root)
     app = create_app(ApiConfig.from_env(state_root))
     uvicorn.run(
         app,
