@@ -12,8 +12,6 @@ from ainrf.api.config import ApiConfig, hash_api_key
 from tests.testutil import get_jwt_headers
 from ainrf.execution.errors import SSHConnectionError
 from ainrf.execution.models import CommandResult
-from ainrf.code_server_installer import CodeServerInstallResult
-from ainrf.environments import InMemoryEnvironmentService
 from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.terminal.models import (
     TerminalAttachmentTarget,
@@ -111,7 +109,6 @@ async def test_environment_create_returns_saved_fields_and_null_latest_detection
     assert data["preferred_env_manager"] == payload["preferred_env_manager"]
     assert data["preferred_runtime_notes"] == payload["preferred_runtime_notes"]
     assert data["task_harness_profile"] == payload["task_harness_profile"]
-    assert data["code_server_path"] is None
     assert data["latest_detection"] is None
     assert data["created_at"] is not None
     assert data["updated_at"] is not None
@@ -218,7 +215,6 @@ async def test_environment_detect_writes_back_runtime_configuration(
     data = response.json()
     assert data["preferred_python"] == "/usr/bin/python3"
     assert data["preferred_env_manager"] == "uv"
-    assert data["code_server_path"] == "/usr/local/bin/codex"
     assert data["latest_detection"]["codex"] == {
         "available": True,
         "version": "Codex 0.130.0",
@@ -615,7 +611,6 @@ async def test_environment_lifecycle_supports_update_detect_and_delete(
                 "display_name": "GPU Lab Updated",
                 "default_workdir": "/workspace/project-a",
                 "task_harness_profile": "Updated task harness profile.",
-                "code_server_path": "/home/researcher/.local/ainrf/code-server/bin/code-server",
             },
         )
         detect_response = await client.post(
@@ -643,10 +638,6 @@ async def test_environment_lifecycle_supports_update_detect_and_delete(
     assert update_response.json()["display_name"] == "GPU Lab Updated"
     assert update_response.json()["default_workdir"] == "/workspace/project-a"
     assert update_response.json()["task_harness_profile"] == "Updated task harness profile."
-    assert (
-        update_response.json()["code_server_path"]
-        == "/home/researcher/.local/ainrf/code-server/bin/code-server"
-    )
 
     assert detect_response.status_code == 200
     assert detect_response.json()["latest_detection"]["environment_id"] == environment_id
@@ -842,213 +833,6 @@ async def test_project_environment_reference_routes_are_mirrored_under_v1(tmp_pa
     assert create_reference_response.json()["environment_id"] == environment_id
     assert list_reference_response.status_code == 200
     assert list_reference_response.json()["items"] == [create_reference_response.json()]
-
-
-@pytest.mark.anyio
-async def test_environment_install_code_server_updates_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app, user_id="browser-user")
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab",
-        display_name="GPU Lab",
-        host="gpu.example.com",
-        user="researcher",
-    )
-
-    async def fake_install_code_server(
-        environment_id: str,
-        *,
-        environment_service: InMemoryEnvironmentService,
-        app_user_id: str | None = None,
-        terminal_session_manager: object | None = None,
-        terminal_attachment_broker: object | None = None,
-        api_base_url: str | None = None,
-    ) -> CodeServerInstallResult:
-        _ = app_user_id, terminal_session_manager
-        assert terminal_attachment_broker is not None
-        assert api_base_url == "http://testserver/"
-        assert environment_id == environment.id
-        app.state.environment_service.update_environment(
-            environment_id,
-            code_server_path="~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server",
-        )
-        return CodeServerInstallResult(
-            version="4.117.0",
-            install_dir="~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64",
-            code_server_path="~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server",
-            execution_mode="ssh",
-            already_installed=False,
-            detail="code-server installed",
-            terminal_session_id="p-localhost",
-            terminal_attachment_id="attachment-1",
-            terminal_ws_url="ws://testserver/terminal/attachments/attachment-1/ws?token=token-1",
-            terminal_attachment_expires_at="2026-04-28T21:00:00Z",
-        )
-
-    monkeypatch.setattr(
-        "ainrf.api.routes.environments.install_code_server", fake_install_code_server
-    )
-
-    async with make_client(app) as client:
-        response = await client.post(
-            f"/environments/{environment.id}/install-code-server",
-            headers=jwt_headers,
-        )
-        v1_response = await client.post(
-            f"/v1/environments/{environment.id}/install-code-server",
-            headers=jwt_headers,
-        )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["installed"] is True
-    assert data["already_installed"] is False
-    assert data["execution_mode"] == "ssh"
-    assert data["version"] == "4.117.0"
-    assert data["code_server_path"] == (
-        "~/.local/ainrf/code-server/code-server-4.117.0-linux-amd64/bin/code-server"
-    )
-    assert data["environment"]["code_server_path"] == data["code_server_path"]
-    assert data["terminal_session_id"] == "p-localhost"
-    assert data["terminal_attachment_id"] == "attachment-1"
-    assert data["terminal_ws_url"] == (
-        "ws://testserver/terminal/attachments/attachment-1/ws?token=token-1"
-    )
-    assert data["terminal_attachment_expires_at"] == "2026-04-28T21:00:00Z"
-    assert v1_response.status_code == 200
-    assert v1_response.json()["environment"]["code_server_path"] == data["code_server_path"]
-
-
-@pytest.mark.anyio
-async def test_environment_install_code_server_missing_environment_returns_404(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app, user_id="browser-user")
-
-    async def fake_install_code_server(
-        environment_id: str,
-        *,
-        environment_service: InMemoryEnvironmentService,
-        app_user_id: str | None = None,
-        terminal_session_manager: object | None = None,
-        terminal_attachment_broker: object | None = None,
-        api_base_url: str | None = None,
-    ) -> CodeServerInstallResult:
-        _ = app_user_id, terminal_session_manager, terminal_attachment_broker, api_base_url
-        environment_service.get_environment(environment_id)
-        raise AssertionError("unreachable")
-
-    monkeypatch.setattr(
-        "ainrf.api.routes.environments.install_code_server", fake_install_code_server
-    )
-
-    async with make_client(app) as client:
-        response = await client.post(
-            "/environments/env-missing/install-code-server",
-            headers=jwt_headers,
-        )
-
-    assert response.status_code == 404
-
-
-@pytest.mark.anyio
-async def test_environment_install_code_server_conflict_returns_409(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app, user_id="browser-user")
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab",
-        display_name="GPU Lab",
-        host="gpu.example.com",
-        user="researcher",
-    )
-
-    async def fake_install_code_server(
-        environment_id: str,
-        *,
-        environment_service: InMemoryEnvironmentService,
-        app_user_id: str | None = None,
-        terminal_session_manager: object | None = None,
-        terminal_attachment_broker: object | None = None,
-        api_base_url: str | None = None,
-    ) -> CodeServerInstallResult:
-        _ = (
-            environment_id,
-            environment_service,
-            app_user_id,
-            terminal_session_manager,
-            terminal_attachment_broker,
-            api_base_url,
-        )
-        from ainrf.code_server_installer import CodeServerInstallError
-
-        raise CodeServerInstallError("personal tmux fallback requires a user id")
-
-    monkeypatch.setattr(
-        "ainrf.api.routes.environments.install_code_server", fake_install_code_server
-    )
-
-    async with make_client(app) as client:
-        response = await client.post(
-            f"/environments/{environment.id}/install-code-server",
-            headers=jwt_headers,
-        )
-
-    assert response.status_code == 409
-    assert "personal tmux fallback requires a user id" in response.json()["detail"]
-
-
-@pytest.mark.anyio
-async def test_environment_install_code_server_unexpected_error_returns_diagnostic_detail(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    app = make_app(tmp_path)
-    jwt_headers = get_jwt_headers(app, user_id="browser-user")
-    environment = app.state.environment_service.create_environment(
-        alias="gpu-lab-2",
-        display_name="GPU Lab 2",
-        host="gpu2.example.com",
-        user="researcher",
-    )
-
-    async def fake_install_code_server(
-        environment_id: str,
-        *,
-        environment_service: InMemoryEnvironmentService,
-        app_user_id: str | None = None,
-        terminal_session_manager: object | None = None,
-        terminal_attachment_broker: object | None = None,
-        api_base_url: str | None = None,
-    ) -> CodeServerInstallResult:
-        _ = (
-            environment_id,
-            environment_service,
-            app_user_id,
-            terminal_session_manager,
-            terminal_attachment_broker,
-            api_base_url,
-        )
-        raise AttributeError("'NoneType' object has no attribute 'attachment_id'")
-
-    monkeypatch.setattr(
-        "ainrf.api.routes.environments.install_code_server", fake_install_code_server
-    )
-
-    async with make_client(app) as client:
-        response = await client.post(
-            f"/environments/{environment.id}/install-code-server",
-            headers=jwt_headers,
-        )
-
-    assert response.status_code == 500
-    assert response.json()["detail"] == (
-        "Unexpected environment error: AttributeError: "
-        "'NoneType' object has no attribute 'attachment_id'"
-    )
 
 
 def _probe_result(command: str) -> CommandResult:

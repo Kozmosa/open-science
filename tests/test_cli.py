@@ -336,11 +336,6 @@ def test_onboard_state_root_reports_ready_runtime(
                 "dependencies": {
                     "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
                     "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
-                    "code_server": {
-                        "available": True,
-                        "path": "/usr/bin/code-server",
-                        "detail": None,
-                    },
                 },
             }
         ),

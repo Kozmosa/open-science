@@ -14,9 +14,9 @@ from ainrf.api.middleware import (
     build_jwt_auth_middleware,
     build_request_size_middleware,
 )
+from ainrf.api.middleware.request_context import build_request_context_middleware
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
-from ainrf.api.routes.code import router as code_router
 from ainrf.api.routes.environments import router as environments_router
 from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
@@ -31,7 +31,6 @@ from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.auth import AuthService
-from ainrf.code_server import CodeServerSupervisor
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.files import FileBrowserService
 from ainrf.literature.scheduler import LiteratureScheduler
@@ -67,7 +66,6 @@ ROUTERS: tuple[APIRouter, ...] = (
     terminal_router,
     tasks_router,
     sessions_router,
-    code_router,
     literature_router,
     resources_router,
     settings_router,
@@ -81,24 +79,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     terminal_session_manager = app.state.terminal_session_manager
     terminal_attachment_broker = app.state.terminal_attachment_broker
     project_service = app.state.project_service
-    manager = CodeServerSupervisor(
-        state_root=app.state.api_config.state_root,
-        environment_service=environment_service,
-        local_host=app.state.api_config.code_server_host,
-        local_port=app.state.api_config.code_server_port,
-    )
-    app.state.code_server_manager = manager
-    app.state.code_server_supervisor = manager
     resource_monitor_service = ResourceMonitorService(environment_service)
     app.state.resource_monitor_service = resource_monitor_service
     await resource_monitor_service.start()
     try:
         await _run_sync_in_lifespan(project_service.initialize)
         await _run_sync_in_lifespan(workspace_service.initialize)
-        localhost = environment_service.get_environment("env-localhost")
-        app.state.runtime_readiness = check_runtime_readiness(
-            localhost.code_server_path
-        ).as_public_payload()
+        app.state.runtime_readiness = check_runtime_readiness().as_public_payload()
         await _run_sync_in_lifespan(terminal_session_manager.reconcile)
         session_service = app.state.session_service
         await _run_sync_in_lifespan(session_service.initialize)
@@ -160,7 +147,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
-        await manager.stop()
         await resource_monitor_service.stop()
         if hasattr(app.state, "literature_scheduler"):
             await app.state.literature_scheduler.shutdown()
@@ -239,7 +225,13 @@ def create_app(
     # Middleware order (outermost first):
     #   1. IP allowlist — reject unknown networks before anything else
     #   2. Request body size limit + concurrency guard
-    #   3. JWT / API-key authentication
+    # Middleware order (outermost first):
+    #   1. Request context — attach request_id + structlog binding
+    #   2. IP allowlist — reject unknown networks before anything else
+    #   3. Request body size limit
+    #   4. Concurrency guard (optional)
+    #   5. JWT / API-key authentication
+    app.middleware("http")(build_request_context_middleware())
     app.middleware("http")(build_ip_allowlist_middleware(api_config.allowed_cidrs))
     app.middleware("http")(build_request_size_middleware(api_config.max_request_body_bytes))
     if api_config.max_concurrent_requests > 0:
@@ -250,4 +242,9 @@ def create_app(
     for router in ROUTERS:
         app.include_router(router)
         app.include_router(router, prefix="/v1")
+    # Metrics endpoint (gated by config)
+    if api_config.metrics_enabled:
+        from ainrf.api.routes.metrics import create_metrics_router
+
+        app.include_router(create_metrics_router(api_config))
     return app

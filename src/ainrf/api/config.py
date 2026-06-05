@@ -42,9 +42,6 @@ class ApiConfig:
     state_root: Path
     container_config: ContainerConfig | None = None
     terminal_command: tuple[str, ...] = field(default_factory=_default_terminal_command)
-    code_server_host: str = "127.0.0.1"
-    code_server_port: int = 18080
-    code_server_workspace_dir: Path | None = None
     startup_cwd: Path = field(default_factory=Path.cwd)
     production: bool = False
     allowed_cidrs: tuple[str, ...] = ()
@@ -52,6 +49,10 @@ class ApiConfig:
     max_concurrent_requests: int = 0  # 0 = unlimited
     login_max_failures: int = 10
     login_lockout_hours: int = 24
+    metrics_enabled: bool = False
+    metrics_path: str = "/metrics"
+    public_registration_enabled: bool = True
+    trusted_proxy_cidrs: tuple[str, ...] = ()
 
     @property
     def runtime_paths(self) -> RuntimePathConfig:
@@ -86,20 +87,31 @@ class ApiConfig:
         max_concurrent = int(os.environ.get("AINRF_MAX_CONCURRENT_REQUESTS", "0"))
         login_max_failures = int(os.environ.get("AINRF_LOGIN_MAX_FAILURES", "10"))
         login_lockout_hours = int(os.environ.get("AINRF_LOGIN_LOCKOUT_HOURS", "24"))
-
+        metrics_enabled = os.environ.get("AINRF_METRICS_ENABLED", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        metrics_path = os.environ.get("AINRF_METRICS_PATH", "/metrics")
+        public_registration_enabled = os.environ.get(
+            "AINRF_PUBLIC_REGISTRATION_ENABLED", "true"
+        ).lower() in ("1", "true", "yes")
+        trusted_raw = os.environ.get("AINRF_TRUSTED_PROXY_CIDRS", "")
+        trusted_proxy_cidrs = tuple(c.strip() for c in trusted_raw.split(",") if c.strip())
         return cls(
             api_key_hashes=api_key_hashes,
             state_root=resolved_state_root,
             container_config=container_config,
-            code_server_workspace_dir=Path(container_config.project_dir)
-            if container_config
-            else None,
             startup_cwd=startup_cwd,
             production=production,
             allowed_cidrs=allowed_cidrs,
             max_concurrent_requests=max_concurrent,
             login_max_failures=login_max_failures,
             login_lockout_hours=login_lockout_hours,
+            metrics_enabled=metrics_enabled,
+            metrics_path=metrics_path,
+            public_registration_enabled=public_registration_enabled,
+            trusted_proxy_cidrs=trusted_proxy_cidrs,
         )
 
     @staticmethod

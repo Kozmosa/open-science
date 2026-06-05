@@ -9,7 +9,6 @@ export interface RuntimeReadiness {
   dependencies: {
     tmux: RuntimeDependencyStatus;
     uv: RuntimeDependencyStatus;
-    code_server: RuntimeDependencyStatus;
   };
 }
 
@@ -368,16 +367,6 @@ export interface TaskOutputListResponse {
   next_seq: number;
 }
 
-export type CodeServerLifecycleStatus = 'starting' | 'ready' | 'unavailable';
-
-export interface CodeServerStatus {
-  status: CodeServerLifecycleStatus;
-  environment_id: string | null;
-  environment_alias: string | null;
-  workspace_dir: string | null;
-  detail: string | null;
-  managed: boolean;
-}
 
 export interface CodexDefaults {
   codex_config_toml: string | null;
@@ -440,7 +429,6 @@ export interface EnvironmentRecord {
   preferred_env_manager: string | null;
   preferred_runtime_notes: string | null;
   task_harness_profile: string | null;
-  code_server_path: string | null;
   created_at: string | null;
   updated_at: string | null;
   latest_detection: EnvironmentDetection | null;
@@ -482,22 +470,6 @@ export interface EnvironmentCreateRequest {
   preferred_env_manager?: string | null;
   preferred_runtime_notes?: string | null;
   task_harness_profile?: string | null;
-  code_server_path?: string | null;
-}
-
-export interface EnvironmentCodeServerInstallResponse {
-  environment: EnvironmentRecord;
-  installed: boolean;
-  version: string;
-  install_dir: string;
-  code_server_path: string;
-  execution_mode: 'ssh' | 'personal_tmux_fallback';
-  already_installed: boolean;
-  detail: string;
-  terminal_session_id?: string | null;
-  terminal_attachment_id?: string | null;
-  terminal_ws_url?: string | null;
-  terminal_attachment_expires_at?: string | null;
 }
 
 export interface EnvironmentUpdateRequest {
@@ -518,7 +490,6 @@ export interface EnvironmentUpdateRequest {
   preferred_env_manager?: string | null;
   preferred_runtime_notes?: string | null;
   task_harness_profile?: string | null;
-  code_server_path?: string | null;
 }
 
 export interface ProjectEnvironmentReferenceCreateRequest {
@@ -560,6 +531,10 @@ export interface FileReadResponse {
   size: number;
   language: string | null;
   mime_type: string | null;
+}
+export interface FileUploadResponse {
+  path: string;
+  size: number;
 }
 
 export interface SkillItem {

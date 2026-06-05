@@ -49,6 +49,9 @@ from ainrf.terminal.pty import (
 )
 from ainrf.terminal.exec import exec_command
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
+from ainrf.api.middleware import _client_ip
+from ainrf.api.routes.metrics import dec_gauge, inc_gauge
+from ainrf.security.audit import audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +284,14 @@ async def create_terminal_session(
     attachment = broker.create_attachment(str(request.base_url), target)
     await to_thread.run_sync(manager.record_personal_attach, target.binding_id)
     attached_session = broker.attach_record(session, attachment, str(request.base_url))
+    audit_event(
+        "terminal.session.created",
+        severity="info",
+        session_id=attached_session.session_id,
+        environment_id=payload.environment_id,
+        user_id=app_user_id,
+        client_ip=_client_ip(request),
+    )
     return TerminalSessionResponse.model_validate(_serialize_session(attached_session))
 
 
@@ -355,6 +366,14 @@ async def reset_terminal_session(
     attachment = broker.create_attachment(str(request.base_url), target)
     await to_thread.run_sync(manager.record_personal_attach, target.binding_id)
     attached_session = broker.attach_record(session, attachment, str(request.base_url))
+    audit_event(
+        "terminal.session.reset",
+        severity="info",
+        session_id=attached_session.session_id,
+        environment_id=payload.environment_id,
+        user_id=app_user_id,
+        client_ip=_client_ip(request),
+    )
     return TerminalSessionResponse.model_validate(_serialize_session(attached_session))
 
 
@@ -458,6 +477,17 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
         return
 
     await websocket.accept()
+    client_ip = _client_ip(websocket)
+    audit_event(
+        "terminal.websocket.opened",
+        severity="info",
+        session_id=attachment.session_id,
+        environment_id=attachment.environment_id,
+        user_id=attachment.user_id,
+        client_ip=client_ip,
+        attachment_id=attachment_id,
+    )
+    inc_gauge("ainrf_terminal_ws_active")
     master_fd = runtime.master_fd
     if master_fd is None:
         broker.close_runtime(attachment_id)
@@ -647,6 +677,16 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
         # task_group cleanup handled by context manager
         pass
     finally:
+        audit_event(
+            "terminal.websocket.closed",
+            severity="info",
+            session_id=attachment.session_id,
+            environment_id=attachment.environment_id,
+            user_id=attachment.user_id,
+            client_ip=client_ip,
+            attachment_id=attachment_id,
+        )
+        dec_gauge("ainrf_terminal_ws_active")
         loop.remove_reader(master_fd)
         broker.close_runtime(attachment_id)
         if (

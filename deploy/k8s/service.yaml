@@ -1,0 +1,18 @@
+# ── AINRF Backend Service ─────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: ainrf
+  namespace: ainrf
+  labels:
+    app.kubernetes.io/name: ainrf
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ainrf
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

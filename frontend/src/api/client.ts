@@ -99,7 +99,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const url = `${API_BASE}${path}`;
   const headers = new Headers(options.headers);
 
-  if (!headers.has('Content-Type')) {
+  if (options.body instanceof FormData) {
+    // Let the browser set Content-Type with multipart boundary
+  } else if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -113,7 +115,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   };
 
   if (options.body !== undefined) {
-    init.body = JSON.stringify(options.body);
+    init.body = options.body instanceof FormData ? options.body : JSON.stringify(options.body);
   }
 
   const response = await fetch(url, init);

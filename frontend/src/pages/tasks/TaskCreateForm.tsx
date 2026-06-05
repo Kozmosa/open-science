@@ -4,6 +4,7 @@ import { useT } from '../../i18n';
 import type { EnvironmentRecord, ProjectRecord, SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine, WorkspaceRecord } from '../../types';
 import TaskSkillPicker from './TaskSkillPicker';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from './taskPresets';
+import SeedFileUploader, { type SeedFileInfo } from './SeedFileUploader';
 
 const FIELD_IDS = {
   project: 'task-create-project',
@@ -52,6 +53,10 @@ export default function TaskCreateForm({
   const [prompt, setPrompt] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [title, setTitle] = useState('');
+  const [seedFiles, setSeedFiles] = useState<SeedFileInfo[]>([]);
+
+  const SEED_FILE_PRESETS: TaskPresetId[] = ['reproduce-baseline-default', 'structured-research-default'];
+  const showSeedUploader = SEED_FILE_PRESETS.includes(selectedTaskPresetId);
 
   useEffect(() => {
     setSelectedProjectId(projectId);
@@ -81,8 +86,16 @@ export default function TaskCreateForm({
     setSelectedTaskPresetId(preset.id);
     setResearcherType(preset.researcherType);
     setHarnessEngine(preset.harnessEngine);
+    setSeedFiles([]);
   };
 
+  const buildPromptWithSeedFiles = (userPrompt: string, files: SeedFileInfo[]): string => {
+    const uploaded = files.filter(f => f.status === 'uploaded');
+    if (uploaded.length === 0) return userPrompt;
+    const fileRefs = uploaded.map(f => `- ${f.serverPath}`).join('\n');
+    const header = `请参考以下种子论文文件作为研究和分析的参考材料：\n${fileRefs}\n\n`;
+    return header + userPrompt;
+  };
 
   const canSubmit = selectedProjectId !== '' && selectedWorkspaceId !== '' && selectedEnvironmentId !== '' && prompt.trim() !== '';
 
@@ -97,7 +110,7 @@ export default function TaskCreateForm({
       environment_id: selectedEnvironmentId,
       researcher_type: researcherType,
       harness_engine: harnessEngine,
-      prompt,
+      prompt: buildPromptWithSeedFiles(prompt, seedFiles),
       skills: researcherType === 'vanilla' ? skills : [],
       mcp_servers: [],
       title: title || undefined,
@@ -166,6 +179,25 @@ export default function TaskCreateForm({
           ))}
         </Select>
       </FormField>
+
+      {showSeedUploader && (
+        <div className="space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.tasks.create.seedFiles.label')}
+          </span>
+          <SeedFileUploader
+            environmentId={selectedEnvironmentId}
+            workspaceId={selectedWorkspaceId}
+            disabled={selectedEnvironmentId === '' || selectedWorkspaceId === ''}
+            onFilesChange={setSeedFiles}
+          />
+          {seedFiles.filter(f => f.status === 'uploaded').length > 0 && (
+            <p className="text-xs text-[var(--text-secondary)]">
+              {t('pages.tasks.create.seedFiles.fileCount', { count: String(seedFiles.filter(f => f.status === 'uploaded').length) })}
+            </p>
+          )}
+        </div>
+      )}
 
       <fieldset className="space-y-2" aria-labelledby="task-create-researcher-type-label">
         <legend id="task-create-researcher-type-label" className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">

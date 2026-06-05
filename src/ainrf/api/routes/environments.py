@@ -7,13 +7,11 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from ainrf.auth.permissions import get_current_user, is_admin, require_admin
 from ainrf.api.schemas import (
-    EnvironmentCodeServerInstallResponse,
     EnvironmentCreateRequest,
     EnvironmentListResponse,
     EnvironmentResponse,
     EnvironmentUpdateRequest,
 )
-from ainrf.code_server_installer import CodeServerInstallError, install_code_server
 from ainrf.environments import (
     AliasConflictError,
     DeleteReferencedEnvironmentError,
@@ -61,8 +59,6 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail="Default localhost environment cannot be deleted",
         )
-    if isinstance(exc, CodeServerInstallError):
-        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     logger.exception("Unexpected environment error", exc_info=exc)
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -114,7 +110,6 @@ async def create_environment(
             preferred_env_manager=payload.preferred_env_manager,
             preferred_runtime_notes=payload.preferred_runtime_notes,
             task_harness_profile=payload.task_harness_profile,
-            code_server_path=payload.code_server_path,
         )
     except Exception as exc:  # pragma: no cover - defensive translation
         raise _translate_environment_error(exc) from exc
@@ -166,7 +161,6 @@ async def update_environment(
             preferred_env_manager=payload.preferred_env_manager,
             preferred_runtime_notes=payload.preferred_runtime_notes,
             task_harness_profile=payload.task_harness_profile,
-            code_server_path=payload.code_server_path,
         )
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
@@ -183,63 +177,6 @@ async def delete_environment(environment_id: str, request: Request) -> None:
     except Exception as exc:
         raise _translate_environment_error(exc) from exc
     return None
-
-
-@router.post(
-    "/{environment_id}/install-code-server", response_model=EnvironmentCodeServerInstallResponse
-)
-async def install_environment_code_server(
-    environment_id: str,
-    request: Request,
-) -> EnvironmentCodeServerInstallResponse:
-    user = get_current_user(request)
-    require_admin(user)
-    service = _get_environment_service(request)
-    app_user_id = user["id"]
-    terminal_session_manager = getattr(request.app.state, "terminal_session_manager", None)
-    terminal_attachment_broker = getattr(request.app.state, "terminal_attachment_broker", None)
-    try:
-        logger.info(
-            "code_server_install_requested",
-            extra={"environment_id": environment_id, "has_app_user_id": app_user_id is not None},
-        )
-        result = await install_code_server(
-            environment_id,
-            environment_service=service,
-            app_user_id=app_user_id,
-            terminal_session_manager=terminal_session_manager,
-            terminal_attachment_broker=terminal_attachment_broker,
-            api_base_url=str(request.base_url),
-        )
-        logger.info(
-            "code_server_install_succeeded",
-            extra={
-                "environment_id": environment_id,
-                "execution_mode": result.execution_mode,
-                "already_installed": result.already_installed,
-                "code_server_path": result.code_server_path,
-            },
-        )
-    except Exception as exc:
-        logger.exception(
-            "code_server_install_failed",
-            extra={"environment_id": environment_id, "has_app_user_id": app_user_id is not None},
-        )
-        raise _translate_environment_error(exc) from exc
-    return EnvironmentCodeServerInstallResponse(
-        environment=_serialize_environment(service, environment_id),
-        installed=not result.already_installed,
-        version=result.version,
-        install_dir=result.install_dir,
-        code_server_path=result.code_server_path,
-        execution_mode=result.execution_mode,
-        already_installed=result.already_installed,
-        detail=result.detail,
-        terminal_session_id=result.terminal_session_id,
-        terminal_attachment_id=result.terminal_attachment_id,
-        terminal_ws_url=result.terminal_ws_url,
-        terminal_attachment_expires_at=result.terminal_attachment_expires_at,
-    )
 
 
 @router.post("/{environment_id}/detect", response_model=EnvironmentResponse)

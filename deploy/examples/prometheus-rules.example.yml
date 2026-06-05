@@ -1,0 +1,84 @@
+# AINRF Prometheus Alerting Rules (Example)
+# Copy to /etc/prometheus/rules/ainrf.yml and adjust thresholds.
+# These are starting points — tune based on your traffic patterns.
+
+groups:
+  # --- Authentication alerts ---
+  - name: ainrf_auth
+    rules:
+      - alert: AINRFHighLoginFailureRate
+        expr: rate(ainrf_auth_login_failed_total[5m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High login failure rate on AINRF"
+          description: >-
+            {{ $value }} login failures per second over the last 5 minutes.
+            Possible brute-force attack. Check audit logs for details.
+
+      - alert: AINRFAccountLockouts
+        expr: rate(ainrf_auth_login_failed_total{reason="account_locked"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: "Account lockouts occurring on AINRF"
+          description: >-
+            {{ $value }} account lockout events per second. Users are being
+            locked out due to repeated failed login attempts.
+
+  # --- Terminal alerts ---
+  - name: ainrf_terminal
+    rules:
+      - alert: AINRFTerminalExecDenials
+        expr: rate(ainrf_terminal_exec_denied_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Terminal exec commands being denied"
+          description: >-
+            {{ $value }} exec denials per second. May indicate unauthorized
+            command attempts or policy violations.
+
+  # --- File security alerts ---
+  - name: ainrf_security
+    rules:
+      - alert: AINRFSensitiveFileAccess
+        expr: rate(ainrf_files_sensitive_path_access_total[5m]) > 0.5
+        for: 1m
+        labels:
+          severity: high
+        annotations:
+          summary: "Sensitive file access detected on AINRF"
+          description: >-
+            {{ $value }} sensitive file access attempts per second. Check
+            audit logs for which paths and users are involved.
+
+  # --- System alerts ---
+  - name: ainrf_system
+    rules:
+      - alert: AINRFHighRequestRate
+        expr: rate(ainrf_http_requests_total[1m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP request rate on AINRF"
+          description: >-
+            {{ $value }} requests per second. May indicate abuse or
+            misconfigured clients.
+
+      - alert: AINRFHighErrorRate
+        expr: >-
+          rate(ainrf_http_requests_total{status=~"5.."}[5m])
+          / rate(ainrf_http_requests_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on AINRF"
+          description: >-
+            {{ $value | humanizePercentage }} of requests returning 5xx errors.
+            Check backend logs for stack traces.

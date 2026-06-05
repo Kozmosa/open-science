@@ -162,7 +162,6 @@ class InMemoryEnvironmentService:
         preferred_env_manager: str | None = None,
         preferred_runtime_notes: str | None = None,
         task_harness_profile: str | None = None,
-        code_server_path: str | None = None,
     ) -> EnvironmentRegistryEntry:
         self._ensure_alias_available(alias)
         now = utc_now()
@@ -186,7 +185,6 @@ class InMemoryEnvironmentService:
             preferred_env_manager=preferred_env_manager,
             preferred_runtime_notes=preferred_runtime_notes,
             task_harness_profile=task_harness_profile,
-            code_server_path=code_server_path,
             created_at=now,
             updated_at=now,
         )
@@ -214,7 +212,6 @@ class InMemoryEnvironmentService:
         preferred_env_manager: str | None = None,
         preferred_runtime_notes: str | None = None,
         task_harness_profile: str | None = None,
-        code_server_path: str | None = None,
     ) -> EnvironmentRegistryEntry:
         environment = self.get_environment(environment_id)
         if alias is not None and alias != environment.alias:
@@ -252,8 +249,6 @@ class InMemoryEnvironmentService:
             environment.preferred_runtime_notes = preferred_runtime_notes
         if task_harness_profile is not None:
             environment.task_harness_profile = task_harness_profile
-        if code_server_path is not None:
-            environment.code_server_path = code_server_path
         environment.updated_at = utc_now()
         return environment
 
@@ -346,14 +341,6 @@ class InMemoryEnvironmentService:
             env_manager = _detected_env_manager(snapshot.uv, snapshot.pixi, snapshot.conda)
             if env_manager is not None:
                 environment.preferred_env_manager = env_manager
-                updated = True
-
-        if snapshot.codex.available and snapshot.codex.path is not None:
-            if (
-                not environment.code_server_path
-                or environment.code_server_path != snapshot.codex.path
-            ):
-                environment.code_server_path = snapshot.codex.path
                 updated = True
 
         if updated:

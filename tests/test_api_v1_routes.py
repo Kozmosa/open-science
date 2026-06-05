@@ -85,8 +85,6 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
     assert "/v1/terminal/session" in payload["paths"]
     assert "/v1/terminal/session-pairs" in payload["paths"]
     assert "/v1/terminal/session/reset" in payload["paths"]
-    assert "/code/session" in payload["paths"]
-    assert "/v1/code/session" in payload["paths"]
     assert "/tasks" in payload["paths"]
     assert "/tasks/{task_id}" in payload["paths"]
     assert "/tasks/{task_id}/output" in payload["paths"]
@@ -154,43 +152,6 @@ async def test_project_task_edges_require_existing_project(tmp_path: Path) -> No
 
 
 @pytest.mark.anyio
-async def test_lifespan_attaches_environment_aware_code_server_manager(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        "ainrf.api.app.check_runtime_readiness",
-        lambda code_server_path=None: type(
-            "FakeReadiness",
-            (),
-            {
-                "as_public_payload": lambda self: {
-                    "ready": True,
-                    "dependencies": {
-                        "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
-                        "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
-                        "code_server": {
-                            "available": True,
-                            "path": "/usr/bin/code-server",
-                            "detail": None,
-                        },
-                    },
-                }
-            },
-        )(),
-    )
-    app = create_app(
-        ApiConfig(
-            api_key_hashes=frozenset({hash_api_key("secret-key")}),
-            state_root=tmp_path,
-        )
-    )
-    async with app.router.lifespan_context(app):
-        manager = app.state.code_server_manager
-        assert manager is app.state.code_server_supervisor
-        assert manager.base_url is None
-
-
-@pytest.mark.anyio
 async def test_lifespan_records_startup_runtime_readiness(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -202,7 +163,7 @@ async def test_lifespan_records_startup_runtime_readiness(
     )
     monkeypatch.setattr(
         "ainrf.api.app.check_runtime_readiness",
-        lambda code_server_path=None: type(
+        lambda: type(
             "FakeReadiness",
             (),
             {
@@ -211,11 +172,6 @@ async def test_lifespan_records_startup_runtime_readiness(
                     "dependencies": {
                         "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
                         "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
-                        "code_server": {
-                            "available": True,
-                            "path": "/usr/bin/code-server",
-                            "detail": None,
-                        },
                     },
                 }
             },
@@ -224,52 +180,6 @@ async def test_lifespan_records_startup_runtime_readiness(
 
     async with app.router.lifespan_context(app):
         assert app.state.runtime_readiness["ready"] is True
-        assert app.state.runtime_readiness["dependencies"]["code_server"] == {
-            "available": True,
-            "path": "/usr/bin/code-server",
-            "detail": None,
-        }
-
-
-@pytest.mark.anyio
-async def test_lifespan_records_readiness_even_when_code_server_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    app = create_app(
-        ApiConfig(
-            api_key_hashes=frozenset({hash_api_key("secret-key")}),
-            state_root=tmp_path,
-        )
-    )
-    monkeypatch.setattr(
-        "ainrf.api.app.check_runtime_readiness",
-        lambda code_server_path=None: type(
-            "FakeReadiness",
-            (),
-            {
-                "as_public_payload": lambda self: {
-                    "ready": False,
-                    "dependencies": {
-                        "tmux": {"available": True, "path": "/usr/bin/tmux", "detail": None},
-                        "uv": {"available": True, "path": "/usr/bin/uv", "detail": None},
-                        "code_server": {
-                            "available": False,
-                            "path": None,
-                            "detail": "Install code-server.",
-                        },
-                    },
-                }
-            },
-        )(),
-    )
-
-    async with app.router.lifespan_context(app):
-        assert app.state.runtime_readiness["ready"] is False
-        assert app.state.runtime_readiness["dependencies"]["code_server"] == {
-            "available": False,
-            "path": None,
-            "detail": "Install code-server.",
-        }
 
 
 @pytest.mark.anyio
@@ -288,7 +198,7 @@ async def test_health_uses_startup_runtime_readiness_snapshot(
     }
     monkeypatch.setattr(
         "ainrf.api.routes.health.check_runtime_readiness",
-        lambda code_server_path=None: pytest.fail("health should reuse startup readiness snapshot"),
+        lambda: pytest.fail("health should reuse startup readiness snapshot"),
     )
 
     async with httpx.AsyncClient(

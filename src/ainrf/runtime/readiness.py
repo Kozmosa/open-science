@@ -4,8 +4,6 @@ import shutil
 from dataclasses import dataclass
 from typing import TypedDict
 
-from ainrf.code_server_binary import resolve_local_code_server_binary
-
 
 class DependencyStatusPayload(TypedDict):
     available: bool
@@ -30,11 +28,10 @@ class DependencyStatus:
 class RuntimeReadiness:
     tmux: DependencyStatus
     uv: DependencyStatus
-    code_server: DependencyStatus
 
     @property
     def ready(self) -> bool:
-        return self.tmux.available and self.uv.available and self.code_server.available
+        return self.tmux.available and self.uv.available
 
     def as_public_payload(self) -> RuntimeReadinessPayload:
         return {
@@ -42,18 +39,16 @@ class RuntimeReadiness:
             "dependencies": {
                 "tmux": _dependency_payload(self.tmux),
                 "uv": _dependency_payload(self.uv),
-                "code_server": _dependency_payload(self.code_server),
             },
         }
 
 
-def check_runtime_readiness(code_server_path: str | None = None) -> RuntimeReadiness:
+def check_runtime_readiness() -> RuntimeReadiness:
     return RuntimeReadiness(
         tmux=_check_binary(
             "tmux", "Install tmux to use localhost terminals and workspace browser."
         ),
         uv=_check_binary("uv", "Install uv to run repository-local Python commands."),
-        code_server=_check_code_server(code_server_path),
     )
 
 
@@ -64,16 +59,6 @@ def _check_binary(name: str, missing_detail: str) -> DependencyStatus:
         available=path is not None,
         path=path,
         detail=None if path is not None else missing_detail,
-    )
-
-
-def _check_code_server(code_server_path: str | None) -> DependencyStatus:
-    resolution = resolve_local_code_server_binary(code_server_path)
-    return DependencyStatus(
-        name="code_server",
-        available=resolution.available,
-        path=resolution.path,
-        detail=resolution.detail,
     )
 
 

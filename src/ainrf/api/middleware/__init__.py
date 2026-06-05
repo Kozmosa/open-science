@@ -50,14 +50,31 @@ def _parse_cidrs(raw: tuple[str, ...]) -> list[ipaddress.IPv4Network | ipaddress
     return networks
 
 
-def _client_ip(request: Request) -> str:
+def _client_ip(
+    request: Request,
+    trusted_cidrs: tuple[str, ...] | None = None,
+) -> str:
     """Extract client IP, respecting X-Forwarded-For from a trusted reverse proxy."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "0.0.0.0"
+    direct_ip = request.client.host if request.client else "0.0.0.0"
+    if trusted_cidrs:
+        networks = _parse_cidrs(trusted_cidrs)
+        try:
+            addr = ipaddress.ip_address(direct_ip)
+            if any(
+                net.supernet_of(
+                    ipaddress.ip_network(f"{addr}/128" if addr.version == 6 else f"{addr}/32")
+                )
+                for net in networks
+            ):
+                forwarded = request.headers.get("x-forwarded-for")
+                if forwarded:
+                    return forwarded.split(",")[0].strip()
+        except ValueError:
+            pass
+    elif request.headers.get("x-forwarded-for"):
+        # No trusted CIDRs configured — legacy behavior for dev
+        return request.headers["x-forwarded-for"].split(",")[0].strip()
+    return direct_ip
 
 
 def build_ip_allowlist_middleware(

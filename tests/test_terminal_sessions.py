@@ -644,7 +644,7 @@ def test_tmux_adapter_capture_pane_joins_wrapped_lines(
         binding,
         environment,
         "p-abc123def4",
-        command="install-code-server",
+        command="run-setup-script",
     )
 
     assert (

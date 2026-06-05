@@ -9,7 +9,6 @@ import type { ChangePasswordRequest,
   AuthTokenResponse,
   LoginRequest,
   RegisterRequest,
-  CodeServerStatus,
   CodexDefaults,
   CollaboratorItem,
   CollaboratorListResponse,
@@ -17,13 +16,13 @@ import type { ChangePasswordRequest,
   EnvAccessItem,
   EnvAccessListResponse,
   EnvAccessRequest,
-  EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
   EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
+  FileUploadResponse,
   LiteratureSubscription,
   LiteraturePaper,
   ProjectCostSummary,
@@ -76,7 +75,6 @@ import {
   mockArchiveTask,
   mockCancelTask,
   mockDeleteTask,
-  mockCreateCodeServerSession,
   mockCreateEnvironment,
   mockCreateProject,
   mockCreateProjectEnvironmentReference,
@@ -84,7 +82,6 @@ import {
   mockCreateTask,
   mockCreateTerminalSession,
   mockCreateWorkspace,
-  mockDeleteCodeServerSession,
   mockDeleteEnvironment,
   mockDeleteProject,
   mockDeleteProjectEnvironmentReference,
@@ -92,7 +89,6 @@ import {
   mockDeleteTerminalSession,
   mockDeleteWorkspace,
   mockDetectEnvironment,
-  mockGetCodeServerStatus,
   mockGetEnvironment,
   mockGetEnvironments,
   mockGetHealth,
@@ -112,7 +108,6 @@ import {
   mockGetSkillDetail,
   mockGetSkills,
   mockImportSkill,
-  mockInstallEnvironmentCodeServer,
   mockPreviewSkillSettings,
   mockListFiles,
   mockReadFile,
@@ -363,20 +358,6 @@ export const sendTaskPrompt = (taskId: string, prompt: string): Promise<{ task_i
 export const getTaskMessages = (taskId: string, afterSeq: number = 0, limit: number = 100): Promise<TaskMessagesResponse> =>
   api.get<TaskMessagesResponse>(`/tasks/${taskId}/messages?after_seq=${afterSeq}&limit=${limit}`);
 
-export const getCodeServerStatus = (environmentId?: string): Promise<CodeServerStatus> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetCodeServerStatus(environmentId))
-    : api.get<CodeServerStatus>(withEnvironmentId('/code/status', environmentId));
-
-export const createCodeServerSession = (environmentId: string): Promise<CodeServerStatus> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateCodeServerSession(environmentId))
-    : api.post<CodeServerStatus>('/code/session', { environment_id: environmentId });
-
-export const deleteCodeServerSession = (): Promise<CodeServerStatus> =>
-  USE_MOCK
-    ? Promise.resolve(mockDeleteCodeServerSession())
-    : api.delete<CodeServerStatus>('/code/session');
 
 export const getEnvironments = (): Promise<EnvironmentListResponse> =>
   USE_MOCK ? Promise.resolve(mockGetEnvironments()) : api.get<EnvironmentListResponse>('/environments');
@@ -411,15 +392,6 @@ export const detectEnvironment = (environmentId: string): Promise<EnvironmentRec
     ? Promise.resolve(mockDetectEnvironment(environmentId))
     : api.post<EnvironmentRecord>(`/environments/${environmentId}/detect`, {});
 
-export const installEnvironmentCodeServer = (
-  environmentId: string
-): Promise<EnvironmentCodeServerInstallResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockInstallEnvironmentCodeServer(environmentId))
-    : api.post<EnvironmentCodeServerInstallResponse>(
-        `/environments/${environmentId}/install-code-server`,
-        {}
-      );
 
 export const getProjects = (): Promise<ProjectListResponse> =>
   USE_MOCK ? Promise.resolve(mockGetProjects()) : api.get<ProjectListResponse>('/projects');
@@ -507,6 +479,24 @@ export const buildFileStreamUrl = (
   `/api/files/stream?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
     workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
   }`;
+export const uploadFile = (params: {
+  environmentId: string;
+  path: string;
+  workspaceId?: string;
+  file: File;
+}): Promise<FileUploadResponse> => {
+  if (USE_MOCK) {
+    return Promise.resolve({ path: params.path, size: params.file.size });
+  }
+  const formData = new FormData();
+  formData.append('environment_id', params.environmentId);
+  formData.append('path', params.path);
+  if (params.workspaceId) {
+    formData.append('workspace_id', params.workspaceId);
+  }
+  formData.append('file', params.file);
+  return api.post<FileUploadResponse>('/files/upload', formData);
+};
 
 export const getResources = (): Promise<ResourcesResponse> =>
   USE_MOCK ? Promise.resolve(mockGetResources()) : api.get<ResourcesResponse>('/resources');

@@ -1,0 +1,7 @@
+# AINRF Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ainrf
+  labels:
+    app.kubernetes.io/name: ainrf

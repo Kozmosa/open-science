@@ -1,0 +1,50 @@
+# ── AINRF Docker production ignore ─────────────────────────────
+# Keep image lean — only copy what the build and runtime need.
+# ──────────────────────────────────────────────────────────────
+
+# Version control
+.git
+.gitignore
+
+# Worktrees and agent scratch
+.worktrees
+.claude
+
+# Python
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+
+# Node
+frontend/node_modules
+frontend/.vitest
+frontend/test-results
+frontend/coverage
+
+# Generated artifacts
+site/
+.cache/
+.ainrf/
+*.sqlite
+*.db
+
+# Docs (not needed in image)
+docs/
+ref-repos/
+
+# Deploy configs (mounted, not baked in)
+deploy/examples/
+deploy/*.sh
+deploy/*.sh.template
+deploy/*.service
+
+# Misc
+*.md
+!frontend/README.md
+.editorconfig
+.pre-commit-config.yaml
+uv.lock
+mkdocs-ainrf.yml
+scripts/perf/

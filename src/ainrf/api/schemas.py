@@ -236,27 +236,9 @@ class EnvironmentResponse(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
-    code_server_path: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     latest_detection: EnvironmentDetectionResponse | None = None
-
-
-class EnvironmentCodeServerInstallResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    environment: EnvironmentResponse
-    installed: bool
-    version: str
-    install_dir: str
-    code_server_path: str
-    execution_mode: str
-    already_installed: bool
-    detail: str
-    terminal_session_id: str | None = None
-    terminal_attachment_id: str | None = None
-    terminal_ws_url: str | None = None
-    terminal_attachment_expires_at: str | None = None
 
 
 class EnvironmentListResponse(BaseModel):
@@ -303,7 +285,6 @@ class EnvironmentCreateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
-    code_server_path: str | None = None
 
 
 class EnvironmentUpdateRequest(BaseModel):
@@ -326,7 +307,6 @@ class EnvironmentUpdateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
-    code_server_path: str | None = None
 
 
 class ProjectEnvironmentReferenceCreateRequest(BaseModel):

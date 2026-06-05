@@ -1,15 +1,22 @@
-# ── AINRF Production Deployment (Docker Compose) ─────────────────
+# ══════════════════════════════════════════════════════════════════
+# AINRF Production Deployment — Docker Compose
+# ══════════════════════════════════════════════════════════════════
 #
 # Usage:
-#   1. Copy this file and .env.example to your deploy directory
-#   2. Edit .env with your secrets
+#   1. Copy .env.example → .env, fill in secrets
+#   2. Place TLS cert + key in ./tls/cert.pem, ./tls/key.pem
+#      (or use deploy/tls/generate-self-signed.sh for lab)
 #   3. docker compose up -d
 #
-# The Nginx container handles TLS termination, IP allowlisting,
-# static file serving, and WebSocket proxying.
-# ────────────────────────────────────────────────────────────────
+# Architecture:
+#   nginx (TLS + static files + reverse proxy)
+#     → ainrf (FastAPI backend, port 8000, not exposed)
+#
+# All persistent data lives in the ainrf-state named volume.
+# ══════════════════════════════════════════════════════════════════
 
 services:
+  # ── AINRF Backend ──────────────────────────────────────────────
   ainrf:
     build:
       context: ..
@@ -17,33 +24,42 @@ services:
     restart: unless-stopped
     environment:
       AINRF_PRODUCTION: "1"
-      AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?Set AINRF_JWT_SECRET in .env}
-      AINRF_ALLOWED_CIDRS: "127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-      AINRF_MAX_CONCURRENT_REQUESTS: "50"
+      AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
+      AINRF_ALLOWED_CIDRS: "0.0.0.0/0"
+      AINRF_TRUSTED_PROXY_CIDRS: "172.16.0.0/12"
+      AINRF_PUBLIC_REGISTRATION_ENABLED: ${AINRF_PUBLIC_REGISTRATION_ENABLED:-false}
       AINRF_LOGIN_MAX_FAILURES: "10"
       AINRF_LOGIN_LOCKOUT_HOURS: "24"
+      AINRF_MAX_CONCURRENT_REQUESTS: "100"
+      AINRF_METRICS_ENABLED: "true"
     volumes:
       - ainrf-state:/opt/ainrf/state
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 10s
     deploy:
       resources:
         limits:
           memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
+  # ── Nginx Reverse Proxy ───────────────────────────────────────
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "443:443"
-      - "80:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTP_PORT:-80}:80"
     volumes:
       - ../deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
       - ./tls:/etc/nginx/tls:ro
@@ -51,6 +67,16 @@ services:
     depends_on:
       ainrf:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   ainrf-state:

@@ -1,8 +1,6 @@
 import type {
   AnthropicEnvStatus,
   AttemptListResponse,
-  CodeServerStatus,
-  EnvironmentCodeServerInstallResponse,
   EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
@@ -74,11 +72,6 @@ const mockHealth: SystemHealth = {
     dependencies: {
       tmux: { available: true, path: '/usr/bin/tmux', detail: null },
       uv: { available: true, path: '/usr/bin/uv', detail: null },
-      code_server: {
-        available: false,
-        path: null,
-        detail: 'Install code-server from Settings before using the workspace browser.',
-      },
     },
   },
   detail: null,
@@ -99,7 +92,6 @@ let mockTerminalSessions: Record<string, TerminalSession> = {};
 let mockTasks: Record<string, TaskRecord> = {};
 let mockTaskOutputs: Record<string, TaskOutputEvent[]> = {};
 let mockEdges: Record<string, TaskEdge[]> = {};
-let mockCodeServerStatus: CodeServerStatus = createUnavailableCodeServerStatus();
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -128,7 +120,6 @@ function createSeedEnvironment(): EnvironmentRecord {
     preferred_runtime_notes: null,
     task_harness_profile:
       'You are running in the default localhost task harness environment. Prefer repository-local tools.',
-    code_server_path: null,
     created_at: timestamp,
     updated_at: timestamp,
     latest_detection: null,
@@ -391,21 +382,7 @@ function createMockRunningTerminalSession(
   };
 }
 
-function createUnavailableCodeServerStatus(
-  environmentId: string | null = null,
-  environmentAlias: string | null = null,
-  workspaceDir: string | null = null,
-  detail: string | null = 'code-server session not started'
-): CodeServerStatus {
-  return {
-    status: 'unavailable',
-    environment_id: environmentId,
-    environment_alias: environmentAlias,
-    workspace_dir: workspaceDir,
-    detail,
-    managed: true,
-  };
-}
+
 
 function createToolStatus(
   available: boolean,
@@ -440,7 +417,6 @@ function createMockEnvironment(
     preferred_env_manager: payload.preferred_env_manager ?? existing?.preferred_env_manager ?? null,
     preferred_runtime_notes: payload.preferred_runtime_notes ?? existing?.preferred_runtime_notes ?? null,
     task_harness_profile: payload.task_harness_profile ?? existing?.task_harness_profile ?? null,
-    code_server_path: payload.code_server_path ?? existing?.code_server_path ?? null,
     is_seed: existing?.is_seed ?? false,
     created_at: existing?.created_at ?? timestamp,
     updated_at: timestamp,
@@ -897,46 +873,8 @@ export function mockCancelTask(taskId: string): TaskSummary {
   return cloneTaskSummary(mockTasks[taskId]);
 }
 
-export function mockGetCodeServerStatus(environmentId?: string): CodeServerStatus {
-  if (!environmentId) {
-    return { ...mockCodeServerStatus };
-  }
-  if (mockCodeServerStatus.environment_id === environmentId) {
-    return { ...mockCodeServerStatus };
-  }
-  const environment = findEnvironment(environmentId);
-  return createUnavailableCodeServerStatus(
-    environment.id,
-    environment.alias,
-    buildEffectiveWorkdir(environmentId)
-  );
-}
 
-export function mockCreateCodeServerSession(environmentId: string): CodeServerStatus {
-  const environment = findEnvironment(environmentId);
-  if (environment.auth_kind === 'password') {
-    throw new Error('Workspace does not support password-auth environments');
-  }
-  mockCodeServerStatus = {
-    status: 'ready',
-    environment_id: environment.id,
-    environment_alias: environment.alias,
-    workspace_dir: buildEffectiveWorkdir(environmentId),
-    detail: null,
-    managed: true,
-  };
-  return { ...mockCodeServerStatus };
-}
 
-export function mockDeleteCodeServerSession(): CodeServerStatus {
-  mockCodeServerStatus = createUnavailableCodeServerStatus(
-    mockCodeServerStatus.environment_id,
-    mockCodeServerStatus.environment_alias,
-    mockCodeServerStatus.workspace_dir,
-    'code-server stopped'
-  );
-  return { ...mockCodeServerStatus };
-}
 
 export function mockGetEnvironments(): EnvironmentListResponse {
   return {
@@ -991,33 +929,6 @@ export function mockDetectEnvironment(environmentId: string): EnvironmentRecord 
   return cloneEnvironment(updated);
 }
 
-export function mockInstallEnvironmentCodeServer(
-  environmentId: string
-): EnvironmentCodeServerInstallResponse {
-  const current = findEnvironment(environmentId);
-  const version = '4.117.0';
-  const installDir = `~/.local/ainrf/code-server/code-server-${version}-linux-amd64`;
-  const codeServerPath = `${installDir}/bin/code-server`;
-  const alreadyInstalled = current.code_server_path === codeServerPath;
-  const updated: EnvironmentRecord = {
-    ...current,
-    code_server_path: codeServerPath,
-    updated_at: nowIso(),
-  };
-  mockEnvironments = mockEnvironments.map((environment) =>
-    environment.id === environmentId ? updated : environment
-  );
-  return {
-    environment: cloneEnvironment(updated),
-    installed: !alreadyInstalled,
-    version,
-    install_dir: installDir,
-    code_server_path: codeServerPath,
-    execution_mode: 'ssh',
-    already_installed: alreadyInstalled,
-    detail: alreadyInstalled ? 'code-server already installed' : 'code-server installed',
-  };
-}
 
 export function mockGetProjectEnvironmentReferences(
   projectId: string = DEFAULT_PROJECT_ID
@@ -1109,7 +1020,6 @@ export function resetMockEnvironmentState(): EnvironmentListResponse {
   mockTerminalSessions = {};
   mockTasks = {};
   mockTaskOutputs = {};
-  mockCodeServerStatus = createUnavailableCodeServerStatus();
   return mockGetEnvironments();
 }
 

@@ -1,0 +1,30 @@
+# ── AINRF Persistent Volumes ─────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ainrf-state
+  namespace: ainrf
+  labels:
+    app.kubernetes.io/name: ainrf
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: standard  # Uncomment and set to your storage class
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ainrf-workspaces
+  namespace: ainrf
+  labels:
+    app.kubernetes.io/name: ainrf
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # storageClassName: standard

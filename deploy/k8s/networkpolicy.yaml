@@ -1,0 +1,29 @@
+# ── AINRF Network Policy ─────────────────────────────────────
+# Deny all ingress to ainrf pods except from the Ingress controller
+# and same-namespace traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ainrf-deny-external
+  namespace: ainrf
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ainrf
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from Ingress controller namespace (adjust label to match yours)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8000
+          protocol: TCP
+    # Allow same-namespace (health checks, etc.)
+    - from:
+        - podSelector: {}
+      ports:
+        - port: 8000
+          protocol: TCP

@@ -69,7 +69,7 @@
 | 本地/远程环境不透明 | Environment Control Plane 管理 SSH 目标、探测结果、默认环境与运行时画像 |
 | Agent 执行过程不可观察 | WebUI 提供任务列表、inspect 面板、输出时间线与错误摘要 |
 | 需要临时接管或观察终端 | Terminal Bench 提供持久 tmux 会话与浏览器终端连接 |
-| 代码工作区和运行时割裂 | Workspace Browser 通过托管 code-server 暴露项目工作区 |
+| 代码工作区和运行时割裂 | Workspace Browser 通过文件浏览 API 暴露项目工作区内容 |
 
 ---
 
@@ -94,7 +94,7 @@
 - 持久个人终端：通过 tmux session 保持长生命周期交互面。
 - 浏览器终端：本地环境直接连接，远程环境通过 SSH bridge 交互。
 - 任务观察与接管：支持 observe-only / takeover 等终端访问语义。
-- 工作区浏览器：按所选环境启动和管理 code-server workspace surface。
+- 工作区浏览器：浏览和管理项目工作区中的文件与目录。
 
 ### CLI / API / WebUI
 

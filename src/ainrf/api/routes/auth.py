@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ainrf.api.config import ApiConfig
 from ainrf.api.schemas import (
     ChangePasswordRequest,
     AccessTokenResponse,
@@ -28,6 +29,9 @@ def _get_service(request: Request) -> AuthService:
 @router.post("/register", status_code=201)
 async def register(payload: RegisterRequest, request: Request) -> dict:
     service = _get_service(request)
+    api_config: ApiConfig = request.app.state.api_config
+    if not api_config.public_registration_enabled:
+        raise HTTPException(status_code=403, detail="Public registration is disabled")
     try:
         service.register(
             username=payload.username,

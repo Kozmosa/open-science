@@ -1,0 +1,53 @@
+# ── AINRF Ingress (Nginx Ingress Controller) ──────────────────
+#
+# Adjust host, TLS secret, and annotations to match your cluster.
+# If you use a different ingress controller (Traefik, Kong, etc.),
+# adapt the annotations accordingly.
+# ──────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ainrf
+  namespace: ainrf
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+    nginx.ingress.kubernetes.io/websocket-services: "ainrf"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    # IP allowlist — restrict to your lab network
+    # nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ainrf.example.com  # Replace with your domain
+      secretName: ainrf-tls
+  rules:
+    - host: ainrf.example.com  # Replace with your domain
+      http:
+        paths:
+          # Frontend static files — served by ainrf container
+          - path: /assets
+            pathType: Prefix
+            backend:
+              service:
+                name: ainrf
+                port:
+                  number: 8000
+          # Block docs endpoints
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: ainrf
+                port:
+                  number: 8000
+          # All API routes
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ainrf
+                port:
+                  number: 8000

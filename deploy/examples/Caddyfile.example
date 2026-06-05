@@ -1,0 +1,60 @@
+# AINRF Caddy Reverse Proxy Configuration (Example)
+# Save as /etc/caddy/Caddyfile or include from your main Caddyfile.
+# Replace YOUR.DOMAIN with your actual domain.
+
+YOUR.DOMAIN {
+    # TLS — automatic via Let's Encrypt
+    # For internal-only: use tls internal
+
+    # Reverse proxy to AINRF backend
+    reverse_proxy localhost:8000 {
+        # WebSocket support
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+
+        # Timeout for long-running requests (SSE, terminal)
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+        }
+    }
+
+    # Static frontend files
+    handle_path /assets/* {
+        root * /var/lib/ainrf/frontend/dist/assets
+        file_server
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    # Block documentation endpoints in production
+    handle /docs* {
+        respond 403
+    }
+    handle /openapi.json {
+        respond 403
+    }
+    handle /redoc* {
+        respond 403
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    # Optional: restrict by IP (uncomment and set your networks)
+    # @blocked not remote_ip 10.0.0.0/8 172.16.0.0/12
+    # handle @blocked {
+    #     respond 403
+    # }
+
+    # Access logs in JSON format
+    log {
+        format json
+        output file /var/log/caddy/ainrf-access.log
+    }
+}

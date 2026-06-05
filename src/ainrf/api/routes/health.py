@@ -15,14 +15,12 @@ router = APIRouter()
 @router.get("/health", response_model=HealthResponse)
 async def health_check(request: Request) -> JSONResponse | HealthResponse:
     api_config = request.app.state.api_config
-    environment_service = request.app.state.environment_service
-    localhost = environment_service.get_environment("env-localhost")
     public_payload = api_config.as_public_health_payload()
     runtime_readiness = getattr(request.app.state, "runtime_readiness", None)
     if runtime_readiness is None:
         runtime_readiness = cast(
             dict[str, object],
-            check_runtime_readiness(localhost.code_server_path).as_public_payload(),
+            check_runtime_readiness().as_public_payload(),
         )
     container_config = api_config.container_config
     if container_config is None:

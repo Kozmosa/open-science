@@ -42,7 +42,7 @@ class TestProcessTreeFilter:
             RawProcess(
                 pid=501,
                 ppid=500,
-                name="code-server",
+                name="web-server",
                 cpu_percent=1.0,
                 memory_mb=50,
                 runtime_seconds=30,
@@ -118,7 +118,7 @@ class TestProcessTreeFilter:
             RawProcess(
                 pid=300,
                 ppid=1,
-                name="code-server",
+                name="web-server",
                 cpu_percent=10.0,
                 memory_mb=500,
                 runtime_seconds=120,

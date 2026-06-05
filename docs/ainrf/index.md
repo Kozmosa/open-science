@@ -26,6 +26,9 @@ source_repo: scholar-agent
 | 资源监控 | GPU/CPU/内存、进程树、环境检测 | [[resources]] |
 | 设置面板 | 通用设置、Admin 用户管理、环境授权 | [[settings]] |
 | 开发命令 | 测试、构建、lint、性能审计 | [[development]] |
+| 生产部署 | 裸机/Docker 部署、安全加固、监控 | [[deployment]] |
+| 安全架构 | 三层防护、审计事件、敏感路径检测 | [[production-security]] |
+| 可观测性 | 审计日志、Prometheus 指标、request_id 关联 | [[observability]] |
 
 ## 关联笔记
 
