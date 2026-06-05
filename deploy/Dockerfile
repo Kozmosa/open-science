@@ -60,11 +60,11 @@ VOLUME /opt/ainrf/state
 
 # Non-root user
 RUN groupadd --gid 1000 ainrf && \
-    useradd --uid 1000 --gid ainrf --no-create-home --shell /usr/sbin/nologin ainrf && \
+    useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
+    mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces && \
     chown -R ainrf:ainrf /opt/ainrf
+ENV HOME=/opt/ainrf
 USER ainrf
-
-EXPOSE 8000
 
 ENV AINRF_PRODUCTION=1
 ENV AINRF_HOST=0.0.0.0

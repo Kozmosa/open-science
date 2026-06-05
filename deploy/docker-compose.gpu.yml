@@ -36,6 +36,7 @@ services:
     ports:
       - "8192:8000"
     environment:
+      HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       # ── 必填：替换为你的密钥 ─────────────────────────────
       AINRF_JWT_SECRET: "<CHANGE_ME_jwt_secret>"

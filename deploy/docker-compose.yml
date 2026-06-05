@@ -23,6 +23,7 @@ services:
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     environment:
+      HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?Set AINRF_JWT_SECRET in .env}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
