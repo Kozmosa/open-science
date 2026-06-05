@@ -1,0 +1,76 @@
+# ══════════════════════════════════════════════════════════════════
+# AINRF GPU Lab — Docker Compose
+# ══════════════════════════════════════════════════════════════════
+#
+# 适用于：无 root 权限、有 Docker 权限、需要 GPU 透传的实验室机器。
+#
+# 使用方法：
+#   1. 生成密钥
+#      python3 -c "import secrets; print(secrets.token_urlsafe(48))"  # → JWT_SECRET
+#      python3 -c "import secrets; print(secrets.token_urlsafe(32))"  # → API_KEY
+#      python3 -c "from hashlib import sha256; print(sha256(b'你的API_KEY').hexdigest())"  # → API_KEY_HASHES
+#
+#   2. 编辑本文件，把 <CHANGE_ME> 替换为上面生成的值
+#
+#   3. 构建并启动
+#      docker compose -f docker-compose.gpu.yml up -d --build
+#
+#   4. 查看日志
+#      docker compose -f docker-compose.gpu.yml logs -f ainrf
+#
+#   5. 首次启动后获取 admin 密码
+#      docker compose -f docker-compose.gpu.yml exec ainrf cat /opt/ainrf/state/admin_initial_password.txt
+#
+#   6. 访问
+#      http://<宿主机IP>:8192/
+#
+# ══════════════════════════════════════════════════════════════════
+
+services:
+  ainrf:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    container_name: ainrf
+    ports:
+      - "8192:8000"
+    environment:
+      AINRF_PRODUCTION: "1"
+      # ── 必填：替换为你的密钥 ─────────────────────────────
+      AINRF_JWT_SECRET: "<CHANGE_ME_jwt_secret>"
+      AINRF_API_KEY_HASHES: "<CHANGE_ME_api_key_sha256_hash>"
+      # ── 安全 ────────────────────────────────────────────
+      AINRF_PUBLIC_REGISTRATION_ENABLED: "false"
+      AINRF_LOGIN_MAX_FAILURES: "10"
+      AINRF_LOGIN_LOCKOUT_HOURS: "24"
+      AINRF_MAX_CONCURRENT_REQUESTS: "100"
+      AINRF_METRICS_ENABLED: "true"
+    volumes:
+      - ainrf-state:/opt/ainrf/state
+      - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+    # ── GPU 全透传 ────────────────────────────────────────
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  ainrf-state:
+  ainrf-workspaces:
