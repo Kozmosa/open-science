@@ -31,6 +31,7 @@ COPY --from=ghcr.1ms.run/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /build
 COPY pyproject.toml ./
+COPY README.md ./
 COPY src/ainrf/ src/ainrf/
 RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
