@@ -194,6 +194,28 @@ docker compose -f docker-compose.gpu.yml up -d --build   # 更新代码后重建
 > GPU 透传要求宿主机已安装 NVIDIA 驱动和 [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)。
 > 可用 `docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi` 验证。
 
+## 方式二 C：CPU-only 容器（无 GPU 透传）
+
+适用于：不需要 GPU、宿主机未装 NVIDIA 驱动或 nvidia-container-toolkit 的服务器。
+使用 `docker-compose.cpu.yml`，与 GPU 版相同但无 GPU 设备透传。
+
+密钥生成步骤与 GPU 版相同（见上方），然后：
+
+```bash
+cd deploy
+# 编辑密钥
+vim docker-compose.cpu.yml
+# 构建并启动
+docker compose -f docker-compose.cpu.yml up -d --build
+# 获取 admin 密码
+docker compose -f docker-compose.cpu.yml exec ainrf \
+  cat /opt/ainrf/state/admin_initial_password.txt
+# 查看日志
+docker compose -f docker-compose.cpu.yml logs -f ainrf
+```
+
+访问 `http://<机器IP>:8192/`。
+
 ## 方式三：Kubernetes 部署
 
 适用于生产集群环境。所有 manifest 在 `deploy/k8s/` 下。
