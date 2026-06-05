@@ -20,7 +20,7 @@ FROM docker.1ms.run/node:20-slim AS frontend-build
 
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm config set registry https://registry.npmmirror.com && npm ci --ignore-scripts
 COPY frontend/ ./
 RUN npm run build
 
@@ -28,6 +28,9 @@ RUN npm run build
 FROM docker.1ms.run/python:3.13-slim AS backend-build
 
 COPY --from=ghcr.1ms.run/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+ENV UV_INDEX_URL=https://mirrors.ustc.edu.cn/pypi/web/simple
+ENV PIP_INDEX_URL=https://mirrors.ustc.edu.cn/pypi/web/simple
 
 WORKDIR /build
 COPY pyproject.toml ./
@@ -39,7 +42,8 @@ RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 FROM docker.1ms.run/python:3.13-slim AS runtime
 
 # Runtime dependencies only (no Node, no uv, no git)
-RUN apt-get update && \
+RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         tmux && \
     rm -rf /var/lib/apt/lists/*
