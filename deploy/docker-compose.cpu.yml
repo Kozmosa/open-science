@@ -50,8 +50,9 @@ services:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
     deploy:
-      limits:
-        memory: 8G
+      resources:
+        limits:
+          memory: 8G
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
