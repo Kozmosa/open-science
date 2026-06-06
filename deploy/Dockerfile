@@ -5,7 +5,7 @@
 # Stages:
 #   frontend-build  — build React app with Node
 #   backend-build   — install Python package with uv
-#   agent-tools     — install Codex CLI via npm + download Claude Code binary
+#   agent-tools     — download Claude Code binary + install Codex CLI
 #   runtime         — minimal production image
 #
 # Build:
@@ -13,6 +13,14 @@
 #
 # Run:
 #   docker run -e AINRF_JWT_SECRET=... -e AINRF_API_KEY_HASHES=... ainrf:latest
+#
+# Agent tool config (set via environment):
+#   CLAUDE_API_KEY     — Anthropic API key
+#   CLAUDE_BASE_URL    — Anthropic API base URL
+#   CLAUDE_MODEL       — default model (e.g. claude-sonnet-4-6)
+#   CODEX_API_KEY      — OpenAI API key
+#   CODEX_BASE_URL     — OpenAI API base URL
+#   CODEX_MODEL        — default model (e.g. gpt-5.5)
 #
 # ══════════════════════════════════════════════════════════════════
 
@@ -45,7 +53,6 @@ RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 FROM docker.1ms.run/node:24-slim AS agent-tools
 
 # Claude Code: download native binary via GitHub mirror
-# Update CLAUDE_CODE_VERSION to pin a specific release.
 ARG CLAUDE_CODE_VERSION=latest
 RUN apt-get update && apt-get install -y --no-install-recommends curl tar && \
     rm -rf /var/lib/apt/lists/* && \
@@ -61,7 +68,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl tar && \
     mkdir -p /opt/claude-code && \
     tar xzf /tmp/claude.tar.gz -C /opt/claude-code && \
     rm /tmp/claude.tar.gz && \
-    ls -la /opt/claude-code/ && \
     /opt/claude-code/claude --version
 
 # Codex CLI: install via npm with China mirror
@@ -81,7 +87,7 @@ RUN apt-get update && \
 COPY --from=agent-tools /opt/claude-code /opt/claude-code
 RUN ln -s /opt/claude-code/claude /usr/local/bin/claude
 
-# Node.js runtime + Codex CLI from agent-tools stage.
+# Node.js runtime + Codex CLI from agent-tools stage
 COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node
 COPY --from=agent-tools /usr/local/bin/codex /usr/local/bin/codex
 COPY --from=agent-tools /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -93,20 +99,36 @@ COPY --from=backend-build /usr/local/bin/ainrf /usr/local/bin/ainrf
 # Copy frontend build output
 COPY --from=frontend-build /build/frontend/dist /opt/ainrf/frontend/dist
 
+# Agent tool config templates (entrypoint substitutes env vars)
+COPY deploy/config/ /opt/ainrf/config/
+COPY deploy/config/entrypoint.py /opt/ainrf/bin/entrypoint.py
+
 # State directory (mount volume here)
-RUN mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces
+RUN mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin
 VOLUME /opt/ainrf/state
 
 # Non-root user
 RUN groupadd --gid 1000 ainrf && \
     useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
-    mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces && \
+    mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf
 ENV HOME=/opt/ainrf
 USER ainrf
 
-# Verify agent tools are functional (runs as ainrf user)
+# Verify agent tools are functional
 RUN claude --version && codex --version
+
+# Default agent tool config (placeholder values — override via env)
+ENV CLAUDE_API_KEY=sk-placeholder-change-me
+ENV CLAUDE_BASE_URL=https://api.anthropic.com
+ENV CLAUDE_MODEL=claude-sonnet-4-6
+ENV CLAUDE_HAIKU_MODEL=claude-haiku-4-5-20251001
+ENV CLAUDE_SONNET_MODEL=claude-sonnet-4-6
+ENV CLAUDE_OPUS_MODEL=claude-opus-4-6
+ENV CODEX_API_KEY=sk-placeholder-change-me
+ENV CODEX_BASE_URL=https://api.openai.com/v1
+ENV CODEX_MODEL=gpt-5.5
+ENV CODEX_REVIEW_MODEL=gpt-5.4
 
 ENV AINRF_PRODUCTION=1
 ENV AINRF_HOST=0.0.0.0
@@ -115,4 +137,5 @@ ENV AINRF_PORT=8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${AINRF_PORT:-8000}/health')"]
 
-CMD python -m ainrf serve --host ${AINRF_HOST:-0.0.0.0} --port ${AINRF_PORT:-8000} --state-root /opt/ainrf/state
+ENTRYPOINT ["python", "/opt/ainrf/bin/entrypoint.py"]
+CMD ["python", "-m", "ainrf", "serve", "--host", "0.0.0.0", "--port", "8000", "--state-root", "/opt/ainrf/state"]

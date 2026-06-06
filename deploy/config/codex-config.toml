@@ -1,0 +1,30 @@
+disable_response_storage = true
+model = "${CODEX_MODEL}"
+model_auto_compact_token_limit = 200000
+model_context_window = 400000
+model_provider = "custom"
+model_reasoning_effort = "medium"
+network_access = "enabled"
+review_model = "${CODEX_REVIEW_MODEL}"
+
+[features]
+collaboration_modes = true
+goals = true
+multi_agent = true
+terminal_resize_reflow = true
+
+[model_providers.custom]
+base_url = "${CODEX_BASE_URL}"
+name = "Custom Provider"
+requires_openai_auth = false
+wire_api = "responses"
+
+[tui]
+status_line = [
+    "model-with-reasoning",
+    "current-dir",
+    "git-branch",
+    "context-remaining",
+    "approval-mode",
+]
+status_line_use_colors = true

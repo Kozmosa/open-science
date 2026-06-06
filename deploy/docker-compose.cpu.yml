@@ -49,6 +49,17 @@ services:
       AINRF_LOGIN_LOCKOUT_HOURS: "24"
       AINRF_MAX_CONCURRENT_REQUESTS: "100"
       AINRF_METRICS_ENABLED: "true"
+      # ── Agent 工具配置（替换为你的 API key 和 base URL）──
+      CLAUDE_API_KEY: "<CHANGE_ME_claude_api_key>"
+      CLAUDE_BASE_URL: "https://api.anthropic.com"
+      CLAUDE_MODEL: "claude-sonnet-4-6"
+      CLAUDE_HAIKU_MODEL: "claude-haiku-4-5-20251001"
+      CLAUDE_SONNET_MODEL: "claude-sonnet-4-6"
+      CLAUDE_OPUS_MODEL: "claude-opus-4-6"
+      CODEX_API_KEY: "<CHANGE_ME_codex_api_key>"
+      CODEX_BASE_URL: "https://api.openai.com/v1"
+      CODEX_MODEL: "gpt-5.5"
+      CODEX_REVIEW_MODEL: "gpt-5.4"
     volumes:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
