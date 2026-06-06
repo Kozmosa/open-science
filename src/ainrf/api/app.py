@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from anyio import to_thread
 from fastapi import APIRouter, FastAPI
+from starlette.responses import Response
 
 from ainrf.api.config import ApiConfig
 from ainrf.api.middleware import (
@@ -252,13 +253,19 @@ def create_app(
     # ── Serve frontend static files ───────────────────────────────
     frontend_dist = Path(os.environ.get("AINRF_FRONTEND_DIR", "/opt/ainrf/frontend/dist"))
     if frontend_dist.is_dir():
-        from fastapi.staticfiles import StaticFiles
+        from starlette.staticfiles import StaticFiles
         from starlette.responses import FileResponse
 
-        app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="frontend-assets")
+        class _SPAStaticFiles(StaticFiles):
+            """StaticFiles that returns index.html for non-file paths (SPA fallback)."""
+            async def get_response(self, path: str, scope) -> Response:
+                try:
+                    response = await super().get_response(path, scope)
+                    if response.status_code == 404:
+                        return FileResponse(frontend_dist / "index.html", media_type="text/html")
+                    return response
+                except Exception:
+                    return FileResponse(frontend_dist / "index.html", media_type="text/html")
 
-        @app.get("/{full_path:path}")
-        async def serve_spa(full_path: str) -> FileResponse:
-            """SPA fallback: any non-API route returns index.html."""
-            return FileResponse(frontend_dist / "index.html", media_type="text/html")
+        app.mount("/", _SPAStaticFiles(directory=frontend_dist, html=True), name="frontend")
     return app
