@@ -244,6 +244,7 @@ def create_app(
     for router in ROUTERS:
         app.include_router(router)
         app.include_router(router, prefix="/v1")
+        app.include_router(router, prefix="/api")
     # Metrics endpoint (gated by config)
     if api_config.metrics_enabled:
         from ainrf.api.routes.metrics import create_metrics_router

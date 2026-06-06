@@ -16,9 +16,13 @@ from ainrf.auth.service import AuthService
 _EXEMPT_PATH_PREFIXES = (
     "/health",
     "/v1/health",
+    "/api/health",
     "/auth/login",
     "/auth/register",
     "/auth/refresh",
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/refresh",
     # Frontend static files (SPA assets, no auth needed)
     "/assets/",
     "/favicon",
@@ -29,6 +33,7 @@ _EXEMPT_PATH_PREFIXES = (
 # Known API route prefixes. Paths NOT matching these are SPA routes
 # served by the frontend catch-all and do not require auth.
 _API_PATH_PREFIXES = (
+    "/api/",
     "/health",
     "/v1/",
     "/auth/",

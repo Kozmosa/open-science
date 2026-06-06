@@ -60,11 +60,17 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
 
     assert response.status_code == 200
     payload = response.json()
-    assert {path for path in payload["paths"] if path.startswith("/v1/")} == {
-        f"/v1{path}" for path in payload["paths"] if not path.startswith("/v1/")
+    # Routes are registered under /, /v1/, and /api/ prefixes
+    non_root_prefixes = {p for p in payload["paths"] if not p.startswith(("/v1/", "/api/"))}
+    assert {f"/v1{p}" for p in non_root_prefixes} == {
+        p for p in payload["paths"] if p.startswith("/v1/") and not p.startswith("/v1/api/")
+    }
+    assert {f"/api{p}" for p in non_root_prefixes} == {
+        p for p in payload["paths"] if p.startswith("/api/") and not p.startswith("/api/v1/")
     }
     assert "/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/v1/projects/{project_id}/environment-refs" in payload["paths"]
+    assert "/api/projects/{project_id}/environment-refs" in payload["paths"]
     assert "/projects/{project_id}/task-edges" in payload["paths"]
     assert "/task-edges/{edge_id}" in payload["paths"]
     assert "/v1/projects/{project_id}/task-edges" in payload["paths"]
