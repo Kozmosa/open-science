@@ -5,7 +5,7 @@
 # Stages:
 #   frontend-build  — build React app with Node
 #   backend-build   — install Python package with uv
-#   agent-tools     — install Claude Code + Codex CLI (global npm)
+#   agent-tools     — install Codex CLI via npm + download Claude Code binary
 #   runtime         — minimal production image
 #
 # Build:
@@ -39,15 +39,34 @@ COPY README.md ./
 COPY src/ainrf/ src/ainrf/
 RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
-# ── Stage 3: Agent tools (Claude Code + Codex CLI) ────────────────
-# Uses the same Node base so we can copy both the Node runtime and
-# the globally-installed agent CLIs from this single stage.
+# ── Stage 3: Agent tools ─────────────────────────────────────────
+# Downloads Claude Code native binary from GitHub via ghfast mirror,
+# and installs Codex CLI via npm (npmmirror).
 FROM docker.1ms.run/node:24-slim AS agent-tools
 
+# Claude Code: download native binary via GitHub mirror
+# Update CLAUDE_CODE_VERSION to pin a specific release.
+ARG CLAUDE_CODE_VERSION=latest
+RUN apt-get update && apt-get install -y --no-install-recommends curl tar && \
+    rm -rf /var/lib/apt/lists/* && \
+    if [ "$CLAUDE_CODE_VERSION" = "latest" ]; then \
+      VERSION=$(curl -sL https://api.github.com/repos/anthropics/claude-code/releases/latest | \
+        grep '"tag_name"' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/'); \
+    else \
+      VERSION="$CLAUDE_CODE_VERSION"; \
+    fi && \
+    echo "Installing Claude Code v${VERSION}" && \
+    curl -sL "https://ghfast.top/https://github.com/anthropics/claude-code/releases/download/v${VERSION}/claude-linux-x64.tar.gz" \
+      -o /tmp/claude.tar.gz && \
+    mkdir -p /opt/claude-code && \
+    tar xzf /tmp/claude.tar.gz -C /opt/claude-code && \
+    rm /tmp/claude.tar.gz && \
+    ls -la /opt/claude-code/ && \
+    /opt/claude-code/claude --version
+
+# Codex CLI: install via npm with China mirror
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g \
-      @anthropic-ai/claude-code@latest \
-      @openai/codex@latest
+    npm install -g @openai/codex@latest
 
 # ── Stage 4: Runtime ──────────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS runtime
@@ -58,10 +77,12 @@ RUN apt-get update && \
         tmux && \
     rm -rf /var/lib/apt/lists/*
 
-# Node.js runtime + agent CLIs (claude, codex) from agent-tools stage.
-# agent-tools is based on node:24-slim, so it carries the full Node binary.
+# Claude Code: standalone native binary (no Node.js needed)
+COPY --from=agent-tools /opt/claude-code /opt/claude-code
+RUN ln -s /opt/claude-code/claude /usr/local/bin/claude
+
+# Node.js runtime + Codex CLI from agent-tools stage.
 COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node
-COPY --from=agent-tools /usr/local/bin/claude /usr/local/bin/claude
 COPY --from=agent-tools /usr/local/bin/codex /usr/local/bin/codex
 COPY --from=agent-tools /usr/local/lib/node_modules /usr/local/lib/node_modules
 

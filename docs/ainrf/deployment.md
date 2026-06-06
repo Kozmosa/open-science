@@ -115,7 +115,7 @@ cd deploy
 docker compose up -d --build
 ```
 
-多阶段构建自动完成：前端 Node 构建 → Python 包安装 → Agent 工具安装（Claude Code + Codex CLI） → 精简运行时镜像。
+多阶段构建自动完成：前端 Node 构建 → Python 包安装 → Claude Code 原生二进制（GitHub Release + ghfast 镜像）+ Codex CLI（npm） → 精简运行时镜像。Claude Code 是独立二进制，不依赖 Node.js 运行。可通过 `--build-arg CLAUDE_CODE_VERSION=2.1.167` 锁定版本。
 
 ### 4. 常用操作
 
