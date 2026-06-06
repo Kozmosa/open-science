@@ -115,7 +115,7 @@ cd deploy
 docker compose up -d --build
 ```
 
-多阶段构建自动完成：前端 Node 构建 → Python 包安装 → 精简运行时镜像（无 Node/uv/git）。
+多阶段构建自动完成：前端 Node 构建 → Python 包安装 → Agent 工具安装（Claude Code + Codex CLI） → 精简运行时镜像。
 
 ### 4. 常用操作
 

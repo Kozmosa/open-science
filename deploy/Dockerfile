@@ -5,7 +5,8 @@
 # Stages:
 #   frontend-build  — build React app with Node
 #   backend-build   — install Python package with uv
-#   runtime         — minimal production image (no build tools)
+#   agent-tools     — install Claude Code + Codex CLI (global npm)
+#   runtime         — minimal production image
 #
 # Build:
 #   docker build -f deploy/Dockerfile -t ainrf:latest .
@@ -38,14 +39,31 @@ COPY README.md ./
 COPY src/ainrf/ src/ainrf/
 RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
-# ── Stage 3: Runtime ──────────────────────────────────────────────
+# ── Stage 3: Agent tools (Claude Code + Codex CLI) ────────────────
+# Uses the same Node base so we can copy both the Node runtime and
+# the globally-installed agent CLIs from this single stage.
+FROM docker.1ms.run/node:24-slim AS agent-tools
+
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g \
+      @anthropic-ai/claude-code@latest \
+      @openai/codex@latest
+
+# ── Stage 4: Runtime ──────────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS runtime
 
-# Runtime dependencies only (no Node, no uv, no git)
+# Runtime OS packages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tmux && \
     rm -rf /var/lib/apt/lists/*
+
+# Node.js runtime + agent CLIs (claude, codex) from agent-tools stage.
+# agent-tools is based on node:24-slim, so it carries the full Node binary.
+COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node
+COPY --from=agent-tools /usr/local/bin/claude /usr/local/bin/claude
+COPY --from=agent-tools /usr/local/bin/codex /usr/local/bin/codex
+COPY --from=agent-tools /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # Copy installed Python packages from build stage
 COPY --from=backend-build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
@@ -65,6 +83,9 @@ RUN groupadd --gid 1000 ainrf && \
     chown -R ainrf:ainrf /opt/ainrf
 ENV HOME=/opt/ainrf
 USER ainrf
+
+# Verify agent tools are functional (runs as ainrf user)
+RUN claude --version && codex --version
 
 ENV AINRF_PRODUCTION=1
 ENV AINRF_HOST=0.0.0.0
