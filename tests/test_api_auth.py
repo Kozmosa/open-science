@@ -34,13 +34,13 @@ async def test_health_is_public(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_missing_unknown_route_stays_unauthorized_without_api_key(tmp_path: Path) -> None:
+async def test_non_api_route_is_not_auth_gated(tmp_path: Path) -> None:
+    """Non-API paths (e.g. SPA routes) skip auth — frontend handles its own auth flow."""
     async with make_client(tmp_path) as client:
-        response = await client.get("/retired")
+        response = await client.get("/some-spa-route")
 
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Unauthorized"}
-
+    # Not 401 — SPA routes are exempt from backend auth
+    assert response.status_code in (200, 404)
 
 @pytest.mark.anyio
 async def test_terminal_session_requires_api_key(tmp_path: Path) -> None:

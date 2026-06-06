@@ -19,6 +19,35 @@ _EXEMPT_PATH_PREFIXES = (
     "/auth/login",
     "/auth/register",
     "/auth/refresh",
+    # Frontend static files (SPA assets, no auth needed)
+    "/assets/",
+    "/favicon",
+    "/vite.svg",
+    "/logo",
+)
+
+# Known API route prefixes. Paths NOT matching these are SPA routes
+# served by the frontend catch-all and do not require auth.
+_API_PATH_PREFIXES = (
+    "/health",
+    "/v1/",
+    "/auth/",
+    "/tasks",
+    "/sessions",
+    "/terminal",
+    "/files",
+    "/workspaces",
+    "/projects",
+    "/environments",
+    "/resources",
+    "/settings",
+    "/literature",
+    "/skills",
+    "/skill-registries",
+    "/admin",
+    "/metrics",
+    "/token-usage",
+    "/task-edges",
 )
 
 # Paths exempt in dev mode only (never in production).
@@ -34,10 +63,13 @@ _DEV_EXEMPT_PATH_PREFIXES = (
 def _is_exempt(path: str, production: bool) -> bool:
     if any(path.startswith(p) for p in _EXEMPT_PATH_PREFIXES):
         return True
+    # SPA routes (non-API paths) are served by the frontend catch-all and
+    # do not require backend auth — the frontend handles its own auth flow.
+    if not any(path.startswith(p) for p in _API_PATH_PREFIXES):
+        return True
     if production:
         return False
     return any(path.startswith(p) for p in _DEV_EXEMPT_PATH_PREFIXES)
-
 
 def _parse_cidrs(raw: tuple[str, ...]) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
     """Parse CIDR strings into network objects. Invalid entries are silently skipped."""
