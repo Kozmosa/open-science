@@ -1,8 +1,9 @@
 # ══════════════════════════════════════════════════════════════════
-# AINRF CPU-only — Docker Compose
+# AINRF CPU-only — Docker Compose (host network)
 # ══════════════════════════════════════════════════════════════════
 #
-# 适用于：无 GPU、无需 GPU 透传的普通服务器或容器环境。
+# 适用于：无 GPU、宿主机 iptables FORWARD 受限（无法使用 Docker NAT 端口映射）。
+# 使用 host 网络模式，容器直接监听宿主机网卡，绕过 Docker NAT。
 #
 # 使用方法：
 #   1. 生成密钥
@@ -33,11 +34,12 @@ services:
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     container_name: ainrf
-    ports:
-      - "8192:8000"
+    network_mode: host
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
+      AINRF_HOST: "0.0.0.0"
+      AINRF_PORT: "8192"
       # ── 必填：替换为你的密钥 ─────────────────────────────
       AINRF_JWT_SECRET: "<CHANGE_ME_jwt_secret>"
       AINRF_API_KEY_HASHES: "<CHANGE_ME_api_key_sha256_hash>"
@@ -55,7 +57,7 @@ services:
         limits:
           memory: 8G
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8192/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
