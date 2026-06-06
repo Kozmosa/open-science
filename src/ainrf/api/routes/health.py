@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from fastapi import APIRouter, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Request
 
 from ainrf.api.schemas import ApiStatus, HealthResponse
 from ainrf.execution import SSHExecutor
@@ -54,9 +53,4 @@ async def health_check(request: Request) -> JSONResponse | HealthResponse:
         container_configured=bool(public_payload["container_configured"]),
         runtime_readiness=runtime_readiness,
     )
-    if health.ssh_ok:
-        return response
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content=response.model_dump(mode="json"),
-    )
+    return response
