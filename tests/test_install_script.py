@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 SCRIPT_PATH = REPO_ROOT / "scripts" / "install.sh"
+
+pytestmark = [pytest.mark.cli]
 
 
 def test_install_script_exists() -> None:

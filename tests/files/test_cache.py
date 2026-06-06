@@ -4,6 +4,9 @@ import time
 
 from ainrf.files.cache import FileTreeCache
 from ainrf.files.models import DirectoryListing
+import pytest
+
+pytestmark = [pytest.mark.unit]
 
 
 def test_cache_returns_none_for_missing_key() -> None:

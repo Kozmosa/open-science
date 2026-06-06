@@ -4,6 +4,9 @@ import os
 from typing import Any
 
 from ainrf.skills.merge import deep_merge_settings, resolve_env_placeholders
+import pytest
+
+pytestmark = [pytest.mark.unit]
 
 
 def test_deep_merge_dicts() -> None:

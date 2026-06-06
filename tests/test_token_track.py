@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 
+pytestmark = [pytest.mark.unit]
 class TestBuildTokenUsage:
     """Tests for _build_token_usage in agent_sdk.py."""
 

@@ -13,6 +13,7 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from tests.testutil import get_jwt_headers
 from ainrf.terminal.tmux import TmuxCommandError
+pytestmark = [pytest.mark.api]
 
 APP_USER_ID = "browser-user"
 # API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)

@@ -6,6 +6,9 @@ import logging
 from pathlib import Path
 
 from ainrf.logging import configure_logging
+import pytest
+
+pytestmark = [pytest.mark.unit]
 
 
 def test_configure_logging_creates_dated_log_file(tmp_path: Path) -> None:

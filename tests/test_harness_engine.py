@@ -19,6 +19,7 @@ from ainrf.harness_engine.engines.claude_code import ClaudeCodeEngine
 from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, CodexSession
 
 
+pytestmark = [pytest.mark.engine]
 def test_get_engine_claude_code() -> None:
     engine = get_engine("claude-code")
     assert isinstance(engine, ClaudeCodeEngine)

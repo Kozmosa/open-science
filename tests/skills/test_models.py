@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from ainrf.skills.models import InjectMode, SkillDefinition, SkillItem, SkillManifest
+import pytest
+
+pytestmark = [pytest.mark.unit]
 
 
 def test_inject_mode_values():

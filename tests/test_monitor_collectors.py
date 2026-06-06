@@ -1,4 +1,7 @@
+import pytest
 from ainrf.monitor.collectors import parse_nvidia_smi_csv, parse_ps_output
+
+pytestmark = [pytest.mark.unit]
 
 
 class TestParseNvidiaSmi:

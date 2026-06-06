@@ -6,6 +6,9 @@ from pathlib import Path
 
 from ainrf.skills.discovery import SkillsDiscoveryService
 from ainrf.skills.models import InjectMode, SkillDefinition
+import pytest
+
+pytestmark = [pytest.mark.unit]
 
 
 def _make_skill_dir(parent: Path, skill_id: str, label: str, inject_mode: str = "auto") -> Path:

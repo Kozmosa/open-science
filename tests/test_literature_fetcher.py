@@ -8,6 +8,8 @@ import pytest
 from ainrf.literature import fetcher
 from ainrf.literature.models import LiteratureSubscription
 
+pytestmark = [pytest.mark.unit]
+
 
 class SlowEmptyArxivClient:
     def results(self, _search: object) -> list[object]:

@@ -26,6 +26,7 @@ from ainrf.terminal.pty import (
 )
 
 
+pytestmark = [pytest.mark.engine]
 class DummyProcess:
     def __init__(self, returncode: int | None = None) -> None:
         self.pid = 4321

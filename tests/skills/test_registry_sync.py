@@ -13,6 +13,7 @@ from ainrf.skills.registry_sync import (
 )
 
 
+pytestmark = [pytest.mark.unit]
 class TestSkillRegistrySyncService:
     @pytest.fixture
     def registry(self):

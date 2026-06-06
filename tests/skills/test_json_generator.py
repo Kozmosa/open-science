@@ -2,6 +2,9 @@ from __future__ import annotations
 
 
 from ainrf.skills.json_generator import generate_skill_json, parse_skill_md_frontmatter
+import pytest
+
+pytestmark = [pytest.mark.unit]
 
 
 class TestParseSkillMdFrontmatter:

@@ -24,6 +24,8 @@ from ainrf.onboarding import (
 )
 from ainrf.state import default_state_root
 
+pytestmark = [pytest.mark.cli]
+
 
 runner = CliRunner()
 

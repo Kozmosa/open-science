@@ -10,6 +10,7 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from tests.testutil import get_jwt_headers
 
+pytestmark = [pytest.mark.api]
 
 def make_client(tmp_path: Path) -> httpx.AsyncClient:
     app = create_app(

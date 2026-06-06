@@ -11,6 +11,7 @@ from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.skills import SkillsDiscoveryService
 from tests.testutil import get_jwt_headers
 
+pytestmark = [pytest.mark.api]
 
 def _make_app(tmp_path: Path, scan_roots: list[Path] | None = None) -> FastAPI:
     api_config = ApiConfig(

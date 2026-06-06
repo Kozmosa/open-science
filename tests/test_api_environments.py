@@ -21,6 +21,7 @@ from ainrf.terminal.models import (
 )
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND
 
+pytestmark = [pytest.mark.api]
 # API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
 
 

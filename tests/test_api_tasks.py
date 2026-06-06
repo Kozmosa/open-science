@@ -22,6 +22,7 @@ from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
 from ainrf.harness_engine.base import EngineEmit
 from tests.testutil import get_jwt_headers
 
+pytestmark = [pytest.mark.api]
 
 class FakeEngine(HarnessEngine):
     def __init__(self) -> None:

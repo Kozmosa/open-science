@@ -8,6 +8,8 @@ import pytest
 
 from ainrf.server import _terminate_process, run_server_daemon
 
+pytestmark = [pytest.mark.cli]
+
 
 class FakeProcess:
     def __init__(self, pid: int) -> None:

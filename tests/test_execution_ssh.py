@@ -16,6 +16,7 @@ from ainrf.execution import (
 from ainrf.execution import ssh as ssh_module
 
 
+pytestmark = [pytest.mark.engine]
 class FakeProcess:
     def __init__(
         self,

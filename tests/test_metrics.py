@@ -21,6 +21,7 @@ from ainrf.api.routes.metrics import (
 from tests.testutil import get_jwt_headers
 
 
+pytestmark = [pytest.mark.unit]
 @pytest.fixture(autouse=True)
 def _clean_metrics() -> Generator[None, None, None]:
     reset_metrics()

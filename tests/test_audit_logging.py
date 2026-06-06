@@ -6,6 +6,9 @@ import structlog
 
 from ainrf.security.audit import audit_event
 from ainrf.security.sensitive_paths import check_path_access, is_sensitive_path
+import pytest
+pytestmark = [pytest.mark.middleware]
+
 
 
 class TestAuditEvent:

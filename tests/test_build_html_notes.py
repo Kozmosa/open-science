@@ -11,6 +11,8 @@ import pytest
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build_html_notes.py"
 
 
+pytestmark = [pytest.mark.cli]
+
 @pytest.fixture(scope="module")
 def build_html_notes() -> types.ModuleType:
     spec = importlib.util.spec_from_file_location("build_html_notes", MODULE_PATH)

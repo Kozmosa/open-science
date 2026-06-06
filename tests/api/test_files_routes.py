@@ -8,6 +8,7 @@ from tests.testutil import make_client
 from ainrf.api.config import ApiConfig
 
 
+pytestmark = [pytest.mark.api]
 def _make_app_and_workdir(tmp_path: Path, *, max_file_size_bytes: int | None = None):
     """Backward compat: returns (app, workdir) from a throwaway ApiConfig."""
     api_config = ApiConfig(

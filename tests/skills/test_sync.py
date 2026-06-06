@@ -7,6 +7,7 @@ import pytest
 from ainrf.skills.sync import sync_ainrf_to_claude, write_managed_marker
 
 
+pytestmark = [pytest.mark.unit]
 def test_sync_creates_symlink(tmp_path: Path) -> None:
     """When claude_skills doesn't exist, a symlink is created pointing to ainrf_skills."""
     ainrf_skills = tmp_path / ".ainrf" / "skills"

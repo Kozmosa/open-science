@@ -29,6 +29,7 @@ from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter, TmuxCommandError, TmuxProbeTimeoutError
 
 
+pytestmark = [pytest.mark.engine]
 def make_manager(
     tmp_path: Path, *, user_id: str = "daemon-user"
 ) -> tuple[SessionManager, InMemoryEnvironmentService]:

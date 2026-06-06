@@ -10,6 +10,7 @@ from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig
 from tests.testutil import get_jwt_headers
 
+pytestmark = [pytest.mark.api]
 
 @pytest.mark.anyio
 async def test_get_resources_returns_list(tmp_path: Path) -> None:

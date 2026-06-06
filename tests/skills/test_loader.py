@@ -8,6 +8,7 @@ import pytest
 from ainrf.skills.loader import SkillLoader
 from ainrf.skills.models import InjectMode, SkillDefinition
 
+pytestmark = [pytest.mark.unit]
 
 def test_load_from_directory_success(tmp_path: Path) -> None:
     """Load a valid skill directory with skill.json and SKILL.md."""

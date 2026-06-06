@@ -22,6 +22,7 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig, ContainerHealth
+pytestmark = [pytest.mark.integration]
 
 
 # ---------------------------------------------------------------------------

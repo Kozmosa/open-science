@@ -49,10 +49,18 @@ packages = ["src/ainrf"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+    "api: HTTP API route integration tests",
+    "unit: pure unit tests (no HTTP server)",
+    "middleware: middleware and security tests",
+    "engine: execution engine and SSH tests",
+    "cli: CLI and build/deploy script tests",
+    "integration: production-like integration tests",
+    "slow: tests that take >1s",
+]
 filterwarnings = [
     "ignore:Benchmarks are automatically disabled because xdist plugin is active:pytest_benchmark.logger.PytestBenchmarkWarning",
 ]
-
 [tool.ruff]
 line-length = 100
 target-version = "py313"

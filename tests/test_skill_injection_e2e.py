@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 
 from ainrf.skills.injection import SkillInjectionService
+import pytest
+
+pytestmark = [pytest.mark.unit]
 
 
 def test_skill_injection_end_to_end(tmp_path: Path) -> None:

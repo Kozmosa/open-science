@@ -12,6 +12,8 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 
+pytestmark = [pytest.mark.middleware]
+
 _API_KEY = "test-secret-key"
 
 

@@ -1,4 +1,7 @@
+import pytest
 from ainrf.monitor.process_tree import ProcessTreeFilter, RawProcess
+
+pytestmark = [pytest.mark.unit]
 
 
 class TestProcessTreeFilter:

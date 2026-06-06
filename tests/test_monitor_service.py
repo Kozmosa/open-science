@@ -7,6 +7,7 @@ from ainrf.monitor.models import CpuInfo, MemoryInfo, ResourceSnapshot
 from ainrf.monitor.service import ResourceMonitorService
 
 
+pytestmark = [pytest.mark.unit]
 class TestResourceMonitorService:
     @pytest.fixture
     def mock_env_service(self):

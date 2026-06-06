@@ -6,6 +6,8 @@ import pytest
 import tempfile
 from pathlib import Path
 
+pytestmark = [pytest.mark.middleware]
+
 
 class TestPermissionHelpers:
     def test_is_admin(self):

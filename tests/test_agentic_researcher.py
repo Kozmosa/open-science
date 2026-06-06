@@ -18,6 +18,7 @@ from ainrf.agentic_researcher.service import TaskNotFoundError
 from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
 from ainrf.harness_engine.base import EngineEmit
 
+pytestmark = [pytest.mark.unit]
 
 class FakeEngine(HarnessEngine):
     def __init__(self) -> None:

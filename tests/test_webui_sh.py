@@ -6,6 +6,10 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
+pytestmark = [pytest.mark.cli]
+
 
 def _write_executable(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")

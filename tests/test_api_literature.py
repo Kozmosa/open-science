@@ -11,6 +11,7 @@ from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
 from tests.testutil import get_jwt_headers
 
+pytestmark = [pytest.mark.api]
 
 def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
     app = create_app(
