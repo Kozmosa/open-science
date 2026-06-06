@@ -151,19 +151,34 @@ Never edit files under `.cache/html-notes/` or `site/`; they are generated artif
 - File naming: English slugs, Chinese content.
 
 ## Testing Guidelines
-
 Tests use `pytest`. Place new tests under `tests/` and name files `test_*.py`. Match function names to behavior, for example `test_serve_stub_runs`. Add or update smoke tests for every new CLI surface, parser behavior, or build-script contract you change.
+### Test Markers
+Every test file must declare a module-level `pytestmark` to categorize its tests:
+| Marker | Scope | Count | Run |
+|--------|-------|-------|-----|
+| `api` | HTTP API route integration tests (full request/response) | 76 | `pytest -m api` |
+| `unit` | Pure unit tests (no HTTP server, isolated logic) | 156 | `pytest -m unit` |
+| `middleware` | Security, auth, audit, and request middleware | 72 | `pytest -m middleware` |
+| `engine` | Execution engine, SSH, terminal, harness | 70 | `pytest -m engine` |
+| `cli` | CLI commands, build scripts, server lifecycle | 61 | `pytest -m cli` |
+| `integration` | Production-like integration tests (SPA, /api prefix) | 12 | `pytest -m integration` |
+| `slow` | Tests that take >1s (opt-in marker for slow tests) | — | `pytest -m 'not slow'` |
+When adding a new test file, add the appropriate marker:
+```python
+import pytest
 
+pytestmark = [pytest.mark.api]  # or unit, middleware, engine, cli, integration
+```
+### Before Submitting
 Before submitting changes to Python code, run both runtime and static checks:
-
 - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
-
-### Testing & Service Command Notes
-
-- Backend tests must run from repo root: `cd /home/xuyang/code/scholar-agent && uv run pytest tests/`
+### Command Reference
+- Backend tests must run from repo root: `cd /home/xuyang/code/scholar-agent && UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`
 - Frontend tests and type-check must run from `frontend/`.
 - Start manual service testing with `uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`.
+- Selective runs: `pytest -m api`, `pytest -m unit`, `pytest -m 'not slow'`.
+- Frontend test command: `cd frontend && npm run test:run`.
 
 ## Commit & Pull Request Guidelines
 
