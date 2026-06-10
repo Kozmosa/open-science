@@ -25,7 +25,6 @@ export default function ResourcesPage() {
   const { layout, setLayout } = useCardLayout();
 
   const snapshots = resourcesQuery.data?.items ?? [];
-
   const groups = useMemo(
     () => [
       {
@@ -61,7 +60,7 @@ export default function ResourcesPage() {
 
   return (
     <PageShell>
-      <div className="space-y-8 p-4">
+      <div className="flex flex-col gap-6 p-4">
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
             {t('pages.resources.eyebrow')}
@@ -79,7 +78,6 @@ export default function ResourcesPage() {
         {snapshots.length === 0 && !resourcesQuery.isLoading && (
           <p className="text-sm text-[var(--text-tertiary)]">{t('pages.resources.noData')}</p>
         )}
-
 
         <CardGrid
           groups={groups}

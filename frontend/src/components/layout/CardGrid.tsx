@@ -143,26 +143,27 @@ export default function CardGrid({
   const gapClass = GAP_CLASSES[gap] ?? GAP_CLASSES[6];
   const colClass = COL_CLASSES[columns] ?? COL_CLASSES[2];
 
+  // Flatten all groups' cards into a single ordered list
+  const allCards = cardOrder.flatMap((kind) =>
+    groups.flatMap((group) => {
+      const card = group.cards.find((c) => c.kind === kind);
+      if (!card) return [];
+      return [{ id: card.id, kind, groupId: group.id, key: `${group.id}:${kind}` }];
+    })
+  );
+
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className={`${gapClass} ${className ?? ''}`}>
-        {groups.map((group) => (
-          <div key={group.id} className={`grid grid-cols-1 ${gapClass} ${colClass}`}>
-            {cardOrder.map((kind) => {
-              const card = group.cards.find((c) => c.kind === kind);
-              if (!card) return null;
-              return (
-                <DraggableCard
-                  key={`${group.id}:${kind}`}
-                  id={`${group.id}:${kind}`}
-                  kind={kind}
-                  groupId={group.id}
-                >
-                  {renderCard(card.id, kind, group.id)}
-                </DraggableCard>
-              );
-            })}
-          </div>
+      <div className={`grid grid-cols-1 ${colClass} ${gapClass} ${className ?? ''}`}>
+        {allCards.map((card) => (
+          <DraggableCard
+            key={card.key}
+            id={card.key}
+            kind={card.kind}
+            groupId={card.groupId}
+          >
+            {renderCard(card.id, card.kind, card.groupId)}
+          </DraggableCard>
         ))}
       </div>
     </DndContext>
