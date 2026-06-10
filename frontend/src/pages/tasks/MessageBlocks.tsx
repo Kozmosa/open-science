@@ -117,7 +117,8 @@ export function AssistantMessage({ message }: { message: MessageItem }) {
 }
 
 export function ThinkingBlock({ message }: { message: MessageItem }) {
-  const [isOpen, setIsOpen] = useState(message.metadata.isFolded !== true);
+  const isStreaming = message.metadata.isStreaming ?? false;
+  const [isOpen, setIsOpen] = useState(isStreaming || message.metadata.isFolded !== true);
   const t = useT();
   const content = typeof message.content === 'string' ? message.content : '';
   return (
@@ -129,6 +130,7 @@ export function ThinkingBlock({ message }: { message: MessageItem }) {
         className="flex items-center gap-1 rounded-lg border-l-2 border-[var(--text-tertiary)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
       >
         {isOpen ? '▾' : '▸'} {t('pages.tasks.thinking')}
+        {isStreaming && <span className="ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--apple-blue)]" />}
       </button>
       {isOpen && (
         <div className="mt-1 w-full rounded-lg border-l-2 border-[var(--text-tertiary)] bg-[var(--bg-secondary)] px-3 py-2">

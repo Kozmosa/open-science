@@ -28,19 +28,29 @@ function convertOutputEventToMessage(event: TaskOutputEvent, initialPrompt?: str
   switch (event.kind) {
     case 'message': {
       const content = (payload.content as string) || '';
+      const blockId = payload.block_id as string | undefined;
       return {
         ...base,
         type: payload.role === 'user' || content === initialPrompt ? 'user' : 'assistant',
         content,
+        ...(blockId ? { metadata: { ...base.metadata, blockId } } : {}),
       };
     }
-    case 'thinking':
+    case 'thinking': {
+      const blockId = payload.block_id as string | undefined;
+      const isPartial = payload.is_partial as boolean | undefined;
       return {
         ...base,
         type: 'thinking',
         content: (payload.content as string) || '',
-        metadata: { ...base.metadata, isFolded: true },
+        metadata: {
+          ...base.metadata,
+          isFolded: isPartial ? false : true,
+          isStreaming: isPartial ?? false,
+          ...(blockId ? { blockId } : {}),
+        },
       };
+    }
     case 'tool_call':
       return {
         ...base,
@@ -150,9 +160,36 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
     const newMessages = convertOutputEventsToMessages(outputItems, initialPrompt);
 
     setStreamMessages((prev) => {
-      const existingIds = new Set(prev.map((m) => m.id));
-      const unique = newMessages.filter((m) => !existingIds.has(m.id));
-      return [...prev, ...unique];
+      // Build a map of existing messages by blockId for quick lookup
+      const byBlockId = new Map<string, number>();
+      prev.forEach((m, i) => {
+        const bid = m.metadata.blockId;
+        if (bid) byBlockId.set(bid, i);
+      });
+
+      const result = [...prev];
+      for (const msg of newMessages) {
+        const bid = msg.metadata.blockId;
+        if (bid) {
+          const existingIdx = byBlockId.get(bid);
+          if (existingIdx !== undefined) {
+            // Update existing message with same blockId (streaming delta)
+            result[existingIdx] = {
+              ...result[existingIdx],
+              content: msg.content,
+              metadata: { ...result[existingIdx].metadata, ...msg.metadata },
+            };
+            continue;
+          }
+          byBlockId.set(bid, result.length);
+        }
+        // New message — add only if not already present by id
+        const existingIds = new Set(result.map((m) => m.id));
+        if (!existingIds.has(msg.id)) {
+          result.push(msg);
+        }
+      }
+      return result;
     });
   }, [outputItems, initialPrompt]);
 

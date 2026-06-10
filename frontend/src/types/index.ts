@@ -681,6 +681,8 @@ export interface MessageItem {
     sequence: number;
     isFolded?: boolean;
     engineType?: string;
+    blockId?: string;
+    isStreaming?: boolean;
   };
 }
 

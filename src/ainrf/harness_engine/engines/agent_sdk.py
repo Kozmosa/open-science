@@ -86,7 +86,10 @@ class AgentSession:
     total_cost_usd: float = 0.0
     had_error: bool = False
     terminal_emitted: bool = False
-
+    # Streaming state: track current content block being accumulated
+    stream_block_index: int = -1
+    stream_block_type: str | None = None  # "thinking" or "text"
+    stream_block_accumulated: str = ""
 
 class AgentSdkEngine(HarnessEngine):
     def __init__(self) -> None:
@@ -317,8 +320,7 @@ class AgentSdkEngine(HarnessEngine):
         if isinstance(sdk_msg, ResultMessage):
             return self._convert_result_message(sdk_msg, session)
         if isinstance(sdk_msg, StreamEvent):
-            _ = sdk_msg
-            return events
+            return self._convert_stream_event(sdk_msg, session)
         if isinstance(sdk_msg, RateLimitEvent):
             return [
                 EngineEvent(
@@ -331,20 +333,90 @@ class AgentSdkEngine(HarnessEngine):
             ]
         return events
 
-    def _convert_assistant_message(self, sdk_msg: AssistantMessage) -> list[EngineEvent]:
+    def _convert_stream_event(self, sdk_msg: StreamEvent, session: AgentSession) -> list[EngineEvent]:
+        """Convert raw Anthropic streaming events into incremental thinking/text events.
+
+        Emits partial events with block_id so the frontend can update a single
+        thinking bubble in real-time instead of waiting for the full block.
+        """
+        raw = sdk_msg.event
+        event_type = raw.get("type")
         events: list[EngineEvent] = []
-        for block in sdk_msg.content:
-            if isinstance(block, TextBlock):
+
+        if event_type == "content_block_start":
+            block = raw.get("content_block") or {}
+            block_type = block.get("type")
+            block_index = raw.get("index", 0)
+            session.stream_block_index = block_index
+            session.stream_block_type = block_type
+            session.stream_block_accumulated = ""
+
+        elif event_type == "content_block_delta":
+            delta = raw.get("delta") or {}
+            delta_type = delta.get("type")
+
+            if delta_type == "thinking_delta" and session.stream_block_type == "thinking":
+                session.stream_block_accumulated += delta.get("thinking", "")
+                events.append(
+                    EngineEvent(
+                        event_type="thinking",
+                        payload={
+                            "content": session.stream_block_accumulated,
+                            "block_id": f"thinking-{session.stream_block_index}",
+                            "is_partial": True,
+                        },
+                    )
+                )
+            elif delta_type == "text_delta" and session.stream_block_type == "text":
+                session.stream_block_accumulated += delta.get("text", "")
                 events.append(
                     EngineEvent(
                         event_type="message",
-                        payload={"role": "assistant", "content": block.text},
+                        payload={
+                            "role": "assistant",
+                            "content": session.stream_block_accumulated,
+                            "block_id": f"text-{session.stream_block_index}",
+                            "is_partial": True,
+                        },
                     )
                 )
-            elif isinstance(block, ThinkingBlock):
+
+        elif event_type == "content_block_stop":
+            if session.stream_block_type == "thinking":
                 events.append(
-                    EngineEvent(event_type="thinking", payload={"content": block.thinking})
+                    EngineEvent(
+                        event_type="thinking",
+                        payload={
+                            "content": session.stream_block_accumulated,
+                            "block_id": f"thinking-{session.stream_block_index}",
+                            "is_partial": False,
+                        },
+                    )
                 )
+            elif session.stream_block_type == "text":
+                events.append(
+                    EngineEvent(
+                        event_type="message",
+                        payload={
+                            "role": "assistant",
+                            "content": session.stream_block_accumulated,
+                            "block_id": f"text-{session.stream_block_index}",
+                            "is_partial": False,
+                        },
+                    )
+                )
+            session.stream_block_index = -1
+            session.stream_block_type = None
+            session.stream_block_accumulated = ""
+
+        return events
+
+    def _convert_assistant_message(self, sdk_msg: AssistantMessage) -> list[EngineEvent]:
+        events: list[EngineEvent] = []
+        for block in sdk_msg.content:
+            # Skip thinking/text blocks — already emitted via StreamEvent deltas
+            if isinstance(block, (ThinkingBlock, TextBlock)):
+                continue
             elif isinstance(block, ToolUseBlock):
                 events.append(
                     EngineEvent(
