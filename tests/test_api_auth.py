@@ -139,8 +139,9 @@ def test_api_config_seeds_localhost_container_profile_when_config_is_minimal(
 
     assert config.container_config is not None
     assert config.container_config.host == "127.0.0.1"
-    assert config.container_config.port == 22
+    assert config.container_config.port == 2222
     assert config.container_config.project_dir == "/workspace/projects"
+    assert config.container_config.ssh_key_path == "/opt/ainrf/.ssh/ainrf_local"
 
 
 def test_api_config_uses_login_shell_by_default(

@@ -358,7 +358,7 @@ async def test_localhost_environment_detect_uses_personal_tmux_directly(
         env: object | None = None,
     ) -> CommandResult:
         _ = self, command, timeout, cwd, env
-        raise AssertionError("Localhost detection should use personal tmux directly")
+        raise SSHConnectionError("SSH intentionally unavailable in test")
 
     def fake_ensure_personal_session(
         app_user_id: str,
