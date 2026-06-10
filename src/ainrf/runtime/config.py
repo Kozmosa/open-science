@@ -9,8 +9,9 @@ from ainrf.execution import ContainerConfig
 
 DEFAULT_CONTAINER_PROFILE_NAME = "localhost"
 DEFAULT_CONTAINER_HOST = "127.0.0.1"
-DEFAULT_CONTAINER_PORT = 22
+DEFAULT_CONTAINER_PORT = 2222
 DEFAULT_CONTAINER_PROJECT_DIR = "/workspace/projects"
+DEFAULT_CONTAINER_SSH_KEY_PATH = "/opt/ainrf/.ssh/ainrf_local"
 DEFAULT_CONNECT_TIMEOUT = 30
 DEFAULT_COMMAND_TIMEOUT = 3600
 
@@ -37,7 +38,7 @@ def build_default_container_profile() -> dict[str, str | int | None]:
         "host": DEFAULT_CONTAINER_HOST,
         "port": DEFAULT_CONTAINER_PORT,
         "user": DEFAULT_CONTAINER_USER,
-        "ssh_key_path": None,
+        "ssh_key_path": DEFAULT_CONTAINER_SSH_KEY_PATH,
         "ssh_password": None,
         "project_dir": DEFAULT_CONTAINER_PROJECT_DIR,
         "connect_timeout": DEFAULT_CONNECT_TIMEOUT,
