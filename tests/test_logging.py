@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from pathlib import Path
 
 from ainrf.logging import configure_logging
 import pytest
 
 pytestmark = [pytest.mark.unit]
+
+@pytest.fixture(autouse=True)
+def _clean_root_handlers() -> Generator[None]:
+    """Remove FileHandlers added by configure_logging so pytest teardown
+    never tries to close a tmp_path-backed FD that no longer exists."""
+
+    root = logging.getLogger()
+    saved = list(root.handlers)
+    yield
+    root.handlers.clear()
+    root.handlers.extend(saved)
 
 
 def test_configure_logging_creates_dated_log_file(tmp_path: Path) -> None:

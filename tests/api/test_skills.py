@@ -280,6 +280,18 @@ async def test_import_skill_git_success(
     (repo_dir / "SKILL.md").write_text("# Git Skill\n", encoding="utf-8")
 
     subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
     subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "init"],
