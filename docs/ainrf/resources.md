@@ -24,7 +24,11 @@ last_local_commit: workspace aggregate
 
 路由：`/resources`
 
-资源监控页面以 `CardGrid` 布局展示所有环境的资源快照。每个环境一张卡片组，内含系统资源卡（GPU / CPU / 内存）与 AINRF 进程卡两张卡片，支持拖拽排序（布局持久化至 `localStorage`）。
+资源监控页面以 `CardGrid` 布局展示所有环境的资源快照。所有卡片（Token 用量、系统资源、AINRF 进程）位于同一个可拖拽网格中，支持自由排序（布局持久化至 `localStorage`）。卡片类型包括：
+
+- **Token 用量卡**：汇总所有任务的 Token 消耗、总耗时、中位耗时，并列出 Top N 高消耗任务
+- **系统资源卡**：GPU / CPU / 内存使用率
+- **AINRF 进程卡**：以服务 PID 为根的进程树
 
 ## GPU 监控
 

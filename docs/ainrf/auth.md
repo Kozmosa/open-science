@@ -42,10 +42,14 @@ source_path: docs/ainrf/auth.md
 POST /auth/register
 {
   "username": "user1",
-  "display_name": "User One",
+  "display_name": "用户一",
   "password": "secure-password"
 }
 ```
+
+- `username`：仅允许 ASCII 字母、数字、点（`.`）、下划线（`_`）、连字符（`-`），1-64 字符
+- `display_name`：任意 Unicode，1-128 字符，用于 WebUI 显示
+- `password`：最少 4 字符
 
 返回 `201` 表示注册成功，状态为 `pending`，等待管理员审批。
 

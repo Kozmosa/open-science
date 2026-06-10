@@ -35,11 +35,11 @@ Workspace 通过 REST API 和 WebUI 提供完整的管理操作：
 
 ## 默认 Workspace
 
-系统内置 `workspace-default`，指向 `~/.ainrf_workspaces/default` 目录。该 workspace 在服务首次初始化时自动创建，不可被删除，作为新用户的缺省工作区。
+系统内置 `workspace-default`，指向 `{state_root}/.ainrf_workspaces/default` 目录。该 workspace 在服务首次初始化时自动创建，不可被删除，作为新用户的缺省工作区。
 
 ## 默认工作目录
 
-每个 workspace 包含一个 `default_workdir` 字段，创建时自动填充为 `~/.ainrf_workspaces/{username}_{slug}` 格式。当任务在此 workspace 下执行时，终端初始目录自动设置为该路径。
+每个 workspace 包含一个 `default_workdir` 字段，创建时根据 seed workspace 路径自动填充为绝对路径格式（如 `/opt/ainrf/.ainrf_workspaces/{username}_{slug}`）。当任务在此 workspace 下执行时，终端初始目录自动设置为该路径。
 
 ## 文件浏览器
 
