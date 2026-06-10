@@ -861,3 +861,23 @@ export interface LiteraturePaper {
   task_id: string | null;
   created_at: string;
 }
+
+// ── Search backend settings ────────────────────────────────────────
+
+export interface SearchBackendItem {
+  id: string;
+  display_name: string;
+  description: string;
+  requires_mcp: boolean;
+}
+
+export interface SearchSettingsResponse {
+  active_backend: string;
+  available_backends: SearchBackendItem[];
+  auto_start_mcp_servers: string[];
+}
+
+export interface SearchSettingsUpdateRequest {
+  active_backend?: string;
+  auto_start_mcp_servers?: string[];
+}

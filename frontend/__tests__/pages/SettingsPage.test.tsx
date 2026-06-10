@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getCodexDefaults,
   getEnvironments,
+  getSearchSettings,
   getSkills,
   getWorkspaces,
 } from '../../src/api';
@@ -38,6 +39,20 @@ vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve(
   getEnvironments: vi.fn(),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
+  getSearchSettings: vi.fn(() => Promise.resolve({
+    active_backend: 'cc-web-mcp',
+    available_backends: [
+      { id: 'native', display_name: 'Claude Native', description: 'Built-in', requires_mcp: false },
+      { id: 'kindly-web-search', display_name: 'Kindly Web Search', description: 'Serper/Tavily', requires_mcp: true },
+      { id: 'cc-web-mcp', display_name: 'CC-Web-MCP', description: 'Lightweight', requires_mcp: true },
+    ],
+    auto_start_mcp_servers: ['kindly-web-search', 'cc-web-mcp'],
+  })),
+  updateSearchSettings: vi.fn(() => Promise.resolve({
+    active_backend: 'cc-web-mcp',
+    available_backends: [],
+    auto_start_mcp_servers: [],
+  })),
   getWorkspaces: vi.fn(),
   importSkill: vi.fn(),
   installSkillRegistry: vi.fn(),
@@ -81,6 +96,16 @@ beforeEach(() => {
   mockGetCodexDefaults.mockReset();
   mockGetSkills.mockReset();
   mockGetWorkspaces.mockReset();
+  vi.mocked(getSearchSettings).mockReset();
+  vi.mocked(getSearchSettings).mockResolvedValue({
+    active_backend: 'cc-web-mcp',
+    available_backends: [
+      { id: 'native', display_name: 'Claude Native', description: 'Built-in', requires_mcp: false },
+      { id: 'kindly-web-search', display_name: 'Kindly Web Search', description: 'Serper/Tavily', requires_mcp: true },
+      { id: 'cc-web-mcp', display_name: 'CC-Web-MCP', description: 'Lightweight', requires_mcp: true },
+    ],
+    auto_start_mcp_servers: ['kindly-web-search', 'cc-web-mcp'],
+  });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
   mockGetCodexDefaults.mockResolvedValue({
     codex_config_toml: 'model = "from-home"\nprovider = "openai"\n',

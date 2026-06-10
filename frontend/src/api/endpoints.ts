@@ -70,6 +70,8 @@ import type { ChangePasswordRequest,
   TaskEdgeCreateRequest,
   TaskEdgeListResponse,
   TaskMessagesResponse,
+  SearchSettingsResponse,
+  SearchSettingsUpdateRequest,
 } from '../types';
 import {
   mockArchiveTask,
@@ -671,3 +673,9 @@ export const getLiteratureFetchStatus = (subscriptionId: string): Promise<{ stat
   USE_MOCK
     ? Promise.resolve({ status: 'completed', error: null })
     : api.get(`/literature/subscriptions/${subscriptionId}/fetch-status`);
+
+export const getSearchSettings = (): Promise<SearchSettingsResponse> =>
+  api.get<SearchSettingsResponse>('/settings/search');
+
+export const updateSearchSettings = (payload: SearchSettingsUpdateRequest): Promise<SearchSettingsResponse> =>
+  api.patch<SearchSettingsResponse>('/settings/search', payload);
