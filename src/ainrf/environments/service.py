@@ -272,18 +272,24 @@ class InMemoryEnvironmentService:
     ) -> DetectionSnapshot:
         environment = self.get_environment(environment_id)
         if is_localhost_environment(environment):
-            if app_user_id is None or terminal_session_manager is None:
-                snapshot = failed_missing_user_snapshot(environment)
-            else:
-                try:
-                    outcome = await probe_with_personal_tmux(
-                        environment=environment,
-                        app_user_id=app_user_id,
-                        session_manager=terminal_session_manager,
-                    )
-                    snapshot = outcome.snapshot
-                except (RuntimeError, TmuxCommandError) as exc:
-                    snapshot = failed_tmux_snapshot(environment, exc)
+            # Try SSH probe first for localhost (container self-test)
+            try:
+                outcome = await probe_with_ssh(environment)
+                snapshot = outcome.snapshot
+            except SSHConnectionError:
+                # Fall back to tmux if user session available
+                if app_user_id is None or terminal_session_manager is None:
+                    snapshot = failed_missing_user_snapshot(environment)
+                else:
+                    try:
+                        outcome = await probe_with_personal_tmux(
+                            environment=environment,
+                            app_user_id=app_user_id,
+                            session_manager=terminal_session_manager,
+                        )
+                        snapshot = outcome.snapshot
+                    except (RuntimeError, TmuxCommandError) as exc:
+                        snapshot = failed_tmux_snapshot(environment, exc)
             self._detections[environment.id].append(snapshot)
             self._write_back_detected_runtime_config(environment, snapshot)
             self._persist_detection(environment_id, snapshot)
