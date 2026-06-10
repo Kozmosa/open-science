@@ -97,6 +97,7 @@ class TestLoginLockoutViaApi:
 
         # Create and activate a user
         auth_svc = app.state.auth_service
+        auth_svc.initialize()
         auth_svc.register(username="locktest", display_name="Lock Test", password="pw123")
         with auth_svc._connect() as conn:
             conn.execute("UPDATE users SET status = 'active' WHERE username = 'locktest'")

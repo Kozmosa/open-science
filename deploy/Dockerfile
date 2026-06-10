@@ -52,7 +52,7 @@ RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
 FROM docker.1ms.run/node:24-slim AS agent-tools
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g @anthropic-ai/claude-code@2.1.170 && \
+    npm install -g @anthropic-ai/claude-code@latest && \
     npm install -g --registry https://registry.npmjs.org @openai/codex@latest
 # Copy codex-linux-x64 to top level for require.resolve
 RUN if [ -d /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 ]; then \
