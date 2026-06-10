@@ -38,22 +38,22 @@ services:
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
-      # ── 必填：替换为你的密钥 ─────────────────────────────
-      AINRF_JWT_SECRET: "<CHANGE_ME_jwt_secret>"
-      AINRF_API_KEY_HASHES: "<CHANGE_ME_api_key_sha256_hash>"
+      # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
+      AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
+      AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
       # ── 安全 ────────────────────────────────────────────
-      AINRF_PUBLIC_REGISTRATION_ENABLED: "false"
+      AINRF_PUBLIC_REGISTRATION_ENABLED: ${AINRF_PUBLIC_REGISTRATION_ENABLED:-false}
       AINRF_LOGIN_MAX_FAILURES: "10"
       AINRF_LOGIN_LOCKOUT_HOURS: "24"
       AINRF_MAX_CONCURRENT_REQUESTS: "100"
       AINRF_METRICS_ENABLED: "true"
-      # ── Agent 工具配置（替换为你的 API key 和 base URL）──
-      ANTHROPIC_API_KEY: "<CHANGE_ME_anthropic_api_key>"
-      ANTHROPIC_BASE_URL: "https://api.anthropic.com"
-      ANTHROPIC_MODEL: "claude-sonnet-4-6"
-      CODEX_API_KEY: "<CHANGE_ME_codex_api_key>"
-      CODEX_BASE_URL: "https://api.openai.com/v1"
-      CODEX_MODEL: "gpt-5.5"
+      # ── Agent 工具配置（在 .env 中设置）──
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
     volumes:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
