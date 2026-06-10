@@ -695,7 +695,7 @@ class AgenticResearcherService:
             except WorkspaceNotFoundError:
                 workspace = None
             if workspace is not None and workspace.default_workdir:
-                path = Path(workspace.default_workdir)
+                path = Path(workspace.default_workdir).expanduser().resolve()
                 path.mkdir(parents=True, exist_ok=True)
                 return path
         fallback = self._state_root / "workspace" / task.workspace_id

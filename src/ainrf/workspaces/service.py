@@ -100,7 +100,8 @@ class WorkspaceRegistryService:
             now = utc_now()
             workspace_id = f"workspace-{uuid.uuid4().hex[:12]}"
             if default_workdir:
-                workdir_path = Path(default_workdir)
+                workdir_path = Path(default_workdir).expanduser().resolve()
+                default_workdir = str(workdir_path)
                 try:
                     workdir_path.mkdir(parents=True, exist_ok=True)
                 except OSError as exc:
@@ -135,6 +136,8 @@ class WorkspaceRegistryService:
         self.initialize()
         with self._lock:
             current = self.get_workspace(workspace_id)
+            if default_workdir:
+                default_workdir = str(Path(default_workdir).expanduser().resolve())
             workspace = WorkspaceRecord(
                 workspace_id=current.workspace_id,
                 project_id=current.project_id if project_id is None else project_id,

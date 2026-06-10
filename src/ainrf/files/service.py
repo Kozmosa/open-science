@@ -54,6 +54,8 @@ class _EnvironmentResolver:
             workdir = workspace.default_workdir or environment.default_workdir or "/"
         else:
             workdir = environment.default_workdir or "/"
+        if workdir.startswith("~"):
+            workdir = str(Path(workdir).expanduser().resolve())
         return environment, workdir
 
 

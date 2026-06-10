@@ -197,10 +197,11 @@ function WorkspacesPage() {
               const newLabel = event.target.value;
               setDraft((current) => {
                 const slug = newLabel.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                const workdirBase = seedWorkspace?.default_workdir?.replace(/\/default$/, '') || '/opt/ainrf/.ainrf_workspaces';
                 return {
                   ...current,
                   label: newLabel,
-                  default_workdir: isCreating ? `~/.ainrf_workspaces/${user?.username || 'user'}_${slug || 'new'}` : current.default_workdir,
+                  default_workdir: isCreating ? `${workdirBase}/${user?.username || 'user'}_${slug || 'new'}` : current.default_workdir,
                 };
               });
               const conflict = workspaces.find((w) => w.label === newLabel);
