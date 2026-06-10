@@ -87,7 +87,23 @@ def main() -> None:
     _start_sshd()
     _generate_claude_settings()
     _generate_codex_config()
-    # Exec the actual server command
+
+    # Drop privileges to ainrf user (UID 1000) before exec-ing the server
+    _uid = 1000
+    _gid = 1000
+    if os.getuid() == 0:
+        # Ensure volume directories are owned by ainrf (Docker named volumes
+        # may be owned by root on first mount)
+        import subprocess
+        for d in ("/opt/ainrf/state", "/opt/ainrf/.ainrf_workspaces"):
+            subprocess.run(["chown", "-R", f"{_uid}:{_gid}", d], check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.setgid(_gid)
+        os.setuid(_uid)
+        os.environ["HOME"] = "/opt/ainrf"
+        os.environ["USER"] = "ainrf"
+        print("[entrypoint] Dropped privileges to ainrf (uid=1000)", flush=True)
+
     cmd = sys.argv[1:]
     if not cmd:
         cmd = [

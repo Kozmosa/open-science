@@ -104,14 +104,16 @@ RUN groupadd --gid 1000 ainrf && \
     useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
     mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf
-# Generate SSH host keys + root login key for localhost self-test
-RUN mkdir -p /run/sshd && \
+# Generate SSH host keys + login keys for localhost self-test
+RUN mkdir -p /run/sshd /root/.ssh && \
     ssh-keygen -A && \
     mkdir -p /opt/ainrf/.ssh && \
     ssh-keygen -t ed25519 -f /opt/ainrf/.ssh/ainrf_local -N "" -C "ainrf-localhost" && \
-    mkdir -p /root/.ssh && \
     cat /opt/ainrf/.ssh/ainrf_local.pub > /root/.ssh/authorized_keys && \
-    chmod 600 /root/.ssh/authorized_keys && \
+    mkdir -p /home/ainrf/.ssh && \
+    cat /opt/ainrf/.ssh/ainrf_local.pub > /home/ainrf/.ssh/authorized_keys && \
+    chmod 600 /root/.ssh/authorized_keys /home/ainrf/.ssh/authorized_keys && \
+    chown ainrf:ainrf /home/ainrf/.ssh /home/ainrf/.ssh/authorized_keys && \
     chown -R ainrf:ainrf /opt/ainrf/.ssh
 RUN echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config.d/ainrf.conf
 ENV HOME=/opt/ainrf
