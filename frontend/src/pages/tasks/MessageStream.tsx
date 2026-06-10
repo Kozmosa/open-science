@@ -6,12 +6,16 @@ import { useMessageGroups } from './useMessageGroups';
 
 interface Props {
   messages: MessageItem[];
+  hasMore: boolean;
+  loadMore: () => void;
+  isLoadingMore: boolean;
 }
 
-export default function MessageStream({ messages }: Props) {
+export default function MessageStream({ messages, hasMore, loadMore, isLoadingMore }: Props) {
   const t = useT();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
   const shouldScrollRef = useRef(false);
   const lastFirstIdRef = useRef<string | null>(null);
   const { displayItems, toggleGroup } = useMessageGroups(messages);
@@ -43,6 +47,23 @@ export default function MessageStream({ messages }: Props) {
     }
   }, [messages]);
 
+  // ── IntersectionObserver for load-more sentinel at top ──────
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, loadMore]);
+
   if (messages.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
@@ -53,6 +74,14 @@ export default function MessageStream({ messages }: Props) {
 
   return (
     <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-2">
+      {/* Sentinel for load-more at the top */}
+      {hasMore && (
+        <div ref={topSentinelRef} className="flex justify-center py-2">
+          <span className="text-xs text-[var(--text-tertiary)]">
+            {isLoadingMore ? t('common.loading') : '↑'}
+          </span>
+        </div>
+      )}
       {displayItems.map((item) => {
         if (item.kind === 'group') {
           return (

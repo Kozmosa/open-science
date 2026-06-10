@@ -365,6 +365,7 @@ export interface TaskOutputEvent {
 export interface TaskOutputListResponse {
   items: TaskOutputEvent[];
   next_seq: number;
+  has_more: boolean;
 }
 
 

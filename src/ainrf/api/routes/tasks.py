@@ -389,6 +389,7 @@ async def get_task_output(
     request: Request,
     task_id: str,
     after_seq: int = Query(0, ge=0),
+    limit: int = Query(0, ge=0, le=1000, description="Max items to return; 0 means unlimited"),
 ) -> TaskOutputResponse:
     user = get_current_user(request)
     service = _get_service(request)
@@ -401,7 +402,13 @@ async def get_task_output(
     check_resource_ownership(user, task.owner_user_id)
 
     items = service.get_output(task_id, after_seq=after_seq)
-    next_seq = items[-1].seq if items else after_seq
+    if limit > 0:
+        has_more = len(items) > limit
+        visible = items[:limit]
+    else:
+        has_more = False
+        visible = items
+    next_seq = visible[-1].seq if visible else after_seq
     return TaskOutputResponse(
         items=[
             TaskOutputItemResponse(
@@ -411,8 +418,9 @@ async def get_task_output(
                 seq=item.seq,
                 created_at=item.created_at.isoformat(),
             )
-            for item in items
+            for item in visible
         ],
+        has_more=has_more,
         next_seq=next_seq,
     )
 

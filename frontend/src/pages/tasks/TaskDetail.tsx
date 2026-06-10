@@ -15,6 +15,9 @@ interface Props {
   detailError: string | null;
   outputItems: TaskOutputEvent[];
   outputError: string | null;
+  hasMore: boolean;
+  loadMore: () => void;
+  isLoadingMore: boolean;
 }
 
 function MetadataRow({
@@ -44,6 +47,9 @@ export default function TaskDetail({
   detailError,
   outputItems,
   outputError,
+  hasMore,
+  loadMore,
+  isLoadingMore,
 }: Props) {
   const t = useT();
   const metadataFallback = t('pages.tasks.unavailable');
@@ -205,7 +211,7 @@ export default function TaskDetail({
             {/* Message stream area */}
             <div className="flex min-h-0 flex-1 overflow-hidden">
               {outputError ? <p className="p-4 text-sm text-[var(--danger)]">{outputError}</p> : null}
-              <MessageStream messages={messages} />
+              <MessageStream messages={messages} hasMore={hasMore} loadMore={loadMore} isLoadingMore={isLoadingMore} />
             </div>
 
             {/* Input bar */}

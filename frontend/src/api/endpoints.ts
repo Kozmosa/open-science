@@ -331,11 +331,12 @@ export const deleteTaskEdge = (edgeId: string): Promise<void> =>
 
 export const getTaskOutput = (
   taskId: string,
-  afterSeq: number = 0
+  afterSeq: number = 0,
+  limit: number = 0
 ): Promise<TaskOutputListResponse> =>
   USE_MOCK
     ? Promise.resolve(mockGetTaskOutput(taskId, afterSeq))
-    : api.get<TaskOutputListResponse>(`/tasks/${taskId}/output?after_seq=${afterSeq}`);
+    : api.get<TaskOutputListResponse>(`/tasks/${taskId}/output?after_seq=${afterSeq}${limit > 0 ? `&limit=${limit}` : ''}`);
 
 export const buildTaskStreamUrl = (taskId: string, afterSeq: number = 0): string => {
   const search = new URLSearchParams({ after_seq: String(afterSeq) });

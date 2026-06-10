@@ -84,7 +84,7 @@ function TasksPage() {
   });
 
   const selectedTask = selectedTaskQuery.data ?? null;
-  const { outputItems, outputError } = useTaskOutputStream(effectiveSelectedTaskId);
+  const { outputItems, outputError, hasMore, loadMore, isLoadingMore } = useTaskOutputStream(effectiveSelectedTaskId);
 
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreatePayload) => createTask(payload),
@@ -261,6 +261,9 @@ function TasksPage() {
           detailError={detailError}
           outputItems={outputItems}
           outputError={outputError}
+          hasMore={hasMore}
+          loadMore={loadMore}
+          isLoadingMore={isLoadingMore}
         />
       </SplitPane>
       </PageShell>

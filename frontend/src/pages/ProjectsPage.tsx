@@ -167,6 +167,9 @@ export default function ProjectsPage() {
             detailError={extractErrorMessage(selectedTaskQuery.error)}
             outputItems={[]}
             outputError={null}
+            hasMore={false}
+            loadMore={() => {}}
+            isLoadingMore={false}
           />
         ) : null}
       </Modal>

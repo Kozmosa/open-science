@@ -1,35 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { buildTaskStreamUrl, getTaskOutput } from '../../api';
 import { useT } from '../../i18n';
 import type { TaskOutputEvent } from '../../types';
 import { getNextOutputSeq, mergeOutputItems } from './output';
 
-const maxOutputItems = 500;
+const PAGE_SIZE = 10;
+const CACHE_PREFIX = 'ainrf-task-output-';
 const taskMetadataSystemSubtypes = new Set(['task_paused', 'task_completed', 'task_failed']);
 
 function shouldRefreshTaskMetadata(item: TaskOutputEvent): boolean {
   if (item.kind !== 'lifecycle') {
     return false;
   }
-
   try {
     const parsed = JSON.parse(item.content) as unknown;
-    if (!parsed || typeof parsed !== 'object') {
-      return true;
-    }
+    if (!parsed || typeof parsed !== 'object') return true;
     const event = parsed as Record<string, unknown>;
     const eventType = event.event_type;
-    if (eventType === 'status') {
-      return true;
-    }
-    if (eventType !== 'system') {
-      return typeof eventType !== 'string';
-    }
+    if (eventType === 'status') return true;
+    if (eventType !== 'system') return typeof eventType !== 'string';
     const payload = event.payload;
-    if (!payload || typeof payload !== 'object') {
-      return true;
-    }
+    if (!payload || typeof payload !== 'object') return true;
     const subtype = (payload as Record<string, unknown>).subtype;
     return typeof subtype === 'string' && taskMetadataSystemSubtypes.has(subtype);
   } catch {
@@ -37,10 +29,32 @@ function shouldRefreshTaskMetadata(item: TaskOutputEvent): boolean {
   }
 }
 
+function readCache(taskId: string): TaskOutputEvent[] | null {
+  try {
+    const raw = sessionStorage.getItem(`${CACHE_PREFIX}${taskId}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as TaskOutputEvent[];
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(taskId: string, items: TaskOutputEvent[]): void {
+  try {
+    sessionStorage.setItem(`${CACHE_PREFIX}${taskId}`, JSON.stringify(items));
+  } catch {
+    // quota exceeded — ignore
+  }
+}
+
+
 
 interface TaskOutputStreamState {
   outputItems: TaskOutputEvent[];
   outputError: string | null;
+  hasMore: boolean;
+  loadMore: () => void;
+  isLoadingMore: boolean;
 }
 
 export function useTaskOutputStream(taskId: string | null): TaskOutputStreamState {
@@ -48,11 +62,56 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
   const t = useT();
   const [outputItems, setOutputItems] = useState<TaskOutputEvent[]>([]);
   const [outputError, setOutputError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const nextSeqRef = useRef<number>(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const refillPromiseRef = useRef<Promise<void> | null>(null);
+  const loadMoreSeqRef = useRef<number>(0);
 
+  const appendOutput = useCallback(
+    (items: TaskOutputEvent[], taskId: string) => {
+      const taskItems = items.filter((item) => item.task_id === taskId);
+      if (taskItems.length === 0) return;
+      setOutputItems((current) => {
+        const merged = mergeOutputItems(current, taskItems);
+        writeCache(taskId, merged);
+        return merged;
+      });
+      nextSeqRef.current = Math.max(
+        nextSeqRef.current,
+        getNextOutputSeq(taskItems, nextSeqRef.current)
+      );
+    },
+    []
+  );
+
+  // ── Load more (scroll up) ──────────────────────────────────
+  const loadMore = useCallback(() => {
+    if (!taskId || isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    const seq = loadMoreSeqRef.current;
+    void getTaskOutput(taskId, seq, PAGE_SIZE)
+      .then((page) => {
+        if (page.items.length > 0) {
+          setOutputItems((current) => {
+            const merged = mergeOutputItems(current, page.items);
+            writeCache(taskId, merged);
+            return merged;
+          });
+          // loadMoreSeq moves to the next batch boundary
+          loadMoreSeqRef.current = page.items[page.items.length - 1].seq;
+        }
+        setHasMore(page.has_more);
+      })
+      .catch(() => {
+        // silent — user can retry by scrolling up again
+      })
+      .finally(() => setIsLoadingMore(false));
+  }, [taskId, isLoadingMore, hasMore]);
+
+  // ── Main effect: initial load + SSE stream ─────────────────
   useEffect(() => {
     const closeCurrentStream = (): void => {
       if (eventSourceRef.current) {
@@ -69,7 +128,10 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
     refillPromiseRef.current = null;
     setOutputItems([]);
     setOutputError(null);
+    setHasMore(false);
+    setIsLoadingMore(false);
     nextSeqRef.current = 0;
+    loadMoreSeqRef.current = 0;
 
     if (taskId === null) {
       return undefined;
@@ -77,32 +139,13 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
 
     let active = true;
 
-    const updateNextSeq = (seq: number): void => {
-      nextSeqRef.current = Math.max(nextSeqRef.current, seq);
-    };
-
-    const appendOutput = (items: TaskOutputEvent[]): void => {
-      const taskItems = items.filter((item) => item.task_id === taskId);
-      if (taskItems.length === 0) {
-        return;
-      }
-      setOutputItems((current) => mergeOutputItems(current, taskItems).slice(-maxOutputItems));
-      updateNextSeq(getNextOutputSeq(taskItems, nextSeqRef.current));
-    };
-
     const refillGap = async (): Promise<void> => {
-      if (refillPromiseRef.current) {
-        return refillPromiseRef.current;
-      }
-
+      if (refillPromiseRef.current) return refillPromiseRef.current;
       refillPromiseRef.current = (async () => {
         try {
           const page = await getTaskOutput(taskId, nextSeqRef.current);
-          if (!active) {
-            return;
-          }
-          appendOutput(page.items);
-          updateNextSeq(page.next_seq);
+          if (!active) return;
+          appendOutput(page.items, taskId);
         } catch (error) {
           if (active) {
             setOutputError(error instanceof Error ? error.message : t('pages.tasks.output.replayFailed'));
@@ -111,7 +154,6 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
           refillPromiseRef.current = null;
         }
       })();
-
       return refillPromiseRef.current;
     };
 
@@ -122,14 +164,10 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
       source.onmessage = (event: MessageEvent<string>) => {
         try {
           const item = JSON.parse(event.data) as TaskOutputEvent;
-          if (item.task_id !== taskId) {
-            return;
-          }
-          if (item.seq > nextSeqRef.current + 1) {
-            void refillGap();
-          }
+          if (item.task_id !== taskId) return;
+          if (item.seq > nextSeqRef.current + 1) void refillGap();
           if (item.seq > nextSeqRef.current) {
-            appendOutput([item]);
+            appendOutput([item], taskId);
           }
           if (shouldRefreshTaskMetadata(item)) {
             void queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -141,13 +179,9 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
       };
       source.onerror = () => {
         source.close();
-        if (!active) {
-          return;
-        }
+        if (!active) return;
         void refillGap().finally(() => {
-          if (!active) {
-            return;
-          }
+          if (!active) return;
           reconnectTimerRef.current = window.setTimeout(openStream, 1000);
         });
       };
@@ -155,15 +189,33 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
 
     void (async () => {
       try {
-        const page = await getTaskOutput(taskId, 0);
-        if (!active) {
-          return;
+        // 1. Try sessionStorage cache first
+        const cached = readCache(taskId);
+        if (cached && cached.length > 0) {
+          setOutputItems(cached);
+          const maxCachedSeq = getNextOutputSeq(cached, 0);
+          nextSeqRef.current = maxCachedSeq;
+          loadMoreSeqRef.current = maxCachedSeq;
+          // Fetch only new items after the cache
+          const page = await getTaskOutput(taskId, maxCachedSeq);
+          if (!active) return;
+          if (page.items.length > 0) {
+            appendOutput(page.items, taskId);
+          }
+          setHasMore(false); // cache means we loaded all history already
+        } else {
+          // 2. No cache — load first PAGE_SIZE items from the beginning
+          const page = await getTaskOutput(taskId, 0, PAGE_SIZE);
+          if (!active) return;
+          if (page.items.length > 0) {
+            setOutputItems(page.items);
+            writeCache(taskId, page.items);
+            nextSeqRef.current = getNextOutputSeq(page.items, 0);
+            // loadMoreSeq starts at 0 + items loaded = next batch boundary
+            loadMoreSeqRef.current = page.items[page.items.length - 1].seq;
+          }
+          setHasMore(page.has_more);
         }
-        appendOutput(page.items);
-        nextSeqRef.current = getNextOutputSeq(
-          page.items.filter((item) => item.task_id === taskId),
-          page.next_seq
-        );
         openStream();
       } catch (error) {
         if (active) {
@@ -176,7 +228,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
       active = false;
       closeCurrentStream();
     };
-  }, [queryClient, taskId, t]);
+  }, [queryClient, taskId, t, appendOutput]);
 
-  return { outputItems, outputError };
+  return { outputItems, outputError, hasMore, loadMore, isLoadingMore };
 }

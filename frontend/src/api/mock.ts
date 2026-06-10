@@ -835,6 +835,7 @@ export function mockGetTaskOutput(taskId: string, afterSeq: number = 0): TaskOut
   return {
     items,
     next_seq: items.at(-1)?.seq ?? afterSeq,
+    has_more: false,
   };
 }
 
