@@ -1,8 +1,6 @@
+import { marked } from 'marked';
 import { useState } from 'react';
-import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { useLocale, useT } from '../../i18n';
-import { workspaceFileBrowserHref } from '../../utils/workspaceFileLinks';
 import type { MessageItem } from '../../types';
 
 function browserLocale(locale: 'en' | 'zh'): string {
@@ -44,37 +42,16 @@ function messageTypeLabel(type: string, t: ReturnType<typeof useT>): string {
   }
 }
 
-const markdownLinkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
+const PROSE_STYLES = 'prose-sm [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-[var(--bg-tertiary)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_pre]:my-1 [&_pre]:rounded-lg [&_pre]:bg-[var(--bg-tertiary)] [&_pre]:p-2 [&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--text-tertiary)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--text-secondary)] [&_a]:text-[var(--apple-blue)] [&_a]:underline [&_strong]:font-semibold [&_em]:italic [&_hr]:my-2 [&_hr]:border-[var(--border)] [&_table]:my-1 [&_table]:w-full [&_th]:border [&_th]:border-[var(--border)] [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-2 [&_td]:py-1';
 
-function RenderedMessageText({ content, className }: { content: string; className: string }) {
-  const nodes: ReactNode[] = [];
-  let lastIndex = 0;
-  for (const match of content.matchAll(markdownLinkPattern)) {
-    const [fullMatch, label, target] = match;
-    const index = match.index ?? 0;
-    if (index > lastIndex) {
-      nodes.push(content.slice(lastIndex, index));
-    }
-    const workspaceHref = workspaceFileBrowserHref(target);
-    if (workspaceHref) {
-      nodes.push(
-        <Link
-          key={`${target}-${index}`}
-          to={workspaceHref}
-          className="underline decoration-[var(--apple-blue)] underline-offset-2 hover:text-[var(--apple-blue)]"
-        >
-          {label}
-        </Link>
-      );
-    } else {
-      nodes.push(fullMatch);
-    }
-    lastIndex = index + fullMatch.length;
-  }
-  if (lastIndex < content.length) {
-    nodes.push(content.slice(lastIndex));
-  }
-  return <pre className={className}>{nodes}</pre>;
+function SafeMarkdown({ content, className }: { content: string; className?: string }) {
+  const html = marked.parse(content, { async: false }) as string;
+  return (
+    <div
+      className={`break-words font-sans text-sm [&_p]:whitespace-pre-wrap ${PROSE_STYLES} ${className ?? ''}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 }
 
 export function SystemEventBlock({ message }: { message: MessageItem }) {
@@ -96,7 +73,7 @@ export function UserMessage({ message }: { message: MessageItem }) {
   return (
     <div className="my-2 flex justify-end">
       <div className="max-w-[80%] rounded-2xl rounded-tr-sm border border-[var(--info-border)] bg-[var(--info-soft)] px-4 py-2">
-        <pre className="whitespace-pre-wrap break-words font-sans text-sm text-[var(--info-foreground)]">{content}</pre>
+        <SafeMarkdown content={content} className="text-[var(--info-foreground)]" />
         <div className="mt-1 text-right text-[10px] text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp, locale)}</div>
       </div>
     </div>
@@ -109,7 +86,7 @@ export function AssistantMessage({ message }: { message: MessageItem }) {
   return (
     <div className="my-2 flex justify-start">
       <div className="max-w-[80%] rounded-2xl rounded-tl-sm bg-[var(--bg-secondary)] px-4 py-2">
-        <RenderedMessageText content={content} className="whitespace-pre-wrap break-words font-sans text-sm text-[var(--text)]" />
+        <SafeMarkdown content={content} className="text-[var(--text)]" />
         <div className="mt-1 text-right text-[10px] text-[var(--text-tertiary)]">{formatTime(message.metadata.timestamp, locale)}</div>
       </div>
     </div>
@@ -182,7 +159,7 @@ export function ToolResultBlock({ message }: { message: MessageItem }) {
       {isOpen && (
         <div className="mt-1 w-full rounded-lg border-l-2 border-[var(--success)] bg-[var(--bg-secondary)] px-3 py-2">
           {typeof content === 'string' ? (
-            <RenderedMessageText content={content} className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--text-secondary)]" />
+            <SafeMarkdown content={content} className="text-xs text-[var(--text-secondary)]" />
           ) : (
             <pre className="whitespace-pre-wrap break-words font-mono text-xs text-[var(--text-secondary)]">{JSON.stringify(content, null, 2)}</pre>
           )}
