@@ -175,7 +175,7 @@ def build_jwt_auth_middleware(
                 "id": "api-key-user",
                 "username": "api-key",
                 "role": "user",  # API keys get user role, not admin
-                "display_name": "API Key",
+                "status": "active",
             }
             request.state.auth_scheme = "api_key"
             return await call_next(request)

@@ -5,7 +5,7 @@
 # Stages:
 #   frontend-build  — build React app with Node
 #   backend-build   — install Python package with uv
-#   agent-tools     — download Claude Code binary + install Codex CLI
+#   agent-tools     — install Claude Code CLI + Codex CLI via npm
 #   runtime         — minimal production image
 #
 # Build:
@@ -15,12 +15,12 @@
 #   docker run -e AINRF_JWT_SECRET=... -e AINRF_API_KEY_HASHES=... ainrf:latest
 #
 # Agent tool config (set via environment):
-#   CLAUDE_API_KEY     — Anthropic API key
-#   CLAUDE_BASE_URL    — Anthropic API base URL
-#   CLAUDE_MODEL       — default model (e.g. claude-sonnet-4-6)
-#   CODEX_API_KEY      — OpenAI API key
-#   CODEX_BASE_URL     — OpenAI API base URL
-#   CODEX_MODEL        — default model (e.g. gpt-5.5)
+#   ANTHROPIC_API_KEY   — Anthropic API key
+#   ANTHROPIC_BASE_URL  — Anthropic API base URL
+#   ANTHROPIC_MODEL     — default model (e.g. claude-sonnet-4-6)
+#   CODEX_API_KEY       — OpenAI API key
+#   CODEX_BASE_URL      — OpenAI API base URL
+#   CODEX_MODEL         — default model (e.g. gpt-5.5)
 #
 # ══════════════════════════════════════════════════════════════════
 
@@ -38,8 +38,8 @@ FROM docker.1ms.run/python:3.13-slim AS backend-build
 
 COPY --from=ghcr.1ms.run/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+ENV UV_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple
+ENV PIP_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple
 
 WORKDIR /build
 COPY pyproject.toml ./
@@ -48,49 +48,35 @@ COPY src/ainrf/ src/ainrf/
 RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
 # ── Stage 3: Agent tools ─────────────────────────────────────────
-# Downloads Claude Code native binary from GitHub via ghfast mirror,
-# and installs Codex CLI via npm (npmmirror).
+# Installs Claude Code CLI and Codex CLI via npm.
 FROM docker.1ms.run/node:24-slim AS agent-tools
 
-# Claude Code: download native binary via GitHub mirror
-ARG CLAUDE_CODE_VERSION=latest
-RUN apt-get update && apt-get install -y --no-install-recommends curl tar && \
-    rm -rf /var/lib/apt/lists/* && \
-    if [ "$CLAUDE_CODE_VERSION" = "latest" ]; then \
-      VERSION=$(curl -sL https://api.github.com/repos/anthropics/claude-code/releases/latest | \
-        grep '"tag_name"' | head -1 | sed -E 's/.*"v([^"]+)".*/\1/'); \
-    else \
-      VERSION="$CLAUDE_CODE_VERSION"; \
-    fi && \
-    echo "Installing Claude Code v${VERSION}" && \
-    curl -sL "https://ghfast.top/https://github.com/anthropics/claude-code/releases/download/v${VERSION}/claude-linux-x64.tar.gz" \
-      -o /tmp/claude.tar.gz && \
-    mkdir -p /opt/claude-code && \
-    tar xzf /tmp/claude.tar.gz -C /opt/claude-code && \
-    rm /tmp/claude.tar.gz && \
-    /opt/claude-code/claude --version
-
-# Codex CLI: install via npm with China mirror
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g @openai/codex@latest
+    npm install -g @anthropic-ai/claude-code@latest && \
+    npm install -g --registry https://registry.npmjs.org @openai/codex@latest
+# Copy codex-linux-x64 to top level for require.resolve
+RUN if [ -d /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 ]; then \
+      cp -r /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 \
+             /usr/local/lib/node_modules/@openai/codex-linux-x64; \
+    fi
 
 # ── Stage 4: Runtime ──────────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS runtime
 
-# Runtime OS packages
-RUN apt-get update && \
+# Runtime OS packages (USTC mirror)
+RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null; \
+    sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list 2>/dev/null; \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
-        tmux && \
+        procps tmux git && \
     rm -rf /var/lib/apt/lists/*
 
-# Claude Code: standalone native binary (no Node.js needed)
-COPY --from=agent-tools /opt/claude-code /opt/claude-code
-RUN ln -s /opt/claude-code/claude /usr/local/bin/claude
-
-# Node.js runtime + Codex CLI from agent-tools stage
+# Node.js runtime + Claude Code CLI + Codex CLI from agent-tools stage
 COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node
+COPY --from=agent-tools /usr/local/bin/claude /usr/local/bin/claude
 COPY --from=agent-tools /usr/local/bin/codex /usr/local/bin/codex
 COPY --from=agent-tools /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules /usr/local/bin/node_modules
 
 # Copy installed Python packages from build stage
 COPY --from=backend-build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
@@ -105,7 +91,7 @@ COPY deploy/config/entrypoint.py /opt/ainrf/bin/entrypoint.py
 
 # State directory (mount volume here)
 RUN mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin
-VOLUME /opt/ainrf/state
+VOLUME /opt/ainrf/state /opt/ainrf/.ainrf_workspaces
 
 # Non-root user
 RUN groupadd --gid 1000 ainrf && \
@@ -116,19 +102,15 @@ ENV HOME=/opt/ainrf
 USER ainrf
 
 # Verify agent tools are functional
-RUN claude --version && codex --version
+RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")
 
 # Default agent tool config (placeholder values — override via env)
-ENV CLAUDE_API_KEY=sk-placeholder-change-me
-ENV CLAUDE_BASE_URL=https://api.anthropic.com
-ENV CLAUDE_MODEL=claude-sonnet-4-6
-ENV CLAUDE_HAIKU_MODEL=claude-haiku-4-5-20251001
-ENV CLAUDE_SONNET_MODEL=claude-sonnet-4-6
-ENV CLAUDE_OPUS_MODEL=claude-opus-4-6
+ENV ANTHROPIC_API_KEY=sk-placeholder-change-me
+ENV ANTHROPIC_BASE_URL=https://api.anthropic.com
+ENV ANTHROPIC_MODEL=claude-sonnet-4-6
 ENV CODEX_API_KEY=sk-placeholder-change-me
 ENV CODEX_BASE_URL=https://api.openai.com/v1
 ENV CODEX_MODEL=gpt-5.5
-ENV CODEX_REVIEW_MODEL=gpt-5.4
 
 ENV AINRF_PRODUCTION=1
 ENV AINRF_HOST=0.0.0.0
@@ -138,4 +120,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${AINRF_PORT:-8000}/health')"]
 
 ENTRYPOINT ["python", "/opt/ainrf/bin/entrypoint.py"]
-CMD ["python", "-m", "ainrf", "serve", "--host", "0.0.0.0", "--port", "8000", "--state-root", "/opt/ainrf/state"]
+CMD ["sh", "-c", "python -m ainrf serve --host ${AINRF_HOST:-0.0.0.0} --port ${AINRF_PORT:-8000} --state-root /opt/ainrf/state"]

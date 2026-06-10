@@ -59,6 +59,24 @@ spec:
                 secretKeyRef:
                   name: ainrf-secrets
                   key: API_KEY_HASHES
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ainrf-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: ANTHROPIC_BASE_URL
+              value: "https://api.anthropic.com"
+            - name: ANTHROPIC_MODEL
+              value: "claude-sonnet-4-6"
+            - name: CODEX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ainrf-secrets
+                  key: CODEX_API_KEY
+            - name: CODEX_BASE_URL
+              value: "https://api.openai.com/v1"
+            - name: CODEX_MODEL
+              value: "gpt-5.5"
           resources:
             requests:
               cpu: 250m

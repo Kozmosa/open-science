@@ -5,7 +5,7 @@ model_context_window = 400000
 model_provider = "custom"
 model_reasoning_effort = "medium"
 network_access = "enabled"
-review_model = "${CODEX_REVIEW_MODEL}"
+review_model = "${CODEX_MODEL}"
 
 [features]
 collaboration_modes = true

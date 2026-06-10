@@ -12,6 +12,14 @@
 #   nginx (TLS + static files + reverse proxy)
 #     → ainrf (FastAPI backend, port 8000, not exposed)
 #
+# Bind mounts:
+#   ./data/workspaces → /opt/ainrf/.ainrf_workspaces  (user workspaces)
+#
+# Agent tool config:
+#   ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL — Claude agent
+#   CODEX_API_KEY, CODEX_BASE_URL, CODEX_MODEL — Codex/OpenAI agent
+#   Set in .env or environment; defaults are provided where possible.
+#
 # All persistent data lives in the ainrf-state named volume.
 # ══════════════════════════════════════════════════════════════════
 
@@ -34,8 +42,16 @@ services:
       AINRF_LOGIN_LOCKOUT_HOURS: "24"
       AINRF_MAX_CONCURRENT_REQUESTS: "100"
       AINRF_METRICS_ENABLED: "true"
+      # ── Agent tool configuration ─────────────────────────────
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
     volumes:
       - ainrf-state:/opt/ainrf/state
+      - ./data/workspaces:/opt/ainrf/.ainrf_workspaces
     expose:
       - "8000"
     healthcheck:
