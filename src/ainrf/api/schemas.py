@@ -955,7 +955,7 @@ class LoginRequest(BaseModel):
 
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    username: str = Field(min_length=1, max_length=64)
+    username: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$", description="ASCII letters, digits, dots, underscores, hyphens only")
     display_name: str = Field(min_length=1, max_length=128)
     password: str = Field(min_length=4)
 

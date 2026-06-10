@@ -140,7 +140,9 @@ class AuthService:
         password: str,
         must_change_password: bool = False,
     ) -> User:
-        self.initialize()
+        import re
+        if not re.fullmatch(r"[a-zA-Z0-9._-]+", username):
+            raise AuthError("Username must contain only ASCII letters, digits, dots, underscores, and hyphens")
         with self._connect() as conn:
             row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
         if row is not None:

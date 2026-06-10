@@ -51,8 +51,8 @@ export default function RegisterPage() {
         <h1 className="text-xl font-semibold mb-6">{t('auth.register')}</h1>
         {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
-          <label className="text-xs text-[var(--text-secondary)]">{t('auth.username')}</label>
-          <Input placeholder={t('auth.username')} value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+          <label className="text-xs text-[var(--text-secondary)]">{t('auth.username')} <span className="text-[var(--text-tertiary)]">({t('auth.usernameHint')})</span></label>
+          <Input placeholder={t('auth.username')} value={username} onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9._-]/g, ''))} autoFocus />
           <label className="text-xs text-[var(--text-secondary)]">{t('auth.displayName')}</label>
           <Input placeholder={t('auth.displayName')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           <label className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
