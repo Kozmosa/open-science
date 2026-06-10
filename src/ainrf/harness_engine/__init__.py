@@ -11,7 +11,14 @@ from ainrf.harness_engine.base import (
     OutputEvent,
 )
 from ainrf.harness_engine.engines import get_engine
-from ainrf.harness_engine.mcp_servers import available_mcp_servers, resolve_mcp_servers
+from ainrf.harness_engine.mcp_servers import (
+    available_mcp_servers,
+    get_active_backend_id,
+    list_backends,
+    load_search_settings,
+    resolve_mcp_servers_for_task,
+    save_search_settings,
+)
 
 __all__ = [
     "ExecutionContext",
@@ -23,6 +30,10 @@ __all__ = [
     "HarnessEngineType",
     "OutputEvent",
     "available_mcp_servers",
+    "get_active_backend_id",
     "get_engine",
-    "resolve_mcp_servers",
+    "list_backends",
+    "load_search_settings",
+    "resolve_mcp_servers_for_task",
+    "save_search_settings",
 ]

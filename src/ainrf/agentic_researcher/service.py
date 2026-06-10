@@ -20,7 +20,7 @@ from ainrf.agentic_researcher.models import (
     TaskStatus,
 )
 from ainrf.harness_engine import EngineEvent, ExecutionContext, get_engine
-from ainrf.harness_engine.mcp_servers import resolve_mcp_servers
+from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
 from ainrf.harness_engine.base import HarnessEngine
 from ainrf.workspaces.service import WorkspaceNotFoundError
 
@@ -654,7 +654,10 @@ class AgenticResearcherService:
 
     def _build_execution_context(self, task: Task) -> ExecutionContext:
         working_directory = self._resolve_working_directory(task)
-        mcp_servers = resolve_mcp_servers(task.user_mcp_servers)
+        mcp_servers = resolve_mcp_servers_for_task(
+            self._state_root,
+            user_mcp_servers=task.user_mcp_servers,
+        )
         return ExecutionContext(
             task_id=task.task_id,
             working_directory=str(working_directory),
