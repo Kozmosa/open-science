@@ -91,15 +91,18 @@ def test_start_terminal_bridge_launches_process(
     runtime = start_terminal_bridge(("/bin/sh",), tmp_path)
 
     assert captured["args"] == (["/bin/sh"],)
-    assert captured["kwargs"] == {
-        "stdin": 12,
-        "stdout": 12,
-        "stderr": 12,
-        "cwd": tmp_path.resolve(),
-        "start_new_session": True,
-        "text": False,
-        "close_fds": True,
-    }
+    kwargs = captured["kwargs"]
+    assert kwargs["stdin"] == 12
+    assert kwargs["stdout"] == 12
+    assert kwargs["stderr"] == 12
+    assert kwargs["cwd"] == tmp_path.resolve()
+    assert kwargs["start_new_session"] is True
+    assert kwargs["text"] is False
+    assert kwargs["close_fds"] is True
+    assert isinstance(kwargs["env"], dict)
+    assert kwargs["env"]["TERM"] == "xterm-256color"
+    assert kwargs["env"]["COLUMNS"] == "80"
+    assert kwargs["env"]["LINES"] == "24"
     assert runtime.process.pid == 4321
     assert runtime.master_fd == 11
 

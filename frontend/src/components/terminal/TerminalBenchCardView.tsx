@@ -171,7 +171,7 @@ function TerminalBenchCardView({
           </div>
         }
       >
-        <div className="h-[480px]">
+        <div className="min-h-[480px]">
           <TerminalSessionConsole
             sessionId={sessionId}
             attachmentId={attachmentId}

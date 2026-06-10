@@ -72,6 +72,10 @@ def start_terminal_bridge(
     spawn_working_directory.mkdir(parents=True, exist_ok=True)
     normalized_working_directory = spawn_working_directory.resolve(strict=True)
     master_fd, slave_fd = os.openpty()
+    child_env = os.environ.copy()
+    child_env["TERM"] = "xterm-256color"
+    child_env.setdefault("COLUMNS", "80")
+    child_env.setdefault("LINES", "24")
     try:
         process = subprocess.Popen(
             list(shell_command),
@@ -79,6 +83,7 @@ def start_terminal_bridge(
             stdout=slave_fd,
             stderr=slave_fd,
             cwd=normalized_working_directory,
+            env=child_env,
             start_new_session=True,
             text=False,
             close_fds=True,
