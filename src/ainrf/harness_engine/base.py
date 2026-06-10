@@ -29,7 +29,7 @@ class ExecutionContext:
     researcher_type: str = "vanilla"
     engine_type: HarnessEngineType = HarnessEngineType.CLAUDE_CODE
     skills: list[str] | None = None
-    mcp_servers: list[str] | None = None
+    mcp_servers: dict[str, dict[str, object]] | None = None
     system_prompt: str | None = None
     model: str | None = None
     permission_mode: str | None = None

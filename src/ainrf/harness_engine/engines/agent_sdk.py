@@ -172,10 +172,11 @@ class AgentSdkEngine(HarnessEngine):
             | None,
             context.permission_mode or "bypassPermissions",
         )
-        mcp_servers = cast(
-            dict[str, McpServerConfig] | str | Path,
-            context.mcp_servers or {},
-        )
+        mcp_servers: dict[str, McpServerConfig] | str | Path = context.mcp_servers or {}
+        # Skills go to the `skills` parameter; allowed_tools includes skills
+        # plus built-in tools (WebSearch, Fetch) so agents can search the web.
+        skills = context.skills or []
+        allowed_tools = list(skills)
         options = ClaudeAgentOptions(
             model=context.model or "claude-sonnet-4-5",
             system_prompt=context.system_prompt,
@@ -185,7 +186,8 @@ class AgentSdkEngine(HarnessEngine):
             max_turns=context.max_turns,
             max_budget_usd=context.max_budget_usd,
             mcp_servers=mcp_servers,
-            allowed_tools=context.skills or [],
+            skills=skills,
+            allowed_tools=allowed_tools,
             hooks={
                 "PostToolUse": [HookMatcher(hooks=[self._post_tool_use_hook(emit)])],
                 "Notification": [HookMatcher(hooks=[self._notification_hook(emit)])],

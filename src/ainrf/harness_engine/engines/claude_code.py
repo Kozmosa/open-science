@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,18 @@ class ClaudeCodeEngine(HarnessEngine):
             "--permission-mode",
             "bypassPermissions",
         ]
+        # If MCP servers are configured, write a temporary config file and
+        # pass it via --mcp-config so Claude Code spawns the servers.
+        mcp_config_file: tempfile._TemporaryFileWrapper[bytes] | None = None
+        if context.mcp_servers:
+            mcp_json = json.dumps({"mcpServers": context.mcp_servers})
+            mcp_config_file = tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".json", prefix="ainrf-mcp-", delete=False,
+            )
+            mcp_config_file.write(mcp_json.encode())
+            mcp_config_file.close()
+            command.extend(["--mcp-config", mcp_config_file.name])
+
         env = os.environ.copy()
         self._remove_implicit_provider_env(env, context)
         if context.api_base_url:
@@ -169,6 +182,11 @@ class ClaudeCodeEngine(HarnessEngine):
             )
         finally:
             self._processes.pop(context.task_id, None)
+            if mcp_config_file is not None:
+                try:
+                    os.unlink(mcp_config_file.name)
+                except OSError:
+                    pass
             if process.returncode is None:
                 process.terminate()
                 try:
