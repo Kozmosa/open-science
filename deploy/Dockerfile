@@ -51,9 +51,8 @@ RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 # Installs Claude Code CLI and Codex CLI via npm.
 
 FROM docker.1ms.run/node:24-slim AS agent-tools
-
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g @anthropic-ai/claude-code@latest && \
+    npm install -g @anthropic-ai/claude-code@2.1.170 && \
     npm install -g --registry https://registry.npmjs.org @openai/codex@latest
 # Copy codex-linux-x64 to top level for require.resolve
 RUN if [ -d /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 ]; then \
@@ -102,9 +101,6 @@ RUN groupadd --gid 1000 ainrf && \
     chown -R ainrf:ainrf /opt/ainrf
 ENV HOME=/opt/ainrf
 # Verify agent tools (Claude Code is required; Codex may need runtime fix)
-RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")
-
-# Verify agent tools are functional
 RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")
 
 # Default agent tool config (placeholder values — override via env)

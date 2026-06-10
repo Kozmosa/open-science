@@ -73,7 +73,18 @@ echo "[2/6] Persistent volumes..."
 $K apply -f "${SCRIPT_DIR}/pvc.yaml"
 
 echo "[3/6] Secrets (skip if already created)..."
-$K apply -f "${SCRIPT_DIR}/secrets.yaml"
+if ! $K get secret ainrf-secrets -n "${NAMESPACE}" &>/dev/null; then
+    echo "  Secret ainrf-secrets not found. Creating with placeholder values."
+    echo "  IMPORTANT: Replace with real secrets via:"
+    echo "    kubectl create secret generic ainrf-secrets --namespace=${NAMESPACE} \\"
+    echo "      --from-literal=JWT_SECRET=\$(python3 -c \"import secrets; print(secrets.token_urlsafe(48))\") \\"
+    echo "      --from-literal=API_KEY_HASHES=\$(python3 -c \"from hashlib import sha256; print(sha256(b'YOUR_API_KEY').hexdigest())\") \\"
+    echo "      --from-literal=ANTHROPIC_API_KEY=sk-ant-... \\"
+    echo "      --from-literal=CODEX_API_KEY=sk-..."
+    $K apply -f "${SCRIPT_DIR}/secrets.yaml"
+else
+    echo "  Secret ainrf-secrets already exists, skipping."
+fi
 
 echo "[4/6] Deployment..."
 if [[ "${IMAGE}" != "ainrf:latest" ]]; then
