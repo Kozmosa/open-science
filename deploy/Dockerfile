@@ -49,6 +49,7 @@ RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
 # ── Stage 3: Agent tools ─────────────────────────────────────────
 # Installs Claude Code CLI and Codex CLI via npm.
+
 FROM docker.1ms.run/node:24-slim AS agent-tools
 
 RUN npm config set registry https://registry.npmmirror.com && \
@@ -76,6 +77,7 @@ COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node
 COPY --from=agent-tools /usr/local/bin/claude /usr/local/bin/claude
 COPY --from=agent-tools /usr/local/bin/codex /usr/local/bin/codex
 COPY --from=agent-tools /usr/local/lib/node_modules /usr/local/lib/node_modules
+
 RUN ln -s /usr/local/lib/node_modules /usr/local/bin/node_modules
 
 # Copy installed Python packages from build stage
@@ -89,7 +91,7 @@ COPY --from=frontend-build /build/frontend/dist /opt/ainrf/frontend/dist
 COPY deploy/config/ /opt/ainrf/config/
 COPY deploy/config/entrypoint.py /opt/ainrf/bin/entrypoint.py
 
-# State directory (mount volume here)
+# State and workspace directories (mount volumes here for persistence)
 RUN mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin
 VOLUME /opt/ainrf/state /opt/ainrf/.ainrf_workspaces
 
@@ -99,7 +101,8 @@ RUN groupadd --gid 1000 ainrf && \
     mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf
 ENV HOME=/opt/ainrf
-USER ainrf
+# Verify agent tools (Claude Code is required; Codex may need runtime fix)
+RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")
 
 # Verify agent tools are functional
 RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")

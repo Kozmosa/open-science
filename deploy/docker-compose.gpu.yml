@@ -55,8 +55,8 @@ services:
       CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
     volumes:
-      - ainrf-state:/opt/ainrf/state
-      - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - ./data/state:/opt/ainrf/state
+      - ./data/workspaces:/opt/ainrf/.ainrf_workspaces
     # ── GPU 全透传 ────────────────────────────────────────
     deploy:
       resources:
@@ -79,6 +79,3 @@ services:
         max-size: "50m"
         max-file: "5"
 
-volumes:
-  ainrf-state:
-  ainrf-workspaces:

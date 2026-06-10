@@ -73,10 +73,12 @@ spec:
                 secretKeyRef:
                   name: ainrf-secrets
                   key: CODEX_API_KEY
+
             - name: CODEX_BASE_URL
               value: "https://api.openai.com/v1"
             - name: CODEX_MODEL
               value: "gpt-5.5"
+
           resources:
             requests:
               cpu: 250m
