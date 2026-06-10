@@ -217,6 +217,10 @@ Pull requests should include:
 - screenshots only for docs/site rendering changes,
 - links to related issues or design notes when applicable.
 
+## Production Environment Safety
+
+Do NOT operate production deployment containers (Docker, Kubernetes, etc.) — including `docker exec`, `docker compose restart`, `docker logs`, or any other container interaction — unless the user explicitly asks you to. This applies to any environment that serves real users or holds production data. When in doubt, ask first.
+
 ## Security & Configuration Tips
 
 Do not commit secrets, SSH keys, or generated artifacts. Keep runtime state under `.ainrf/` out of version control. Prefer `uv run` over manual venv management so local execution matches the project lockfile.
