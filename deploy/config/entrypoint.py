@@ -63,10 +63,26 @@ def _generate_codex_config() -> None:
         print(f"[entrypoint] Generated {out_dir / 'auth.json'}")
 
 
+def _start_sshd() -> None:
+    """Start sshd so localhost self-test works."""
+    import subprocess
+    try:
+        subprocess.Popen(
+            ["/usr/sbin/sshd"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        print("[entrypoint] sshd started", flush=True)
+    except FileNotFoundError:
+        print("[entrypoint] sshd not found, skipping", flush=True)
+    except OSError as exc:
+        print(f"[entrypoint] sshd failed to start: {exc}", flush=True)
+
+
 def main() -> None:
+    _start_sshd()
     _generate_claude_settings()
     _generate_codex_config()
-
     # Exec the actual server command
     cmd = sys.argv[1:]
     if not cmd:

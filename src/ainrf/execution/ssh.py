@@ -310,8 +310,10 @@ class SSHExecutor:
             "username": self._container.user,
             "connect_timeout": self._container.connect_timeout,
         }
-        ssh_config_path = Path.home() / ".ssh" / "config"
-        if ssh_config_path.exists():
+        # Skip host key verification for localhost connections (container self-test)
+        if self._container.host in ("127.0.0.1", "localhost", "::1"):
+            connect_kwargs["known_hosts"] = None
+        elif (ssh_config_path := Path.home() / ".ssh" / "config").exists():
             connect_kwargs["config"] = [str(ssh_config_path)]
         if self._container.ssh_key_path is not None:
             connect_kwargs["client_keys"] = [self._container.ssh_key_path]

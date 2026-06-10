@@ -65,13 +65,16 @@ RUN --mount=type=cache,target=/root/.npm \
 # ── Stage 4: Runtime ──────────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS runtime
 
-# Runtime OS packages (USTC mirror)
+# Runtime OS packages (USTC mirror) — includes SSH server for localhost self-test
 RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null; \
     sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list 2>/dev/null; \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        bubblewrap procps tmux git && \
+        openssh-server bubblewrap procps tmux git && \
     rm -rf /var/lib/apt/lists/*
+
+# uv from official image (needed for runtime Python dev commands)
+COPY --from=ghcr.1ms.run/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Node.js runtime + Claude Code CLI + Codex CLI from agent-tools stage
 COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node
@@ -101,6 +104,16 @@ RUN groupadd --gid 1000 ainrf && \
     useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
     mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf
+# Generate SSH host keys + root login key for localhost self-test
+RUN mkdir -p /run/sshd && \
+    ssh-keygen -A && \
+    mkdir -p /opt/ainrf/.ssh && \
+    ssh-keygen -t ed25519 -f /opt/ainrf/.ssh/ainrf_local -N "" -C "ainrf-localhost" && \
+    mkdir -p /root/.ssh && \
+    cat /opt/ainrf/.ssh/ainrf_local.pub > /root/.ssh/authorized_keys && \
+    chmod 600 /root/.ssh/authorized_keys && \
+    chown -R ainrf:ainrf /opt/ainrf/.ssh
+RUN echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config.d/ainrf.conf
 ENV HOME=/opt/ainrf
 # Verify agent tools (Claude Code is required; Codex may need runtime fix)
 RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")
