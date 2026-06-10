@@ -29,7 +29,8 @@ FROM docker.1ms.run/node:24-slim AS frontend-build
 
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm config set registry https://registry.npmmirror.com && npm ci --ignore-scripts
+RUN --mount=type=cache,target=/root/.npm \
+    npm config set registry https://registry.npmmirror.com && npm ci --ignore-scripts
 COPY frontend/ ./
 RUN npm run build
 
@@ -50,12 +51,12 @@ RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 # ── Stage 3: Agent tools ─────────────────────────────────────────
 # Installs Claude Code CLI and Codex CLI via npm.
 
-FROM docker.1ms.run/node:24-slim AS agent-tools
-RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g @anthropic-ai/claude-code@latest && \
-    npm install -g --registry https://registry.npmjs.org @openai/codex@latest
-# Copy codex-linux-x64 to top level for require.resolve
-RUN if [ -d /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 ]; then \
+RUN --mount=type=cache,target=/root/.npm \
+    npm config set registry https://registry.npmmirror.com && \
+    npm install -g @anthropic-ai/claude-code@latest
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g --registry https://registry.npmjs.org @openai/codex@latest && \
+    if [ -d /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 ]; then \
       cp -r /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 \
              /usr/local/lib/node_modules/@openai/codex-linux-x64; \
     fi
