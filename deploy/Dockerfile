@@ -69,7 +69,7 @@ RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debi
     sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list 2>/dev/null; \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        procps tmux git && \
+        bubblewrap procps tmux git && \
     rm -rf /var/lib/apt/lists/*
 
 # Node.js runtime + Claude Code CLI + Codex CLI from agent-tools stage

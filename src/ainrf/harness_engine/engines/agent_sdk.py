@@ -4,7 +4,9 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 from collections import deque
+from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -29,6 +31,9 @@ from claude_agent_sdk.types import (
     McpSdkServerConfig,
     McpSSEServerConfig,
     McpStdioServerConfig,
+    PermissionResultAllow,
+    SandboxSettings,
+    ToolPermissionContext,
 )
 
 from ainrf.environments.models import utc_now
@@ -161,10 +166,11 @@ class AgentSdkEngine(HarnessEngine):
                     session.pending_prompts = deque(checkpoint.pending_prompts)
 
         prompt = self._resolve_prompt(context, session)
+        prompt_stream = self._wrap_prompt_stream(prompt)
         permission_mode = cast(
             Literal["default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto"]
             | None,
-            context.permission_mode or "acceptEdits",
+            context.permission_mode or "bypassPermissions",
         )
         mcp_servers = cast(
             dict[str, McpServerConfig] | str | Path,
@@ -185,6 +191,8 @@ class AgentSdkEngine(HarnessEngine):
                 "Notification": [HookMatcher(hooks=[self._notification_hook(emit)])],
             },
             include_partial_messages=True,
+            can_use_tool=self._can_use_tool,
+            sandbox=self._build_sandbox_settings(),
         )
 
         async with self._run_lock:
@@ -197,13 +205,60 @@ class AgentSdkEngine(HarnessEngine):
                 saved_env[key] = os.environ.get(key)
                 os.environ[key] = value
             try:
-                await self._run_query(context, session, prompt, options, emit)
+                await self._run_query(context, session, prompt_stream, options, emit)
             finally:
                 for key, value in saved_env.items():
                     if value is None:
                         os.environ.pop(key, None)
                     else:
                         os.environ[key] = value
+
+    async def _can_use_tool(
+        self,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        context: ToolPermissionContext,  # noqa: ARG002
+    ) -> PermissionResultAllow:
+        """Permission callback for tool calls that require approval.
+
+        Currently a dummy that always allows. Future: integrate with WebUI
+        approval flow so users can approve/deny tool calls from the browser.
+        """
+        _ = tool_name, tool_input
+        return PermissionResultAllow()
+
+    @staticmethod
+    async def _wrap_prompt_stream(prompt: str) -> AsyncIterator[dict[str, Any]]:
+        """Wrap a string prompt into an async iterable for SDK streaming mode.
+
+        The can_use_tool callback requires the prompt to be an AsyncIterable
+        rather than a plain string. This helper converts a resolved string
+        prompt into the single-message stream format expected by the SDK.
+        """
+        yield {
+            "type": "user",
+            "session_id": "",
+            "message": {"role": "user", "content": prompt},
+            "parent_tool_use_id": None,
+        }
+
+    def _build_sandbox_settings(self) -> SandboxSettings | None:
+        """Build sandbox settings when bwrap is available on the system.
+
+        Enables the Claude Code sandbox (bubblewrap) for bash command
+        isolation. When the sandbox is active, bash commands are
+        auto-approved (``autoAllowBashIfSandboxed``), which avoids
+        per-command permission prompts without fully bypassing isolation.
+
+        Returns ``None`` when bwrap is not installed (e.g. local dev).
+        """
+        if shutil.which("bwrap") is None:
+            return None
+        return SandboxSettings(
+            enabled=True,
+            autoAllowBashIfSandboxed=True,
+            enableWeakerNestedSandbox=True,
+        )
 
     def _resolve_prompt(self, context: ExecutionContext, session: AgentSession) -> str:
         if session.pending_prompts:
@@ -216,7 +271,7 @@ class AgentSdkEngine(HarnessEngine):
         self,
         context: ExecutionContext,
         session: AgentSession,
-        prompt: str,
+        prompt: AsyncIterator[dict[str, Any]],
         options: ClaudeAgentOptions,
         emit: EngineEmit,
     ) -> None:

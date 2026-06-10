@@ -52,6 +52,8 @@ services:
     volumes:
       - ainrf-state:/opt/ainrf/state
       - ./data/workspaces:/opt/ainrf/.ainrf_workspaces
+    cap_add:
+      - SYS_ADMIN
     expose:
       - "8000"
     healthcheck:

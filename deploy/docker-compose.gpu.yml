@@ -57,6 +57,8 @@ services:
     volumes:
       - ./data/state:/opt/ainrf/state
       - ./data/workspaces:/opt/ainrf/.ainrf_workspaces
+    cap_add:
+      - SYS_ADMIN
     # ── GPU 全透传 ────────────────────────────────────────
     deploy:
       resources:

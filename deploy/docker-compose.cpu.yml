@@ -59,6 +59,8 @@ services:
     volumes:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+    cap_add:
+      - SYS_ADMIN
     deploy:
       resources:
         limits:
