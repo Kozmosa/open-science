@@ -8,7 +8,7 @@ from collections.abc import Callable
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from ainrf.agentic_researcher.models import (
@@ -733,13 +733,28 @@ class AgenticResearcherService:
                     TaskStatus.FAILED,
                     completed=True,
                     exit_code=exit_code if isinstance(exit_code, int) else None,
+                    error_summary=event.payload.get("error_summary")
+                    or event.payload.get("message"),
                 )
         elif event.event_type == "system":
             subtype = event.payload.get("subtype")
             if subtype == "task_paused":
                 await self._set_status(task_id, TaskStatus.PAUSED)
             elif subtype == "task_failed":
-                await self._set_status(task_id, TaskStatus.FAILED, completed=True)
+                payload = event.payload
+                rc = payload.get("returncode") or payload.get("exit_code")
+                err = (
+                    payload.get("error_summary")
+                    or payload.get("message")
+                    or self._extract_nested_error(payload)
+                )
+                await self._set_status(
+                    task_id,
+                    TaskStatus.FAILED,
+                    completed=True,
+                    exit_code=rc if isinstance(rc, int) else None,
+                    error_summary=err,
+                )
             elif subtype == "task_completed":
                 latest = self.get_task(task_id)
                 if latest.status in {TaskStatus.STARTING, TaskStatus.RUNNING}:
@@ -749,6 +764,28 @@ class AgenticResearcherService:
                         completed=True,
                         exit_code=0,
                     )
+
+    @staticmethod
+    def _extract_nested_error(payload: dict[str, Any]) -> str | None:
+        """Try to extract an error message from nested payload structures.
+
+        Different engines encode errors differently:
+        - codex-app-server: ``{"turn": {"error": {"message": "..."}}}``
+        - claude-code: ``{"error": "..."}``
+        """
+        # codex: turn.error.message
+        turn = payload.get("turn")
+        if isinstance(turn, dict):
+            err = turn.get("error")
+            if isinstance(err, dict):
+                return err.get("message")
+            if isinstance(err, str):
+                return err
+        # claude-code: top-level error
+        err = payload.get("error")
+        if isinstance(err, str):
+            return err
+        return None
 
     async def _record_token_usage(self, task_id: str, usage: dict, *, replace: bool) -> None:
         await asyncio.to_thread(self._record_token_usage_sync, task_id, usage, replace)
