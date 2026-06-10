@@ -7,6 +7,7 @@
 /.codex-skill-staging/
 /.worktrees/
 /.claude/
+/apikey
 /.superpowers/
 /.puffer/
 
