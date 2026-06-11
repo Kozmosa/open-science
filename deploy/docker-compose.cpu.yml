@@ -36,10 +36,9 @@ services:
     container_name: ainrf
     network_mode: host
     environment:
-      HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
-      AINRF_HOST: "0.0.0.0"
-      AINRF_PORT: "8192"
+      AINRF_HOST: "127.0.0.1"
+      AINRF_PORT: "8000"
       # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
@@ -67,9 +66,8 @@ services:
         limits:
           memory: 8G
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8192/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
-      timeout: 5s
       retries: 3
       start_period: 15s
     logging:
@@ -110,6 +108,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-ainrf-grafana}
+      GF_SERVER_HTTP_ADDR: "127.0.0.1"
       GF_SERVER_HTTP_PORT: "3000"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/ainrf/ainrf-overview.json
@@ -125,6 +124,22 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  nginx:
+    image: docker.1ms.run/nginx:1.27-alpine
+    restart: unless-stopped
+    container_name: ainrf-nginx
+    network_mode: host
+    volumes:
+      - ./config/nginx-host.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      ainrf:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   ainrf-state:
