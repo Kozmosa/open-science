@@ -11,6 +11,26 @@
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000"
   },
-  "permissions": { "allow": [], "deny": [] },
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Read(/opt/ainrf/state/**)",
+      "Write(/opt/ainrf/state/**)",
+      "Edit(/opt/ainrf/state/**)",
+      "Read(/opt/ainrf/config/**)",
+      "Write(/opt/ainrf/config/**)",
+      "Edit(/opt/ainrf/config/**)",
+      "Read(/home/ainrf_tenants/**)",
+      "Write(/home/ainrf_tenants/**)",
+      "Edit(/home/ainrf_tenants/**)",
+      "Bash(sudo *)",
+      "Bash(su *)",
+      "Bash(chown *)",
+      "Bash(useradd *)",
+      "Bash(userdel *)",
+      "Bash(groupadd *)",
+      "Bash(passwd *)"
+    ]
+  },
   "skipDangerousModePermissionPrompt": true
 }

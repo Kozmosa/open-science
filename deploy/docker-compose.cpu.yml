@@ -59,6 +59,7 @@ services:
     volumes:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - ainrf-tenants:/home/ainrf_tenants
     cap_add:
       - SYS_ADMIN
     deploy:
@@ -127,5 +128,6 @@ services:
 volumes:
   ainrf-state:
   ainrf-workspaces:
+  ainrf-tenants:
   prometheus-data:
   grafana-data:

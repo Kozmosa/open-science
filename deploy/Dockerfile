@@ -96,11 +96,13 @@ COPY deploy/config/ /opt/ainrf/config/
 COPY deploy/config/entrypoint.py /opt/ainrf/bin/entrypoint.py
 
 # State and workspace directories (mount volumes here for persistence)
-RUN mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin
-VOLUME /opt/ainrf/state /opt/ainrf/.ainrf_workspaces
-
-# Non-root user
-RUN groupadd --gid 1000 ainrf && \
+# Multi-tenant isolation group (GID 2000) and backend user (GID 1000)
+# Tenant users (ainrf_<username>) are created at runtime during registration.
+RUN groupadd --gid 2000 ainrf_tenants && \
+    mkdir -p /home/ainrf_tenants && \
+    chown root:ainrf_tenants /home/ainrf_tenants && \
+    chmod 0755 /home/ainrf_tenants && \
+    groupadd --gid 1000 ainrf && \
     useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
     mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf

@@ -166,6 +166,41 @@ class WorkspaceRegistryService:
             del self._workspaces[workspace_id]
             self._persist()
 
+
+    def ensure_tenant_workspace(
+        self,
+        *,
+        username: str,
+        label: str = "default",
+    ) -> WorkspaceRecord:
+        """Return the workspace for a tenant user, creating it if needed.
+
+        The default_workdir is set to ``/home/ainrf_tenants/<username>/workspaces/<label>/``.
+        """
+        self.initialize()
+        existing = [
+            ws
+            for ws in self._workspaces.values()
+            if ws.owner_user_id == username and ws.label == label
+        ]
+        if existing:
+            return existing[0]
+        from ainrf.runtime.paths import RuntimePathConfig
+
+        rpc = RuntimePathConfig(startup_cwd=Path.cwd())
+        default_workdir = rpc.tenant_workspace_dir(username, label)
+        default_workdir.mkdir(parents=True, exist_ok=True)
+        return self.create_workspace(
+            label=label,
+            description=f"Default workspace for tenant {username}",
+            default_workdir=str(default_workdir),
+            workspace_prompt=(
+                "Treat this workspace as the default local workspace context for the task.\n"
+                f"Workspace directory: {default_workdir}"
+            ),
+            owner_user_id=username,
+        )
+
     def _build_seed_workspace(self) -> WorkspaceRecord:
         now = utc_now()
         default_workdir_path = self._default_workspace_dir or Path.cwd() / "workspace" / "default"

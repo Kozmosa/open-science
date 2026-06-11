@@ -33,7 +33,7 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
     if not api_config.public_registration_enabled:
         raise HTTPException(status_code=403, detail="Public registration is disabled")
     try:
-        service.register(
+        user = service.register(
             username=payload.username,
             display_name=payload.display_name,
             password=payload.password,
@@ -43,6 +43,16 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
         if "already exists" in detail:
             raise HTTPException(status_code=409, detail=detail) from exc
         raise HTTPException(status_code=400, detail=detail) from exc
+
+    # Create a tenant-scoped workspace entry for the new user.
+    workspace_service = getattr(request.app.state, "workspace_service", None)
+    if workspace_service is not None:
+        from ainrf.workspaces import WorkspaceRegistryService
+
+        assert isinstance(workspace_service, WorkspaceRegistryService)
+        workspace_service.ensure_tenant_workspace(username=payload.username)
+
+    _ = user  # user created; admin approval is still required for login
     return {"message": "Registration submitted. Awaiting admin approval."}
 
 

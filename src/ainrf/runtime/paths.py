@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+_TENANT_HOME_ROOT = Path("/home/ainrf_tenants")
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimePathConfig:
     startup_cwd: Path
@@ -15,6 +18,13 @@ class RuntimePathConfig:
     @property
     def default_workspace_dir(self) -> Path:
         return Path.home() / ".ainrf_workspaces" / "default"
+
+    def tenant_workspace_dir(self, username: str, label: str = "default") -> Path:
+        """Return the workspace directory for a tenant user.
+
+        Convention: ``/home/ainrf_tenants/<username>/workspaces/<label>/``.
+        """
+        return _TENANT_HOME_ROOT / username / "workspaces" / label
 
     def ensure_default_workspace_dir(self) -> Path:
         path = self.default_workspace_dir

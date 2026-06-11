@@ -1,8 +1,10 @@
-# src/ainrf/auth/service.py
 from __future__ import annotations
 
 import hashlib
+import logging
+import re
 import sqlite3
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +22,28 @@ from ainrf.auth.models import (
     UserRole,
     UserStatus,
 )
+
+_LOG = logging.getLogger(__name__)
+
+# Linux usernames: lowercase ASCII + digits + hyphen + underscore, start with
+# a letter or digit, 2–31 chars.  The AINRF prefix ``ainrf_`` is added
+# automatically, so the final Linux username will be ``ainrf_<username>``.
+_USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}$")
+
+# Fixed GID for the ``ainrf_tenants`` group created in the Dockerfile.
+_TENANT_GID = 2000
+_TENANT_GROUP = "ainrf_tenants"
+_TENANT_HOME_ROOT = Path("/home/ainrf_tenants")
+
+
+def tenant_linux_username(ainrf_username: str) -> str:
+    """Return the Linux username for an AINRF user, e.g. ``aaa`` → ``ainrf_aaa``."""
+    return f"ainrf_{ainrf_username}"
+
+
+def tenant_home_dir(ainrf_username: str) -> Path:
+    """Return the home directory for an AINRF tenant user."""
+    return _TENANT_HOME_ROOT / ainrf_username
 
 
 def _now_iso() -> str:
@@ -140,9 +164,11 @@ class AuthService:
         password: str,
         must_change_password: bool = False,
     ) -> User:
-        import re
-        if not re.fullmatch(r"[a-zA-Z0-9._-]+", username):
-            raise AuthError("Username must contain only ASCII letters, digits, dots, underscores, and hyphens")
+        if not _USERNAME_RE.fullmatch(username):
+            raise AuthError(
+                "Username must be 2-31 characters, start with a letter or digit, "
+                "and contain only lowercase letters, digits, underscores, or hyphens"
+            )
         with self._connect() as conn:
             row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
         if row is not None:
@@ -159,6 +185,8 @@ class AuthService:
                 (uid, username, password_hash, display_name, now, int(must_change_password)),
             )
             conn.commit()
+
+        self._ensure_tenant_user(username)
         return self._load_user(uid)
 
     # --- Login ---
@@ -481,6 +509,43 @@ class AuthService:
             raise AuthError(f"User not found: {username}")
         return _row_to_user(row)
 
+    def _ensure_tenant_user(self, username: str) -> None:
+        """Create Linux user, home directory and default workspace for *username*.
+
+        Silently succeeds if the user or directories already exist so that the
+        method is safe to call idempotently (e.g. during migration).
+        """
+        provision_tenant_user(username)
+
+
+def _ensure_tenant_group() -> None:
+    """Create the ``ainrf_tenants`` group (GID 2000) if it does not exist."""
+    result = subprocess.run(
+        ["getent", "group", _TENANT_GROUP],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        _LOG.info("_ensure_tenant_group: creating group %s (gid %d)", _TENANT_GROUP, _TENANT_GID)
+        subprocess.run(
+            ["groupadd", "--gid", str(_TENANT_GID), _TENANT_GROUP],
+            check=True,
+            capture_output=True,
+        )
+
+
+def _linux_user_exists(username: str) -> bool:
+    return subprocess.run(
+        ["id", username], capture_output=True
+    ).returncode == 0
+
+
+def _chown_recursive(path: Path, user: str, group: str) -> None:
+    subprocess.run(
+        ["chown", "-R", f"{user}:{group}", str(path)],
+        check=True,
+        capture_output=True,
+    )
+
 
 def _row_to_user(row: sqlite3.Row) -> User:
     return User(
@@ -497,6 +562,56 @@ def _row_to_user(row: sqlite3.Row) -> User:
         if "must_change_password" in row.keys()
         else False,
     )
+
+
+def _is_container_environment() -> bool:
+    """Return True if running inside a container with the ainrf_tenants group."""
+    return Path("/opt/ainrf/state").is_dir() or Path("/.dockerenv").exists()
+
+
+def provision_tenant_user(username: str) -> None:
+    """Create the Linux user ``ainrf_<username>`` with home directory and
+    default workspace tree.  Idempotent — safe to call for existing users.
+
+    Outside a container (local dev / tests), creates the workspace directory
+    under a temp-root instead of ``/home/ainrf_tenants/`` so the caller does
+    not need root privileges.
+    """
+    linux_user = tenant_linux_username(username)
+    home = tenant_home_dir(username)
+    workspace_dir = home / "workspaces" / "default"
+
+    if _is_container_environment():
+        _ensure_tenant_group()
+        if not _linux_user_exists(linux_user):
+            _LOG.info("provision_tenant_user: creating Linux user %s", linux_user)
+            subprocess.run(
+                [
+                    "useradd",
+                    "--gid", str(_TENANT_GID),
+                    "--home-dir", str(home),
+                    "--create-home",
+                    "--shell", "/bin/bash",
+                    linux_user,
+                ],
+                check=True,
+                capture_output=True,
+            )
+        home.mkdir(parents=True, exist_ok=True)
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        _chown_recursive(home, linux_user, _TENANT_GROUP)
+    else:
+        # Local dev / tests: just ensure the workspace dir is creatable.
+        try:
+            workspace_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            _LOG.debug(
+                "provision_tenant_user: cannot create %s (non-container), "
+                "using /tmp fallback",
+                workspace_dir,
+            )
+            fallback = Path("/tmp/ainrf_tenants") / username / "workspaces" / "default"
+            fallback.mkdir(parents=True, exist_ok=True)
 
 
 def _user_to_dict(user: User) -> dict:
