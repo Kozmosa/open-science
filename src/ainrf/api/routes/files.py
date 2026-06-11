@@ -15,9 +15,11 @@ from ainrf.api.schemas import (
     FileReadResponse,
     FileUploadResponse,
 )
+from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
 from ainrf.execution.ssh import SSHExecutor
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
 from ainrf.files.service import _build_container_config
+from ainrf.workspaces.service import WorkspaceNotFoundError
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -27,6 +29,48 @@ def _get_file_browser_service(request: Request) -> FileBrowserService:
     if service is None:
         raise HTTPException(status_code=500, detail="file browser service not initialized")
     return service
+
+
+def _get_workspace_service(request: Request):
+    service = getattr(request.app.state, "workspace_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="workspace service not initialized")
+    return service
+
+
+def _check_workspace_access(request: Request, workspace_id: str | None) -> str | None:
+    """Validate workspace ownership. Returns the workspace default_workdir if access is allowed.
+
+    Returns None if no workspace_id was given (caller should use environment default).
+    Raises 403 if the user does not own the workspace.
+    """
+    if workspace_id is None:
+        return None
+    user = get_current_user(request)
+    ws_service = _get_workspace_service(request)
+    try:
+        workspace = ws_service.get_workspace(workspace_id)
+    except WorkspaceNotFoundError:
+        raise HTTPException(status_code=404, detail="Workspace not found") from None
+    check_resource_ownership(user, workspace.owner_user_id)
+    return workspace.default_workdir
+
+
+def _resolve_tenant_user(request: Request) -> str | None:
+    """Resolve the current user to a tenant Linux username (container-only)."""
+    user = get_current_user(request)
+    auth_service = getattr(request.app.state, "auth_service", None)
+    if auth_service is None:
+        return None
+    from ainrf.auth.service import _is_container_environment, tenant_linux_username
+
+    if not _is_container_environment():
+        return None
+    try:
+        user_record = auth_service.get_user(user["id"])
+    except Exception:
+        return None
+    return tenant_linux_username(user_record.username)
 
 
 def _translate_file_browser_error(exc: Exception) -> HTTPException:
@@ -51,6 +95,8 @@ async def list_files(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ) -> FileListResponse:
+    get_current_user(request)
+    _check_workspace_access(request, workspace_id)
     service = _get_file_browser_service(request)
     try:
         listing = await service.list_directory(environment_id, path, workspace_id)
@@ -80,6 +126,8 @@ async def read_file(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ) -> FileReadResponse:
+    get_current_user(request)
+    _check_workspace_access(request, workspace_id)
     service = _get_file_browser_service(request)
     try:
         content = await service.read_file(environment_id, path, workspace_id)
@@ -104,6 +152,8 @@ async def stream_file(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ):
+    get_current_user(request)
+    _check_workspace_access(request, workspace_id)
     service = _get_file_browser_service(request)
     try:
         is_local, resolved_path, environment = await service.resolve_stream_target(
@@ -175,6 +225,9 @@ async def upload_file(
     workspace_id: str | None = Form(default=None),
     file: UploadFile = File(...),
 ) -> FileUploadResponse:
+    get_current_user(request)
+    _check_workspace_access(request, workspace_id)
+    tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
 
     # Check file size limit (default 100MB)
@@ -201,6 +254,15 @@ async def upload_file(
             local_temp_path=tmp_path,
             workspace_id=workspace_id,
         )
+        # Chown uploaded file to tenant user so agent processes can access it
+        if tenant_user is not None:
+            import subprocess as _sp
+
+            _sp.run(
+                ["chown", f"{tenant_user}:ainrf_tenants", result.path],
+                check=False,
+                capture_output=True,
+            )
         return FileUploadResponse(path=result.path, size=result.size)
     except HTTPException:
         raise
