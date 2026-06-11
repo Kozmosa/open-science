@@ -10,24 +10,35 @@ STATE_ROOT = Path.home() / ".ainrf" / "runtime"
 
 # Column names frequently used in WHERE / JOIN / ORDER BY clauses that should be indexed
 WATCH_COLUMNS: dict[str, list[str]] = {
+    # Active database (agentic_researcher.sqlite3)
+    "tasks": ["project_id", "status", "environment_id", "workspace_id", "owner_user_id", "created_at", "updated_at"],
+    "task_outputs": ["kind"],
+    # Legacy database (task_harness.sqlite3) — may still exist in production
     "task_harness_tasks": ["project_id", "status", "environment_id", "workspace_id", "session_id", "owner_user_id", "created_at"],
     "task_harness_output_events": ["kind"],
     "task_harness_edges": ["project_id", "source_task_id", "target_task_id"],
     "managed_tasks": ["environment_id", "status", "task_id"],
     "task_terminal_bindings": ["status", "ownership_user_id", "agent_write_state"],
-    "task_sessions": ["project_id", "status", "created_at"],
-    "task_attempts": ["session_id", "parent_attempt_id", "status"],
+    # Auth database
     "users": ["username", "status"],
     "refresh_tokens": ["user_id", "expires_at"],
+    # Sessions database
+    "task_sessions": ["project_id", "status", "created_at"],
+    "task_attempts": ["session_id", "parent_attempt_id", "status"],
 }
 
-# Queries to EXPLAIN — these represent common API call paths
 EXPLAIN_QUERIES: dict[str, list[tuple[str, str]]] = {
+    "agentic_researcher.sqlite3": [
+        ("list_tasks_by_project",
+         "SELECT * FROM tasks WHERE project_id = ? AND status != 'CANCELLED' ORDER BY updated_at DESC"),
+        ("list_task_output_after_seq",
+         "SELECT seq, kind, content FROM task_outputs WHERE task_id = ? AND seq > ? ORDER BY seq"),
+    ],
     "task_harness.sqlite3": [
         ("list_tasks_by_project",
          "SELECT task_id FROM task_harness_tasks WHERE project_id = ? AND status != 'archived'"),
         ("list_output_by_task",
-         "SELECT seq, kind, data FROM task_harness_output_events WHERE task_id = ? AND seq > ?"),
+         "SELECT seq, kind, content FROM task_harness_output_events WHERE task_id = ? AND seq > ?"),
         ("list_edges_by_project",
          "SELECT edge_id, source_task_id, target_task_id FROM task_harness_edges WHERE project_id = ?"),
     ],
@@ -83,12 +94,21 @@ def analyze_db(db_path: Path) -> dict:
         indexed = get_indexed_columns(conn)
 
         # Check missing indexes
+        # Build a set of all existing columns per table to avoid false positives
+        existing_columns: dict[str, set[str]] = {}
+        for tbl in tables:
+            cols: set[str] = set()
+            for row in conn.execute(f"PRAGMA table_info('{tbl}')"):
+                cols.add(row[1])
+            existing_columns[tbl] = cols
+
         for tbl in tables:
             if tbl in WATCH_COLUMNS:
                 need = WATCH_COLUMNS[tbl]
                 have = indexed.get(tbl, set())
+                exist = existing_columns.get(tbl, set())
                 for col in need:
-                    if col not in have:
+                    if col not in have and col in exist:
                         findings["missing_indexes"].append(f"{db_path.name}:{tbl}.{col}")
 
         # EXPLAIN QUERY PLAN for core queries
@@ -155,7 +175,7 @@ def main() -> None:
     report_dir = today_dir()
     all_findings: dict[str, dict] = {}
 
-    for db_name in ["auth.sqlite3", "sessions.sqlite3", "task_harness.sqlite3", "terminal_state.sqlite3"]:
+    for db_name in ["agentic_researcher.sqlite3", "auth.sqlite3", "sessions.sqlite3", "task_harness.sqlite3", "terminal_state.sqlite3"]:
         db_path = STATE_ROOT / db_name
         all_findings[db_name] = analyze_db(db_path)
 

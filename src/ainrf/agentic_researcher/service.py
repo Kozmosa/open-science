@@ -216,8 +216,70 @@ class AgenticResearcherService:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_environment ON tasks(environment_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_project_status"
+                " ON tasks(project_id, status)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_outputs_kind ON task_outputs(kind)"
+            )
             conn.commit()
         self._initialized = True
+        self._migrate_legacy_task_harness_indexes()
+
+    def _migrate_legacy_task_harness_indexes(self) -> None:
+        """Patch missing indexes on the legacy task_harness.sqlite3 if it exists.
+
+        The old ``task_harness/`` module was removed in the AgenticResearcher refactor,
+        but production containers may still have the database file without indexes.
+        Individual index creation is tolerant of missing columns — some schema
+        revisions never deployed certain columns.
+        """
+        legacy_db = self._runtime_root / "task_harness.sqlite3"
+        if not legacy_db.exists():
+            return
+        _INDEXES: list[str] = [
+            "CREATE INDEX IF NOT EXISTS idx_th_tasks_project_status ON task_harness_tasks(project_id, status)",
+            "CREATE INDEX IF NOT EXISTS idx_th_tasks_env ON task_harness_tasks(environment_id)",
+            "CREATE INDEX IF NOT EXISTS idx_th_tasks_workspace ON task_harness_tasks(workspace_id)",
+            "CREATE INDEX IF NOT EXISTS idx_th_tasks_created ON task_harness_tasks(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_th_outputs_kind ON task_harness_output_events(kind)",
+            "CREATE INDEX IF NOT EXISTS idx_th_edges_project ON task_harness_edges(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_th_edges_source ON task_harness_edges(source_task_id)",
+            "CREATE INDEX IF NOT EXISTS idx_th_edges_target ON task_harness_edges(target_task_id)",
+        ]
+        # Conditional indexes — only if column exists (schema varies by deployment)
+        _CONDITIONAL: list[tuple[str, str]] = [
+            ("task_harness_tasks", "CREATE INDEX IF NOT EXISTS idx_th_tasks_session ON task_harness_tasks(session_id)"),
+            ("task_harness_tasks", "CREATE INDEX IF NOT EXISTS idx_th_tasks_owner ON task_harness_tasks(owner_user_id)"),
+        ]
+        try:
+            with closing(sqlite3.connect(str(legacy_db))) as conn:
+                for ddl in _INDEXES:
+                    try:
+                        conn.execute(ddl)
+                    except Exception:
+                        pass
+                # Check which columns actually exist for conditional indexes
+                existing_columns: set[str] = set()
+                try:
+                    for row in conn.execute("PRAGMA table_info('task_harness_tasks')"):
+                        existing_columns.add(row[1])
+                except Exception:
+                    existing_columns = set()
+                for col, ddl in _CONDITIONAL:
+                    if col in existing_columns:
+                        try:
+                            conn.execute(ddl)
+                        except Exception:
+                            pass
+                conn.commit()
+        except Exception:
+            pass  # Non-critical; don't block startup for legacy DB issues
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)

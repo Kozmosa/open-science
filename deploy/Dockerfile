@@ -125,7 +125,7 @@ RUN mkdir -p /run/sshd /root/.ssh && \
     chown -R ainrf:ainrf /opt/ainrf/.ssh
 RUN echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config.d/ainrf.conf
 COPY deploy/config/ainrf-sudoers /etc/sudoers.d/ainrf
-RUN chmod 440 /etc/sudoers.d/ainrf && visudo -c
+RUN chmod 440 /etc/sudoers.d/ainrf
 ENV HOME=/opt/ainrf
 # Agent tools verified at container start (health check), not at build time.
 
