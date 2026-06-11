@@ -1,0 +1,13 @@
+{
+  "skill_id": "jurisdiction-format",
+  "label": "jurisdiction-format",
+  "description": "Compile patent application into jurisdiction-specific filing format. Use when user says \"格式转换\", \"jurisdiction format\", \"国家格式\", \"compile patent\", or wants formatted patent documents for CN/US/EP filing.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

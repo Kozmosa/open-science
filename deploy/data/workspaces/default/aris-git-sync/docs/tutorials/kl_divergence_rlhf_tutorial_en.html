@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kl Divergence Rlhf Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/kl_divergence_rlhf_tutorial_en.md">
+<meta name="aris:source-sha256" content="4477782e0f503450db748cc46a12ddd9361df1fbcdcf2f996d8fee58f4761b73">
+<meta name="aris:generated-at" content="2026-05-19 19:29 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-kl-fundamentals">§1 KL Fundamentals</a>
+<ul>
+<li><a href="#11-definition-properties-notation">1.1　Definition, properties, notation</a></li>
+<li><a href="#12-forward-kl-vs-reverse-kl-mass-covering-or-mode-seeking">1.2　Forward KL vs Reverse KL: mass-covering or mode-seeking?</a></li>
+<li><a href="#13-relation-to-other-divergences">1.3　Relation to other divergences</a></li>
+<li><a href="#14-why-does-rlhf-add-kl">1.4　Why does RLHF add KL?</a></li>
+</ul>
+</li>
+<li><a href="#2-kl-estimators-k1--k2--k3-interview-core">§2 KL Estimators (k1 / k2 / k3): Interview Core</a>
+<ul>
+<li><a href="#21-problem-setup">2.1　Problem setup</a></li>
+<li><a href="#22-k1-estimator--plug-definition-in-directly">2.2　k1 estimator — &quot;plug definition in directly&quot;</a></li>
+<li><a href="#23-k2-estimator--l2-form">2.3　k2 estimator — &quot;$L^2$ form&quot;</a></li>
+<li><a href="#24-k3-estimator-schulman-2020-blog--non-negative-unbiased-value-estimator-but-as-a-loss-term-the-gradient-is-biased--see-36">2.4　k3 estimator (Schulman 2020 blog) — **non-negative unbiased value estimator** (but as a loss term, the gradient is biased — see §3.6)</a></li>
+<li><a href="#25-comparison-table-for-the-three">2.5　Comparison table for the three</a></li>
+<li><a href="#26-code-three-estimators--variance-simulation">2.6　Code: three estimators + variance simulation</a></li>
+</ul>
+</li>
+<li><a href="#3-two-placements-of-kl-in-rlhf">§3 Two placements of KL in RLHF</a>
+<ul>
+<li><a href="#31-option-a-in-reward-shaping-ppo-rlhf--instructgpt-standard">3.1　Option A: In-reward shaping (PPO RLHF / InstructGPT standard)</a></li>
+<li><a href="#32-option-b-in-loss-regularization-grpo--dapo">3.2　Option B: In-loss regularization (GRPO / DAPO)</a></li>
+<li><a href="#33-mathematically-equivalent-engineering-wise-not-equivalent">3.3　Mathematically equivalent? Engineering-wise not equivalent</a></li>
+<li><a href="#34-practice-which-goes-where">3.4　Practice: which goes where?</a></li>
+<li><a href="#36-gradient-bias-analysis-of-estimator-placement-rethinking-kl-regularization-in-rlhf">3.6　Gradient bias analysis of estimator placement (Rethinking KL Regularization in RLHF)</a></li>
+</ul>
+</li>
+<li><a href="#4--schedule">§4 β schedule</a>
+<ul>
+<li><a href="#41-fixed---baseline">4.1　Fixed β — baseline</a></li>
+<li><a href="#42-adaptive---schulman-ppo-penalty-original">4.2　Adaptive β — Schulman PPO-Penalty original</a></li>
+<li><a href="#43--annealing-schedule--analogous-to-learning-rate-schedule">4.3　β annealing schedule — analogous to learning rate schedule</a></li>
+<li><a href="#44--failure-modes">4.4　β failure modes</a></li>
+<li><a href="#45-adaptive--code-example">4.5　Adaptive β code example</a></li>
+</ul>
+</li>
+<li><a href="#5-kls-relation-to-dpo--grpo--simpo--kto--ipo">§5 KL&#x27;s relation to DPO / GRPO / SimPO / KTO / IPO</a>
+<ul>
+<li><a href="#51-dpo-implicit-reward----sequence-log-density-ratio">5.1　DPO: implicit reward = β × sequence log-density ratio</a></li>
+<li><a href="#52-grpo-k3-kl-in-loss">5.2　GRPO: k3 KL in loss</a></li>
+<li><a href="#53-simpo-drops-reference-no-kl-anchor">5.3　SimPO: drops reference, no KL anchor</a></li>
+<li><a href="#54-kl-handling-in-kto--ipo--orpo">5.4　KL handling in KTO / IPO / ORPO</a></li>
+<li><a href="#55-recent-papers-2024-2026">5.5　Recent papers (2024-2026)</a></li>
+</ul>
+</li>
+<li><a href="#6-theoretical-optimal-policy-of-kl-regularized-rl--reward-overoptimization">§6 Theoretical: optimal policy of KL-regularized RL + reward overoptimization</a>
+<ul>
+<li><a href="#61-closed-form-solution-of-kl-regularized-rl-the-mathematical-basis-for-dpo">6.1　Closed-form solution of KL-regularized RL (the mathematical basis for DPO)</a></li>
+<li><a href="#62-inverting-the-optimal-policy-to-extract-implicit-reward">6.2　Inverting the optimal policy to extract implicit reward</a></li>
+<li><a href="#63-rl-under-bradley-terry-preference-is-equivalent-to-dpo">6.3　RL under Bradley-Terry preference is equivalent to DPO</a></li>
+<li><a href="#64-reward-overoptimization-gao-schulman-hilton-2023-icml">6.4　Reward Overoptimization (Gao, Schulman, Hilton 2023 ICML)</a></li>
+<li><a href="#65-relation-between-kl-and-chi2-gap">6.5　Relation between KL and $\chi^2$ gap</a></li>
+<li><a href="#66-sequence-level-vs-token-level-kl">6.6　Sequence-level vs token-level KL</a></li>
+</ul>
+</li>
+<li><a href="#7-practice--code">§7 Practice + code</a>
+<ul>
+<li><a href="#71-ppo-style-in-reward-shaping-implementation">7.1　PPO style: In-reward shaping implementation</a></li>
+<li><a href="#72-grpo-style-in-loss-regularization-implementation-k3">7.2　GRPO style: In-loss regularization implementation (k3)</a></li>
+<li><a href="#73-dpo-closed-form-loss--implicit-reward-monitoring">7.3　DPO closed-form loss + implicit-reward monitoring</a></li>
+<li><a href="#74-reward-overoptimization-monitoring">7.4　Reward overoptimization monitoring</a></li>
+<li><a href="#75-engineering-checklist-debug-checklist">7.5　Engineering checklist (debug checklist)</a></li>
+</ul>
+</li>
+<li><a href="#8-failure-modes-kl-collapse--runaway--reward-hacking">§8 Failure modes: KL Collapse / Runaway / Reward Hacking</a>
+<ul>
+<li><a href="#81-kl-collapse--too-large-or-entropy-too-low">8.1　KL Collapse (β too large or entropy too low)</a></li>
+<li><a href="#82-kl-runaway--too-small-or-reward-signal-too-strong">8.2　KL Runaway (β too small or reward signal too strong)</a></li>
+<li><a href="#83-reward-overoptimization-the-inverted-u-over-kl-distance">8.3　Reward Overoptimization (the inverted-U over KL distance)</a></li>
+<li><a href="#84-length-bias-dpo-specific-also-a-form-of-insufficient-kl-anchor">8.4　Length bias (DPO-specific, also a form of insufficient KL anchor)</a></li>
+<li><a href="#85-reference-policy-wrong-checkpoint-failure">8.5　Reference policy &quot;wrong checkpoint&quot; failure</a></li>
+</ul>
+</li>
+<li><a href="#9-25-high-frequency-interview-questions">§9 25 high-frequency interview questions</a>
+<ul>
+<li><a href="#l1-must-know-10-questions">L1 must-know (10 questions)</a></li>
+<li><a href="#l2-advanced-10-questions">L2 advanced (10 questions)</a></li>
+<li><a href="#l3-top-lab-questions-5-questions">L3 top-lab questions (5 questions)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-reference-list">§A Appendix: reference list</a>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Kl Divergence Rlhf Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/kl_divergence_rlhf_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>4477782e0f50</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:29 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">8 sentences to nail KL in RLHF</div><p>one page covering interview essentials (see §1–§8 for derivations).</p></div>
+<ol><li><strong>Definition</strong>: $\text{KL}(p \| q) = \mathbb{E}_{x \sim p}[\log(p(x)/q(x))]$ — non-negative, asymmetric, non-metric. In RLHF, $p = \pi_\theta$, $q = \pi_\text{ref}$, and the role is to anchor the post-RL policy near SFT to prevent reward hacking.</li><li><strong>Forward vs Reverse</strong>: convention — $p$ is the data/target, $q_\theta$ is the variational/optimization distribution. <strong>Forward KL</strong> = $\text{KL}(p\|q_\theta)$ (mass-covering); <strong>Reverse KL</strong> = $\text{KL}(q_\theta\|p)$ (mode-seeking). RLHF uses $\text{KL}(\pi_\theta \| \pi_\text{ref})$, which under this convention is <strong>reverse KL</strong> ($\pi_\theta$ is the variational side). Its mode-seeking behavior fits the RL goal — make $\pi_\theta$ pick reward-high modes inside high-density regions of $\pi_\text{ref}$ — and is also engineering-feasible (just estimate from rollout samples). Note that naming varies slightly across communities, but DPO / RLOO / "Rethinking KL" / "Comedy of Estimators" and other 2024-2026 RLHF papers all call $\text{KL}(\pi_\theta \| \pi_\text{ref})$ reverse KL.</li><li><p><strong>Three KL estimators (Schulman 2020 blog <code>joschu.net/blog/kl-approx.html</code>)</strong>:</p>
+<ul><li><strong>k1</strong> = $\log(\pi_\theta/\pi_\text{ref})$ — unbiased but high variance, can be negative (cannot be read as a "distance").</li><li><strong>k2</strong> = $\tfrac{1}{2}(\log(\pi_\theta/\pi_\text{ref}))^2$ — always non-negative but <strong>biased</strong> (second-order Taylor approximation).</li><li><strong>k3</strong> = $(\pi_\text{ref}/\pi_\theta) - \log(\pi_\text{ref}/\pi_\theta) - 1$ — <strong>unbiased + non-negative + low variance</strong>, derived from the identity $\mathbb{E}_q[f(\log p/q)]$ with $f(x)=e^x-x-1$.</li></ul></li><li><strong>Two placements</strong>: (a) <strong>In-reward shaping</strong>: $\tilde{r}_t = r_t - \beta \cdot \text{KL}_t$, computed along with advantage / GAE; (b) <strong>In-loss regularization</strong>: $\mathcal{L} = \mathcal{L}_\text{PG} + \beta \cdot \mathbb{E}[\text{KL}]$. <strong>InstructGPT/Anthropic PPO use (a); GRPO uses (b) + k3 estimator</strong>. <strong>The objective is the same, but the gradient path differs</strong> — under a principled estimator (e.g. (a) k1-in-reward or (b) k2-as-loss) the two are gradient-equivalent on-policy; GRPO's (b) k3-as-loss actually carries an $O(\Delta^2)$ first-order Taylor bias (see §3.6 + Rethinking KL 2510.01555). The two placements also respond differently to PPO clip / importance-ratio truncation.</li><li><strong>β schedule</strong>: fixed β (simplest), <strong>Adaptive β</strong> (PPO-Penalty original — pulling β based on measured-KL-vs-target), Annealing β (tight early, loose later, like an SFT-to-RL transition). <strong>Too-large β fails to learn</strong> (policy stuck near ref); <strong>too-small β leads to reward hacking</strong> (policy drifts away, with long / sycophantic answers).</li><li><strong>Closed-form optimal policy of KL-regularized RL</strong>: solving the BT-style reward objective $\max_\pi \mathbb{E}[r] - \beta \cdot \text{KL}(\pi\|\pi_\text{ref})$ has the unique closed-form solution $\pi^*(y|x) \propto \pi_\text{ref}(y|x) \exp(r(x,y)/\beta)$. <strong>DPO is exactly this inverse plugged into Bradley-Terry</strong>, yielding $r = \beta \log(\pi^*/\pi_\text{ref}) + \beta\log Z$, where the partition function $\log Z$ <strong>cancels</strong> in the pairwise difference.</li><li><strong>KL's place in DPO/GRPO/SimPO</strong>: DPO's implicit reward $\hat r_\theta = \beta\log(\pi_\theta/\pi_\text{ref})$ is a sequence-level log-ratio (taking expectation under $y\sim\pi_\theta$ would equal $\beta\cdot$KL, but in DPO training $y$ comes from preference data so this is not KL itself — yet the reference appearing in the denominator still provides implicit anchoring); GRPO puts k3 KL in the loss (note that k3-as-loss yields a first-order gradient approximation, see §3.6); SimPO outright <strong>drops the reference</strong>, so it has <strong>no KL constraint</strong> — making it more sensitive to β/γ/length-norm.</li><li><strong>Failure modes</strong>: KL explosion (β too small, importance ratio too large), KL collapse (β too large or entropy too low, policy stuck), <strong>Reward Overoptimization</strong> (Gao 2023 ICML): proxy reward rises monotonically with KL, but gold reward rises then falls (inverted-U) — KL distance is the natural axis for overoptimization.</li></ol>
+<h2 id="1-kl-fundamentals">§1 KL Fundamentals</h2>
+<h3 id="11-definition-properties-notation">1.1　Definition, properties, notation</h3>
+<p><strong>Definition</strong> (discrete):</p>
+<p>$$\boxed{\;\text{KL}(p \| q) \triangleq \sum_x p(x) \log \frac{p(x)}{q(x)} = \mathbb{E}_{x \sim p}\!\left[\log \frac{p(x)}{q(x)}\right]\;}$$</p>
+<p>Conventions: $0 \log 0 = 0$, $0 \log(0/0) = 0$, $p \log(p/0) = +\infty$. Continuous distributions replace $\sum$ with $\int$.</p>
+<p><strong>Core properties</strong> (frequently asked together in interviews):</p>
+<table><thead><tr><th>Property</th><th>One-line statement</th><th>Brief proof</th></tr></thead><tbody><tr><td><strong>Non-negative</strong></td><td>$\text{KL} \ge 0$</td><td>Jensen + $-\log$ convex: $\text{KL} = -\mathbb{E}_p \log(q/p) \ge -\log \mathbb{E}_p(q/p) = 0$</td></tr><tr><td><strong>Equality</strong></td><td>$\text{KL} = 0$ iff $p = q$ a.e.</td><td>Jensen equality condition</td></tr><tr><td><strong>Asymmetric</strong></td><td>$\text{KL}(p,q) \ne \text{KL}(q,p)$ (in KL's asymmetric arguments)</td><td>Direct example construction</td></tr><tr><td><strong>No triangle inequality</strong></td><td>Not a metric</td><td>So "KL distance" is informal/imprecise</td></tr><tr><td><strong>Convexity</strong></td><td>$\text{KL}(\cdot,\cdot)$ jointly convex in $(p,q)$</td><td>Log-sum inequality</td></tr><tr><td><strong>Chain rule</strong></td><td>Joint KL = marginal KL + expected conditional KL (see display below)</td><td>Direct log decomposition</td></tr><tr><td><strong>Reparameterization invariance</strong></td><td>Invariant under same transformation $x \mapsto T(x)$ (equality only when $T$ invertible)</td><td>Measure change + Jacobian cancellation</td></tr></tbody></table>
+<p>Full chain-rule form:</p>
+<p>$$\text{KL}(p(x,y) \,\|\, q(x,y)) = \text{KL}(p(x) \,\|\, q(x)) + \mathbb{E}_{p(x)}\!\big[\text{KL}(p(y|x) \,\|\, q(y|x))\big]$$</p>
+<div class="callout callout-good"><div class="callout-title">Chain rule in RLHF = per-token KL summed</div><p>sequence-level KL is the <strong>expectation</strong> of the sum of trajectory log-ratios: $\text{KL}_\text{seq} = \mathbb{E}_{y\sim\pi_\theta}[\sum_t \log\pi_\theta(y_t|s_t)/\pi_\text{ref}(y_t|s_t)]$. In implementation, computing $\sum_t \log r_t$ on a single rollout is the <strong>single-MC estimator</strong> (the sequence form of k1); to get true expected KL one averages over a batch of rollouts. The <strong>true token-level KL</strong> $D_\text{KL}(\pi_\theta(\cdot|s_t)\|\pi_\text{ref}(\cdot|s_t))$ further requires a full-vocab sum (full-vocab KL) at that prefix rather than a log-ratio only at the sampled token. The two <strong>have the same expectation</strong> but use different estimator forms: sum-over-rollout of sampled log-ratios is the cheap-but-noisy estimator.</p></div>
+<h3 id="12-forward-kl-vs-reverse-kl-mass-covering-or-mode-seeking">1.2　Forward KL vs Reverse KL: mass-covering or mode-seeking?</h3>
+<p>Let $p$ be the data/true distribution and $q_\theta$ the parametric model. The two directions behave completely differently in fitting policies:</p>
+<table><thead><tr><th>Direction</th><th>Form (display below)</th><th>Expectation under</th><th>Behavior</th><th>Classic uses</th></tr></thead><tbody><tr><td><strong>Forward KL</strong></td><td>$\text{KL}(p\,\</td><td>\,q_\theta) = \mathbb{E}<em>{p}[\log(p/q</em>\theta)]$</td><td>$p$ (data/target)</td><td><strong>mass-covering / mean-seeking</strong>: wherever $p > 0$, $q_\theta$ must be $> 0$, otherwise $\log(p/q) \to \infty$</td><td>MLE / distillation (student covers teacher)</td></tr><tr><td><strong>Reverse KL</strong></td><td>$\text{KL}(q_\theta\,\</td><td>\,p) = \mathbb{E}<em>{q</em>\theta}[\log(q_\theta/p)]$</td><td>$q_\theta$ (variational/optimization)</td><td><strong>mode-seeking / minorization</strong>: wherever $q_\theta > 0$, $p$ must be $> 0$; $q_\theta$ tends to collapse into a single mode</td><td>VI, RLHF, GAN-like training</td></tr></tbody></table>
+<p>Notation conventions:</p>
+<p>$$\text{Forward KL}: \text{KL}(p \,\|\, q_\theta) = \mathbb{E}_{p}\!\left[\log\frac{p}{q_\theta}\right],\qquad \text{Reverse KL}: \text{KL}(q_\theta \,\|\, p) = \mathbb{E}_{q_\theta}\!\left[\log\frac{q_\theta}{p}\right]$$</p>
+<p>Classic picture (bimodal $p$, unimodal $q_\theta$):</p>
+<ul><li>Forward KL fit → $q_\theta$ widens and bridges both modes (<strong>mass-covering</strong>).</li><li>Reverse KL fit → $q_\theta$ picks one mode and shrinks into it (<strong>mode-seeking</strong>).</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Modern consensus on the naming convention</div><p>Variational inference, DPO, RLOO, "Rethinking KL Regularization in RLHF" (arXiv 2510.01555), "A Comedy of Estimators" (arXiv 2512.21852), and other 2024-2026 RLHF papers all use the unified convention: $\text{KL}(q_\theta\|p)$ is called reverse KL ($q_\theta$ is the variational/optimization side), and $\text{KL}(p\|q_\theta)$ is called forward KL. This tutorial follows that standard convention. A few earlier RL textbooks name it by the sampling distribution — in interviews, simply state the formula to avoid label ambiguity.</p></div>
+<p><strong>Which one does RLHF use?</strong> Almost all mainstream implementations (InstructGPT / Anthropic PPO / DeepSeekMath GRPO) use $\text{KL}(\pi_\theta \| \pi_\text{ref})$ (<strong>reverse-KL form</strong>: $\pi_\theta$ is the variational side, $\pi_\text{ref}$ is the target). <strong>Fundamental reason</strong>: training already samples from $\pi_\theta$ (rollout), so $\mathbb{E}_{\pi_\theta}[\log \pi_\theta/\pi_\text{ref}]$ is directly estimable from samples; meanwhile reverse KL's mode-seeking behavior matches the RL goal exactly — find the reward-high mode in the high-density region of $\pi_\text{ref}$, rather than "cover all of $\pi_\text{ref}$".</p>
+<div class="callout callout-info"><div class="callout-title">Tip</div><p>Note: if we swapped roles of $\pi_\theta$ and $\pi_\text{ref}$ (forward KL = $\text{KL}(\pi_\text{ref}\|\pi_\theta)$), we would need to sample from $\pi_\text{ref}$, which engineering-wise requires IS, is expensive, and is semantically off-target (we are training $\pi_\theta$, not $\pi_\text{ref}$). So RLHF rarely uses the forward direction.</p></div>
+<h3 id="13-relation-to-other-divergences">1.3　Relation to other divergences</h3>
+<table><thead><tr><th>Divergence</th><th>Definition (display below)</th><th>Properties</th><th>Notes</th></tr></thead><tbody><tr><td><strong>JS</strong></td><td>Symmetric average of KL to mixture $m = (p+q)/2$</td><td>Symmetric, bounded ($\le \log 2$), square root is a metric</td><td>$\sqrt{\text{JS}}$ is a metric (Endres-Schindelin 2003 IEEE TIT 49(7)); the original GAN discriminator loss is equivalent to $2\cdot\text{JSD} - \log 4$; rarely used in RLHF</td></tr><tr><td><strong>α-divergence</strong></td><td>$\frac{1}{\alpha(1-\alpha)}(1 - \int p^\alpha q^{1-\alpha})$</td><td>Contains KL as a limit</td><td>Unified framework; $\alpha \to 1$ gives forward KL, $\alpha \to 0$ gives reverse KL</td></tr><tr><td><strong>Hellinger</strong></td><td>$H^2(p,q) = \tfrac{1}{2}\int(\sqrt{p}-\sqrt{q})^2$</td><td>Symmetric, bounded, $0 \le H^2 \le 1$</td><td>Relation to KL: $H^2 \le \tfrac{1}{2}\text{KL}$</td></tr><tr><td><strong>$\chi^2$</strong></td><td>$\chi^2(p,q) = \int \frac{(p-q)^2}{q}$</td><td>$f$-divergence at $f(t) = (t-1)^2$</td><td>Relation to KL: $\text{KL} \le \log(1 + \chi^2)$</td></tr><tr><td><strong>TV</strong></td><td>$\tfrac{1}{2}\int \lvert p-q\rvert$</td><td>A metric, $\in [0,1]$</td><td><strong>Pinsker</strong>: $\text{TV} \le \sqrt{\text{KL}/2}$</td></tr></tbody></table>
+<p>Full forms of four common $f$-divergences:</p>
+<p>$$\text{JS}(p, q) = \tfrac{1}{2}\text{KL}(p \,\|\, m) + \tfrac{1}{2}\text{KL}(q \,\|\, m),\quad m = (p+q)/2$$</p>
+<p>$$\chi^2(p, q) = \int \frac{(p(x) - q(x))^2}{q(x)}\,dx,\qquad \text{Pinsker: } \mathrm{TV}(p,q) \le \sqrt{\text{KL}(p \,\|\, q) / 2}$$</p>
+<div class="callout callout-info"><div class="callout-title">Why doesn&#x27;t RLHF use JS / α-divergence?</div><p>Mostly engineering inertia + KL's closed-form advantages: in the PPO/DPO framework, KL admits clean per-token decomposition (chain rule), has a closed-form optimum (softmax-style), and likelihood ratios directly give per-token KL increments — so no extra density-ratio estimator is needed. JS / α-divergence either lack such clean math or require an extra density-ratio estimator.</p></div>
+<h3 id="14-why-does-rlhf-add-kl">1.4　Why does RLHF add KL?</h3>
+<p>Put "without KL" and "with KL" objectives side by side:</p>
+<p>$$\text{Without KL}:\quad \max_\pi \mathbb{E}_{x,\,y \sim \pi(\cdot|x)}[r(x,y)]$$</p>
+<p>$$\text{With KL}:\quad \max_\pi \mathbb{E}_{x,\,y \sim \pi(\cdot|x)}[r(x,y)] - \beta\,\mathbb{E}_x\,\text{KL}\!\big(\pi(\cdot|x)\,\big\|\,\pi_\text{ref}(\cdot|x)\big)$$</p>
+<p><strong>What happens without KL?</strong></p>
+<ol><li><strong>Reward hacking</strong>: the policy finds RM blind spots (longer answers / "As an AI..." boilerplate / sycophancy / format hacks) to gain high RM scores while degrading human-perceived quality.</li><li><strong>Linguistic fluency collapses</strong>: the policy outputs token sequences the RM "likes" but humans find unintelligible (in extreme cases, degenerating to repeating a single token / completely ungrammatical).</li><li><strong>Distribution shift</strong>: the policy strays far from $\pi_\text{ref}$, to the point that even the RM cannot reliably score it (off-distribution — the more uncertain the RM, the more random the reward).</li></ol>
+<p>After adding KL:</p>
+<ul><li><strong>β provides implicit regularization against RM error</strong>: when the RM is unreliable, KL pulls the policy back to the SFT's known-good distribution.</li><li><strong>A closed-form optimal policy exists</strong> (derived in §6.1), giving the whole RLHF stack a mathematical foundation.</li><li><strong>DPO / KTO / GRPO all depend on this KL anchor</strong>: SimPO, which drops the reference, has empirically been observed to be more hyperparameter-sensitive.</li></ul>
+<h2 id="2-kl-estimators-k1--k2--k3-interview-core">§2 KL Estimators (k1 / k2 / k3): Interview Core</h2>
+<h3 id="21-problem-setup">2.1　Problem setup</h3>
+<p>In practice, on every mini-batch we must estimate $\text{KL}(\pi_\theta \| \pi_\text{ref})$. But a full sum $\sum_y \pi_\theta(y) \log \pi_\theta(y)/\pi_\text{ref}(y)$ is infeasible ($y$ is a full response — combinatorial blowup). <strong>Only Monte Carlo is viable</strong>: estimate KL using samples drawn from $\pi_\theta$.</p>
+<p>Let $\log r = \log(\pi_\theta(y)/\pi_\text{ref}(y))$ (not the importance ratio, but the policy log-ratio). With samples $y \sim \pi_\theta$, we want to estimate $\mathbb{E}_{\pi_\theta}[\log r] = \text{KL}(\pi_\theta \| \pi_\text{ref})$.</p>
+<div class="callout callout-warn"><div class="callout-title">Notation unification</div><p>In this section $\log r$ always denotes the <strong>policy log-ratio</strong> $\log \pi_\theta - \log \pi_\text{ref}$ (<strong>not</strong> the PPO importance ratio $\pi_\theta / \pi_\text{old}$). The two have similar form but different meaning: the former measures "how far from reference", the latter measures "how far from the sampling policy".</p></div>
+<h3 id="22-k1-estimator--plug-definition-in-directly">2.2　k1 estimator — "plug definition in directly"</h3>
+<p>$$\boxed{\;\widehat{\text{KL}}_1 = \log\frac{\pi_\theta(y)}{\pi_\text{ref}(y)} = \log r\;}$$</p>
+<ul><li><strong>Unbiased</strong>: $\mathbb{E}_{y\sim\pi_\theta}[\log r] = \text{KL}(\pi_\theta\|\pi_\text{ref})$ by definition.</li><li><strong>Can be negative</strong>: on a single sample, $\log r$ can be positive or negative (the log-ratio has no "non-negative" constraint).</li><li><strong>High variance</strong>: in the tails, $\log r$ can be very large or very small, especially in regions where $\pi_\theta$ and $\pi_\text{ref}$ have little overlap.</li></ul>
+<p><strong>Problem</strong>: using k1 as a "KL monitoring metric" yields <strong>negative values</strong>; engineering loggers may display a negative KL, confusing newcomers (isn't KL supposed to be non-negative?). This is because <strong>non-negativity of the expectation does not imply non-negativity of every sample</strong>. But as per-token KL in reward shaping it is acceptable (what matters is unbiased mean).</p>
+<h3 id="23-k2-estimator--l2-form">2.3　k2 estimator — "$L^2$ form"</h3>
+<p>$$\boxed{\;\widehat{\text{KL}}_2 = \tfrac{1}{2}\!\left(\log\frac{\pi_\theta(y)}{\pi_\text{ref}(y)}\right)^2 = \tfrac{1}{2}(\log r)^2\;}$$</p>
+<ul><li><strong>Always non-negative</strong> ✓</li><li><strong>Biased</strong>: $\mathbb{E}[\tfrac{1}{2}(\log r)^2] \ne \text{KL}$.</li><li><strong>Small-KL limit</strong>: Taylor expansion $\log r = (r - 1) - \tfrac{1}{2}(r-1)^2 + O((r-1)^3)$; when $\pi_\theta \approx \pi_\text{ref}$, $\log r$ is small, and $\tfrac{1}{2}(\log r)^2$ equals KL to second order (near $p = q$, KL = Fisher-information quadratic form).</li><li><strong>Variance smaller than k1</strong>: because squaring eliminates sign cancellation, but it is still not optimal.</li></ul>
+<p>In practice k2 is mostly used for <strong>monitoring</strong> (providing a "non-negative but biased" visualization metric); it is rarely used for reward shaping.</p>
+<h3 id="24-k3-estimator-schulman-2020-blog--non-negative-unbiased-value-estimator-but-as-a-loss-term-the-gradient-is-biased--see-36">2.4　k3 estimator (Schulman 2020 blog) — <strong>non-negative unbiased value estimator</strong> (but as a loss term, the gradient is biased — see §3.6)</h3>
+<h4 id="241-construction">2.4.1　Construction</h4>
+<p>Consider $f(x) = e^x - x - 1$. From $e^x \ge 1 + x$ (for real $x$), we get $f(x) \ge 0$, with $f(0) = 0$.</p>
+<p>Substituting $x = \log(\pi_\text{ref}(y)/\pi_\theta(y)) = -\log r$:</p>
+<p>$$f(-\log r) = e^{-\log r} - (-\log r) - 1 = \frac{1}{r} + \log r - 1 = \frac{\pi_\text{ref}(y)}{\pi_\theta(y)} + \log\frac{\pi_\theta(y)}{\pi_\text{ref}(y)} - 1$$</p>
+<p>Equivalently (writing it with $\Delta = -\log r = \log(\pi_\text{ref}/\pi_\theta)$): $\frac{\pi_\text{ref}}{\pi_\theta} - \log\frac{\pi_\text{ref}}{\pi_\theta} - 1$ (note $-\log(\pi_\text{ref}/\pi_\theta) = \log(\pi_\theta/\pi_\text{ref})$, the two forms are equivalent).</p>
+<p>Equivalently (this is the standard form in Schulman's blog):</p>
+<p>$$\boxed{\;\widehat{\text{KL}}_3 = \frac{\pi_\text{ref}(y)}{\pi_\theta(y)} - \log\frac{\pi_\text{ref}(y)}{\pi_\theta(y)} - 1 = e^{\Delta} - \Delta - 1,\quad \Delta = \log\frac{\pi_\text{ref}(y)}{\pi_\theta(y)} = -\log r\;}$$</p>
+<h4 id="242-three-core-properties-must-know">2.4.2　Three core properties (must-know)</h4>
+<p><strong>Property 1 (non-negative)</strong>:</p>
+<p>Since $e^\Delta - \Delta - 1 \ge 0$ for all $\Delta \in \mathbb{R}$ (the convex $e^\Delta$ lies above its tangent line $1 + \Delta$ at $\Delta = 0$), $\widehat{\text{KL}}_3 \ge 0$ always holds.</p>
+<p><strong>Property 2 (unbiased)</strong>:</p>
+<p>We show $\mathbb{E}_{y \sim \pi_\theta}[\widehat{\text{KL}}_3] = \text{KL}(\pi_\theta\|\pi_\text{ref})$.</p>
+<p>$$\mathbb{E}_{\pi_\theta}\!\left[\frac{\pi_\text{ref}}{\pi_\theta}\right] = \sum_y \pi_\theta(y) \cdot \frac{\pi_\text{ref}(y)}{\pi_\theta(y)} = \sum_y \pi_\text{ref}(y) = 1$$</p>
+<p>$$\mathbb{E}_{\pi_\theta}\!\left[-\log\frac{\pi_\text{ref}}{\pi_\theta}\right] = \mathbb{E}_{\pi_\theta}\!\left[\log\frac{\pi_\theta}{\pi_\text{ref}}\right] = \text{KL}(\pi_\theta\|\pi_\text{ref})$$</p>
+<p>Therefore:</p>
+<p>$$\mathbb{E}_{\pi_\theta}[\widehat{\text{KL}}_3] = 1 + \text{KL}(\pi_\theta\|\pi_\text{ref}) - 1 = \text{KL}(\pi_\theta\|\pi_\text{ref}) \quad \checkmark$$</p>
+<p><strong>Property 3 (variance typically lower than k1)</strong>:</p>
+<p>Intuition: $\widehat{\text{KL}}_3$ is $\log r$'s linear term (the $-\log r/\pi_\theta$ part, i.e. the equivalent form of k1, $\mathbb{E}_{\pi_\theta}[-\log(\pi_\text{ref}/\pi_\theta)]$) plus a <strong>mean-1 control variate</strong> $\pi_\text{ref}/\pi_\theta - 1$. The control variate reduces variance: when $r$ is large, $\log r$ is large but $1/r$ is small, and vice versa, so <strong>the two are negatively correlated</strong> and summing them gives lower variance than k1 alone.</p>
+<p>Formally: $\widehat{\text{KL}}_3 = \widehat{\text{KL}}_1 + (\frac{\pi_\text{ref}}{\pi_\theta} - 1)$; the added term $(\frac{\pi_\text{ref}}{\pi_\theta} - 1)$ has expectation 0 but is strongly negatively correlated with $\log r$ → variance reduction.</p>
+<div class="callout callout-info"><div class="callout-title">The elegance of k3</div><p>The derivation in Schulman's 2020 blog is equivalent to the above: he <strong>first looks for $f(x) \ge 0$ such that $\mathbb{E}_q f(\log p/q) = \text{KL}$</strong>, then picks $f(x) = e^x - x - 1$ (the simplest non-trivial non-negative differentiable choice). So k3 is not "inspired" — it is the most natural construction under the "non-negative + unbiased" constraint.</p></div>
+<h4 id="243-variants-and-simplifications">2.4.3　Variants and simplifications</h4>
+<p>Real-world code often writes (this also applies to the PPO ratio $r = \pi_\theta / \pi_\text{old}$, but with different semantics — that is an importance-ratio approximation, not a policy log-ratio):</p>
+<pre><code class="language-python">approx_kl_to_old = ((ratio - 1) - torch.log(ratio.clamp_min(1e-8))).mean()</code></pre>
+<p>I.e. $\widehat{\text{KL}}_3 \approx (r - 1) - \log r$, which is the equivalent dual of $e^\Delta - \Delta - 1$ above (treat $r = e^{\log r}$ as $e^\Delta$ with sign convention swapped). <strong>TRL / OpenRLHF / verl all default <code>approx_kl</code> to this form</strong>.</p>
+<h3 id="25-comparison-table-for-the-three">2.5　Comparison table for the three</h3>
+<table><thead><tr><th>Estimator</th><th>Form</th><th>Unbiased?</th><th>Non-negative?</th><th>Variance</th><th>Typical RLHF use</th></tr></thead><tbody><tr><td><strong>k1</strong></td><td>$\log r$</td><td>✅</td><td>❌</td><td>High</td><td>InstructGPT PPO reward shaping (per-token KL)</td></tr><tr><td><strong>k2</strong></td><td>$\tfrac{1}{2}(\log r)^2$</td><td>❌ value-estimator biased (second-order approximation of KL)</td><td>✅</td><td>Mid</td><td>Often used for monitoring from the value perspective; <strong>from the loss-gradient perspective, k2-as-loss is principled</strong> — on-policy it is gradient-equivalent to k1-in-reward, see §3.6</td></tr><tr><td><strong>k3</strong></td><td>$e^{-\log r} + \log r - 1$</td><td>✅ (as a <strong>value estimator</strong>)</td><td>✅</td><td>Low</td><td>Historical usage in DeepSeekMath GRPO / DAPO (when used <strong>as loss</strong>, its gradient is a biased first-order approximation, see §3.6 + the Rethinking KL paper)</td></tr></tbody></table>
+<h3 id="26-code-three-estimators--variance-simulation">2.6　Code: three estimators + variance simulation</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def k1_estimator(logp_theta, logp_ref):
+    &quot;&quot;&quot;k1: log(π_θ / π_ref)  — unbiased, but can be negative, high variance.&quot;&quot;&quot;
+    return logp_theta - logp_ref           # [B, T]
+
+def k2_estimator(logp_theta, logp_ref):
+    &quot;&quot;&quot;k2: 0.5 (log(π_θ / π_ref))^2  — biased, non-negative, mid variance.&quot;&quot;&quot;
+    return 0.5 * (logp_theta - logp_ref) ** 2
+
+def k3_estimator(logp_theta, logp_ref):
+    &quot;&quot;&quot;k3 (Schulman 2020): exp(log π_ref - log π_θ) + log(π_θ/π_ref) - 1
+       = (π_ref/π_θ) - log(π_ref/π_θ) - 1     [letting Δ = log π_ref - log π_θ]
+
+    Value-estimator properties: unbiased, non-negative, low variance.
+    ⚠️ Recommended for KL value MONITORING, NOT as a loss term — k3-as-loss
+       gives gradient (1 - e^{-Δ})∇logπ_θ = (Δ - ½Δ² + O(Δ³))∇logπ_θ, a
+       first-order Taylor approximation of reverse-KL gradient with O(Δ²) bias.
+       For principled reverse-KL gradient, use k2-as-loss (gradient-equivalent
+       to k1-in-reward on-policy) or k1-in-reward via score function. See §3.6.
+    &quot;&quot;&quot;
+    log_r = logp_theta - logp_ref          # log(π_θ/π_ref)
+    log_ratio_rev = -log_r                 # Δ = log(π_ref/π_θ)
+    return torch.exp(log_ratio_rev) - log_ratio_rev - 1
+
+# Variance comparison: 1D synthetic
+def compare_kl_estimators(n_samples=10_000, seed=0):
+    &quot;&quot;&quot;
+    Synthetic: π_θ = N(0, 1), π_ref = N(μ, 1). True KL = μ^2 / 2.
+    Sample y ~ π_θ; evaluate the three estimators.
+    &quot;&quot;&quot;
+    torch.manual_seed(seed)
+    mu = 0.5
+    true_kl = mu ** 2 / 2.0                        # closed-form for Gaussians w/ same σ
+
+    y = torch.randn(n_samples)                     # y ~ N(0, 1) = π_θ
+    # log-pdf of N(0,1) vs N(μ,1) at y (drop common -0.5 log 2π):
+    logp_theta = -0.5 * y ** 2
+    logp_ref   = -0.5 * (y - mu) ** 2
+
+    k1 = k1_estimator(logp_theta, logp_ref)
+    k2 = k2_estimator(logp_theta, logp_ref)
+    k3 = k3_estimator(logp_theta, logp_ref)
+
+    print(f&quot;true KL = {true_kl:.4f}&quot;)
+    for name, vals in [(&quot;k1&quot;, k1), (&quot;k2&quot;, k2), (&quot;k3&quot;, k3)]:
+        print(f&quot;  {name}: mean={vals.mean().item():+.4f}  var={vals.var().item():.4f}  &quot;
+              f&quot;min={vals.min().item():+.3f}  max={vals.max().item():+.3f}&quot;)
+    # Expected output: k1 mean ≈ 0.125 (unbiased), but min &lt; 0;
+    #                  k2 mean &gt; 0.125 (biased upward);
+    #                  k3 mean ≈ 0.125 (unbiased), min ≥ 0, var(k3) &lt; var(k1).</code></pre>
+<div class="callout callout-good"><div class="callout-title">Running the simulation you will see</div></div>
+<ul><li>k1 mean ≈ 0.125, min around −1.5 (negative possible), variance large.</li><li>k2 mean ≈ 0.18 (biased high), min ≥ 0, mid variance.</li><li>k3 mean ≈ 0.125 (unbiased), min ≥ 0, var <strong>distinctly smaller than</strong> k1.</li></ul>
+<p>This matches the takeaway from Schulman's blog: <strong>k3 simultaneously delivers unbiased + non-negative + lower variance</strong>.</p>
+<h2 id="3-two-placements-of-kl-in-rlhf">§3 Two placements of KL in RLHF</h2>
+<h3 id="31-option-a-in-reward-shaping-ppo-rlhf--instructgpt-standard">3.1　Option A: In-reward shaping (PPO RLHF / InstructGPT standard)</h3>
+<p>Bake KL <strong>into per-token reward</strong>, then run normal PPO + GAE:</p>
+<p>$$\boxed{\;\tilde{r}_t = \underbrace{\mathbb{1}[t = T] \cdot R(x, y)}_{\text{terminal RM reward}} - \beta \cdot \underbrace{\log\frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_\text{ref}(y_t \mid x, y_{<t})}}_{\text{per-token KL (k1)}}\;}$$</p>
+<p>Details to watch:</p>
+<ul><li><strong>Per-token</strong>: every generated token contributes its log-prob ratio as part of that step's reward.</li><li><strong>k1 estimator</strong>: this directly uses $\log(\pi_\theta/\pi_\text{ref})$ (k1). Note <strong>a single token's value can be negative</strong>, but as reward shaping only the mean/sum needs to match the KL expectation.</li><li><strong>Terminal RM reward</strong>: the RM scalar for the entire answer is placed only on the last token (other tokens have RM reward = 0).</li></ul>
+<p>After placement, run GAE:</p>
+<p>$$\delta_t = \tilde{r}_t + \gamma V(s_{t+1}) - V(s_t),\quad A_t^{\text{GAE}} = \sum_{l \ge 0} (\gamma\lambda)^l \delta_{t+l}$$</p>
+<p>The KL penalty naturally propagates into policy gradient through the advantage: <strong>at every step the "increase in action probability" is offset by KL's "pull back to reference"</strong>, and the final RL objective is expected $R$ − $\beta$ · KL.</p>
+<h3 id="32-option-b-in-loss-regularization-grpo--dapo">3.2　Option B: In-loss regularization (GRPO / DAPO)</h3>
+<p>Don't put KL in the reward; <strong>make it a separate loss term</strong>:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{full}(\theta) = -\underbrace{\mathbb{E}\!\left[\min(\rho_t A_t, \text{clip}(\rho_t, 1\!-\!\epsilon, 1\!+\!\epsilon) A_t)\right]}_{\text{PPO surrogate / GRPO surrogate}} + \beta \cdot \underbrace{\mathbb{E}\!\left[\widehat{\text{KL}}_\text{loss}(\pi_\theta \| \pi_\text{ref})\right]}_{\text{KL loss term}}\;}$$</p>
+<p>GRPO's <strong>historical implementation</strong> (DeepSeekMath / DAPO) takes $\widehat{\text{KL}}_\text{loss}$ to be <strong>k3</strong> (per-token):</p>
+<ul><li>Uses k3 estimator (per-token).</li><li>KL <strong>does not enter advantage computation</strong>; it is added to the loss directly as a regularizer.</li><li>Advantage comes from group-internal reward normalization ($\hat{A}_i = (r_i - \bar{r})/\sigma_r$), shared across all tokens.</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Important caveat</div><p>backpropagating k3 directly as a loss term is <strong>not</strong> the exact reverse-KL gradient — it is a biased first-order approximation (see §3.6 + the 2025 paper "Rethinking KL Regularization in RLHF"). The two more principled on-policy choices are: (1) <strong>k1 in reward</strong> (KL into reward, PPO/GRPO backprops via score function — gradient strictly unbiased); (2) <strong>k2 as loss</strong> ($\tfrac12 (\log r)^2$, $\nabla\mathcal L = \Delta\,\nabla\log\pi_\theta$, <strong>gradient-equivalent</strong> to (1) on-policy — both are the strict reverse-KL gradient). Off-policy still requires IS correction. §3.6 below gives the comparison table.</p></div>
+<h3 id="33-mathematically-equivalent-engineering-wise-not-equivalent">3.3　Mathematically equivalent? Engineering-wise not equivalent</h3>
+<p><strong>Math</strong>: both placements optimize the same objective:</p>
+<p>$$J(\pi) = \mathbb{E}_{\pi}[R] - \beta \cdot \text{KL}(\pi \| \pi_\text{ref})$$</p>
+<p>but the <strong>gradient propagation path differs</strong>:</p>
+<ul><li>Option A: KL as part of reward → through GAE → into advantage → into PPO surrogate gradient.</li><li>Option B: KL as independent loss → direct gradient w.r.t. $\theta$.</li></ul>
+<p><strong>Engineering differences</strong>:</p>
+<table><thead><tr><th>Dimension</th><th>In-reward (Option A)</th><th>In-loss (Option B)</th></tr></thead><tbody><tr><td>KL estimator</td><td>k1 (per-token can be negative, acceptable as reward)</td><td>k3 (unbiased + non-negative, more stable)</td></tr><tr><td>Relation to PPO clip</td><td>KL is truncated by clip (importance-ratio truncation cuts KL along with it)</td><td>KL is independent, unaffected by clip</td></tr><tr><td>Advantage interpretation</td><td>Advantage contains KL → "net advantage"</td><td>Advantage is reward-only → "pure advantage"</td></tr><tr><td>Hyperparameter sensitivity</td><td>β directly affects reward scale → must coordinate with RM scale</td><td>β is independent of reward, but KL-vs-PG balance matters</td></tr><tr><td>Monitoring metrics</td><td>Watch token-level KL inside reward</td><td>Watch the KL loss curve independently</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">How PPO clip masks the KL signal</div><p>In Option A, when the importance ratio $\rho_t$ falls outside the clip range ($\rho_t > 1+\epsilon$ with $\tilde A_t > 0$ or $\rho_t < 1-\epsilon$ with $\tilde A_t < 0$), PPO truncates the surrogate into a constant (zero gradient w.r.t. θ), and the KL term in $\tilde r_t$ at that step also becomes ineffective. This means <strong>when the policy drifts too far, PPO clip ironically disables the KL anchor</strong> — this is part of the motivation for Option B (KL in loss is always active).</p></div>
+<h3 id="34-practice-which-goes-where">3.4　Practice: which goes where?</h3>
+<table><thead><tr><th>Algorithm</th><th>KL placement</th><th>Estimator</th><th>Source</th></tr></thead><tbody><tr><td>InstructGPT PPO</td><td><strong>In-reward</strong></td><td>k1</td><td>Ouyang 2022 NeurIPS</td></tr><tr><td>Anthropic RLHF</td><td><strong>In-reward</strong></td><td>k1 + adaptive β</td><td>Bai 2022 arXiv 2204.05862</td></tr><tr><td>GRPO / DeepSeekMath</td><td><strong>In-loss</strong></td><td>k3</td><td>Shao 2024 arXiv 2402.03300</td></tr><tr><td>DAPO</td><td><strong>In-loss</strong> (often KL turned off or low-weighted in real configs)</td><td>k3</td><td>Yu 2025 arXiv 2503.14476</td></tr><tr><td>DPO</td><td><strong>Implicit in-loss</strong> (via $\pi_\text{ref}$ in the log-ratio denominator)</td><td>—</td><td>Rafailov 2023 NeurIPS</td></tr><tr><td>SimPO</td><td><strong>No reference, no KL</strong></td><td>—</td><td>Meng 2024 NeurIPS</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">DAPO field experience</div><p>ByteDance's verl team has reported in engineering write-ups that the KL term is <strong>often turned off or set to a very small β</strong> ($10^{-4}$ order) for large-scale math/code RL training. Reasons: the reward is already rule-based (close to ground truth), there is no RM hacking to worry about, and the KL anchor actually slows down training. This is the extreme "Option B + β ≈ 0" version.</p></div>
+<h3 id="36-gradient-bias-analysis-of-estimator-placement-rethinking-kl-regularization-in-rlhf">3.6　Gradient bias analysis of estimator placement (Rethinking KL Regularization in RLHF)</h3>
+<div class="callout callout-info"><div class="callout-title">Key reference</div><p>Kezhao Liu et al., "Rethinking KL Regularization in RLHF: From Value Estimation to Gradient Optimization", arXiv 2510.01555 (2025-10-02). This paper systematically distinguishes <strong>value estimation</strong> ("is the KL value itself estimated correctly?") from <strong>gradient optimization</strong> ("after differentiating w.r.t. θ, is the gradient actually the reverse-KL gradient?"), and its conclusions are not fully aligned with the historical GRPO implementation.</p></div>
+<h4 id="setup-and-three-estimator-placements">Setup and three estimator placements</h4>
+<p>For brevity, let $\Delta_t = \log\!\frac{\pi_\theta(y_t|s_t)}{\pi_\text{ref}(y_t|s_t)}$ (per-token log-ratio, <strong>with θ gradient</strong>), $\hat\Delta_t = \text{stop\_grad}(\Delta_t)$ (detached copy recorded at rollout time). Three common placements:</p>
+<table><thead><tr><th>Placement</th><th>Where KL appears</th><th>Per-token form</th><th>Gradient contribution to θ</th></tr></thead><tbody><tr><td><strong>(P1) k1 in reward</strong></td><td>Enter reward / advantage</td><td>$\hat r_t \leftarrow r_t - \beta\,\hat\Delta_t$, then PPO surrogate</td><td>$-\beta\cdot \mathbb{E}[\nabla_\theta\log\pi_\theta\cdot \hat\Delta_t]$, <strong>the strict reverse-KL score-function gradient</strong> (on-policy)</td></tr><tr><td><strong>(P2) k2 as loss</strong></td><td>Direct loss term</td><td>$\mathcal{L}_\text{KL} = \tfrac12 \Delta_t^2$</td><td>$\nabla\mathcal{L}_\text{KL} = \Delta_t\,\nabla_\theta\log\pi_\theta$ (using $\nabla_\theta\Delta_t = \nabla_\theta\log\pi_\theta$). On-policy, $\mathbb{E}_{y\sim\pi_\theta}[\Delta\,\nabla\log\pi_\theta] = \nabla\text{KL}$ — <strong>gradient-equivalent</strong> to (P1), strictly principled</td></tr><tr><td><strong>(P3) k3 as loss</strong></td><td>Direct loss term</td><td>$\mathcal{L}_\text{KL} = e^{-\Delta_t} + \Delta_t - 1$</td><td>$\nabla\mathcal{L}_\text{KL} = (1 - e^{-\Delta_t})\nabla_\theta\log\pi_\theta$; this is a <strong>first-order Taylor approximation</strong> of the reverse-KL gradient, since $1-e^{-\Delta} = \Delta - \tfrac12\Delta^2 + O(\Delta^3)$, with $O(\Delta^2)$ bias</td></tr></tbody></table>
+<h4 id="why-k3-as-loss-yields-a-biased-gradient-key-intuition">Why k3 as loss yields a biased gradient (key intuition)</h4>
+<p>k3 as a <strong>value estimator</strong> (computing the KL numeric value) is unbiased: $\mathbb{E}_{\pi_\theta}[\widehat{\text{KL}}_3] = \text{KL}(\pi_\theta\|\pi_\text{ref})$ (see §2.4.2 Property 2). But when <strong>backpropagating w.r.t. θ</strong>, autograd computes $\nabla_\theta\widehat{\text{KL}}_3$, <strong>not</strong> $\nabla_\theta\,\mathbb{E}_{\pi_\theta}[\widehat{\text{KL}}_3]$. The latter is given by the score-function trick:</p>
+<p>$$\nabla_\theta\,\text{KL}(\pi_\theta\|\pi_\text{ref}) = \mathbb{E}_{y\sim\pi_\theta}\!\big[\nabla_\theta\log\pi_\theta(y) \cdot \log(\pi_\theta(y)/\pi_\text{ref}(y))\big] \;+\; \mathbb{E}_{\pi_\theta}[\nabla_\theta\log\pi_\theta]\,\quad\text{(=0)}$$</p>
+<p>= $\mathbb{E}[\nabla\log\pi_\theta \cdot \Delta]$ (<strong>this is the gradient given by (P1)</strong>, equivalent to treating $\Delta$ as a detached reward via the score function).</p>
+<p>Meanwhile (P3) <code>loss.backward()</code> gives $\nabla_\theta(e^{-\Delta} + \Delta - 1) = (1 - e^{-\Delta})\nabla_\theta\Delta = (1 - 1/r)\nabla_\theta\log\pi_\theta$. Taylor expansion: $1 - 1/r = \Delta - \tfrac12\Delta^2 + O(\Delta^3)$. So (P3) ≈ (P1) only in the $\Delta\to 0$ neighborhood; far from 0 there is $O(\Delta^2)$ bias.</p>
+<h4 id="practical-rules-combining-rethinking-kl--comedy-of-estimators">Practical rules (combining Rethinking KL + Comedy of Estimators)</h4>
+<table><thead><tr><th>Scenario</th><th>Recommended placement</th><th>Notes</th></tr></thead><tbody><tr><td><strong>On-policy (rollout-step backprop, no PPO mini-batch multi-step updates)</strong></td><td><strong>(P1) k1 in reward</strong> or <strong>(P2) k2 as loss</strong></td><td>The two are <strong>gradient-equivalent</strong> on-policy, both being the strict reverse-KL gradient</td></tr><tr><td><strong>Off-policy (PPO mini-batch passes over the same data several times)</strong></td><td>(P1) k1 in reward + <strong>IS correction</strong>: $\rho\cdot\Delta$, $\rho = \pi_\theta^\text{new}/\pi_\theta^\text{old}$</td><td>Otherwise the reward mismatches the current policy</td></tr><tr><td><strong>Historical GRPO/DeepSeekMath/DAPO implementations</strong></td><td>(P3) k3 as loss</td><td>Carries $O(\Delta^2)$ gradient bias; in practice $\Delta$ is small (β anchors tight) and it still trains; but <strong>not theoretically principled</strong></td></tr><tr><td><strong>Value-side monitoring</strong> (looking at how large the KL is)</td><td>k3 estimator remains first choice</td><td>Unbiased, non-negative, low variance — exactly the three properties from §2.4</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Summary phrasing</div><p>(interview-ready): k3 is an <strong>excellent KL value estimator</strong> (unbiased + non-negative + low variance); but the gradient produced by backpropagating it as a loss is a first-order Taylor approximation of the reverse-KL gradient, with bias. Rethinking KL recommends (P1) or (P2) on-policy; DAPO/GRPO historically use (P3) primarily as engineering convention + because the approximation holds in the small-β regime.</p></div>
+<h2 id="4--schedule">§4 β schedule</h2>
+<h3 id="41-fixed---baseline">4.1　Fixed β — baseline</h3>
+<p>The most common. $\beta \in [0.01, 0.5]$; <strong>InstructGPT reports β = 0.02 as a reference value</strong> (per-token KL). Pros: simple and reproducible. Cons: KL typically grows from small to large during training; a fixed β may "fail to suppress" late in training or "over-suppress" early on.</p>
+<h3 id="42-adaptive---schulman-ppo-penalty-original">4.2　Adaptive β — Schulman PPO-Penalty original</h3>
+<p>The PPO paper (Schulman 2017 arXiv 1707.06347) originally proposed two versions: <strong>Clip</strong> (current mainstream) and <strong>Penalty</strong> (adaptive KL). The Penalty form:</p>
+<p>$$\mathcal{L} = \mathbb{E}[r_t A_t] - \beta_k \cdot \text{KL}(\pi_{\theta_\text{old}} \| \pi_\theta)$$</p>
+<p><strong>β adaptive rule</strong> (after each epoch, look at measured KL $d$):</p>
+<ul><li>If $d < d_\text{target} / 1.5$: $\beta \leftarrow \beta / 2$ (KL below target, relax)</li><li>If $d > d_\text{target} \times 1.5$: $\beta \leftarrow \beta \times 2$ (KL above target, tighten)</li><li>Otherwise β unchanged</li></ul>
+<p>Intuition: treat β as the P term of a PID controller with target = expected KL (e.g. $d_\text{target} = 0.01$). This approach also appeared in InstructGPT and later Anthropic work (Anthropic's helpfulness/harmlessness reports after 1707.06347 contain similar adaptive-β descriptions).</p>
+<h3 id="43--annealing-schedule--analogous-to-learning-rate-schedule">4.3　β annealing schedule — analogous to learning rate schedule</h3>
+<p>View β as a time function $\beta(t)$:</p>
+<ul><li><strong>Tight early, loose late</strong>: $\beta(t) = \beta_0 \cdot \exp(-t / \tau)$. Intuition: early on, the policy is near ref — strengthen anchor to prevent instability; later the policy has learned — relax to let it explore reward.</li><li><strong>Loose early, tight late</strong>: opposite direction; explore RM signal early, anchor late. Rare.</li><li><strong>Cosine / linear decay</strong>: reference learning rate schedules.</li></ul>
+<p>In RLHF engineering, annealing is uncommon — adaptive β is more robust than schedules (no schedule shape to tune).</p>
+<h3 id="44--failure-modes">4.4　β failure modes</h3>
+<table><thead><tr><th>β setting</th><th>Symptom</th><th>Diagnosis</th></tr></thead><tbody><tr><td><strong>β too large</strong> ($> 1$)</td><td>KL ≈ 0, policy stuck near ref, RM reward doesn't rise</td><td>Reward curve is flat / <code>chosen_logp - rejected_logp</code> doesn't separate</td></tr><tr><td><strong>β too small</strong> ($< 0.001$)</td><td>KL explodes (runaway), policy increasingly long / sycophantic / repetitive</td><td>KL curve climbing, generation length growing, human eval dropping</td></tr><tr><td><strong>β jumps</strong></td><td>Loss curve has discontinuities</td><td>Adaptive frequency too high / target_kl too strict</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">Is InstructGPT&#x27;s β = 0.02 universally right?</div><p>Depends on task. <strong>Math/code RL</strong> typically needs smaller β (DeepSeekMath reports β ≈ 0.04, DAPO frequently uses much smaller β or 0) because reward is close to ground truth. <strong>Helpfulness/safety RL</strong> needs larger β (≥ 0.1) to prevent reward hacking, because neural RMs are easy to hack. That's why "β is not a universal hyperparameter".</p></div>
+<h3 id="45-adaptive--code-example">4.5　Adaptive β code example</h3>
+<pre><code class="language-python">class AdaptiveKLController:
+    &quot;&quot;&quot;
+    Schulman 2017 PPO-Penalty style adaptive β controller.
+    Call update(measured_kl) after every PPO epoch.
+    &quot;&quot;&quot;
+    def __init__(self, beta_init=0.02, target_kl=0.01, horizon=10000):
+        self.beta = beta_init
+        self.target_kl = target_kl
+        self.horizon = horizon          # smoothing coefficient (larger = slower)
+
+    def update(self, measured_kl, n_steps):
+        # proportional update; clip to prevent extreme jumps
+        proportional_error = max(-0.2, min(0.2,
+            measured_kl / self.target_kl - 1.0))
+        mult = 1.0 + proportional_error * n_steps / self.horizon
+        self.beta *= mult
+        # safety clamp
+        self.beta = max(1e-4, min(1.0, self.beta))
+        return self.beta</code></pre>
+<p>Usage:</p>
+<pre><code class="language-python">kl_ctrl = AdaptiveKLController(beta_init=0.02, target_kl=0.01)
+for epoch in range(num_epochs):
+    # ... rollout and PPO update ...
+    measured_kl = compute_mean_kl(policy, ref_policy, batch)   # k3 recommended
+    kl_ctrl.update(measured_kl, n_steps=batch_size)
+    current_beta = kl_ctrl.beta</code></pre>
+<div class="callout callout-info"><div class="callout-title">Analogy: adaptive β vs PID controller</div><p>Above is only a P term (proportional); HuggingFace TRL's implementation also uses only P. You could add I (integral: accumulated error) and D (derivative: rate of change) for full PID, but in practice P alone suffices; adding D tends to oscillate due to noisy KL estimates.</p></div>
+<h2 id="5-kls-relation-to-dpo--grpo--simpo--kto--ipo">§5 KL's relation to DPO / GRPO / SimPO / KTO / IPO</h2>
+<h3 id="51-dpo-implicit-reward----sequence-log-density-ratio">5.1　DPO: implicit reward = β × sequence log-density ratio</h3>
+<p>DPO's implicit reward is $\hat{r}_\theta(x, y) = \beta \log(\pi_\theta(y|x) / \pi_\text{ref}(y|x))$, i.e. the sequence-level log-density ratio for the entire $y$:</p>
+<p>$$\hat{r}_\theta(x, y) = \beta \sum_t \log\frac{\pi_\theta(y_t | x, y_{<t})}{\pi_\text{ref}(y_t | x, y_{<t})}$$</p>
+<div class="callout callout-warn"><div class="callout-title">Important distinction: the implicit reward is not KL itself</div><p>$\hat{r}_\theta$ is <strong>a single sequence's pointwise log-ratio</strong>, <strong>not</strong> KL. Only when taking expectation over $y\sim\pi_\theta$ does $\mathbb{E}_{y\sim\pi_\theta}[\hat{r}_\theta(x,y)] = \beta\cdot\text{KL}(\pi_\theta(\cdot|x)\,\|\,\pi_\text{ref}(\cdot|x))$ (this is the sequence-level form of the k1 KL estimator). But <strong>during DPO training, $y_w, y_l$ do not come from $\pi_\theta$ — they come from fixed preference data</strong>, so the training-stage $\hat{r}_\theta$ cannot be read as KL; it is just a pairwise log-ratio difference.</p>
+<p><strong>Correct framing</strong>: the dual RLHF interpretation of the DPO loss is to view $\hat{r}_\theta$ as a reward, with the BT model giving probability $\sigma(\hat{r}_w - \hat{r}_l)$; it corresponds to the reward expression obtained by inverting the "KL-regularized RL closed-form optimal policy $\pi^* \propto \pi_\text{ref}\exp(r/\beta)$". $\pi_\theta$ is implicitly KL-constrained under the implicit-RLHF view (because $\pi_\theta/\pi_\text{ref}$ appears in $\hat r_\theta$), but DPO optimizes a pairwise margin rather than an explicit KL margin.</p></div>
+<h4 id="511-dpo-closed-form-derivation-review">5.1.1　DPO closed-form derivation review</h4>
+<p>KL-regularized objective:</p>
+<p>$$\max_\pi \mathbb{E}_{x,\, y \sim \pi}[r(x, y)] - \beta\, \text{KL}(\pi \| \pi_\text{ref})$$</p>
+<p>For a single $x$, using Lagrangian + differentiation (detailed derivation in §6.1):</p>
+<p>$$\pi^*(y|x) = \frac{1}{Z(x)} \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x, y)}{\beta}\right)$$</p>
+<p>Inversion:</p>
+<p>$$r(x, y) = \beta \log\frac{\pi^*(y|x)}{\pi_\text{ref}(y|x)} + \beta \log Z(x)$$</p>
+<p>Plugging into Bradley-Terry $P(y_w \succ y_l | x) = \sigma(r(x, y_w) - r(x, y_l))$, the $\beta \log Z$ cancels, giving DPO:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{DPO}(\theta) = -\mathbb{E}_{(x,y_w,y_l)}\log\sigma\!\left(\beta\log\frac{\pi_\theta(y_w|x)}{\pi_\text{ref}(y_w|x)} - \beta\log\frac{\pi_\theta(y_l|x)}{\pi_\text{ref}(y_l|x)}\right)\;}$$</p>
+<h4 id="512-kl-interpretation-of-dpos-gradient">5.1.2　KL interpretation of DPO's gradient</h4>
+<p>$$\nabla_\theta \mathcal{L}_\text{DPO} = -\beta \mathbb{E}\!\Big[\sigma(\hat{r}_l - \hat{r}_w)\big(\nabla_\theta \log\pi_\theta(y_w|x) - \nabla_\theta \log\pi_\theta(y_l|x)\big)\Big]$$</p>
+<p><strong>Interpretation</strong>:</p>
+<ul><li>$\sigma(\hat{r}_l - \hat{r}_w)$ is "the current model's confidence in mis-ranking the preference order".</li><li>$\nabla \log\pi(y_w) - \nabla \log\pi(y_l)$ is "raise probability of $y_w$ + lower $y_l$".</li><li>$\beta$ appears twice: once inside the implicit reward $\hat{r}$ (determining the sigmoid's interior), once explicitly as a gradient scale. So <strong>β controls both KL strength and gradient magnitude in DPO</strong> — unlike in RLHF where β controls only one thing.</li></ul>
+<div class="callout callout-warn"><div class="callout-title">DPO&#x27;s β hyperparameter pitfall</div><p>Tuning β in DPO is not semantically equivalent to tuning β in RLHF. In PPO, β only affects KL penalty strength; in DPO, β simultaneously affects: (1) implicit-reward scale, (2) gradient magnitude (outer β), (3) sigmoid saturation position (inner β). <strong>Empirically $\beta \in [0.05, 0.5]$ but the optimal differs per task</strong>.</p></div>
+<h3 id="52-grpo-k3-kl-in-loss">5.2　GRPO: k3 KL in loss</h3>
+<p>DeepSeekMath GRPO uses k3, with KL as a separate loss term:</p>
+<p>$$L^\text{GRPO}(\theta) = \mathbb{E}\!\left[\frac{1}{G}\sum_{i=1}^G \frac{1}{|y_i|}\sum_{t=1}^{|y_i|}\!\Big(\min(\rho_{i,t} \hat{A}_{i,t}, \text{clip}(\rho_{i,t}, 1{-}\epsilon, 1{+}\epsilon)\hat{A}_{i,t}) - \beta\,\widehat{\text{KL}}_3^{i,t}\Big)\right]$$</p>
+<p>where $\widehat{\text{KL}}_3^{i,t} = e^{-\log r_{i,t}} + \log r_{i,t} - 1$ (per-token k3) and $\log r_{i,t} = \log\pi_\theta(y_{i,t}|\cdot) - \log\pi_\text{ref}(y_{i,t}|\cdot)$.</p>
+<p><strong>Why did GRPO historically pick k3</strong> (note: these are all <strong>value-estimator</strong> properties; they do not directly guarantee gradient correctness — see §3.6):</p>
+<ol><li><strong>Non-negative</strong>: the loss-value display is intuitive (k1 values can be negative, making optimizer monitoring curves look odd during debugging — but k1 in reward is harmless).</li><li><strong>Value estimator unbiased</strong>: $\mathbb{E}_{\pi_\theta}[\widehat{\text{KL}}_3] = \text{KL}$ (<strong>unbiased only as a numerical KL estimate; when backpropagated w.r.t. θ, the gradient is a first-order Taylor approximation with $O(\Delta^2)$ bias</strong>).</li><li><strong>Value estimator low variance</strong>: smaller variance than k1's value (smoother monitoring curves).</li><li><strong>Doesn't enter advantage</strong>: relatively decouples from In-reward placement, easier to diagnose (KL loss and PG loss monitored separately).</li></ol>
+<div class="callout callout-warn"><div class="callout-title">GRPO&#x27;s k3-as-loss is not the theoretically principled best choice</div><p>The Rethinking KL paper (arXiv 2510.01555) systematically analyzes that on-policy, (P1) k1-in-reward or (P2) k2-as-loss gives the strict reverse-KL gradient; GRPO/DAPO's actual engineering with tight β and small $\Delta$ makes the first-order approximation error limited — but <strong>in an interview, one should distinguish "value-estimator advantage" from "loss-gradient correctness"</strong>.</p></div>
+<h3 id="53-simpo-drops-reference-no-kl-anchor">5.3　SimPO: drops reference, no KL anchor</h3>
+<p>SimPO redefines the implicit reward as length-normalized log-prob:</p>
+<p>$$r_\text{SimPO}(x, y) = \frac{\beta}{|y|} \log \pi_\theta(y|x)$$</p>
+<p><strong>Key difference</strong>: <strong>no $\pi_\text{ref}$</strong>, hence <strong>no KL term</strong>. Loss:</p>
+<p>$$\mathcal{L}_\text{SimPO} = -\mathbb{E}\log\sigma\!\left(\frac{\beta}{|y_w|}\log\pi(y_w) - \frac{\beta}{|y_l|}\log\pi(y_l) - \gamma\right)$$</p>
+<p><strong>Consequences</strong>:</p>
+<ul><li>✅ Saves one reference policy at training time (memory halved).</li><li>❌ No KL anchor, so the distance from SFT is <strong>completely uncontrolled</strong>.</li><li>Empirically, SimPO outperforms DPO on certain benchmarks (AlpacaEval-2 / Arena-Hard); but generation quality on OOD prompts is <strong>less stable than DPO</strong>. SimPO's design is "length-norm + margin replaces KL anchor" — it assumes "for short prompt-response tasks, length-norm + margin is enough to constrain the policy", which <strong>doesn't hold universally</strong>.</li></ul>
+<div class="callout callout-info"><div class="callout-title">Engineering impact of SimPO&#x27;s missing KL</div><p>In practice, SimPO-trained models exhibit <strong>worse robustness on repetition patterns, generation length, and prompt-perturbation than DPO</strong>. That's why many production RLHF deployments still use DPO + small β rather than SimPO — the KL anchor has a cost, but it has value.</p></div>
+<h3 id="54-kl-handling-in-kto--ipo--orpo">5.4　KL handling in KTO / IPO / ORPO</h3>
+<table><thead><tr><th>Algorithm</th><th>KL form</th><th>Notes</th></tr></thead><tbody><tr><td><strong>KTO</strong> (Ethayarajh 2024 ICML)</td><td>Through reference point $z_0 = \mathbb{E}[\beta\cdot\text{KL}]$ (estimated from batch mismatched pairs, detached)</td><td>KL acts implicitly as an "anchor": how far implicit reward deviates from $z_0$</td></tr><tr><td><strong>IPO</strong> (Azar 2024 AISTATS)</td><td>Same as DPO ($\log(\pi/\pi_\text{ref})$), but loss changes from sigmoid to squared</td><td>Prevents unbounded growth of $\hat{r}$ under deterministic preferences</td></tr><tr><td><strong>ORPO</strong> (Hong 2024 EMNLP)</td><td><strong>No reference model</strong> (similar to SimPO), uses odds-ratio instead</td><td>Single-stage SFT + preference learning; KL anchor implicitly in SFT loss</td></tr></tbody></table>
+<h3 id="55-recent-papers-2024-2026">5.5　Recent papers (2024-2026)</h3>
+<table><thead><tr><th>Paper</th><th>Claim</th><th>KL angle</th></tr></thead><tbody><tr><td><strong>DeepSeekMath GRPO</strong> (Shao et al. 2024 arXiv 2402.03300)</td><td>Group-relative normalization + k3 KL in loss</td><td>First default use of k3 KL in LLM RL</td></tr><tr><td><strong>DPO Implicit Reward Models</strong> (Rafailov 2023 NeurIPS)</td><td>DPO's implicit reward equals the KL log-ratio</td><td>DPO is fundamentally the inverse of KL-regularized optimization</td></tr><tr><td><strong>Reward Model Overoptimization Scaling Laws</strong> (Gao, Schulman, Hilton 2023 ICML)</td><td>Gold reward shows an inverted-U over KL distance</td><td>KL is the natural x-axis for overoptimization</td></tr><tr><td><strong>DAPO</strong> (Yu et al. 2025 ByteDance arXiv 2503.14476)</td><td>clip-higher + dynamic sampling + token-level loss</td><td>KL term often set small or off, with prompt-cleaning dynamic sampling</td></tr><tr><td><strong>Cohere DRO / OPO</strong> (various 2024-2025 works)</td><td>offline IS-correction RL with KL</td><td>Combines IS-correction with KL anchor</td></tr><tr><td><strong>"Rethinking KL Regularization in RLHF: From Value Estimation to Gradient Optimization"</strong> (Kezhao Liu et al. 2025-10, arXiv 2510.01555)</td><td>Systematically distinguishes KL value estimation from gradient optimization: k3-as-loss is a biased first-order approximation; recommends (1) k1 in reward (strict reverse-KL score-function gradient) or (2) <strong>k2 as loss</strong> (value-estimator biased but on-policy loss gradient strictly equivalent to k1-in-reward / reverse-KL gradient); off-policy needs IS correction</td><td>Historical GRPO's "k3 as loss" is engineering convention, not theoretically principled</td></tr><tr><td><strong>"A Comedy of Estimators: On KL Regularization in RL Training of LLMs"</strong> (Vedant Shah et al. 2025-12, arXiv 2512.21852, v3 2026-03)</td><td>Systematic comparison across many RL algorithms + estimator-placement combinations of k1/k2/k3 estimator bias and gradient bias; analyzes placement-effect</td><td>No universally best estimator exists; reward-shaping vs loss-term have different sweet spots</td></tr></tbody></table>
+<h2 id="6-theoretical-optimal-policy-of-kl-regularized-rl--reward-overoptimization">§6 Theoretical: optimal policy of KL-regularized RL + reward overoptimization</h2>
+<h3 id="61-closed-form-solution-of-kl-regularized-rl-the-mathematical-basis-for-dpo">6.1　Closed-form solution of KL-regularized RL (the mathematical basis for DPO)</h3>
+<p><strong>Theorem</strong> (closed-form solution of KL-regularized policy optimization):</p>
+<p>Consider:</p>
+<p>$$\max_\pi J(\pi) = \mathbb{E}_{y \sim \pi(\cdot|x)}[r(x, y)] - \beta\, \text{KL}\!\big(\pi(\cdot|x) \| \pi_\text{ref}(\cdot|x)\big)$$</p>
+<p>where $\pi$ is a distribution over any $x$, and $\pi_\text{ref}$ is strictly positive ($\pi_\text{ref}(y|x) > 0$ for all $y$).</p>
+<p><strong>Unique optimal solution</strong>:</p>
+<p>$$\boxed{\;\pi^*(y|x) = \frac{1}{Z(x)}\, \pi_\text{ref}(y|x)\, \exp\!\left(\frac{r(x, y)}{\beta}\right),\quad Z(x) = \sum_{y'} \pi_\text{ref}(y'|x) \exp\!\left(\frac{r(x, y')}{\beta}\right)\;}$$</p>
+<p><strong>Proof</strong> (Lagrangian):</p>
+<p>Fix $x$ and write the objective (general continuous/discrete; discrete shown):</p>
+<p>$$\mathcal{L}_x[\pi] = \sum_y \pi(y|x) r(x, y) - \beta \sum_y \pi(y|x) \log\frac{\pi(y|x)}{\pi_\text{ref}(y|x)} - \mu\!\left(\sum_y \pi(y|x) - 1\right)$$</p>
+<p>where $\mu$ is the Lagrange multiplier for normalization (sign note: when deriving KKT from max, writing $\sum_y\pi = 1$ as $-\mu(\sum - 1)$ keeps the interior-optimum condition concise).</p>
+<p>Differentiating w.r.t. $\pi(y|x)$:</p>
+<p>$$\frac{\partial \mathcal{L}_x}{\partial \pi(y|x)} = r(x, y) - \beta \log\frac{\pi(y|x)}{\pi_\text{ref}(y|x)} - \beta - \mu = 0$$</p>
+<p>Rearranging:</p>
+<p>$$\log\frac{\pi(y|x)}{\pi_\text{ref}(y|x)} = \frac{r(x, y) - \mu - \beta}{\beta}$$</p>
+<p>Exponentiating:</p>
+<p>$$\pi(y|x) = \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x, y) - \mu - \beta}{\beta}\right) = \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x, y)}{\beta}\right) \cdot e^{-(\mu+\beta)/\beta}$$</p>
+<p>Plugging into the normalization constraint $\sum_y \pi(y|x) = 1$:</p>
+<p>$$e^{(\mu+\beta)/\beta} = \sum_y \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x, y)}{\beta}\right) = Z(x)$$</p>
+<p>So $e^{-(\mu+\beta)/\beta} = 1/Z(x)$, giving:</p>
+<p>$$\pi^*(y|x) = \frac{1}{Z(x)} \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x, y)}{\beta}\right) \quad \blacksquare$$</p>
+<p><strong>Uniqueness</strong>: because $J$ is <strong>strictly concave</strong> in $\pi$ (KL is convex, negating gives strictly concave; the reward term is linear), concave optimization has a unique optimum.</p>
+<h3 id="62-inverting-the-optimal-policy-to-extract-implicit-reward">6.2　Inverting the optimal policy to extract implicit reward</h3>
+<p>Taking the log of $\pi^*$ from §6.1:</p>
+<p>$$\log\pi^*(y|x) = \log\pi_\text{ref}(y|x) + \frac{r(x, y)}{\beta} - \log Z(x)$$</p>
+<p>Inverting for $r$:</p>
+<p>$$\boxed{\;r(x, y) = \beta\log\frac{\pi^*(y|x)}{\pi_\text{ref}(y|x)} + \beta\log Z(x)\;}$$</p>
+<p><strong>This is DPO's implicit reward</strong>. $\beta \log Z(x)$ is the partition function, which <strong>depends only on $x$, not on $y$</strong> — so it <strong>cancels</strong> in the Bradley-Terry difference $r(x, y_w) - r(x, y_l)$.</p>
+<h3 id="63-rl-under-bradley-terry-preference-is-equivalent-to-dpo">6.3　RL under Bradley-Terry preference is equivalent to DPO</h3>
+<p>BT model: $P(y_w \succ y_l | x) = \sigma(r(x, y_w) - r(x, y_l))$.</p>
+<p>Plug §6.2 in:</p>
+<p>$$r(x, y_w) - r(x, y_l) = \beta \log\frac{\pi^*(y_w|x)}{\pi_\text{ref}(y_w|x)} - \beta\log\frac{\pi^*(y_l|x)}{\pi_\text{ref}(y_l|x)}$$</p>
+<p>Replace $\pi^*$ with learnable $\pi_\theta$, and take NLL over preference data:</p>
+<p>$$\mathcal{L}_\text{DPO}(\theta) = -\mathbb{E}\log\sigma\!\left(\beta\log\frac{\pi_\theta(y_w|x)}{\pi_\text{ref}(y_w|x)} - \beta\log\frac{\pi_\theta(y_l|x)}{\pi_\text{ref}(y_l|x)}\right)$$</p>
+<p><strong>This is the DPO formula in §5.1</strong>. So <strong>DPO ≡ Bradley-Terry preference + KL-regularized RL closed form + preference-data NLL</strong>, three pieces unified.</p>
+<h3 id="64-reward-overoptimization-gao-schulman-hilton-2023-icml">6.4　Reward Overoptimization (Gao, Schulman, Hilton 2023 ICML)</h3>
+<h4 id="641-problem-statement">6.4.1　Problem statement</h4>
+<p>Let gold reward $r_g$ (true human-perceived quality) and proxy reward $r_p$ (RM estimate). The RM is trained on finite preference data, so $r_p \ne r_g$.</p>
+<p>As RL training pushes KL distance $d = \text{KL}(\pi_\theta \| \pi_\text{ref})$ up:</p>
+<ul><li>$\mathbb{E}_{\pi_\theta}[r_p]$ rises monotonically (the policy learns the RM's preference).</li><li>$\mathbb{E}_{\pi_\theta}[r_g]$ rises then falls (<strong>inverted-U</strong>) — this is reward overoptimization.</li></ul>
+<h4 id="642-gao-2023s-fitted-form">6.4.2　Gao 2023's fitted form</h4>
+<p>Gao 2023 ran large-scale experiments over RM size + KL distance, giving a fitted form for gold reward vs KL distance $d$ (using $\sqrt{d}$ on the x-axis):</p>
+<p>$$R_g(d) = d \cdot (\alpha_g - \gamma_g \cdot d) \quad \text{(BoN)}$$</p>
+<p>$$R_g(d) = d \cdot (\alpha_g - \gamma_g \cdot d) - \delta_g\, d^{3/2}\quad \text{(PPO, an extra higher-order term)}$$</p>
+<p>where $\alpha_g, \gamma_g, \delta_g$ are coefficients dependent on RM size; larger RM → smaller "higher-order / quadratic" weight → slower overoptimization.</p>
+<h4 id="643-kl-is-overoptimizations-natural-axis">6.4.3　KL is overoptimization's "natural axis"</h4>
+<p>Whether BoN, PPO, or DPO (via accumulated implicit reward), one can plot training curves as "<strong>KL distance vs gold reward</strong>". Gao 2023 found:</p>
+<ul><li><strong>Different algorithms (BoN / PPO) exhibit similar over-optimization behavior at the same KL</strong> (the gold curve shape under the same RM is consistent).</li><li><strong>Larger RM → slower over-optimization</strong> (gold-curve peak shifts right).</li><li><strong>KL is a one-dimensional progress indicator</strong> — better than step count / reward count for explaining over-optimization.</li></ul>
+<p><strong>Interview takeaway</strong>: in RLHF monitoring, plot <code>(measured_KL, gold_reward)</code> to see whether it has entered the descending region — that is the most direct "stop early" signal.</p>
+<h3 id="65-relation-between-kl-and-chi2-gap">6.5　Relation between KL and $\chi^2$ gap</h3>
+<p>KL and $\chi^2$ are related via the Pinsker family of inequalities:</p>
+<p>$$\text{TV} \le \sqrt{\text{KL}/2}\qquad \text{(Pinsker)}$$</p>
+<p>$$\text{KL} \le \log(1 + \chi^2)$$</p>
+<p>In RLHF, $\chi^2$ is occasionally used as a "sensitive" upper bound on KL: <strong>when $\chi^2$ is large but KL is small, $\pi_\theta$ has heavy-tail deviation from $\pi_\text{ref}$</strong> (high variance but low mean). Some works (Yu et al. 2024 / others) plot KL and $\chi^2$ together when monitoring reward hacking, to track tail behavior.</p>
+<h3 id="66-sequence-level-vs-token-level-kl">6.6　Sequence-level vs token-level KL</h3>
+<p>By the <strong>chain rule</strong> in §1.1:</p>
+<p>$$\text{KL}(\pi_\theta(\cdot|x) \| \pi_\text{ref}(\cdot|x)) = \mathbb{E}_{y \sim \pi_\theta}\!\left[\sum_t \log\frac{\pi_\theta(y_t | x, y_{<t})}{\pi_\text{ref}(y_t | x, y_{<t})}\right]$$</p>
+<p>i.e. <strong>sequence-level KL = expectation of the sum of token-level KLs</strong> (autoregressive chain rule). Note: directly treating $\sum_t \log\pi_\theta(y_t)/\pi_\text{ref}(y_t)$ from a single rollout as KL is the <strong>k1 estimator</strong> (unbiased but high per-rollout variance); the true token-level KL $D(\pi_\theta(\cdot|s_t)\|\pi_\text{ref}(\cdot|s_t))$ would still require a full-vocab forward sum. <strong>The two have the same expectation</strong>; engineering uses the sampled log-ratio because vocab summation is expensive.</p>
+<p>But two <strong>implementation tricks</strong> relate to token-level:</p>
+<ol><li><strong>Per-token clipping</strong>: occasionally a single token's KL can be very large (rare tokens, long tails); per-token KL clipping prevents one token from dragging the batch total KL away.</li><li><strong>Mask on assistant tokens only</strong>: in chat / agent settings, prompt tokens should not enter KL computation (the prompt is identical, policy and ref agree on it exactly, KL = 0; but floating-point noise pollutes it). So the KL mask coincides with the PPO action_mask — <strong>compute KL only on assistant generation tokens</strong>.</li></ol>
+<pre><code class="language-python"># Per-token KL with action mask (chat / agentic RL setting)
+def per_token_kl_with_mask(logp_theta, logp_ref, action_mask, estimator=&quot;k3&quot;):
+    &quot;&quot;&quot;
+    logp_theta, logp_ref: [B, T]   per-token log-prob
+    action_mask:          [B, T]   1 = assistant token, 0 = prompt/system/pad
+    estimator:            &quot;k1&quot; | &quot;k2&quot; | &quot;k3&quot;
+    Returns: mean KL over assistant tokens, scalar.
+    &quot;&quot;&quot;
+    log_r = logp_theta - logp_ref
+    if estimator == &quot;k1&quot;:
+        kl_per_tok = log_r
+    elif estimator == &quot;k2&quot;:
+        kl_per_tok = 0.5 * log_r ** 2
+    elif estimator == &quot;k3&quot;:
+        delta = -log_r                        # log(π_ref / π_θ)
+        kl_per_tok = torch.exp(delta) - delta - 1.0
+    else:
+        raise ValueError(f&quot;Unknown estimator: {estimator}&quot;)
+    masked = (kl_per_tok * action_mask).sum()
+    n = action_mask.sum().clamp_min(1.0)
+    return masked / n</code></pre>
+<h2 id="7-practice--code">§7 Practice + code</h2>
+<h3 id="71-ppo-style-in-reward-shaping-implementation">7.1　PPO style: In-reward shaping implementation</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def ppo_reward_with_kl(rewards_terminal, rollout_logp_theta, logp_ref,
+                       action_mask, beta=0.02):
+    &quot;&quot;&quot;
+    PPO / InstructGPT style: KL penalty in reward (k1 estimator).
+    rewards_terminal:    [B]      only the last assistant token gets the RM reward
+    rollout_logp_theta:  [B, T]   log π_θ_old(y_t | ...), recorded during rollout, DETACHED
+    logp_ref:            [B, T]   log π_ref(y_t | ...), reference policy frozen
+    action_mask:         [B, T]   1 = assistant token
+    Returns: shaped_reward [B, T]  per-token reward with KL penalty baked in.
+
+    ⚠️ Crucial: rollout_logp_theta and logp_ref must be detached scalars (recorded at
+    rollout time, or via no_grad forward). The shaped reward is the reward tensor passed
+    through PPO / score-function backprop and **must not carry gradient**; otherwise the
+    KL term and the PG surrogate will double-backprop and break the score-function
+    semantics. Production code typically stores logp_old as fixed data in the rollout
+    buffer, then re-forwards at update time to get new_logp.
+    &quot;&quot;&quot;
+    B, T = rollout_logp_theta.shape
+    # k1 KL per token (signed; mean is unbiased). Both inputs assumed detached.
+    kl_per_tok = (rollout_logp_theta.detach() - logp_ref.detach()) * action_mask  # [B, T]
+    # spread terminal reward to last assistant token
+    last_token_idx = action_mask.cumsum(dim=-1).argmax(dim=-1)  # [B]
+    R_per_tok = torch.zeros_like(kl_per_tok)
+    R_per_tok[torch.arange(B), last_token_idx] = rewards_terminal
+    # combine
+    shaped = R_per_tok - beta * kl_per_tok
+    return shaped  # the whole tensor is detached / gradient-free, serving as data input to PPO advantage computation</code></pre>
+<h3 id="72-grpo-style-in-loss-regularization-implementation-k3">7.2　GRPO style: In-loss regularization implementation (k3)</h3>
+<pre><code class="language-python">def grpo_loss_with_k3_kl(policy, ref_policy, batch, eps_clip=0.2, beta=0.04):
+    &quot;&quot;&quot;
+    GRPO / DeepSeekMath style: KL penalty in loss (k3 estimator).
+    batch:
+      input_ids:     [N, L]    N = sum_b G_b samples
+      action_mask:   [N, L]
+      old_log_probs: [N, L]
+      rewards:       [N]       sequence-level reward
+      group_id:      [N]       which prompt
+    &quot;&quot;&quot;
+    rewards = batch[&quot;rewards&quot;]
+    gid = batch[&quot;group_id&quot;].long()
+    num_groups = int(gid.max().item()) + 1
+
+    # Group-relative advantage (z-score within group)
+    counts = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, torch.ones_like(rewards))
+    sums = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, rewards)
+    group_mean = sums / counts.clamp_min(1.0)
+    diff_sq = (rewards - group_mean[gid]) ** 2
+    sq_sums = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, diff_sq)
+    group_std = (sq_sums / counts.clamp_min(1.0)).sqrt()
+    A = (rewards - group_mean[gid]) / (group_std[gid] + 1e-8)
+    A = A.unsqueeze(-1)                                          # [N, 1] shared per token
+
+    # Forward pass policy + ref
+    logits = policy(batch[&quot;input_ids&quot;]).logits[:, :-1]
+    log_probs = F.log_softmax(logits, dim=-1)
+    tgt = batch[&quot;input_ids&quot;][:, 1:].unsqueeze(-1)
+    new_log_probs = log_probs.gather(-1, tgt).squeeze(-1)
+    new_log_probs = F.pad(new_log_probs, (1, 0))                 # [N, L]
+    mask = batch[&quot;action_mask&quot;].float()
+
+    with torch.no_grad():
+        ref_logits = ref_policy(batch[&quot;input_ids&quot;]).logits[:, :-1]
+        ref_log_probs = F.log_softmax(ref_logits, dim=-1)
+        ref_token_lp = ref_log_probs.gather(-1, tgt).squeeze(-1)
+        ref_token_lp = F.pad(ref_token_lp, (1, 0))
+
+    # PPO-Clip surrogate (advantage shared per sample)
+    ratio = torch.exp(new_log_probs - batch[&quot;old_log_probs&quot;])
+    surr1 = ratio * A
+    surr2 = torch.clamp(ratio, 1 - eps_clip, 1 + eps_clip) * A
+    pg_per_tok = torch.min(surr1, surr2)                         # [N, L]
+
+    # k3 KL per token: exp(Δ) - Δ - 1, Δ = log(π_ref / π_θ)
+    delta = ref_token_lp - new_log_probs                         # log(π_ref / π_θ)
+    kl_per_tok_k3 = torch.exp(delta) - delta - 1.0               # ≥ 0
+
+    # Combine: maximize PG - β·KL  →  minimize -PG + β·KL
+    token_obj = pg_per_tok - beta * kl_per_tok_k3
+    seq_len = mask.sum(dim=-1).clamp_min(1.0)
+    per_seq = (token_obj * mask).sum(dim=-1) / seq_len
+    loss = -per_seq.mean()
+
+    with torch.no_grad():
+        kl_mean = (kl_per_tok_k3 * mask).sum() / mask.sum().clamp_min(1.0)
+    return loss, {&quot;kl_k3&quot;: kl_mean.item(), &quot;advantage_std&quot;: A.std().item()}</code></pre>
+<h3 id="73-dpo-closed-form-loss--implicit-reward-monitoring">7.3　DPO closed-form loss + implicit-reward monitoring</h3>
+<pre><code class="language-python">def dpo_loss_with_implicit_reward_monitor(policy, ref_policy, batch, beta=0.1):
+    &quot;&quot;&quot;
+    DPO loss + implicit reward margin (β × pointwise sequence log-density ratio on
+    preference data; this is NOT a KL estimator on preference data — only equals
+    β·KL when expectation is taken under y~π_θ, which doesn&#x27;t hold for fixed preference pairs).
+    &quot;&quot;&quot;
+    def log_prob_sum(model, ids, mask):
+        logits = model(ids).logits[:, :-1]
+        logp = F.log_softmax(logits, dim=-1)
+        tgt = ids[:, 1:].unsqueeze(-1)
+        token_logp = logp.gather(-1, tgt).squeeze(-1)
+        token_mask = mask[:, 1:]
+        return (token_logp * token_mask).sum(dim=-1)
+
+    pi_w = log_prob_sum(policy, batch[&quot;chosen_ids&quot;], batch[&quot;chosen_mask&quot;])
+    pi_l = log_prob_sum(policy, batch[&quot;rejected_ids&quot;], batch[&quot;rejected_mask&quot;])
+    with torch.no_grad():
+        ref_w = log_prob_sum(ref_policy, batch[&quot;chosen_ids&quot;], batch[&quot;chosen_mask&quot;])
+        ref_l = log_prob_sum(ref_policy, batch[&quot;rejected_ids&quot;], batch[&quot;rejected_mask&quot;])
+
+    # sequence-level log-density ratios on preference data
+    log_ratio_w = pi_w - ref_w               # Σ_t log(π_θ/π_ref) on y_w
+    log_ratio_l = pi_l - ref_l
+
+    diff = beta * (log_ratio_w - log_ratio_l)
+    loss = -F.logsigmoid(diff).mean()
+
+    # implicit rewards (DPO definition: β × pointwise sequence log-ratio, detached for logging)
+    chosen_reward = beta * log_ratio_w.detach()
+    rejected_reward = beta * log_ratio_l.detach()
+    margin = (chosen_reward - rejected_reward).mean()
+
+    # ⚠️ Note: the average log-ratio on preference data is **not** a KL estimator — KL requires y ~ π_θ samples.
+    # Here we can only monitor &quot;how much the model deviates from ref on preference data&quot; as a DPO training-health indicator, not as KL.
+    avg_pref_log_ratio = ((log_ratio_w.detach() + log_ratio_l.detach()) / 2).mean()
+    return loss, {&quot;margin&quot;: margin.item(),
+                  &quot;avg_pref_log_ratio&quot;: avg_pref_log_ratio.item(),
+                  &quot;chosen_reward&quot;: chosen_reward.mean().item(),
+                  &quot;rejected_reward&quot;: rejected_reward.mean().item()}</code></pre>
+<h3 id="74-reward-overoptimization-monitoring">7.4　Reward overoptimization monitoring</h3>
+<pre><code class="language-python">def overoptimization_monitor(policy, ref_policy, gold_reward_fn, prompts,
+                             checkpoints_kl, gold_at_kl):
+    &quot;&quot;&quot;
+    Track gold reward as a function of measured KL distance during training.
+    Call periodically; plot (measured_KL, gold_reward) to visualize the inverted-U.
+
+    Args:
+      policy:          current π_θ
+      ref_policy:      frozen π_ref
+      gold_reward_fn:  callable (text -&gt; float), uses gold RM or human eval
+      prompts:         list of held-out prompts (small, e.g. 64)
+      checkpoints_kl:  running list of KL values across training
+      gold_at_kl:      running list of gold reward values
+    &quot;&quot;&quot;
+    measured_kl_total = 0.0
+    gold_reward_total = 0.0
+    for prompt in prompts:
+        # Generate from policy and ref; compute per-token k3 KL on policy generation
+        out_policy = policy.generate(prompt, do_sample=True)
+        # ... (use generate to get logits, mask, compute k3 KL) ...
+        # For simplicity here, just track the average sequence-level KL
+        kl_seq = compute_seq_kl_k3(policy, ref_policy, out_policy)
+        gold = gold_reward_fn(out_policy)
+        measured_kl_total += kl_seq
+        gold_reward_total += gold
+    avg_kl = measured_kl_total / len(prompts)
+    avg_gold = gold_reward_total / len(prompts)
+    checkpoints_kl.append(avg_kl)
+    gold_at_kl.append(avg_gold)
+    # Detection heuristic: if last 5 gold values are decreasing while KL is rising,
+    # we are likely in the over-optimization regime.
+    if len(gold_at_kl) &gt;= 5:
+        recent_gold = gold_at_kl[-5:]
+        recent_kl = checkpoints_kl[-5:]
+        if all(recent_gold[i] &gt;= recent_gold[i+1] for i in range(4)) \
+           and all(recent_kl[i] &lt;= recent_kl[i+1] for i in range(4)):
+            print(f&quot;⚠️ Possible reward over-optimization: KL ↑, gold ↓ over 5 checkpoints&quot;)
+    return avg_kl, avg_gold</code></pre>
+<h3 id="75-engineering-checklist-debug-checklist">7.5　Engineering checklist (debug checklist)</h3>
+<div class="callout callout-warn"><div class="callout-title">Top-8 KL-related bugs</div></div>
+<ol><li><strong>Wrong mask for KL</strong>: KL on prompt tokens should be 0 (same prompt input), but floating-point noise pollutes it — so <strong>mask only assistant tokens</strong>.</li><li><strong>k1 shows negative</strong>: a single-sample log-ratio can be negative, but <strong>the expectation is non-negative</strong>. Not a bug — it's an estimator property. Switch to k3 / k2 for more intuitive monitoring.</li><li><strong>Wrong β unit</strong>: when reward scale = O(1), β = 0.02; when reward scale = O(100), β must be scaled accordingly. Otherwise the KL anchor fails.</li><li><strong>Adaptive β oscillates</strong>: target_kl too strict / mult too large. Clip mult to [0.8, 1.2], reduce update frequency to every 100 steps.</li><li><strong>Reference policy not frozen</strong>: forgetting <code>ref_policy.eval()</code> + <code>torch.no_grad()</code>, ref trains along with policy, KL turns into self-distillation.</li><li><strong>Per-token vs sequence-level KL confused</strong>: monitoring sometimes reports per-token, sometimes sequence-level — misreading leads to mis-tuning β. Unify units.</li><li><strong>KL term shrinks reward in GRPO</strong>: when reward is binary {0, 1} (math problems) and β = 0.04 with KL ≈ 0.5, the KL penalty already exceeds the mean reward — loss is dominated by KL. <strong>Drop β to 1e-3 or smaller</strong>.</li><li><strong>Float overflow in $\pi_\text{ref}/\pi_\theta$</strong>: when the policy diverges from ref by a lot, $\pi_\text{ref}/\pi_\theta$ can be very large and $e^\Delta$ overflows. <strong>Compute k3 in log-space</strong>: <code>exp(delta) - delta - 1</code> may still overflow for large $\Delta$, so add <code>torch.clamp(delta, max=10)</code> or use a numerically stable form.</li></ol>
+<h2 id="8-failure-modes-kl-collapse--runaway--reward-hacking">§8 Failure modes: KL Collapse / Runaway / Reward Hacking</h2>
+<h3 id="81-kl-collapse--too-large-or-entropy-too-low">8.1　KL Collapse (β too large or entropy too low)</h3>
+<p><strong>Symptoms</strong>:</p>
+<ul><li>KL curve $\approx 0$, policy equals reference.</li><li>Reward doesn't rise.</li><li>Generation identical to SFT.</li></ul>
+<p><strong>Causes</strong>:</p>
+<ul><li>β too large, KL penalty dominates loss, PG signal is suppressed.</li><li>Policy entropy too low (SFT was already deterministic) → further updates are difficult.</li></ul>
+<p><strong>Fixes</strong>:</p>
+<ul><li>Lower β (adaptive controller should handle this automatically).</li><li>Add entropy bonus ($+ c_e \cdot H[\pi_\theta]$).</li><li>Check PG-vs-KL-loss magnitude ratio: ideal $|\text{PG}| / (\beta \cdot |\text{KL}|) \in [1, 10]$.</li></ul>
+<h3 id="82-kl-runaway--too-small-or-reward-signal-too-strong">8.2　KL Runaway (β too small or reward signal too strong)</h3>
+<p><strong>Symptoms</strong>:</p>
+<ul><li>KL keeps rising, policy drifts further from ref.</li><li>Generation lengthens, repetition patterns appear, style drifts.</li><li>Gold reward on validation starts dropping (reward overoptimization).</li></ul>
+<p><strong>Causes</strong>:</p>
+<ul><li>β too small, KL anchor fails.</li><li>Reward signal too strong (neural RM produces huge gradient).</li><li>PPO importance ratio frequently outside clip range, KL signal masked by clip (Option A specific).</li></ul>
+<p><strong>Fixes</strong>:</p>
+<ul><li>Raise β (adaptive).</li><li>Add max_kl_budget early stop (when measured KL &gt; target, stop training).</li><li>Use RM ensemble + conservative aggregation (min / mean - std).</li><li>For Option A, consider switching to Option B (KL not masked by PPO clip).</li></ul>
+<h3 id="83-reward-overoptimization-the-inverted-u-over-kl-distance">8.3　Reward Overoptimization (the inverted-U over KL distance)</h3>
+<p><strong>Symptoms</strong>:</p>
+<ul><li>Proxy reward keeps rising.</li><li>Gold reward rises then falls (inverted-U).</li><li>Human eval: model looks good on in-distribution data, but crashes on OOD prompts.</li></ul>
+<p><strong>Causes</strong>: see §6.4 — the RM and gold reward are fundamentally different.</p>
+<p><strong>Fixes</strong>:</p>
+<ol><li><strong>KL budget early stop</strong>: cap measured KL before the inverted-U peak (requires gold reward monitoring).</li><li><strong>RM ensemble</strong>: multiple seeds of RM, take min or mean - $k\cdot\text{std}$.</li><li><strong>Mix RL + DPO</strong>: DPO for 70%, then small-β PPO for the last mile.</li><li><strong>Rule-based reward replacing neural RM</strong>: the fundamental fix for math/code tasks.</li><li><strong>PRM replacing ORM</strong>: dense reward → bounded per-step over-optimization.</li></ol>
+<h3 id="84-length-bias-dpo-specific-also-a-form-of-insufficient-kl-anchor">8.4　Length bias (DPO-specific, also a form of insufficient KL anchor)</h3>
+<p><strong>Symptoms</strong>:</p>
+<ul><li>DPO-trained outputs visibly longer.</li><li>AlpacaEval score high but users find them verbose.</li></ul>
+<p><strong>Cause</strong>: DPO loss is sequence-level log-ratio difference. $y_w$ is typically longer (humans prefer more detailed answers); longer $y_w$ → more negative $\log\pi(y_w)$ → larger log-ratio difference → smaller loss. But this is RM scale, not reasoning quality.</p>
+<p><strong>Fixes</strong>:</p>
+<ul><li>SimPO's length-normalization ($r = (\beta/|y|)\log\pi$).</li><li>Add a length penalty in reward shaping.</li><li>Data curation: make $y_w$ and $y_l$ have similar length distributions.</li></ul>
+<h3 id="85-reference-policy-wrong-checkpoint-failure">8.5　Reference policy "wrong checkpoint" failure</h3>
+<p><strong>Symptoms</strong>: training looks normal but downstream eval is awful.</p>
+<p><strong>Cause</strong>: wrong ref checkpoint (e.g. pretrain base instead of SFT). KL anchors to "language model" rather than "instruction model".</p>
+<p><strong>Fix</strong>: reference must be the immediate-previous-stage SFT checkpoint — never skip levels.</p>
+<h2 id="9-25-high-frequency-interview-questions">§9 25 high-frequency interview questions</h2>
+<p>Split by difficulty into 3 tiers: L1 = any LLM engineering role; L2 = research / alignment teams; L3 = top-lab / DeepSeek-grade hardcore. Each question has an answer summary + common pitfalls. Click to expand.</p>
+<h3 id="l1-must-know-10-questions">L1 must-know (10 questions)</h3>
+<details>
+
+<summary>Q1. KL divergence's definition and 3 core properties?</summary>
+<ul><li>Definition: $\text{KL}(p\|q) = \mathbb{E}_{x\sim p}[\log(p(x)/q(x))]$</li><li>Non-negative (Jensen); equality ⟺ $p = q$ a.e.</li><li>Asymmetric ($\text{KL}(p\|q) \ne \text{KL}(q\|p)$), not a metric</li><li>Jointly convex, invariant under reparameterization (reparam invariant)</li></ul>
+<p>Saying KL is a "distance" — wrong (no triangle inequality); not knowing convexity.</p>
+</details>
+<details>
+
+<summary>Q2. Why does RLHF need a KL penalty?</summary>
+<ul><li>Prevent reward hacking: the policy finds RM blind spots for high scores but worse human-perceived quality</li><li>Prevent linguistic fluency collapse: without KL, the model may emit "gibberish that RM scores high"</li><li>Prevent distribution shift: when the policy drifts far from SFT, even the RM can't score accurately (OOD)</li><li>Provides a closed-form optimal policy: $\pi^* \propto \pi_\text{ref}\exp(r/\beta)$</li></ul>
+<p>Only saying "prevents overfitting" — not specific enough; not knowing about reward hacking.</p>
+</details>
+<details>
+
+<summary>Q3. What is the k1 estimator? Why can a single sample be negative?</summary>
+<ul><li>k1: $\widehat{\text{KL}}_1 = \log(\pi_\theta(y)/\pi_\text{ref}(y))$ (direct log-ratio)</li><li><strong>Expectation</strong> $\mathbb{E}_{y\sim\pi_\theta}[\log r] = \text{KL}$ (unbiased), but <strong>a single sample</strong> $\log r$ can be positive or negative</li><li>Reason: at a single sample $y$, $\pi_\theta$ may be larger or smaller than $\pi_\text{ref}$, the log-ratio has no "non-negative" constraint</li><li>Engineering impact: don't panic when k1 monitoring shows negative — that's the estimator's nature</li></ul>
+<p>Confusing single estimator with expectation; not knowing expectation non-negative ≠ pointwise non-negative.</p>
+</details>
+<details>
+
+<summary>Q4. What is the k3 estimator (Schulman 2020) formula? What are its three properties?</summary>
+<ul><li>Formula: $\widehat{\text{KL}}_3 = e^\Delta - \Delta - 1$, $\Delta = \log(\pi_\text{ref}/\pi_\theta) = -\log r$</li><li>Equivalent form: $\widehat{\text{KL}}_3 = (\pi_\text{ref}/\pi_\theta) - \log(\pi_\text{ref}/\pi_\theta) - 1$</li><li><strong>Unbiased</strong> ($\mathbb{E}_{\pi_\theta} = \text{KL}$, using $\sum_y\pi_\text{ref} = 1$)</li><li><strong>Non-negative</strong> ($f(x) = e^x - x - 1 \ge 0$)</li><li><strong>Low variance</strong> (with the expectation-0 control variate $\pi_\text{ref}/\pi_\theta - 1$)</li></ul>
+<p>Only memorizing the formula without knowing the derivation; or not knowing it is non-negative.</p>
+</details>
+<details>
+
+<summary>Q5. What are the two KL placements in RLHF? What's the difference?</summary>
+<ul><li><strong>In-reward shaping (Option A)</strong>: $\tilde{r}_t = r_t - \beta \cdot \text{KL}_t$ (uses k1), KL enters advantage / GAE. InstructGPT standard.</li><li><strong>In-loss regularization (Option B)</strong>: $\mathcal{L} = \mathcal{L}_\text{PG} + \beta \cdot \mathbb{E}[\text{KL}]$. GRPO / DAPO historically pick k3 estimator.</li><li>Same objective, but <strong>the gradient path differs</strong>. <strong>Principled gradient</strong> choices: (P1) k1 in reward; (P2) k2 as loss — on-policy these are gradient-equivalent, both being the strict reverse-KL gradient. <strong>GRPO's k3-as-loss</strong> is a first-order Taylor approximation of the reverse-KL gradient, with $O(\Delta^2)$ bias (see §3.6 / Rethinking KL arXiv 2510.01555).</li><li>PPO clip in Option A "masks" out-of-clip KL (advantage's embedded KL gets clipped together); Option B isn't affected.</li><li>Practice: math/code RL historically picks B (k3) because β is small and $\Delta$ is small — bias is negligible; helpfulness / safety mostly uses A (k1); for strictly principled on-policy, P2 (k2-as-loss) is the simplest principled choice.</li></ul>
+<p>Saying the two are fully equivalent — same objective but not gradient-equivalent; saying k3-as-loss is principled — it is a first-order approximation, theoretically inexact.</p>
+</details>
+<details>
+
+<summary>Q6. How do you tune β? What are the symptoms when it's too large / too small?</summary>
+<ul><li>β too large: KL ≈ 0, policy stuck near ref, reward doesn't rise, model essentially equals SFT</li><li>β too small: KL runaway, policy drifts, generation lengthens / repeats / panders, reward hacking</li><li>Starting points: InstructGPT uses β ≈ 0.02 (per-token); GRPO math task β ≈ 0.04 or smaller; DAPO often β ≈ 0</li><li>Methods: fixed / adaptive (pull β based on measured KL vs target) / annealing schedule</li></ul>
+<p>Only saying "tune by feel"; not knowing the engineering order of magnitude for β.</p>
+</details>
+<details>
+
+<summary>Q7. Which one does RLHF use — Forward KL or Reverse KL? Why?</summary>
+<ul><li>RLHF almost always uses $\text{KL}(\pi_\theta \| \pi_\text{ref})$; under the standard VI/RLHF convention (used by DPO/RLOO/Rethinking KL etc.) this is <strong>reverse KL</strong> ($\pi_\theta$ is the variational side), mode-seeking</li><li>Because training samples from $\pi_\theta$ (rollout), and $\mathbb{E}_{\pi_\theta}[\log r]$ is directly estimable from samples</li><li><strong>Forward KL</strong> $\text{KL}(\pi_\text{ref} \| \pi_\theta)$ requires sampling from $\pi_\text{ref}$, which is engineering-meaningless (we are training $\pi_\theta$, not $\pi_\text{ref}$), and mass-covering doesn't fit the RLHF goal</li><li>Reverse KL's mode-seeking matches the rule perfectly: pick the reward-highest mode inside the high-density region of $\pi_\text{ref}$</li></ul>
+<p>Not knowing the naming convention (a few early RL textbooks name by sampling distribution and label reverse as forward; in an interview, giving the formula is safer); or saying forward is better.</p>
+</details>
+<details>
+
+<summary>Q8. How does DPO's implicit reward relate to KL?</summary>
+<ul><li>DPO implicit reward $\hat{r}_\theta(x, y) = \beta\log(\pi_\theta(y|x)/\pi_\text{ref}(y|x))$, i.e. <strong>β × pointwise sequence log-density ratio</strong></li><li>⚠️ <strong>It is not KL itself</strong>: only when taking expectation over $y\sim\pi_\theta$ does $\mathbb{E}_{y\sim\pi_\theta}[\hat r_\theta(x,y)] = \beta\cdot\text{KL}(\pi_\theta(\cdot|x)\,\|\,\pi_\text{ref}(\cdot|x))$. <strong>In DPO training, $y_w, y_l$ come from fixed preference data</strong>, so the $\hat r$ here is not a KL estimator nor a KL margin</li><li>During training, maximizing $\hat{r}(y_w) - \hat{r}(y_l)$ ≡ pairwise log-ratio margin (relative confidence on the preference pair), <strong>not</strong> a "KL margin"</li><li>The KL anchor is <strong>implicit</strong>: $\pi_\text{ref}$ appearing in the denominator of $\hat r$ provides anchoring, but no explicit KL term is in the loss</li><li>Dual RL view: DPO is derived from the closed-form optimal policy $\pi^* \propto \pi_\text{ref}\exp(r/\beta)$ of KL-regularized RL; the implicit objective is the same RLHF objective, but the estimator path differs</li></ul>
+<p>Saying DPO has no KL (wrong — it's an implicit anchor); reading $\hat r$ directly as KL / KL margin (wrong — requires the y~π_θ expectation condition).</p>
+</details>
+<details>
+
+<summary>Q9. What is reward overoptimization? Why does it happen?</summary>
+<ul><li>Proxy reward (RM) rises monotonically with KL, but gold reward (human eval) rises then falls (<strong>inverted-U</strong>)</li><li>Gao, Schulman, Hilton 2023 ICML gives the fitted form for KL vs gold-reward</li><li>Cause: RM and gold reward differ (RM is a finite-data learned approximation), policy learns RM's preference but not necessarily true quality</li><li>Mitigations: KL budget early stop / RM ensemble / PRM / mix DPO + PPO</li></ul>
+<p>Only saying "overfitting" — too vague; not knowing KL is the axis for over-optimization.</p>
+</details>
+<details>
+
+<summary>Q10. Why did GRPO historically use k3 instead of k1?</summary>
+<ul><li><strong>Engineering motivation</strong>: GRPO puts KL in the loss, and k3's <strong>value-estimator</strong> properties (non-negative + value-side unbiased + low variance) make the KL monitoring curve intuitive</li><li><strong>k1-as-loss is infeasible</strong>: backpropagating $\log r = \log\pi_\theta - \log\pi_\text{ref}$ directly gives $\nabla = \nabla\log\pi_\theta$, which has expectation 0 on-policy — <strong>not</strong> the reverse-KL gradient. k1 must <strong>enter reward / advantage</strong> (as a detached scalar via the score-function trick) to give the strict reverse-KL gradient. Putting k1 as a loss term is bad both because the value can be negative (visually unappealing) and because the gradient is wrong</li><li><strong>k3-as-loss's true cost</strong>: backpropagating w.r.t. θ gives a <strong>first-order Taylor approximation</strong> of the reverse-KL gradient, $1 - e^{-\Delta} = \Delta - \tfrac12\Delta^2 + O(\Delta^3)$, with $O(\Delta^2)$ bias (see §3.6 + Rethinking KL arXiv 2510.01555)</li><li><strong>Principled alternative</strong>: on-policy, (P1) k1 in reward or (P2) <strong>k2 as loss</strong> ($\tfrac12\Delta^2$, $\nabla = \Delta\cdot\nabla\log\pi_\theta$, gradient-equivalent to P1) are both the strict reverse-KL gradient</li><li><strong>Historical DeepSeekMath / DAPO / verl default to k3</strong> as engineering convention; when β is tight and $\Delta$ is small, bias is negligible — but this is empirical rationalization, not theoretical principle</li></ul>
+<p>Only saying k3 "satisfies all three" without the gradient-bias caveat; not knowing that (P2) k2-as-loss is the gradient-equivalent alternative to P1.</p>
+</details>
+<h3 id="l2-advanced-10-questions">L2 advanced (10 questions)</h3>
+<details>
+
+<summary>Q11. Derive the unbiasedness of k3.</summary>
+<p>We need to show $\mathbb{E}_{y\sim\pi_\theta}[(\pi_\text{ref}/\pi_\theta) - \log(\pi_\text{ref}/\pi_\theta) - 1] = \text{KL}(\pi_\theta\|\pi_\text{ref})$.</p>
+<ol><li>$\mathbb{E}_{\pi_\theta}[\pi_\text{ref}/\pi_\theta] = \sum_y \pi_\theta(y)\cdot\pi_\text{ref}(y)/\pi_\theta(y) = \sum_y\pi_\text{ref}(y) = 1$</li><li>$\mathbb{E}_{\pi_\theta}[-\log(\pi_\text{ref}/\pi_\theta)] = \mathbb{E}_{\pi_\theta}[\log(\pi_\theta/\pi_\text{ref})] = \text{KL}(\pi_\theta\|\pi_\text{ref})$</li><li>Combining: $\mathbb{E}[\widehat{\text{KL}}_3] = 1 + \text{KL} - 1 = \text{KL}$ ✓</li></ol>
+<p>Key: use $\sum_y\pi_\text{ref} = 1$. If you forget the $\pi_\text{ref}/\pi_\theta$ term is a control variate with expectation 1, you can't prove unbiasedness.</p>
+</details>
+<details>
+
+<summary>Q12. Derive the k3 estimator from $f(x) = e^x - x - 1$.</summary>
+<p>Constructive proof:</p>
+<ol><li>$f(x) = e^x - x - 1$ is non-negative on $\mathbb{R}$ (the convex $e^x$ lies above its tangent line $1 + x$ at $x = 0$).</li><li><p>Set $x = \log(\pi_\text{ref}(y)/\pi_\theta(y)) = -\log r$:</p>
+<ul><li>$e^{-\log r} = 1/r = \pi_\text{ref}/\pi_\theta$</li><li>$-(-\log r) = \log r = \log(\pi_\theta/\pi_\text{ref})$</li><li>$f(-\log r) = \pi_\text{ref}/\pi_\theta - \log(\pi_\text{ref}/\pi_\theta) - 1 = e^\Delta - \Delta - 1$, $\Delta = -\log r$</li></ul></li><li>Expectation: $\mathbb{E}_{\pi_\theta}[f(-\log r)] = \text{KL}$ (proved in Q11).</li></ol>
+<p>So k3 = special form of $f(\log p/q)$, which happens to satisfy all three properties "non-negative + unbiased + with control variate".</p>
+<p>Just writing the formula without explaining the motivation of $f$; not knowing the convex tangent → non-negative.</p>
+</details>
+<details>
+
+<summary>Q13. Derive the closed-form optimal policy of KL-regularized RL under BT preference.</summary>
+<p>Objective: $\max_\pi \mathbb{E}_{y\sim\pi}[r(x,y)] - \beta\,\text{KL}(\pi\|\pi_\text{ref})$.</p>
+<ol><li>Lagrangian: $\sum_y \pi r - \beta\sum_y\pi\log(\pi/\pi_\text{ref}) - \mu(\sum_y\pi - 1)$</li><li>Differentiate w.r.t. $\pi(y) = 0$: $r - \beta(\log(\pi/\pi_\text{ref}) + 1) - \mu = 0$</li><li>Rearrange: $\log(\pi/\pi_\text{ref}) = (r - \mu - \beta)/\beta$</li><li>Exponentiate: $\pi(y) = \pi_\text{ref}(y)\exp((r - \mu - \beta)/\beta)$</li><li>Use $\sum_y\pi = 1$ to solve for $\mu$: $e^{(\mu+\beta)/\beta} = \sum_y\pi_\text{ref}\exp(r/\beta) = Z$</li><li>Get: $\pi^*(y|x) = \pi_\text{ref}(y|x)\exp(r/\beta)/Z(x)$</li></ol>
+<p>Note: $J$ is strictly concave in $\pi$, so the optimum is unique.</p>
+<p>Missing the normalization constraint; missing the strict concavity argument; sign flip.</p>
+</details>
+<details>
+
+<summary>Q14. Derive the DPO loss starting from the closed-form $\pi^*$ in §6.1.</summary>
+<ol><li>§6.1 gives $\pi^*(y|x) = \pi_\text{ref}\exp(r/\beta)/Z(x)$</li><li>Inversion: $r(x,y) = \beta\log(\pi^*/\pi_\text{ref}) + \beta\log Z(x)$</li><li>Bradley-Terry: $P(y_w \succ y_l) = \sigma(r_w - r_l)$</li><li>Key observation: $\beta\log Z(x)$ doesn't depend on $y$, so <strong>it cancels in $r_w - r_l$</strong>:  $r_w - r_l = \beta\log(\pi^*(y_w)/\pi_\text{ref}(y_w)) - \beta\log(\pi^*(y_l)/\pi_\text{ref}(y_l))$</li><li>Replace $\pi^*$ with learnable $\pi_\theta$, NLL over preference data:  $\mathcal{L}_\text{DPO} = -\mathbb{E}\log\sigma(\beta\log(\pi_\theta(y_w)/\pi_\text{ref}(y_w)) - \beta\log(\pi_\theta(y_l)/\pi_\text{ref}(y_l)))$</li></ol>
+<p>Key trick: <strong>$\log Z$ doesn't depend on $y$</strong>, so it cancels in the pairwise difference (this is why DPO doesn't need sampling).</p>
+<p>Not explaining why $\log Z$ cancels; not knowing about BT's sigmoid.</p>
+</details>
+<details>
+
+<summary>Q15. Derive the DPO gradient.</summary>
+<p>Let $h_\theta = \beta\log(\pi_\theta(y_w)/\pi_\text{ref}(y_w)) - \beta\log(\pi_\theta(y_l)/\pi_\text{ref}(y_l))$ (implicit reward margin).</p>
+<p>$\mathcal{L}_\text{DPO} = -\mathbb{E}\log\sigma(h_\theta)$, $\nabla = -\mathbb{E}\sigma'(h_\theta)/\sigma(h_\theta) \cdot \nabla h_\theta$.</p>
+<p>Using $\sigma'(x) = \sigma(x)\sigma(-x)$, $\sigma'(h)/\sigma(h) = \sigma(-h) = \sigma(\hat{r}_l - \hat{r}_w)$ (i.e. "misranking confidence").</p>
+<p>$\nabla h_\theta = \beta(\nabla\log\pi_\theta(y_w) - \nabla\log\pi_\theta(y_l))$ ($\pi_\text{ref}$ is constant, derivative w.r.t. $\theta$ is 0).</p>
+<p>Combining:</p>
+<p>$$\nabla\mathcal{L}_\text{DPO} = -\beta\mathbb{E}[\sigma(\hat{r}_l - \hat{r}_w)(\nabla\log\pi_\theta(y_w) - \nabla\log\pi_\theta(y_l))]$$</p>
+<p>Interpretation:</p>
+<ul><li>The coefficient $\sigma(\hat{r}_l - \hat{r}_w)$ is "how much the current model misranks $y_l$ above $y_w$" → hard-example mining</li><li>The rest is "raise $y_w$ probability + lower $y_l$ probability"</li></ul>
+<p>Missing a step in the sigmoid' derivation; not knowing $\sigma'(x) = \sigma(x)\sigma(-x)$.</p>
+</details>
+<details>
+
+<summary>Q16. Why is the k2 estimator biased? In the small-KL limit, by how much?</summary>
+<p>Let $r = \pi_\theta/\pi_\text{ref}$, $y \sim \pi_\theta$, $\text{KL}(\pi_\theta\|\pi_\text{ref}) = \mathbb{E}_{\pi_\theta}[\log r]$.</p>
+<ul><li><strong>k2</strong> is defined as $\mathbb{E}_{\pi_\theta}[\tfrac12(\log r)^2]$, generally $\ne \mathbb{E}[\log r]$ — so <strong>biased</strong>.</li><li><strong>The correct Taylor expansion</strong> should use $s = \pi_\text{ref}/\pi_\theta = 1/r$ (this is the random variable with $\mathbb{E}_{\pi_\theta}[s] = 1$, so we can do a mean-1 expansion). $\log r = -\log s$, $\log s = (s-1) - \tfrac12 (s-1)^2 + O((s-1)^3)$.</li><li>$\mathbb{E}_{\pi_\theta}[\log r] = -\mathbb{E}[\log s] = -\mathbb{E}[s-1] + \tfrac12\mathbb{E}[(s-1)^2] + O(\cdot) = 0 + \tfrac12\mathrm{Var}(s) + O$. This matches the Fisher second-order expansion.</li><li>$\mathbb{E}_{\pi_\theta}[\tfrac12 (\log r)^2] = \tfrac12\mathbb{E}[(\log s)^2] = \tfrac12\mathbb{E}[(s-1)^2] + O((s-1)^3) = \tfrac12\mathrm{Var}(s) + O$.</li><li>So <strong>in the small-KL limit (i.e. $r\approx 1$)</strong>: $\mathbb{E}[k_2] \approx \mathbb{E}[\log r] = \text{KL}$, second-order equivalent.</li><li>For large KL, k2 systematically deviates from KL (higher-order terms can't be ignored, direction depends on higher moments).</li></ul>
+<p><strong>Key correction</strong>: a previous version wrote "$\mathbb{E}[r-1] = 0$" — wrong, because under $y\sim\pi_\theta$, $\mathbb{E}[r] = \mathbb{E}_{\pi_\theta}[\pi_\theta/\pi_\text{ref}]$ is generally $\ne 1$. $\mathbb{E}[s] = 1$ is the correct identity (this is the standard importance-sampling result).</p>
+<p>Only saying "second-order approximation"; not expanding Taylor, or mistakenly using $r$ instead of $s$ for the mean-1 expansion.</p>
+</details>
+<details>
+
+<summary>Q17. Analogy between adaptive β and PID controllers?</summary>
+<ul><li>Adaptive β (PPO Schulman 2017) only uses the P term: if KL &gt; target → β ↑; if KL &lt; target → β ↓</li><li>Comparison to a PID controller: $u(t) = K_p e + K_i\int e + K_d \dot{e}$</li><li>P term = current-error proportional response</li><li>I term = accumulated error (prevents steady-state error), but KL is stochastic; adding I oscillates</li><li>D term = error derivative (damping), but KL estimates have high variance; D amplifies noise</li><li>Practice: <strong>only the P term</strong> is most robust (TRL default); some frameworks add a small I for long-term convergence</li></ul>
+<p>Only saying "P-controller-like" without elaboration; or adding D term without knowing it has problems.</p>
+</details>
+<details>
+
+<summary>Q18. How to tune β in GRPO with k3 KL when reward is binary (0/1)?</summary>
+<ul><li>Reward = {0, 1}, advantage scale ≈ O(1)</li><li>KL_k3 per-token starts at ≈ 0 (policy equals ref), can reach 0.1 ~ 0.5 during training</li><li>If β = 0.04, KL penalty per-token ≈ 0.04 × 0.3 ≈ 0.012, reasonable vs advantage</li><li>If β = 1, KL penalty per-token ≈ 0.3, <strong>much larger than</strong> advantage, loss dominated by KL</li><li>Experience: math task starts at β = 0.01 ~ 0.04, adjusted by KL curve; DAPO often β = 1e-3 or 0</li><li>Compare RLHF helpfulness: reward scale is large (continuous [-5, 5]) → β can be larger (0.1 ~ 0.5)</li></ul>
+<p>Not knowing the coupling between β and reward scale; or mechanically applying β = 0.04.</p>
+</details>
+<details>
+
+<summary>Q19. SimPO has no reference model — why does it still work? Without the KL anchor, doesn't it reward-hack?</summary>
+<ul><li>SimPO uses <strong>length-normalization</strong> $r = (\beta/|y|)\log\pi(y)$ + <strong>target reward margin</strong> $\gamma$</li><li>No KL anchor, but length-norm prevents the "$y_w$ longer = better" degeneration</li><li>Margin $\gamma$ makes the loss saturate at $r_w - r_l > \gamma$, avoiding unbounded implicit reward</li><li>Empirically SimPO outperforms DPO on some benchmarks (AlpacaEval-2 / Arena-Hard)</li><li>But <strong>the cost of no KL anchor</strong>: poor OOD robustness, sensitive to $\beta, \gamma$ tuning, generation length may still be too large</li><li>In production, DPO + small β is still mainstream; SimPO is a "stronger on some benchmarks but with different tradeoffs" choice</li></ul>
+<p>Saying SimPO is strictly better; not knowing length-norm + margin is the KL substitute.</p>
+</details>
+<details>
+
+<summary>Q20. How are per-token KL and sequence-level KL related?</summary>
+<ul><li>By KL's <strong>chain rule</strong> (conditional decomposition): $\text{KL}(\pi_\theta(\cdot|x) \| \pi_\text{ref}(\cdot|x)) = \mathbb{E}_{y\sim\pi_\theta}[\sum_t \log(\pi_\theta(y_t|x,y_{<t})/\pi_\text{ref}(y_t|x,y_{<t}))]$</li><li>I.e. <strong>sequence-level KL = expectation of the sum of token-level KLs</strong></li><li>Engineering must compute at the token level (vocab summation is fine, sequence summation explodes combinatorially)</li><li>Actual RLHF loss: per-token KL → mask assistant tokens → sum → average per sequence</li><li>Note: on prompt tokens, policy and ref have identical input, so KL should = 0, but floating-point noise pollutes → mask required</li></ul>
+<p>Confusing the two; or not knowing why masking only assistant tokens is necessary.</p>
+</details>
+<h3 id="l3-top-lab-questions-5-questions">L3 top-lab questions (5 questions)</h3>
+<details>
+
+<summary>Q21. Prove $f(x) = e^x - x - 1 \ge 0$ for all $x \in \mathbb{R}$. Starting from this inequality, derive the non-negativity and unbiasedness of k3. Which property is more critical for "KL as a loss term", and why?</summary>
+<p><strong>Non-negativity proof</strong>:</p>
+<p>$f(x) = e^x - x - 1$. $f'(x) = e^x - 1$, $f'(x) = 0$ ⟺ $x = 0$. $f''(x) = e^x > 0$, so $f$ is strictly convex; $x = 0$ is the global minimum, $f(0) = 0$. So $f(x) \ge 0$ for all $x$. ✓</p>
+<p><strong>k3 non-negativity</strong>: Setting $x = \log(\pi_\text{ref}/\pi_\theta) = -\log r$, $\widehat{\text{KL}}_3 = f(-\log r) \ge 0$ always. ✓</p>
+<p><strong>k3 unbiasedness</strong>:</p>
+<p>$\mathbb{E}_{\pi_\theta}[\widehat{\text{KL}}_3] = \mathbb{E}_{\pi_\theta}[e^{-\log r}] + \mathbb{E}_{\pi_\theta}[\log r] - 1 = 1 + \text{KL} - 1 = \text{KL}$ ✓</p>
+<p><strong>Which property is more critical for "KL as a loss term"?</strong></p>
+<ul><li><strong>Non-negative + value-side unbiased</strong>: these are good <strong>monitoring/numerical-display</strong> properties — the KL loss curve doesn't show negatives or huge noise. But <strong>the key issue with k3-as-loss is not in the numerical layer</strong>, but in the gradient layer.</li><li>⚠️ <strong>The gradient when k3 is backpropagated as a loss is a first-order Taylor approximation of the reverse-KL gradient</strong>: $\nabla(e^{-\Delta} + \Delta - 1) = (1-e^{-\Delta})\nabla\Delta = (\Delta - \tfrac12\Delta^2 + O(\Delta^3))\,\nabla\log\pi_\theta$, with $O(\Delta^2)$ bias (see §3.6 + Rethinking KL arXiv 2510.01555).</li><li><strong>The truly principled loss choice is (P2) k2-as-loss</strong>: $\nabla(\tfrac12\Delta^2) = \Delta\,\nabla\log\pi_\theta$ equals the strict reverse-KL gradient in expectation on-policy. k2's value is not calibrated but its gradient is correct — gradient-equivalent to k1-in-reward.</li><li><strong>If "non-negative + unbiased + easy to monitor" is required</strong> ⇒ k3 remains the best <strong>value estimator</strong>; but distinguishing "value-side k3 monitor + loss-side k2/k1-in-reward gradient" is a more principled combination than "k3-as-loss".</li></ul>
+<p>So k3 is most convenient at the <strong>value-monitoring layer</strong> (non-negative + value-unbiased + low variance). But <strong>for the principled-ness of "as a loss addend", the key is not non-negativity but whether the loss-gradient matches the true reverse-KL gradient</strong> — k3-as-loss's gradient $(1 - e^{-\Delta})\nabla\log\pi_\theta$ is only a first-order Taylor approximation with $O(\Delta^2)$ bias; on-policy, the strictly principled losses are (P2) k2-as-loss or (P1) k1-in-reward. GRPO/DAPO historically used k3 mostly as engineering convention + because the bias is negligible at small β.</p>
+<p><strong>Common mistake</strong>: treating non-negativity as the "key for loss-addend" — that's only the numerical display advantage; what truly determines principled-ness is gradient correctness. The ideal combination is "value-side k3 monitor + loss-side k2/k1-in-reward gradient".</p>
+</details>
+<details>
+
+<summary>Q22. Derive the "dual equivalence" between DPO's implicit reward and the policy gradient of KL-regularized RL.</summary>
+<p>Setup: $\max_\pi \mathbb{E}_\pi[r] - \beta\,\text{KL}(\pi\|\pi_\text{ref})$, closed-form $\pi^*(y|x) = \pi_\text{ref}\exp(r/\beta)/Z$.</p>
+<p><strong>RL view</strong>: when reward $r$ is given, the optimal policy moves towards $\pi^*$ via importance-weighted updates. Score-function policy gradient:</p>
+<p>$\nabla_\theta J = \mathbb{E}_{\pi_\theta}[\nabla\log\pi_\theta \cdot (r - \beta\log(\pi_\theta/\pi_\text{ref}))]$</p>
+<p><strong>DPO view</strong>: treat $\pi$ as the learnable $\pi_\theta$, invert BT to get implicit reward $\hat{r} = \beta\log(\pi_\theta/\pi_\text{ref}) + \beta\log Z$, do NLL over preference pairs.</p>
+<p><strong>Equivalence</strong>:</p>
+<ol><li>The closed-form gives $r = \beta\log(\pi^*/\pi_\text{ref}) + \beta\log Z$.</li><li>If $\pi_\theta = \pi^*$ (i.e. RL has converged), then the implicit reward recovers the true $r$ (up to additive $\beta\log Z$, which cancels in BT pairwise).</li><li>RL gradient $\propto r - \beta\log(\pi_\theta/\pi_\text{ref})$ at convergence $= \beta\log Z(x)$ (constant in $y$) → gradient is 0 (PG stops at $\pi^*$).</li><li>DPO gradient $\propto \sigma(\hat{r}_l - \hat{r}_w)(\nabla\log\pi(y_w) - \nabla\log\pi(y_l))$, at $\pi_\theta = \pi^*$ corresponds to "BT model fits perfectly" → gradient also vanishes.</li><li>The fixed points of both views are $\pi^*$, so <strong>RL and DPO are optimizing the same objective from two angles</strong>: RL is forward optimization (directly max $J$), DPO is inverse optimization (fit BT model to preference data).</li></ol>
+<p><strong>Key</strong>: DPO is not a replacement for RL — it is <strong>a different reduction of the same objective</strong>. RL via sampling-based PG, DPO via closed-form + supervised learning. "DPO has no RL" is a misreading.</p>
+<p>Only saying "DPO derives from RL closed form" without expanding gradient equivalence; or not knowing both views share the same fixed point.</p>
+</details>
+<details>
+
+<summary>Q23. From $\sqrt{\text{KL}}$ and the inverted-U gold curve, derive a "safe KL budget" for reward overoptimization.</summary>
+<p>Gao 2023's BoN gold reward fit: $R_g(d) = d(\alpha_g - \gamma_g d)$, $d = \sqrt{\text{KL}}$.</p>
+<p>Find peak: $dR_g/dd = \alpha_g - 2\gamma_g d = 0$ → $d_\text{peak} = \alpha_g / (2\gamma_g)$.</p>
+<p>Corresponding KL distance: $\text{KL}_\text{peak} = d_\text{peak}^2 = \alpha_g^2 / (4\gamma_g^2)$.</p>
+<p><strong>Safe budget</strong>: stop before peak. Typically pick $\text{KL}_\text{stop} = 0.5 \cdot \text{KL}_\text{peak}$ (50% safety margin).</p>
+<p><strong>How to estimate $\alpha_g, \gamma_g$?</strong> Need gold reward signal (human / strong RM ensemble). Run a small pilot at a few KL points and fit $R_g(d)$.</p>
+<p><strong>Larger RM, peak further right</strong>: Gao 2023's scaling law shows $\alpha_g, \gamma_g$ depend on RM size (fit coefficients themselves depend on RM scale and data); larger RM has $\text{KL}_\text{peak}$ further right, with a higher $R_g(\text{peak})$ as well. This is why a larger RM both "rewards the budget" and reaches higher gold.</p>
+<p><strong>PPO slightly more complex than BoN</strong>: $R_g(d) = d(\alpha_g - \gamma_g d) - \delta_g d^{3/2}$; the third-order term shifts the peak slightly left.</p>
+<p>Application: in practice, cap measured KL at $\text{KL}_\text{peak} \cdot 0.5$ for early stop, i.e. "$\sqrt{\text{KL}}$ &lt; $d_\text{peak}/2$".</p>
+<p>Missing the derivative; or not knowing the RM-size-vs-peak scaling.</p>
+</details>
+<details>
+
+<summary>Q24. If you had to design an RLHF algorithm combining reverse + forward KL, how would you use them?</summary>
+<p><strong>Motivation</strong> (under the standard convention: reverse = $\text{KL}(q\|p)$ mode-seeking; forward = $\text{KL}(p\|q)$ mass-covering):</p>
+<ul><li><strong>Reverse KL</strong> $\text{KL}(\pi_\theta\|\pi_\text{ref})$ = mode-seeking on $\pi_\theta$ → pick reward-high modes inside high-density regions of ref (matches the rule). <strong>RLHF's default</strong>.</li><li><strong>Forward KL</strong> $\text{KL}(\pi_\text{ref}\|\pi_\theta)$ = mass-covering on $\pi_\theta$ → make $\pi_\theta$ cover all of ref's possible outputs (prevents mode collapse).</li></ul>
+<p><strong>Problem</strong>: forward KL requires sampling from $\pi_\text{ref}$, which is engineering-meaningless (we are training $\pi_\theta$, not $\pi_\text{ref}$).</p>
+<p><strong>Workaround proposals (theoretical)</strong>:</p>
+<ol><li><strong>JSD-style combo</strong>: use $\text{JS}(\pi_\theta\|\pi_\text{ref}) = \tfrac{1}{2}\text{KL}(\pi_\theta\|m) + \tfrac{1}{2}\text{KL}(\pi_\text{ref}\|m)$, $m = (\pi_\theta + \pi_\text{ref})/2$. Symmetric, bounded, captures both mode-seeking and mass-covering. Problem: $m$ has no closed form (mixture distribution), gradient computation is complex.</li><li><strong>Importance sampling</strong>: sample from $\pi_\theta$ but reweight to $\pi_\text{ref}$ expectation: $\mathbb{E}_{\pi_\theta}[(\pi_\text{ref}/\pi_\theta)\log(\pi_\text{ref}/\pi_\theta)] = \text{KL}(\pi_\text{ref}\|\pi_\theta)$. Problem: tails have very large $\pi_\text{ref}/\pi_\theta$, variance explodes.</li><li><strong>Symmetric KL</strong>: $\text{KL}_\text{sym} = \tfrac{1}{2}(\text{KL}(\pi_\theta\|\pi_\text{ref}) + \text{KL}(\pi_\text{ref}\|\pi_\theta))$, symmetric but still needs the forward-side estimate.</li><li><strong>Hybrid penalty</strong>: early training mostly reverse KL (drive policy towards modes), later add small forward-KL term estimated via importance sampling to prevent mode collapse.</li></ol>
+<p><strong>Practical industrial approach (simpler)</strong>:</p>
+<ul><li>Use entropy bonus to replace forward KL's "mass coverage" goal — entropy doesn't need ref sampling.</li><li>Train an ensemble of policies, each mode-seeks a different mode, preserving diversity overall.</li><li>Combine BoN inference + DPO/PPO training: mode-seek during training, source diversity from BoN sampling at inference.</li></ul>
+<p><strong>Summary</strong>: forward KL is "theoretically attractive but engineering-difficult" in RLHF; mainstream approaches use entropy / multiple policies as substitutes.</p>
+<p>Just saying "add both" — too naive, must give engineering scheme; not knowing forward KL's sampling barrier.</p>
+</details>
+<details>
+
+<summary>Q25. How might next-generation RLHF algorithms improve KL regularization? Give 3 directions + tradeoffs.</summary>
+<p><strong>Direction 1: Adaptive KL estimator per token</strong></p>
+<ul><li>Pick k1 vs k3 per token: small-KL tokens use k1 (unbiased + simple), large-KL tokens use k3 (prevent variance explosion).</li><li>Tradeoff: implementation complexity + hard-to-determine per-token threshold.</li></ul>
+<p><strong>Direction 2: Per-task β controller</strong></p>
+<ul><li>Different sub-tasks (math / code / dialogue / safety) use different β, dispatched online by a task classifier.</li><li>Tradeoff: requires accurate task labels; cross-task β interference needs study.</li></ul>
+<p><strong>Direction 3: Adversarial KL</strong></p>
+<ul><li>Don't fix $\pi_\text{ref}$ — train it online (e.g. self-rewarding LM, iterative DPO), but freeze $\pi_\text{ref}$ within each time window.</li><li>Tradeoff: potentially unstable (GAN-like); needs fresh human labels to prevent drift.</li></ul>
+<p><strong>Direction 4: Distributional reward + W2 KL</strong></p>
+<ul><li>Model reward as a distribution $p(r|x,y)$, replace KL with the Wasserstein-2 metric (geometric).</li><li>Tradeoff: W2 computation is complex, needs sliced approximation; theoretical convergence unclear.</li></ul>
+<p><strong>Direction 5: Hierarchical KL</strong></p>
+<ul><li>Sentence-level KL + token-level KL combined: sentence-level controls total KL budget, token-level provides fine-grained anchoring.</li><li>Analogy: PRM (process reward) vs ORM (outcome reward).</li><li>Tradeoff: sentence boundaries are not explicit during generation, requires extra annotation or heuristics.</li></ul>
+<p><strong>Direction 6: KL-free but trust-region substitute</strong></p>
+<ul><li>Drop KL entirely, use PPO clip's trust region for constraint ("clip is enough").</li><li>Already explored in IRL / SimPO.</li><li>Tradeoff: loses the closed-form RL mathematical foundation (no $\pi^* \propto \pi_\text{ref}\exp(r/\beta)$).</li></ul>
+<p>Only listing without tradeoffs; not knowing SimPO / IPO have already partly explored the KL-free route.</p>
+</details>
+<h2 id="a-appendix-reference-list">§A Appendix: reference list</h2>
+<p>Grouped by chapter. This section is a draft; <strong>arXiv IDs and exact venues are not all verified online</strong> — proofreading should re-check via <code>/arxiv</code> or codex web_search.</p>
+<p><strong>KL fundamentals and estimators</strong></p>
+<ul><li>Schulman 2020 blog <em>Approximating KL Divergence</em> <code>http://joschu.net/blog/kl-approx.html</code> (the canonical source for k1 / k2 / k3 estimators)</li><li>Endres &amp; Schindelin 2003 IEEE TIT 49(7) <em>A New Metric for Probability Distributions</em> (proof that $\sqrt{\text{JS}}$ is a metric)</li><li>Pinsker 1964 (original Pinsker inequality $\text{TV} \le \sqrt{\text{KL}/2}$)</li></ul>
+<p><strong>RLHF / PPO</strong></p>
+<ul><li>Schulman et al. 2017 arXiv 1707.06347 <em>Proximal Policy Optimization Algorithms</em> (PPO-Clip + PPO-Penalty adaptive β)</li><li>Ouyang et al. 2022 NeurIPS <em>Training Language Models to Follow Instructions with Human Feedback</em> (InstructGPT, per-token KL in reward)</li><li>Bai et al. 2022 Anthropic arXiv 2204.05862 <em>Training a Helpful and Harmless Assistant with RLHF</em> (adaptive β controller)</li></ul>
+<p><strong>DPO family</strong></p>
+<ul><li>Rafailov et al. 2023 NeurIPS <em>Direct Preference Optimization: Your Language Model is Secretly a Reward Model</em> (closed form + inversion + BT)</li><li>Azar et al. 2024 AISTATS <em>A General Theoretical Paradigm to Understand Learning from Human Preferences</em> (IPO, prevents unbounded reward under deterministic preference)</li><li>Ethayarajh et al. 2024 ICML <em>KTO: Model Alignment as Prospect Theoretic Optimization</em> (reference point replacing KL)</li><li>Meng et al. 2024 NeurIPS <em>SimPO: Simple Preference Optimization with a Reference-Free Reward</em> (drops ref, length-norm + margin)</li><li>Hong et al. 2024 EMNLP <em>ORPO: Monolithic Preference Optimization without Reference Model</em> (odds-ratio single-stage)</li></ul>
+<p><strong>GRPO family / RL with k3 KL</strong></p>
+<ul><li>Shao et al. 2024 arXiv 2402.03300 <em>DeepSeekMath: Pushing the Limits of Mathematical Reasoning</em> (first systematic use of GRPO with k3 + group-relative advantage)</li><li>DeepSeek-AI 2025 arXiv 2501.12948 <em>DeepSeek-R1</em> (GRPO + rule-based reward + emergent CoT)</li><li>Yu et al. 2025 ByteDance arXiv 2503.14476 <em>DAPO: An Open-Source LLM Reinforcement Learning System at Scale</em> (clip-higher + dynamic sampling + token-level loss + small β)</li></ul>
+<p><strong>Reward Overoptimization</strong></p>
+<ul><li>Gao, Schulman, Hilton 2023 ICML <em>Scaling Laws for Reward Model Overoptimization</em> (KL distance vs gold reward inverted-U + fitted form)</li><li>Coste et al. 2024 ICLR <em>Reward Model Ensembles Help Mitigate Overoptimization</em></li><li>Eisenstein et al. 2024 COLM (arXiv 2312.09244, 2023) <em>Helping or Herding? Reward Model Ensembles Mitigate but do not Eliminate Reward Hacking</em></li></ul>
+<p><strong>Critic-free RL (related to KL placement)</strong></p>
+<ul><li>Ahmadian et al. 2024 ACL <em>Back to Basics: Revisiting REINFORCE Style Optimization</em> (RLOO, leave-one-out baseline, KL in reward)</li><li>Li et al. 2024 ICML <em>ReMax: A Simple, Effective, and Efficient Reinforcement Learning Method</em></li></ul>
+<p><strong>Two 2024-2026 systematic analyses of KL-in-RLHF (arXiv metadata verified)</strong></p>
+<ul><li>Kezhao Liu et al., <em>Rethinking KL Regularization in RLHF: From Value Estimation to Gradient Optimization</em>, arXiv 2510.01555 (2025-10-02). Systematically distinguishes KL value estimation vs gradient optimization; shows k3-as-loss is a biased first-order approximation; recommends (P1) k1 in reward or (P2) k2 as loss; off-policy needs IS correction. §3.6 of this tutorial is based on this paper.</li><li>Vedant Shah et al., <em>A Comedy of Estimators: On KL Regularization in RL Training of LLMs</em>, arXiv 2512.21852 (2025-12-26, v3 2026-03-18). Empirical comparison of k1/k2/k3 across RL algorithms + placement combinations, focusing on estimator bias / gradient bias / placement-effect; conclusion: no universally best estimator.</li></ul>
+<p><strong>Zhihu Chinese resources</strong></p>
+<ul><li><code>https://zhuanlan.zhihu.com/p/1979720260128118305</code> — <em>KL deep dive: Forward KL, Reverse KL, KL estimation and applications</em> (verified, topic consistent with RLHF KL estimators)</li><li><code>https://zhuanlan.zhihu.com/p/1892008158626546312</code> — [needs-verify URL accessibility] topic appears to cover k2-loss vs k3-loss / GRPO off-policy / clip_std; replace if the link is broken at verification time.</li></ul>
+<p><strong>Closely related internal tutorials</strong></p>
+<ul><li><code>docs/tutorials/rlhf_dpo_grpo_ppo_tutorial.md</code> — RLHF / DPO / GRPO / PPO overview (includes BT + closed form + DPO derivation)</li><li><code>docs/tutorials/reasoning_models_tutorial.md</code> — RL training details of reasoning models</li><li><code>docs/tutorials/agentic_rl_tutorial.md</code> — token mask + KL discussion in the agentic setting</li></ul>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/kl_divergence_rlhf_tutorial_en.md</code> ·
+  SHA256 <code>4477782e0f50</code> ·
+  generated at 2026-05-19 19:29 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

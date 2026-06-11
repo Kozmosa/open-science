@@ -1,0 +1,66 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/reasoning_models_tutorial.md",
+  "output": "docs/tutorials/reasoning_models_tutorial.html",
+  "topic": "Reasoning Models (o1 / R1 / Test-Time Compute / PRM / GRPO)",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per round",
+  "math_code_review": {
+    "verdict": "PASS (with length WARN)",
+    "rounds": [
+      {
+        "run": "1-3 (subagent)",
+        "verdict": "FAIL→FAIL→PASS",
+        "notes": "Multiple rounds of cross-model codex review run by writing agent before continuation hung."
+      },
+      {
+        "run": 4,
+        "verdict": "FAIL → fixed",
+        "thread_id": "019e3f44-8186-7c32-8e73-b1244b9994b2",
+        "reviewer": "main-session DIY backfill",
+        "issues_caught": [
+          "Q22 wrong claim: InstructGPT RM gives 'dense token-level reward' (actual: response-level scalar preference reward; token-level advantage comes from critic + GAE + KL)",
+          "Snell 2024 4× mischaracterization in TL;DR (should be compute-optimal test-time scaling vs best-of-N baseline, not '比线性扩参数有效 4×')",
+          "Math-Shepherd labeled as 'MCTS rollout' (actual: Monte Carlo completion rollouts, not MCTS tree search) — fixed in 3 places",
+          "extract_answer LaTeX parser broken on nested `\\boxed{\\frac{1}{2}}` (truncated to `\\frac{1`)",
+          "grpo_loss did not enforce detach on log_probs_old / log_probs_ref",
+          "Q11 + comment claimed 'std=0 时 loss=0' — actual: PG term zeroes, KL term remains",
+          "prm_beam_search edge case: empty new_beams → max() ValueError",
+          "7 callout-list collisions (callouts immediately followed by lists with no blank line)",
+          "Length 1254 lines (target 800-1200) — accepted as content-dense WARN"
+        ],
+        "fixes_applied": [
+          "Q22 rewritten: clarified InstructGPT RM is response-level scalar; token-level signal comes from critic + GAE + KL",
+          "TL;DR Snell 2024 description rewritten: compute-optimal scaling vs best-of-N baseline yields >4× efficiency; FLOPs-matched setting yields up to 14× larger model match",
+          "Math-Shepherd description updated in §0 TL;DR + Q4 to Monte Carlo completion rollouts with arXiv 2312.08935 citation",
+          "Rewrote extract_answer with balanced-brace _extract_braced() helper to handle nested LaTeX",
+          "grpo_loss: added defensive detach() calls on log_probs_old/ref + updated docstring",
+          "Q11 + grpo_loss comment updated: PG=0 when std=0, but KL penalty term remains",
+          "prm_beam_search: added empty new_beams guard + fallback return",
+          "Inserted blank lines after 7 callout headers to avoid markdown blockquote-list ambiguity"
+        ],
+        "issues_deferred_as_low": [
+          "Appendix temporal order (2022-03 listed before 2022-05) — cosmetic",
+          "R1-Zero 'aha moment' Figure 3 vs Table 3 — cosmetic citation nit",
+          "o3 ARC-AGI 75.7/87.5 caveat (production o3 differs from ARC Prize preview system)"
+        ]
+      }
+    ]
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "PASS",
+        "thread_id": "019e3f69-5d50-7eb3-8c53-fdc504a2db64",
+        "reviewer": "codex gpt-5.5 xhigh, fresh thread (main session)",
+        "notes": "13/13 functional checks pass. 45 headings, 11 code blocks, 5 tables, 18 callouts (0 raw blockquotes remaining — all callout-list collisions fixed), 25 details blocks. Source SHA256 549e2f7e241c matches."
+      }
+    ]
+  },
+  "summary": "Reasoning Models tutorial: subagent did 3 rounds before hang, main-session DIY did 1 substantive round catching 9 errors (Q22 RM semantics, Snell 4× description, Math-Shepherd MCTS→MC fix, extract_answer parser, grpo_loss detach, prm_beam edge case, KL penalty edge case, 7 callout-list spacings). Final 13/13 render PASS. 1254 lines content-dense (WARN).",
+  "rendered_at": "2026-05-19",
+  "notes": "Subagent was killed during continuation due to codex MCP concurrency hang. Substantive review + fixes + render + render review completed in main session DIY."
+}

@@ -1,0 +1,13 @@
+{
+  "skill_id": "paper-illustration-image2",
+  "label": "paper-illustration-image2",
+  "description": "Generate publication-quality academic illustrations through a local Codex app-server bridge that uses Codex native image generation. This is a separate experimental alternative to `paper-illustration`, intended for Claude Code users who want a GPT-image-style renderer without modifying the original skill.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

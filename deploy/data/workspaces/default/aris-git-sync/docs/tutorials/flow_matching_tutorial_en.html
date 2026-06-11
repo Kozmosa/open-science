@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow Matching Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/flow_matching_tutorial_en.md">
+<meta name="aris:source-sha256" content="90243d531e3f172dc24c2345e6ada197471f80f92dd45892bc0d002afa86c3f0">
+<meta name="aris:generated-at" content="2026-05-19 18:47 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr">§0 TL;DR</a>
+</li>
+<li><a href="#1-basic-setup-and-intuition">§1 Basic setup and intuition</a>
+</li>
+<li><a href="#2-flow-matching-loss">§2 Flow Matching Loss</a>
+<ul>
+<li><a href="#21-marginal-flow-matching-theoretical-form">2.1　Marginal Flow Matching (theoretical form)</a></li>
+<li><a href="#22-conditional-flow-matching-the-practical-training-objective">2.2　Conditional Flow Matching (the practical training objective)</a></li>
+<li><a href="#23-key-theorem-lipman-et-al-2023-theorem-2">2.3　Key theorem (Lipman et al. 2023, Theorem 2)</a></li>
+</ul>
+</li>
+<li><a href="#3-three-conditional-path-choices">§3 Three conditional path choices</a>
+<ul>
+<li><a href="#31-rectified-flow-simplest-most-stable-most-widely-used">3.1　Rectified Flow: simplest, most stable, most widely used</a></li>
+<li><a href="#32-vp-path-same-family-as-ddpm">3.2　VP path (same family as DDPM)</a></li>
+<li><a href="#33-ve-path-same-family-as-smldedm">3.3　VE path (same family as SMLD/EDM)</a></li>
+</ul>
+</li>
+<li><a href="#4-training-code-framework-pytorch">§4 Training code framework (PyTorch)</a>
+<ul>
+<li><a href="#41-probability-path-abstraction">4.1　Probability Path abstraction</a></li>
+<li><a href="#42-vector-field-network-pedagogical-mlp-production-uses-u-net--dit">4.2　Vector field network (pedagogical MLP; production uses U-Net / DiT)</a></li>
+<li><a href="#43-cfm-loss">4.3　CFM Loss</a></li>
+<li><a href="#44-minimal-training-loop">4.4　Minimal training loop</a></li>
+</ul>
+</li>
+<li><a href="#5-ode-sampling">§5 ODE sampling</a>
+</li>
+<li><a href="#6-relationship-to-diffusion--score-matching">§6 Relationship to diffusion / score matching</a>
+<ul>
+<li><a href="#61-velocity--score--noise-prediction-interconversion-must-know">6.1　Velocity ↔ Score ↔ Noise prediction interconversion (must know)</a></li>
+<li><a href="#62-correspondence-between-fm-paths-and-diffusion">6.2　Correspondence between FM paths and diffusion</a></li>
+<li><a href="#63-why-rectified-flow-training--sampling-is-relatively-stable">6.3　Why Rectified Flow training / sampling is relatively &quot;stable&quot;</a></li>
+</ul>
+</li>
+<li><a href="#7-advanced-topics">§7 Advanced topics</a>
+<ul>
+<li><a href="#71-reflow-liu-et-al-2022-iclr">7.1　Reflow (Liu et al. 2022, ICLR)</a></li>
+<li><a href="#72-conditional-flow-matching-cfg">7.2　Conditional Flow Matching (CFG)</a></li>
+<li><a href="#73-logit-normal-t-sd3-default">7.3　Logit-normal $t$ (SD3 default)</a></li>
+</ul>
+</li>
+<li><a href="#8-complete-runnable-example-2d-toy">§8 Complete runnable example (2D toy)</a>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Flow Matching Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/flow_matching_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>90243d531e3f</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 18:47 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr">§0 TL;DR</h2>
+<div class="callout callout-info"><div class="callout-title">Flow Matching in 5 sentences</div><p>one page covering the core points (full derivations in §1–§4).</p></div>
+<ol><li><strong>Goal</strong>: learn a vector field $v_\theta(t, x)$ such that the ODE $\dot{x}_t = v_\theta(t, x_t)$ transports $x_0 \sim p_0$ (noise) into $x_1 \sim p_1$ (data).</li><li><strong>Training (CFM)</strong>: $\mathcal{L}_\text{CFM}(\theta) = \mathbb{E}_{t, z, x_t \sim p_t(\cdot|z)} \|v_\theta(t, x_t) - u_t(x_t|z)\|^2$, <strong>simulation-free</strong> (no ODE solve needed to compute the loss).</li><li><strong>Key theorem</strong>: $\nabla_\theta \mathcal{L}_\text{FM} = \nabla_\theta \mathcal{L}_\text{CFM}$ — so learning the conditional vector field is equivalent to learning the marginal one (Lipman et al. 2023).</li><li><strong>Simplest form (Rectified Flow / OT-CFM)</strong>: $x_t = (1-t)x_0 + tx_1$, target $u_t = x_1 - x_0$. SD3 / FLUX / Lumina all use this.</li><li><strong>Sampling</strong>: starting from $x_0 \sim p_0$, integrate with an ODE solver (Euler / Heun / RK4) until $t=1$.</li></ol>
+<h2 id="1-basic-setup-and-intuition">§1 Basic setup and intuition</h2>
+<p>Given a data distribution $p_1$ (the "target") and a simple prior $p_0$ (typically $\mathcal{N}(0, I)$), we want to construct a family of <strong>probability paths</strong> $\{p_t\}_{t \in [0,1]}$ smoothly interpolating from $p_0$ to $p_1$.</p>
+<div class="callout callout-warn"><div class="callout-title">Convention (used throughout)</div><p>notation summarized in the table below.</p></div>
+<ul><li>$x_0 \sim p_0 = \mathcal{N}(0, I)$ (noise side) — $t=0$</li><li>$x_1 \sim p_1$ (data side) — $t=1$</li><li>Sampling direction: integrate from $t=0$ to $t=1$ (noise → data)</li><li>Note: different papers use different conventions — Lipman et al. 2023 uses $x_0$=data, $x_1$=noise; Liu et al. 2022 (Rectified Flow) uses $x_0$=noise, $x_1$=data (which we follow here). The SD3 paper is also noise→data but with slightly different notation. <strong>In interviews, disambiguate in your first sentence</strong>.</li></ul>
+<p>A family of <strong>time-varying vector fields</strong> $u_t : [0,1] \times \mathbb{R}^d \to \mathbb{R}^d$ pushes particles from $p_0$ to $p_1$ via the ODE $\dot{x}_t = u_t(x_t)$. By the <strong>continuity equation</strong>:</p>
+<p>$$\boxed{\;\frac{\partial p_t}{\partial t} + \nabla \cdot (p_t\, u_t) = 0\;}$$</p>
+<p>Our goal: find a neural network $v_\theta(t, x) \approx u_t(x)$.</p>
+<pre class="diagram"><code>
+   p_0 (noise)             p_t (intermediate)       p_1 (data)
+   ●●●●●          →        ●  ●  ●        →        ████
+                            v_θ(t, x)
+                           ─────────→
+                          dx/dt = v_θ</code></pre>
+<p>Compared to diffusion:</p>
+<ul><li><strong>Diffusion (SDE)</strong>: $dx = f(x, t) dt + g(t) dW$, trained with score matching $s_\theta \approx \nabla \log p_t$</li><li><strong>Flow matching (ODE)</strong>: $dx = v_\theta(t, x) dt$, <strong>no stochastic term</strong>, training directly regresses the vector field</li><li>The two are linked via the <strong>probability flow ODE</strong>: $v = f - \frac{1}{2} g^2 \nabla \log p_t$ (see §6)</li></ul>
+<h2 id="2-flow-matching-loss">§2 Flow Matching Loss</h2>
+<h3 id="21-marginal-flow-matching-theoretical-form">2.1　Marginal Flow Matching (theoretical form)</h3>
+<p>If we knew $u_t$ (the marginal vector field), we could just regress against it:</p>
+<p>$$\mathcal{L}_\text{FM}(\theta) = \mathbb{E}_{t \sim \mathcal{U}[0,1],\; x \sim p_t} \left\| v_\theta(t, x) - u_t(x) \right\|^2$$</p>
+<p><strong>Problem</strong>: $u_t(x)$ is a marginal obtained by integrating (weighted) all conditional paths — <strong>not directly sampleable</strong>.</p>
+<h3 id="22-conditional-flow-matching-the-practical-training-objective">2.2　Conditional Flow Matching (the practical training objective)</h3>
+<p>Introduce a <strong>conditioning variable</strong> $z$ (e.g. $z = x_1$, or $z = (x_0, x_1)$). Pick a conditional path $p_t(x | z)$ and conditional vector field $u_t(x | z)$ such that marginalizing over $z$ recovers the desired marginal:</p>
+<p>$$p_t(x) = \int p_t(x | z) q(z)\, dz, \quad u_t(x) = \int u_t(x|z) \frac{p_t(x|z) q(z)}{p_t(x)} dz$$</p>
+<p>Then the <strong>Conditional FM loss</strong> is:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{CFM}(\theta) = \mathbb{E}_{t,\; z \sim q,\; x \sim p_t(\cdot|z)} \left\| v_\theta(t, x) - u_t(x|z) \right\|^2\;}$$</p>
+<p>Each term is <strong>sampleable and computable</strong>. $x \sim p_t(\cdot|z)$ is usually closed-form sampleable (e.g. linear interpolation below).</p>
+<h3 id="23-key-theorem-lipman-et-al-2023-theorem-2">2.3　Key theorem (Lipman et al. 2023, Theorem 2)</h3>
+<div class="callout callout-good"><div class="callout-title">Gradient equivalence theorem</div><p>under appropriate regularity of $p_t$ and $u_t$, and $p_t > 0$:</p></div>
+<p>$$\nabla_\theta \mathcal{L}_\text{FM}(\theta) = \nabla_\theta \mathcal{L}_\text{CFM}(\theta)$$ So <strong>minimizing CFM ≡ minimizing FM</strong>. The two losses differ by a $\theta$-independent constant under the above assumptions.</p>
+<p><strong>Proof sketch</strong>: expand the L2 norm $\|v_\theta\|^2 - 2 v_\theta^\top u_t + \|u_t\|^2$; the first two terms are equal under either loss (using the definition of $u_t$ to write the marginal as a conditional-weighted expectation); the third term is $\theta$-independent and vanishes under the gradient.</p>
+<div class="callout callout-info"><div class="callout-title">Interview bonus: marginal vector field is non-unique</div><p>given $p_t$, the $u_t$ satisfying the continuity equation $\partial_t p_t + \nabla\cdot(p_t u_t) = 0$ is <strong>not unique</strong> — adding any divergence-free vector field still yields a valid choice. CFM automatically picks a "natural" $u_t$ via the conditional path (usually corresponding to the OT map or a score-based ODE). This is often a follow-up: "Is the marginal $u_t$ unique?"</p></div>
+<h2 id="3-three-conditional-path-choices">§3 Three conditional path choices</h2>
+<p>Let $z = (x_0, x_1)$, $x_0 \sim p_0$, $x_1 \sim p_1$. The conditional path $p_t(x | x_0, x_1)$ is generally a Dirac $\delta(x - \psi_t(x_0, x_1))$ (deterministic interpolation), with conditional vector field $\dot{\psi}_t(x_0, x_1)$.</p>
+<table><thead><tr><th>Path</th><th>$x_t = \psi_t(x_0, x_1)$</th><th>Target $u_t$</th><th>Used in</th></tr></thead><tbody><tr><td><strong>Rectified Flow / OT-CFM</strong></td><td>$(1-t)x_0 + t\, x_1$</td><td>$x_1 - x_0$ (constant)</td><td>SD3, FLUX, Lumina, MovieGen</td></tr><tr><td><strong>VP cosine</strong></td><td>$\cos\!\left(\frac{\pi t}{2}\right) x_0 + \sin\!\left(\frac{\pi t}{2}\right) x_1$</td><td>$-\frac{\pi}{2}\sin\!\frac{\pi t}{2}\, x_0 + \frac{\pi}{2}\cos\!\frac{\pi t}{2}\, x_1$</td><td>Same family as DDPM cosine schedule (under restrictions)</td></tr><tr><td><strong>VE</strong></td><td>$x_1 + \sigma(1{-}t)\, x_0$, $\sigma$ increasing</td><td>$-\sigma'(1{-}t)\, x_0$</td><td>Same family as SMLD/EDM (prior variance must match $\sigma_{\max}^2$)</td></tr></tbody></table>
+<h3 id="31-rectified-flow-simplest-most-stable-most-widely-used">3.1　Rectified Flow: simplest, most stable, most widely used</h3>
+<p>Linear interpolation: $x_t = (1-t) x_0 + t\, x_1$, so $\dot{x}_t = x_1 - x_0$ is <strong>constant</strong> (does not depend on $t$).</p>
+<p>Training objective:</p>
+<p>$$\mathcal{L}_\text{RF}(\theta) = \mathbb{E}_{t, x_0, x_1} \|v_\theta(t,\, (1-t)x_0 + t x_1) - (x_1 - x_0)\|^2$$</p>
+<p>The name "OT-CFM" comes from: if $(x_0, x_1)$ is the optimal transport coupling (rather than independent samples), the learned vector field approximately realizes the OT map.</p>
+<div class="callout callout-good"><div class="callout-title">Reflow: Rectified Flow&#x27;s killer feature</div><p>use the learned $v_\theta$ to regenerate $(x_0, x_1)$ pairs (run the ODE from $x_0$ to obtain the corresponding $x_1$), then <strong>train again</strong>. The new trajectories are straighter, and <strong>few-step sampling quality improves dramatically</strong>, enabling 1-step / 2-step generation (InstaFlow et al.).</p></div>
+<h3 id="32-vp-path-same-family-as-ddpm">3.2　VP path (same family as DDPM)</h3>
+<p>With $\sigma(t) = \cos\!\frac{\pi t}{2}$ (noise coefficient) and $\alpha(t) = \sin\!\frac{\pi t}{2}$ (data coefficient), satisfying $\sigma^2 + \alpha^2 = 1$ (variance preserving):</p>
+<p>$$x_t = \sigma(t)\, x_0 + \alpha(t)\, x_1, \quad u_t = \sigma'(t)\, x_0 + \alpha'(t)\, x_1$$</p>
+<p>Boundaries: $x_t = x_0$ (noise) at $t=0$, $x_t = x_1$ (data) at $t=1$.</p>
+<p>This path and DDPM's cosine schedule belong to <strong>the same Gaussian-path family</strong> (continuous limit + time reversal). But strictly speaking they are not "exactly equivalent" — DDPM (Nichol-Dhariwal) has details like $s=0.008$ offset, and DDPM uses the forward-noising convention ($t=0$ is data) while FM uses the reverse ($t=0$ is noise).</p>
+<h3 id="33-ve-path-same-family-as-smldedm">3.3　VE path (same family as SMLD/EDM)</h3>
+<p>Following Lipman et al. 2023's conditional VE path:</p>
+<p>$$p_t(x | x_1) = \mathcal{N}\!\left(x \,\Big|\, x_1,\; \sigma(1-t)^2 I\right)$$</p>
+<p>$\sigma(s)$ is monotonically increasing in forward time $s \in [0, 1]$ (e.g. $\sigma(s) = \sigma_\min (\sigma_\max/\sigma_\min)^s$). Reparameterizing gives</p>
+<p>$$x_t = x_1 + \sigma(1-t)\, x_0, \quad u_t = -\sigma'(1-t)\, x_0$$</p>
+<p>Boundaries: $x_t \approx x_1 + \sigma_\max\, x_0$ at $t=0$ (noise-dominated), $x_t \approx x_1 + \sigma_\min\, x_0 \approx x_1$ at $t=1$ (data).</p>
+<div class="callout callout-warn"><div class="callout-title">VE deployment note</div><p>strictly, the prior $p_0$ should be $\mathcal{N}(0, \sigma_\max^2 I)$ (so the marginal variance at $t=0$ matches); when using $\mathcal{N}(0, I)$, scale accordingly (e.g. $x_0 \leftarrow \sigma_\max \cdot \tilde{x}_0$). The code examples here are pedagogical; <strong>for production VE, use EDM preconditioning</strong> for stability.</p></div>
+<h2 id="4-training-code-framework-pytorch">§4 Training code framework (PyTorch)</h2>
+<h3 id="41-probability-path-abstraction">4.1　Probability Path abstraction</h3>
+<pre><code class="language-python">import math
+from dataclasses import dataclass
+from typing import Callable, Optional
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+@dataclass
+class FlowPath:
+    &quot;&quot;&quot; Conditional probability path abstraction &quot;&quot;&quot;
+    name: str
+    sample_xt: Callable    # (t, x0, x1) -&gt; x_t
+    target_ut: Callable    # (t, x0, x1) -&gt; u_t
+
+def _broadcast_t(t: torch.Tensor, x: torch.Tensor) -&gt; torch.Tensor:
+    &quot;&quot;&quot; t: [B], x: [B, ...] —— broadcast t to shape [B, 1, 1, ...] for elementwise ops &quot;&quot;&quot;
+    return t.view(-1, *([1] * (x.dim() - 1)))
+
+def rectified_flow_path() -&gt; FlowPath:
+    &quot;&quot;&quot; x_t = (1-t)x_0 + t*x_1,  u_t = x_1 - x_0 &quot;&quot;&quot;
+    def sample_xt(t, x0, x1):
+        tb = _broadcast_t(t, x0)
+        return (1 - tb) * x0 + tb * x1
+    def target_ut(t, x0, x1):
+        return x1 - x0
+    return FlowPath(&quot;rectified_flow&quot;, sample_xt, target_ut)
+
+def vp_cosine_path() -&gt; FlowPath:
+    &quot;&quot;&quot; x_t = cos(π t/2) x_0 + sin(π t/2) x_1
+        t=0: x_t = x_0 (noise);  t=1: x_t = x_1 (data)  [noise → data direction] &quot;&quot;&quot;
+    def sample_xt(t, x0, x1):
+        tb = _broadcast_t(t, x0)
+        sig = torch.cos(0.5 * math.pi * tb)    # noise coeff
+        alp = torch.sin(0.5 * math.pi * tb)    # data coeff
+        return sig * x0 + alp * x1
+    def target_ut(t, x0, x1):
+        tb = _broadcast_t(t, x0)
+        d_sig = -0.5 * math.pi * torch.sin(0.5 * math.pi * tb)
+        d_alp =  0.5 * math.pi * torch.cos(0.5 * math.pi * tb)
+        return d_sig * x0 + d_alp * x1
+    return FlowPath(&quot;vp_cosine&quot;, sample_xt, target_ut)
+
+def ve_path(sigma_min: float = 0.01, sigma_max: float = 50.0) -&gt; FlowPath:
+    &quot;&quot;&quot; VE: x_t = x_1 + σ(1-t) · x_0,  σ(s) increasing in forward time s (log-linear)
+        t=0: x_t = x_1 + σ_max·x_0 (large noise);  t=1: x_t ≈ x_1 (data)
+        Note: strict VE requires prior p_0 ~ N(0, σ_max² I); this example uses N(0, I) for
+              simplicity. Production code needs EDM-style preconditioning. &quot;&quot;&quot;
+    log_min, log_max = math.log(sigma_min), math.log(sigma_max)
+    def sigma_fwd(s):                          # increasing in forward time s
+        return torch.exp(log_min * (1 - s) + log_max * s)
+    def d_sigma_fwd(s):                        # dσ/ds = σ · (log σ_max − log σ_min)
+        return sigma_fwd(s) * (log_max - log_min)
+    def sample_xt(t, x0, x1):
+        tb = _broadcast_t(t, x0)
+        return x1 + sigma_fwd(1 - tb) * x0
+    def target_ut(t, x0, x1):
+        tb = _broadcast_t(t, x0)
+        # u_t = d/dt [σ(1-t)] x_0 = -σ&#x27;(1-t) · x_0
+        return -d_sigma_fwd(1 - tb) * x0
+    return FlowPath(&quot;ve&quot;, sample_xt, target_ut)</code></pre>
+<h3 id="42-vector-field-network-pedagogical-mlp-production-uses-u-net--dit">4.2　Vector field network (pedagogical MLP; production uses U-Net / DiT)</h3>
+<pre><code class="language-python">class SinusoidalTimeEmbed(nn.Module):
+    &quot;&quot;&quot; Time encoding isomorphic to Transformer positional embedding &quot;&quot;&quot;
+    def __init__(self, dim: int):
+        super().__init__()
+        self.dim = dim
+    def forward(self, t: torch.Tensor) -&gt; torch.Tensor:
+        # t: [B] in [0, 1]
+        half = self.dim // 2
+        freqs = torch.exp(-math.log(10000) * torch.arange(half, device=t.device) / half)
+        args = t[:, None] * freqs[None, :]
+        return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
+
+class VectorFieldMLP(nn.Module):
+    &quot;&quot;&quot; v_θ(t, x) ——— simplified version for 2D toy / low-dim experiments
+        Real generative models replace this with U-Net (image) or DiT (high-res / video) &quot;&quot;&quot;
+    def __init__(self, dim: int, hidden: int = 256, t_dim: int = 128):
+        super().__init__()
+        self.t_embed = nn.Sequential(
+            SinusoidalTimeEmbed(t_dim),
+            nn.Linear(t_dim, hidden),
+            nn.SiLU(),
+            nn.Linear(hidden, hidden),
+        )
+        self.net = nn.Sequential(
+            nn.Linear(dim + hidden, hidden), nn.SiLU(),
+            nn.Linear(hidden, hidden),       nn.SiLU(),
+            nn.Linear(hidden, dim),
+        )
+    def forward(self, t: torch.Tensor, x: torch.Tensor) -&gt; torch.Tensor:
+        # t: [B], x: [B, dim]
+        return self.net(torch.cat([x, self.t_embed(t)], dim=-1))</code></pre>
+<h3 id="43-cfm-loss">4.3　CFM Loss</h3>
+<pre><code class="language-python">def cfm_loss(
+    model: nn.Module,
+    path: FlowPath,
+    x1: torch.Tensor,                              # [B, ...] data samples
+    x0: Optional[torch.Tensor] = None,              # defaults to N(0, I)
+    t_dist: str = &quot;uniform&quot;,                        # &quot;uniform&quot; or &quot;logitnormal&quot;
+    return_components: bool = False,
+):
+    &quot;&quot;&quot;
+    Conditional Flow Matching loss:
+        L = E ‖v_θ(t, x_t) - u_t(x_t | x_0, x_1)‖²
+    &quot;&quot;&quot;
+    B = x1.shape[0]
+    device = x1.device
+    if x0 is None:
+        x0 = torch.randn_like(x1)
+
+    # t sampling
+    if t_dist == &quot;uniform&quot;:
+        t = torch.rand(B, device=device)
+    elif t_dist == &quot;logitnormal&quot;:
+        # SD3 default: t = σ(z), z ~ N(0, 1). More concentrated around t≈0.5 (hardest middle region)
+        t = torch.sigmoid(torch.randn(B, device=device))
+    else:
+        raise ValueError(f&quot;unknown t_dist: {t_dist}&quot;)
+
+    x_t = path.sample_xt(t, x0, x1)
+    u_t = path.target_ut(t, x0, x1)
+    v_pred = model(t, x_t)
+
+    loss = F.mse_loss(v_pred, u_t)
+    if return_components:
+        return loss, {&quot;v_pred_norm&quot;: v_pred.norm().item(), &quot;u_norm&quot;: u_t.norm().item()}
+    return loss</code></pre>
+<h3 id="44-minimal-training-loop">4.4　Minimal training loop</h3>
+<pre><code class="language-python">def train_flow_matching(
+    model: nn.Module,
+    dataloader,                         # yields x1 batches
+    path: FlowPath,
+    total_steps: int = 50_000,
+    lr: float = 3e-4,
+    weight_decay: float = 0.0,
+    device: str = &quot;cuda&quot;,
+    log_every: int = 200,
+    ema_decay: float = 0.9999,           # EMA is essential for generative models
+):
+    model = model.to(device).train()
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    ema_model = _make_ema(model)        # see below
+
+    step = 0
+    while step &lt; total_steps:
+        for x1 in dataloader:
+            x1 = x1.to(device, non_blocking=True)
+            loss = cfm_loss(model, path, x1, t_dist=&quot;logitnormal&quot;)
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step()
+            _update_ema(ema_model, model, ema_decay)
+
+            if step % log_every == 0:
+                print(f&quot;[{step:6d}] {path.name} loss = {loss.item():.4f}&quot;)
+            step += 1
+            if step &gt;= total_steps: break
+
+    return model, ema_model
+
+@torch.no_grad()
+def _make_ema(model):
+    import copy
+    ema = copy.deepcopy(model).eval()
+    for p in ema.parameters(): p.requires_grad_(False)
+    return ema
+
+@torch.no_grad()
+def _update_ema(ema, model, decay):
+    for ep, p in zip(ema.parameters(), model.parameters()):
+        ep.mul_(decay).add_(p.detach(), alpha=1 - decay)</code></pre>
+<h2 id="5-ode-sampling">§5 ODE sampling</h2>
+<p>After training $v_\theta$, start from $x_0 \sim p_0$ and solve the ODE $\dot{x}_t = v_\theta(t, x_t)$ up to $t = 1$.</p>
+<pre><code class="language-python">@torch.no_grad()
+def euler_sampler(model, x0, steps=50, t_start=0.0, t_end=1.0):
+    &quot;&quot;&quot; First-order Euler: 1 NFE per step, simple but needs many steps &quot;&quot;&quot;
+    x = x0.clone()
+    ts = torch.linspace(t_start, t_end, steps + 1, device=x0.device)
+    for i in range(steps):
+        t = ts[i].expand(x.shape[0])
+        dt = ts[i + 1] - ts[i]
+        x = x + dt * model(t, x)
+    return x
+
+@torch.no_grad()
+def heun_sampler(model, x0, steps=50, t_start=0.0, t_end=1.0):
+    &quot;&quot;&quot; Second-order Heun (improved Euler / RK2): 2 NFE per step, O(dt²) accuracy &quot;&quot;&quot;
+    x = x0.clone()
+    ts = torch.linspace(t_start, t_end, steps + 1, device=x0.device)
+    for i in range(steps):
+        b = x.shape[0]
+        t_i, t_next = ts[i], ts[i + 1]
+        dt = t_next - t_i
+        v1 = model(t_i.expand(b), x)
+        x_euler = x + dt * v1
+        v2 = model(t_next.expand(b), x_euler)
+        x = x + dt * 0.5 * (v1 + v2)
+    return x
+
+@torch.no_grad()
+def rk4_sampler(model, x0, steps=25, t_start=0.0, t_end=1.0):
+    &quot;&quot;&quot; Fourth-order Runge-Kutta: 4 NFE per step, O(dt⁴) accuracy
+        25 steps × 4 NFE = 100 NFE, but usually much more accurate than 100-step Euler &quot;&quot;&quot;
+    x = x0.clone()
+    ts = torch.linspace(t_start, t_end, steps + 1, device=x0.device)
+    for i in range(steps):
+        b = x.shape[0]
+        t_i, t_next = ts[i], ts[i + 1]
+        dt = t_next - t_i
+        k1 = model(t_i.expand(b),                       x)
+        k2 = model((t_i + dt / 2).expand(b),  x + dt / 2 * k1)
+        k3 = model((t_i + dt / 2).expand(b),  x + dt / 2 * k2)
+        k4 = model(t_next.expand(b),          x + dt * k3)
+        x = x + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+    return x</code></pre>
+<div class="callout callout-info"><div class="callout-title">Sampler choice cheat sheet</div><p>sorted by NFE / quality trade-off.</p></div>
+<ul><li><strong>Euler</strong>: 1 NFE/step, needs ≥50 steps for good images; debug baseline</li><li><strong>Heun / RK2</strong>: 2 NFE/step, ~25 steps already good; EDM default</li><li><strong>RK4</strong>: 4 NFE/step, 10-20 steps usually matches 100-step Euler</li><li><strong>Adaptive (Dopri5 / dopri8)</strong>: provided by torchdiffeq; auto error control but uncontrolled NFE</li><li><strong>Rectified Flow after retraining</strong>: after 1-2 reflow passes, 1-4 step Euler reaches near multi-step quality</li></ul>
+<h2 id="6-relationship-to-diffusion--score-matching">§6 Relationship to diffusion / score matching</h2>
+<p>For any SDE $dx = f(x, t) dt + g(t) dW$ (forward), there exists a corresponding <strong>probability flow ODE</strong> (Song et al. 2021):</p>
+<p>$$dx = \underbrace{\left[ f(x, t) - \frac{1}{2} g^2(t)\, \nabla_x \log p_t(x) \right]}_{\text{vector field } u_t(x)} dt$$</p>
+<p>This ODE has the same marginal distribution $p_t$ as the SDE at every time.</p>
+<div class="callout callout-good"><div class="callout-title">FM ↔ Score Matching bridge (with caveats)</div><p>when the FM probability path arises from a non-degenerate noising SDE ($g(t) > 0$), learning the score $s_\theta \approx \nabla \log p_t$ and learning the vector field $v_\theta \approx u_t$ are <strong>two parameterizations of the same information</strong>:</p></div>
+<p>$$v_\theta(t, x) = f(x, t) - \tfrac{1}{2} g^2(t)\, s_\theta(t, x)$$ So under VP/VE paths, FM can be viewed as a score matching equivalent in the ODE viewpoint. <strong>But this fails for Rectified Flow / OT-CFM</strong> (no standard SDE correspondence), where FM is more general vector-field regression.</p>
+<h3 id="61-velocity--score--noise-prediction-interconversion-must-know">6.1　Velocity ↔ Score ↔ Noise prediction interconversion (must know)</h3>
+<p>Under VP/VE paths, assuming $x_t = \alpha(t) x_1 + \sigma(t) x_0$ (with $x_0 \sim \mathcal{N}(0, I)$ as the noise direction), the three main prediction targets are linearly interconvertible:</p>
+<p>$$ \begin{aligned} \epsilon\text{-prediction} &:\quad \epsilon_\theta(t, x_t) \approx x_0 \\ x_0\text{-prediction} &:\quad x^0_\theta(t, x_t) \approx x_1 \\ v\text{-prediction (Salimans-Ho)} &:\quad v_\theta(t, x_t) \approx \alpha'(t) x_1 + \sigma'(t) x_0 \\ \text{score} &:\quad s_\theta(t, x_t) \approx -x_0 / \sigma(t) \end{aligned} $$</p>
+<p>Given $x_t$ and any one prediction, the other three are algebraically recoverable. For example, under VP the $\epsilon$-score relation is:</p>
+<p>$$s_\theta(t, x_t) = -\epsilon_\theta(t, x_t) / \sigma(t)$$</p>
+<p>This is why DDPM (learning $\epsilon$) and score-based (learning $\nabla \log p_t$) are <strong>equivalent parameterizations</strong>. Flow matching learning $v = \alpha' x_1 + \sigma' x_0$ is one such choice, and under RF (linear) it degenerates to $v = x_1 - x_0$.</p>
+<h3 id="62-correspondence-between-fm-paths-and-diffusion">6.2　Correspondence between FM paths and diffusion</h3>
+<table><thead><tr><th>FM Path</th><th>Equivalent diffusion / SDE</th><th>Typical noise schedule</th></tr></thead><tbody><tr><td>VP cosine</td><td>DDPM (cosine)</td><td>$\bar\alpha_t = \cos^2(\pi t/2)$</td></tr><tr><td>VP linear</td><td>DDPM (linear β)</td><td>$\beta_t = \beta_0 + t(\beta_1 - \beta_0)$</td></tr><tr><td>VE</td><td>SMLD / EDM</td><td>$\sigma_t \in [\sigma_\min, \sigma_\max]$ log-linear</td></tr><tr><td>Rectified Flow</td><td>No standard non-zero-diffusion noising SDE (except degenerate cases)</td><td>Path is a straight line, the "shortest" path</td></tr></tbody></table>
+<h3 id="63-why-rectified-flow-training--sampling-is-relatively-stable">6.3　Why Rectified Flow training / sampling is relatively "stable"</h3>
+<ul><li><strong>Constant target</strong>: $u_t = x_1 - x_0$ does not explicitly depend on $t$ (given $x_0, x_1$), making it numerically easy to fit</li><li><strong>Straight-line paths</strong>: few-step ODE integration error is small</li><li><strong>Loss conditioning</strong>: RF training is more balanced than native DDPM; but <strong>that does not mean reweighting is unnecessary</strong> — SD3 still applies logit-normal $t$ sampling and similar reweighting on top of RF, with ablated gains</li><li><strong>Reflow compresses NFE</strong>: enables 1-step generation routes (InstaFlow / SD3-Turbo / Flux-Schnell)</li></ul>
+<h2 id="7-advanced-topics">§7 Advanced topics</h2>
+<h3 id="71-reflow-liu-et-al-2022-iclr">7.1　Reflow (Liu et al. 2022, ICLR)</h3>
+<p>The reason Rectified Flow enables few-step generation is the <strong>reflow algorithm</strong>:</p>
+<ol><li>Train initially to obtain $v_\theta^{(1)}$ (using independent pairs $(x_0, x_1) \sim p_0 \otimes p_1$)</li><li>Use $v_\theta^{(1)}$ to run the ODE and generate <strong>coupled</strong> pairs $(x_0, x_1^{(1)})$, i.e. $x_1^{(1)} = \text{ODE}(x_0; v_\theta^{(1)})$</li><li>Train again on coupled pairs to obtain $v_\theta^{(2)}$ — the new trajectories are <strong>straighter</strong></li><li>Repeat — Liu et al. 2022 prove that under suitable assumptions, the <strong>convex transport cost</strong> of the coupling is non-increasing (each reflow does not worsen total transport cost)</li></ol>
+<p>"Trajectories become straighter" is intuition + empirical observation; the rigorous theorem is monotonicity of transport cost. In practice 1-2 reflow passes make 4-step quality match 50-step (InstaFlow / SD3-Turbo / Flux-Schnell). The limit: completely straight → 1-step generation ($x_1 = x_0 + v_\theta(0, x_0)$).</p>
+<h3 id="72-conditional-flow-matching-cfg">7.2　Conditional Flow Matching (CFG)</h3>
+<p>For conditional generation (e.g. text-to-image), the model takes an extra condition $c$:</p>
+<p>$$v_\theta(t, x, c)$$</p>
+<p>During training, with probability $p_\text{drop}$ (typically 0.1), $c$ is replaced by a null token (e.g. null embedding), yielding an <strong>unconditional head</strong>.</p>
+<p>At sampling time, use <strong>Classifier-Free Guidance</strong>:</p>
+<p>$$v_\text{CFG}(t, x, c) = v_\theta(t, x, \emptyset) + s \cdot \left[v_\theta(t, x, c) - v_\theta(t, x, \emptyset)\right]$$</p>
+<p>$s$ is the guidance scale (typically 1.5-7.5). $s > 1$ amplifies the conditional signal, improving text alignment but reducing diversity.</p>
+<h3 id="73-logit-normal-t-sd3-default">7.3　Logit-normal $t$ (SD3 default)</h3>
+<p>SD3 (Esser et al. 2024) finds that <strong>$t \sim \mathcal{U}[0, 1]$ is not optimal</strong>. The middle region ($t \approx 0.5$) has the most difficult target noise-signal ratio. Replace with:</p>
+<p>$$t = \sigma(\tau), \quad \tau \sim \mathcal{N}(m, s^2)$$</p>
+<p>i.e. Gaussian-sample $\tau$ then sigmoid-map back to $(0, 1)$. Tune $m, s$ to control which range of $t$ is emphasized. With default $m = 0, s = 1$, $t$ concentrates near 0.5. This is one of the key ablation wins in the SD3 paper.</p>
+<h2 id="8-complete-runnable-example-2d-toy">§8 Complete runnable example (2D toy)</h2>
+<p>Below is an end-to-end minimal runnable example: train a vector field to map $\mathcal{N}(0, I)$ to a 2D moon-shaped distribution.</p>
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+    # 1) Data (target distribution p_1): 2D moons
+    from sklearn.datasets import make_moons
+
+    def sample_moons(n: int) -&gt; torch.Tensor:
+        X, _ = make_moons(n_samples=n, noise=0.05)
+        return torch.tensor(X, dtype=torch.float32) * 2.0  # scale
+
+    # 2) Model + path
+    model = VectorFieldMLP(dim=2, hidden=128)
+    path = rectified_flow_path()
+
+    # 3) &quot;dataloader&quot; (random generation)
+    class MoonDataset:
+        def __init__(self, batch=512, total=5000):
+            self.batch = batch; self.total = total
+        def __iter__(self):
+            for _ in range(self.total):
+                yield sample_moons(self.batch)
+
+    # 4) Train
+    train_flow_matching(
+        model,
+        MoonDataset(batch=512, total=2000),
+        path=path,
+        total_steps=2000,
+        lr=3e-4,
+        device=&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;,
+        log_every=100,
+    )
+
+    # 5) Sample
+    model.eval()
+    device = next(model.parameters()).device
+    x0 = torch.randn(2000, 2, device=device)
+    x_samples = euler_sampler(model, x0, steps=50)
+
+    # Overlay with real 2D moons for visual sanity check
+    import matplotlib.pyplot as plt
+    real = sample_moons(2000).numpy()
+    fake = x_samples.cpu().numpy()
+    plt.scatter(real[:, 0], real[:, 1], alpha=0.3, label=&quot;real&quot;)
+    plt.scatter(fake[:, 0], fake[:, 1], alpha=0.3, label=&quot;generated&quot;)
+    plt.legend(); plt.savefig(&quot;flow_matching_moons.png&quot;, dpi=120)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Production additions (not in this pedagogical version)</div><p>engineering items to add before deployment.</p></div>
+<ul><li><strong>EMA scheduler</strong>: decay closer to 1 in late training (e.g. 0.9999 → 0.99995)</li><li><strong>Gradient checkpointing</strong>: U-Net / DiT memory optimization</li><li><strong>Mixed precision</strong>: fp16 / bf16 + GradScaler</li><li><strong>Latent space</strong>: high-resolution images run FM in VAE latent space (LDM / SD3 / FLUX)</li><li><strong>Conditioning</strong>: text encoder (T5 / CLIP) + cross-attention or token concat</li><li><strong>Distributed</strong>: DDP / FSDP for multi-GPU</li><li><strong>Loss weighting</strong>: SD3 implicitly reweights via logit-normal $t$; EDM uses explicit SNR weighting</li></ul>
+<p><strong>Flow Matching Quick Reference</strong> · Main references: Lipman et al. 2023 (Flow Matching), Liu et al. 2022 (Rectified Flow), Esser et al. 2024 (SD3 / MM-DiT)</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/flow_matching_tutorial_en.md</code> ·
+  SHA256 <code>90243d531e3f</code> ·
+  generated at 2026-05-19 18:47 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

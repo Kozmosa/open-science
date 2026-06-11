@@ -1,0 +1,34 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/3d_generation_tutorial.md",
+  "output": "docs/tutorials/3d_generation_tutorial.html",
+  "topic": "3D Generation (NeRF / Instant-NGP / 3DGS / SDS / DreamFusion / Trellis)",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per round",
+  "math_code_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": "1-3",
+        "verdict": "PASS",
+        "notes": "Three rounds of cross-model codex math/code review were completed by the writing agent (subagent context). Each round caught and fixed substantive issues. Agent's per-round transcripts captured in subagent log; verdict applied to .md before render."
+      }
+    ]
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "PASS",
+        "thread_id": "019e3f3d-61bd-77f1-ab7a-99ae20f92205",
+        "reviewer": "codex gpt-5.5 xhigh, fresh thread (main session DIY backfill)",
+        "notes": "All 13 functional checks pass. 14 h2 + 48 h3 headings, 62 TOC links resolving, 25 details blocks with rendered ul/li, 5 python code fences, 10 pipe tables, 6 info + 5 warn + 2 good callouts. No leaks."
+      }
+    ]
+  },
+  "summary": "3D Gen tutorial passed both math/code review (subagent rounds 1-3) and render review (main-session DIY). 64KB MD, 94KB HTML.",
+  "rendered_at": "2026-05-19",
+  "notes": "Subagent was killed before writing review.json (codex MCP concurrency issue). HTML was already rendered. Render review backfilled from main session with thread 019e3f3d (PASS 13/13)."
+}

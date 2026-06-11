@@ -1,0 +1,67 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/vlm_multimodal_tutorial.md",
+  "source_sha256_prefix": "f9cc9510bdd53549",
+  "output": "docs/tutorials/vlm_multimodal_tutorial.html",
+  "topic": "VLM / Multimodal (CLIP / ViT / LLaVA / Qwen-VL / DeepSeek-VL)",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "math_code_review": {
+    "verdict": "FAIL_AFTER_3_ROUNDS_WITH_FIXES_APPLIED",
+    "reviewer": "codex gpt-5.5 xhigh, fresh thread per run (never codex-reply)",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL",
+        "thread_id": "019e3ea8-748a-7543-b3e3-fa0379f82476",
+        "issue": "(a) M-RoPE explanation said 'd_t:d_h:d_w = 16:24:24, rotating 64 dims and leaving 64 dims unrotated' — wrong; mrope_section is in half-dim pair units and all 128 head_dim rotate. (b) M-RoPE code only rotated q (not k) and used wrong section convention. (c) §6.1 said 'N=256 for 336^2 input' — wrong; 336/14=24, 24^2=576. (d) LLaVA-1.0 mislabeled as 336^2 single resolution. (e) Qwen2-VL attribution should be Wang et al. 2024 not Bai. (f) Video-MME is CVPR 2025 not ACL 2024. (g) EVA-CLIP attribution conflated Fang/Sun.",
+        "fix": "Rewrote §10.2 / §10.5 / Q14 / Q23 with correct Qwen2-VL M-RoPE semantics (mrope_section=[16,24,24] in half-dim pairs, full head_dim rotates, 6-segment alternating t/h/w/t/h/w); rewrote M-RoPE code to rotate both q and k via LLaMA-style rotate_half, matching HF implementation. Fixed §6.1 patch count, LLaVA-1.0 resolution, Qwen2-VL/Video-MME/EVA-CLIP attributions."
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL",
+        "thread_id": "019e3eb6-2aea-75f3-8902-58f1a04d26e2",
+        "issue": "(a) §A sanity output still said 'rot dims=64 / identity dims=64' (inconsistent with corrected M-RoPE). (b) Q19 SigLIP claim '256k batch 仍稳' overstated. (c) Q22 BLIP-2 written as '3 stage', actual is 2 stage with stage 1 containing 3 losses. (d) Q25 vision tower attribution errors: Molmo doesn't use SigLIP; Qwen2-VL not 'self-trained from scratch'; OpenAI CLIP is open not closed.",
+        "fix": "Updated §A sanity to '2 × sum(mrope_section) = 128 = head_dim, full rotation'. Softened Q19 SigLIP claim to '32k typical, 256k experiments scanned'. Q22 corrected to '2 stage (representation + generation)'. Q25 rewritten: removed Molmo from SigLIP list, corrected Qwen2-VL as DFN-derived init, noted OpenAI CLIP is open."
+      },
+      {
+        "run": 3,
+        "verdict": "FAIL",
+        "thread_id": "019e3ebc-ea73-7f31-941b-c893146e5aca",
+        "issue": "(a) §8.2 Perceiver Resampler described as 'single layer cross-attention' — incorrect; Flamingo paper Sec 3.1 uses stacked depth (default ~6 layers). (b) §7.4 ⚠️ note claimed missing kdim/vdim would 'truncate image features' — wrong; PyTorch raises shape mismatch error. (c) Q7 BLIP-2 stages mislabeled as 'two-stage representation + one-stage generation' — should be 2 stage total.",
+        "fix": "§8.2 rewritten: Perceiver Resampler is multi-layer (Flamingo Sec 3.1 default ~6 layers) with per-layer CrossAttn + FFN update rule. §7.4 ⚠️ note corrected: PyTorch raises shape mismatch error, does not silently truncate. Q7 + §7.5 table corrected: 2 stage total, stage 1 includes ITC + ITM + ITG."
+      }
+    ],
+    "note": "After 3 review rounds all flagged issues received targeted fixes; per the 3-round-FAIL stop rule, no 4th review was run. Each round's issues were addressed by direct edits in source MD before stopping."
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "reviewer": "codex gpt-5.5 xhigh, fresh thread per run (never codex-reply)",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "PASS",
+        "thread_id": "019e3ec3-faa9-77f1-9636-963ad7709e09",
+        "issue": null,
+        "fix": null,
+        "checks": {
+          "information_fidelity": "pass",
+          "structure": "pass",
+          "math_code_tables": "pass",
+          "callouts": "pass",
+          "details_inner_markdown_rendered": "pass",
+          "safety_escaping": "pass",
+          "placeholder_leak": "pass",
+          "author_byline_rendered": "pass",
+          "eyebrow_subtitle_title": "pass",
+          "no_absolute_local_path_leak": "pass",
+          "no_personal_info_leak": "pass",
+          "heading_glue_fix": "pass",
+          "toc_sidebar_links_resolve": "pass"
+        }
+      }
+    ]
+  },
+  "summary": "3-round math/code review (FAIL → FAIL → FAIL, each round's blocking issues fixed in place; stopped per 3-round rule); 1-round render review PASS on all 13 checks. Length is 1446 lines vs target 1000 (+44.6%, warn-only).",
+  "rendered_at": "2026-05-19"
+}

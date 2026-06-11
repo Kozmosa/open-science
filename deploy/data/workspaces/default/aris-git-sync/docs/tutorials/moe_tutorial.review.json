@@ -1,0 +1,54 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/moe_tutorial.md",
+  "output": "docs/tutorials/moe_tutorial.html",
+  "topic": "MoE (Mixture-of-Experts) — DeepSeek-V3 / Mixtral / Llama 4 / Qwen-MoE",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per round",
+  "math_code_review": {
+    "verdict": "PASS (with arithmetic + formula completion fixes)",
+    "rounds": [
+      {
+        "run": "0 (subagent)",
+        "verdict": "no fixes applied (subagent hung before first codex returned)",
+        "notes": "Original draft as-is from initial generation."
+      },
+      {
+        "run": 1,
+        "verdict": "FAIL → fixed",
+        "thread_id": "019e3fae-e47f-7711-af04-1e5092f678dc",
+        "reviewer": "main-session DIY backfill",
+        "real_issues_caught": [
+          "§4.4 router gradient formula: only diagonal softmax derivative shown, missing full Jacobian with off-diagonal -p_i*p_l cross terms and the renormalization Z dependency",
+          "§3 capacity code uses int() floor; text formula uses ceil(). Tiny batch can produce capacity=0",
+          "Q20 Mixtral 8x7B arithmetic: 7×8 + (1/3 × 7) ≈ 56 + 2.3 ≈ 47B was wrong (the 56 figure already assumed expert-multiplied attention; the actual derivation is shared + 8×FFN ≈ 2.4 + 38.4 ≈ 40.8B, plus router weights brings to official 46.7B)",
+          "§7.2 memory table claim '8× H100 80G 才够 FP8' for 671B FP8: 8×80 = 640 GB < 671 GB; need 16× H100 80G or 8× H200 141G"
+        ],
+        "fixes_applied": [
+          "Rewrote §4.4 with full softmax+renormalize Jacobian: ∂g_i/∂s_l = 1[i∈T_k](∂p_i/∂s_l / Z - p_i/Z² · 1[l∈T_k] · ∂Z/∂s_l); added explicit off-diagonal -p_i*p_l discussion",
+          "§3 capacity: replaced int(...) with math.ceil(...) + max(1, ...) guard; added comment matching text",
+          "Q20 rewritten: shared 2.4B + 8×4.8B FFN ≈ 40.8B + router weights → 46.7B official; active 12B (top-2)",
+          "§7.2 table updated: '8×80G=640GB 还差一点; 实际部署需 16×H100 80G 或 8×H200 141G'; §10 same fix"
+        ],
+        "warnings": [
+          "Torch-dependent code blocks not runtime-tested (env lacks torch); static AST + math alignment passed"
+        ]
+      }
+    ]
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "PASS",
+        "thread_id": "019e3fb7-1ed9-7012-978e-5ea5e1b9be50",
+        "reviewer": "codex gpt-5.5 xhigh, fresh thread (main session)",
+        "notes": "13/13 functional checks pass. 41 headings, 6 python code fences, 8 tables, 11 callouts (intentional callout+separate-list pattern preserved), 17 display equations. Source SHA256 e860589270ed matches."
+      }
+    ]
+  },
+  "summary": "MoE tutorial: original draft (no subagent rounds) received first independent codex review from main session. Caught 4 substantive issues (Q20 arithmetic, §4.4 missing Jacobian terms, capacity int vs ceil, H100 memory). All fixed. Final 13/13 render PASS. 1023+ lines.",
+  "rendered_at": "2026-05-19"
+}

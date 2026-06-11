@@ -1,0 +1,13 @@
+{
+  "skill_id": "auto-review-loop-llm",
+  "label": "auto-review-loop-llm",
+  "description": "Autonomous research review loop using any OpenAI-compatible LLM API. Configure via llm-chat MCP server or environment variables. Trigger with \"auto review loop llm\" or \"llm review\".",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

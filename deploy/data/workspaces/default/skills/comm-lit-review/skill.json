@@ -1,0 +1,13 @@
+{
+  "skill_id": "comm-lit-review",
+  "label": "comm-lit-review-claude-single",
+  "description": "Communications-domain literature review with Claude-style knowledge-base-first retrieval. Use when the task is about communications, wireless, networking, satellite/NTN, Wi-Fi, cellular, transport protocols, congestion control, routing, scheduling, MAC/PHY, rate adaptation, channel estimation, beamforming, or communication-system research and the user wants papers, related work, a survey, or a landscape summary.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

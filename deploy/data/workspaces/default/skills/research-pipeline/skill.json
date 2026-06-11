@@ -1,0 +1,13 @@
+{
+  "skill_id": "research-pipeline",
+  "label": "research-pipeline",
+  "description": "Full end-to-end research pipeline: from a broad research direction through idea discovery, experiments, and review all the way to a polished paper PDF. Use when user says \"全流程\", \"full pipeline\", \"从找idea到投稿\", \"end-to-end research\", or wants the complete autonomous research lifecycle.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

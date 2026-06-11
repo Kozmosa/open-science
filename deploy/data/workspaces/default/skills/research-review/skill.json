@@ -1,0 +1,13 @@
+{
+  "skill_id": "research-review",
+  "label": "research-review",
+  "description": "Get a deep critical review of research from an external reviewer backend (Codex or manual). Use when user says \"review my research\", \"help me review\", \"get external review\", or wants critical feedback on research ideas, papers, or experimental results.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

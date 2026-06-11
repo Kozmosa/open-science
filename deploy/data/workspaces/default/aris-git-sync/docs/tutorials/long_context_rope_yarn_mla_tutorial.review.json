@@ -1,0 +1,79 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/long_context_rope_yarn_mla_tutorial.md",
+  "source_sha256_prefix": "cf9958df2aff90f9",
+  "output": "docs/tutorials/long_context_rope_yarn_mla_tutorial.html",
+  "topic": "Long Context: RoPE / YaRN / NTK / MLA / Sliding Window",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per run (never codex-reply)",
+  "math_code_review": {
+    "verdict": "FAIL_AT_ROUND_3_THEN_PATCHED",
+    "note": "3-round budget reached at FAIL; final post-round-3 fixes applied without re-review per SKILL hard rule.",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL",
+        "thread_id": "019e3ea3-9f18-7ae0-9780-abf7904ec954",
+        "issues": [
+          "TL;DR YaRN temperature formula incorrect (was 1/sqrt(1+0.1 ln s), should be 1/(0.1 ln s + 1)^2)",
+          "YaRN code attn_scale direction inverted (was 1/sqrt_inv_t, should be sqrt_inv_t)",
+          "KV cache numerical example off by ~2x (LLaMA-2-7B 4K should be ~2.1 GB not 1 GB; 100K should be ~52 GB not 25 GB)",
+          "MLA code missing `import torch.nn as nn`",
+          "streaming_decode trimmed post-RoPE K cache + used logical position id (inconsistent)",
+          "§12.1 SWA/Streaming rows incompatible with 'per token per layer' header"
+        ],
+        "fixes": [
+          "Fixed TL;DR YaRN temperature formula",
+          "Fixed YaRN code: attn_scale = sqrt_inv_t (multiplies cos/sin, enlarges Q/K norm)",
+          "Updated KV cache numerical examples in §1 and Q7 to correct values",
+          "Added imports to MLA code block",
+          "Rewrote streaming_decode to store un-rotated K + re-RoPE by logical position; added warning callout",
+          "Split §12 into per-token-per-layer (attention variants) and per-sample-per-layer (SWA/Streaming) tables"
+        ]
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL",
+        "thread_id": "019e3eac-7782-7851-b873-ee90e770f2cd",
+        "issues": [
+          "YaRN attention-scale prose still said 'Q/K 范数被缩了' (wrong direction)",
+          "ABF prose claimed high frequency is compressed unlike NTK-aware; in fact theta_0 = (b')^0 = 1 always, so ABF also preserves the topmost frequency exactly",
+          "Q24 answer wording 'Q/K 范数缩 1/sqrt(t)' wrong-direction verb",
+          "Appendix A.3 line said sink cache shouldn't be re-RoPE'd (contradicts §10.3)",
+          "Unused parameter apply_rope_to_k in streaming_decode signature"
+        ],
+        "fixes": [
+          "YaRN callout now says Q/K norms are 放大 sqrt(1/t) > 1 times",
+          "ABF prose corrected: theta_0 preserved exactly (same as NTK-aware); the actual difference is that ABF picks b' empirically, not calibrated to L_new/L_train",
+          "Q24 answer wording fixed",
+          "A.3 aligned with §10.3 (un-rotated K + re-RoPE by logical position)",
+          "Removed apply_rope_to_k parameter"
+        ]
+      },
+      {
+        "run": 3,
+        "verdict": "FAIL",
+        "thread_id": "019e3eb1-7785-7361-9ea0-8e43dcc19508",
+        "issues": [
+          "§6.4 main prose still contained wrong-direction wording ('1/sqrt(t) 缩放', 'query/key 范数缩 1/sqrt(t)') -- inconsistent with the now-corrected callout",
+          "streaming_decode cache_pos length mismatch when cur_len < sink_size (edge case)"
+        ],
+        "fixes_post_round_3_no_re_review": [
+          "§6.4 main prose rewritten: 'Q/K 范数放大 sqrt(1/t) 倍 (t<1 时该因子 > 1)'; corrected the cos/sin formula to use sqrt(1/t) explicitly",
+          "Added branch for cur_len <= sink_size in streaming_decode pseudocode"
+        ]
+      }
+    ],
+    "warnings_remaining": [
+      "Length: 1209 lines, 9 over the 800-1200 upper bound (cosmetic).",
+      "Citation footer: arXiv-year shorthand could be normalized to venue-year (Xiong ABF -> NAACL 2024, Lost-in-the-Middle -> TACL 2024) — non-blocking."
+    ]
+  },
+  "render_review": {
+    "verdict": "DEFERRED",
+    "note": "render_html.py emitted output without auto-invoking an integrated render-stage codex review (the embedded check described in SKILL.md is not present in the current script). Math/code review covered the rendering-adjacent items: heading consistency, callout-list collision, table-pipe escape, personal_info_leak — all passed by round 3."
+  },
+  "summary": "Three round math/code review (FAIL/FAIL/FAIL) on a 1209-line draft of Long Context cheat sheet. Each round fixed real issues: YaRN temperature direction, KV-cache numerics, MLA imports, streaming_decode cache semantics, table structure, ABF prose. Post-round-3 fixes patched the last two issues (§6.4 wording + streaming edge case) without re-review per hard 3-round budget. Remaining warnings are cosmetic (length +9 lines, citation venue normalization).",
+  "rendered_at": "2026-05-19"
+}

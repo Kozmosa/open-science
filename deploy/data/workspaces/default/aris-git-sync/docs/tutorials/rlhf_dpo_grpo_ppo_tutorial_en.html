@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rlhf Dpo Grpo Ppo Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/rlhf_dpo_grpo_ppo_tutorial_en.md">
+<meta name="aris:source-sha256" content="0740c1296ea5c2902e4cab332899d30786c1f175d2420b5a53c4587fb7ec65c0">
+<meta name="aris:generated-at" content="2026-05-19 19:02 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-post-training-alignment-intuition">§1 Post-Training Alignment Intuition</a>
+<ul>
+<li><a href="#11-special-characteristics-of-language-task-rl">1.1　Special characteristics of language-task RL</a></li>
+</ul>
+</li>
+<li><a href="#2-ppo-core">§2 PPO Core</a>
+<ul>
+<li><a href="#21-vanilla-policy-gradient-recap">2.1　Vanilla policy gradient recap</a></li>
+<li><a href="#22-ppo-clipped-surrogate-must-know-formula">2.2　PPO clipped surrogate (must-know formula)</a></li>
+<li><a href="#23-gae-generalized-advantage-estimation">2.3　GAE: generalized advantage estimation</a></li>
+<li><a href="#24-full-ppo-objective-in-rlhf">2.4　Full PPO objective in RLHF</a></li>
+<li><a href="#25-code-core-60-lines">2.5　Code (core 60 lines)</a></li>
+</ul>
+</li>
+<li><a href="#3-rlhf-pipeline-instructgpt-paradigm">§3 RLHF Pipeline (InstructGPT Paradigm)</a>
+<ul>
+<li><a href="#31-stage-1--sft-supervised-fine-tuning">3.1　Stage 1 — SFT (Supervised Fine-Tuning)</a></li>
+<li><a href="#32-stage-2--rm-reward-model">3.2　Stage 2 — RM (Reward Model)</a></li>
+<li><a href="#33-stage-3--ppo--kl-policy-optimization">3.3　Stage 3 — PPO + KL (Policy Optimization)</a></li>
+<li><a href="#34-in-practice-4-models-resident-simultaneously">3.4　In practice: 4 models resident simultaneously</a></li>
+</ul>
+</li>
+<li><a href="#4-dpo-closed-form-direct-preference-optimization">§4 DPO: Closed-Form Direct Preference Optimization</a>
+<ul>
+<li><a href="#41-kl-regularized-optimal-policy-key-step">4.1　KL-regularized optimal policy (key step)</a></li>
+<li><a href="#42-inversion-implicit-reward">4.2　Inversion: implicit reward</a></li>
+<li><a href="#43-plug-into-bradley-terry-to-get-dpo-loss">4.3　Plug into Bradley-Terry to get DPO loss</a></li>
+<li><a href="#44-implicit-meaning-of-the-dpo-gradient">4.4　Implicit meaning of the DPO gradient</a></li>
+<li><a href="#45-code-core-dpo-loss-in-30-lines">4.5　Code (core DPO loss in 30 lines)</a></li>
+</ul>
+</li>
+<li><a href="#5-grpo-group-relative-advantage">§5 GRPO: Group Relative Advantage</a>
+<ul>
+<li><a href="#51-motivation">5.1　Motivation</a></li>
+<li><a href="#52-grpo-objective">5.2　GRPO objective</a></li>
+<li><a href="#53-deepseek-r1s-key-modifications">5.3　DeepSeek-R1&#x27;s key modifications</a></li>
+<li><a href="#54-code-core-grpo-advantage--loss-in-50-lines">5.4　Code (core GRPO advantage + loss in 50 lines)</a></li>
+</ul>
+</li>
+<li><a href="#6-dpo-variant-ecosystem">§6 DPO Variant Ecosystem</a>
+<ul>
+<li><a href="#61-ipo-prevent-reward-overfit">6.1　IPO: prevent reward overfit</a></li>
+<li><a href="#62-kto-no-need-for-pairs">6.2　KTO: no need for pairs</a></li>
+<li><a href="#63-simpo-drop-the-reference">6.3　SimPO: drop the reference</a></li>
+<li><a href="#64-orpo-single-stage-sft--preference">6.4　ORPO: single-stage SFT + preference</a></li>
+<li><a href="#65-rloo--remax">6.5　RLOO / ReMax</a></li>
+</ul>
+</li>
+<li><a href="#7-advanced-reward-modeling">§7 Advanced Reward Modeling</a>
+<ul>
+<li><a href="#71-prm-vs-orm">7.1　PRM vs ORM</a></li>
+<li><a href="#72-constitutional-ai--rlaif">7.2　Constitutional AI / RLAIF</a></li>
+<li><a href="#73-reward-model-ensemble--uncertainty">7.3　Reward model ensemble &amp; uncertainty</a></li>
+</ul>
+</li>
+<li><a href="#8-reward-hacking--engineering-experience">§8 Reward Hacking &amp; Engineering Experience</a>
+<ul>
+<li><a href="#81-core-mitigation-mechanisms">8.1　Core mitigation mechanisms</a></li>
+<li><a href="#82-gao-2023-scaling-law">8.2　Gao 2023 scaling law</a></li>
+</ul>
+</li>
+<li><a href="#9-complexity--resource-comparison">§9 Complexity / Resource Comparison</a>
+<ul>
+<li><a href="#91-resource-comparison-of-four-paradigms">9.1　Resource comparison of four paradigms</a></li>
+<li><a href="#92-rough-llm-rlhf-training-memory-estimation">9.2　Rough LLM RLHF training memory estimation</a></li>
+<li><a href="#93-training-throughput-comparison">9.3　Training throughput comparison</a></li>
+</ul>
+</li>
+<li><a href="#10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</a>
+<ul>
+<li><a href="#l1-must-know-10-questions">L1 Must-Know (10 questions)</a></li>
+<li><a href="#l2-advanced-10-questions">L2 Advanced (10 questions)</a></li>
+<li><a href="#l3-top-lab-5-questions">L3 Top Lab (5 questions)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-reference-list">§A Appendix: Reference List</a>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Rlhf Dpo Grpo Ppo Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/rlhf_dpo_grpo_ppo_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>0740c1296ea5</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:02 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">Post-training alignment in 7 sentences</div><p>one page covering the interview essentials (see §2–§9 for derivations).</p></div>
+<ol><li><strong>RLHF pipeline (Ouyang 2022 InstructGPT)</strong>: SFT → RM (Bradley-Terry pairwise) → PPO + per-token KL; the value model (value head) is trained separately, and the policy is anchored to the reference policy by KL.</li><li><strong>PPO core (Schulman 2017)</strong>: clipped surrogate $L^{\text{CLIP}}(\theta) = \mathbb{E}[\min(r_t A_t,\; \text{clip}(r_t, 1-\epsilon, 1+\epsilon) A_t)]$, importance ratio $r_t = \pi_\theta / \pi_{\theta_\text{old}}$; advantages use <strong>GAE</strong> $A_t^{\text{GAE}} = \sum_{l \ge 0} (\gamma\lambda)^l \delta_{t+l}$ to balance bias/variance.</li><li><strong>DPO closed-form (Rafailov 2023 NeurIPS)</strong>: the optimal policy of KL-regularized RLHF is $\pi^*(y|x) \propto \pi_\text{ref}(y|x)\exp(r(x,y)/\beta)$; inverting gives $r = \beta\log(\pi^*/\pi_\text{ref}) + \beta\log Z(x)$; substituting into Bradley-Terry, <strong>$\log Z$ cancels in the pairwise difference</strong>, leaving a pure SFT-style loss $-\log\sigma(\beta\log\frac{\pi(y_w)}{\pi_\text{ref}(y_w)} - \beta\log\frac{\pi(y_l)}{\pi_\text{ref}(y_l)})$.</li><li><strong>GRPO (DeepSeekMath 2024, R1 2025)</strong>: for each prompt sample a group of $G$ responses, advantage uses <strong>within-group normalization</strong> $\hat{A}_i = (r_i - \text{mean}(\mathbf{r}))/\text{std}(\mathbf{r})$; <strong>drops the value model</strong>, saving half the memory, especially suitable for LLM math/code RL.</li><li><strong>DPO variant ecosystem</strong>: KTO (only needs thumbs up/down, no pairs), IPO ($\ell_2$ form preventing reward overfit), SimPO (reference-free, length-normalized), ORPO (one-stage SFT + odds-ratio fusion), RLOO (leave-one-out baseline over multiple samples, value-free), ReMax (greedy baseline, further savings).</li><li><strong>PRM vs ORM (Lightman 2023 arXiv / 2024 ICLR)</strong>: process-reward supervises each reasoning step, Math-Shepherd (Wang 2024 ACL) auto-labels PRM; outcome-reward only looks at the final answer. <strong>PRM consistently beats ORM on math reasoning</strong>, but annotation cost is high.</li><li><strong>Reward hacking is the central pain point</strong>: the model over-optimizes the proxy reward, producing answers that get longer, sycophantic, with abnormal style; mitigations = KL penalty, reward clipping, length penalty, ensemble RM, Constitutional AI / RLAIF (Bai 2022, Lee 2023).</li></ol>
+<h2 id="1-post-training-alignment-intuition">§1 Post-Training Alignment Intuition</h2>
+<p>LLM training splits into three stages:</p>
+<ul><li><strong>Pretraining</strong>: next-token prediction over trillion-token corpora — learns world knowledge and language patterns</li><li><strong>SFT (Supervised Fine-Tuning)</strong>: next-token on instruction-response pairs — learns instruction format and basic capability</li><li><strong>Alignment / RL post-training</strong>: make outputs <strong>align with human preferences</strong> (helpful / harmless / honest) — learns "which response is better"</li></ul>
+<p>Why isn't SFT enough? Because SFT can only mimic positive examples ("what a good response looks like") and cannot explicitly learn <strong>contrastive signal</strong> ("A is better than B"). RL post-training provides three paradigms:</p>
+<table><thead><tr><th>Paradigm</th><th>Signal</th><th>Representative</th><th>One-liner</th></tr></thead><tbody><tr><td><strong>RLHF + PPO</strong></td><td>Learn an RM to mimic preferences, then optimize the RM via RL</td><td>InstructGPT, ChatGPT, Claude</td><td>RM-in-the-loop on-policy RL</td></tr><tr><td><strong>DPO family</strong></td><td>Skip the RM, do contrastive loss directly on preference data</td><td>DPO, IPO, SimPO, KTO, ORPO</td><td>Offline, no sampling needed</td></tr><tr><td><strong>GRPO family</strong></td><td>RM scores online but <strong>skip the value model</strong>, advantage via within-group normalization</td><td>DeepSeek-R1, Kimi-K1.5</td><td>Top choice for math/code tasks</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Why not pure reward?</div><p>If you directly maximize reward, the model finds shortcuts in the RM (reward hacking). The KL penalty $\beta \cdot \text{KL}(\pi || \pi_\text{ref})$ is the core "anti-drift" mechanism: it keeps the RL-trained policy from drifting too far from the SFT base, acting as an implicit regularizer.</p></div>
+<h3 id="11-special-characteristics-of-language-task-rl">1.1　Special characteristics of language-task RL</h3>
+<p>Classic game RL (Atari, Go) and LLM RL differ significantly, a common interview probe:</p>
+<table><thead><tr><th>Dimension</th><th>Game RL (classic PPO setting)</th><th>LLM RL</th></tr></thead><tbody><tr><td><strong>State space</strong></td><td>Image / board</td><td>Token sequence, up to $\sim 10^4$ long</td></tr><tr><td><strong>Action space</strong></td><td>Tens to hundreds of discrete actions</td><td>Large vocab ($\sim 10^5$)</td></tr><tr><td><strong>Trajectory length</strong></td><td>Thousands of steps</td><td>Typically 1 response (one reward at end of generation)</td></tr><tr><td><strong>Reward sparsity</strong></td><td>Intermediate rewards exist</td><td>Usually <strong>only terminal reward</strong> (end of response)</td></tr><tr><td><strong>Environment</strong></td><td>Independent simulator</td><td>RM (also a neural network, <strong>can be hacked</strong>)</td></tr><tr><td><strong>on/off-policy</strong></td><td>on-policy (PPO)</td><td>RLHF: on-policy; DPO: fully offline</td></tr></tbody></table>
+<p>Because there is only a terminal reward, <strong>LLM RL advantage estimation often uses coarse schemes</strong>: PPO+GAE distributes advantage over each token (but reward is 0 on most tokens); GRPO directly uses the whole response's reward, assigning all tokens the same within-group normalized advantage.</p>
+<h2 id="2-ppo-core">§2 PPO Core</h2>
+<h3 id="21-vanilla-policy-gradient-recap">2.1　Vanilla policy gradient recap</h3>
+<p>Policy gradient theorem:</p>
+<p>$$\nabla_\theta J(\theta) = \mathbb{E}_{\tau \sim \pi_\theta}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t | s_t)\, A^{\pi_\theta}(s_t, a_t)\right]$$</p>
+<p>REINFORCE uses $A \leftarrow R_t$ (return), which has high variance; Actor-Critic uses $A^{\pi}(s, a) = Q^\pi(s,a) - V^\pi(s)$ to reduce variance.</p>
+<h3 id="22-ppo-clipped-surrogate-must-know-formula">2.2　PPO clipped surrogate (must-know formula)</h3>
+<p>Define importance ratio:</p>
+<p>$$r_t(\theta) = \frac{\pi_\theta(a_t | s_t)}{\pi_{\theta_\text{old}}(a_t | s_t)}$$</p>
+<p>PPO-Clip objective:</p>
+<p>$$\boxed{\;L^{\text{CLIP}}(\theta) = \mathbb{E}_t\!\left[\min\!\Big(r_t(\theta) A_t,\; \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) A_t\Big)\right]\;}$$</p>
+<p>Intuition:</p>
+<ul><li>If $A_t > 0$ (this action beats baseline), we want to increase $\pi_\theta(a_t|s_t)$, but <strong>only up to $r_t = 1+\epsilon$</strong> (preventing too aggressive a single update).</li><li>If $A_t < 0$ (this action is worse than baseline), we want to decrease $\pi_\theta(a_t|s_t)$, but <strong>only down to $r_t = 1-\epsilon$</strong>.</li><li><code>min</code> picks the smaller of the two → <strong>pessimistic estimate</strong> (pessimistic bound): when we want to "add points," clip the upper bound; when we want to "subtract points," clip the lower bound.</li></ul>
+<p>Typical $\epsilon = 0.1 \sim 0.2$. In LLM RLHF practice, $0.1 \sim 0.2$ is common; too large easily blows up the KL.</p>
+<div class="callout callout-warn"><div class="callout-title">PPO-Clip vs PPO-Penalty</div><p>The original paper also has a PPO-Penalty form: $L = \mathbb{E}[r_t A_t] - \beta\, \text{KL}(\pi_{\theta_\text{old}} \| \pi_\theta)$, with $\beta$ adaptively tuned. In production, the <strong>clipped form is more common</strong> (rl4lms / TRL / OpenRLHF defaults).</p></div>
+<h3 id="23-gae-generalized-advantage-estimation">2.3　GAE: generalized advantage estimation</h3>
+<p>Define TD residual:</p>
+<p>$$\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$$</p>
+<p>GAE is the <strong>exponentially weighted average</strong> of advantages over different step lengths:</p>
+<p>$$\boxed{\;A_t^{\text{GAE}(\gamma, \lambda)} = \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}\;}$$</p>
+<p>Boundary cases:</p>
+<ul><li>$\lambda = 0$ → $A_t = \delta_t$, pure TD(0), high bias low variance</li><li>$\lambda = 1$ → $A_t = \sum_l \gamma^l r_{t+l} - V(s_t)$, pure Monte Carlo (advantage equals actual return minus baseline), low bias high variance</li><li>Typical $\lambda = 0.95$, $\gamma = 0.99$</li></ul>
+<p><strong>Degeneration of GAE in LLMs</strong>: in RLHF typically $\gamma = 1$ (no discount), and there is only a terminal reward, so $\delta_t = -V(s_t) + V(s_{t+1})$ for intermediate tokens, $\delta_T = R_T - V(s_T)$ for the terminal token. In this case GAE is equivalent to "value baseline + reward backflow."</p>
+<h3 id="24-full-ppo-objective-in-rlhf">2.4　Full PPO objective in RLHF</h3>
+<p>In LLMs, each timestep $t$ corresponds to generating the $t$-th token, state = $(x, y_{\lt t})$, action = $y_t$. The reward usually adds a KL penalty:</p>
+<p>$$\tilde{r}_t = \mathbb{1}[t = T] \cdot R(x, y) - \beta \log \frac{\pi_\theta(y_t | x, y_{\lt t})}{\pi_\text{ref}(y_t | x, y_{\lt t})}$$</p>
+<p>Final objective:</p>
+<p>$$L^{\text{PPO}}(\theta) = L^{\text{CLIP}}(\theta) - c_v \cdot \underbrace{\mathbb{E}_t (V_\phi(s_t) - V_t^\text{target})^2}_{\text{value loss}} + c_e \cdot \underbrace{\mathbb{E}_t \mathcal{H}[\pi_\theta(\cdot | s_t)]}_{\text{entropy bonus}}$$</p>
+<p>Typical $c_v = 0.5$, $c_e = 0.01$ (in LLMs the entropy bonus is usually very small or 0, because the vocab is large and entropy is already high).</p>
+<div class="callout callout-warn"><div class="callout-title">Code block convention</div><p>The PPO / RM / DPO / GRPO blocks below are <strong>teaching pseudocode</strong>, each independently readable (each imports <code>torch / torch.nn.functional as F</code>). Production implementation needs additional: (1) HF transformer forward passing <code>attention_mask</code>; (2) decode-time <code>position_ids</code> padding handling; (3) clipping <code>targets</code> to vocab before <code>gather</code>; (4) RM finding the true end via <code>attention_mask</code> for last-token. This article focuses on the core loss derivations.</p></div>
+<h3 id="25-code-core-60-lines">2.5　Code (core 60 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+def compute_gae(rewards, values, dones, gamma=1.0, lam=0.95):
+    &quot;&quot;&quot;
+    rewards: [B, T]    per-token reward (with KL penalty)
+    values:  [B, T+1]  value at s_0...s_T (s_T = terminal, V=0)
+    dones:   [B, T]    1 if terminal, 0 otherwise
+    returns advantages [B, T], returns [B, T]
+    &quot;&quot;&quot;
+    B, T = rewards.shape
+    advantages = torch.zeros_like(rewards)
+    gae = 0.0
+    for t in reversed(range(T)):
+        non_term = 1.0 - dones[:, t]
+        delta = rewards[:, t] + gamma * values[:, t + 1] * non_term - values[:, t]
+        gae = delta + gamma * lam * non_term * gae
+        advantages[:, t] = gae
+    returns = advantages + values[:, :T]
+    return advantages, returns
+
+
+def ppo_step(policy, value, batch, eps_clip=0.2, c_v=0.5, c_e=0.01):
+    &quot;&quot;&quot;
+    batch: dict with keys
+      input_ids:    [B, L]     prompt + response tokens
+      action_mask:  [B, L]     1 for response tokens, 0 for prompt/pad
+      old_log_probs:[B, L]     log π_θold(y_t | s_t) at sample time
+      advantages:   [B, L]     GAE advantages (already normalized)
+      returns:      [B, L]     GAE returns (V target)
+    &quot;&quot;&quot;
+    logits = policy(batch[&quot;input_ids&quot;]).logits          # [B, L, V]
+    # log-prob of taken action y_t at position t (shifted by 1: predict t+1 from t)
+    log_probs = F.log_softmax(logits[:, :-1], dim=-1)
+    targets   = batch[&quot;input_ids&quot;][:, 1:].unsqueeze(-1)
+    new_log_probs = log_probs.gather(-1, targets).squeeze(-1)  # [B, L-1]
+    new_log_probs = F.pad(new_log_probs, (1, 0))               # align to [B, L]
+
+    mask = batch[&quot;action_mask&quot;].float()
+    ratio = torch.exp(new_log_probs - batch[&quot;old_log_probs&quot;])  # r_t
+
+    # ── PPO-Clip core ──
+    A = batch[&quot;advantages&quot;]
+    surr1 = ratio * A
+    surr2 = torch.clamp(ratio, 1.0 - eps_clip, 1.0 + eps_clip) * A
+    policy_loss = -((torch.min(surr1, surr2) * mask).sum() / mask.sum())
+
+    # ── Value loss ──
+    V = value(batch[&quot;input_ids&quot;]).squeeze(-1)                  # [B, L]
+    value_loss = (((V - batch[&quot;returns&quot;]) ** 2) * mask).sum() / mask.sum()
+
+    # ── Entropy bonus ──
+    probs = log_probs.exp()                                    # [B, L-1, V]
+    entropy = -(probs * log_probs).sum(-1)                     # [B, L-1]
+    entropy = F.pad(entropy, (1, 0))
+    entropy_bonus = (entropy * mask).sum() / mask.sum()
+
+    loss = policy_loss + c_v * value_loss - c_e * entropy_bonus
+
+    # Monitoring (does not participate in backprop)
+    with torch.no_grad():
+        approx_kl = ((ratio - 1) - torch.log(ratio.clamp_min(1e-8)))
+        approx_kl = (approx_kl * mask).sum() / mask.sum()
+        clip_frac = (((ratio &lt; 1 - eps_clip) | (ratio &gt; 1 + eps_clip)).float() * mask).sum() / mask.sum()
+
+    return loss, {&quot;policy&quot;: policy_loss.item(), &quot;value&quot;: value_loss.item(),
+                  &quot;entropy&quot;: entropy_bonus.item(),
+                  &quot;approx_kl&quot;: approx_kl.item(), &quot;clip_frac&quot;: clip_frac.item()}</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Top 5 PPO engineering pitfalls</div></div>
+<ul><li><code>approx_kl</code> uses $\mathbb{E}[r - 1 - \log r] \ge 0$ (Schulman 2020 blog), more stable than $\mathbb{E}[\log r]$ and never negative.</li><li>Multiple PPO updates per epoch (typically 4), but monitor <code>approx_kl</code>: early stop if it exceeds <code>target_kl</code> (e.g. 0.02).</li><li>Advantage must do batch-level normalization (subtract mean divide std), otherwise scale will make learning rate ineffective.</li><li>When computing KL penalty with reference policy, KL is token-level (not sequence-level); writing wrong dimensions easily causes gradient explosion.</li><li><code>c_v=0.5</code> is just an empirical value; if value loss is far greater than policy loss, it "eats" the gradient. You can use a separate optimizer or a separate lr for value.</li></ul>
+<h2 id="3-rlhf-pipeline-instructgpt-paradigm">§3 RLHF Pipeline (InstructGPT Paradigm)</h2>
+<p>Ouyang et al. 2022 NeurIPS, <em>Training language models to follow instructions with human feedback</em>, is the predecessor of ChatGPT and defines today's standard three-stage RLHF:</p>
+<h3 id="31-stage-1--sft-supervised-fine-tuning">3.1　Stage 1 — SFT (Supervised Fine-Tuning)</h3>
+<p>Given instruction-response pairs $\{(x, y)\}$ (high-quality human-written), do next-token:</p>
+<p>$$\mathcal{L}_\text{SFT}(\phi) = -\mathbb{E}_{(x, y) \sim \mathcal{D}_\text{SFT}}\left[\sum_t \log \pi_\phi(y_t | x, y_{\lt t})\right]$$</p>
+<p>Output is $\pi_\text{SFT}$ (also called $\pi_\text{ref}$, since downstream RL uses it as KL anchor).</p>
+<h3 id="32-stage-2--rm-reward-model">3.2　Stage 2 — RM (Reward Model)</h3>
+<p>For the same prompt $x$, sample multiple responses with $\pi_\text{SFT}$ and have humans <strong>pairwise compare</strong> to obtain preference pairs $(x, y_w, y_l)$, $y_w \succ y_l$.</p>
+<p><strong>Bradley-Terry preference model</strong>:</p>
+<p>$$P(y_w \succ y_l | x) = \sigma(r^*(x, y_w) - r^*(x, y_l))$$</p>
+<p>where $r^*$ is the unknown "true" reward function. We fit it with $r_\psi$ (a transformer with a scalar head on the last layer):</p>
+<p>$$\boxed{\;\mathcal{L}_\text{RM}(\psi) = -\mathbb{E}_{(x, y_w, y_l)} \log \sigma\!\big(r_\psi(x, y_w) - r_\psi(x, y_l)\big)\;}$$</p>
+<p>Implementation details:</p>
+<ul><li>RM is usually initialized from SFT model (shared backbone), with the last token's hidden state going through a linear layer to scalar reward.</li><li>After training, RM parameters are <strong>frozen</strong>.</li></ul>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def rm_loss(reward_model, batch):
+    &quot;&quot;&quot;
+    batch:
+      chosen_ids:   [B, L]     prompt + y_w
+      rejected_ids: [B, L]     prompt + y_l
+    &quot;&quot;&quot;
+    r_w = reward_model(batch[&quot;chosen_ids&quot;])      # [B]  scalar at last token
+    r_l = reward_model(batch[&quot;rejected_ids&quot;])    # [B]
+    # Bradley-Terry NLL
+    loss = -F.logsigmoid(r_w - r_l).mean()
+    accuracy = (r_w &gt; r_l).float().mean()
+    return loss, accuracy</code></pre>
+<h3 id="33-stage-3--ppo--kl-policy-optimization">3.3　Stage 3 — PPO + KL (Policy Optimization)</h3>
+<p>Objective:</p>
+<p>$$\boxed{\;\max_{\pi_\theta} \mathbb{E}_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot|x)} \big[r_\psi(x, y)\big] - \beta\, \mathbb{E}_x\, \text{KL}\!\big(\pi_\theta(\cdot|x) \,\big\|\, \pi_\text{ref}(\cdot|x)\big)\;}$$</p>
+<p>In implementation, split the KL across each token and merge it with the RM reward into a per-token reward $\tilde{r}_t$ (see §2.4), then run PPO.</p>
+<pre class="diagram"><code>
+prompt x
+   │
+   │   π_θ generates response y
+   ↓
+(x, y)
+   │
+   │   r_ψ(x, y) → scalar reward       (Stage 2 RM, frozen)
+   │   KL(π_θ || π_ref)               (per-token, on the fly)
+   ↓
+r̃_t = R · 1[t=T] − β log(π_θ/π_ref)
+   │
+   │   GAE on r̃_t → advantages
+   ↓
+PPO update on π_θ and V_φ</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Why do we need a reference policy?</div><p>Without a KL anchor, the policy will <strong>severely over-optimize the RM</strong> (reward hacking): outputs become longer, repetitive nonsense, sycophantic ("As an AI..."), drifting in style to the RM's biased samples. $\beta = 0.01 \sim 0.1$ is the common range for InstructGPT; too small leads to drift, too large prevents learning.</p></div>
+<h3 id="34-in-practice-4-models-resident-simultaneously">3.4　In practice: 4 models resident simultaneously</h3>
+<p>PPO RLHF training has <strong>4 models in memory simultaneously</strong>:</p>
+<ol><li><strong>Policy</strong> $\pi_\theta$ (trainable)</li><li><strong>Reference policy</strong> $\pi_\text{ref}$ (frozen, for KL)</li><li><strong>Reward model</strong> $r_\psi$ (frozen, for reward)</li><li><strong>Value model</strong> $V_\phi$ (trainable, required by PPO)</li></ol>
+<p>This is the root cause of RLHF's memory consumption; 4× base model + optimizer state + gradient = easy to blow up. <strong>This is also the fundamental reason DPO / GRPO are widely accepted in LLM RL — they each chop off some of the models.</strong></p>
+<h2 id="4-dpo-closed-form-direct-preference-optimization">§4 DPO: Closed-Form Direct Preference Optimization</h2>
+<p>Rafailov et al. 2023 NeurIPS, <em>Direct Preference Optimization: Your Language Model is Secretly a Reward Model</em>, is the milestone in RLHF simplification. <strong>Core observation</strong>: the KL-regularized RL problem has a closed-form optimum, which can be inverted to give an implicit reward, replacing PPO with pure supervised learning.</p>
+<h3 id="41-kl-regularized-optimal-policy-key-step">4.1　KL-regularized optimal policy (key step)</h3>
+<p>Consider the RLHF objective (formula §3.3):</p>
+<p>$$\max_{\pi} \mathbb{E}_{x \sim \mathcal{D}, y \sim \pi(\cdot|x)}\big[r(x, y)\big] - \beta\, \text{KL}\!\big(\pi(\cdot|x) \| \pi_\text{ref}(\cdot|x)\big)$$</p>
+<p><strong>Solve for the optimal $\pi^*(\cdot | x)$ for a single $x$</strong> (Lagrangian):</p>
+<p>$$\mathcal{L}_x[\pi] = \sum_y \pi(y|x) r(x, y) - \beta \sum_y \pi(y|x) \log \frac{\pi(y|x)}{\pi_\text{ref}(y|x)} + \mu\!\left(1 - \sum_y \pi(y|x)\right)$$</p>
+<p>Take partial derivative with respect to $\pi(y|x)$ and set = 0:</p>
+<p>$$r(x, y) - \beta\!\left(\log \frac{\pi(y|x)}{\pi_\text{ref}(y|x)} + 1\right) - \mu = 0$$</p>
+<p>Rearranging:</p>
+<p>$$\log \pi^*(y|x) = \log \pi_\text{ref}(y|x) + \frac{r(x, y)}{\beta} - \frac{\mu + \beta}{\beta}$$</p>
+<p>Let $\log Z(x) = (\mu + \beta)/\beta$ (log of partition function), getting:</p>
+<p>$$\boxed{\;\pi^*(y|x) = \frac{1}{Z(x)} \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x, y)}{\beta}\right), \quad Z(x) = \sum_y \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x, y)}{\beta}\right)\;}$$</p>
+<h3 id="42-inversion-implicit-reward">4.2　Inversion: implicit reward</h3>
+<p>Taking the log of the above and solving for $r$:</p>
+<p>$$r(x, y) = \beta \log \frac{\pi^*(y|x)}{\pi_\text{ref}(y|x)} + \beta \log Z(x)$$</p>
+<p><strong>Key insight</strong>: the reward is the log-ratio of $\pi^*$ to $\pi_\text{ref}$ (plus a term $\beta \log Z(x)$ that does not depend on $y$). So once we have $\pi^*$, we have the reward; conversely as well.</p>
+<h3 id="43-plug-into-bradley-terry-to-get-dpo-loss">4.3　Plug into Bradley-Terry to get DPO loss</h3>
+<p>Bradley-Terry gives preference probability:</p>
+<p>$$P(y_w \succ y_l | x) = \sigma\!\big(r(x, y_w) - r(x, y_l)\big)$$</p>
+<p>Substituting §4.2's inversion (<strong>note $\beta \log Z(x)$ does not depend on $y$ and cancels in $r(x, y_w) - r(x, y_l)$!</strong>):</p>
+<p>$$r(x, y_w) - r(x, y_l) = \beta \log \frac{\pi^*(y_w|x)}{\pi_\text{ref}(y_w|x)} - \beta \log \frac{\pi^*(y_l|x)}{\pi_\text{ref}(y_l|x)}$$</p>
+<p>Replacing the target $\pi^*$ with the learnable $\pi_\theta$, we get the <strong>DPO loss</strong>:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{DPO}(\theta) = -\mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}}\log \sigma\!\left(\beta \log \frac{\pi_\theta(y_w|x)}{\pi_\text{ref}(y_w|x)} - \beta \log \frac{\pi_\theta(y_l|x)}{\pi_\text{ref}(y_l|x)}\right)\;}$$</p>
+<div class="callout callout-good"><div class="callout-title">Why is DPO so &quot;counterintuitively&quot; effective?</div></div>
+<ul><li>It has <strong>no explicit reward model</strong>, but the implicit reward = $\beta \log(\pi/\pi_\text{ref})$.</li><li>It <strong>needs no sampling</strong> (unlike PPO requiring on-policy rollouts), the entire training is offline contrastive learning.</li><li>The KL constraint is written <strong>implicitly</strong> into the loss (via $\pi_\text{ref}$ in the log-ratio denominator).</li><li>The whole pipeline becomes SFT-style: one pass of supervised learning and you're done.</li></ul>
+<h3 id="44-implicit-meaning-of-the-dpo-gradient">4.4　Implicit meaning of the DPO gradient</h3>
+<p>Take the gradient with respect to $\theta$ (derivation details in original paper Appendix):</p>
+<p>$$\nabla_\theta \mathcal{L}_\text{DPO} = -\beta \mathbb{E}\big[\sigma(\hat{r}_l - \hat{r}_w)\big(\nabla_\theta \log \pi_\theta(y_w|x) - \nabla_\theta \log \pi_\theta(y_l|x)\big)\big]$$</p>
+<p>where $\hat{r} = \beta \log(\pi_\theta/\pi_\text{ref})$ is the implicit reward. <strong>Intuition</strong>:</p>
+<ul><li>The coefficient $\sigma(\hat{r}_l - \hat{r}_w)$ is "the current model's confidence in the wrong direction $y_l \succ y_w$" — the more confidently wrong, the bigger the weight (hard-example mining effect).</li><li>Then increase $\log \pi_\theta(y_w | x)$ and decrease $\log \pi_\theta(y_l | x)$.</li></ul>
+<h3 id="45-code-core-dpo-loss-in-30-lines">4.5　Code (core DPO loss in 30 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def dpo_loss(policy, ref_policy, batch, beta=0.1):
+    &quot;&quot;&quot;
+    batch:
+      chosen_ids:    [B, L]     prompt + y_w
+      rejected_ids:  [B, L]     prompt + y_l
+      chosen_mask:   [B, L]     1 for y_w response tokens, 0 elsewhere (prompt + pad)
+      rejected_mask: [B, L]
+    &quot;&quot;&quot;
+    # log π(y | x) = sum_t log π(y_t | x, y_&lt;t) over response tokens
+    def log_prob_sum(model, ids, mask):
+        logits = model(ids).logits[:, :-1]                  # [B, L-1, V]
+        logp = F.log_softmax(logits, dim=-1)
+        tgt = ids[:, 1:].unsqueeze(-1)                      # [B, L-1, 1]
+        token_logp = logp.gather(-1, tgt).squeeze(-1)       # [B, L-1]
+        token_mask = mask[:, 1:]                            # align with next-token prediction
+        return (token_logp * token_mask).sum(dim=-1)        # [B]
+
+    pi_w  = log_prob_sum(policy,     batch[&quot;chosen_ids&quot;],   batch[&quot;chosen_mask&quot;])
+    pi_l  = log_prob_sum(policy,     batch[&quot;rejected_ids&quot;], batch[&quot;rejected_mask&quot;])
+    with torch.no_grad():
+        ref_w = log_prob_sum(ref_policy, batch[&quot;chosen_ids&quot;],   batch[&quot;chosen_mask&quot;])
+        ref_l = log_prob_sum(ref_policy, batch[&quot;rejected_ids&quot;], batch[&quot;rejected_mask&quot;])
+
+    # log-ratios
+    logits_w = pi_w - ref_w        # = log(π/π_ref)(y_w)
+    logits_l = pi_l - ref_l
+    diff = beta * (logits_w - logits_l)
+
+    loss = -F.logsigmoid(diff).mean()
+    # implicit reward margin (for monitoring)
+    chosen_reward   = beta * logits_w.detach()
+    rejected_reward = beta * logits_l.detach()
+    margin = (chosen_reward - rejected_reward).mean()
+    accuracy = (chosen_reward &gt; rejected_reward).float().mean()
+    return loss, {&quot;loss&quot;: loss.item(), &quot;margin&quot;: margin.item(),
+                  &quot;accuracy&quot;: accuracy.item()}</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Known DPO failure modes</div></div>
+<ul><li><strong>Likelihood decreases for both $y_w$ and $y_l$</strong> (Pal et al. 2024, Saeidi et al.): DPO only requires that $\log\pi(y_w) - \log\pi(y_l)$ increases, not that $\log\pi(y_w)$ increases. In practice both often decrease together, with $y_l$ decreasing more — which can make the model "unwilling to say anything."</li><li><strong>Sensitive to $\beta$</strong>: too small → loses KL constraint → reward hacking; too large → fails to learn. Common range $0.05 \sim 0.5$.</li><li><strong>Data quality determines everything</strong>: when preference pairs are noisy, DPO is more brittle than PPO (PPO buffers via RM ensemble, DPO eats raw data directly).</li><li><strong>Off-policy bias</strong>: preference data is sampled by $\pi_\text{SFT}$, but $\pi_\theta$ drifts during training, creating distribution shift.</li></ul>
+<h2 id="5-grpo-group-relative-advantage">§5 GRPO: Group Relative Advantage</h2>
+<p>DeepSeekMath (Shao et al. 2024 arXiv 2402.03300) proposes <strong>Group Relative Policy Optimization</strong>, and DeepSeek-R1 (DeepSeek-AI 2025 arXiv 2501.12948) pushes it to the flagship of reasoning.</p>
+<h3 id="51-motivation">5.1　Motivation</h3>
+<p>PPO's value model is hard to train for LLMs:</p>
+<ul><li>LLM token-level value has no clear semantics (intermediate tokens usually have reward = 0, only terminal has reward)</li><li>Value model is the same size as policy → doubled memory</li></ul>
+<p>GRPO's <strong>core idea</strong>: for each prompt $x$, <strong>sample a group of $G$ responses</strong> $\{y_1, \dots, y_G\}$, score them with RM giving $G$ rewards $\{r_1, \dots, r_G\}$, <strong>advantage directly uses within-group normalization</strong>:</p>
+<p>$$\boxed{\;\hat{A}_{i, t} = \frac{r_i - \text{mean}(\{r_1, \dots, r_G\})}{\text{std}(\{r_1, \dots, r_G\}) + \epsilon}\;}$$</p>
+<p>Within the entire response, <strong>all tokens share the same $\hat{A}_i$</strong> (since there is no value model providing per-token baseline, only sequence-level reward and group-relative advantage).</p>
+<div class="callout callout-good"><div class="callout-title">The essence of GRPO</div><p>Replace PPO's "$A_t = Q - V$" (Critic gives $V$) with "$A_i = (r_i - \bar{r}) / \sigma$" (within-group statistics give baseline). <strong>Drop the value model</strong>, saving half the memory; meanwhile within-group baseline automatically does variance reduction.</p></div>
+<h3 id="52-grpo-objective">5.2　GRPO objective</h3>
+<p>GRPO keeps PPO-Clip's form but puts the KL penalty into the loss (not into the reward):</p>
+<p>Let importance ratio $\rho_{i, t}(\theta) = \pi_\theta(y_{i,t}|x_i, y_{i,\lt t}) / \pi_{\theta_\text{old}}(y_{i,t}|x_i, y_{i,\lt t})$ (avoiding confusion with sequence-level reward $r_i$):</p>
+<p>$$L^\text{GRPO}(\theta) = \mathbb{E}\!\left[\frac{1}{G}\sum_{i=1}^G \frac{1}{|y_i|}\sum_{t=1}^{|y_i|} \Big(\min(\rho_{i, t} \hat{A}_{i, t},\, \text{clip}(\rho_{i, t}, 1\!-\!\epsilon, 1\!+\!\epsilon) \hat{A}_{i, t}) - \beta\, \text{KL}_{i, t}(\pi_\theta \| \pi_\text{ref})\Big)\right]$$</p>
+<p>where KL uses the K3 estimator (Schulman blog 2020):</p>
+<p>$$\text{KL}_{i, t} = \frac{\pi_\text{ref}(y_{i,t}|\cdot)}{\pi_\theta(y_{i,t}|\cdot)} - \log\frac{\pi_\text{ref}(y_{i,t}|\cdot)}{\pi_\theta(y_{i,t}|\cdot)} - 1$$</p>
+<p>This estimator is guaranteed non-negative and low-variance, more stable than directly using $\log(\pi_\theta/\pi_\text{ref})$.</p>
+<h3 id="53-deepseek-r1s-key-modifications">5.3　DeepSeek-R1's key modifications</h3>
+<p>DeepSeek-R1 (Jan 2025) does two things on top of GRPO:</p>
+<ol><li><strong>R1-Zero</strong>: directly run GRPO from pretrain base, <strong>without an SFT stage</strong>, purely with rule-based reward (math correctness + format reward). Emergent long CoT.</li><li><strong>R1</strong>: add a small SFT cold-start + multi-stage RL (reasoning RL → SFT → general RL). The open-source 32B/70B compete with o1 on math reasoning.</li></ol>
+<div class="callout callout-info"><div class="callout-title">Why is GRPO particularly effective for math/code RL?</div></div>
+<ul><li><strong>Rule-based reward</strong>: math has unique answers, code has unit tests, <strong>bypassing the neural RM, reward hacking risk is significantly reduced</strong> (reward signal is close to ground truth, but the policy can still find loopholes in the grader, e.g. guessing answers, writing only "42" without reasoning, exploiting test coverage blind spots, etc., so "no hacking at all" is too strong a claim).</li><li><strong>Within-group normalization</strong>: same problem sampled $G=16$ solutions, automatically figuring out "which reasoning paths are better," without needing absolute scale.</li><li><strong>Save value model</strong>: math prompts are many and reasoning is long, saving half the memory enables larger batches.</li></ul>
+<h3 id="54-code-core-grpo-advantage--loss-in-50-lines">5.4　Code (core GRPO advantage + loss in 50 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def grpo_loss(policy, ref_policy, batch, eps_clip=0.2, beta=0.04):
+    &quot;&quot;&quot;
+    batch:
+      input_ids:     [N, L]       N = sum_b G_b samples in the batch
+      action_mask:   [N, L]
+      old_log_probs: [N, L]
+      rewards:       [N]          sequence-level reward (rule-based or RM)
+      group_id:      [N]          which prompt each sample belongs to (long tensor)
+    &quot;&quot;&quot;
+    rewards = batch[&quot;rewards&quot;]
+    gid = batch[&quot;group_id&quot;].long()
+    N = rewards.shape[0]
+
+    # ── Within-group normalization (GRPO core) ──
+    # Use scatter to aggregate mean / std per group, no assumption that group_id is sorted or equal-sized.
+    num_groups = int(gid.max().item()) + 1
+    counts = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, torch.ones_like(rewards))                              # [num_groups]
+    sums = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, rewards)                                                # [num_groups]
+    group_mean = sums / counts.clamp_min(1.0)                          # [num_groups]
+    diff_sq = (rewards - group_mean[gid]) ** 2
+    sq_sums = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, diff_sq)                                                # [num_groups]
+    group_var = sq_sums / counts.clamp_min(1.0)
+    group_std = group_var.sqrt()                                       # [num_groups]
+
+    A = (rewards - group_mean[gid]) / (group_std[gid] + 1e-8)          # [N]
+    A = A.unsqueeze(-1)                                                # [N, 1] shared across the whole sequence
+
+    # ── log-prob ratio ──
+    logits = policy(batch[&quot;input_ids&quot;]).logits[:, :-1]
+    log_probs = F.log_softmax(logits, dim=-1)
+    tgt = batch[&quot;input_ids&quot;][:, 1:].unsqueeze(-1)
+    new_log_probs = log_probs.gather(-1, tgt).squeeze(-1)
+    new_log_probs = F.pad(new_log_probs, (1, 0))        # [B*G, L]
+    mask = batch[&quot;action_mask&quot;].float()
+
+    ratio = torch.exp(new_log_probs - batch[&quot;old_log_probs&quot;])
+
+    # ── PPO-Clip surrogate (advantage shared across the sequence) ──
+    surr1 = ratio * A                                    # [N, L]
+    surr2 = torch.clamp(ratio, 1.0 - eps_clip, 1.0 + eps_clip) * A
+
+    # ── KL penalty (K3 estimator: KL ≈ exp(Δ) - Δ - 1) ──
+    with torch.no_grad():
+        ref_logits = ref_policy(batch[&quot;input_ids&quot;]).logits[:, :-1]
+        ref_log_probs = F.log_softmax(ref_logits, dim=-1)
+        ref_token_lp = ref_log_probs.gather(-1, tgt).squeeze(-1)
+        ref_token_lp = F.pad(ref_token_lp, (1, 0))
+    delta = ref_token_lp - new_log_probs                 # log(π_ref / π_θ)
+    kl_per_token = torch.exp(delta) - delta - 1.0        # K3, non-negative [N, L]
+
+    # Formula: (1/G) Σ_i (1/|y_i|) Σ_t [ min(...) - β·KL_{i,t} ]
+    # Implementation: each sample first normalized by response length |y_i|, then averaged over batch
+    token_obj = torch.min(surr1, surr2) - beta * kl_per_token   # [N, L]
+    seq_len = mask.sum(dim=-1).clamp_min(1.0)            # [N] = |y_i|
+    per_seq = (token_obj * mask).sum(dim=-1) / seq_len   # [N]
+    loss = -per_seq.mean()                               # Negative sign: maximize -&gt; minimize
+
+    # Monitoring
+    with torch.no_grad():
+        policy_term = -(torch.min(surr1, surr2) * mask).sum(dim=-1) / seq_len
+        kl_term = (kl_per_token * mask).sum(dim=-1) / seq_len
+    return loss, {&quot;policy&quot;: policy_term.mean().item(),
+                  &quot;kl&quot;: kl_term.mean().item(),
+                  &quot;reward_mean&quot;: rewards.mean().item(),
+                  &quot;advantage_std&quot;: A.squeeze(-1).std().item()}</code></pre>
+<div class="callout callout-warn"><div class="callout-title">GRPO engineering essentials</div></div>
+<ul><li>$G$ is usually 8/16/32: too small means noisy within-group statistics, too large blows up memory.</li><li>The degenerate case where <code>std</code> is 0 (all rewards in group are the same, all-pass / all-fail): add $\epsilon$ or drop the group.</li><li><strong>DAPO</strong> (ByteDance Seed, 2025 arXiv 2503.14476) makes several improvements to GRPO: clip higher (breaking symmetric clip), dynamic sampling (drop all-correct/all-wrong groups), token-level loss, overlong shaping — it is the industrial-grade evolution of GRPO.</li><li><strong>DeepSeek also discusses GRPO's limitations in the R1 report</strong>: within-group baseline fails when reward variance is small or group size is small; subsequent work (e.g. VAPO, CISPO) tries to improve.</li></ul>
+<h2 id="6-dpo-variant-ecosystem">§6 DPO Variant Ecosystem</h2>
+<p>After DPO, 2024–2025 saw a surge of improvements, and interviews frequently ask "what's the difference between X and Y." The table below compares <strong>core loss differences</strong>; notation is unified as: $\pi$ = current policy, $\pi_\text{ref}$ = SFT model, $\beta$ = inverse temperature, $r$ = implicit reward.</p>
+<table><thead><tr><th>Method</th><th>Loss</th><th>Key change</th><th>Paper</th></tr></thead><tbody><tr><td><strong>DPO</strong></td><td>$-\log\sigma(\beta\log\tfrac{\pi(y_w)}{\pi_\text{ref}(y_w)} - \beta\log\tfrac{\pi(y_l)}{\pi_\text{ref}(y_l)})$</td><td>Baseline</td><td>Rafailov 2023 NeurIPS</td></tr><tr><td><strong>IPO</strong></td><td>$(\log\tfrac{\pi(y_w)/\pi_\text{ref}(y_w)}{\pi(y_l)/\pi_\text{ref}(y_l)} - \tfrac{1}{2\beta})^2$</td><td>sigmoid → squared loss, <strong>prevents reward overfitting</strong></td><td>Azar 2024 AISTATS</td></tr><tr><td><strong>KTO</strong></td><td>per-sample sigmoid loss, only needs binary good/bad, <strong>no pairs needed</strong></td><td>Kahneman-Tversky inspired, desirable/undesirable</td><td>Ethayarajh 2024 ICML</td></tr><tr><td><strong>SimPO</strong></td><td>$-\log\sigma(\beta\cdot\tfrac{1}{\lvert y_w\rvert}\log\pi(y_w) - \beta\cdot\tfrac{1}{\lvert y_l\rvert}\log\pi(y_l) - \gamma)$</td><td><strong>Reference-free</strong>, length-normalized, with margin $\gamma$</td><td>Meng 2024 NeurIPS</td></tr><tr><td><strong>ORPO</strong></td><td>$\mathcal{L}_\text{SFT}(y_w) + \lambda\cdot\mathcal{L}_\text{OR}$, odds-ratio preference</td><td><strong>Single-stage SFT + preference</strong>, no reference needed</td><td>Hong 2024 EMNLP</td></tr><tr><td><strong>RLOO</strong></td><td>REINFORCE + leave-one-out baseline from $k$ samples</td><td>Online RL, value-free, strong baseline</td><td>Ahmadian 2024 ACL</td></tr><tr><td><strong>ReMax</strong></td><td>REINFORCE + greedy baseline (greedy decode on same prompt as baseline)</td><td>Further save sampling</td><td>Li 2024 ICML</td></tr></tbody></table>
+<h3 id="61-ipo-prevent-reward-overfit">6.1　IPO: prevent reward overfit</h3>
+<p>Azar et al. 2024 <em>A General Theoretical Paradigm to Understand Learning from Human Preferences</em> points out: Bradley-Terry + DPO will blow up the implicit reward to infinity when preferences are deterministic ("$y_w$ always wins"), causing overfit. <strong>IPO replaces sigmoid with squared loss</strong>:</p>
+<p>$$\mathcal{L}_\text{IPO} = \mathbb{E}\!\left[\left(\log\frac{\pi(y_w)/\pi_\text{ref}(y_w)}{\pi(y_l)/\pi_\text{ref}(y_l)} - \frac{1}{2\beta}\right)^2\right]$$</p>
+<p>Intuition: aim for log-ratio equal to a <strong>fixed margin</strong> $1/(2\beta)$, not increasingly large.</p>
+<h3 id="62-kto-no-need-for-pairs">6.2　KTO: no need for pairs</h3>
+<p>Ethayarajh et al. 2024 ICML <em>KTO: Model Alignment as Prospect Theoretic Optimization</em>. Production data is often a single label ("this is good" / "this is bad"), not pairs. KTO is inspired by Prospect Theory (Kahneman-Tversky) and <strong>symmetrically pushes desirable / undesirable samples away from a reference point</strong>:</p>
+<p>Let implicit reward $\hat{r}_\theta(x, y) = \beta \log \tfrac{\pi_\theta(y|x)}{\pi_\text{ref}(y|x)}$, reference point $z_0 = \mathbb{E}_{x',\, y' \sim \pi_\theta(\cdot | x')}\!\big[\beta \cdot \text{KL}\!\big(\pi_\theta(\cdot | x') \,\|\, \pi_\text{ref}(\cdot | x')\big)\big]$ (estimated via mismatched pairs within the batch, <strong>does not participate in backprop</strong> — treated as a constant). The KTO loss is:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{KTO}(\theta) = \mathbb{E}_{(x, y) \sim \mathcal{D}} \big[\, w(y)\big(1 - v(x, y)\big)\,\big]\;}$$</p>
+<p>where piecewise definitions ($\hat r$ and $z_0$ already contain $\beta$, <strong>no additional $\beta$</strong> in the sigmoid):</p>
+<p>$$v(x, y) = \begin{cases}\sigma\!\big(\hat{r}_\theta(x, y) - z_0\big) & y \text{ desirable}\\[2pt] \sigma\!\big(z_0 - \hat{r}_\theta(x, y)\big) & y \text{ undesirable}\end{cases}$$</p>
+<p>$$w(y) = \begin{cases}\lambda_D & y \text{ desirable}\\ \lambda_U & y \text{ undesirable}\end{cases}$$</p>
+<p>Intuition: desirable samples want $\hat{r} > z_0$ (push up), undesirable samples want $\hat{r} < z_0$ (push down); $\sigma$ gives a probability score of "how far from the reference point." $\lambda_D, \lambda_U$ are weights for imbalanced data (e.g. if desirable is more, $\lambda_U > \lambda_D$). When data only has single thumbs up/down, KTO is more practical than DPO. See Ethayarajh et al. 2024 ICML, HuggingFace TRL <code>KTOTrainer</code> for details.</p>
+<h3 id="63-simpo-drop-the-reference">6.3　SimPO: drop the reference</h3>
+<p>Meng et al. 2024 NeurIPS <em>SimPO: Simple Preference Optimization with a Reference-Free Reward</em>. SimPO observes: <strong>DPO does not use $\pi_\text{ref}$ at inference, but stores it during training (occupies memory)</strong>. SimPO directly changes the implicit reward to length-normalized log-prob:</p>
+<p>$$r_\text{SimPO}(x, y) = \frac{\beta}{|y|}\log\pi(y|x)$$</p>
+<p>Loss:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{SimPO} = -\mathbb{E}\log\sigma\!\left(\frac{\beta}{|y_w|}\log\pi(y_w|x) - \frac{\beta}{|y_l|}\log\pi(y_l|x) - \gamma\right)\;}$$</p>
+<p>where $\gamma$ is the target reward margin (encourages $r_w - r_l \ge \gamma$, no loss past that).</p>
+<div class="callout callout-good"><div class="callout-title">SimPO advantages</div></div>
+<ul><li><strong>No $\pi_\text{ref}$ needed during training</strong>, saves a copy of model weights in memory.</li><li><strong>Length-normalization</strong> mitigates DPO's length bias (DPO favors long answers since their log-probs are more negative, with larger differences).</li><li>Experimentally on AlpacaEval-2 / Arena-Hard, SimPO often outperforms DPO; but the reward-free form <strong>lacks a KL anchor</strong>, requiring more careful tuning of $\beta, \gamma$.</li></ul>
+<h3 id="64-orpo-single-stage-sft--preference">6.4　ORPO: single-stage SFT + preference</h3>
+<p>Hong et al. 2024 EMNLP <em>ORPO: Monolithic Preference Optimization without Reference Model</em>. ORPO removes the two-stage "SFT then DPO," doing <strong>SFT and preference simultaneously in one training pass</strong>:</p>
+<p>$$\mathcal{L}_\text{ORPO} = \mathcal{L}_\text{SFT}(y_w) - \lambda \cdot \log\sigma\!\left(\log\frac{\text{odds}_\theta(y_w|x)}{\text{odds}_\theta(y_l|x)}\right)$$</p>
+<p>where odds = $p / (1 - p)$. <strong>No reference model needed</strong>, but it requires the chosen response to be high quality (driven by the SFT part).</p>
+<h3 id="65-rloo--remax">6.5　RLOO / ReMax</h3>
+<p>Ahmadian et al. 2024 ACL <em>Back to Basics: Revisiting REINFORCE Style Optimization</em>. On LLM RLHF, <strong>simple REINFORCE + multi-sample baseline empirically outperforms PPO</strong>:</p>
+<ul><li><strong>RLOO</strong>: for each prompt sample $k$ responses, the baseline for each is the average reward of the other $k-1$ (leave-one-out), $\hat{A}_i = r_i - \frac{1}{k-1}\sum_{j\ne i} r_j$.</li><li><strong>ReMax</strong> (Li et al. 2024 ICML): baseline directly uses the <strong>greedy decode</strong> reward for the same prompt, only needing 1 sample + 1 greedy per step.</li></ul>
+<p>Both <strong>drop the value model</strong>, in the same lineage as GRPO — fundamentally all using <strong>multi-sample or greedy baselines to replace the critic</strong>; the difference is only in baseline form.</p>
+<div class="callout callout-info"><div class="callout-title">GRPO vs RLOO vs ReMax distinctions</div></div>
+<ul><li><strong>GRPO</strong>: within-group mean+std normalization ($z$-score) + PPO-clip.</li><li><strong>RLOO</strong>: within-group leave-one-out mean as baseline + REINFORCE.</li><li><strong>ReMax</strong>: greedy decode as baseline + REINFORCE.</li><li>The three share a philosophy: <strong>bypass the value model, use sample baselines</strong>; differing only in baseline form.</li></ul>
+<h2 id="7-advanced-reward-modeling">§7 Advanced Reward Modeling</h2>
+<h3 id="71-prm-vs-orm">7.1　PRM vs ORM</h3>
+<table><thead><tr><th>Dimension</th><th><strong>ORM</strong> (Outcome RM)</th><th><strong>PRM</strong> (Process RM)</th></tr></thead><tbody><tr><td><strong>Scoring granularity</strong></td><td>Only the final answer</td><td>Each reasoning step</td></tr><tr><td><strong>Annotation cost</strong></td><td>Low (only result)</td><td>High (every step labeled)</td></tr><tr><td><strong>Reward signal</strong></td><td>Sparse (end of trajectory)</td><td>Dense (each step)</td></tr><tr><td><strong>Math reasoning performance</strong></td><td>Medium</td><td><strong>Good</strong></td></tr><tr><td><strong>Typical usage</strong></td><td>Best-of-N + ORM rerank</td><td>PRM for step-level search / RL</td></tr><tr><td><strong>Representative paper</strong></td><td>InstructGPT (Ouyang 2022)</td><td>Let's Verify Step by Step (Lightman 2023 arXiv / 2024 ICLR)</td></tr></tbody></table>
+<p>Lightman et al. <em>Let's Verify Step by Step</em> (OpenAI arXiv 2305.20050, 2023; ICLR 2024) compared ORM and PRM on the MATH dataset:</p>
+<ul><li>PRM800K: 800K step-level annotations (each step labeled ✓ / ⚠️ / ✗).</li><li>On GPT-4 generator, PRM rerank over 1860 candidates gives MATH accuracy <strong>78.2%</strong>, significantly higher than ORM's 72.4%.</li></ul>
+<p><strong>Math-Shepherd</strong> (Wang et al. 2024 ACL <em>Math-Shepherd: Verify and Reinforce LLMs Step-by-Step without Human Annotations</em>) uses <strong>rollout-based automatic annotation of PRM</strong>: from each step run $K$ subsequent generations, automatically giving soft labels per step based on correctness rate, removing the need for human labels.</p>
+<h3 id="72-constitutional-ai--rlaif">7.2　Constitutional AI / RLAIF</h3>
+<p><strong>Constitutional AI (Bai et al. 2022 Anthropic)</strong> <em>Constitutional AI: Harmlessness from AI Feedback</em>:</p>
+<ol><li><strong>SL stage</strong>: have the AI rewrite harmful responses itself according to "constitution" principles.</li><li><strong>RL stage</strong>: use AI (rather than humans) for preference annotation → train RM → PPO (i.e. RLAIF).</li></ol>
+<p>The entire harmless training <strong>needs no human preference annotation</strong>, relying on LLM self-evaluation.</p>
+<p><strong>RLAIF (Lee et al. 2023 Google)</strong> <em>RLAIF: Scaling RLHF with AI Feedback</em>: on tasks like summarization, helpful dialogue, systematically verifies AI feedback ≈ human feedback in effect. <strong>Conditions</strong>: the LLM judge must be strong enough (GPT-4 / Claude-3 level), and the prompt must be well designed.</p>
+<div class="callout callout-warn"><div class="callout-title">RLAIF risks</div><p>If the judging LLM has its own biases (sycophancy, length preference), the biases get amplified to the student model. In production this is usually <strong>used in combination</strong>: rule-based (math/code) + RM (general quality) + RLAIF (safety).</p></div>
+<h3 id="73-reward-model-ensemble--uncertainty">7.3　Reward model ensemble &amp; uncertainty</h3>
+<p>Recent years (Coste 2024, Eisenstein 2024) have found: <strong>single RM is easily hacked</strong>, and ensemble of RMs (5-7 RMs with different seeds) combined with conservative aggregation (min / mean - $k\cdot$std) can significantly mitigate reward hacking without losing performance. The cost is doubled memory — hence industrial deployment uses lightweight RM (e.g. 6B evaluating 70B policy).</p>
+<h2 id="8-reward-hacking--engineering-experience">§8 Reward Hacking &amp; Engineering Experience</h2>
+<p>Reward hacking is the central pain point of RL post-training: the model finds blind spots in the RM to get high scores, but humans find the result worse. Common symptoms:</p>
+<table><thead><tr><th>Phenomenon</th><th>Cause</th><th>Mitigation</th></tr></thead><tbody><tr><td><strong>Answers get longer</strong></td><td>Long answers typically score higher in RM training data (information content, polite filler)</td><td>length penalty / length normalize (SimPO) / length-regression calibration</td></tr><tr><td><strong>Sycophancy</strong></td><td>Users prefer agreement → RM learns "agree better"</td><td>sycophancy probe + adversarial data</td></tr><tr><td><strong>Repetition / boilerplate</strong></td><td>Closing phrases like "Hope this helps!" score high in RM data</td><td>n-gram repetition penalty / diversity reward</td></tr><tr><td><strong>Over-refusal</strong></td><td>Safety RM learns "refuse = safe"</td><td>helpfulness vs harmlessness dual RM balance</td></tr><tr><td><strong>Format hacks</strong></td><td>Using markdown / bullets / emoji to score</td><td>format normalization</td></tr><tr><td><strong>Number manipulation</strong></td><td>Hard-coding common answer distributions in math problems</td><td>rule-based reward replaces RM</td></tr></tbody></table>
+<h3 id="81-core-mitigation-mechanisms">8.1　Core mitigation mechanisms</h3>
+<ol><li><strong>KL penalty</strong> ($\beta \log\pi/\pi_\text{ref}$): the most basic anchor.</li><li><strong>Early stopping by KL budget</strong>: stop when $\text{KL}(\pi || \pi_\text{ref}) > K_\text{target}$.</li><li><strong>Reward model ensemble</strong> (Coste 2024 ICLR <em>Reward Model Ensembles Help Mitigate Overoptimization</em>): take min or mean - std of multiple RMs.</li><li><strong>Reward shaping</strong>: decompose reward into multiple terms (helpfulness + length + diversity), capping each individually.</li><li><strong>Offline + online mix</strong>: first DPO / KTO to get to ~70 points, then PPO + strong RM for the last mile.</li><li><strong>Composite reward</strong>: weighted combination of rule-based + RM-based, the rule part cannot be hacked.</li></ol>
+<h3 id="82-gao-2023-scaling-law">8.2　Gao 2023 scaling law</h3>
+<p>Gao, Schulman, Hilton 2023 ICML <em>Scaling Laws for Reward Model Overoptimization</em>:</p>
+<ul><li>Proxy reward (RM score) monotonically rises with KL, but gold reward rises then falls (<strong>inverted-U</strong>).</li><li>Best-of-N's over-optimization differs slightly in form from PPO: BoN's gold reward is close to linear-minus-plus-linear in $\sqrt{\text{KL}}$, PPO has more higher-order terms.</li><li>Provides a scaling law that larger RM → slower over-optimization, also discussing different functional forms for fitting.</li></ul>
+<p><strong>Interview takeaway</strong>: reward hacking is not a bug, it is the essence of RL — the inevitable phenomenon of proxy and true objective being separated.</p>
+<h2 id="9-complexity--resource-comparison">§9 Complexity / Resource Comparison</h2>
+<h3 id="91-resource-comparison-of-four-paradigms">9.1　Resource comparison of four paradigms</h3>
+<table><thead><tr><th>Dimension</th><th><strong>PPO RLHF</strong></th><th><strong>DPO family</strong></th><th><strong>GRPO</strong></th><th><strong>RLOO/ReMax</strong></th></tr></thead><tbody><tr><td>Need RM?</td><td>✅ frozen</td><td>❌ implicit</td><td>✅ frozen or rule</td><td>✅ frozen or rule</td></tr><tr><td>Need value model?</td><td>✅ trainable</td><td>❌</td><td>❌</td><td>❌</td></tr><tr><td>Need reference policy?</td><td>✅ frozen</td><td>✅ frozen (except SimPO/ORPO)</td><td>✅ frozen</td><td>✅ frozen or none</td></tr><tr><td>Online sampling?</td><td>✅ on-policy</td><td>❌ offline</td><td>✅ on-policy</td><td>✅ on-policy</td></tr><tr><td>Number of model copies</td><td><strong>4</strong> (π, π_ref, RM, V)</td><td><strong>2</strong> (π, π_ref)</td><td><strong>3</strong> (π, π_ref, RM)</td><td><strong>3</strong></td></tr><tr><td>KL anchor</td><td>Explicitly in reward</td><td>Implicitly in loss</td><td>Explicitly in loss</td><td>Explicitly in reward or loss</td></tr><tr><td>Main bottleneck</td><td>Memory + slow on-policy</td><td>Preference data quality</td><td>Multiple-times sampling</td><td>Multiple-times sampling</td></tr><tr><td>Tuning difficulty</td><td><strong>High</strong> ($\beta, \epsilon, \lambda, c_v, c_e$)</td><td>Medium ($\beta$)</td><td>Medium ($\beta, G$)</td><td>Low ($\beta, k$)</td></tr><tr><td>Representative</td><td>InstructGPT, Claude</td><td>Llama-3 instruct, Zephyr</td><td>DeepSeek-R1, Kimi-K1.5</td><td>Cohere Command R</td></tr></tbody></table>
+<h3 id="92-rough-llm-rlhf-training-memory-estimation">9.2　Rough LLM RLHF training memory estimation</h3>
+<p>For 7B base, fp16 forward + fp32 master, AdamW (typical RLHF):</p>
+<table><thead><tr><th>Copy</th><th>Use</th><th>bf16 weights</th><th>fp32 optimizer state</th><th>Total</th></tr></thead><tbody><tr><td>Policy $\pi_\theta$</td><td>trainable</td><td>14 GB</td><td>28+14+14=56 GB</td><td><strong>70 GB</strong></td></tr><tr><td>Value $V_\phi$</td><td>trainable</td><td>14 GB</td><td>56 GB</td><td><strong>70 GB</strong></td></tr><tr><td>Reference $\pi_\text{ref}$</td><td>frozen</td><td>14 GB</td><td>—</td><td>14 GB</td></tr><tr><td>Reward $r_\psi$</td><td>frozen</td><td>14 GB</td><td>—</td><td>14 GB</td></tr><tr><td><strong>Total</strong></td><td></td><td></td><td></td><td><strong>~170 GB</strong></td></tr></tbody></table>
+<p>Plus activation, KV cache, generation buffer, a single 80GB card is hard to fit; typically using ZeRO-3 + offload or multi-machine sharding.</p>
+<p><strong>DPO with same base</strong>: only needs $\pi_\theta$ + $\pi_\text{ref}$ = 70 + 14 = <strong>84 GB</strong> (half).</p>
+<p><strong>GRPO with same base</strong>: $\pi_\theta$ + $\pi_\text{ref}$ + RM = 70 + 14 + 14 = <strong>98 GB</strong> (saves one value copy).</p>
+<h3 id="93-training-throughput-comparison">9.3　Training throughput comparison</h3>
+<p>Measured (open-source 7B, 8×H100, TRL/OpenRLHF report):</p>
+<ul><li>PPO: ~50-100 token/s/GPU (bottleneck: on-policy generation + 4 copies)</li><li>DPO: ~500-1000 token/s/GPU (pure supervised, no generation)</li><li>GRPO: ~100-200 token/s/GPU (needs generation, but one fewer model)</li><li>SimPO: ~600-1200 token/s/GPU (DPO further drops reference)</li></ul>
+<p>DPO is fast because it is <strong>fully offline</strong>, almost SFT speed; PPO is slow mainly due to rollout (generate a response before one gradient).</p>
+<h2 id="10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</h2>
+<p>Divided into 3 tiers by difficulty: L1 = asked at any LLM engineering position; L2 = asked by research/alignment teams; L3 = hardcore questions from top labs / DeepSeek-class teams. Each question expands to answer points + common pitfalls.</p>
+<h3 id="l1-must-know-10-questions">L1 Must-Know (10 questions)</h3>
+<details>
+
+<summary>Q1. What are the three stages of RLHF?</summary>
+<ul><li>Stage 1: SFT (Supervised Fine-Tuning)</li><li>Stage 2: RM (train reward model with Bradley-Terry, frozen)</li><li>Stage 3: PPO + KL penalty (policy optimizes RM score, constrained by KL to reference policy)</li></ul>
+<p>Pitfalls: skipping SFT and saying "RM + PPO"; or omitting the KL penalty.</p>
+</details>
+<details>
+
+<summary>Q2. What is the PPO clipped surrogate formula?</summary>
+<ul><li>$r_t = \pi_\theta / \pi_{\theta_\text{old}}$ is the importance ratio</li><li>$L^\text{CLIP} = \mathbb{E}[\min(r_t A_t,\, \text{clip}(r_t, 1-\epsilon, 1+\epsilon) A_t)]$</li><li>Taking min is a pessimistic estimate (pessimistic bound); upper bound $1+\epsilon$ when advantage is positive, lower bound $1-\epsilon$ when negative</li></ul>
+<p>Pitfalls: saying "clip the reward"; or missing the role of min.</p>
+</details>
+<details>
+
+<summary>Q3. What is GAE? How to pick $\lambda$?</summary>
+<ul><li>$A_t^\text{GAE} = \sum_l (\gamma\lambda)^l \delta_{t+l}$, $\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$</li><li>$\lambda = 0$ → TD(0), high bias low variance</li><li>$\lambda = 1$ → Monte Carlo, low bias high variance</li><li>Typical $\lambda = 0.95$, $\gamma = 0.99$</li></ul>
+<p>Pitfalls: treating GAE as the advantage itself (it is an estimator); or forgetting that $\gamma\lambda$ is the joint decay coefficient.</p>
+</details>
+<details>
+
+<summary>Q4. What is the RM loss function?</summary>
+<ul><li>Bradley-Terry pairwise: $\mathcal{L} = -\mathbb{E}\log\sigma(r(x, y_w) - r(x, y_l))$</li><li>Initialize backbone with SFT model, add scalar head on top</li><li>Frozen after training, used by PPO</li></ul>
+<p>Pitfalls: saying RM uses BCE / MSE; or writing it as absolute reward supervision.</p>
+</details>
+<details>
+
+<summary>Q5. What is the DPO loss formula? What's its relation to RM loss?</summary>
+<ul><li>$\mathcal{L}_\text{DPO} = -\log\sigma(\beta\log\frac{\pi_\theta(y_w)}{\pi_\text{ref}(y_w)} - \beta\log\frac{\pi_\theta(y_l)}{\pi_\text{ref}(y_l)})$</li><li>Same form as Bradley-Terry RM loss, but <strong>implicit reward</strong> is $\beta\log(\pi/\pi_\text{ref})$, not a separate RM</li><li>Origin: KL-regularized RLHF optimum $\pi^* \propto \pi_\text{ref}\exp(r/\beta)$, inverting gives $r = \beta\log(\pi/\pi_\text{ref}) + \beta\log Z$, and $\log Z$ cancels in the pairwise difference</li></ul>
+<p>Pitfalls: memorizing the formula without knowing the closed-form derivation; or saying "DPO needs no reference" (wrong, needs $\pi_\text{ref}$ to compute log-ratio).</p>
+</details>
+<details>
+
+<summary>Q6. What data does DPO training need?</summary>
+<ul><li>Preference pairs $(x, y_w, y_l)$: for the same prompt, humans or AI judge $y_w \succ y_l$</li><li>Need $\pi_\text{ref}$ (usually the SFT model)</li><li><strong>Don't need</strong> RM, value model, online sampling</li></ul>
+<p>Pitfalls: saying it needs reward scalar annotations; or forgetting $\pi_\text{ref}$.</p>
+</details>
+<details>
+
+<summary>Q7. What does GRPO save compared to PPO?</summary>
+<ul><li><strong>Drops the value model</strong>: advantage uses within-group normalization $\hat{A}_i = (r_i - \bar{r}) / \sigma_r$</li><li>Less memory; less tuning (no $c_v$, no value lr)</li><li>Suitable for LLM RL since LLM's per-token value is hard to learn</li></ul>
+<p>Pitfalls: saying it saves the RM (wrong, GRPO still needs RM or rule-based reward); or saying GRPO is offline (wrong, it is on-policy).</p>
+</details>
+<details>
+
+<summary>Q8. What role does the KL penalty play in RLHF?</summary>
+<ul><li>Add $-\beta\log\pi/\pi_\text{ref}$ to the reward (per-token KL)</li><li>Prevents the policy from drifting too far from SFT, mitigating reward hacking</li><li>$\beta$ too small → drift, $\beta$ too large → fails to learn</li><li>In DPO, implicitly implemented via $\pi_\text{ref}$</li></ul>
+<p>Pitfalls: saying KL is part of the RM (wrong, KL is between policy and reference, does not involve RM).</p>
+</details>
+<details>
+
+<summary>Q9. Why do RL/DPO after SFT?</summary>
+<ul><li>SFT can only mimic positive examples, <strong>cannot learn contrastive signals</strong> (A better than B)</li><li>RM explicitly models "which is better," policy optimizes "obtain high RM score"</li><li>DPO skips the RM but keeps the same contrastive signal</li><li>Empirically, helpfulness, harmlessness, honesty all improve significantly after RLHF/DPO (InstructGPT report)</li></ul>
+<p>Pitfalls: only saying "RL is stronger than SFT"; or not knowing about the contrastive signal point.</p>
+</details>
+<details>
+
+<summary>Q10. What is reward hacking? How to mitigate?</summary>
+<ul><li>The policy over-optimizes the RM, finding blind spots to score high, but humans find it worse</li><li>Typical symptoms: longer answers, sycophancy, repeated boilerplate, over-refusal</li><li>Mitigation: KL penalty, RM ensemble, length penalty, composite reward (rule + RM), early stopping by KL budget</li></ul>
+<p>Pitfalls: only saying "add KL," not knowing other mitigations; or not knowing about length bias.</p>
+</details>
+<h3 id="l2-advanced-10-questions">L2 Advanced (10 questions)</h3>
+<details>
+
+<summary>Q11. Derive DPO loss (from KL-regularized RLHF).</summary>
+<ol><li>Objective: $\max_\pi \mathbb{E}[r] - \beta \text{KL}(\pi || \pi_\text{ref})$</li><li>Lagrangian + derivative w.r.t. $\pi$ $\Rightarrow \pi^*(y|x) = \frac{1}{Z(x)}\pi_\text{ref}(y|x)\exp(r/\beta)$</li><li>Inversion $r(x, y) = \beta\log(\pi^*/\pi_\text{ref}) + \beta\log Z(x)$</li><li>Plug into Bradley-Terry $P(y_w \succ y_l) = \sigma(r_w - r_l)$, <strong>$\log Z$ cancels</strong></li><li>Replace $\pi^*$ with learnable $\pi_\theta$, do NLL on preference data → DPO loss</li></ol>
+<p>Pitfalls: memorizing the formula, can't answer "why does $\log Z$ cancel" (because it doesn't depend on $y$, it subtracts away).</p>
+</details>
+<details>
+
+<summary>Q12. Why does PPO need importance ratio $r_t = \pi_\theta/\pi_\text{old}$?</summary>
+<ul><li>Standard PG is on-policy, but PPO does multiple updates on the same batch (K epochs)</li><li>From the 2nd onwards $\pi_\theta \ne \pi_\text{old}$ (the sampling distribution), needs importance sampling correction</li><li>$\nabla \mathbb{E}_{\pi_\theta}[A] = \mathbb{E}_{\pi_\text{old}}[(\pi_\theta/\pi_\text{old}) \nabla\log\pi_\theta A]$</li><li>Clip prevents the ratio from drifting too far across multiple updates</li></ul>
+<p>Pitfalls: not knowing about PPO's multiple updates; or unclear on the role of IS.</p>
+</details>
+<details>
+
+<summary>Q13. DPO vs IPO differences? When to use IPO?</summary>
+<ul><li>DPO uses sigmoid loss: the more extreme the preference, the larger the implicit reward (unbounded)</li><li>IPO uses squared loss + fixed margin $1/(2\beta)$: reward is bounded</li><li><strong>When preference data is deterministic</strong> (every pair $y_w$ always wins), DPO easily overfits, IPO is more stable</li><li>Azar et al. 2024 AISTATS gives a unified framework ($\Psi$PO)</li></ul>
+<p>Pitfalls: saying IPO is just a hyperparameter of DPO; or not knowing the sigmoid issue under deterministic preferences.</p>
+</details>
+<details>
+
+<summary>Q14. What did SimPO change compared to DPO?</summary>
+<ul><li><strong>Drop reference</strong>: $r = (\beta / |y|) \log\pi(y)$, no $\pi_\text{ref}$ needed</li><li><strong>Length normalize</strong>: divide by $|y|$, mitigates DPO's length bias</li><li><strong>Reward margin</strong> $\gamma$: require $r_w - r_l \ge \gamma$, loss stops once exceeded</li><li>Saves memory by one model; but losing the KL anchor requires more careful tuning of $\beta, \gamma$</li></ul>
+<p>Pitfalls: only saying "drop reference," missing length-norm and margin; or not knowing SimPO is also contrastive.</p>
+</details>
+<details>
+
+<summary>Q15. What is the GRPO advantage formula? Why this design?</summary>
+<ul><li>$\hat{A}_i = (r_i - \text{mean}_g(r)) / (\text{std}_g(r) + \epsilon)$, where $g$ is the group of the same prompt</li><li>Within the response, all tokens share the same $\hat{A}_i$</li><li><strong>Design rationale</strong>: LLM token-level value is hard to learn; use sequence-level reward + within-group statistics to directly do variance reduction</li><li>The philosophy aligns with RLOO (leave-one-out mean) and ReMax (greedy baseline): use sample baseline to replace critic</li></ul>
+<p>Pitfalls: writing per-token advantage (wrong, GRPO shares within sequence); or not knowing the commonality of GRPO/RLOO/ReMax.</p>
+</details>
+<details>
+
+<summary>Q16. PRM vs ORM differences? When to use PRM?</summary>
+<ul><li>ORM scores only the final answer; PRM scores each reasoning step</li><li>PRM is notably better on <strong>multi-step reasoning tasks</strong> (math, code) (Lightman 2023, MATH dataset 78% vs 72%)</li><li>PRM annotation cost is high → Math-Shepherd uses rollout-based auto-labeling</li><li>PRM can be used for both search rerank and step-level RL (dense reward)</li></ul>
+<p>Pitfalls: saying PRM is better at all tasks (wrong, simple tasks have ORM sufficient); or not knowing Math-Shepherd's auto-labeling.</p>
+</details>
+<details>
+
+<summary>Q17. Key idea of Constitutional AI / RLAIF?</summary>
+<ul><li>Use AI (not humans) for preference annotation, saving manual labor</li><li>Constitutional AI (Bai 2022 Anthropic): SL stage AI self-rewrites harmful → RL stage AI preference scoring → PPO</li><li>RLAIF (Lee 2023 Google): systematically validated AI ≈ human on tasks like summarization</li><li><strong>Risk</strong>: judging LLM biases get amplified; usually mixed with rule-based / human RM</li></ul>
+<p>Pitfalls: saying RLAIF is just GPT-4 labeling data (not entirely correct, CAI emphasizes "by constitution" self-evaluation); or not knowing CAI predates RLAIF by a year.</p>
+</details>
+<details>
+
+<summary>Q18. Why add KL on the reward in PPO training, not on the loss?</summary>
+<ul><li>Adding on the reward → naturally flows into PPO-clip surrogate via advantage, per-token control</li><li>Adding on the loss → overall KL constraint, but lose token-level resolution</li><li>GRPO conversely puts KL on the loss (using K3 estimator), since GRPO does not unfold per-token advantage</li><li>Both placements are essentially KL anchors, just different implementation details</li></ul>
+<p>Pitfalls: confusing the two placements; or not knowing GRPO's K3 estimator.</p>
+</details>
+<details>
+
+<summary>Q19. How is the value model initialized in RLHF? Why?</summary>
+<ul><li>Usually <strong>initialized from RM or SFT model</strong> for the value backbone, with a new value head added</li><li>Benefit of RM init: RM already "understands reward," value converges faster</li><li>Benefit of SFT init: value shares underlying representations with policy</li><li>DeepSpeed-Chat defaults to RM init; TRL defaults to SFT</li><li><strong>Shared trunk vs independent model is a trade-off</strong>: A3C/A2C and other classical actor-critic share trunk to save memory, but policy and value loss have different scales that can interfere; LLM RLHF mainstream (DeepSpeed-Chat / TRL / OpenRLHF) chooses independent models + separate optimizer, prioritizing stability</li></ul>
+<p>Pitfalls: random initialization of value (impractical, too slow); or saying "value must share trunk" / "must not share," both extremes are wrong — it's a trade-off, not a theorem.</p>
+</details>
+<details>
+
+<summary>Q20. DPO training broke (margin not increasing / loss not dropping), how to diagnose?</summary>
+<ul><li>Check if <code>chosen_logp</code> and <code>rejected_logp</code> both drop (typical DPO degeneration)</li><li>Check if reference policy is correctly loaded (forgot to load → log-ratio becomes raw log-prob)</li><li>Check $\beta$: too small (&lt; 0.01) makes loss ≈ sigmoid constant, too large (&gt; 1) easily collapses</li><li>Check data: are $y_w$ and $y_l$ truly significantly different?</li><li>Check length: DPO favors long responses, if $y_w$ is systematically shorter than $y_l$, there's a bug</li></ul>
+<p>Pitfalls: only saying "tune lr"; or not knowing the likelihood-decrease-for-both problem.</p>
+</details>
+<h3 id="l3-top-lab-5-questions">L3 Top Lab (5 questions)</h3>
+<details>
+
+<summary>Q21. DeepSeek-R1 vs R1-Zero differences? Why need cold-start?</summary>
+<ul><li><p><strong>R1-Zero</strong>: directly run GRPO + rule-based reward (math correctness + format) from pretrain base, <strong>no SFT</strong></p>
+<ul><li>Pros: emergent long CoT, proves RL can self-trigger reasoning</li><li>Cons: low readability, language mixing, unstable format</li></ul></li><li><p><strong>R1</strong>: cold-start SFT (thousands of high-quality reasoning) → reasoning RL → SFT → general RL (multi-stage)</p>
+<ul><li>Fixes R1-Zero's readability issues</li><li>SOTA math / code reasoning</li></ul></li><li><strong>Importance of R1-Zero</strong>: proves RL alone can trigger reasoning without prior SFT; foundation for subsequent self-play / pure-RL paths</li></ul>
+<p>Pitfalls: only saying R1 is an improvement of R1-Zero; or not knowing what cold-start fixes (readability, not performance).</p>
+</details>
+<details>
+
+<summary>Q22. Who is more important in GAE: $\gamma$ or $\lambda$? How are they typically set in LLM RLHF?</summary>
+<ul><li>$\gamma$ is reward discount (task-level), $\lambda$ is TD estimator trace-decay (algorithm-level)</li><li><strong>In LLM RLHF $\gamma = 1$</strong> (no discount, since reward only at terminal, discount makes early tokens receive too small a signal)</li><li>$\lambda = 0.95$ is still useful: bias-variance trade-off at token dimension</li><li>The joint $\gamma\lambda$ decay is GAE's effective trace-decay; with $\gamma=1, \lambda=0.95$ the actual trace is about 20 tokens</li><li>If $\gamma = 1, \lambda = 1$ → GAE degenerates to MC, equivalent to "reward-to-go - V baseline"</li></ul>
+<p>Pitfalls: blindly copying $\gamma = 0.99$ from game RL, not knowing $\gamma = 1$ is more mainstream for LLMs (more reasonable under terminal-reward + short-context generation); or conversely insisting $\gamma$ must be 1 — it depends on whether the reward is dense / long horizon, an engineering choice not a theorem.</p>
+</details>
+<details>
+
+<summary>Q23. How to design an RL framework that supports DPO / PPO / GRPO simultaneously?</summary>
+<p>Abstract into three layers:</p>
+<ol><li><strong>Data layer</strong>: preference pair (DPO) / prompt + group (GRPO) / prompt only (PPO) → unified batch interface</li><li><p><strong>Trajectory layer</strong>: on-policy rollout (PPO/GRPO) vs offline (DPO)</p>
+<ul><li>PPO/GRPO need vLLM/sgl inference acceleration + asynchronous trajectory queue</li><li>DPO is pure dataloader</li></ul></li><li><p><strong>Loss layer</strong>: pluggable</p>
+<ul><li>PPO: clipped surrogate + value + entropy + GAE</li><li>DPO: log-ratio sigmoid</li><li>GRPO: clipped surrogate + group-normalized advantage + K3 KL</li></ul></li><li><strong>Reference management</strong>: DPO/PPO/GRPO all need $\pi_\text{ref}$, uniformly encapsulated as frozen + lazy load</li><li><strong>RM/rule reward</strong>: pluggable reward backend (neural RM, unit-test, math checker)</li></ol>
+<p>Reference: TRL, OpenRLHF, verl (ByteDance), SimplePO. <strong>verl is the mainstream implementation framework for GRPO/RLOO/DAPO</strong>.</p>
+<p>Pitfalls: only listing PPO; or not considering trajectory queue and asynchronous rollout.</p>
+</details>
+<details>
+
+<summary>Q24. What if RM and policy are trained together? Why doesn't mainstream RLHF do this?</summary>
+<ul><li>Intuition: let the RM also learn online, giving it more data from new distributions → adversarial training</li><li><strong>Issue 1</strong>: RM training objective and policy training objective are coupled, loss landscape is unstable (GAN-like)</li><li><strong>Issue 2</strong>: RM training needs fresh human labels, otherwise it drifts with the policy</li><li><strong>Issue 3</strong>: RM signal changes too fast → policy's notion of "what is good" is inconsistent</li><li>Middle-ground: <strong>iterative preference optimization</strong> (Xu et al. 2023 arXiv 2312.16682 <em>Some things are more CRINGE than others: Iterative Preference Optimization with the Pairwise Cringe Loss</em>), <strong>self-rewarding LM</strong> (Yuan et al. 2024 <em>Self-Rewarding Language Models</em>) — each round, regenerate responses with the latest policy + rescore (same model / human / GPT-4), implicitly updating RM</li><li><strong>OpenAI / Anthropic mainstream: fixed RM, multi-round PPO</strong>; visually interpretable, more stable</li></ul>
+<p>Pitfalls: only saying "would be unstable" without specific reasons; or not knowing the emerging path of iterative DPO / self-rewarding.</p>
+</details>
+<details>
+
+<summary>Q25. If you were to design a next-gen post-training algorithm, how would you improve GRPO?</summary>
+<p>Possible directions (answer 2-3, with trade-off discussion):</p>
+<ul><li><strong>Adaptive group size</strong>: small $G$ when reward variance is high, large $G$ when low (DAPO dynamic sampling)</li><li><strong>Token-level credit assignment</strong>: GRPO shares advantage across sequence → signal diluted on long responses. Can introduce a lightweight critic (VAPO) or step-level reward (PRM) based partial credit</li><li><strong>Off-policy correction</strong>: GRPO is on-policy, rollout is slow; introduce V-trace / Retrace to use stale samples</li><li><strong>Multi-task reward</strong>: rule + RM + style composed reward, each dimension independently normalized to avoid reward scale imbalance</li><li><strong>Reward model uncertainty</strong>: use min or mean - std of an ensemble RM to prevent over-optimization</li><li><strong>Process reward integration</strong>: PRM gives step-level dense advantage, combined with group baseline (Math-Shepherd + GRPO path)</li><li><strong>CISPO / truncated IS</strong> (Minimax 2025): solves GRPO's stability issue with large ratios on negative advantages</li><li><strong>DAPO</strong> (ByteDance 2025): clip higher + dynamic sampling + token-level loss + overlong shaping, open-sourced verl implementation</li></ul>
+<p>Pitfalls: only listing "add attention / more models" without trade-offs; or not knowing follow-up work like DAPO / VAPO / CISPO.</p>
+</details>
+<h2 id="a-appendix-reference-list">§A Appendix: Reference List</h2>
+<p>Organized by section, all verified by codex (gpt-5.5 xhigh) reviewer for correct author-year-venue:</p>
+<p><strong>PPO / RL fundamentals</strong></p>
+<ul><li>Schulman et al. 2017 arXiv 1707.06347 <em>Proximal Policy Optimization Algorithms</em></li><li>Schulman et al. 2016 ICLR <em>High-Dimensional Continuous Control Using GAE</em></li><li>Schulman 2020 blog <em>Approximating KL Divergence</em> (source of K3 estimator)</li></ul>
+<p><strong>RLHF</strong></p>
+<ul><li>Christiano et al. 2017 NeurIPS <em>Deep Reinforcement Learning from Human Preferences</em> (first paper on pairwise preference + RM)</li><li>Stiennon et al. 2020 NeurIPS <em>Learning to Summarize from Human Feedback</em> (OpenAI summarization report)</li><li>Ouyang et al. 2022 NeurIPS <em>Training Language Models to Follow Instructions with Human Feedback</em> (InstructGPT)</li><li>Bai et al. 2022 Anthropic arXiv 2204.05862 <em>Training a Helpful and Harmless Assistant with RLHF</em></li><li>Bai et al. 2022 Anthropic arXiv 2212.08073 <em>Constitutional AI</em></li><li>Lee et al. 2023 Google arXiv 2309.00267 <em>RLAIF: Scaling RLHF with AI Feedback</em></li></ul>
+<p><strong>DPO family</strong></p>
+<ul><li>Rafailov et al. 2023 NeurIPS <em>Direct Preference Optimization</em></li><li>Azar et al. 2024 AISTATS <em>A General Theoretical Paradigm to Understand Learning from Human Preferences</em> (IPO)</li><li>Ethayarajh et al. 2024 ICML <em>KTO: Model Alignment as Prospect Theoretic Optimization</em></li><li>Meng et al. 2024 NeurIPS <em>SimPO: Simple Preference Optimization with a Reference-Free Reward</em></li><li>Hong et al. 2024 EMNLP <em>ORPO: Monolithic Preference Optimization without Reference Model</em></li><li>Tang et al. 2024 ICML <em>Generalized Preference Optimization</em> (unifying DPO/IPO/SLiC framework)</li></ul>
+<p><strong>Critic-free RL</strong></p>
+<ul><li>Ahmadian et al. 2024 ACL <em>Back to Basics: Revisiting REINFORCE Style Optimization</em> (RLOO)</li><li>Li et al. 2024 ICML <em>ReMax: A Simple, Effective, and Efficient Reinforcement Learning Method</em></li><li>Shao et al. 2024 arXiv 2402.03300 <em>DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models</em> (proposes GRPO)</li><li>DeepSeek-AI 2025 arXiv 2501.12948 <em>DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning</em></li><li>Yu et al. 2025 ByteDance arXiv 2503.14476 <em>DAPO: An Open-Source LLM Reinforcement Learning System at Scale</em></li></ul>
+<p><strong>Reward Modeling</strong></p>
+<ul><li>Lightman et al. 2024 ICLR / OpenAI arXiv 2305.20050 (2023) <em>Let's Verify Step by Step</em> (PRM800K, PRM vs ORM)</li><li>Wang et al. 2024 ACL <em>Math-Shepherd: Verify and Reinforce LLMs Step-by-Step without Human Annotations</em></li><li>Coste et al. 2024 ICLR <em>Reward Model Ensembles Help Mitigate Overoptimization</em></li><li>Eisenstein et al. 2024 COLM (arXiv 2312.09244, 2023) <em>Helping or Herding? Reward Model Ensembles Mitigate but do not Eliminate Reward Hacking</em></li><li>Gao, Schulman, Hilton 2023 ICML <em>Scaling Laws for Reward Model Overoptimization</em></li></ul>
+<p><strong>Iterative / Self-rewarding</strong></p>
+<ul><li>Xu et al. 2023 arXiv 2312.16682 <em>Some things are more CRINGE than others: Iterative Preference Optimization with the Pairwise Cringe Loss</em></li><li>Yuan et al. 2024 ICML <em>Self-Rewarding Language Models</em></li><li>Pal et al. 2024 arXiv 2402.13228 <em>Smaug: Fixing Failure Modes of Preference Optimisation with DPO-Positive</em></li></ul>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/rlhf_dpo_grpo_ppo_tutorial_en.md</code> ·
+  SHA256 <code>0740c1296ea5</code> ·
+  generated at 2026-05-19 19:02 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

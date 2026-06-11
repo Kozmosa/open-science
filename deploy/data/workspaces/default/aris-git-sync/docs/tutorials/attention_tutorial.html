@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention 面试 Cheat Sheet</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/attention_tutorial.md">
+<meta name="aris:source-sha256" content="8d8d5146c1a9a924cd5e29973b7419d9fe14f5009c392db4b4ad6ff3a12ab1e0">
+<meta name="aris:generated-at" content="2026-05-19 03:40 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-attention-直觉">§1 Attention 直觉</a>
+</li>
+<li><a href="#2-scaled-dot-product-attention">§2 Scaled Dot-Product Attention</a>
+<ul>
+<li><a href="#21-公式">2.1　公式</a></li>
+<li><a href="#22-为什么除以-dk必考题要会推方差">2.2　为什么除以 √d_k（必考题，要会推方差）</a></li>
+<li><a href="#23-mask-与-nan-陷阱-经典-bug面试必问">2.3　Mask 与 NaN 陷阱（💣 经典 bug，面试必问）</a></li>
+<li><a href="#24-代码核心-20-行">2.4　代码（核心 20 行）</a></li>
+</ul>
+</li>
+<li><a href="#3-multi-head-attention">§3 Multi-Head Attention</a>
+<ul>
+<li><a href="#31-公式">3.1　公式</a></li>
+<li><a href="#32-为什么要-multi-head不是单-head-也行吗">3.2　为什么要 multi-head（不是单 head 也行吗？）</a></li>
+<li><a href="#33-参数量与-flops">3.3　参数量与 FLOPs</a></li>
+<li><a href="#34-代码核心-30-行">3.4　代码（核心 30 行）</a></li>
+</ul>
+</li>
+<li><a href="#4-self--cross--causal--padding">§4 Self / Cross / Causal / Padding</a>
+<ul>
+<li><a href="#41-self-vs-cross-attention必考">4.1　Self vs Cross Attention（必考）</a></li>
+<li><a href="#42-causal-maskdecoder--gpt">4.2　Causal Mask（Decoder / GPT）</a></li>
+<li><a href="#43-padding-mask变长序列">4.3　Padding Mask（变长序列）</a></li>
+</ul>
+</li>
+<li><a href="#5-复杂度分析">§5 复杂度分析</a>
+</li>
+<li><a href="#6-kv-cache--mqa--gqa">§6 KV Cache + MQA / GQA</a>
+<ul>
+<li><a href="#61-kv-cacheautoregressive-inference-关键优化">6.1　KV Cache（autoregressive inference 关键优化）</a></li>
+<li><a href="#62-mqa--gqaattack-kv-cache-显存">6.2　MQA / GQA（attack KV cache 显存）</a></li>
+</ul>
+</li>
+<li><a href="#7-flashattention-核心-trick">§7 FlashAttention 核心 Trick</a>
+</li>
+<li><a href="#8-position-encoding-rope--alibi--absolute">§8 Position Encoding (RoPE / ALiBi / Absolute)</a>
+<ul>
+<li><a href="#81-attention-sink高级题">8.1　Attention Sink（高级题）</a></li>
+</ul>
+</li>
+<li><a href="#9-attention-in-diffusiongenerative-方向必问">§9 Attention in Diffusion（generative 方向必问）</a>
+<ul>
+<li><a href="#91-latent-diffusion-stable-diffusion-里的-cross-attention">9.1　Latent Diffusion (Stable Diffusion) 里的 Cross-Attention</a></li>
+<li><a href="#92-attention-在-video-diffusion">9.2　Attention 在 video diffusion</a></li>
+</ul>
+</li>
+<li><a href="#10-25-高频面试题">§10 25 高频面试题</a>
+<ul>
+<li><a href="#l1必会题任何-ml-工程岗都会问">L1必会题（任何 ML 工程岗都会问）</a></li>
+<li><a href="#l2进阶题research-oriented-岗位">L2进阶题（research-oriented 岗位）</a></li>
+<li><a href="#l3高级变体顶级-lab--diffusion-方向">L3高级变体（顶级 lab / diffusion 方向）</a></li>
+</ul>
+</li>
+<li><a href="#a-附录完整-from-scratch-代码骨架">§A 附录：完整 from-scratch 代码骨架</a>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Interview Prep · Attention / MHA / Cross-Attention</div>
+  <h1>Attention 面试 Cheat Sheet</h1>
+  <p class="subtitle">公式推导 + From-Scratch 代码 + 25 高频题（L1 必会 · L2 进阶 · L3 顶级 lab）</p>
+  <p class="byline">By <strong>Ruofeng Yang (杨若峰), Shanghai Jiao Tong University</strong></p>
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/attention_tutorial.md</code></span>
+    <span><strong>SHA256:</strong> <code>8d8d5146c1a9</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 03:40 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">7 句话搞定 attention</div><p>一页拿下面试核心要点（详见后文 §2–§9 推导）。</p></div>
+<ol><li><strong>公式</strong>：$\text{Attention}(Q,K,V) = \text{softmax}\!\left(\dfrac{QK^\top}{\sqrt{d_k}}\right) V$。</li><li><strong>为什么除 √d_k</strong>：若 $q_i, k_i \sim \mathcal{N}(0,1)$ 独立，$q\cdot k$ 方差 $= d_k$；除 $\sqrt{d_k}$ 把方差拉回 1，避免 softmax 饱和。</li><li><strong>Multi-Head</strong>：把 $D$ 拆成 $H$ 个 head，每个 head 在不同 subspace 独立做 attention，concat 后 $W_o$ 投影。<strong>固定 $D$ 且 $d_k=D/H$ 时，标准 MHA 参数量 $\approx 4D^2$（不随 $H$ 变）；MQA/GQA 下 K/V 投影变小</strong>。</li><li><strong>Self vs Cross</strong>：Self 的 Q/K/V 同源；Cross 的 Q 来自 query stream，K/V 来自 context stream（encoder output / image tokens / text embedding）。</li><li><strong>Causal mask vs Padding mask</strong>：前者用下三角阻断未来；后者用 <code>[B,1,1,L_k]</code> 屏蔽 padding 列。</li><li><strong>复杂度</strong>：$O(B H L^2 d_k)$ 时间，$O(B H L^2)$ score 显存——长序列瓶颈在二次项。</li><li><strong>易踩坑</strong>：全 masked row → softmax NaN；FP16 下 $QK^\top$ 可能 overflow；attention weight ≠ 因果解释。</li></ol>
+<h2 id="1-attention-直觉">§1 Attention 直觉</h2>
+<p>Attention 的本质是 <strong>可学习的检索（learned retrieval）</strong>：</p>
+<ul><li>每个 <strong>query</strong>（"我现在需要什么信息？"）</li><li>对所有 <strong>key</strong>（"每个位置宣称自己能提供什么"）计算相似度</li><li>用 softmax 归一化得到 <strong>权重分布</strong></li><li>对所有 <strong>value</strong>（"每个位置实际提供的内容"）做加权求和</li></ul>
+<p>对比 RNN：RNN 把过去信息<strong>压缩进一个固定大小的 hidden state</strong>，长序列必丢信息；attention 在每一步都<strong>直接、全局、动态地</strong>检索过去所有位置，因此适合长程依赖。</p>
+<p>"Q/K/V 是同一个向量经过三个不同投影"——这点要主动说明，因为面试常考新手会以为 Q/K/V 是三份不同输入。</p>
+<h2 id="2-scaled-dot-product-attention">§2 Scaled Dot-Product Attention</h2>
+<h3 id="21-公式">2.1　公式</h3>
+<p>$$\boxed{\;\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V\;}$$</p>
+<p>形状：</p>
+<ul><li>$Q \in \mathbb{R}^{L_q \times d_k}$, $K \in \mathbb{R}^{L_k \times d_k}$, $V \in \mathbb{R}^{L_k \times d_v}$</li><li>Scores $QK^\top \in \mathbb{R}^{L_q \times L_k}$（每个 query 对所有 key 的相似度）</li><li>Softmax over <strong>key 维度</strong>：每个 query 行的权重和为 1</li><li>Output $\in \mathbb{R}^{L_q \times d_v}$</li></ul>
+<h3 id="22-为什么除以-dk必考题要会推方差">2.2　为什么除以 √d_k（必考题，要会推方差）</h3>
+<p>假设 $q, k \in \mathbb{R}^{d_k}$ 的每个分量独立同分布，$q_i, k_i \sim \mathcal{N}(0,1)$。考虑点积：</p>
+<p>$$q \cdot k = \sum_{i=1}^{d_k} q_i k_i$$</p>
+<p>由独立性，每项 $q_i k_i$ 均值 $= \mathbb{E}[q_i]\mathbb{E}[k_i] = 0$，方差 $= \mathbb{E}[q_i^2]\mathbb{E}[k_i^2] = 1$。所以：</p>
+<p>$$\mathbb{E}[q\cdot k] = 0, \quad \text{Var}[q\cdot k] = d_k$$</p>
+<p>当 $d_k$ 大（如 64、128），$q\cdot k$ 的典型量级是 $\sqrt{d_k}$，进入 softmax 后<strong>最大 logit 容易抢走绝大部分概率</strong>，softmax 进入饱和区，梯度量级显著缩小，训练收敛变慢甚至停滞。除以 $\sqrt{d_k}$ 把方差拉回 1，<strong>减轻饱和、改善梯度尺度</strong>。</p>
+<div class="callout callout-warn"><div class="callout-title">面试加分：FP16 下还有 overflow</div><p>即使除了 √d_k，FP16 下 <code>QK^T</code> 自己累加时也可能 overflow（fp16 max ≈ 65504）。生产实现用 fused SDPA / FlashAttention 或 <strong>fp32 accumulation</strong> 解决。<code>torch.softmax</code> 内部有 log-sum-exp 稳定化（减最大 logit 再 exp），但那是在 softmax 一步内做的，挡不住 matmul 累加的 overflow。</p></div>
+<h3 id="23-mask-与-nan-陷阱-经典-bug面试必问">2.3　Mask 与 NaN 陷阱（💣 经典 bug，面试必问）</h3>
+<p>标准做法：把要屏蔽的位置 score 填成 $-\infty$，softmax 后那些位置概率 = 0。</p>
+<p>但有个陷阱：<strong>如果某一行所有 key 都被 mask</strong>（如 query 0 在 cross-attn 中 context 全 padding；causal + 左 padding；某 query 后无任何合法 token），那一行 score 全是 $-\infty$，softmax 输出：</p>
+<p>$$\text{softmax}([-\infty, -\infty, ..., -\infty]) = \text{NaN}$$</p>
+<p>因为分子分母都是 $e^{-\infty} = 0$，$0/0 = $ NaN，污染整个 batch 的梯度。</p>
+<div class="callout callout-good"><div class="callout-title">修复：检测全 mask 行 → softmax 后清 0</div></div>
+<pre><code class="language-python"># 检测全 mask 行
+all_masked = (~mask).all(dim=-1, keepdim=True)   # [..., L_q, 1]
+# 临时给该行放开 (避免 NaN)
+safe_mask = mask | all_masked
+scores = scores.masked_fill(~safe_mask, float(&quot;-inf&quot;))
+
+# Softmax 正常计算
+weights = F.softmax(scores, dim=-1)
+
+# 把全 mask 行的输出强制设为 0 (否则会得到均匀分布)
+weights = weights.masked_fill(all_masked, 0.0)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Mask 语义不对齐 (面试要主动 disambiguate)</div><p>本实现 / <code>F.scaled_dot_product_attention</code>：<strong>True = keep</strong></p></div>
+<p><code>nn.MultiheadAttention</code> 的 <code>attn_mask</code> / <code>key_padding_mask</code>：<strong>True = mask out</strong>（相反！）</p>
+<p>面试写代码前先问面试官约定，或主动声明你的约定，否则容易被搞反。</p>
+<h3 id="24-代码核心-20-行">2.4　代码（核心 20 行）</h3>
+<pre><code class="language-python">def scaled_dot_product_attention(Q, K, V, mask=None, dropout_p=0.0, training=True):
+    d_k = Q.size(-1)
+    scores = Q @ K.transpose(-2, -1)                 # [..., L_q, L_k]
+    scores = scores / math.sqrt(d_k)                 # ← 关键 scale
+
+    if mask is not None:
+        all_masked = (~mask).all(dim=-1, keepdim=True)
+        safe_mask = mask | all_masked
+        scores = scores.masked_fill(~safe_mask, float(&quot;-inf&quot;))
+    else:
+        all_masked = None
+
+    weights = F.softmax(scores, dim=-1)
+
+    if all_masked is not None:
+        weights = weights.masked_fill(all_masked, 0.0)   # NaN 防护
+
+    if dropout_p &gt; 0.0 and training:
+        weights = F.dropout(weights, p=dropout_p)
+
+    return weights @ V, weights                       # output, weights</code></pre>
+<h2 id="3-multi-head-attention">§3 Multi-Head Attention</h2>
+<h3 id="31-公式">3.1　公式</h3>
+<p>$$\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_H) W_o$$</p>
+<p>$$\text{head}_h = \text{Attention}(Q W_q^{(h)},\; K W_k^{(h)},\; V W_v^{(h)})$$</p>
+<p>每个 head 的 $W_q^{(h)}, W_k^{(h)}, W_v^{(h)} \in \mathbb{R}^{D \times d_k}$，$d_k = D/H$。<strong>工程上把 H 个 head 的投影矩阵 concat 成一个 $D \times D$ 大矩阵</strong>，一次 matmul 跑完所有 head 的投影（GPU 友好）：</p>
+<pre class="diagram"><code>
+Input X [B, L, D]
+   │
+   │  W_q, W_k, W_v ∈ R^{D×D}   (每个 = concat of H 个 W^{(h)} ∈ R^{D×d_k})
+   ↓
+Q, K, V [B, L, D]
+   │
+   │  reshape [B, L, D] → [B, L, H, d_k] → transpose → [B, H, L, d_k]
+   ↓
+对每个 head 独立做 Scaled-Dot-Product Attention (batched matmul, 并行)
+   ↓
+heads [B, H, L_q, d_k]
+   │
+   │  transpose + reshape → [B, L_q, D]   (concat heads)
+   ↓
+W_o ∈ R^{D×D}    →    Output [B, L_q, D]</code></pre>
+<h3 id="32-为什么要-multi-head不是单-head-也行吗">3.2　为什么要 multi-head（不是单 head 也行吗？）</h3>
+<ul><li><strong>不同 subspace</strong>：每个 head 在自己的 $d_k$ 维子空间里学一种关系模式（语法、共指、远距依赖、局部 n-gram...）</li><li><strong>表达力</strong>：单 head 只能学一种 attention 模式；H 个 head 在 inference 时<strong>并行</strong>给出 H 种不同的 weighted sum 结果</li><li><strong>参数效率</strong>：$d_k = D/H$ 而不是 $D$，所以参数量不会随 H 线性增加</li><li>面试常问：head 越多越好吗？<strong>不</strong>。$d_k = D/H$ 太小（如 $d_k < 16$）会让每个 head 表达力受限；Mistral / LLaMA 用 head_dim ≈ 64-128 是 sweet spot</li></ul>
+<h3 id="33-参数量与-flops">3.3　参数量与 FLOPs</h3>
+<table><thead><tr><th>组件</th><th>形状</th><th>参数量</th></tr></thead><tbody><tr><td>$W_q$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td>$W_k$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td>$W_v$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td>$W_o$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td><strong>总计</strong></td><td></td><td><strong>$4D^2$</strong>（不随 $H$ 变）</td></tr></tbody></table>
+<p>FLOPs（单次 self-attention forward，$L_q = L_k = L$）：</p>
+<ul><li>QKV projection: $3 \cdot 2 B L D^2 = 6 B L D^2$</li><li>$QK^\top$: $2 B H L^2 d_k = 2 B L^2 D$</li><li>Softmax weight × V: $2 B L^2 D$</li><li>Output projection $W_o$: $2 B L D^2$</li><li><strong>总计 $\approx 8 B L D^2 + 4 B L^2 D$</strong>——前者随 $L$ 线性，后者随 $L$ 平方（长序列瓶颈）</li></ul>
+<h3 id="34-代码核心-30-行">3.4　代码（核心 30 行）</h3>
+<pre><code class="language-python">class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads, dropout=0.0, bias=False):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_model, self.num_heads, self.d_k = d_model, num_heads, d_model // num_heads
+
+        # 合并 H 个 W^(h) 成一个 [D, D] 矩阵
+        self.W_q = nn.Linear(d_model, d_model, bias=bias)
+        self.W_k = nn.Linear(d_model, d_model, bias=bias)
+        self.W_v = nn.Linear(d_model, d_model, bias=bias)
+        self.W_o = nn.Linear(d_model, d_model, bias=bias)
+        self.dropout_p = dropout
+
+    def _split(self, x):  # [B, L, D] → [B, H, L, d_k]
+        B, L, _ = x.shape
+        return x.view(B, L, self.num_heads, self.d_k).transpose(1, 2)
+
+    def _merge(self, x):  # [B, H, L, d_k] → [B, L, D]
+        B, _, L, _ = x.shape
+        return x.transpose(1, 2).contiguous().view(B, L, self.d_model)
+
+    def forward(self, query, key, value, mask=None):
+        Q = self._split(self.W_q(query))
+        K = self._split(self.W_k(key))
+        V = self._split(self.W_v(value))
+
+        if mask is not None:
+            if mask.dim() == 2: mask = mask.unsqueeze(0).unsqueeze(0)   # [1,1,L_q,L_k]
+            elif mask.dim() == 3: mask = mask.unsqueeze(1)              # [B,1,L_q,L_k]
+            # dim=4: 已对齐
+
+        out, w = scaled_dot_product_attention(Q, K, V, mask=mask, dropout_p=self.dropout_p, training=self.training)
+        return self.W_o(self._merge(out)), w</code></pre>
+<h2 id="4-self--cross--causal--padding">§4 Self / Cross / Causal / Padding</h2>
+<h3 id="41-self-vs-cross-attention必考">4.1　Self vs Cross Attention（必考）</h3>
+<table><thead><tr><th></th><th>Self-Attention</th><th>Cross-Attention</th></tr></thead><tbody><tr><td><strong>Q 来源</strong></td><td>$X$</td><td>$X_\text{decoder}$ / latent / learnable queries</td></tr><tr><td><strong>K, V 来源</strong></td><td>$X$（同源）</td><td>$X_\text{encoder}$ / context / memory</td></tr><tr><td><strong>$L_q$ vs $L_k$</strong></td><td>相等</td><td>可以不同</td></tr><tr><td><strong>典型 mask</strong></td><td>causal (decoder) 或 padding (encoder)</td><td>K/V 端 padding mask（不用 causal）</td></tr><tr><td><strong>用途</strong></td><td>内部位置相关性</td><td>从外部 memory 检索相关信息</td></tr><tr><td><strong>例子</strong></td><td>BERT 各层；GPT 各层；ViT</td><td>Transformer Decoder 第二子层；DETR；Perceiver；Stable Diffusion (image Q × text K/V)</td></tr></tbody></table>
+<h3 id="42-causal-maskdecoder--gpt">4.2　Causal Mask（Decoder / GPT）</h3>
+<p>下三角矩阵（含对角线）：第 $i$ 行可以看 $j \le i$ 的 key。</p>
+<pre><code class="language-python">def causal_mask(L, device=None):
+    return torch.tril(torch.ones(L, L, dtype=torch.bool, device=device))
+# L=4 →
+# [[T F F F]
+#  [T T F F]
+#  [T T T F]
+#  [T T T T]]</code></pre>
+<h3 id="43-padding-mask变长序列">4.3　Padding Mask（变长序列）</h3>
+<p>每个 sample 有效长度不同，padding token 不应被 attend：</p>
+<pre><code class="language-python">def padding_mask(lengths, max_len=None):
+    if max_len is None: max_len = int(lengths.max())
+    idx = torch.arange(max_len, device=lengths.device).unsqueeze(0).expand(len(lengths), -1)
+    return idx &lt; lengths.unsqueeze(1)    # [B, L]    True=valid, False=padding
+
+# 用法：必须 unsqueeze 成 [B, 1, 1, L_k] 才能 broadcast 到 MHA 内部 [B, H, L_q, L_k]
+pmask = padding_mask(lengths).unsqueeze(1).unsqueeze(1)   # [B, 1, 1, L_k]
+out, _ = mha(x, x, x, mask=pmask)</code></pre>
+<div class="callout callout-info"><div class="callout-title">Causal + Padding 同时用</div><p>两个 mask 取 AND：<code>combined = causal_mask &amp; padding_mask_4d</code>。注意 broadcast 维度对齐：causal 是 <code>[L,L]</code>，padding 是 <code>[B,1,1,L_k]</code>，AND 出来 <code>[B,1,L,L]</code>。</p></div>
+<h2 id="5-复杂度分析">§5 复杂度分析</h2>
+<table><thead><tr><th></th><th>Time</th><th>Memory</th><th>瓶颈</th></tr></thead><tbody><tr><td>RNN</td><td>$O(L \cdot D^2)$</td><td>$O(D)$</td><td>顺序计算不可并行</td></tr><tr><td>Self-Attention</td><td>$O(L^2 \cdot D)$</td><td>$O(L^2 + L \cdot D)$</td><td>$L^2$ score 矩阵（长序列）</td></tr><tr><td>Conv (kernel $k$)</td><td>$O(L \cdot k \cdot D^2)$</td><td>$O(D)$</td><td>感受野有限</td></tr></tbody></table>
+<p>关键点：</p>
+<ul><li>Self-attention 的 $L^2$ 项<strong>计算</strong>可以接受（GPU 并行），但 <strong>$L^2$ 显存</strong>（score 矩阵）是真正瓶颈——这是 Flash Attention 攻击的痛点</li><li>LLM inference 时 prefill stage 是 $O(L^2)$；decode stage 用 KV cache 后每步是 $O(L)$（见 §6）</li><li>当 $L \approx D$ 时，attention 与 FFN 时间相当；当 $L \gg D$ 时，attention 占绝大部分时间</li></ul>
+<h2 id="6-kv-cache--mqa--gqa">§6 KV Cache + MQA / GQA</h2>
+<h3 id="61-kv-cacheautoregressive-inference-关键优化">6.1　KV Cache（autoregressive inference 关键优化）</h3>
+<p>问题：GPT 自回归生成时，每生成一个 token，把整个 prefix 重新过 forward——$t$ 步累计 $O(t^2)$ 重复计算。</p>
+<p>解：把每层 $K^{(\ell)}, V^{(\ell)}$ 缓存。生成第 $t+1$ 个 token 时：</p>
+<ul><li>只对新 token 算 $q_{t+1}, k_{t+1}, v_{t+1}$（1 × D 大小）</li><li>将 $k_{t+1}, v_{t+1}$ append 到 cache</li><li>新 $q$ 对整个 cache 做 attention（$O(t)$ 不是 $O(t^2)$）</li></ul>
+<div class="callout callout-warn"><div class="callout-title">易踩坑</div><p>KV cache 是 <strong>推理优化</strong>，<strong>训练</strong>时不能用——训练时所有位置同时做 attention，没有"逐个生成"的概念。</p></div>
+<p><strong>KV cache 显存（per sample）</strong>：</p>
+<p>$$\text{KV cache} = L_\text{ctx} \cdot n_\text{layers} \cdot \underbrace{2}_{K, V} \cdot H_\text{kv} \cdot d_\text{head} \cdot \text{bytes\_per\_elem}$$</p>
+<p>注意：MQA/GQA 下 $H_\text{kv} \ll H$，cache 显著缩减。对 LLaMA-2-70B（GQA, $H_\text{kv}=8$）、$L_\text{ctx}=4096$、80 层、fp16：约 <strong>1.25 GB / sample</strong>——这就是 LLaMA-2 用 GQA 不用 MHA 的原因（vanilla MHA 会到 10 GB / sample）。</p>
+<h3 id="62-mqa--gqaattack-kv-cache-显存">6.2　MQA / GQA（attack KV cache 显存）</h3>
+<table><thead><tr><th>变体</th><th>Q heads</th><th>K/V heads</th><th>KV cache 缩减</th><th>用在哪</th></tr></thead><tbody><tr><td><strong>MHA</strong> (Vanilla)</td><td>$H$</td><td>$H$</td><td>1×</td><td>原始 Transformer</td></tr><tr><td><strong>MQA</strong> (Multi-Query)</td><td>$H$</td><td><strong>1</strong></td><td>$H \times$</td><td>PaLM, Falcon</td></tr><tr><td><strong>GQA</strong> (Grouped-Query)</td><td>$H$</td><td>$G$（$1 < G < H$）</td><td>$H/G \times$</td><td>LLaMA-2/3, Mistral</td></tr></tbody></table>
+<p>核心：<strong>多个 Q head 共享一组 K/V</strong>。MQA 极端但质量略降；GQA 是折中（如 H=32, G=8），显存 / 带宽降 4 倍，质量基本不掉。</p>
+<div class="callout callout-bad"><div class="callout-title">易踩坑</div><p>MQA/GQA 减少的是 <strong>KV cache 显存 + 显存带宽</strong>，<strong>不是 Q projection 计算</strong>（Q 头数不变）。面试常被反问"减了什么"。</p></div>
+<h2 id="7-flashattention-核心-trick">§7 FlashAttention 核心 Trick</h2>
+<p>问题：标准 attention 需要物化 $L \times L$ 的 score 矩阵，HBM 读写 IO 是瓶颈（不是 FLOPs）。</p>
+<p>FlashAttention 思路（<strong>IO-aware exact attention</strong>，不是近似）：</p>
+<ol><li><strong>Block Tiling</strong>：把 $Q, K, V$ 切成 block，每次只把一个 $Q$ block 和一个 $K, V$ block 加载到 SRAM</li><li><strong>Online Softmax</strong>：边算边维护 running max $m$ 和 running sum $\ell$，避免一次性物化全部 scores</li><li><strong>Recompute on backward</strong>：反向时重算 attention 而不存 $L^2$ scores</li></ol>
+<p>效果：</p>
+<ul><li><strong>避免 materialize</strong> 完整 $L \times L$ 的 scores / probs 矩阵到 HBM</li><li>论文给出的 HBM IO 复杂度约 $O(L^2 d^2 / M + Ld)$，对比标准 attention 的 $O(L^2 + Ld)$ HBM traffic——当 $L$ 大、$M$（SRAM）合适时 IO 减少显著</li><li>显存峰值从 $O(L^2)$ 降到 $O(L)$（不存中间 scores）</li><li>典型速度提升 2-4 倍（取决于 sequence length &amp; GPU 架构）</li><li><strong>数学上完全等价</strong>（exact attention，不是 sparse / linear approximation）</li></ul>
+<div class="callout callout-info"><div class="callout-title">FlashAttention v1/v2/v3 关键区别</div><p>v1 (2022)：online softmax + block tiling + recompute。v2 (2023)：换内外循环 (Q-outer, KV-inner) + 更好 warp-level parallelism + 减少非 matmul FLOPs。v3 (2024)：针对 H100 Hopper，使用 WGMMA / TMA / FP8 + asynchronous pipeline。面试一般问 v1/v2，会问到 online softmax 细节。</p></div>
+<h2 id="8-position-encoding-rope--alibi--absolute">§8 Position Encoding (RoPE / ALiBi / Absolute)</h2>
+<table><thead><tr><th>方法</th><th>原理</th><th>外推性</th><th>用在哪</th></tr></thead><tbody><tr><td><strong>Sinusoidal absolute</strong></td><td>固定 sin/cos 位置向量加到 input embedding</td><td>位置编码本身可定义任意长度，但模型未必学到长度外的泛化</td><td>原始 Transformer (Vaswani 2017)</td></tr><tr><td><strong>Learned absolute</strong></td><td>把位置当 token，学一个 embedding 表</td><td>差（位置 embedding 表是定长，硬限制）</td><td>BERT, GPT-2</td></tr><tr><td><strong>RoPE</strong> (Rotary)</td><td>对 $Q, K$ 做位置相关的旋转：$q_m \to q_m e^{im\theta}$（复数视角）——<strong>位置相关项通过相对位移 $m-n$ 进入内积</strong>（内容向量仍影响分数）</td><td>中等（自然包含相对位置；长度外推需 NTK-aware / YaRN）</td><td>LLaMA-1/2/3, Mistral, Qwen</td></tr><tr><td><strong>ALiBi</strong></td><td>在 score 上加位置距离 bias：$\text{score}_{ij} - m \cdot \lvert i-j \rvert$</td><td>好（线性 bias 自然外推）</td><td>BLOOM, MPT</td></tr></tbody></table>
+<h3 id="81-attention-sink高级题">8.1　Attention Sink（高级题）</h3>
+<p>训练好的 LLM 在 decode 时，注意力会异常集中在前 1-4 个 token（特别是 [BOS] / 第一个 token），即使内容无关。这种现象叫 <strong>attention sink</strong>。<strong>常见直觉解释</strong>：softmax 强制权重和为 1，当一个 query 实际不想 attend 任何 key 时，需要一个"垃圾位"来吸收概率质量；又因为 early tokens 对所有后续 token 都可见，训练中容易自然形成全局 sink。StreamingLLM (Xiao et al., ICLR 2024) 利用这个现象做长序列推理（保留 attention sink + 滑动窗口）。</p>
+<h2 id="9-attention-in-diffusiongenerative-方向必问">§9 Attention in Diffusion（generative 方向必问）</h2>
+<p>对 diffusion 背景的候选人，几乎必问 attention 在生成模型里的用法。</p>
+<h3 id="91-latent-diffusion-stable-diffusion-里的-cross-attention">9.1　Latent Diffusion (Stable Diffusion) 里的 Cross-Attention</h3>
+<pre><code>
+Image latent (z_t)  [B, C, H, W]
+   │
+   │  flatten to tokens [B, HW, D]
+   ↓
+Self-Attention (Q=K=V from image)
+   ↓
+Cross-Attention:
+    Q = image tokens [B, HW, D]
+    K, V = text embedding [B, L_text, D]    ← 文本条件
+   ↓
+FFN → next layer</code></pre>
+<p>关键点：</p>
+<ul><li>Text-to-image conditioning 通过 cross-attention 实现：image tokens 是 query，text embedding 是 key/value</li><li>Classifier-Free Guidance (CFG)：两次 forward（with text / without text）做差值。$\epsilon$-pred 时：$\epsilon_\text{CFG} = \epsilon_\text{uncond} + s (\epsilon_\text{cond} - \epsilon_\text{uncond})$；v-pred / x0-pred 时换成对应预测量，线性 guidance 形式类似</li><li>SD / SDXL 的 U-Net 在多个 spatial resolution 的 transformer block 里都有 self-attn 与 cross-attn 交替</li><li>DiT (Diffusion Transformer) 把 U-Net 换成 pure Transformer，conditioning 通过 AdaLN / cross-attn / token-concat 等方式</li></ul>
+<h3 id="92-attention-在-video-diffusion">9.2　Attention 在 video diffusion</h3>
+<ul><li><strong>Spatial attention</strong>：每帧内部（image patches 之间）</li><li><strong>Temporal attention</strong>：跨帧（同位置在不同时间步之间）</li><li><strong>Spatiotemporal / full attention</strong>：所有 frame × all positions——最昂贵，长视频不可行</li><li>Long video 的 attention 是开放问题（$L \sim 10^4$-$10^5$ token），常见路线：因式化（空间 + 时间交替）、sparse window、hierarchical pooling、chunked attention</li></ul>
+<h2 id="10-25-高频面试题">§10 25 高频面试题</h2>
+<p>codex (gpt-5.5 xhigh) 作为顶级 lab 面试官视角列的，按难度分 3 档。每题点开看答案要点 + 易踩坑。</p>
+<h3 id="l1必会题任何-ml-工程岗都会问">L1必会题（任何 ML 工程岗都会问）</h3>
+<details>
+
+<summary>Q1.Attention 公式是什么？</summary>
+<ul><li>$\text{softmax}(QK^\top / \sqrt{d_k}) V$</li><li>Softmax over keys 维度</li><li>输出是 value 的加权和</li></ul>
+<p>把 softmax 维度写到 query 维。</p>
+</details>
+<details>
+
+<summary>Q2.为什么除以 √d_k？</summary>
+<ul><li>若 $q_i, k_i$ 独立零均值单位方差</li><li>Dot product 方差约 $d_k$</li><li>缩放后方差回到 1，避免 softmax 饱和</li></ul>
+<p>只说"防止数值太大"，不给方差推导。</p>
+</details>
+<details>
+
+<summary>Q3.Q/K/V 分别代表什么？</summary>
+<ul><li>Q 是检索请求</li><li>K 是匹配索引</li><li>V 是被聚合内容</li></ul>
+<p>说 Q/K/V 是三份不同输入；self-attn 中它们同源但投影不同。</p>
+</details>
+<details>
+
+<summary>Q4.Multi-head 为什么有用？</summary>
+<ul><li>不同子空间建模不同关系</li><li>多种位置/语义模式并行</li><li>Concat 后再融合</li></ul>
+<p>说 head 越多一定越好。实际 $d_k$ 太小会限制表达力。</p>
+</details>
+<details>
+
+<summary>Q5.MHA 参数量随 head 数怎么变？</summary>
+<ul><li>固定 $D$ 且 $d_k = D/H$（标准 MHA）</li><li>$W_q + W_k + W_v + W_o$ 共 $4D^2$，<strong>不随 $H$ 变</strong></li><li>但若用 MQA/GQA，K/V 投影矩阵会变小（$H_\text{kv} < H$ 个 head）</li><li>这就是为什么"head 数是免费的"在标准 MHA 下成立，但在 MQA/GQA 下有显存收益</li></ul>
+<p>误以为 head 多参数也线性多 H 倍；或忘了 MQA/GQA 改变了 K/V 投影维度。</p>
+</details>
+<details>
+
+<summary>Q6.Self-attention 和 cross-attention 区别？</summary>
+<ul><li>Self: Q/K/V 同源</li><li>Cross: Q 来自 target，K/V 来自 context</li><li>Cross 常用于 encoder-decoder、diffusion text conditioning</li></ul>
+<p>只说"cross 有两个输入"，不说明 Q 与 KV 来源。</p>
+</details>
+<details>
+
+<summary>Q7.写 causal mask 怎么做？</summary>
+<ul><li><code>torch.tril(torch.ones(L, L, dtype=torch.bool))</code></li><li>明确说 True=keep 还是 True=mask（API 间不一致）</li><li>Broadcast 到 <code>[B, H, L, L]</code> 或让框架隐式 broadcast</li></ul>
+<p>上下三角写反；忘记 broadcast 维度对齐。</p>
+</details>
+<details>
+
+<summary>Q8.Padding mask mask 的是哪一维？</summary>
+<ul><li>通常 mask key/value 列（让 padding 位置概率为 0）</li><li>Shape 可为 <code>[B, 1, 1, L_k]</code> 对齐 head + query 维</li><li>注意：mask key 列<strong>不足以</strong>让 padded query 输出为 0；padded query 行通常用 loss ignore / output zeroing / packed sequence 等手段单独处理</li></ul>
+<p>以为 padding mask 一手包办——它只防止"看到 padding"，但 padded query 自己的输出还需要外部处理。</p>
+</details>
+<details>
+
+<summary>Q9.Attention 复杂度？</summary>
+<ul><li>时间 $O(B H L_q L_k d_k) = O(B L^2 D)$</li><li>Score memory $O(B H L_q L_k)$</li><li>长序列瓶颈是二次项</li></ul>
+<p>只说 $O(n^2)$，漏 head 和 hidden 维。</p>
+</details>
+<details>
+
+<summary>Q10.Attention dropout 放在哪里？</summary>
+<ul><li>放在 softmax weights 之后、与 V matmul 之前</li><li>Training 才启用，eval 时关闭</li><li>Dropout 后权重行和不一定是 1（期望意义上为 1）</li></ul>
+<p>Sanity check 时还要求 dropout 后 row-sum = 1（错的）。</p>
+</details>
+<h3 id="l2进阶题research-oriented-岗位">L2进阶题（research-oriented 岗位）</h3>
+<details>
+
+<summary>Q11.手推 softmax 的 Jacobian。</summary>
+<ul><li>$y_i = \dfrac{e^{x_i}}{\sum_j e^{x_j}}$</li><li>$\dfrac{\partial y_i}{\partial x_j} = y_i (\delta_{ij} - y_j)$</li><li>矩阵形式：$J = \text{diag}(y) - yy^\top$</li></ul>
+<p>只写对角项，漏交叉项 $-y_i y_j$。</p>
+</details>
+<details>
+
+<summary>Q12.用 -∞ 做 mask 有什么坑？</summary>
+<ul><li>正常情况 masked 位置 softmax 概率为 0 ✓</li><li><strong>全 masked row → softmax 输出 NaN</strong>（$0/0$）</li><li>修复路径：先避免 all-<code>-inf</code> 行（临时放开），softmax 后把该行 weights 与 output 强制清 0，并确保该 query 不进入 loss / 残差累积</li><li>Fused kernel / API 对 sentinel 数值有约束；fp16 下用一个 dtype-safe 大负数（如 <code>finfo(dtype).min</code>）更稳</li></ul>
+<p>以为 -inf 永远安全；或只在 softmax 后清 0 而不防 NaN。</p>
+</details>
+<details>
+
+<summary>Q13.Log-sum-exp trick 是什么？</summary>
+<ul><li>softmax 前先减 max(logits)，等价不改变概率</li><li>防止 $e^{x_i}$ overflow（fp32 max ≈ 3.4e38，但 $e^{100}$ 已经溢出）</li><li>$\log \sum_j e^{x_j} = m + \log \sum_j e^{x_j - m}$ 其中 $m = \max_j x_j$</li></ul>
+<p>忘了 $QK^\top$ overflow 可能发生在 softmax 之前（matmul 累加阶段）。</p>
+</details>
+<details>
+
+<summary>Q14.PyTorch nn.MultiheadAttention 的 in_proj_weight 顺序？</summary>
+<ul><li>Shape <code>[3D, D]</code></li><li>顺序：<strong>Q, K, V</strong>（cat dim=0）</li><li>Linear weight 是 <code>[out, in]</code>，所以 <code>cat([W_q.weight, W_k.weight, W_v.weight], dim=0)</code></li></ul>
+<p>拼成 K/Q/V 或转置 weight。</p>
+</details>
+<details>
+
+<summary>Q15.attn_mask 和 key_padding_mask 区别？</summary>
+<ul><li><code>attn_mask</code> 控制 query-key pair 级别（一般是 causal）</li><li><code>key_padding_mask</code> 控制 key token 整体可见性（一般是 padding）</li><li>两者 bool 语义：<code>nn.MultiheadAttention</code> 是 <strong>True = mask out</strong>；<code>F.scaled_dot_product_attention</code> 的 bool mask 是 <strong>True = keep</strong>（相反！）</li><li>同时用时，在 mask-out 语义下合并是 <strong>OR</strong>（任一为 True 就屏蔽）；在 keep 语义下是 AND（两者都 True 才保留）</li></ul>
+<p>不查 API 文档直接套用 True/False；或把 AND/OR 搞反。</p>
+</details>
+<details>
+
+<summary>Q16.Cross-attention 中 L_q 和 L_k 能否不同？</summary>
+<ul><li>可以——这正是 cross-attention 的常态</li><li>Scores shape 是 $[L_q, L_k]$</li><li>Mask 必须对齐 key 维度</li></ul>
+<p>默认 cross-attn 必须等长。</p>
+</details>
+<details>
+
+<summary>Q17.为什么需要 output projection W_o？</summary>
+<ul><li>融合不同 head 的输出</li><li>映射回 $d_\text{model}$ 与残差相加</li><li>给模型学习 head 间组合（不是简单 concat）</li></ul>
+<p>以为 concat 后已经结束。</p>
+</details>
+<details>
+
+<summary>Q18.Pre-norm vs post-norm 对 attention block 的影响？</summary>
+<ul><li>Pre-norm：<code>x + Attn(LN(x))</code>，深层训练更稳定，gradient 沿残差路径相对保持</li><li>Post-norm：<code>LN(x + Attn(x))</code>，Vaswani 原论文用，超深时需 warmup / careful init</li><li><strong>多数 decoder-only LLM 用 pre-norm（常配 RMSNorm 变体）</strong>，但具体架构有例外</li></ul>
+<p>把 norm 位置当纯工程细节，或说"现代 LLM 都用 pre-norm" 太绝对。</p>
+</details>
+<details>
+
+<summary>Q19.Attention weight 等于"模型解释"吗？</summary>
+<ul><li>可视化有参考价值（注意聚焦位置）</li><li>但 <strong>不等于因果解释</strong></li><li>Value 路径和后续层都会改变实际贡献</li><li>Jain &amp; Wallace "Attention is not Explanation" (2019)</li></ul>
+<p>直接把高 attention 权重当成"模型理由"。</p>
+</details>
+<details>
+
+<summary>Q20.Mixed-precision attention 注意什么？</summary>
+<ul><li><strong>fp32 accumulation</strong>：matmul 累加 / softmax 关键步骤在 fp32 完成，再 cast 回低精度</li><li><strong>Softmax max-subtraction</strong>（log-sum-exp）防 exp overflow，PyTorch <code>F.softmax</code> 内部已做</li><li><strong>Mask sentinel</strong>：fp16 下用 <code>torch.finfo(dtype).min</code> 而非字面 -inf</li><li><strong>BF16 vs FP16</strong>：BF16 动态范围与 fp32 相近，更适合 attention；fp16 表数范围窄，QK^T 易 overflow</li><li><strong>Fused kernels</strong>（FlashAttention, <code>F.scaled_dot_product_attention</code>）内置 kernel-level 稳定化，比手写 naive 安全</li></ul>
+<p>FP16 下直接手写 naive attention 不做 fp32 accumulation。</p>
+</details>
+<h3 id="l3高级变体顶级-lab--diffusion-方向">L3高级变体（顶级 lab / diffusion 方向）</h3>
+<details>
+
+<summary>Q21.KV cache 如何优化自回归解码？</summary>
+<ul><li>解码第 $t+1$ 步时，只为新 token 算 $Q$（1×D）</li><li>复用历史 $K, V$（已经在 cache 里），append 新 $k_{t+1}, v_{t+1}$</li><li>每步 attention 从 $O(t^2)$ 变 $O(t)$，整段生成从 $O(L^3)$ 变 $O(L^2)$</li><li>Per-sample 显存：$L_\text{ctx} \cdot n_\text{layers} \cdot 2 \cdot H_\text{kv} \cdot d_\text{head} \cdot \text{bytes}$（MQA/GQA 下 $H_\text{kv} \ll H$）</li></ul>
+<p>说 KV cache 减少训练成本——错。它只用于 autoregressive inference。另：cache 是 KV heads 数量，不是 Q heads。</p>
+</details>
+<details>
+
+<summary>Q22.MQA 和 GQA 解决什么？</summary>
+<ul><li>MQA：多个 Q head 共享一组 K/V（K/V 只有 1 个 head）</li><li>GQA：折中，K/V 有 $G$ 组（$1 < G < H$）</li><li>主要收益：<strong>decode 时 KV cache 显存 + 显存带宽</strong>（大幅降低）</li><li>同时也减少 K/V projection 的参数和计算（K/V 投影矩阵变小），<strong>但不减少 Q / O projection</strong></li><li>质量影响：通常 <strong>GQA 质量损失小于 MQA</strong>，具体取决于模型规模和训练方式（LLaMA-2 70B / LLaMA-3 / Mistral / Qwen-2 都用 GQA）</li></ul>
+<p>以为减少了 Q projection；或说"GQA 质量基本不掉"过于绝对。</p>
+</details>
+<details>
+
+<summary>Q23.FlashAttention 核心 trick？</summary>
+<ul><li><strong>Block tiling</strong>：把 $Q, K, V$ 切成 SRAM-sized block，分批 load</li><li><strong>Online softmax</strong>：增量维护 running max $m$ 与 running sum $\ell$，<strong>避免 materialize</strong> 完整 $L \times L$ scores / probs 矩阵到 HBM</li><li><strong>Recompute on backward</strong>：反向时根据 saved $m, \ell$ 重算 scores，不存中间结果</li><li>关键：<strong>IO-aware exact attention</strong>（数学等价，不是近似）</li><li>HBM IO 复杂度约 $O(L^2 d^2 / M + Ld)$，对比标准 attention 的 $O(L^2 + Ld)$ HBM traffic——长序列下显著减少 IO（不是 FLOPs）</li></ul>
+<p>说它是近似 attention（如 Performer / Linformer）——错，FlashAttn 是 exact；或把 IO 复杂度和 FLOPs 复杂度混淆。</p>
+</details>
+<details>
+
+<summary>Q24.RoPE, ALiBi, absolute position 的区别？什么是 attention sink？</summary>
+<ul><li><strong>Absolute</strong>：位置向量加到 input embedding 上（Vaswani sinusoidal / GPT-2 learned）</li><li><strong>RoPE</strong>：对 $Q, K$ 做位置相关的旋转，保留<strong>相对位置</strong>信息（$q_m^\top k_n$ 只依赖 $m-n$）</li><li><strong>ALiBi</strong>：在 score 上加距离 bias $-m |i-j|$，自然外推</li><li><strong>Attention sink</strong>：训练好的 LLM 会让前 1-4 个 token（特别是 [BOS]）获得异常高的 attention，即使内容无关——softmax 强制和为 1，模型需要"垃圾位"。StreamingLLM 利用此现象做长序列推理。</li></ul>
+<p>把 attention sink 当成 padding / CLS token 的正常 attention 行为。</p>
+</details>
+<details>
+
+<summary>Q25.Attention 在 diffusion / latent diffusion 里怎么用？</summary>
+<ul><li><strong>U-Net latent tokens 作 Q</strong>，text embedding 作 K/V，做 <strong>cross-attention</strong> 注入文本条件</li><li>Self-attention 在每个 spatial resolution 内做（image patches × image patches）</li><li><strong>CFG (Classifier-Free Guidance)</strong>：两次 forward，差值放大 conditional 信号</li><li>DiT (Diffusion Transformer)：把 U-Net 换成 pure Transformer，conditioning 通过 AdaLN / cross-attn / token-concat</li><li>Video diffusion：空间 attn + 时间 attn + 时空 attn 的组合（长 video 是开放问题，$L \sim 10^5$）</li></ul>
+<p>说 diffusion 只靠卷积；或者只在 DiT 里才有 attention（错，U-Net 里也有大量）。</p>
+</details>
+<h2 id="a-附录完整-from-scratch-代码骨架">§A 附录：完整 from-scratch 代码骨架</h2>
+<p>参考 from-scratch 实现包含：</p>
+<ul><li><code>scaled_dot_product_attention()</code>—— 含 NaN 防护</li><li><code>MultiHeadAttention</code>—— 标准 MHA，支持 4 种 mask 形状</li><li><code>SelfAttention</code> / <code>CrossAttention</code>—— thin wrapper，调用语义清晰</li><li><code>causal_mask()</code> / <code>padding_mask()</code> / <code>combine_masks()</code></li><li>9 个 sanity check（self / causal / padding / cross / wrappers / nn.MHA 对齐 / NaN防护 / d_model%H / return_weights=False）</li></ul>
+<p>实跑 sanity check 输出（PyTorch 2.x，单机 GPU）：</p>
+<pre><code>[a] self-attn  out=(2, 5, 16) weights=(2, 4, 5, 5)  weights row-sum=1 ✓
+[b] causal mask: upper triangle ~ 0  ✓
+[c] padding mask: pad-key columns ~ 0 in sample-1  ✓
+[d] cross-attn out=(2, 7, 16) weights=(2, 4, 7, 5)  ✓
+[e] SelfAttention(causal) ✓   CrossAttention(context-pad) ✓
+[f] vs nn.MultiheadAttention:  |Δout|=0.00e+00  |Δweights|=0.00e+00  ✓
+[g] all-masked row: no NaN, weights row = 0  ✓
+[h] d_model not divisible by num_heads -&gt; ValueError  ✓
+[i] return_weights=False -&gt; weights is None  ✓</code></pre>
+<p>代码经独立 reviewer 静态检查 + PyTorch 实跑 sanity check，与 <code>nn.MultiheadAttention</code> diff = 0。</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/attention_tutorial.md</code> ·
+  SHA256 <code>8d8d5146c1a9</code> ·
+  generated at 2026-05-19 03:40 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

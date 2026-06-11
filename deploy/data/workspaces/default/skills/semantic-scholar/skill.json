@@ -1,0 +1,14 @@
+{
+  "skill_id": "semantic-scholar",
+  "label": "semantic-scholar",
+  "description": "Search published venue papers (IEEE, ACM, Springer, etc.) via Semantic Scholar API. Complements /arxiv (preprints) with citation counts, venue metadata, and TLDR. Use when user says \"search semantic scholar\", \"find IEEE papers\", \"find journal papers\", \"venue papers\", \"citation search\", or wants published literature beyond arXiv preprints.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "auto",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": [],
+  "package": "aris"
+}

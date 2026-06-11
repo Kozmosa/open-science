@@ -1,0 +1,125 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/llm_opd_tutorial.md",
+  "output": "docs/tutorials/llm_opd_tutorial.html",
+  "topic": "LLM On-Policy Distillation (OPD) — MiniLLM, GKD, Qwen3, Thinking Machines, Tinker, vOPD, OPD+GRPO",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per round",
+  "math_code_review": {
+    "verdict": "PASS (after 7 rounds of substantive fixes; no deferred items)",
+    "rounds": [
+      {
+        "run": "0 (subagent — draft only)",
+        "verdict": "draft delivered",
+        "notes": "Solo subagent (low codex contention) wrote 1037-line draft (later expanded to 1196)."
+      },
+      {
+        "run": 1,
+        "verdict": "FAIL → §2.3 / §4.1 / §4.4 / §4.5 rewritten",
+        "thread_id": "019e4130-3f67-7e03-9175-dfbe0cdbfbec",
+        "real_issues_caught": [
+          "§4.4 CRITICAL: surrogate sign reversed (would cause gradient ASCENT on KL)",
+          "§2.3 MAJOR: Route B trajectory gradient missing return-to-go for state visitation",
+          "§4.5 MAJOR: token_mask shape mismatch [B,L] vs per_token_logp [B,L-1]",
+          "§4.4 MAJOR: closed-form baseline contradicts black-box-teacher framing",
+          "§4.1 MINOR: 'directly .backward() equals MLE' inaccurate",
+          "L2-4 MINOR: 'maximizes variance reduction' imprecise"
+        ]
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL → L2-4 sign + Tinker default + device fix",
+        "thread_id": "019e4136-a633-7ec2-828b-bb5ca9a90d43",
+        "real_issues_caught": [
+          "L2-4 MAJOR: final warning still showed loss = -E[...] (contradicting fixed §4.4 positive sign)",
+          "Tinker default inconsistency: §2.3/§4.1 said full-vocab, L2-6 said sampled-token + closed-form (MINOR)",
+          "§4.5 device mismatch: torch.tensor(rewards) creates CPU tensor (MINOR)"
+        ]
+      },
+      {
+        "run": 3,
+        "verdict": "FAIL → Tinker = Route B (verified against Tinker source)",
+        "thread_id": "019e4139-be51-79c2-8908-e7ada4c402e5",
+        "real_issues_caught": [
+          "MAJOR: Codex cross-checked Tinker source (train_on_policy.py); default is sampled-token + IS + negative-KL-advantage, NOT full-vocab. Tutorial repeatedly attributed full-vocab path to Tinker — wrong."
+        ]
+      },
+      {
+        "run": 4,
+        "verdict": "FAIL → Route B equal-footing; MiniLLM = Route B",
+        "thread_id": "019e413e-35ab-7b12-b723-5f90b6adb58b",
+        "real_issues_caught": [
+          "Route B still labeled 'fallback' / '少见' (MAJOR)",
+          "L2-2 attribution of MiniLLM as REINFORCE was correct, but earlier sections still said MiniLLM = Route A; cross-section inconsistency (MAJOR)"
+        ]
+      },
+      {
+        "run": 5,
+        "verdict": "FAIL → 3 remaining: MiniLLM attribution in §4.1, Route B fallback wording, KL reward formula ambiguity",
+        "thread_id": "019e4141-eed6-7f11-8d71-04237b3191a4",
+        "real_issues_caught": [
+          "MAJOR: §4.1 docstring still attributed full-vocab to 'MiniLLM Algorithm 1 / GKD' (wrong — MiniLLM uses REINFORCE)",
+          "MAJOR: §4.4 still framed Route B as 'fallback / 退化'",
+          "MAJOR: KL reward formula -log π_θ/π_T parses ambiguously as (-log π_θ)/π_T"
+        ]
+      },
+      {
+        "run": 6,
+        "verdict": "FAIL → L2-6 residual MiniLLM attribution + L3-4 KL reward old-policy mark missing",
+        "thread_id": "019e4146-f717-7082-a92f-7444fe6bbed8",
+        "real_issues_caught": [
+          "L2-6 MAJOR: still said 'MiniLLM Algorithm 1 / GKD 概念路线 = full-vocab' (had to fix the last remaining attribution slip)",
+          "L3-4 MAJOR: KL reward used log π_T - log π_θ (current student) instead of log π_T - log π_θ^old"
+        ]
+      },
+      {
+        "run": 7,
+        "verdict": "PASS",
+        "thread_id": "019e4149-c664-7263-a46c-6966c618aa0b",
+        "notes": "All MiniLLM attributed to Route B (sampled-token + REINFORCE/IS). Both KL reward locations use log π_T - log π_θ^old. Route A vs Route B equal-footing throughout. §4.4 sign positive. §4.5 ratio = new vs old student. Shape consistency. Device handling. All prior fixes preserved."
+      }
+    ]
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL (table-pipe + list-renumber)",
+        "thread_id": "019e414e-0289-7710-942c-16085d82ac29",
+        "real_issues_caught": [
+          "§2.1 Total Variation row: |π_θ(v) - π_T(v)| inside | table | row collided with table pipe → 5 columns",
+          "§0 ordered list broke after item 2 because $$...$$ display math interrupted list → items 3-8 renumbered from 1"
+        ],
+        "fixes_applied": [
+          "Total Variation: |...| → \\lvert...\\rvert per ARIS table-pipe rule",
+          "§0 item 2: inlined formula into prose, then continuation paragraph indented under item 2"
+        ]
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL (illegal TeX \\\\mid / \\\\{...\\\\})",
+        "thread_id": "019e415a-302d-7a81-9f4e-5395ac1b3e56",
+        "real_issues_caught": [
+          "md:33, 36, 104-107: \\mid in table cells were double-escaped to \\\\mid which MathJax rejects",
+          "md:82: \\{0, 1\\} also double-escaped"
+        ],
+        "fixes_applied": [
+          "All \\\\mid → \\,\\Vert\\, (standard KL divergence parallel notation in math mode)",
+          "\\\\{0, 1\\\\} → \\{0, 1\\} (correct single-backslash escape)"
+        ]
+      },
+      {
+        "run": 3,
+        "verdict": "PASS",
+        "thread_id": "019e415f-8f3a-7782-8825-df550e1ab899",
+        "notes": "13/13 functional checks pass. All TeX renders correctly. 25 details/summary pairs, 58 TOC anchors resolve, no personal info leaks."
+      }
+    ]
+  },
+  "summary": "LLM OPD tutorial: solo subagent draft (1037→1196 lines) → 7 rounds of strict math/code review with cross-model codex gpt-5.5 xhigh. Caught 1 CRITICAL sign reversal in vOPD surrogate, 11 MAJOR issues (Tinker default misattribution, MiniLLM Route A misattribution, Route B 'fallback' framing, shape mismatch, return-to-go trajectory PG, KL reward formula ambiguity, etc.), and ~6 MINORs. ALL FIXED — no deferred items per user's no-defer feedback. Render PASS after 3 rounds (table-pipe + list-renumber + TeX double-escape).",
+  "no_defer_compliance": true,
+  "user_feedback_observed": "LLM OPD 数学有较多问题 — 修关键 + 加 caveats，剩下深层 derivation 在 review.json 标 defer。 这种我不接受哈 你可以无限次的叫codex 但一定要对",
+  "rendered_at": "2026-05-20"
+}

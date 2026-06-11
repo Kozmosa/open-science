@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Long Context Rope Yarn Mla Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/long_context_rope_yarn_mla_tutorial_en.md">
+<meta name="aris:source-sha256" content="d8ebcc89a3ac6a7b354d7603a4d0f5f495fe5b539c64ca49e48ae38c72c84075">
+<meta name="aris:generated-at" content="2026-05-19 19:03 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-why-long-context-is-hard--one-paragraph-intuition">§1 Why Long Context Is Hard — One-Paragraph Intuition</a>
+</li>
+<li><a href="#2-rope--rotary-position-embedding">§2 RoPE — Rotary Position Embedding</a>
+<ul>
+<li><a href="#21-complex-number-perspective-derivation">2.1 Complex-number perspective derivation</a></li>
+<li><a href="#22-real-matrix-form">2.2 Real-matrix form</a></li>
+<li><a href="#23-why-thetai--10000-2id-frequency-distribution">2.3 Why $\theta_i = 10000^{-2i/d}$ (frequency distribution)</a></li>
+<li><a href="#24-rope-code-from-scratch">2.4 RoPE code from scratch</a></li>
+</ul>
+</li>
+<li><a href="#3-recap-of-naive-position-encodings-comparison-baseline">§3 Recap of Naive Position Encodings (comparison baseline)</a>
+</li>
+<li><a href="#4-pi--position-interpolation-the-simplest-rope-extrapolation">§4 PI — Position Interpolation (the simplest RoPE extrapolation)</a>
+<ul>
+<li><a href="#41-motivation">4.1 Motivation</a></li>
+<li><a href="#42-form">4.2 Form</a></li>
+<li><a href="#43-side-effect-high-frequencies-are-damaged">4.3 Side effect: high frequencies are damaged</a></li>
+<li><a href="#44-pi-code">4.4 PI code</a></li>
+</ul>
+</li>
+<li><a href="#5-ntk-aware-rope--base-swap-approach-that-preserves-high-frequencies">§5 NTK-aware RoPE — Base-Swap Approach That Preserves High Frequencies</a>
+<ul>
+<li><a href="#51-origin-and-intuition">5.1 Origin and intuition</a></li>
+<li><a href="#52-derivation-what-base-change-compresses-low-frequencies-to-1s">5.2 Derivation: what base change compresses low frequencies to $1/s$?</a></li>
+<li><a href="#53-comparison-with-pi">5.3 Comparison with PI</a></li>
+<li><a href="#54-ntk-aware-code">5.4 NTK-aware code</a></li>
+</ul>
+</li>
+<li><a href="#6-yarn--yet-another-rope-extension">§6 YaRN — Yet another RoPE extensioN</a>
+<ul>
+<li><a href="#61-overview">6.1 Overview</a></li>
+<li><a href="#62-ntk-by-parts--segment-wise-frequency-handling">6.2 NTK-by-parts — segment-wise frequency handling</a></li>
+<li><a href="#63-temperature-scaling--attention-entropy-compensation">6.3 Temperature Scaling — attention entropy compensation</a></li>
+<li><a href="#64-attention-scale--equivalent-alternative-implementation-of-temperature">6.4 Attention Scale — equivalent alternative implementation of Temperature</a></li>
+<li><a href="#65-what-does-each-of-yarns-three-components-solve-a-must-ask-l3-question">6.5 What does each of YaRN&#x27;s three components solve (a must-ask L3 question)</a></li>
+<li><a href="#66-yarn-code-ntk-by-parts--temperature">6.6 YaRN code (NTK-by-parts + temperature)</a></li>
+</ul>
+</li>
+<li><a href="#7-longrope--evolutionary-search--short-context-rescue">§7 LongRoPE — Evolutionary Search + Short-Context Rescue</a>
+<ul>
+<li><a href="#71-key-observations">7.1 Key observations</a></li>
+<li><a href="#72-three-stage-scheme">7.2 Three-stage scheme</a></li>
+<li><a href="#73-search-space">7.3 Search space</a></li>
+<li><a href="#74-comparison-with-yarn">7.4 Comparison with YaRN</a></li>
+</ul>
+</li>
+<li><a href="#8-abf-and-nope--two-non-mainstream-extensions">§8 ABF and NoPE — Two &quot;Non-Mainstream&quot; Extensions</a>
+<ul>
+<li><a href="#81-abf--adjusted-base-frequency-xiong-et-al-2023-meta">8.1 ABF — Adjusted Base Frequency (Xiong et al. 2023, Meta)</a></li>
+<li><a href="#82-nope--no-position-encoding">8.2 NoPE — No Position Encoding</a></li>
+</ul>
+</li>
+<li><a href="#9-mla--multi-head-latent-attention-deepseek-v2-may-2024">§9 MLA — Multi-Head Latent Attention (DeepSeek-V2 May 2024)</a>
+<ul>
+<li><a href="#91-motivation">9.1 Motivation</a></li>
+<li><a href="#92-naive-low-rank-kv--first-step-derivation">9.2 Naive low-rank K/V — first-step derivation</a></li>
+<li><a href="#93-absorbing-trick--avoid-explicit-up-projection">9.3 Absorbing trick — avoid explicit up-projection</a></li>
+<li><a href="#94-why-rope-must-be-decoupled-the-most-critical-l3-question">9.4 Why RoPE must be decoupled (the most critical L3 question)</a></li>
+<li><a href="#95-mlas-decoupling-solution--shared-rope-key--non-rope-main-body">9.5 MLA&#x27;s decoupling solution — shared RoPE key + non-RoPE main body</a></li>
+<li><a href="#96-mla-kv-cache-total-size">9.6 MLA KV cache total size</a></li>
+<li><a href="#97-mla-simplified-code">9.7 MLA simplified code</a></li>
+<li><a href="#98-training-cost">9.8 Training cost</a></li>
+</ul>
+</li>
+<li><a href="#10-sliding-window-and-streaming-attention">§10 Sliding Window and Streaming Attention</a>
+<ul>
+<li><a href="#101-sliding-window-attention-mistral-2023">10.1 Sliding Window Attention (Mistral 2023)</a></li>
+<li><a href="#102-streamingllm--attention-sink--sliding-window">10.2 StreamingLLM — Attention Sink + Sliding Window</a></li>
+<li><a href="#103-streamingllm-inference-loop-code">10.3 StreamingLLM inference loop code</a></li>
+<li><a href="#104-lost-in-the-middle-liu-2023">10.4 Lost-in-the-Middle (Liu 2023)</a></li>
+</ul>
+</li>
+<li><a href="#11-system-level-long-context--ring--cp--flashattn">§11 System-Level Long Context — Ring / CP / FlashAttn</a>
+<ul>
+<li><a href="#111-ring-attention-liu-et-al-2023">11.1 Ring Attention (Liu et al. 2023)</a></li>
+<li><a href="#112-context-parallelism-megatron-2024">11.2 Context Parallelism (Megatron 2024)</a></li>
+<li><a href="#113-flashattention-23-and-long-context">11.3 FlashAttention 2/3 and long context</a></li>
+<li><a href="#114-differential-attention-optional-microsoft-2024">11.4 Differential Attention (optional, Microsoft 2024)</a></li>
+</ul>
+</li>
+<li><a href="#12-complexity-and-memory-summary-table">§12 Complexity and Memory Summary Table</a>
+<ul>
+<li><a href="#121-kv-cache-per-token-per-layer-size-attention-variants">12.1 KV cache per-token-per-layer size (attention variants)</a></li>
+<li><a href="#122-total-kv-cache-occupancy-per-sample-per-layer-affected-by-window-mechanisms-like-swa--streaming">12.2 Total KV cache occupancy (per-sample-per-layer, affected by &quot;window&quot; mechanisms like SWA / Streaming)</a></li>
+<li><a href="#123-attention-time-and-memory">12.3 Attention time and memory</a></li>
+</ul>
+</li>
+<li><a href="#13-overall-comparison-and-selection-decision-tree">§13 Overall Comparison and Selection Decision Tree</a>
+</li>
+<li><a href="#14-25-frequently-asked-interview-questions">§14 25 Frequently-Asked Interview Questions</a>
+<ul>
+<li><a href="#l1-must-know-any-long-context-related-role">L1 must-know (any long-context-related role)</a></li>
+<li><a href="#l2-advanced-research-oriented-roles">L2 advanced (research-oriented roles)</a></li>
+<li><a href="#l3-top-lab-questions-deepseek--anthropic--openai--google">L3 top-lab questions (DeepSeek / Anthropic / OpenAI / Google)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-implementation-points-checklist">§A Appendix: Implementation Points Checklist</a>
+<ul>
+<li><a href="#a1-rope-engineering-implementation-points">A.1 RoPE engineering implementation points</a></li>
+<li><a href="#a2-long-context-fine-tune-key-hyperparameters-yarn-experience">A.2 Long-context fine-tune key hyperparameters (YaRN experience)</a></li>
+<li><a href="#a3-streamingllm-deployment-checklist">A.3 StreamingLLM deployment checklist</a></li>
+<li><a href="#a4-quick-reference-table">A.4 Quick reference table</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Long Context Rope Yarn Mla Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/long_context_rope_yarn_mla_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>d8ebcc89a3ac</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:03 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">8 sentences to nail Long Context</div><p>get the interview core points in one page (see §2-§9 for full derivations).</p></div>
+<ol><li><strong>RoPE</strong>: apply position-$m$-dependent 2D rotations on each pair of dimensions $(2i, 2i+1)$, with $\theta_i = 10000^{-2i/d}$. $q_m^\top k_n$ depends only on the <strong>relative position</strong> $m-n$ (not on absolute $m, n$ separately), and requires no trainable parameters.</li><li><strong>PI (Position Interpolation, Chen 2023)</strong>: divide all $\theta_i$ by $s = L_\text{new}/L_\text{train}$ (equivalent to compressing the absolute position $m$ to $m/s$). <strong>Damages high frequencies</strong> (the phase resolution of early dimensions is compressed), but is simple to implement.</li><li><strong>NTK-aware (bloc97 2023)</strong>: change the base; new base $b' = b \cdot s^{d/(d-2)}$. <strong>Low-frequency dimensions are heavily compressed while high-frequency dimensions are almost unchanged</strong>, so zero-shot extrapolation is better than PI.</li><li><strong>YaRN (Peng 2023)</strong>: NTK-by-parts (segment-wise frequency handling) + temperature scaling (the fitted formula $\sqrt{1/t} \approx 0.1\ln s + 1$, i.e., $t \approx 1/(0.1\ln s + 1)^2$) + attention scale. The three components respectively solve: handle high/low frequencies separately, sharpen the softmax, and compensate for post-extrapolation attention entropy inflation.</li><li><strong>LongRoPE (Ding 2024 ICML)</strong>: evolutionary search for an independent scaling factor $\lambda_i$ per dimension, plus a short-context "rescue", pushing context to 2M tokens.</li><li><strong>MLA (DeepSeek-V2)</strong>: $\mathbf{c}_t^{KV} = W_\text{DKV}\mathbf{h}_t$ compresses K/V to a latent of dimension $d_c \ll N_h d_h$; RoPE must be <strong>decoupled</strong> — keep a separate $d_h^R$-dimensional RoPE key (shared across heads), otherwise the rotation matrix cannot be "absorbed" into $W_\text{UK}$.</li><li><strong>Streaming + Sink (Xiao 2024 ICLR)</strong>: keep the first 4 tokens (attention sink, the softmax "trash bin") + a sliding window; tokens outside the window are dropped, but the sink cannot be dropped, otherwise PPL blows up.</li><li><strong>System</strong>: Ring Attention / Context Parallel chunk K/V across devices; FlashAttention 2/3 blocks + online softmax; Mistral SWA reduces each layer's receptive field from $L$ to $W$ (multi-layer stacking still sees far).</li></ol>
+<h2 id="1-why-long-context-is-hard--one-paragraph-intuition">§1 Why Long Context Is Hard — One-Paragraph Intuition</h2>
+<p>Pushing a Transformer to 100K-2M token context is hard because <strong>three things happen at once</strong>:</p>
+<ul><li><strong>Position-encoding extrapolation</strong>: training only saw $m \in [0, 4096)$, but inference uses $m = 100{,}000$, and the model must know this is "very far" rather than numerically broken. <strong>RoPE by default does not extrapolate</strong>: unseen rotation phases make the relative-position signal of $q_m^\top k_n$ fail.</li><li><strong>KV cache memory</strong>: in autoregressive decode, $\text{cache} \propto L \cdot n_\text{layers} \cdot 2 \cdot N_h \cdot d_h \cdot \text{bytes}$. For LLaMA-2-7B (32 layers, $N_h=32, d_h=128$, fp16, MHA), one 4K context $\approx 2.1$ GB, one 100K context $\approx 52$ GB, doesn't fit on a single card. MQA/GQA reduces $N_h \to G$; MLA reduces $N_h d_h \to d_c$.</li><li><strong>Attention's intrinsic $O(L^2)$</strong>: at $L=100\text{K}$, $L^2 = 10^{10}$, and the score matrix doesn't fit. Two routes: <strong>algorithmic sparsification/linearization</strong> (sliding window, sparse attention, linear attention) or <strong>system-level partitioning</strong> (Ring Attention, Context Parallelism, FlashAttention blocking).</li></ul>
+<div class="callout callout-warn"><div class="callout-title">One-sentence way to tell extension methods apart</div><p>RoPE family (PI / NTK / YaRN / LongRoPE) solves "position encoding extrapolation"; MLA / MQA / GQA solves "KV cache memory"; FlashAttention / Ring / SWA / Sink solves "attention time and memory". <strong>The three are orthogonal</strong>, and production-grade long-context models (e.g., DeepSeek-V2, Qwen2.5-1M, Llama-3.1-405B) typically use all three classes simultaneously.</p></div>
+<h2 id="2-rope--rotary-position-embedding">§2 RoPE — Rotary Position Embedding</h2>
+<h3 id="21-complex-number-perspective-derivation">2.1 Complex-number perspective derivation</h3>
+<p><strong>Goal</strong>: find a position-dependent transformation $f(\mathbf{x}, m)$ for query/key, such that the inner product $\langle f(\mathbf{q}, m), f(\mathbf{k}, n) \rangle$ depends only on the <strong>relative position</strong> $m - n$ (and on the content $\mathbf{q}, \mathbf{k}$ themselves), no longer on absolute $m, n$.</p>
+<p>Group $\mathbf{x} \in \mathbb{R}^d$ into adjacent pairs to form $d/2$ complex numbers: $\mathbf{x} \leftrightarrow [x_0 + ix_1, x_2 + ix_3, \dots] \in \mathbb{C}^{d/2}$. Define</p>
+<p>$$f(\mathbf{x}, m) = \mathbf{x} \odot e^{im\boldsymbol\theta}, \quad e^{im\boldsymbol\theta}_i = e^{im\theta_i}, \quad \theta_i = b^{-2i/d}\ (b = 10000)$$</p>
+<p>where $\odot$ is element-wise complex multiplication. By complex multiplication:</p>
+<p>$$\langle f(\mathbf{q}, m), f(\mathbf{k}, n) \rangle_\mathbb{R} = \mathrm{Re}\!\left[(\mathbf{q} \odot e^{im\boldsymbol\theta})^* (\mathbf{k} \odot e^{in\boldsymbol\theta})\right] = \mathrm{Re}\!\left[\sum_{i=0}^{d/2-1} \bar{q_i} k_i \cdot e^{i(n-m)\theta_i}\right]$$</p>
+<p>Depends only on $n - m$ (and on $\bar{q_i}k_i$, i.e., the content term); <strong>the absolute position term cancels</strong> — this is the fundamental reason RoPE gives relative positions.</p>
+<div class="callout callout-good"><div class="callout-title">Geometric intuition</div><p>think of each pair of dimensions $(x_{2i}, x_{2i+1})$ as a vector in a 2D plane; RoPE rotates each 2D subspace by angle $m\theta_i$ (different $i$ rotate at different rates). After rotating both query and key and taking the inner product, the <strong>relative angle</strong> is preserved, the absolute direction cancels.</p></div>
+<h3 id="22-real-matrix-form">2.2 Real-matrix form</h3>
+<p>On each pair of dimensions, this is a 2D rotation matrix:</p>
+<p>$$R_{\theta_i, m} = \begin{pmatrix} \cos m\theta_i & -\sin m\theta_i \\ \sin m\theta_i & \cos m\theta_i \end{pmatrix}$$</p>
+<p>Viewing $\mathbf{x}$ as a concatenation of $d/2$ 2D vectors, the overall $R_m = \mathrm{blkdiag}(R_{\theta_0, m}, \dots, R_{\theta_{d/2-1}, m})$. Then:</p>
+<p>$$\langle R_m \mathbf{q}, R_n \mathbf{k} \rangle = \mathbf{q}^\top R_m^\top R_n \mathbf{k} = \mathbf{q}^\top R_{n-m} \mathbf{k}$$</p>
+<p>The last step uses $R_m^\top R_n = R_{n-m}$ (additivity of 2D rotations). <strong>The relative position $n - m$ is explicitly encoded into the inner product</strong>.</p>
+<h3 id="23-why-thetai--10000-2id-frequency-distribution">2.3 Why $\theta_i = 10000^{-2i/d}$ (frequency distribution)</h3>
+<p>Treat $\theta_i$ as angular velocity. Larger dimension $i$ means smaller $\theta_i$ and <strong>slower</strong> rotation (low frequency); smaller dimension $i$ (close to 0) means $\theta_i$ close to 1 and <strong>faster</strong> rotation (high frequency).</p>
+<ul><li><strong>High-frequency dimensions</strong>: short period ($2\pi/\theta_i$ short), phase is sensitive to position changes — encodes fine-grained local relative positions</li><li><strong>Low-frequency dimensions</strong>: long period (maximum $2\pi \cdot 10000$), phase changes slowly with position — encodes coarse long-range positions</li></ul>
+<p>This <strong>geometric-progression frequency distribution</strong> matches Vaswani 2017 sinusoidal PE (not a coincidence: sinusoidal PE also uses $10000^{-2i/d}$), letting the model resolve positions at multiple time scales simultaneously.</p>
+<div class="callout callout-info"><div class="callout-title">Wavelength vs training context</div><p>the wavelength of dimension $i$ is $\lambda_i = 2\pi b^{2i/d}$. When $\lambda_i$ <strong>exceeds the training length</strong> $L$, that dimension has not seen a complete period during training — this is the key observation behind NTK-by-parts: phase interpolation on low-frequency dimensions is risky (extrapolation enters unseen regions), while high-frequency dimensions are safe.</p></div>
+<h3 id="24-rope-code-from-scratch">2.4 RoPE code from scratch</h3>
+<pre><code class="language-python">import torch
+
+def precompute_rope_cache(seq_len: int, dim: int, base: float = 10000.0, device=None):
+    &quot;&quot;&quot;
+    Returns cos / sin tensors, shape [seq_len, dim/2]; pairs of dimensions share a rotation angle.
+    dim must be even (RoPE rotates pairs of adjacent dimensions).
+    &quot;&quot;&quot;
+    assert dim % 2 == 0, &quot;RoPE dim must be even&quot;
+    half = dim // 2
+    # θ_i = base^{-2i/dim}, i = 0, 1, ..., dim/2-1
+    inv_freq = 1.0 / (base ** (torch.arange(0, half, device=device).float() / half))
+    pos = torch.arange(seq_len, device=device).float()              # [L]
+    freqs = torch.outer(pos, inv_freq)                              # [L, dim/2]
+    return freqs.cos(), freqs.sin()                                 # [L, dim/2] each
+
+def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -&gt; torch.Tensor:
+    &quot;&quot;&quot;
+    x:   [..., L, dim]              (Q or K)
+    cos: [L, dim/2]  sin: [L, dim/2]
+    Real-form implementation: split x into two halves x1, x2 corresponding to the real/imag parts
+    of complex numbers, do 2D rotation.
+    Convention (HuggingFace LLaMA style): pair = (x[..., :half], x[..., half:])
+        rather than (x[..., 0::2], x[..., 1::2]).
+    Mathematically equivalent (depending on convention; the two are merely a different permutation).
+    &quot;&quot;&quot;
+    x1, x2 = x.chunk(2, dim=-1)                                     # each [..., L, dim/2]
+    # Rotation: (x1, x2) -&gt; (x1*cos - x2*sin, x1*sin + x2*cos)
+    rot1 = x1 * cos - x2 * sin
+    rot2 = x1 * sin + x2 * cos
+    return torch.cat([rot1, rot2], dim=-1)
+
+# Full pipeline example ——————————————————————————————————————
+def rope_attention(Q, K, V, cos, sin, mask=None):
+    &quot;&quot;&quot;
+    Q, K, V: [B, H, L, d_head]
+    cos, sin: [L, d_head/2]  (broadcastable)
+    &quot;&quot;&quot;
+    Q = apply_rope(Q, cos, sin)
+    K = apply_rope(K, cos, sin)
+    scores = (Q @ K.transpose(-2, -1)) / (Q.size(-1) ** 0.5)
+    if mask is not None:
+        scores = scores.masked_fill(~mask, float(&quot;-inf&quot;))
+    return torch.softmax(scores, dim=-1) @ V</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Complex vs real implementation differences</div><p>Meta's official LLaMA repo uses the <strong>complex view</strong> (<code>torch.view_as_complex</code>); HuggingFace transformers uses the <strong>real chunk form</strong> (the code above). HF's "front half / back half" convention is <strong>merely a permutation</strong> of the original paper's "even/odd interleaved" convention; the final attention output is <strong>mathematically equivalent</strong>. <strong>But the RoPE cache precomputation and your pairing choice must be consistent</strong> — mixing them causes rotations to act on wrong dimensions, with near-random results. This bug has actually appeared across HuggingFace <code>LlamaRotaryEmbedding</code> version changes.</p></div>
+<h2 id="3-recap-of-naive-position-encodings-comparison-baseline">§3 Recap of Naive Position Encodings (comparison baseline)</h2>
+<table><thead><tr><th>Method</th><th>Form</th><th>Relative position?</th><th>Extrapolation</th><th>Where used</th></tr></thead><tbody><tr><td><strong>Sinusoidal absolute</strong> (Vaswani 2017)</td><td>$\mathrm{PE}_{m, 2i} = \sin(m / 10000^{2i/d})$, added to input</td><td>No (absolute)</td><td>Poor (model has not seen extrapolation region)</td><td>original Transformer</td></tr><tr><td><strong>Learned absolute</strong></td><td>Treat position as a token, look up an embedding table</td><td>No</td><td><strong>Very poor</strong> (embedding table fixed length)</td><td>BERT, GPT-2</td></tr><tr><td><strong>Relative bias</strong> (T5)</td><td>A learned bias added to logits (bucketed by relative distance)</td><td>Yes</td><td>Moderate (saturates outside buckets)</td><td>T5</td></tr><tr><td><strong>ALiBi</strong> (Press 2022)</td><td>$\text{score}_{ij} - m_h \cdot \lvert i - j \rvert$, head-dependent slope $m_h$</td><td>Yes</td><td><strong>Good</strong> (linear bias extrapolates naturally)</td><td>BLOOM, MPT</td></tr><tr><td><strong>RoPE</strong> (Su 2021/2024)</td><td>$q_m \to q_m e^{im\boldsymbol\theta}$ rotation</td><td>Yes</td><td>Moderate (default); with NTK/YaRN can push to 100K-2M</td><td>LLaMA-1/2/3, Mistral, Qwen, DeepSeek</td></tr><tr><td><strong>NoPE</strong> (Kazemnejad 2023)</td><td>No position encoding at all</td><td>Indirectly via causal mask</td><td>Surprisingly OK (decoder-only small-model setting)</td><td>research curiosity</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Why the community converged on RoPE</div><p>three points in one: (1) no trainable parameters (vs learned absolute), (2) explicit relative position (vs sinusoidal), (3) simple implementation and multi-head compatible (each head rotates independently). ALiBi extrapolates better but is slightly less expressive (only monotonic distance decay); RoPE lets the model learn complex position-content coupling itself.</p></div>
+<h2 id="4-pi--position-interpolation-the-simplest-rope-extrapolation">§4 PI — Position Interpolation (the simplest RoPE extrapolation)</h2>
+<h3 id="41-motivation">4.1 Motivation</h3>
+<p>In training, $m \in [0, L_\text{train})$; at inference, $m \in [0, L_\text{new})$ with $L_\text{new} > L_\text{train}$. <strong>RoPE naively extrapolating crashes</strong>: when $m \theta_i$ exceeds the phase range seen during training (in particular when $m\theta_i$ on low-frequency dimensions approaches $2\pi$), the phase enters an unseen region and attention behavior becomes unpredictable.</p>
+<p>PI (Chen et al., Meta, 2023, "Extending Context Window of LLMs via Position Interpolation"): <strong>don't extrapolate, interpolate</strong>. Linearly compress $m \in [0, L_\text{new})$ to $[0, L_\text{train})$.</p>
+<h3 id="42-form">4.2 Form</h3>
+<p>Let the scaling factor $s = L_\text{new} / L_\text{train}$. Replace the absolute position $m$ with $m / s$:</p>
+<p>$$\text{PI:}\quad f(\mathbf{x}, m) = \mathbf{x} \odot e^{i (m/s) \boldsymbol\theta}$$</p>
+<p>Equivalently (the more common implementation): keep $m$ unchanged and replace all $\theta_i$ with $\theta_i / s$. The two statements are <strong>fully equivalent</strong>.</p>
+<h3 id="43-side-effect-high-frequencies-are-damaged">4.3 Side effect: high frequencies are damaged</h3>
+<p>On low-frequency dimensions, $m\theta_i$ is originally $\ll 2\pi$ within training length (it has not completed one period), so compressing to $m\theta_i / s$ is still in a reasonable range. <strong>The problem is on high frequencies</strong>: high-frequency dimensions have $\theta_i \approx 1$, and during training $m\theta_i$ already rotates freely in $[0, L_\text{train}]$; compressing to $1/s$ <strong>drops the relative-position resolution by $s\times$</strong> — originally the phase difference between adjacent tokens was $\theta_i$ (near 1 rad), now only $\theta_i/s$, and the model's ability to distinguish "1 token apart vs 2 tokens apart" degrades.</p>
+<div class="callout callout-warn"><div class="callout-title">Must fine-tune to recover</div><p>when used zero-shot in the original paper, PI causes PPL to worsen; about 1000 fine-tuning steps essentially recovers and stably extends to 32K context.</p></div>
+<h3 id="44-pi-code">4.4 PI code</h3>
+<pre><code class="language-python">def precompute_rope_cache_pi(seq_len: int, dim: int,
+                              base: float = 10000.0,
+                              scale: float = 1.0,        # s = L_new / L_train
+                              device=None):
+    &quot;&quot;&quot;PI: divide θ_i by s (equivalent to compressing m to m/s)&quot;&quot;&quot;
+    half = dim // 2
+    inv_freq = 1.0 / (base ** (torch.arange(0, half, device=device).float() / half))
+    inv_freq = inv_freq / scale                         # ← PI&#x27;s key line
+    pos = torch.arange(seq_len, device=device).float()
+    freqs = torch.outer(pos, inv_freq)
+    return freqs.cos(), freqs.sin()</code></pre>
+<h2 id="5-ntk-aware-rope--base-swap-approach-that-preserves-high-frequencies">§5 NTK-aware RoPE — Base-Swap Approach That Preserves High Frequencies</h2>
+<h3 id="51-origin-and-intuition">5.1 Origin and intuition</h3>
+<p>PI also flattens high-frequency dimensions, which the community considered too crude. <strong>bloc97 / jquesnelle</strong> proposed NTK-aware scaling ("NTK-Aware Scaled RoPE") in a LocalLLaMA reddit post in July 2023; the name comes from the "high frequency vs low frequency" perspective in Neural Tangent Kernel theory: neural networks learn high-frequency signals slowly, so damaging high frequencies harms the model more than damaging low frequencies.</p>
+<p><strong>Core idea</strong>: <strong>change the base</strong> instead of uniform scaling — let high-frequency dimensions remain almost unchanged (protecting fine-grained position), let low-frequency dimensions be heavily compressed (these dimensions had not seen complete periods during training, so the impact is small).</p>
+<h3 id="52-derivation-what-base-change-compresses-low-frequencies-to-1s">5.2 Derivation: what base change compresses low frequencies to $1/s$?</h3>
+<p>Recall RoPE frequency $\theta_i = b^{-2i/d}$.</p>
+<ul><li><strong>Highest frequency</strong> ($i = 0$): $\theta_0 = 1$</li><li><strong>Lowest frequency</strong> ($i = d/2 - 1$): $\theta_{d/2-1} = b^{-(d-2)/d} \approx b^{-1}$ (for large $d$)</li></ul>
+<p>PI divides all $\theta_i$ by $s$, equivalent to discounting the position resolution of all dimensions by factor $s$.</p>
+<p>NTK-aware: change the base from $b$ to $b'$, such that <strong>the lowest frequency</strong> $\theta$ is compressed to $1/s$ and <strong>the highest frequency</strong> $\theta$ is almost unchanged.</p>
+<p>Let $b' = b \cdot \alpha$. The new lowest frequency is</p>
+<p>$$\theta'_{d/2-1} = (b')^{-(d-2)/d} = b^{-(d-2)/d} \cdot \alpha^{-(d-2)/d}$$</p>
+<p>To make $\theta'_{d/2-1} = \theta_{d/2-1} / s$, we need</p>
+<p>$$\alpha^{-(d-2)/d} = 1/s \quad\Longrightarrow\quad \alpha = s^{d/(d-2)}$$</p>
+<p>so</p>
+<p>$$\boxed{\;b' = b \cdot s^{\,d/(d-2)}\;}$$</p>
+<p><strong>Verify the highest frequency</strong>: $\theta'_0 = (b')^0 = 1 = \theta_0$, completely unchanged. $\checkmark$</p>
+<p><strong>Asymptotics</strong>: on dimension $i$, $\theta'_i / \theta_i = \alpha^{-2i/d} = s^{-2i/(d-2)}$. At $i = 0$ the ratio is 1 (unchanged); at $i = d/2-1$ the ratio is $1/s$ (heavily compressed). The compression ratio <strong>exponentially transitions</strong> from high to low frequencies — this is the geometric meaning of "NTK-aware".</p>
+<h3 id="53-comparison-with-pi">5.3 Comparison with PI</h3>
+<table><thead><tr><th>Dimension</th><th>PI</th><th>NTK-aware</th></tr></thead><tbody><tr><td><strong>Highest frequency ($i=0$) scaling</strong></td><td>$1/s$ (broken)</td><td><strong>$1$</strong> (preserved)</td></tr><tr><td><strong>Lowest frequency scaling</strong></td><td>$1/s$</td><td>$1/s$</td></tr><tr><td><strong>Middle dimensions</strong></td><td>uniformly $1/s$ (linear)</td><td>$s^{-2i/(d-2)}$ (exponential transition)</td></tr><tr><td><strong>Zero-shot PPL</strong> ($s=4$ on LLaMA-7B)</td><td>greatly worsens</td><td>close to original PPL</td></tr><tr><td><strong>Need fine-tuning</strong></td><td>yes</td><td>no (zero-shot usable)</td></tr></tbody></table>
+<h3 id="54-ntk-aware-code">5.4 NTK-aware code</h3>
+<pre><code class="language-python">def precompute_rope_cache_ntk(seq_len: int, dim: int,
+                               base: float = 10000.0,
+                               scale: float = 1.0,        # s = L_new / L_train
+                               device=None):
+    &quot;&quot;&quot;
+    NTK-aware: change base b&#x27; = b * s^{d/(d-2)}
+    - Highest frequency (i=0) θ unchanged;
+    - Lowest frequency (i=d/2-1) θ compressed to 1/s;
+    - Middle dimensions transition exponentially with i.
+    &quot;&quot;&quot;
+    new_base = base * (scale ** (dim / (dim - 2)))
+    half = dim // 2
+    inv_freq = 1.0 / (new_base ** (torch.arange(0, half, device=device).float() / half))
+    pos = torch.arange(seq_len, device=device).float()
+    freqs = torch.outer(pos, inv_freq)
+    return freqs.cos(), freqs.sin()</code></pre>
+<div class="callout callout-warn"><div class="callout-title">NTK-aware limitation</div><p>at larger expansion ratios ($s \ge 8$), the lowest-frequency dimensions get compressed too aggressively and performance degrades. This motivates NTK-by-parts, which <strong>handles different frequency bands separately</strong> — and that is exactly the starting point of YaRN.</p></div>
+<h2 id="6-yarn--yet-another-rope-extension">§6 YaRN — Yet another RoPE extensioN</h2>
+<h3 id="61-overview">6.1 Overview</h3>
+<p>Peng et al. 2023 ("YaRN: Efficient Context Window Extension of Large Language Models") systematizes the NTK-aware idea, splitting it into three relatively independent components:</p>
+<ol><li><strong>NTK-by-parts</strong>: split dimensions into three bands by wavelength and handle them separately</li><li><strong>Temperature scaling</strong>: apply a global temperature to logits before softmax</li><li><strong>Attention scale</strong> (an alternative implementation equivalent to temperature): scale Q/K norms in sync</li></ol>
+<p>We derive each below.</p>
+<h3 id="62-ntk-by-parts--segment-wise-frequency-handling">6.2 NTK-by-parts — segment-wise frequency handling</h3>
+<p>Let $L_\text{train}$ be the training context length. The wavelength of dimension $i$ is $\lambda_i = 2\pi / \theta_i = 2\pi b^{2i/d}$. Define the ratio</p>
+<p>$$r_i = \frac{L_\text{train}}{\lambda_i} = \frac{L_\text{train} \cdot \theta_i}{2\pi}$$</p>
+<p>$r_i$ is the number of revolutions dimension $i$ makes within the training length. Split dimensions into three bands:</p>
+<table><thead><tr><th>Band</th><th>Condition</th><th>Meaning</th><th>Treatment</th></tr></thead><tbody><tr><td><strong>High frequency</strong></td><td>$r_i \ge \beta$ ($\beta=32$)</td><td>Within training, $\ge 32$ revolutions, relative positions fully sampled</td><td><strong>No scaling</strong> ($\theta'_i = \theta_i$)</td></tr><tr><td><strong>Mid frequency</strong></td><td>$\alpha < r_i < \beta$ ($\alpha=1$)</td><td>Partial sampling</td><td><strong>Linear interpolation</strong> (PI applied locally)</td></tr><tr><td><strong>Low frequency</strong></td><td>$r_i \le \alpha$</td><td>Within training, &lt; 1 revolution; position encoding has not seen a full period</td><td><strong>Fully scaled to $1/s$</strong> (PI behavior)</td></tr></tbody></table>
+<p>Formally: for dimension $i$, define a ramp function</p>
+<p>$$\gamma(r_i) = \mathrm{clip}\!\left(\frac{r_i - \alpha}{\beta - \alpha},\; 0,\; 1\right) \in [0, 1]$$</p>
+<p>The new frequency is an interpolation between NTK-aware and PI:</p>
+<p>$$\theta'_i = (1 - \gamma(r_i)) \cdot \frac{\theta_i}{s} + \gamma(r_i) \cdot \theta_i$$</p>
+<ul><li>$r_i \ge \beta$ (high frequency): $\gamma = 1$, $\theta'_i = \theta_i$ (unchanged)</li><li>$r_i \le \alpha$ (low frequency): $\gamma = 0$, $\theta'_i = \theta_i / s$ (PI fully scaled)</li><li>Middle: smooth transition</li></ul>
+<div class="callout callout-info"><div class="callout-title">Reason for the three-band split</div><p>high-frequency dimensions have completed many revolutions during training, so during extrapolation, <strong>as long as the phase doesn't jump</strong>, they can keep working (periodicity of rotations); low-frequency dimensions have not completed one revolution during training, so the "extrapolation region" is fully unseen data for the model, and we must <strong>interpolate</strong> into the training-seen phase range. Middle frequencies get in-between handling.</p></div>
+<h3 id="63-temperature-scaling--attention-entropy-compensation">6.3 Temperature Scaling — attention entropy compensation</h3>
+<p><strong>Problem</strong>: after extending context, the effective statistics of softmax input change — the same query now faces $L_\text{new} \gg L_\text{train}$ keys, making the attention distribution <strong>flatter</strong> (higher entropy) and the effective signal diluted.</p>
+<p><strong>Solution</strong>: divide logits by temperature $t$ before softmax ($t < 1$ sharpens the distribution to compensate for dilution):</p>
+<p>$$\mathrm{Attention} = \mathrm{softmax}\!\left(\frac{QK^\top}{t \sqrt{d_k}}\right) V$$</p>
+<p>The YaRN paper's fitted formula (from empirical ablations):</p>
+<p>$$\boxed{\;\sqrt{1/t} \approx 0.1 \ln s + 1 \quad\Longleftrightarrow\quad t \approx \frac{1}{(0.1 \ln s + 1)^2}\;}$$</p>
+<p>For example, $s = 8$ ($L_\text{new} = 32\text{K}$ from $L_\text{train} = 4\text{K}$): $\sqrt{1/t} \approx 0.1 \cdot 2.08 + 1 \approx 1.21$, $t \approx 0.68$.</p>
+<h3 id="64-attention-scale--equivalent-alternative-implementation-of-temperature">6.4 Attention Scale — equivalent alternative implementation of Temperature</h3>
+<p>Directly modifying softmax temperature requires changing the attention kernel. Equivalent practice: <strong>multiply</strong> the norms of query and key by $\sqrt{1/t} = (0.1\ln s + 1) > 1$ (when $t < 1$ this is an amplification), so $QK^\top$ is naturally amplified by factor $1/t$, and softmax sees the same logits as if divided by $t$.</p>
+<p>YaRN implements this by multiplying the scaling factor directly into the RoPE cache:</p>
+<p>$$\text{cos}'_m = \cos(m \theta'_i) \cdot \sqrt{1/t}, \quad \text{sin}'_m = \sin(m \theta'_i) \cdot \sqrt{1/t}$$</p>
+<p>Note this only affects the RoPE part, but <strong>the overall effect is equivalent to amplifying query/key norms by $\sqrt{1/t}$</strong> (when $t < 1$ this factor $> 1$) — provided the Q/K norms are dominated by the post-RoPE part. In practice YaRN's attention scale implementation simply multiplies the cos/sin cache by $\sqrt{1/t}$. <strong>This is equivalent to changing the temperature without modifying the attention kernel</strong>.</p>
+<h3 id="65-what-does-each-of-yarns-three-components-solve-a-must-ask-l3-question">6.5 What does each of YaRN's three components solve (a must-ask L3 question)</h3>
+<table><thead><tr><th>Component</th><th>Problem solved</th><th>What happens without it</th></tr></thead><tbody><tr><td><strong>NTK-by-parts</strong></td><td>High frequencies should be preserved, low frequencies should be interpolated, mid frequencies need a smooth transition</td><td>Using NTK-aware globally, large expansion ratios cause low-frequency collapse</td></tr><tr><td><strong>Temperature scaling</strong></td><td>After context lengthens, softmax distribution is diluted</td><td>Attention entropy too high, long-range signal drowned</td></tr><tr><td><strong>Attention scale (implementation-layer)</strong></td><td>Realize temperature without modifying softmax kernel</td><td>Need to rewrite the FlashAttention kernel</td></tr></tbody></table>
+<p>YaRN paper shows: just 400 fine-tuning steps push LLaMA-2-7B from 4K to 128K ($s = 32$), outperforming PI and NTK-aware.</p>
+<h3 id="66-yarn-code-ntk-by-parts--temperature">6.6 YaRN code (NTK-by-parts + temperature)</h3>
+<pre><code class="language-python">import math
+
+def precompute_rope_cache_yarn(
+    seq_len: int, dim: int,
+    base: float = 10000.0,
+    scale: float = 1.0,            # s = L_new / L_train
+    original_max_pos: int = 4096,  # L_train
+    alpha: float = 1.0,            # ramp lower bound (revolutions)
+    beta: float = 32.0,            # ramp upper bound (revolutions)
+    device=None,
+):
+    &quot;&quot;&quot;
+    YaRN: NTK-by-parts + temperature scaling (implemented as attention scale).
+    - High-frequency dims (r_i ≥ β): no scaling
+    - Low-frequency dims (r_i ≤ α): PI-style full scaling
+    - Mid dims (α &lt; r_i &lt; β): smooth transition
+    &quot;&quot;&quot;
+    half = dim // 2
+    i = torch.arange(0, half, device=device).float()                 # [half]
+    inv_freq = 1.0 / (base ** (i / half))                            # θ_i
+    wavelen = 2.0 * math.pi / inv_freq                               # λ_i
+    r = original_max_pos / wavelen                                   # r_i = L_train / λ_i
+
+    gamma = torch.clamp((r - alpha) / (beta - alpha), 0.0, 1.0)      # ramp ∈ [0,1]
+    inv_freq_pi   = inv_freq / scale                                  # PI full scaling
+    inv_freq_ntk  = inv_freq                                          # NTK unscaled (high freq)
+    inv_freq_yarn = (1.0 - gamma) * inv_freq_pi + gamma * inv_freq_ntk
+
+    # Temperature scaling (implemented as attention scale baked into cos/sin)
+    # YaRN empirical formula:  sqrt(1/t) ≈ 0.1 ln(s) + 1
+    # Goal: amplify effective QK^T by 1/t (equivalent to softmax temperature t&lt;1 → sharper).
+    # Implementation: multiply Q and K norms by sqrt(1/t), then QK^T is naturally multiplied by 1/t.
+    # Because RoPE rotates via cos/sin, multiplying sqrt(1/t) into cos/sin suffices.
+    sqrt_inv_t = 0.1 * math.log(scale) + 1.0 if scale &gt; 1.0 else 1.0
+    attn_scale = sqrt_inv_t                                           # ← multiplied into cos/sin to amplify Q/K norm
+
+    pos = torch.arange(seq_len, device=device).float()
+    freqs = torch.outer(pos, inv_freq_yarn)
+    return freqs.cos() * attn_scale, freqs.sin() * attn_scale</code></pre>
+<div class="callout callout-warn"><div class="callout-title">YaRN attention scale side effect</div><p>Q/K norms are <strong>amplified</strong> by $\sqrt{1/t} > 1$ (not shrunk), but V is not amplified in sync. In a multi-layer transformer, this is equivalent to changing the effective temperature of each layer's attention, and gradient scales in backprop also differ. In practice, fine-tuning is needed to stabilize (YaRN paper uses ≈ 400 steps).</p></div>
+<h2 id="7-longrope--evolutionary-search--short-context-rescue">§7 LongRoPE — Evolutionary Search + Short-Context Rescue</h2>
+<p>Ding et al., ICML 2024 (Microsoft) asks further: <strong>can the optimal scaling factor of each dimension be searched independently</strong>, rather than using a single ramp function?</p>
+<h3 id="71-key-observations">7.1 Key observations</h3>
+<ol><li><strong>Dimensions differ greatly in sensitivity to extension length</strong> (one ramp function is not necessarily optimal).</li><li><strong>Ultra-long-context models actually degrade on short contexts (≤ $L_\text{train}$)</strong> — because the RoPE cache has been changed and the original training distribution is disturbed.</li></ol>
+<h3 id="72-three-stage-scheme">7.2 Three-stage scheme</h3>
+<table><thead><tr><th>Stage</th><th>What</th></tr></thead><tbody><tr><td><strong>Stage 1: Evolution search (256K)</strong></td><td>Each RoPE dimension scaled independently by $\lambda_i$; evolutionary search for the $\{\lambda_i\}$ giving the lowest long-context PPL</td></tr><tr><td><strong>Stage 2: Fine-tune at 256K</strong></td><td>Brief fine-tuning (≈ 400 steps) with the searched $\{\lambda_i\}$</td></tr><tr><td><strong>Stage 3: Re-search at 2M + short-context rescue</strong></td><td>Further search up to 2M; maintain two scaling sets — short context uses $\{\lambda_i^\text{short}\}$ (close to 1), long context uses $\{\lambda_i^\text{long}\}$</td></tr></tbody></table>
+<h3 id="73-search-space">7.3 Search space</h3>
+<p>Each dimension $i$ has $\lambda_i \in [1, s_\text{max}]$ ($s_\text{max} = L_\text{new}/L_\text{train}$); new frequency $\theta'_i = \theta_i / \lambda_i$.</p>
+<p>Search objective:</p>
+<p>$$\min_{\{\lambda_i\}} \mathrm{PPL}\!\left(M; \theta'_i = \theta_i / \lambda_i\right) \quad \text{on a long-context validation set}$$</p>
+<p>Evolutionary algorithm (CMA-ES or similar) maintains a population, iterating to select the best. The paper reports convergence in a few hundred generations.</p>
+<h3 id="74-comparison-with-yarn">7.4 Comparison with YaRN</h3>
+<table><thead><tr><th>Method</th><th>Scaling granularity</th><th>Fine-tune requirement</th><th>Max context</th></tr></thead><tbody><tr><td>PI</td><td>All dimensions same $1/s$</td><td>yes (≥ 1000 steps)</td><td>32K</td></tr><tr><td>NTK-aware</td><td>Gradient (single param $\alpha$)</td><td>no (zero-shot)</td><td>16K</td></tr><tr><td>YaRN</td><td>Three-band ramp (fixed $\alpha, \beta$)</td><td>yes (≈ 400 steps)</td><td>128K</td></tr><tr><td>LongRoPE</td><td><strong>Per-dim independent</strong></td><td>yes (≈ 400 steps)</td><td><strong>2M</strong></td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Significance of short-context rescue</div><p>directly applying long-context scaling makes the model worse on short contexts (e.g., 1K-4K, covering most real use cases). LongRoPE switches the scaling table at inference based on the actual length of the current batch; this dual-table design is a common trick in production-grade long-context models (DeepSeek-V2 / Qwen2.5 / Llama-3.1 also have similar dual-table designs).</p></div>
+<h2 id="8-abf-and-nope--two-non-mainstream-extensions">§8 ABF and NoPE — Two "Non-Mainstream" Extensions</h2>
+<h3 id="81-abf--adjusted-base-frequency-xiong-et-al-2023-meta">8.1 ABF — Adjusted Base Frequency (Xiong et al. 2023, Meta)</h3>
+<p>The most naive "base change" — simply change the RoPE base from 10000 to something larger (e.g., 500000). Equivalent to uniform NTK-aware scaling across all dimensions, but without considering the ramp.</p>
+<ul><li><strong>Pros</strong>: simplest, a 1-line config change.</li><li><strong>Cons</strong>: $\theta_0 = (b')^0 = 1$ is also unchanged (consistent with NTK-aware, highest frequency is precisely preserved), but ABF's $b'$ is picked by empirical guess (e.g., $10^6$), <strong>not calibrated to the training length ratio</strong> — unlike NTK-aware where the lowest frequency is precisely compressed to $1/s$. Result: the compression strength on low-frequency dimensions is entirely by feel.</li><li><strong>Where used</strong>: CodeLlama uses $b = 10^6$ to extend to 16K; Llama-3 / Llama-3.1 continue using large bases combined with more refined RoPE scaling.</li></ul>
+<h3 id="82-nope--no-position-encoding">8.2 NoPE — No Position Encoding</h3>
+<p>Kazemnejad et al. 2023 ("The Impact of Positional Encoding on Length Generalization in Transformers"): <strong>decoder-only models without position encoding can still learn position information via the causal mask alone</strong>.</p>
+<p>Observation: the causal attention mask already breaks symmetry under permutation (position $i$ cannot see position $j > i$), which itself encodes <strong>order</strong>. On small models / short context, NoPE even extrapolates better.</p>
+<div class="callout callout-warn"><div class="callout-title">NoPE limitation</div><p>only applies to decoder-only + causal mask. Encoder-only (BERT-like) without causal mask degenerates to bag-of-words after removing position encoding. NoPE has not been broadly validated on large models. <strong>Remember it as an interesting research finding</strong>, not an industry default.</p></div>
+<h2 id="9-mla--multi-head-latent-attention-deepseek-v2-may-2024">§9 MLA — Multi-Head Latent Attention (DeepSeek-V2 May 2024)</h2>
+<h3 id="91-motivation">9.1 Motivation</h3>
+<p>GQA compresses KV cache from $2 N_h d_h$ to $2 G d_h$ (per-token, per-layer), but $G$ must be at least 4-8 to maintain quality. <strong>Can we compress more aggressively?</strong> MLA compresses KV cache to a low-rank latent, theoretically reaching $d_c \ll N_h d_h$ without losing much performance.</p>
+<h3 id="92-naive-low-rank-kv--first-step-derivation">9.2 Naive low-rank K/V — first-step derivation</h3>
+<p>Define a compression matrix $W_\text{DKV} \in \mathbb{R}^{d_c \times d_\text{model}}$, projecting each token's hidden state $\mathbf{h}_t \in \mathbb{R}^{d_\text{model}}$ onto a KV latent:</p>
+<p>$$\boxed{\;\mathbf{c}_t^{KV} = W_\text{DKV}\, \mathbf{h}_t \in \mathbb{R}^{d_c}\;}$$</p>
+<p>Each head's K, V is recovered from this latent via an <strong>up-projection</strong>:</p>
+<p>$$\mathbf{k}_t^{(h)} = W_\text{UK}^{(h)}\, \mathbf{c}_t^{KV}, \qquad \mathbf{v}_t^{(h)} = W_\text{UV}^{(h)}\, \mathbf{c}_t^{KV}$$</p>
+<p>where $W_\text{UK}^{(h)}, W_\text{UV}^{(h)} \in \mathbb{R}^{d_h \times d_c}$.</p>
+<p><strong>Key: cache stores only $\mathbf{c}_t^{KV}$</strong> ($d_c$-dimensional), not $\mathbf{k}, \mathbf{v}$ themselves. Per-token-per-layer cache drops from $2 N_h d_h$ to $d_c$. DeepSeek-V2 picks $d_c = 4 d_h$ (vs $N_h d_h = 128 d_h$ for $N_h = 128$), giving <strong>≈ 50× KV cache compression</strong>.</p>
+<h3 id="93-absorbing-trick--avoid-explicit-up-projection">9.3 Absorbing trick — avoid explicit up-projection</h3>
+<p>Naive approach: each attention computes $\mathbf{k}_t^{(h)} = W_\text{UK}^{(h)} \mathbf{c}_t^{KV}$ from $\mathbf{c}_t^{KV}$, then computes $\mathbf{q}_t^{(h)\top} \mathbf{k}_t^{(h)}$. This equals:</p>
+<p>$$\mathbf{q}_t^{(h)\top} \mathbf{k}_t^{(h)} = \mathbf{q}_t^{(h)\top} (W_\text{UK}^{(h)} \mathbf{c}_t^{KV}) = (W_\text{UK}^{(h)\top} \mathbf{q}_t^{(h)})^\top \mathbf{c}_t^{KV}$$</p>
+<p>Let $\tilde{\mathbf{q}}_t^{(h)} := W_\text{UK}^{(h)\top} \mathbf{q}_t^{(h)}$; then the attention score becomes $\tilde{\mathbf{q}}_t^{(h)\top} \mathbf{c}_s^{KV}$ — <strong>inner product with the latent cache directly</strong>, no need to compute $\mathbf{k}_s^{(h)}$. Similarly, $W_\text{UV}^{(h)}$ can be absorbed into the left-multiplication of the output projection $W_O$. This is <strong>MLA's absorbing trick</strong>: at training time, the two steps are explicit; at inference, the up-projection matrices are absorbed into the query/output projections, <strong>reading the cache and the matmul done in one step</strong>.</p>
+<h3 id="94-why-rope-must-be-decoupled-the-most-critical-l3-question">9.4 Why RoPE must be decoupled (the most critical L3 question)</h3>
+<p><strong>Problem</strong>: what if RoPE is added? Traditional RoPE multiplies directly onto $\mathbf{q}, \mathbf{k}$:</p>
+<p>$$\mathbf{q}_t^{(h)} \leftarrow R_t\, \mathbf{q}_t^{(h)}, \qquad \mathbf{k}_t^{(h)} \leftarrow R_t\, \mathbf{k}_t^{(h)} = R_t\, W_\text{UK}^{(h)}\, \mathbf{c}_t^{KV}$$</p>
+<p>But $R_t$ is <strong>position-dependent</strong> — different rotation matrices for different cache tokens $t$. If we still want to use the absorbing trick and absorb $R_t W_\text{UK}^{(h)}$ into the query side, this becomes</p>
+<p>$$\mathbf{q}_t^{(h)\top} \mathbf{k}_s^{(h)} = \mathbf{q}_t^{(h)\top} (R_s\, W_\text{UK}^{(h)}\, \mathbf{c}_s^{KV})$$</p>
+<p>Here $R_s$ differs per cache position $s$ — <strong>no fixed matrix can be absorbed into the query projection</strong>. In other words:</p>
+<p>$$(W_\text{UK}^{(h)\top} R_s^\top)\, \mathbf{q}_t^{(h)} \quad \text{with } R_s \text{ varying in } s$$</p>
+<p>Insisting on preserving RoPE while doing absorbing is equivalent to <strong>per-position query projection</strong>, destroying all cache-friendliness of the absorbing trick; the cache would need to store post-RoPE K again (returning to $N_h d_h$ size).</p>
+<h3 id="95-mlas-decoupling-solution--shared-rope-key--non-rope-main-body">9.5 MLA's decoupling solution — shared RoPE key + non-RoPE main body</h3>
+<p>DeepSeek-V2's solution: <strong>split K into two parts</strong>:</p>
+<ol><li><strong>Non-RoPE main body</strong>: obtained via up-projection from the latent, dimension $d_h$, participates in absorbing.</li><li><strong>RoPE part</strong>: a separate key of dimension $d_h^R$ (usually 64), <strong>shared across all heads</strong>, with RoPE applied independently, not participating in absorbing.</li></ol>
+<p>Formally (DeepSeek-V2 paper Eq. 5-11):</p>
+<p>$$ \begin{aligned} \mathbf{c}_t^{KV} &= W_\text{DKV}\, \mathbf{h}_t \in \mathbb{R}^{d_c} \\ \mathbf{k}_t^{C,(h)} &= W_\text{UK}^{(h)}\, \mathbf{c}_t^{KV} \in \mathbb{R}^{d_h} \quad\text{(non-RoPE main body, per head)}\\ \mathbf{k}_t^{R} &= \mathrm{RoPE}(W_\text{KR}\, \mathbf{h}_t) \in \mathbb{R}^{d_h^R} \quad\text{(shared RoPE key, all heads share)}\\ \mathbf{k}_t^{(h)} &= [\mathbf{k}_t^{C,(h)}\; ;\; \mathbf{k}_t^{R}] \in \mathbb{R}^{d_h + d_h^R} \end{aligned} $$</p>
+<p>The query side is similarly split into two halves:</p>
+<p>$$ \begin{aligned} \mathbf{c}_t^{Q} &= W_\text{DQ}\, \mathbf{h}_t \in \mathbb{R}^{d_c'} \\ \mathbf{q}_t^{C,(h)} &= W_\text{UQ}^{(h)}\, \mathbf{c}_t^{Q} \in \mathbb{R}^{d_h} \quad\text{(non-RoPE, paired with } \mathbf{k}_t^{C,(h)} \text{)}\\ \mathbf{q}_t^{R,(h)} &= \mathrm{RoPE}(W_\text{QR}^{(h)}\, \mathbf{c}_t^{Q}) \in \mathbb{R}^{d_h^R} \quad\text{(per-head RoPE query, paired with } \mathbf{k}_t^{R} \text{)}\\ \mathbf{q}_t^{(h)} &= [\mathbf{q}_t^{C,(h)}\; ;\; \mathbf{q}_t^{R,(h)}] \end{aligned} $$</p>
+<p>Attention score (same head):</p>
+<p>$$\mathbf{q}_t^{(h)\top} \mathbf{k}_s^{(h)} = \underbrace{\mathbf{q}_t^{C,(h)\top}\, \mathbf{k}_s^{C,(h)}}_{\text{absorbed into q projection}} + \underbrace{\mathbf{q}_t^{R,(h)\top}\, \mathbf{k}_s^{R}}_{\text{RoPE part, computed directly}}$$</p>
+<p>In the first term, $\mathbf{k}_s^{C,(h)} = W_\text{UK}^{(h)} \mathbf{c}_s^{KV}$, and per §9.3 absorbing trick, $W_\text{UK}^{(h)}$ is absorbed into the query side. In the second term, the RoPE key is shared across all heads, and the cache stores only one copy of $\mathbf{k}_s^R$.</p>
+<h3 id="96-mla-kv-cache-total-size">9.6 MLA KV cache total size</h3>
+<p>Per token per layer:</p>
+<p>$$\boxed{\;\text{MLA cache} = \underbrace{d_c}_{\mathbf{c}^{KV}} + \underbrace{d_h^R}_{\mathbf{k}^R} \quad \text{vs} \quad \text{MHA cache} = 2 N_h d_h\;}$$</p>
+<p>DeepSeek-V2 numbers ($N_h = 128, d_h = 128, d_c = 512, d_h^R = 64$):</p>
+<ul><li>MHA: $2 \cdot 128 \cdot 128 = 32{,}768$ elements / token / layer</li><li>MLA: $512 + 64 = 576$ elements / token / layer</li><li>Compression ratio <strong>57×</strong> (vs MHA); MLA's total KV cache is also about 4× smaller than GQA-8.</li></ul>
+<h3 id="97-mla-simplified-code">9.7 MLA simplified code</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+# Reuse apply_rope from §2.4 (omitted).
+
+class MultiHeadLatentAttention(nn.Module):
+    &quot;&quot;&quot;
+    Simplified MLA: training version (absorbing trick can be added at inference).
+    Per-token-per-layer cache: c_kv [d_c] + k_R [d_h_R]
+    &quot;&quot;&quot;
+    def __init__(self, d_model: int, n_heads: int,
+                 d_c: int = 512, d_h: int = 128, d_h_R: int = 64,
+                 d_c_q: int = 1536):
+        super().__init__()
+        self.n_heads, self.d_h, self.d_h_R = n_heads, d_h, d_h_R
+
+        # Down-projection to latent
+        self.W_DKV = nn.Linear(d_model, d_c,  bias=False)
+        self.W_DQ  = nn.Linear(d_model, d_c_q, bias=False)
+
+        # Up-projection (non-RoPE main body)
+        self.W_UK = nn.Linear(d_c,   n_heads * d_h,   bias=False)
+        self.W_UV = nn.Linear(d_c,   n_heads * d_h,   bias=False)
+        self.W_UQ = nn.Linear(d_c_q, n_heads * d_h,   bias=False)
+
+        # RoPE-decoupled part
+        self.W_KR = nn.Linear(d_model, d_h_R,            bias=False)  # shared across heads
+        self.W_QR = nn.Linear(d_c_q,   n_heads * d_h_R,  bias=False)  # per head
+
+        self.W_O  = nn.Linear(n_heads * d_h, d_model, bias=False)
+
+    def forward(self, h: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor,
+                mask: torch.Tensor = None):
+        # h: [B, L, d_model]; cos/sin for RoPE: [L, d_h_R/2]
+        B, L, _ = h.shape
+        H, dH, dHR = self.n_heads, self.d_h, self.d_h_R
+
+        # ----- KV path -----
+        c_kv = self.W_DKV(h)                                              # [B, L, d_c]
+        k_C  = self.W_UK(c_kv).view(B, L, H, dH).transpose(1, 2)          # [B, H, L, d_h]
+        v    = self.W_UV(c_kv).view(B, L, H, dH).transpose(1, 2)          # [B, H, L, d_h]
+
+        k_R  = self.W_KR(h)                                                # [B, L, d_h_R]  (shared)
+        k_R  = apply_rope(k_R, cos, sin)                                   # shared RoPE
+        # Broadcast to H heads for concatenation
+        k_R_per_head = k_R.unsqueeze(1).expand(B, H, L, dHR)                # [B, H, L, d_h_R]
+        k = torch.cat([k_C, k_R_per_head], dim=-1)                          # [B, H, L, d_h+d_h_R]
+
+        # ----- Q path -----
+        c_q  = self.W_DQ(h)                                                 # [B, L, d_c_q]
+        q_C  = self.W_UQ(c_q).view(B, L, H, dH).transpose(1, 2)             # [B, H, L, d_h]
+        q_R  = self.W_QR(c_q).view(B, L, H, dHR).transpose(1, 2)            # [B, H, L, d_h_R]
+        q_R  = apply_rope(q_R, cos, sin)                                    # per-head RoPE
+        q = torch.cat([q_C, q_R], dim=-1)                                   # [B, H, L, d_h+d_h_R]
+
+        # ----- Attention -----
+        scores = (q @ k.transpose(-2, -1)) / ((dH + dHR) ** 0.5)
+        if mask is not None:
+            scores = scores.masked_fill(~mask, float(&quot;-inf&quot;))
+        attn = torch.softmax(scores, dim=-1)
+        out  = (attn @ v).transpose(1, 2).contiguous().view(B, L, H * dH)   # [B, L, H*d_h]
+        return self.W_O(out)                                                # [B, L, d_model]</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Common misconception</div><p>"MLA is just further compression of GQA" — inaccurate. GQA compresses along the head dimension (multiple Q heads share a K/V head); MLA is low-rank compression along the hidden dimension ($N_h d_h \to d_c$) + shared RoPE. GQA still applies RoPE independently per KV head; MLA must decouple RoPE to preserve the absorbing trick.</p></div>
+<h3 id="98-training-cost">9.8 Training cost</h3>
+<p>MLA introduces extra down-projection / up-projection, so <strong>training FLOPs slightly increase</strong> (DeepSeek-V2 reports ≈ 2% increase), in exchange for tens of times smaller KV cache at inference — a "slightly more expensive training, much cheaper inference" trade-off.</p>
+<h2 id="10-sliding-window-and-streaming-attention">§10 Sliding Window and Streaming Attention</h2>
+<h3 id="101-sliding-window-attention-mistral-2023">10.1 Sliding Window Attention (Mistral 2023)</h3>
+<p>Each query attends only to the previous $W$ keys ($W$ = window size; Mistral-7B uses $W = 4096$).</p>
+<ul><li><strong>Complexity</strong>: drops from $O(L^2 d)$ to $O(L W d)$, linear in long sequences.</li><li><strong>Receptive field via multi-layer stacking</strong>: layer 1 sees $W$; layer 2's each position sees the previous $W$ (where each token sees its own previous $W$), giving effective receptive field $2W$; after $\ell$ layers, the receptive field is $\ell W$. <strong>So 32 layers × 4096 window ≈ 131K effective receptive field</strong>.</li></ul>
+<pre><code class="language-python">def sliding_window_mask(L: int, W: int, device=None) -&gt; torch.Tensor:
+    &quot;&quot;&quot;
+    L: sequence length; W: window size (including self)
+    Returns [L, L] bool mask, True=visible.
+    Position i sees j ∈ [max(0, i-W+1), i] (causal + sliding window)
+    &quot;&quot;&quot;
+    idx_q = torch.arange(L, device=device).unsqueeze(1)   # [L, 1]
+    idx_k = torch.arange(L, device=device).unsqueeze(0)   # [1, L]
+    causal     = idx_k &lt;= idx_q
+    in_window  = idx_k &gt; (idx_q - W)
+    return causal &amp; in_window
+
+# Example L=8, W=4:
+# row 0: [T F F F F F F F]
+# row 1: [T T F F F F F F]
+# row 2: [T T T F F F F F]
+# row 3: [T T T T F F F F]
+# row 4: [F T T T T F F F]    ← token 0 is pushed out of the window
+# row 5: [F F T T T T F F]
+# row 6: [F F F T T T T F]
+# row 7: [F F F F T T T T]</code></pre>
+<div class="callout callout-info"><div class="callout-title">Practical significance of SWA</div><p>Mistral-7B trained at length 8K can handle 32K+ context at inference with SWA (each layer sees only 4K locally; multi-layer stacking sees globally), with memory/compute scaling linearly. But pure SWA's <strong>long-range exact retrieval</strong> (e.g., needle-in-haystack far away) is weak — this is exactly why StreamingLLM adds attention sink.</p></div>
+<h3 id="102-streamingllm--attention-sink--sliding-window">10.2 StreamingLLM — Attention Sink + Sliding Window</h3>
+<p>Xiao et al. ICLR 2024 ("Efficient Streaming Language Models with Attention Sinks") makes a key inference-time finding:</p>
+<p><strong>During LLM decode, softmax forces attention weights to sum to 1, but the query may actually have "nothing it wants to attend to". The model then dumps most of the weight onto the first 1-4 tokens (especially <code>&lt;bos&gt;</code>), forming an attention sink.</strong> These tokens carry no informational content, but their KV cache <strong>cannot be discarded</strong> — once removed, softmax loses its "trash bin" and the remaining tokens' attention distribution is forcibly rebalanced, blowing up PPL.</p>
+<p>StreamingLLM inference strategy:</p>
+<ol><li><strong>Always keep</strong> the KV cache of the first $S$ tokens ($S = 4$ empirical) as the sink.</li><li><strong>Sliding window</strong> keeping the KV cache of the most recent $W$ tokens.</li><li>Tokens outside the window and outside the sink have their KV <strong>directly discarded</strong>.</li></ol>
+<p>The total KV cache size is $S + W$, decoupled from the sequence length $L$, achieving <strong>true streaming</strong> generation.</p>
+<h3 id="103-streamingllm-inference-loop-code">10.3 StreamingLLM inference loop code</h3>
+<p>The below is <strong>pedagogical</strong>, focused on control flow. The production implementation (HuggingFace <code>streaming_llm</code> / the authors' <code>streaming-llm</code> repo) has two critical details, noted in the comments.</p>
+<pre><code class="language-python">@torch.no_grad()
+def streaming_decode(model, input_ids, max_new_tokens,
+                     sink_size=4, window_size=2044):
+    &quot;&quot;&quot;
+    Pedagogical streaming inference: sink + sliding window.
+    Total cache = sink_size + window_size, independent of generation length.
+
+    Critical details (production code MUST do):
+    (a) Cache stores K *before* RoPE (i.e., W_K @ h, unrotated) AND records each token&#x27;s &quot;logical position&quot;.
+        At each forward, re-apply RoPE on sink / recent K according to their *new* logical positions in the current cache.
+        Otherwise, trimming + position shift causes the rotation angles in the cache to mismatch the new logical positions.
+    (b) Sink positions are fixed at [0, S), recent window positions are fixed at [S, S+W),
+        and new tokens take S+W (the cache capacity upper bound) as their logical position.
+        This way, the &quot;max relative position&quot; the model sees is always ≤ S+W, never touching the RoPE training upper bound.
+    &quot;&quot;&quot;
+    device = input_ids.device
+    B = input_ids.size(0)
+    total = sink_size + window_size
+
+    # ----- 1) Prefill -----
+    # past_kv_pre[i] = (k_pre, v) where k_pre = W_K @ h, NOT RoPE-applied
+    past_kv_pre = _prefill_unrotated(model, input_ids)            # implementation details omitted
+
+    # If the prompt already exceeds sink+window, trim (sink segment + most recent window segment)
+    def trim_unrotated(past_kv_pre):
+        new_past = []
+        for (k_pre, v) in past_kv_pre:
+            if k_pre.size(-2) &lt;= total:
+                new_past.append((k_pre, v));  continue
+            sink = (k_pre[..., :sink_size, :], v[..., :sink_size, :])
+            recent = (k_pre[..., -window_size:, :], v[..., -window_size:, :])
+            new_past.append(
+                (torch.cat([sink[0], recent[0]], dim=-2),
+                 torch.cat([sink[1], recent[1]], dim=-2))
+            )
+        return new_past
+
+    past_kv_pre = trim_unrotated(past_kv_pre)
+    # logits from the last prefill step
+    next_token = _last_logits(model, past_kv_pre).argmax(-1, keepdim=True)
+    generated = [next_token]
+
+    # ----- 2) Autoregressive decode -----
+    for step in range(max_new_tokens - 1):
+        cur_len = past_kv_pre[0][0].size(-2)                       # current number of tokens in cache
+        # Assign &quot;logical positions&quot; to each cache token; note: when prompt is very short and cur_len &lt; sink_size,
+        # all tokens are treated as sink (no recent window).
+        if cur_len &lt;= sink_size:
+            cache_pos = torch.arange(cur_len, device=device)        # [cur_len]
+        else:
+            cache_pos = torch.cat([
+                torch.arange(sink_size, device=device),             # sink segment: [0..S)
+                torch.arange(sink_size, cur_len, device=device),    # window segment: [S..cur_len)
+            ])                                                       # length = cur_len
+        new_pos = torch.tensor([cur_len], device=device)             # new token&#x27;s logical position
+
+        # Re-apply RoPE on cache K_pre (by cache_pos) and on the new token (by new_pos).
+        out = model(next_token, past_kv_pre=past_kv_pre,
+                    cache_pos=cache_pos, new_pos=new_pos, use_cache=True)
+        past_kv_pre = trim_unrotated(out.past_kv_pre)
+        next_token = out.logits[:, -1].argmax(-1, keepdim=True)
+        generated.append(next_token)
+
+    return torch.cat(generated, dim=-1)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Warning</div><p>**Directly trimming the <em>post-RoPE</em> K cache is wrong<strong> — a common bug: directly trim HF's default K cache (already RoPE-applied) as above and feed new tokens with logical position ids, and you get a self-contradictory relative position (cache K is rotated with original absolute positions, but the new query is rotated with logical positions). </strong>Correct approach**: keep the unrotated K (<code>W_K @ h</code>, not multiplied by cos/sin) and re-apply RoPE each step by current logical position; or use the author repo's <code>enable_streaming_llm()</code> patch, which modifies the attention layer to accept "position-shift" form rotation.</p></div>
+<div class="callout callout-warn"><div class="callout-title">StreamingLLM does not increase the model&#x27;s effective context</div><p>it allows the model to <strong>stream forever</strong> without blowing memory, but what it actually sees is still the tokens within sink + window range. The discarded middle content <strong>really is invisible</strong>. For long-context retrieval, you still need YaRN / LongRoPE / SSM or actual context extension.</p></div>
+<h3 id="104-lost-in-the-middle-liu-2023">10.4 Lost-in-the-Middle (Liu 2023)</h3>
+<p>Liu et al. 2023 ("Lost in the Middle: How Language Models Use Long Contexts") empirically observes: <strong>long-context models pay much more attention to the head and tail of the prompt than the middle</strong>, making "middle content harder to retrieve".</p>
+<ul><li><strong>U-shaped curve</strong>: placing key information at different positions in the prompt yields a U-shaped retrieval accuracy curve (high at ends, low in middle).</li><li><strong>Reasons</strong>: in causal-LM training distribution, the first token has the broadest influence (attention sink shared root); the last token is the direct precursor of next-token prediction. Middle content is "squeezed" by both ends.</li><li><strong>Mitigation</strong>: (a) put important information at the start or end of the prompt; (b) recurrent retrieval (chain prompts); (c) increase mid-segment weight during training (position-aware loss weighting).</li></ul>
+<div class="callout callout-info"><div class="callout-title">Interview takeaway</div><p>this is not "position-encoding extrapolation failure" — the model <strong>has effectively learned</strong> long context, but the attention distribution has a preference. Different from what RoPE/YaRN solve.</p></div>
+<h2 id="11-system-level-long-context--ring--cp--flashattn">§11 System-Level Long Context — Ring / CP / FlashAttn</h2>
+<h3 id="111-ring-attention-liu-et-al-2023">11.1 Ring Attention (Liu et al. 2023)</h3>
+<p>Cut the sequence into $P$ chunks on $P$ GPUs; each chunk holds its own Q/K/V chunk. Attention is realized via <strong>K/V chunks passed in a ring around the GPUs</strong>:</p>
+<pre class="diagram"><code>GPU 0: holds Q0, K0, V0  ←→  GPU 1: holds Q1, K1, V1  ←→  ...  ←→  GPU P-1
+            │                       │
+            └─ pass K1, V1 to GPU 0, while GPU 0 passes K0, V0 to GPU P-1
+            (after P-1 ring iterations, every GPU has seen all K, V)</code></pre>
+<ul><li><strong>At each round</strong>, each GPU does local attention with its currently-held K/V chunk on its local Q chunk, accumulating partial output.</li><li><strong>Communication overlaps with computation</strong> (the next K/V is being passed while the current attention is being computed).</li><li>Per-GPU communication: $O(L \cdot d)$ (each GPU sends/receives $P-1$ chunks); per-GPU computation: $O(L^2 d / P)$.</li></ul>
+<p><strong>Key effect</strong>: each GPU only needs to hold $L/P$ of K/V, and <strong>effective context scales linearly with the number of GPUs</strong> — theoretically 8 GPUs × 128K per card = 1M context.</p>
+<h3 id="112-context-parallelism-megatron-2024">11.2 Context Parallelism (Megatron 2024)</h3>
+<p>Megatron-Core's Context Parallel (CP) is an engineering-grade version of Ring Attention, integrated into existing tensor/pipeline parallelism. Main engineering points:</p>
+<ul><li>Uses fused all-to-all comms combined with FlashAttention blocking</li><li>Handles load imbalance between chunks under causal mask (front chunks compute less attention, back chunks compute more, requiring load balancing)</li><li>Compatible with ZeRO-3</li></ul>
+<h3 id="113-flashattention-23-and-long-context">11.3 FlashAttention 2/3 and long context</h3>
+<p>FlashAttention v1 (Dao 2022) core is IO-aware exact attention, but v1's loop structure is unbalanced on long sequences.</p>
+<ul><li><strong>v2 (Dao 2023)</strong>: swaps inner/outer loops (Q-outer, KV-inner), better warp-level parallelism, 2× throughput on long sequences.</li><li><strong>v3 (Dao 2024)</strong>: targets H100, uses WGMMA / TMA / FP8 asynchronous pipeline.</li></ul>
+<p>In long-context scenarios, FlashAttention is <strong>the default in almost all training / inference stacks</strong> (avoiding materializing the $L \times L$ score matrix).</p>
+<h3 id="114-differential-attention-optional-microsoft-2024">11.4 Differential Attention (optional, Microsoft 2024)</h3>
+<p>Ye et al. 2024 ("Differential Transformer") proposes that each attention head uses <strong>two independent Q/K projections and takes the difference</strong>:</p>
+<p>$$\mathrm{Diff} = \mathrm{softmax}(Q_1 K_1^\top / \sqrt{d}) - \lambda \cdot \mathrm{softmax}(Q_2 K_2^\top / \sqrt{d})$$</p>
+<ul><li><strong>Intuition</strong>: the first term learns "signal", the second learns "noise"; the difference is sharper.</li><li><strong>Effect</strong>: significant improvement on long-context needle-in-haystack tasks over vanilla attention.</li><li><strong>Cost</strong>: each head needs an extra set of Q/K projections (+ 50% parameters and computation).</li></ul>
+<div class="callout callout-info"><div class="callout-title">Whether to use</div><p>Differential Attention is a new direction from late 2024; industry adoption is still low (DeepSeek-V3 does not use it, Llama-3 does not either), but it is interesting research. When asked about "new long-context directions" in interviews, you can mention it.</p></div>
+<h2 id="12-complexity-and-memory-summary-table">§12 Complexity and Memory Summary Table</h2>
+<h3 id="121-kv-cache-per-token-per-layer-size-attention-variants">12.1 KV cache per-token-per-layer size (attention variants)</h3>
+<table><thead><tr><th>Method</th><th>KV cache size (elements)</th><th>vs MHA ($N_h=128, d_h=128, G=8, d_c=512, d_h^R=64$)</th></tr></thead><tbody><tr><td><strong>MHA</strong></td><td>$2 N_h d_h$</td><td>32,768 (baseline 1×)</td></tr><tr><td><strong>MQA</strong></td><td>$2 d_h$</td><td>256 (128×)</td></tr><tr><td><strong>GQA-8</strong></td><td>$2 G d_h$</td><td>2,048 (16×)</td></tr><tr><td><strong>MLA</strong></td><td>$d_c + d_h^R$</td><td>576 (57×)</td></tr></tbody></table>
+<h3 id="122-total-kv-cache-occupancy-per-sample-per-layer-affected-by-window-mechanisms-like-swa--streaming">12.2 Total KV cache occupancy (per-sample-per-layer, affected by "window" mechanisms like SWA / Streaming)</h3>
+<table><thead><tr><th>Method</th><th>Total cache size (elements)</th><th>vs vanilla cache (under the same attention variant)</th></tr></thead><tbody><tr><td><strong>Vanilla (full sequence)</strong></td><td>$L \cdot 2 N_h d_h$</td><td>baseline 1×</td></tr><tr><td><strong>SWA (window=W)</strong></td><td>$W \cdot 2 N_h d_h$ (each layer only sees the most recent W tokens)</td><td>$W/L \times$</td></tr><tr><td><strong>Streaming (sink+win)</strong></td><td>$(S + W) \cdot 2 N_h d_h$ (constant, decoupled from L)</td><td>$(S{+}W)/L \times$</td></tr></tbody></table>
+<p>Note: SWA / Streaming and GQA / MLA are <strong>orthogonal</strong> — multiplying them together gives the actual cache size in production stacks.</p>
+<h3 id="123-attention-time-and-memory">12.3 Attention time and memory</h3>
+<table><thead><tr><th>Method</th><th>Time per token (decode)</th><th>Memory peak (prefill)</th></tr></thead><tbody><tr><td>Vanilla MHA</td><td>$O(L \cdot N_h d_h)$</td><td>$O(L^2)$ scores</td></tr><tr><td>FlashAttention</td><td>$O(L \cdot N_h d_h)$</td><td>$O(L)$ (no intermediate scores)</td></tr><tr><td>Sliding Window</td><td>$O(W \cdot N_h d_h)$</td><td>$O(L \cdot W)$</td></tr><tr><td>Streaming (S+W)</td><td>$O((S+W) \cdot N_h d_h)$</td><td>$O((S+W)^2)$</td></tr><tr><td>Ring (P GPU)</td><td>$O(L \cdot N_h d_h / P)$ per GPU</td><td>$O(L^2 / P)$ per GPU</td></tr><tr><td>MLA</td><td>$O(L \cdot (d_c + d_h^R))$</td><td>+ projection overhead</td></tr></tbody></table>
+<h2 id="13-overall-comparison-and-selection-decision-tree">§13 Overall Comparison and Selection Decision Tree</h2>
+<pre class="diagram"><code>Q: I want to push context from 4K to N tokens, N=?
+│
+├── N ≤ 16K, zero-shot, cannot fine-tune
+│    └── NTK-aware (1-line config, increase base)
+│
+├── N ≤ 32K, can do limited fine-tuning (~1000 steps)
+│    └── PI (simple and stable) or YaRN (better)
+│
+├── 32K &lt; N ≤ 128K, fine-tune budget &lt; 500 steps
+│    └── YaRN (NTK-by-parts + temperature)
+│
+├── N &gt; 128K (256K-2M)
+│    └── LongRoPE (per-dim independent search + short-context rescue)
+│
+└── Streaming generation (unlimited length, no long-range retrieval needed)
+     └── StreamingLLM (sink + sliding window)
+
+Q: KV cache memory unmanageable?
+│
+├── Want to preserve quality, compress moderately
+│    └── GQA (LLaMA-2/3, Mistral)
+│
+├── Want extreme compression, accept retraining
+│    └── MLA (DeepSeek-V2/V3): cache cut 50×, RoPE must be decoupled
+│
+└── Inference server side
+     └── Combine with PagedAttention (vLLM) for cache pagination
+
+Q: Attention infeasible (L^2 too large)?
+│
+├── Single-card inference
+│    └── FlashAttention 2/3 (exact, must install)
+│
+├── Multi-card training / inference
+│    └── Ring Attention / Context Parallelism (chunk K/V ring pass)
+│
+└── Don&#x27;t need long-range exact retrieval, only local dependency
+     └── Sliding Window Attention (Mistral style)</code></pre>
+<h2 id="14-25-frequently-asked-interview-questions">§14 25 Frequently-Asked Interview Questions</h2>
+<p>Split into L1 (must-know) / L2 (advanced) / L3 (top labs) tiers. Each question expands to answer points and pitfalls.</p>
+<h3 id="l1-must-know-any-long-context-related-role">L1 must-know (any long-context-related role)</h3>
+<details>
+
+<summary>Q1. What is the core formula of RoPE? Why does it give "relative positions"?</summary>
+<ul><li>2D rotation per pair of adjacent dimensions: $f(\mathbf{x}, m) = \mathbf{x} \odot e^{im\boldsymbol\theta}$ (complex view), $\theta_i = 10000^{-2i/d}$</li><li>$\langle f(\mathbf{q}, m), f(\mathbf{k}, n)\rangle = \mathrm{Re}\!\sum_i \bar{q}_i k_i\, e^{i(n-m)\theta_i}$, <strong>depends only on $n-m$</strong></li><li>Key: additivity of rotation matrices $R_m^\top R_n = R_{n-m}$</li></ul>
+<p>Pitfall: only saying "RoPE encodes relative position" without being able to derive.</p>
+</details>
+<details>
+
+<summary>Q2. Why is the RoPE frequency $10000^{-2i/d}$?</summary>
+<ul><li>Follows the geometric-progression frequency distribution of Vaswani 2017 sinusoidal</li><li>High-frequency dimensions (small $i$) have short periods, encoding fine-grained local positions; low-frequency dimensions (large $i$) have long periods, encoding coarse long-range positions</li><li>Resolves positions at multiple time scales simultaneously</li></ul>
+<p>Pitfall: just saying "so different dimensions see different positions", without pointing out the geometric progression and high/low frequency meaning.</p>
+</details>
+<details>
+
+<summary>Q3. Why can naive RoPE not extrapolate directly?</summary>
+<ul><li>Training has $m \in [0, L_\text{train})$, and on low-frequency dimensions $m\theta_i$ is far less than $2\pi$</li><li>Inference with $m > L_\text{train}$, low-frequency dimensions enter unseen phase regions</li><li>The model has not learned attention behavior for these regions → PPL blows up / context collapses</li></ul>
+<p>Pitfall: saying "RoPE periodicity makes extrapolation OK" — wrong. Periodicity only holds within a dimension; what's being extrapolated across context length is the "position → phase" mapping, and the model has never seen $m\theta_i$ outside the training range combinations.</p>
+</details>
+<details>
+
+<summary>Q4. How does PI (Position Interpolation) work? What is the side effect?</summary>
+<ul><li>Divide all $\theta_i$ by $s = L_\text{new}/L_\text{train}$ (or equivalently compress $m$ to $m/s$)</li><li>Side effect: <strong>high-frequency dimensions are damaged</strong> — high frequency originally resolves fine-grained positions during training, but now resolution is compressed by $s\times$</li><li>Must fine-tune (≥ 1000 steps) to recover</li></ul>
+<p>Pitfall: assuming "interpolation is lossless".</p>
+</details>
+<details>
+
+<summary>Q5. What is the core difference between NTK-aware and PI?</summary>
+<ul><li><strong>PI</strong>: all dimensions divided by $s$ (high frequencies damaged)</li><li><strong>NTK-aware</strong>: change base $b' = b \cdot s^{d/(d-2)}$, so the highest frequency is almost unchanged and the lowest is compressed to $1/s$</li><li><strong>NTK-aware is zero-shot usable</strong> (no fine-tuning needed); PI must be fine-tuned</li></ul>
+<p>Pitfall: saying "NTK and PI are no different".</p>
+</details>
+<details>
+
+<summary>Q6. Difference between ALiBi and RoPE? Which extrapolates better?</summary>
+<ul><li>ALiBi: add $-m_h |i-j|$ distance bias to logits, head-dependent slope, <strong>no Q/K rotation</strong></li><li>RoPE: encode position via Q/K rotation, <strong>no explicit bias</strong></li><li>Extrapolation: ALiBi is better (linear bias extrapolates naturally), but is less expressive (only monotonic distance decay)</li><li>Industry choice: RoPE combined with YaRN/LongRoPE is more common (expressivity + extensibility)</li></ul>
+<p>Pitfall: treating RoPE and ALiBi as the same type (one is score-shift, the other is Q/K transformation).</p>
+</details>
+<details>
+
+<summary>Q7. How to compute KV cache memory?</summary>
+<ul><li>Formula: $L_\text{ctx} \cdot n_\text{layers} \cdot 2 \cdot H_\text{kv} \cdot d_\text{head} \cdot \text{bytes}$</li><li>The $2$ is because both K and V are stored; MQA has $H_\text{kv} = 1$; GQA has $H_\text{kv} = G$; MLA replaces it with $d_c + d_h^R$ (no longer 2× separately)</li><li>For LLaMA-2-7B (32 layers, $N_h=32, d_h=128$, fp16, MHA), 4K context $\approx 2.1$ GB / sample; 100K $\approx 52$ GB / sample</li><li>LLaMA-2-70B uses GQA-8 ($H_\text{kv}=8$, 80 layers, $d_h=128$); 4K $\approx 1.25$ GB / sample — GQA hugely compresses</li></ul>
+<p>Pitfall: forgetting $n_\text{layers}$; or treating the $2$ as a head factor.</p>
+</details>
+<details>
+
+<summary>Q8. What does MQA / GQA reduce?</summary>
+<ul><li><strong>KV cache memory</strong> + <strong>memory bandwidth</strong> (during decode, K/V cache must be read from HBM each step)</li><li>Also reduces K/V projection parameters and computation</li><li><strong>Does not reduce Q projection</strong>; Q head count remains unchanged</li></ul>
+<p>Pitfall: mistakenly saying "GQA reduces Q heads".</p>
+</details>
+<details>
+
+<summary>Q9. How does Sliding Window Attention let the model see far?</summary>
+<ul><li>Each layer sees only $W$, but stacked multi-layer: at layer $\ell$, each position's receptive field is $\ell \cdot W$</li><li>Mistral-7B: 32 layers × 4K window ≈ 131K effective receptive field</li><li>But <strong>long-range exact retrieval</strong> capability is weak (information must propagate via multi-layer "tunnel")</li></ul>
+<p>Pitfall: assuming "within window means only $W$ tokens visible" — wrong; that's true for only one layer.</p>
+</details>
+<details>
+
+<summary>Q10. What is Attention Sink?</summary>
+<ul><li>During LLM decode, the first 1-4 tokens (especially <code>&lt;bos&gt;</code>) receive abnormally high attention, even when content is irrelevant</li><li>Intuition: softmax forces weights to sum to 1, and the model needs a "trash bin" to absorb probability mass</li><li>Engineering use: StreamingLLM permanently keeps the first $S$ tokens' KV cache + sliding window</li></ul>
+<p>Pitfall: thinking attention sink is BOS / CLS tokens' "semantically normal" attention — wrong; sinks typically appear on all queries, <strong>independent of content</strong>.</p>
+</details>
+<h3 id="l2-advanced-research-oriented-roles">L2 advanced (research-oriented roles)</h3>
+<details>
+
+<summary>Q11. How to derive $b' = b \cdot s^{d/(d-2)}$ in NTK-aware?</summary>
+<ul><li>Let $b' = b \cdot \alpha$</li><li>Highest frequency $\theta_0 = (b')^0 = 1$, unaffected by $\alpha$ ✓</li><li>Lowest frequency $\theta'_{d/2-1} = b^{-(d-2)/d} \cdot \alpha^{-(d-2)/d}$</li><li>Requiring $\theta'_{d/2-1} = \theta_{d/2-1}/s$ → $\alpha^{-(d-2)/d} = 1/s$ → $\alpha = s^{d/(d-2)}$</li></ul>
+<p>Pitfall: just memorizing the formula without being able to derive.</p>
+</details>
+<details>
+
+<summary>Q12. What does each of YaRN's three components solve?</summary>
+<ul><li><strong>NTK-by-parts</strong>: handle high/mid/low frequencies in separate bands; finer than NTK-aware's single-parameter ramp</li><li><strong>Temperature scaling</strong>: after context lengthens, softmax distribution flattens; lower temperature $t < 1$ sharpens it</li><li><strong>Attention scale (implementation-layer)</strong>: implement temperature $1/t$ as Q/K norm scaling (equivalent to multiplying into cos/sin cache), without modifying the attention kernel</li></ul>
+<p>Pitfall: just saying "YaRN is an improved NTK-aware" without decomposing.</p>
+</details>
+<details>
+
+<summary>Q13. Where does YaRN's temperature formula $\sqrt{1/t} \approx 0.1 \ln s + 1$ come from?</summary>
+<ul><li>This is an <strong>empirical fit formula</strong>, not a closed-form derivation</li><li>Based on experimental measurements of attention entropy under different expansion ratios $s$</li><li>Idea: the larger the expansion ratio, the lower the temperature needed (sharper distribution) to compensate for dilution</li></ul>
+<p>Pitfall: treating it as a "strictly derived optimal temperature" — wrong; the YaRN paper makes clear it is an empirical fit.</p>
+</details>
+<details>
+
+<summary>Q14. What are the two RoPE real-form pairings?</summary>
+<ul><li><strong>Even-odd interleaved</strong>: $(x_0, x_1), (x_2, x_3), \dots$ (original RoFormer paper)</li><li><strong>Front half / back half</strong>: $(x_0, x_{d/2}), (x_1, x_{d/2+1}), \dots$ (HuggingFace LLaMA implementation)</li><li>Mathematically just a dimension permutation; <strong>equivalent</strong> for the final inner product</li><li>But the RoPE cache precomputation and the pairing must be <strong>consistent</strong>; mixing them causes rotations to act on wrong dimensions</li></ul>
+<p>Pitfall: not knowing that HF and Meta's official implementations have this difference.</p>
+</details>
+<details>
+
+<summary>Q15. Core difference between LongRoPE and YaRN?</summary>
+<ul><li><strong>YaRN</strong>: wavelength-based fixed ramp function; all dimensions follow the same rule</li><li><strong>LongRoPE</strong>: independent scaling factor $\lambda_i$ per dimension, <strong>evolutionary algorithm</strong> search</li><li>LongRoPE also introduces short-context rescue (separate scaling table for short context)</li><li>Max context: YaRN 128K vs LongRoPE 2M</li></ul>
+<p>Pitfall: saying LongRoPE "is no different from YaRN".</p>
+</details>
+<details>
+
+<summary>Q16. How does Mistral-7B compute the effective receptive field with SWA + multi-layer stacking?</summary>
+<ul><li>Single-layer receptive field $W = 4096$</li><li>After $\ell$ layers, theoretical receptive field is $\ell W$; 32 layers × 4096 = 131K</li><li>But actual "information propagation" is sparse — long-range tokens must propagate through multiple layers, equivalent to a deep pipeline</li><li>Empirically Mistral performs well within 32K, decaying further out</li></ul>
+<p>Pitfall: assuming SWA directly looks at 4K as a hard upper bound.</p>
+</details>
+<details>
+
+<summary>Q17. Why does StreamingLLM use "logical positions" rather than absolute positions for position ids?</summary>
+<ul><li>If using absolute positions: in the cache, sink is at [0,4), the most recent window is at [L-W, L), and the new token is at L</li><li>But $L$ can grow infinitely; RoPE hasn't seen $m > L_\text{train}$, so PPL blows up</li><li><strong>Logical positions</strong>: sink uses [0, S), within window uses [S, S+W), new token uses S+W</li><li>This way RoPE is always within the training-seen range → streaming generation can be unlimited</li></ul>
+<p>Pitfall: saying "absolute position is correct" — wrong; absolute positions hit RoPE's extrapolation upper bound.</p>
+</details>
+<details>
+
+<summary>Q18. Communication and computation of Ring Attention?</summary>
+<ul><li>$P$ cards, each card holding sequence length $L/P$ of Q/K/V</li><li>Ring-pass K/V chunks; after $P-1$ rounds, every card has seen all K/V</li><li>Per-card communication: $O(L \cdot d)$ (send/receive K/V each)</li><li>Per-card computation: $O(L^2 d / P)$</li><li><strong>Communication and computation overlap</strong>: next round of K/V is being passed while the current round's attention is being computed</li></ul>
+<p>Pitfall: saying "Ring Attention is just chunked attention" — missing the ring communication key point.</p>
+</details>
+<details>
+
+<summary>Q19. What is Lost in the Middle? Is it the same problem as position-encoding extrapolation?</summary>
+<ul><li>Phenomenon: in long context, the model attends more to head/tail tokens than middle (U-shaped curve)</li><li>Cause: causal-LM training distribution favors head/tail (attention sink shared root + next-token direct precursor)</li><li><strong>Not a position-encoding extrapolation problem</strong> — it's an attention distribution preference problem</li><li>Even with perfect position encoding extrapolation, this preference exists</li></ul>
+<p>Pitfall: confusing it with RoPE extrapolation.</p>
+</details>
+<details>
+
+<summary>Q20. Relation between ABF and NTK-aware?</summary>
+<ul><li>ABF (Adjusted Base Frequency): directly increase the RoPE base (e.g., 10000 → 500000), all dimensions sync base change</li><li>NTK-aware: change base $b' = b \cdot s^{d/(d-2)}$, <strong>formally identical to ABF</strong> (both increase base)</li><li>Difference is <strong>why this change is made</strong>: NTK-aware has a mathematical derivation (preserve highest frequency + compress lowest to $1/s$); ABF is an empirical choice</li><li>CodeLlama uses ABF (base=$10^6$); LLaMA-3 also greatly increases the base and combines with RoPE scaling</li></ul>
+<p>Pitfall: saying "ABF and NTK-aware are completely unrelated" — wrong; the formulas are isomorphic, only the motivation differs.</p>
+</details>
+<h3 id="l3-top-lab-questions-deepseek--anthropic--openai--google">L3 top-lab questions (DeepSeek / Anthropic / OpenAI / Google)</h3>
+<details>
+
+<summary>Q21. Why does NTK-aware base scaling precisely preserve high frequencies?</summary>
+<ul><li>High frequency corresponds to $i = 0$, $\theta_0 = b^{-0} = 1$, <strong>independent of $b$</strong></li><li>After base change $b \to b' = b \cdot \alpha$, $\theta'_0 = (b')^0 = 1$, still 1</li><li>Middle dimensions $\theta'_i / \theta_i = \alpha^{-2i/d}$, exponentially transitioning from 1 ($i=0$) to $1/s$ ($i=d/2-1$)</li><li><strong>Geometric meaning</strong>: base change is "shearing" in log-frequency space (high frequencies anchored, low frequencies compressed by $\log s$ amount)</li></ul>
+<p>Pitfall: just saying "NTK does not change high frequencies" — without explaining why base change has this effect automatically.</p>
+</details>
+<details>
+
+<summary>Q22. After RoPE is decoupled in MLA, how is absolute position information injected into the K/V latent up-projection part?</summary>
+<ul><li><strong>Key answer: it is not injected</strong>. MLA's non-RoPE main body $\mathbf{k}_t^{C,(h)} = W_\text{UK}^{(h)} \mathbf{c}_t^{KV}$ has no position encoding at all</li><li>The position signal is <strong>provided only by the shared RoPE key</strong> $\mathbf{k}_t^R = \mathrm{RoPE}(W_\text{KR} \mathbf{h}_t)$</li><li>The attention score is additively decomposed: $\mathbf{q}_t^{C\top} \mathbf{k}_s^C$ (content) + $\mathbf{q}_t^{R\top} \mathbf{k}_s^R$ (position)</li><li>This is what "decoupling" means: the content path and the position path are <strong>independent</strong>, not polluting the absorbing trick</li></ul>
+<p>Pitfall: assuming MLA absorbs RoPE into the latent — wrong.</p>
+</details>
+<details>
+
+<summary>Q23. Why can MLA not simply "apply RoPE after the up-projection"? Which step cannot be computed?</summary>
+<ul><li>Assume the cache stores $\mathbf{c}_s^{KV}$, and at attention time computes $\mathbf{k}_s^{(h)} = R_s\, W_\text{UK}^{(h)}\, \mathbf{c}_s^{KV}$</li><li>To absorb: the query inner product becomes $\mathbf{q}_t^{(h)\top} (R_s W_\text{UK}^{(h)} \mathbf{c}_s^{KV}) = (W_\text{UK}^{(h)\top} R_s^\top \mathbf{q}_t^{(h)})^\top \mathbf{c}_s^{KV}$</li><li>Here $R_s$ is <strong>position-$s$-dependent</strong> rotation — each cache position $s$ corresponds to a different $R_s$</li><li>Cannot absorb a fixed matrix into the query projection; <strong>absorbing must be per-position</strong></li><li>Equivalent to computing $W_\text{UK}^{(h)\top} R_s^\top$ matmul per query × per cache position — <strong>O(L) matmuls</strong>, more expensive than directly materializing K</li><li>So "applying RoPE after up-projection and absorbing" is computationally worse than not decoupling, <strong>completely defeating the absorbing trick</strong></li></ul>
+<p>Pitfall: just saying "RoPE is position-dependent" — not enough; you need to state the key point that <strong>the constancy needed for absorb is broken</strong>.</p>
+</details>
+<details>
+
+<summary>Q24. What is the implementation-layer difference between YaRN's attention scale and directly changing the softmax temperature?</summary>
+<ul><li><strong>Direct temperature change</strong>: divide logits by $t$ in the attention kernel, requiring modification of fused kernels like FlashAttention</li><li><strong>Attention scale</strong>: multiply $\sqrt{1/t}$ into the RoPE cos/sin cache, equivalent to <strong>amplifying</strong> Q/K norms by $\sqrt{1/t}$ ($\sqrt{1/t} > 1$ when $t < 1$); $QK^\top$ naturally amplified by $1/t$</li><li>The two are <strong>mathematically equivalent</strong> (provided Q/K norms come mainly from the post-RoPE part)</li><li>Engineering advantage: <strong>no attention kernel modification at all</strong>, only the RoPE precomputation</li><li>This is a major selling point of YaRN being "infrastructure-friendly"</li></ul>
+<p>Pitfall: saying "the two are the same thing" — mathematically equivalent but engineering significance differs.</p>
+</details>
+<details>
+
+<summary>Q25. Design a 1M-context, streaming-generation, single-card-inference scheme.</summary>
+<p>Reference Qwen2.5-1M / DeepSeek-V3 ideas:</p>
+<ul><li><strong>Position encoding</strong>: YaRN / LongRoPE to push RoPE to 1M (per-dim scaling search)</li><li><strong>KV cache compression</strong>: MLA (cut cache 50×) to fit the 1M cache "latent" on a single card</li><li><strong>Attention algorithm</strong>: FlashAttention 3 + Ring Attention (if multi-card) or Sliding Window combined with sink (if streaming)</li><li><strong>Inference optimization</strong>: vLLM PagedAttention for cache pagination; speculative decoding to speed up decode; chunked prefill (feed prompt in batches to avoid OOM)</li><li><strong>Training</strong>: must actually fine-tune on long-context data (≥ 1000 steps); zero-shot RoPE modification alone is not enough</li></ul>
+<p>Full stack: MLA + YaRN/LongRoPE + FlashAttn3 + (Ring/CP if multi-card) + StreamingLLM(if streaming) + vLLM inference.</p>
+<p>Pitfalls:</p>
+<ul><li>Only mentioning one method (e.g., just YaRN) — not complete</li><li>Not distinguishing "extending context" and "compressing cache" as two independent dimensions</li><li>Forgetting "must fine-tune"</li></ul>
+</details>
+<h2 id="a-appendix-implementation-points-checklist">§A Appendix: Implementation Points Checklist</h2>
+<h3 id="a1-rope-engineering-implementation-points">A.1 RoPE engineering implementation points</h3>
+<ul><li><strong>Pairing consistency</strong>: even-odd interleaved vs front/back half must be consistent with the cache precomputation</li><li><strong>Half-dim attention</strong>: cos/sin cache shape is $[L, d/2]$; when applying, broadcast to $[L, d]$ or multiply on the two halves separately</li><li><strong>dtype handling</strong>: compute cos/sin in fp32 then cast to dtype, avoiding rotation angle cumulative error in fp16/bf16</li><li><strong>For YaRN</strong>: the cos/sin cache has already been multiplied by $1/\sqrt{t}$; do not scale again inside attention</li><li><strong>For MLA</strong>: the RoPE part and non-RoPE part of query / key must be concatenated (typically RoPE last); attention scale uses $\sqrt{d_h + d_h^R}$, not $\sqrt{d_h}$</li></ul>
+<h3 id="a2-long-context-fine-tune-key-hyperparameters-yarn-experience">A.2 Long-context fine-tune key hyperparameters (YaRN experience)</h3>
+<ul><li>Training tokens: ≈ 1 B tokens (≈ 400-1000 steps) significantly improves PPL</li><li>Data: must contain <strong>real long context</strong> (books / arxiv / code repos); not just concatenated short documents</li><li>Learning rate: typically $1\times 10^{-5}$ to $5\times 10^{-5}$, one order of magnitude smaller than pretrain</li><li>Don't freeze: all layers participate in fine-tuning; freezing attention layers performs significantly worse</li><li>Eval: PPL on long contexts, Needle-in-Haystack retrieval accuracy</li></ul>
+<h3 id="a3-streamingllm-deployment-checklist">A.3 StreamingLLM deployment checklist</h3>
+<ul><li>Sink size $S = 4$ is empirically optimal (first 4 tokens)</li><li>Window size $W$ choice: throughput vs quality trade-off; common $W \in [1024, 4096]$</li><li>Position IDs must use <strong>logical positions</strong> rather than absolute positions</li><li>Compatible with RoPE / YaRN; per §10.3, the cache should store K <em>before</em> RoPE, and at each forward re-apply RoPE based on the <strong>current logical position</strong> of each token in sink / window (some vendor implementations equivalently treat the sink segment as "fixed rotation + attention key index shift", with approximate effect)</li></ul>
+<h3 id="a4-quick-reference-table">A.4 Quick reference table</h3>
+<table><thead><tr><th>Context</th><th>Recommended scheme</th><th>KV cache optimization</th></tr></thead><tbody><tr><td>4K-16K</td><td>RoPE + ABF / NTK-aware (zero-shot)</td><td>GQA</td></tr><tr><td>16K-32K</td><td>PI / YaRN + fine-tune</td><td>GQA</td></tr><tr><td>32K-128K</td><td>YaRN + fine-tune</td><td>GQA / MLA</td></tr><tr><td>128K-2M</td><td>LongRoPE + fine-tune</td><td>MLA + Ring/CP</td></tr><tr><td>Streaming generation</td><td>StreamingLLM (sink + window)</td><td>Any; cache is constant size</td></tr></tbody></table>
+<p><strong>Long Context Quick Reference</strong> · Main references: Su et al. 2021/2024 (RoPE/RoFormer, Neurocomputing), Chen et al. 2023 (PI, arXiv:2306.15595, Meta), bloc97 / jquesnelle 2023 (NTK-aware, LocalLLaMA community), Peng et al. 2023 (YaRN, arXiv:2309.00071), Ding et al. 2024 (LongRoPE, ICML 2024, Microsoft), DeepSeek-AI 2024 (DeepSeek-V2, arXiv:2405.04434), Jiang et al. 2023 (Mistral 7B, arXiv:2310.06825), Xiao et al. 2024 (StreamingLLM, ICLR 2024), Nelson F. Liu et al. 2023 (Lost in the Middle, arXiv:2307.03172, TACL), Hao Liu et al. 2023 (Ring Attention, arXiv:2310.01889), Dao et al. 2022-2024 (FlashAttention 1/2/3)</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/long_context_rope_yarn_mla_tutorial_en.md</code> ·
+  SHA256 <code>d8ebcc89a3ac</code> ·
+  generated at 2026-05-19 19:03 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

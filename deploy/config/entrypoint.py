@@ -134,6 +134,75 @@ def _sync_aris_skills() -> None:
         print(f"[entrypoint] ARIS skill sync failed: {exc}")
 
 
+def _provision_tenant_users(state_root: str) -> None:
+    """Ensure ainrf_tenants group and per-user Linux accounts exist.
+
+    Called at container startup while still running as root.
+    Container /etc/passwd resets on every restart, but the auth SQLite
+    database persists in the named volume. This re-creates Linux users
+    for every registered user, so tenant isolation works across restarts.
+    """
+    import sqlite3
+
+    TENANT_GID = 2000
+    TENANT_GROUP = "ainrf_tenants"
+    HOME_ROOT = Path("/home/ainrf_tenants")
+    auth_db = Path(state_root) / "runtime" / "auth.sqlite3"
+    if not auth_db.exists():
+        return
+
+    # 1. Ensure the tenant group exists
+    res = subprocess.run(["getent", "group", TENANT_GROUP],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        subprocess.run(["groupadd", "--gid", str(TENANT_GID), TENANT_GROUP],
+                       check=True, capture_output=True, text=True)
+        print(f"[entrypoint] Created group {TENANT_GROUP} (gid {TENANT_GID})",
+              flush=True)
+
+    # 2. Read all usernames from auth DB and ensure Linux users exist
+    try:
+        conn = sqlite3.connect(str(auth_db))
+        rows = conn.execute("SELECT username FROM users").fetchall()
+        conn.close()
+    except Exception as exc:
+        print(f"[entrypoint] Could not read auth DB for tenant provisioning: {exc}",
+              flush=True)
+        return
+
+    created = 0
+    for (username,) in rows:
+        linux_user = f"ainrf_{username}"
+        home = HOME_ROOT / username
+        workspace = home / "workspaces" / "default"
+
+        res = subprocess.run(["id", linux_user], capture_output=True, text=True)
+        if res.returncode == 0:
+            continue  # user already exists
+
+        subprocess.run(
+            [
+                "useradd",
+                "--gid", str(TENANT_GID),
+                "--home-dir", str(home),
+                "--create-home",
+                "--shell", "/bin/bash",
+                linux_user,
+            ],
+            check=True, capture_output=True, text=True,
+        )
+        home.mkdir(parents=True, exist_ok=True)
+        workspace.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["chown", "-R", f"{linux_user}:{TENANT_GROUP}", str(home)],
+            check=True, capture_output=True, text=True,
+        )
+        created += 1
+
+    if created:
+        print(f"[entrypoint] Provisioned {created} tenant Linux user(s)", flush=True)
+
+
 def main() -> None:
     _start_sshd()
     _generate_claude_settings()
@@ -144,8 +213,6 @@ def main() -> None:
     _uid = 1000
     _gid = 1000
     if os.getuid() == 0:
-        # Ensure volume directories are owned by ainrf (Docker named volumes
-        # may be owned by root on first mount)
         import subprocess
 
         for d in ("/opt/ainrf/state", "/opt/ainrf/.ainrf_workspaces"):
@@ -155,6 +222,12 @@ def main() -> None:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+
+        # Ensure tenant group and Linux users exist (container /etc/passwd
+        # resets on restart — the auth DB in the named volume persists but
+        # the Linux accounts do not).
+        _provision_tenant_users("/opt/ainrf/state")
+
         os.setgid(_gid)
         os.setuid(_uid)
         os.environ["HOME"] = "/opt/ainrf"

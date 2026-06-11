@@ -1,0 +1,146 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/agent_foundations_tutorial.md",
+  "source_sha256_prefix": "a329ddea9be664b9",
+  "output": "docs/tutorials/agent_foundations_tutorial.html",
+  "topic": "Agent Foundations (LLM agents — ReAct / Plan-and-Solve / Reflexion / Toolformer / Function Calling / MCP / A2A / Computer Use / Benchmarks / Production Patterns)",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "math_code_review": {
+    "verdict": "WARN",
+    "rounds": [
+      {
+        "run": 1,
+        "thread_id": "019e3ff8-08fe-7a92-9d65-b4150442d372",
+        "verdict": "FAIL",
+        "issues": [
+          "ReAct Table swapped ReAct→CoT-SC and CoT-SC→ReAct numbers; ReAct paper Table 1 gives different values for HotpotQA / Fever.",
+          "TL;DR §0 #2 and Q1 overstate ReAct vs CoT on HotpotQA; pure ReAct EM 27.4 is below CoT 29.4.",
+          "SWE-bench Verified ~58% problematic statement; OpenAI reports 38.3% underspecified + 61.1% test issues.",
+          "Q21 gave invented exact failure-mode percentages with no source.",
+          "Q25 claimed OSWorld human basically full score; actual 72.36%.",
+          "Table cell |h_t| math needed \\lvert h_t \\rvert escape.",
+          "Python code blocks had undefined helpers: search_engine/kb_lookup/run_python/build_prompt/embed/cosine; missing import time; await missing in async fn."
+        ],
+        "fix": "Rewrote ReAct results table with ReAct→CoT-SC 35.1 and CoT-SC→ReAct 64.6 separated; added 'three key facts' callout. Corrected TL;DR §0 #2 and Q1 to clarify ReAct < CoT on HotpotQA but wins on ALFWorld/WebShop. Cited OpenAI 38.3% / 61.1% on SWE-bench Verified. Removed invented Q21 percentages; replaced with qualitative ordering with cited sources. Corrected OSWorld human 72.36% in §8.3 + Q25. Replaced |h_t| in table with \\lvert h_t \\rvert. Added stubs for search_engine/kb_lookup/run_python/embed/cosine; added build_prompt def; added import time; restructured parallel_tool_step as async with await."
+      },
+      {
+        "run": 2,
+        "thread_id": "019e4001-ad88-73f0-b618-08d689760119",
+        "verdict": "FAIL",
+        "issues": [
+          "ReAct Fever ReAct→CoT-SC = 62.0 (not 61.0); ALFWorld ≈ 70.9/71 (not 70.7).",
+          "Caption falsely claimed all numbers from Table 1; ALFWorld/WebShop come from later tables.",
+          "Reflexion WebShop 28% → 40%+ wrong — paper Fig 6 reports Reflexion does NOT significantly outperform ReAct on WebShop.",
+          "Claim that Plan-and-Solve had HotpotQA limited gains was unsupported — paper does not evaluate HotpotQA.",
+          "Q25 said SWE-bench used '2023+ issue' as held-out cutoff — original Jimenez paper has no such strict cutoff."
+        ],
+        "fix": "Updated ReAct results table to Fever ReAct→CoT-SC = 62.0, ALFWorld ~71. Caption now clarifies Table 1 covers HotpotQA/Fever only; ALFWorld/WebShop from later tables. Reflexion table updated to show WebShop 'not significantly outperformed' with note in commentary. Q3 + §3.3 callout rewritten: list Plan-and-Solve actual datasets (GSM8K/AQuA/SVAMP/MultiArith/AddSub/SingleEq + commonsense + symbolic), drop HotpotQA limited-gains claim. Q25 contamination-control example replaced with SWE-bench+ / SWE-rebench."
+      },
+      {
+        "run": 3,
+        "thread_id": "019e400b-58d8-7ff1-904c-3c10e301ef2e",
+        "verdict": "FAIL",
+        "issues": [
+          "Cost formula used $|a_t + \\text{thought}_t|$ — ambiguous notation.",
+          "parallel_tool_step async but called llm.messages.create without await.",
+          "Q8 oversimplified MCP/A2A as 'both JSON-RPC 2.0 + HTTP'.",
+          "Reflexion §4.2 cited a multi-armed-bandit/UCB appendix that does not exist in the paper.",
+          "A2A AgentCard sample was missing v0.3 fields (protocolVersion, preferredTransport, securitySchemes/security).",
+          "A2A lifecycle was missing auth-required and unknown states; transport claim overstated as JSON-RPC over HTTP only."
+        ],
+        "fix": "Cost formula notation rewritten with $|y_t|$ = LLM output tokens; latency similarly updated. Added explicit `await` on llm.messages.create in parallel_tool_step. Q8 now explicitly notes MCP uses stdio/HTTP, A2A v0.3 supports JSON-RPC/gRPC/HTTP+JSON via preferredTransport. Removed bandit/UCB claim; replaced with paper-grounded note on Reflexion task scope. AgentCard sample updated to v0.3 (protocolVersion 0.3.0, preferredTransport, additionalInterfaces, securitySchemes/security). Task lifecycle now includes auth-required + unknown."
+      },
+      {
+        "run": 4,
+        "thread_id": "019e4013-090f-73d3-a333-7d987496a8b0",
+        "verdict": "FAIL",
+        "issues": [
+          "Notation conflict: o_t defined as observation in §1 but used as LLM output in §9 cost formula.",
+          "Reflexion code: react_loop signature mismatch — build_prompt output passed as question but react_loop would re-wrap.",
+          "Q8 stale at v0.3 — needs to mention v1.0 has been released as of 2026Q1.",
+          "MCP DCR stated as required; 2025-11-25 spec downgraded to MAY (added CIMD alternative).",
+          "Agent S3 + bBoN 72.6% date attribution wrong (was 2026Q2; actual 2025-12-16)."
+        ],
+        "fix": "Cost formula notation $y_t$ disambiguated from observation $o_t$ via explicit note in §9.1 and Q15. react_loop signature extended to accept `reflections=memory` arg; Reflexion code calls it correctly. Q8 + §6.2 intro mention A2A v1.0 (Part redesign, SCREAMING_SNAKE_CASE enum, signed agent card). MCP DCR text changed to MAY + introduced CIMD. Agent S3 entry corrected to 2025-12-16."
+      },
+      {
+        "run": 5,
+        "thread_id": "019e401a-e6b0-7011-9ff9-b7558da4ce9f",
+        "verdict": "FAIL",
+        "issues": [
+          "Toolformer utility filter formula was simplified; original paper uses L_i^- = min(no-call, call-no-result) - L_i^+ >= τ_f.",
+          "Latency decode used $|a_t|$ instead of newly defined $|y_t|$.",
+          "Reflexion code returned mixed types between success / failure paths.",
+          "Agent S3 + bBoN attribution conflated tiers — 72.6% is wider scaling, Agent S3 + bBoN alone reports 69.9%.",
+          "Q24 listed Anthropic Constitutional Classifiers under self-improvement; it's a jailbreak safety classifier, not self-improvement."
+        ],
+        "fix": "Toolformer §5.2 + Q4 rewritten with min over (no-call) and (call-no-result), τ_f notation explicit. Latency uses $|y_t|$. Reflexion returns consistent (answer, history) tuple in both branches. OSWorld row + appendix expanded to 'Agent S3 单 agent 62.6% → + bBoN 69.9% → wider scaling 72.6%'. Q24 removed Constitutional Classifiers misattribution; added note explaining it's a jailbreak classifier not self-improvement."
+      },
+      {
+        "run": 6,
+        "thread_id": "019e4021-24c8-7c41-a095-0fd536028a2d",
+        "verdict": "FAIL",
+        "issues": [
+          "MCP lifecycle described `shutdown` message; 2025-11-25 spec has no shutdown message — transport closure terminates.",
+          "Anthropic Tool Use stated as 2024-03 onwards; actually beta 2024-04, GA 2024-05-30.",
+          "ReAct §2.1 intro still overgeneralized vs CoT/Act-only."
+        ],
+        "fix": "§6.1.2 + Q7 lifecycle rewritten to end with 'transport closure'; explicitly noted spec defines no shutdown message. Tool-use generation table updated to 'beta 2024-04, GA 2024-05-30'. §2.1 intro now qualifies ReAct strong on interactive decision / Fever; weak vs CoT-SC on HotpotQA."
+      },
+      {
+        "run": 7,
+        "thread_id": "019e4027-6ccf-7ee2-9476-74d8306749a8",
+        "verdict": "FAIL",
+        "issues": [
+          "Q22 said MCP sampling requires 'per-call user consent'; spec is SHOULD human-in-loop, not MUST per-call.",
+          "Agent S3 single agent percentage still imprecise.",
+          "Q13 protocol wording: 'MCP 协议层是 transport' was technically wrong (MCP is application protocol over transport)."
+        ],
+        "fix": "Q22 sampling consent rewritten as 'SHOULD human-in-the-loop', client controls allow/deny, no per-call MUST. OSWorld row + appendix updated with precise Agent S3 single 62.6% + bBoN 69.9% + wider scaling 72.6%. Q13 punchline reworded to clarify MCP is application-level JSON-RPC over stdio/HTTP transports."
+      },
+      {
+        "run": 8,
+        "thread_id": "019e402e-26c2-7113-9ff4-da6446b8188c",
+        "verdict": "FAIL",
+        "issues": [
+          "Q13 still called MCP-style content 'trusted text'; need to phrase as protocol does not enforce isolation/validation — host must treat as untrusted.",
+          "OSWorld 27% 'task ceiling' statement was unsupported; 72.36% human is baseline not ceiling."
+        ],
+        "fix": "Q13 rewritten: 'MCP only specifies transport + RPC shape; content is not labeled trusted vs untrusted by protocol — host must treat as untrusted.' OSWorld row clarified 'human baseline 72.36% (OSWorld paper reported value, not task ceiling); 距离任务实际上限仍有空间.'"
+      },
+      {
+        "run": 9,
+        "thread_id": "019e4033-a540-7893-9603-d9d492b70d39",
+        "verdict": "WARN",
+        "issues": [
+          "Length 1229 lines, +2.4% over 1200 target (within ±20.8% allowance)."
+        ],
+        "fix": "Cosmetic only — no factual/technical/citation/code/math error. Accepted per SKILL.md WARN-with-no-FAIL rule."
+      }
+    ],
+    "summary_note": "9 rounds of cross-model review (Codex gpt-5.5 xhigh, fresh thread each round). Each round surfaced substantive issues (citations, code correctness, formula notation, factual attribution); all FAIL items were enumerable and shrinking. Final round (9) returned WARN with only a cosmetic length warning and no factual error."
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "thread_id": "019e403a-a078-7632-8820-82e290bcc511",
+        "verdict": "PASS",
+        "checks": {
+          "source_hash_match": "pass",
+          "information_fidelity": "pass",
+          "structure": "pass",
+          "math_code_tables": "pass",
+          "callouts": "pass",
+          "safety_escaping": "pass",
+          "placeholder_leak": "pass"
+        },
+        "summary": "HTML aris:source-sha256 matches current Markdown SHA256. Body hierarchy, 14 tables, 16 code blocks, 25 details/summary, math delimiters and 14 callouts preserved and routed. No silent drop, no unsafe HTML passthrough, no event handlers / javascript / data URL, no template placeholder leak."
+      }
+    ]
+  },
+  "summary": "9-round math/code review (Codex gpt-5.5 xhigh fresh threads) settled at WARN (length only, no factual error); 1-round render review settled at PASS.",
+  "rendered_at": "2026-05-19"
+}

@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self Evolving Agents Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/self_evolving_agents_tutorial_en.md">
+<meta name="aris:source-sha256" content="65f5baf62206b2506086becf7b79fc11d4a8dc9ff113bb5f2ae933595131abb5">
+<meta name="aris:generated-at" content="2026-05-19 19:02 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-self-evolving-agent-intuition">§1 Self-Evolving Agent Intuition</a>
+</li>
+<li><a href="#2-formalizing-the-three-self-evolution-paradigms">§2 Formalizing the Three Self-Evolution Paradigms</a>
+<ul>
+<li><a href="#21-experience-driven-evolution">2.1　Experience-Driven Evolution</a></li>
+<li><a href="#22-adversarial-self-play-evolution">2.2　Adversarial Self-Play Evolution</a></li>
+<li><a href="#23-meta-learning--reward-free-evolution">2.3　Meta-Learning / Reward-Free Evolution</a></li>
+<li><a href="#24-three-paradigm-comparison-memorize">2.4　Three-paradigm comparison (memorize)</a></li>
+</ul>
+</li>
+<li><a href="#3-markdownification-of-skills--knowledge-the-most-important-engineering-shift">§3 Markdownification of Skills / Knowledge (the most important engineering shift)</a>
+<ul>
+<li><a href="#31-convergence-of-anthropic-skills--native-evolution">3.1　Convergence of Anthropic Skills + Native Evolution</a></li>
+<li><a href="#32-typical-schema-of-skill--k-files">3.2　Typical Schema of Skill / K Files</a></li>
+<li><a href="#33-why-markdown-rather-than-vector-embedding">3.3　Why markdown rather than vector embedding?</a></li>
+</ul>
+</li>
+<li><a href="#4-voyager--reflexion--star-the-foundational-trio">§4 Voyager / Reflexion / STaR: the foundational trio</a>
+<ul>
+<li><a href="#41-voyager-wang-2023-neurips-nvidia--caltech">4.1　Voyager (Wang 2023 NeurIPS, NVIDIA + Caltech)</a></li>
+<li><a href="#42-reflexion-shinn-2023-neurips-northeastern">4.2　Reflexion (Shinn 2023 NeurIPS, Northeastern)</a></li>
+<li><a href="#43-star-self-taught-reasoner-zelikman-2022-neurips-stanford">4.3　STaR (Self-Taught Reasoner, Zelikman 2022 NeurIPS, Stanford)</a></li>
+</ul>
+</li>
+<li><a href="#5-ctx2skill-5-role-self-play-loop-focus-1">§5 Ctx2Skill: 5-Role Self-Play Loop (Focus 1)</a>
+<ul>
+<li><a href="#51-problem-formulation">5.1　Problem formulation</a></li>
+<li><a href="#52-five-frozen-lm-roles">5.2　Five frozen LM roles</a></li>
+<li><a href="#53-cross-time-replay-mechanism-core-anti-collapse">5.3　Cross-Time Replay mechanism (core anti-collapse)</a></li>
+<li><a href="#54-ctx2skill-5-role--replay-code-skeleton">5.4　Ctx2Skill 5-role + Replay code skeleton</a></li>
+<li><a href="#55-ctx2skill-experimental-results-must-memorize">5.5　Ctx2Skill experimental results (must memorize)</a></li>
+<li><a href="#56-ctx2skill-ablation-interview-bonus">5.6　Ctx2Skill ablation (interview bonus)</a></li>
+</ul>
+</li>
+<li><a href="#6-native-evolution-reward-free-meta-learning-focus-2">§6 Native Evolution: Reward-Free Meta-Learning (Focus 2)</a>
+<ul>
+<li><a href="#61-core-architecture-two-phase-decoupling">6.1　Core architecture: two-phase decoupling</a></li>
+<li><a href="#62-outcome-based-reward-design">6.2　Outcome-Based Reward Design</a></li>
+<li><a href="#63-two-phase-training-sft--rft">6.3　Two-phase training: SFT → RFT</a></li>
+<li><a href="#64-native-evolution-training--inference-code-skeleton">6.4　Native Evolution training + inference code skeleton</a></li>
+<li><a href="#65-native-evolution-experimental-results">6.5　Native Evolution experimental results</a></li>
+<li><a href="#66-native-evolution-vs-ctx2skill-comparison">6.6　Native Evolution vs Ctx2Skill comparison</a></li>
+</ul>
+</li>
+<li><a href="#7-ard-and-long-horizon-memory-architecture-focus-3">§7 A²RD and Long-Horizon Memory Architecture (Focus 3)</a>
+<ul>
+<li><a href="#71-retrieve--synthesize--refine--update-closed-loop">7.1　Retrieve → Synthesize → Refine → Update closed loop</a></li>
+<li><a href="#72-mvmem-schema-textual-states--frames--videos">7.2　MVMem schema (textual states + frames + videos)</a></li>
+<li><a href="#73-dependency-dag-key-trick">7.3　Dependency DAG (key trick)</a></li>
+<li><a href="#74-hits-hierarchical-test-time-self-improvement">7.4　HITS: Hierarchical Test-Time Self-Improvement</a></li>
+<li><a href="#75-transfer-to-general-long-horizon-agents-typical-cheat-sheet">7.5　Transfer to general long-horizon agents (typical cheat-sheet)</a></li>
+</ul>
+</li>
+<li><a href="#8-theoretical-upper-bound-of-self-improvement-l3-level">§8 Theoretical Upper Bound of Self-Improvement (L3 level)</a>
+<ul>
+<li><a href="#81-on-the-limits-of-self-improving-in-llms-arxiv-260105280">8.1　On the Limits of Self-Improving in LLMs (arXiv 2601.05280)</a></li>
+<li><a href="#82-solver-verifier-gap-arxiv-250700075">8.2　Solver-Verifier Gap (arXiv 2507.00075)</a></li>
+<li><a href="#83-practical-implications-of-the-two-papers">8.3　Practical implications of the two papers</a></li>
+</ul>
+</li>
+<li><a href="#9-memory-driven-self-evolution">§9 Memory-Driven Self-Evolution</a>
+<ul>
+<li><a href="#91-generative-agents-park-2023-uist-stanford">9.1　Generative Agents (Park 2023 UIST, Stanford)</a></li>
+<li><a href="#92-memgpt-packer-2023-berkeley">9.2　MemGPT (Packer 2023, Berkeley)</a></li>
+<li><a href="#93-relation-of-this-layer-to-ctx2skill--native-evolution">9.3　Relation of this layer to Ctx2Skill / Native Evolution</a></li>
+</ul>
+</li>
+<li><a href="#10-skill--k-retrieval-and-ranking-engineering-practice">§10 Skill / K Retrieval and Ranking (engineering practice)</a>
+<ul>
+<li><a href="#101-hybrid-retrieval-pipeline">10.1　Hybrid retrieval pipeline</a></li>
+<li><a href="#102-skill-ranking-formula">10.2　Skill ranking formula</a></li>
+<li><a href="#103-skill-update-prevent-staleness">10.3　Skill update (prevent staleness)</a></li>
+</ul>
+</li>
+<li><a href="#11-inference-time-orchestration-like-aris-vs-training-time-meta-learning-like-native-evolution">§11 Inference-Time Orchestration (like ARIS) vs Training-Time Meta-Learning (like Native Evolution)</a>
+<ul>
+<li><a href="#111-mathematical-formulation-comparison">11.1　Mathematical formulation comparison</a></li>
+<li><a href="#112-respective-limitations">11.2　Respective limitations</a></li>
+<li><a href="#113-hybrid-form-in-real-systems">11.3　Hybrid form in real systems</a></li>
+</ul>
+</li>
+<li><a href="#12-failure-modes-and-defenses-memorize">§12 Failure Modes and Defenses (memorize)</a>
+<ul>
+<li><a href="#121-adversarial-collapse">12.1　Adversarial Collapse</a></li>
+<li><a href="#122-memory-drift">12.2　Memory Drift</a></li>
+<li><a href="#123-reward-hacking">12.3　Reward Hacking</a></li>
+<li><a href="#124-bias-amplification-echo-chamber">12.4　Bias Amplification (Echo Chamber)</a></li>
+<li><a href="#125-sandbox-contamination">12.5　Sandbox Contamination</a></li>
+<li><a href="#126-capability-ceiling">12.6　Capability Ceiling</a></li>
+<li><a href="#127-hallucination-compounding-independent-reviewers-can-co-hallucinate">12.7　Hallucination Compounding (independent reviewers can co-hallucinate)</a></li>
+</ul>
+</li>
+<li><a href="#13-25-frequently-asked-interview-questions-l1--l2--l3">§13 25 Frequently-Asked Interview Questions (L1 + L2 + L3)</a>
+<ul>
+<li><a href="#l1-must-know-q1-q10">L1 Must-Know (Q1-Q10)</a></li>
+<li><a href="#l2-advanced-q11-q20">L2 Advanced (Q11-Q20)</a></li>
+<li><a href="#l3-top-lab-q21-q25">L3 Top Lab (Q21-Q25)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-complete-from-scratch-code-skeleton">§A Appendix: Complete from-scratch code skeleton</a>
+<ul>
+<li><a href="#a1-complete-skill-library-implementation">A.1　Complete Skill library implementation</a></li>
+<li><a href="#a2-complete-reflexion-memory-implementation">A.2　Complete Reflexion memory implementation</a></li>
+<li><a href="#a3-sanity-check-output-illustrative">A.3　Sanity-check output (illustrative)</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Self Evolving Agents Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/self_evolving_agents_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>65f5baf62206</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:02 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">Self-Evolving Agents in 8 sentences</div><p>one page covering the 2024-2026 frontier direction (see §1–§11 for derivations).</p></div>
+<ol><li><strong>Core problem</strong>: have an agent continuously improve its capability on <strong>long-horizon tasks</strong>, without relying on repeated human annotation. Formalized as the convergence / stability / asymptotic effectiveness of an update operator $\mathcal{T}$ such that $\pi_t \to \pi_{t+1}$.</li><li><strong>Three paradigms</strong>: ① Experience-Driven (human-made tasks + reward, e.g. AgentTuning, Voyager); ② Adversarial Self-Play (Challenger-Solver, e.g. Absolute Zero, Ctx2Skill); ③ Meta-Learning / Reward-Free (task-free, reward-free exploration + outcome-based reward, e.g. Native Evolution).</li><li><strong>Capability container</strong>: <strong>natural-language skill / world knowledge K written in markdown</strong> — this is the most important paradigm shift of 2024-2026, bypassing parameter updates, everything is inference-time <code>system_prompt += K</code>.</li><li><strong>Ctx2Skill 5-role self-play</strong> (arXiv 2604.27660): Challenger / Reasoner / Judge / Proposer / Generator, <strong>frozen LM but skill set evolves</strong>. Cross-Time Replay picks $\arg\max_i \rho^h_i \cdot \rho^e_i$ to prevent adversarial collapse.</li><li><strong>Native Evolution two-phase</strong> (arXiv 2604.18131): Evolution phase explores task-free and reward-free → distills markdown K; Execution phase uses K as system prompt. Training signal $R_\text{evolve}(\mathcal{K}) = \text{Success}(\mathcal{T}_E\mid\mathcal{K}) - \text{Success}(\mathcal{T}_E\mid\varnothing)$.</li><li><strong>A²RD trio</strong> (arXiv 2605.06924): MVMem (textual states + frames + videos + dependency DAG) + Adaptive Segment Gen + HITS (frame-level + video-level self-check). Directly transferable as a memory + audit template for any long-horizon agent.</li><li><strong>Theoretical upper bound</strong>: [arXiv:2601.05280] shows that closed-loop density matching <strong>degenerates in the absence of an exogenous grounding signal</strong> (<strong>not</strong> that all reward-free training must collapse; this is a specific conclusion for that setting); [arXiv:2507.00075] models the solver-verifier gap and empirically fits it to capability dynamics.</li><li><strong>Common failures</strong>: adversarial collapse (Challenger gets extreme), memory drift (internal contradictions accumulating in K), reward hacking (self-rewarding drift), bias amplification (agent retrained on its own output), capability ceiling (self-improvement degrades when exogenous grounding is missing).</li></ol>
+<h2 id="1-self-evolving-agent-intuition">§1 Self-Evolving Agent Intuition</h2>
+<p>"Self-evolving" is not magic. An LLM agent consists of four parts:</p>
+<ul><li><strong>policy $\pi$</strong>: a parameterized or pure in-context decision function</li><li><strong>memory / knowledge $\mathcal{K}$</strong>: externalized long-term state, typically in markdown</li><li><strong>skills $\mathcal{S}$</strong>: reusable procedural knowledge, each skill being a markdown document</li><li><strong>environment $E$</strong>: the interactable world (web / code / paper / sandbox / OS)</li></ul>
+<p>"Self-evolution" is defining an update operator $\mathcal{T}$:</p>
+<p>$$\big(\pi_t, \mathcal{K}_t, \mathcal{S}_t\big) \xrightarrow{\mathcal{T}(E, \text{trajectories})} \big(\pi_{t+1}, \mathcal{K}_{t+1}, \mathcal{S}_{t+1}\big)$$</p>
+<p>By the object updated by $\mathcal{T}$, 2024-2026 work roughly divides into four "layers":</p>
+<table><thead><tr><th>Layer</th><th>Update target</th><th>Update method</th><th>Representative work</th></tr></thead><tbody><tr><td>L1 Parameter layer</td><td>$\pi$ (model weights)</td><td>SFT / RFT / RL</td><td>AgentTuning, Native Evolution</td></tr><tr><td>L2 Capability layer</td><td>$\mathcal{S}$ (skills markdown)</td><td>self-play + replay</td><td>Voyager, Ctx2Skill, CoEvoSkills</td></tr><tr><td>L3 Memory layer</td><td>$\mathcal{K}$ (world knowledge markdown)</td><td>exploration + summarize</td><td>MemGPT, MVMem, Native Evolution</td></tr><tr><td>L4 System layer</td><td>workflow orchestration</td><td>inference-time only</td><td>Anthropic Skills, ARIS-style harness</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Important intuition</div><p>L1 is "train instincts"; L2/L3 is "grow a toolbox + notebook"; L4 is "workflow orchestration." <strong>The 2025-2026 mainstream is L2 + L3, with L1 mainly preparing training-test decoupling</strong>.</p></div>
+<p>Two intuitions commonly missed in interviews:</p>
+<ul><li>❌ "self-evolving = automatically training new model weights" — wrong, <strong>the vast majority of work does not update parameters</strong> (Voyager, Ctx2Skill, Generative Agents, A²RD are all training-free / inference-time).</li><li>❌ "self-evolving = the agent does whatever it wants" — wrong, the 2026 mainstream is <strong>strictly grounded</strong> self-improvement: either a code executor (Absolute Zero), a math checker (STaR), a rubric judge (Ctx2Skill), or an outcome utility (Native Evolution).</li></ul>
+<h2 id="2-formalizing-the-three-self-evolution-paradigms">§2 Formalizing the Three Self-Evolution Paradigms</h2>
+<p>The Native Evolution paper [arXiv:2604.18131] gives a very clear classification — we add the mathematical formulation.</p>
+<h3 id="21-experience-driven-evolution">2.1　Experience-Driven Evolution</h3>
+<p><strong>Setting</strong>: humans provide a task set $\mathcal{T}$, a reward function $R: \mathcal{O} \times \mathcal{A} \to \mathbb{R}$, and a workflow. The agent runs trajectories $\tau$, weighted by $R(\tau)$ to update.</p>
+<p><strong>Update operator</strong>:</p>
+<p>$$\theta_{t+1} = \theta_t + \eta \,\mathbb{E}_{\tau \sim \pi_{\theta_t}}\!\left[\nabla_\theta \log \pi_\theta(\tau)\, R(\tau)\right]$$</p>
+<p>This is standard policy gradient — AgentTuning, ToolLLM, early Voyager variants fall in this category.</p>
+<p><strong>Pros</strong>: high supervision density, fast convergence. <strong>Cons</strong>: huge labor cost (each new environment needs new reward design).</p>
+<h3 id="22-adversarial-self-play-evolution">2.2　Adversarial Self-Play Evolution</h3>
+<p><strong>Setting</strong>: two agents (Challenger + Solver) evolve jointly, with no external task source — tasks are produced by Challenger, solved by Solver, with verifier feedback.</p>
+<p><strong>Update operator</strong> (in Absolute Zero / R-Zero formalization):</p>
+<p>$$\theta^{\text{ch}}_{t+1}, \theta^{\text{sol}}_{t+1} = \arg\min_{\theta^{\text{ch}}, \theta^{\text{sol}}} \;\mathbb{E}_{t\sim \pi^\text{ch}_t}\big[\ell^\text{ch}(t)\big] + \lambda\, \mathbb{E}_{(t,a)\sim \pi^\text{ch}_t,\pi^\text{sol}_t}\big[\ell^\text{sol}(t,a)\big]$$</p>
+<p>Concrete "learnability reward" (Absolute Zero, arXiv 2505.03335):</p>
+<p>$$R^\text{learn}(t) = \pi^\text{sol}_t(\text{correct}\mid t)\cdot \big(1 - \pi^\text{sol}_t(\text{correct}\mid t)\big)$$</p>
+<p>Maximizing it favors 50% difficulty — neither too easy nor too hard. This is the core of curriculum-as-reward.</p>
+<p><strong>Pros</strong>: no need for human-made task sets; <strong>Cons</strong>: still need verifier (code executor / math checker), and prone to <strong>adversarial collapse</strong> (Challenger produces extreme tasks, Solver learns trivial defense).</p>
+<h3 id="23-meta-learning--reward-free-evolution">2.3　Meta-Learning / Reward-Free Evolution</h3>
+<p><strong>Setting</strong> (Native Evolution): training stage provides outcome-based reward (<strong>not</strong> step-level); inference stage has no task, no reward — the agent autonomously explores → distills markdown world knowledge $\mathcal{K}$ → uses $\mathcal{K}$ as system prompt in downstream tasks.</p>
+<p><strong>Reward design</strong> (Native Evolution core formula):</p>
+<p>$$\boxed{\;R_\text{evolve}(\mathcal{K}) \;=\; \text{Success}(\mathcal{T}_E \mid \mathcal{K}) \;-\; \text{Success}(\mathcal{T}_E \mid \varnothing)\;}$$</p>
+<p>where $\mathcal{T}_E$ is the set of downstream tasks in environment $E$ (observable at training time). <strong>Reward measures the downstream utility gain of K</strong>, without needing step-level supervision.</p>
+<p><strong>Pros</strong>: completely task-free / reward-free at inference; <strong>Cons</strong>: high training cost (rejection sampling RFT × 2 iterations), and $\mathcal{T}_E$ still needs labeled data at training time.</p>
+<div class="callout callout-warn"><div class="callout-title">Common confusion: reward-free at inference ≠ reward-free training</div><p>Native Evolution's evolution phase is indeed <strong>task-free / reward-free at inference</strong>; but at <strong>training</strong> time it still needs a labeled set of 600 deep search questions × 20 websites to compute $R_\text{evolve}$. This is an interview bonus point: actively disambiguate.</p></div>
+<h3 id="24-three-paradigm-comparison-memorize">2.4　Three-paradigm comparison (memorize)</h3>
+<table><thead><tr><th>Dimension</th><th>Experience-Driven</th><th>Adversarial</th><th>Meta-Learning</th></tr></thead><tbody><tr><td>Task source at training</td><td>Humans</td><td>Challenger agent</td><td>Endogenous exploration + labeled downstream</td></tr><tr><td>Reward at training</td><td>Humans</td><td>verifier</td><td>outcome utility</td></tr><tr><td>Task at inference</td><td>Given by humans</td><td>Given by humans / agent itself</td><td>Given by humans</td></tr><tr><td>Reward at inference</td><td>Not needed</td><td>Not needed</td><td><strong>Not needed</strong> ✓</td></tr><tr><td>Workflow at inference</td><td>Human-orchestrated</td><td>Human-orchestrated</td><td><strong>Agent-driven</strong> (evolve then execute) ✓</td></tr><tr><td>Representative</td><td>AgentTuning, ToolLLM</td><td>AZR, R-Zero, Ctx2Skill</td><td>Native Evolution</td></tr><tr><td>Engineering cost</td><td>High (reward eng.)</td><td>Medium (verifier orchestration)</td><td>High (rejection sampling)</td></tr><tr><td>arXiv</td><td>2310.12823</td><td>2505.03335 / 2604.27660</td><td>2604.18131</td></tr></tbody></table>
+<h2 id="3-markdownification-of-skills--knowledge-the-most-important-engineering-shift">§3 Markdownification of Skills / Knowledge (the most important engineering shift)</h2>
+<p>The most important paradigm shift in 2024 is: <strong>long-term memory and capability extension are not via weight updates, but via external markdown documents</strong>.</p>
+<h3 id="31-convergence-of-anthropic-skills--native-evolution">3.1　Convergence of Anthropic Skills + Native Evolution</h3>
+<p>Anthropic publicly released the <code>skills/</code> paradigm in 2025 (each skill is a standalone markdown file, the agent loads on demand into the system prompt). Native Evolution explicitly cites Anthropic skills in the paper as a reference implementation for K (paper §3, footnote 1 pointing to <code>github.com/anthropics/skills/tree/main/skills</code>).</p>
+<table><thead><tr><th>Dimension</th><th>Anthropic Skills</th><th>Native Evolution K</th></tr></thead><tbody><tr><td>Representation</td><td>markdown</td><td>markdown</td></tr><tr><td>Loading</td><td>Select skill by task and inject into system prompt</td><td>Load K by environment and inject into system prompt</td></tr><tr><td>Granularity</td><td>"How to do PDF / Excel / git commit"</td><td>"ACL2025 site structure / code repo topology"</td></tr><tr><td>Supervision</td><td>Human-written</td><td>Auto-distilled by agent</td></tr><tr><td>Origin</td><td>Static human-made</td><td>Post-training endogenous</td></tr></tbody></table>
+<p>→ Convergence conclusion: <strong>system prompt is the new model weights, markdown documents are the new fine-tuning data</strong>.</p>
+<h3 id="32-typical-schema-of-skill--k-files">3.2　Typical Schema of Skill / K Files</h3>
+<pre><code># skill_name
+## Trigger / When-to-use
+&lt;which task should use this skill&gt;
+
+## Steps
+1. ...
+2. ...
+
+## Resources / References
+- file paths / URLs
+
+## Failure modes
+- Known pitfalls + fixes</code></pre>
+<p>Native Evolution's K also explicitly stores:</p>
+<ul><li><strong>Visual arcs</strong> (visual evolution of entities/environments)</li><li><strong>Spatial relations</strong> (subject-relation-object triplets)</li><li><strong>Camera states / Site map</strong> (environment topology)</li><li><strong>Token budget allocation</strong> (how many tokens each sub-page gets)</li></ul>
+<h3 id="33-why-markdown-rather-than-vector-embedding">3.3　Why markdown rather than vector embedding?</h3>
+<ul><li><strong>Interpretable</strong>: humans can audit, revise, merge</li><li><strong>Composable</strong>: skill A + skill B directly prepend</li><li><strong>Routable</strong>: LLM can read the trigger section and decide which to load</li><li><strong>Evolvable</strong>: natural language diff is more stable than vector diff</li></ul>
+<p>Cost: retrieval precision is worse than vector RAG; the fix is hybrid (vector for candidate selection → markdown for close reading).</p>
+<h2 id="4-voyager--reflexion--star-the-foundational-trio">§4 Voyager / Reflexion / STaR: the foundational trio</h2>
+<p>Before going into 2024-2026 frontier work, you must chew through the three foundational works — interviewers will almost certainly ask about baselines.</p>
+<h3 id="41-voyager-wang-2023-neurips-nvidia--caltech">4.1　Voyager (Wang 2023 NeurIPS, NVIDIA + Caltech)</h3>
+<p>The first true end-to-end "automatic curriculum + skill library" agent: running GPT-4 in Minecraft, letting it propose its own tasks, write JS code (each piece of code is a skill), self-verify, and store successful skills in the library.</p>
+<p>The core trio:</p>
+<ul><li><strong>Automatic Curriculum</strong>: GPT-4 proposes the next task based on the current inventory state</li><li><strong>Skill Library</strong>: each new skill is a JS function, indexed by embedding and retrieved by description</li><li><strong>Iterative Prompting + Self-Verification</strong>: execute → env feedback → critic agent → revise, until passes</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Common misconception</div><p>Voyager does not update GPT-4 weights, it is pure inference-time. It does not use reward either; it uses GPT-4 itself as a critic to judge task success, belonging to the self-verification category (not RL).</p></div>
+<h3 id="42-reflexion-shinn-2023-neurips-northeastern">4.2　Reflexion (Shinn 2023 NeurIPS, Northeastern)</h3>
+<p>Solidifies the concept of "verbal RL": after each failure, the agent writes a reflection in natural language about its own trajectory, stores it in episodic memory, and prepends it to the next prompt.</p>
+<p>Formalization (pseudo-Bellman):</p>
+<p>$$M_{t+1} = M_t \cup \big\{\text{reflect}(\tau_t, r_t)\big\}$$</p>
+<p>where $\text{reflect}$ is a text generation of "what went wrong + how to fix" by the LLM itself.</p>
+<p><strong>Why it works</strong> (theoretically): reflection compresses sparse reward signal into structured text, bypassing gradient updates; equivalent to a kind of <strong>non-parametric policy improvement</strong> in the in-context domain. But lacks convergence guarantee.</p>
+<h3 id="43-star-self-taught-reasoner-zelikman-2022-neurips-stanford">4.3　STaR (Self-Taught Reasoner, Zelikman 2022 NeurIPS, Stanford)</h3>
+<p>Let the LM <strong>generate rationale → if wrong, rationalize using the true answer → SFT on correct (q, rationale, a) tuples</strong>. This is the true starting point of self-improvement on reasoning.</p>
+<p>Pseudocode:</p>
+<pre><code>for iter in 1..N:
+    for each (q, a_gt) in D:
+        r, a_pred = LM(q)
+        if a_pred == a_gt:
+            collect (q, r, a_gt)
+        else:
+            r&#x27; = LM(q, hint=a_gt)        # rationalize
+            if r&#x27; produces a_gt:
+                collect (q, r&#x27;, a_gt)
+    SFT(LM, collected)</code></pre>
+<p>STaR's key flaw (also [arXiv:2601.05280]'s core argument against self-improvement): <strong>rationalization is reverse-engineering the answer, not necessarily reflecting the true reasoning process</strong>, leading to distribution drift.</p>
+<h2 id="5-ctx2skill-5-role-self-play-loop-focus-1">§5 Ctx2Skill: 5-Role Self-Play Loop (Focus 1)</h2>
+<blockquote><p>This section nearly mirrors arXiv 2604.27660's §3 word-for-word, since interviewers may quote the paper directly.</p></blockquote>
+<h3 id="51-problem-formulation">5.1　Problem formulation</h3>
+<p>Given a context $C$ (possibly 100k+ tokens of manual / paper / repo / dataset), a task set $\mathcal{T} = \{t_j\}$, each task has a binary rubric set $\mathcal{R}_j = \{r_{j,k}\}$. Solving indicator:</p>
+<p>$$y_j(\pi; C) = \prod_k \mathbb{I}\big[r_{j,k}(a_j) = \text{pass}\big], \quad a_j \sim \pi(\,\cdot\mid C, t_j)$$</p>
+<p>Goal: construct a markdown skill set $\mathcal{S}^R$ such that:</p>
+<p>$$a_j \sim \pi(\,\cdot\mid \mathcal{S}^R, C, t_j) \quad \text{maximizes}\ \mathbb{E}_j y_j$$</p>
+<p>and <strong>without updating $\pi$'s parameters</strong> — only updating $\mathcal{S}^R$.</p>
+<h3 id="52-five-frozen-lm-roles">5.2　Five frozen LM roles</h3>
+<table><thead><tr><th>Role</th><th>Input</th><th>Output</th><th>Intuition</th></tr></thead><tbody><tr><td><strong>Challenger</strong></td><td>$C$, $\mathcal{S}^C_{i-1}$</td><td>A batch of $(t_m, \mathcal{R}_m)$</td><td>Generate probing tasks</td></tr><tr><td><strong>Reasoner</strong></td><td>$C$, $\mathcal{S}^R_{i-1}$, $t_m$</td><td>$a_m$</td><td>Solve using skills</td></tr><tr><td><strong>Judge</strong></td><td>$a_m$, $\mathcal{R}_m$</td><td>binary $y_m$</td><td>Strictly verify by rubric</td></tr><tr><td><strong>Proposer (per side)</strong></td><td>failed/solved batch + current skill set</td><td>Natural-language diagnosis</td><td>Find root cause, does not write skill</td></tr><tr><td><strong>Generator (per side)</strong></td><td>proposer diagnosis + current skill set</td><td>New skill set</td><td>Materialize the change</td></tr></tbody></table>
+<p>Note that <strong>two sides evolve independently</strong>:</p>
+<ul><li><strong>Reasoner side</strong>: failed cases → Reasoner Proposer diagnoses "what contextual knowledge is missing" → Reasoner Generator writes new $\mathcal{S}^R_i$</li><li><strong>Challenger side</strong>: too-easy-solved cases → Challenger Proposer diagnoses "why is the challenger producing tasks too weak" → Challenger Generator strengthens $\mathcal{S}^C_i$</li></ul>
+<p>→ These two sides <strong>never exchange skill sets</strong> — maintaining strict adversarial pressure.</p>
+<h3 id="53-cross-time-replay-mechanism-core-anti-collapse">5.3　Cross-Time Replay mechanism (core anti-collapse)</h3>
+<p>The more iterations, the more extreme the Challenger gets, and the more the Reasoner over-specializes to extreme tasks. Returning $\mathcal{S}^R_N$ directly is bad.</p>
+<p><strong>Replay procedure</strong>:</p>
+<ol><li><p>During training, maintain two probe sets:</p>
+<ul><li><strong>Hard set $\mathcal{Q}^h$</strong>: each iteration, pick the failed task with the lowest rubric pass rate</li><li><strong>Easy set $\mathcal{Q}^e$</strong>: each iteration, pick the solved task with the fewest rubrics passed ("just barely solved")</li></ul></li><li>After training, for each candidate $\mathcal{S}^R_i$ ($i=1\ldots N$), run the Reasoner $\pi^R$ on both probe sets:</li></ol>
+<p>$$\rho^h(i) = \frac{\sum_{q\in \mathcal{Q}^h} y_q(\pi^R; C, \mathcal{S}^R_i) + 1}{|\mathcal{Q}^h| + 1}, \quad \rho^e(i) = \frac{\sum_{q\in \mathcal{Q}^e} y_q(\pi^R; C, \mathcal{S}^R_i) + 1}{|\mathcal{Q}^e| + 1}$$</p>
+<p>(Laplace smoothing prevents empty probe sets)</p>
+<ol><li>Select:</li></ol>
+<p>$$\boxed{\;\mathcal{S}^R_\star = \mathcal{S}^R_{i^\star}, \quad i^\star = \arg\max_i \big(\rho^h(i) \cdot \rho^e(i)\big)\;}$$</p>
+<p><strong>Why product, not sum</strong>: product penalizes catastrophic forgetting (if some version has $\rho^e \to 0$, the overall score → 0), forcing selection of versions that are not bad on either side. Ctx2Skill ablation shows using sum drops final accuracy by ~1.5%.</p>
+<h3 id="54-ctx2skill-5-role--replay-code-skeleton">5.4　Ctx2Skill 5-role + Replay code skeleton</h3>
+<pre><code class="language-python">def ctx2skill_loop(context: str, llm, num_iters: int = 5, M: int = 5):
+    &quot;&quot;&quot;
+    Ctx2Skill: 5 frozen LM roles + Cross-Time Replay.
+    Returns the optimal Reasoner skill set selected by cross-time replay.
+    All LM calls use the same frozen backbone; only the skill set changes.
+    &quot;&quot;&quot;
+    S_R = &quot;&quot;                    # Reasoner skill markdown (initially empty)
+    S_C = &quot;&quot;                    # Challenger skill markdown
+    candidates = []             # Historical S_R candidates (cross-time)
+    Q_hard, Q_easy = [], []     # Two probe sets
+
+    for i in range(1, num_iters + 1):
+        # ── (1) Challenger produces a batch ──
+        batch = llm(role=&quot;challenger&quot;, prompt=challenger_prompt(context, S_C), n=M)
+        # batch = [(t_m, rubrics_m), ...]
+
+        failed, solved = [], []
+        for t_m, rubrics_m in batch:
+            # ── (2) Reasoner solves ──
+            a_m = llm(role=&quot;reasoner&quot;, prompt=reasoner_prompt(context, S_R, t_m))
+            # ── (3) Judge per-rubric ──
+            per_rubric = [llm(role=&quot;judge&quot;, prompt=judge_prompt(a_m, r))
+                          for r in rubrics_m]
+            y_m = all(per_rubric)
+            pass_rate = sum(per_rubric) / len(per_rubric)
+            (failed if not y_m else solved).append(
+                (t_m, rubrics_m, a_m, pass_rate)
+            )
+
+        # ── Maintain probe sets (preparation for Laplace smoothing) ──
+        if failed:
+            hardest = min(failed, key=lambda x: x[3])
+            Q_hard.append((hardest[0], hardest[1]))
+        if solved:
+            # The &quot;lowest pass_rate among solved&quot; (i.e. &quot;barely solved&quot; — all rubrics pass but many prompts just barely pass)
+            # Note: entries in `solved` all satisfy all(per_rubric), so pass_rate=1.0;
+            # in production, &quot;barely solved&quot; should use per-rubric soft scores (e.g. LLM-judge giving [0,1] rather than 0/1),
+            # here teaching version uses the task closest to the solving boundary (e.g. the task in batch with most reasoner retries)
+            easiest_among_solved = solved[-1]  # Teaching simplification: take the last solved task
+            Q_easy.append((easiest_among_solved[0], easiest_among_solved[1]))
+
+        # ── (4) Two-sided Proposer diagnoses ──
+        diag_R = llm(role=&quot;reasoner_proposer&quot;,
+                     prompt=proposer_prompt(failed, S_R))
+        diag_C = llm(role=&quot;challenger_proposer&quot;,
+                     prompt=proposer_prompt(solved, S_C))
+
+        # ── (5) Two-sided Generator writes skills ──
+        S_R = llm(role=&quot;reasoner_generator&quot;,
+                  prompt=generator_prompt(diag_R, S_R))
+        S_C = llm(role=&quot;challenger_generator&quot;,
+                  prompt=generator_prompt(diag_C, S_C))
+
+        candidates.append(S_R)
+
+    # ── Cross-Time Replay ──
+    best_idx, best_score = 0, -1.0
+    for i, cand in enumerate(candidates):
+        rho_h = laplace_smoothed_rate(Q_hard, cand, llm, context)
+        rho_e = laplace_smoothed_rate(Q_easy, cand, llm, context)
+        score = rho_h * rho_e
+        if score &gt; best_score:
+            best_score, best_idx = score, i
+
+    return candidates[best_idx]
+
+
+def laplace_smoothed_rate(probe, skill_set, llm, context):
+    &quot;&quot;&quot; Laplace-smoothed pass rate: (sum_q y_q + 1) / (|probe| + 1).
+    
+    Args:
+        probe:     list[(task, rubrics)]
+        skill_set: candidate S_R^i markdown skill to evaluate
+        llm:       frozen LM
+        context:   original context (same source as ctx2skill_loop parameter; must be passed explicitly
+                   to prevent closure misuse)
+    &quot;&quot;&quot;
+    num_pass = 0
+    for t_q, rubrics_q in probe:
+        a = llm(role=&quot;reasoner&quot;,
+                prompt=reasoner_prompt(context, skill_set, t_q))
+        if all(llm(role=&quot;judge&quot;, prompt=judge_prompt(a, r))
+               for r in rubrics_q):
+            num_pass += 1
+    return (num_pass + 1) / (len(probe) + 1)</code></pre>
+<h3 id="55-ctx2skill-experimental-results-must-memorize">5.5　Ctx2Skill experimental results (must memorize)</h3>
+<p>On CL-bench, <strong>without any parameter updates</strong>:</p>
+<table><thead><tr><th>backbone</th><th>w/o skills</th><th>Ctx2Skill</th><th>Δ</th></tr></thead><tbody><tr><td>GPT-4.1</td><td>11.1%</td><td><strong>16.5%</strong></td><td><strong>+5.4</strong></td></tr><tr><td>GPT-5.1</td><td>21.2%</td><td><strong>25.8%</strong></td><td><strong>+4.6</strong></td></tr><tr><td>GPT-5.2</td><td>18.2%</td><td><strong>21.4%</strong></td><td><strong>+3.2</strong></td></tr></tbody></table>
+<p>→ GPT-4.1 + Ctx2Skill (16.5%) <strong>surpasses</strong> Gemini 3 Pro without skills (15.8%) — confirming "high-quality skills can compensate for model gap."</p>
+<h3 id="56-ctx2skill-ablation-interview-bonus">5.6　Ctx2Skill ablation (interview bonus)</h3>
+<table><thead><tr><th>Removed component</th><th>GPT-4.1 Δ from 16.5</th><th>GPT-5.1 Δ from 25.8</th></tr></thead><tbody><tr><td>Cross-Time Replay</td><td>−1.8 (→14.7)</td><td>−2.8 (→23.0)</td></tr><tr><td>decoupling Proposer + Generator</td><td>−0.6</td><td>−0.7</td></tr><tr><td>Challenger evolving</td><td><strong>−2.6 (→13.9)</strong> ← largest</td><td>−3.3 ← largest</td></tr><tr><td>Easy probe set</td><td>−0.8</td><td>−1.6</td></tr><tr><td>Hard probe set</td><td>−1.3</td><td>−1.1</td></tr><tr><td>Laplace smoothing</td><td>−1.0</td><td>−0.6</td></tr></tbody></table>
+<p><strong>The drop from removing Challenger evolving is the largest</strong> — proving that "sustained adversarial pressure" is the true driver of Reasoner progress.</p>
+<h2 id="6-native-evolution-reward-free-meta-learning-focus-2">§6 Native Evolution: Reward-Free Meta-Learning (Focus 2)</h2>
+<blockquote><p>Fully corresponds to arXiv 2604.18131. Tencent + HKUST(GZ), 2026-04-20.</p></blockquote>
+<h3 id="61-core-architecture-two-phase-decoupling">6.1　Core architecture: two-phase decoupling</h3>
+<pre class="diagram"><code>  ┌─────────────────────────────────┐       ┌──────────────────────────────┐
+  │      Native Evolution Phase     │       │   Knowledge-Enhanced Execution│
+  │      (task-free + reward-free   │       │   (uses K as system prompt at │
+  │       at inference)             │       │    inference)                │
+  │                                 │       │                              │
+  │   π_θ(K | E)                    │  ──→  │   π_task(a_t | o_t, K, Task) │
+  │   &quot;exploring + summarizing&quot;     │       │                              │
+  │                                 │       │                              │
+  └──────────────┬──────────────────┘       └──────────────────────────────┘
+                 │
+                 │ (during training, use outcome-based reward to supervise evolve)
+                 ▼
+  R_evolve(K) = Success(T_E | K) − Success(T_E | ∅)</code></pre>
+<p><strong>Key design choice</strong>: evolution and execution use the <strong>same LLM</strong> (unlike RLHF which separates SFT-policy / RM); they only have different system prompts + training that goes through SFT + RFT to learn "evolution mode."</p>
+<h3 id="62-outcome-based-reward-design">6.2　Outcome-Based Reward Design</h3>
+<p>$$\boxed{\;R_\text{evolve}(\mathcal{K}) = \underbrace{\text{Success}(\mathcal{T}_E\mid \mathcal{K})}_{\text{downstream success rate with K}} - \underbrace{\text{Success}(\mathcal{T}_E\mid \varnothing)}_{\text{no-K baseline}}\;}$$</p>
+<p>where $\text{Success}(\mathcal{T}_E\mid \mathcal{K}) = \frac{1}{M}\sum_{j=1}^M \mathbb{I}\big[f(Q_j, \mathcal{K}) = A_j\big]$.</p>
+<p><strong>Why outcome-based rather than step-level?</strong></p>
+<table><thead><tr><th>Dimension</th><th>step-level</th><th>outcome-based</th></tr></thead><tbody><tr><td>Supervision density</td><td>High</td><td>Low</td></tr><tr><td>Signal noise</td><td>Medium (hard to evaluate intermediate states)</td><td>Low (end-task answer is ground truth)</td></tr><tr><td>Reward hacking risk</td><td>High (agent learns shortcut to grab intermediate scores)</td><td>Low (only by truly improving task success)</td></tr><tr><td>Engineering complexity</td><td>High (need PRM)</td><td>Low</td></tr></tbody></table>
+<p>Native Evolution chooses outcome-based for another special reason: <strong>$\mathcal{K}$ is a long markdown stretch (374.8 steps × 3322.4 tokens/step); step-level reward is nearly meaningless on such a long horizon</strong>.</p>
+<h3 id="63-two-phase-training-sft--rft">6.3　Two-phase training: SFT → RFT</h3>
+<p><strong>Stage 1 (SFT)</strong>:</p>
+<ul><li>Use teacher model $\pi_T$ (Gemini-2.5-Pro) to generate 3 candidates $\{\mathcal{K}_i\}_{i=1}^3$</li><li>Compute $R_\text{evolve}(\mathcal{K}_i)$, pick the best $\mathcal{K}^\star$</li><li>Use $T^\star = \{Q, o_1^\star, a_1^\star, \ldots, o_k^\star, a_k^\star\}$ trajectory to SFT base model $\pi_{\theta_0}$</li><li>Training data: 600 deep search questions × 20 websites</li></ul>
+<p><strong>Stage 2 (RFT, Rejection Sampling Fine-Tuning)</strong>:</p>
+<ul><li>Use $\pi_{\theta_1}$ itself to generate $C$ K candidates</li><li>Pick the highest scoring by $R_\text{evolve}$</li><li>Continue fine-tuning with the highest scoring trajectory</li><li>Run 2 iterations</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Common misconception</div><p>Reason Native Evolution uses RFT rather than GRPO/PPO: (1) trajectory horizon ~ 374 steps, GRPO backprop is infeasible; (2) reward evaluation needs running an auxiliary agent on downstream tasks, too expensive → offline rejection sampling decouples trajectory generation from policy update.</p></div>
+<h3 id="64-native-evolution-training--inference-code-skeleton">6.4　Native Evolution training + inference code skeleton</h3>
+<pre><code class="language-python">def native_evolution_pipeline(base_model, teacher_model, env_pool,
+                              downstream_tasks_per_env, num_iter=2,
+                              C_sft: int = 3, C_rft: int = 8):
+    &quot;&quot;&quot;
+    Native Evolution: SFT + RFT (2 iter) → learn reward-free self-evolution.
+    
+    Args:
+        C_sft: number of teacher-generated K candidates in SFT stage (paper: 3)
+        C_rft: number of pi-self-generated candidates in RFT stage (paper: 8)
+    &quot;&quot;&quot;
+    # ── Stage 1: SFT ──
+    sft_data = []
+    for E in env_pool:
+        T_E = downstream_tasks_per_env[E]            # labeled downstream
+        # baseline: without K
+        s0 = success_rate(base_model, T_E, K=None)
+
+        # teacher generates C_sft candidate Ks
+        candidates = [explore_and_summarize(teacher_model, E)
+                      for _ in range(C_sft)]
+        # Evaluate reward = Success(T_E | K) − Success(T_E | ∅)
+        rewards = [success_rate(base_model, T_E, K=K) - s0
+                   for K in candidates]
+        K_star = candidates[argmax(rewards)]
+        traj_star = extract_trajectory(teacher_model, E, K_star)
+        sft_data.append(traj_star)                   # ~374 steps each
+
+    pi_1 = sft(base_model, sft_data)                 # warm-up
+
+    # ── Stage 2: RFT × num_iter ──
+    pi = pi_1
+    for it in range(num_iter):
+        rft_data = []
+        for E in env_pool:
+            T_E = downstream_tasks_per_env[E]
+            s0 = success_rate(pi, T_E, K=None)
+            # pi itself generates C_rft candidates
+            candidates = [explore_and_summarize(pi, E) for _ in range(C_rft)]
+            rewards = [success_rate(pi, T_E, K=K) - s0
+                       for K in candidates]
+            best = candidates[argmax(rewards)]
+            rft_data.append(extract_trajectory(pi, E, best))
+        pi = sft(pi, rft_data)                       # next iter
+
+    return pi   # π_θ*: has learned native evolution
+
+
+def native_evolution_inference(pi_star, new_env, task):
+    &quot;&quot;&quot;
+    At inference: no task, no reward → explore → distill K → solve task with K.
+    &quot;&quot;&quot;
+    K = explore_and_summarize(pi_star, new_env)      # task-free!
+    answer = pi_star(task, system_prompt=K)          # K-augmented
+    return answer</code></pre>
+<h3 id="65-native-evolution-experimental-results">6.5　Native Evolution experimental results</h3>
+<p>WebVoyager + WebWalker, 14B Qwen3 / 36B Seed-OSS:</p>
+<table><thead><tr><th>backbone</th><th>w/o K</th><th>Native Evolution (RFT)</th><th>Δ</th></tr></thead><tbody><tr><td>Qwen3-30B (WebWalker)</td><td>22.04</td><td><strong>40.91</strong></td><td><strong>+18.9</strong></td></tr><tr><td>Qwen3-30B (WebVoyager)</td><td>41.08</td><td><strong>57.44</strong></td><td><strong>+16.4</strong></td></tr><tr><td>Seed-OSS-36B (WebWalker)</td><td>19.50</td><td>36.72</td><td>+17.2</td></tr></tbody></table>
+<p><strong>Most striking</strong>: 14B Qwen3 + transferred K from 36B → 35.6% conference accuracy; <strong>unassisted Gemini-2.5-Flash is only 31.3%</strong> — proving high-quality K can surpass pure parameter scaling.</p>
+<h3 id="66-native-evolution-vs-ctx2skill-comparison">6.6　Native Evolution vs Ctx2Skill comparison</h3>
+<table><thead><tr><th>Dimension</th><th>Native Evolution</th><th>Ctx2Skill</th></tr></thead><tbody><tr><td>Updates parameters?</td><td>Yes (SFT + RFT × 2 iter)</td><td>No (frozen LM, only updates skills)</td></tr><tr><td>Needs task at inference?</td><td>No (evolve then execute)</td><td>Yes (task-driven)</td></tr><tr><td>Knowledge container</td><td>$\mathcal{K}$ (markdown environment map)</td><td>$\mathcal{S}^R$ (markdown skills)</td></tr><tr><td>Reward design</td><td>outcome-based downstream utility</td><td>binary rubric judge</td></tr><tr><td>Anti-collapse mechanism</td><td>rejection sampling (filter)</td><td>Cross-Time Replay</td></tr><tr><td>Training cost</td><td>High</td><td>Low</td></tr><tr><td>Inference cost</td><td>Lower</td><td>Medium</td></tr><tr><td>Suitable tasks</td><td>New environment exploration</td><td>Dense context task</td></tr></tbody></table>
+<p>→ <strong>They are complementary</strong>: Native Evolution lets the backbone learn <strong>how to explore</strong>; Ctx2Skill lets a frozen backbone <strong>distill context into reusable skills</strong>. They can be stacked.</p>
+<h2 id="7-ard-and-long-horizon-memory-architecture-focus-3">§7 A²RD and Long-Horizon Memory Architecture (Focus 3)</h2>
+<blockquote><p>arXiv 2605.06924, Google Cloud AI + NUS, 2026-05-07. While the paper is about video, the memory schema transfers directly to all long-horizon agents.</p></blockquote>
+<h3 id="71-retrieve--synthesize--refine--update-closed-loop">7.1　Retrieve → Synthesize → Refine → Update closed loop</h3>
+<pre class="diagram"><code>   ┌──────────────────────────────────────────────────────────────┐
+   │   for segment i = 1..N:                                       │
+   │     1. Retrieve relevant context from MVMem (T_j, F_j, V_j)   │
+   │     2. Decide mode: extrapolation vs interpolation            │
+   │     3. Synthesize boundary frames F_i^begin, F_i^end          │
+   │     4. HITS (frame-level): verify + revise frames             │
+   │     5. Synthesize video segment V_i = TI2V(P_i, F_i, F^rel)   │
+   │     6. HITS (video-level): verify + revise via MAPO           │
+   │     7. Update MVMem with (F_i, V_i, T_i, T_{i+1}^F)           │
+   └──────────────────────────────────────────────────────────────┘</code></pre>
+<h3 id="72-mvmem-schema-textual-states--frames--videos">7.2　MVMem schema (textual states + frames + videos)</h3>
+<p>$$\mathcal{M} := \{\mathcal{M}_1, \ldots, \mathcal{M}_N\} \cup \mathcal{R} \cup \mathcal{D}$$</p>
+<p>Each segment $\mathcal{M}_j = \{T_j, \mathcal{F}_j, V_j\}$:</p>
+<ul><li><strong>Textual States $T_j$</strong>: contain Visual Arcs (entity identity / motion) + Spatial Relations (subject-relation-object triplets, grounding geometric layout) + Camera trajectories</li><li><strong>Frames $\mathcal{F}_j = \{F_j^\text{begin}, F_j^\text{end}\}$</strong>: keyframes</li><li><strong>Videos $V_j$</strong>: full segment</li></ul>
+<p>Plus:</p>
+<ul><li><strong>$\mathcal{R}$</strong>: global reference frames (background, entity references)</li><li><strong>$\mathcal{D}$</strong>: prompt database (also stores failed prompts)</li></ul>
+<h3 id="73-dependency-dag-key-trick">7.3　Dependency DAG (key trick)</h3>
+<p>References have dependencies: entities depend on environment, camera depends on entity positions. A²RD builds a DAG:</p>
+<p>$$\mathcal{G} := \text{MLLM}_\text{dep}(\mathcal{P}_\mathcal{R})$$</p>
+<p>Then topological sort decides synthesis order. Transfers directly to ARIS-style agents: in research projects claim ← experiment ← code ← idea, typed memory is also a DAG.</p>
+<h3 id="74-hits-hierarchical-test-time-self-improvement">7.4　HITS: Hierarchical Test-Time Self-Improvement</h3>
+<p>Two levels:</p>
+<ul><li><strong>Frame-level HITS</strong>: for each $F^\text{begin}, F^\text{end}$, use VLM to verify "matches textual state," if not → MAPO (Multi-Aspect Prompt Optimization) revises the prompt → regenerate</li><li><strong>Video-level HITS</strong>: for the full segment $V_i$, use VLM to verify "narrative continuity," if not → revise video prompt → regenerate</li></ul>
+<p>→ <strong>Self-check at two scales: inner-segment + inter-segment</strong> — stronger anti-drift than single-layer self-improvement.</p>
+<h3 id="75-transfer-to-general-long-horizon-agents-typical-cheat-sheet">7.5　Transfer to general long-horizon agents (typical cheat-sheet)</h3>
+<pre><code class="language-python">class TypedMemory:
+    &quot;&quot;&quot;A²RD MVMem idea ⇒ general long-horizon agent memory.&quot;&quot;&quot;
+    def __init__(self):
+        self.segments = []          # list of {state, artifacts, deps}
+        self.global_refs = {}       # Global entities (e.g. paper-level claim)
+        self.dep_graph = {}         # DAG: which artifact depends on which
+        self.failure_db = []        # Failure trace database
+
+    def retrieve(self, current_segment_ctx, k=3):
+        &quot;&quot;&quot;Retrieve narratively-relevant context (top k previous segments).&quot;&quot;&quot;
+        cands = []
+        for j, M_j in enumerate(self.segments):
+            score = relevance(M_j[&quot;state&quot;], current_segment_ctx)
+            cands.append((score, j))
+        topk = sorted(cands, reverse=True)[:k]
+        return [self.segments[j] for _, j in topk]
+
+    def update(self, segment, deps):
+        self.segments.append(segment)
+        seg_id = len(self.segments) - 1
+        self.dep_graph[seg_id] = deps      # parent ids
+
+    def topo_synthesis_order(self, num_segments: int) -&gt; list[int]:
+        &quot;&quot;&quot;A²RD&#x27;s dependency DAG → decide generation order.
+        
+        Args:
+            num_segments: total number of segments to generate; automatically adds nodes
+                          not in dep_graph as roots.
+        Returns:
+            A valid topological order (list of segment indices).
+        &quot;&quot;&quot;
+        # Automatically adds all 0..num_segments-1 to the graph (those without dependencies treated as roots)
+        graph = {i: self.dep_graph.get(i, []) for i in range(num_segments)}
+        return topological_sort(graph)
+
+
+def long_horizon_agent_with_hits(memory, segments_to_generate, llm, verifier):
+    &quot;&quot;&quot;A²RD-style R→S→R→U closed loop.
+    
+    Note: segments_to_generate is a list of context descriptions for the segments to generate;
+    generation order is determined by memory.dep_graph (defaults to sequential if empty).
+    &quot;&quot;&quot;
+    order = memory.topo_synthesis_order(num_segments=len(segments_to_generate))
+    for i in order:
+        # Retrieve
+        ctx = memory.retrieve(segments_to_generate[i])
+        # Synthesize
+        artifact = llm.generate(segments_to_generate[i], context=ctx)
+        # Frame-level HITS (internal consistency of artifact)
+        for _ in range(MAX_REFINES):
+            if verifier.frame_check(artifact): break
+            artifact = llm.refine(artifact, verifier.feedback)
+        # Video-level HITS (consistency of artifact with history)
+        for _ in range(MAX_REFINES):
+            if verifier.video_check(artifact, ctx): break
+            artifact = llm.refine(artifact, verifier.feedback)
+        # Update
+        memory.update(artifact, deps=ctx)</code></pre>
+<h2 id="8-theoretical-upper-bound-of-self-improvement-l3-level">§8 Theoretical Upper Bound of Self-Improvement (L3 level)</h2>
+<p>Two 2025-2026 must-read theoretical papers — this is the L3 part that top labs may ask in interviews.</p>
+<h3 id="81-on-the-limits-of-self-improving-in-llms-arxiv-260105280">8.1　On the Limits of Self-Improving in LLMs (arXiv 2601.05280)</h3>
+<p><strong>Full title</strong>: "On the Limits of Self-Improving in LLMs: The Singularity Is Not Near Without Symbolic Model Synthesis"</p>
+<p><strong>Setup</strong>: model self-training as a dynamical system on probability distributions:</p>
+<p>$$p_{t+1} = \mathcal{T}_\text{closed}(p_t) = \mathbb{E}_{x \sim p_t}\big[\delta_{x'}\big],\quad x' = \pi_t(x)$$</p>
+<p>i.e. $p_{t+1}$ is the distribution obtained by retraining the model on its own samples.</p>
+<p><strong>Main theorem (narrative version)</strong>: under closed-loop density matching (no exogenous grounding signal), if $\pi_t$ has no access to ground truth, then $\{p_t\}$ generally does not converge to the target $p^\star$, and degenerates in mode collapse / drift.</p>
+<p><strong>Core mechanism</strong>:</p>
+<p>$$D_\text{KL}(p^\star \,\|\, p_{t+1}) \;\ge\; D_\text{KL}(p^\star \,\|\, p_t) - \Delta_\text{grounding}$$</p>
+<p>where $\Delta_\text{grounding}$ is the KL reduction brought by the grounding signal. With no grounding ($\Delta = 0$), the KL does not decrease but actually rises.</p>
+<p><strong>Positive implication</strong>: <strong>self-improvement needs exogenous grounding</strong> — code executor / math checker / human label / rubric judge — this is why Absolute Zero must hook up a code executor, STaR must use ground-truth answers for rationalization, Ctx2Skill must use a Judge to verify rubrics.</p>
+<div class="callout callout-warn"><div class="callout-title">Misreading warning (interview bonus)</div><p>This paper does <strong>not</strong> prove that "reward-free training must collapse"; it proves that closed-loop density matching degenerates in the absence of an exogenous grounding signal. <strong>Native Evolution is still compliant</strong> — it has outcome-based reward as grounding.</p></div>
+<h3 id="82-solver-verifier-gap-arxiv-250700075">8.2　Solver-Verifier Gap (arXiv 2507.00075)</h3>
+<p><strong>Setup</strong>: model capability evolution as coupled dynamics of two variables $\theta^\text{sol}, \theta^\text{ver}$:</p>
+<p>$$\begin{cases} \dot\theta^\text{sol} = \eta_s\, g_s(\theta^\text{sol}, \theta^\text{ver}) \\ \dot\theta^\text{ver} = \eta_v\, g_v(\theta^\text{sol}, \theta^\text{ver}) \end{cases}$$</p>
+<p><strong>Empirical observation</strong>: capability $C(\theta)$ under self-improvement follows (a fitted) <strong>exponential law</strong>:</p>
+<p>$$C(\theta_t) \approx C_\infty - (C_\infty - C_0)\, e^{-\kappa t}$$</p>
+<p>and $\kappa$ is <strong>positively correlated</strong> with the solver-verifier gap $\Delta := C^\text{ver} - C^\text{sol}$ (larger gap → faster improvement), but too large a gap also saturates (verifier gives feedback that the solver cannot learn).</p>
+<p><strong>Engineering guidance</strong>:</p>
+<ul><li>Cross-model reviewers (e.g. ARIS using Codex 5.5 to review Claude) naturally create a verifier-solver gap → accelerate self-improvement</li><li>Same-model self-review has almost no gap → slow or ineffective convergence</li></ul>
+<div class="callout callout-good"><div class="callout-title">This is the best theoretical motivation supporting the &quot;executor != reviewer family&quot; protocol</div><p>but remember this is <strong>modeling + empirical fit, not a ready-made theorem</strong>.</p></div>
+<h3 id="83-practical-implications-of-the-two-papers">8.3　Practical implications of the two papers</h3>
+<table><thead><tr><th>Paper</th><th>Claim</th><th>Engineering takeaway</th></tr></thead><tbody><tr><td>2601.05280</td><td>Closed-loop self-training degenerates without grounding</td><td>Must have exogenous verifier (executor / judge / rubric)</td></tr><tr><td>2507.00075</td><td>Solver-verifier gap positively correlates with improvement rate (modeling + empirics)</td><td>Use cross-model reviewer to increase gap</td></tr></tbody></table>
+<p>→ Combining the two: <strong>reward-free at inference + grounded at training</strong> is the fundamental reason work like Native Evolution can work; <strong>ARIS-style cross-model audit</strong> is the system-level engineering choice to accelerate self-improvement.</p>
+<h2 id="9-memory-driven-self-evolution">§9 Memory-Driven Self-Evolution</h2>
+<h3 id="91-generative-agents-park-2023-uist-stanford">9.1　Generative Agents (Park 2023 UIST, Stanford)</h3>
+<p>The most classic long-horizon simulation: observation stream → memory store → reflection (LLM writes insights itself) → planning.</p>
+<p>Three layers of memory:</p>
+<ul><li><strong>Observation memory</strong>: raw timestamp + literal description</li><li><strong>Reflection memory</strong>: "insight" generated by retrieval-augmented LLM</li><li><strong>Planning memory</strong>: long-term goal</li></ul>
+<p><strong>Retrieval score</strong>:</p>
+<p>$$\text{score}(m) = \alpha_\text{recency}\, r(m) + \alpha_\text{importance}\, i(m) + \alpha_\text{relevance}\, s(m, q)$$</p>
+<p>where $r(m) = \gamma^{\Delta t}$ (exponential decay), $i(m) \in [1,10]$ (LLM self-rated), $s(m,q)$ cosine similarity.</p>
+<h3 id="92-memgpt-packer-2023-berkeley">9.2　MemGPT (Packer 2023, Berkeley)</h3>
+<p>OS-style hierarchical memory:</p>
+<ul><li><strong>Main context</strong> (LLM token budget) = "RAM"</li><li><strong>External archival</strong> (disk) = "HDD"</li><li>LLM learns paging: <code>memgpt_function_call(load, save, summarize)</code></li></ul>
+<p><strong>Core trick</strong>: let the LLM observe its own token usage within its context, actively deciding to swap pages — this brings the OS abstraction into the LLM agent.</p>
+<h3 id="93-relation-of-this-layer-to-ctx2skill--native-evolution">9.3　Relation of this layer to Ctx2Skill / Native Evolution</h3>
+<table><thead><tr><th>Dimension</th><th>Generative Agents</th><th>MemGPT</th><th>Ctx2Skill</th><th>Native Evolution</th></tr></thead><tbody><tr><td>Evolution target</td><td>reflection / plan</td><td>paging policy</td><td>skill</td><td>K (world map)</td></tr><tr><td>Updates parameters?</td><td>No</td><td>No</td><td>No</td><td>Yes</td></tr><tr><td>Trigger frequency</td><td>per observation</td><td>per context overflow</td><td>per failure batch</td><td>per training epoch</td></tr><tr><td>Task-driven?</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No (evolution phase)</td></tr></tbody></table>
+<p>→ The 2024-2026 evolutionary direction of memory-driven work: <strong>from episodic (GA) → hierarchical (MemGPT) → typed + DAG (MVMem)</strong>.</p>
+<h2 id="10-skill--k-retrieval-and-ranking-engineering-practice">§10 Skill / K Retrieval and Ranking (engineering practice)</h2>
+<p>In actual deployment, with skill libraries of dozens to hundreds, you must <strong>load on demand</strong> — otherwise tokens explode.</p>
+<h3 id="101-hybrid-retrieval-pipeline">10.1　Hybrid retrieval pipeline</h3>
+<pre><code class="language-python">def hybrid_skill_retrieval(task: str, skills: list, k=3):
+    &quot;&quot;&quot;
+    Stage A: Coarse filter (vector embedding, fast)
+    Stage B: Fine ranking (LLM scoring on description, accurate)
+    Stage C: Exact match on trigger section (deterministic)
+    &quot;&quot;&quot;
+    # ── Stage A: BM25 + dense embedding hybrid ──
+    bm25_scores = bm25_search(task, [s.description for s in skills], topn=20)
+    dense_scores = dense_search(task, [s.embedding for s in skills], topn=20)
+    candidates = top_k(merge(bm25_scores, dense_scores), n=10)
+
+    # ── Stage B: LLM rerank ──
+    reranked = []
+    for skill in candidates:
+        prompt = f&quot;task={task}\nskill trigger={skill.trigger}\n&quot; \
+                 f&quot;Q: relevant? (yes / no / partial)&quot;
+        verdict = llm(prompt)
+        score = {&quot;yes&quot;: 1.0, &quot;partial&quot;: 0.5, &quot;no&quot;: 0.0}[verdict]
+        reranked.append((score, skill))
+
+    # ── Stage C: Strong keyword match ──
+    keyword_hits = [s for s in skills
+                    if any(kw in task.lower() for kw in s.exact_triggers)]
+
+    # Merge and deduplicate → take top k
+    final = top_k(reranked + [(2.0, s) for s in keyword_hits], k=k)
+    return [s for _, s in final]</code></pre>
+<h3 id="102-skill-ranking-formula">10.2　Skill ranking formula</h3>
+<p>Weighted fusion of 3 signals:</p>
+<p>$$\text{score}(s, q) = \alpha_\text{sim}\, \cos(\mathbf{e}_s, \mathbf{e}_q) + \alpha_\text{prior}\, \log(1 + n_\text{used}(s)) + \alpha_\text{recent}\, \gamma^{\Delta t}$$</p>
+<p>where $n_\text{used}$ is historical call count (more frequent → more reliable), $\gamma^{\Delta t}$ is recency decay.</p>
+<h3 id="103-skill-update-prevent-staleness">10.3　Skill update (prevent staleness)</h3>
+<p>Each skill maintains:</p>
+<ul><li><code>success_count</code>, <code>fail_count</code></li><li><code>last_updated</code></li><li><code>version</code></li></ul>
+<p>Trigger conditions for update:</p>
+<ul><li><code>fail_count / total &gt; τ_fail</code> (high failure rate) → revise</li><li><code>last_updated &gt; T_stale</code> (stale) → re-explore</li><li>Environment change detection → trigger Native-Evolution-style redistillation</li></ul>
+<h2 id="11-inference-time-orchestration-like-aris-vs-training-time-meta-learning-like-native-evolution">§11 Inference-Time Orchestration (like ARIS) vs Training-Time Meta-Learning (like Native Evolution)</h2>
+<blockquote><p>L3 must-ask at top labs: master the fundamental mathematical difference between inference-time orchestration and training-time meta-learning.</p></blockquote>
+<h3 id="111-mathematical-formulation-comparison">11.1　Mathematical formulation comparison</h3>
+<table><thead><tr><th>Dimension</th><th>Inference-Time Orchestration</th><th>Training-Time Meta-Learning</th></tr></thead><tbody><tr><td>Optimization target</td><td>system prompt $\mathcal{K}, \mathcal{S}$</td><td>model params $\theta$</td></tr><tr><td>Form</td><td>$\pi_{\theta}(\,\cdot\mid \mathcal{S}\oplus \text{ctx})$</td><td>$\theta_{t+1} = \theta_t - \eta\,\nabla \mathcal{L}$</td></tr><tr><td>Feedback source</td><td>External verifier (cross-model)</td><td>outcome reward + RFT</td></tr><tr><td>Persistence form</td><td>markdown files on disk</td><td>model weights</td></tr><tr><td>Update at test time?</td><td>Yes (each task can update files)</td><td>No (parameters frozen)</td></tr><tr><td>Convergence dynamics</td><td>Textual language diff, non-gradient</td><td>gradient flow</td></tr><tr><td>Theoretical tools</td><td>bandit / online learning / sequential decision</td><td>RL theory, meta-learning theory</td></tr></tbody></table>
+<h3 id="112-respective-limitations">11.2　Respective limitations</h3>
+<p><strong>Inference-time orchestration</strong>:</p>
+<ul><li>❌ Cannot internalize skills into weights → tokens need loading every time</li><li>❌ Context length limit becomes a bottleneck</li><li>❌ Hard to learn low-level subtoken patterns</li><li>✅ Immediately interpretable, auditable</li><li>✅ No GPU needed</li></ul>
+<p><strong>Training-time meta-learning</strong>:</p>
+<ul><li>❌ Expensive training (rejection sampling × 2 iter, 600 tasks × 20 envs)</li><li>❌ Once trained, evolution capability is fixed</li><li>❌ Cross-environment generalization remains an open problem</li><li>✅ One training session, long-term benefit</li><li>✅ Behavior can be internalized into fast inference path</li></ul>
+<h3 id="113-hybrid-form-in-real-systems">11.3　Hybrid form in real systems</h3>
+<p>Mainstream production agents are often <strong>both layers</strong>:</p>
+<ul><li><strong>Bottom layer</strong>: fine-tuned for instruction follow + tool use (one-time training)</li><li><strong>Top layer</strong>: inference-time orchestration of skills / memory (continuous update)</li></ul>
+<p>This is also the actual position of ARIS-type systems — the top layer is inference-time orchestration, with the bottom layer relying on already-trained-to-follow-skill backbones like GPT-4.5 / Claude Opus.</p>
+<h2 id="12-failure-modes-and-defenses-memorize">§12 Failure Modes and Defenses (memorize)</h2>
+<h3 id="121-adversarial-collapse">12.1　Adversarial Collapse</h3>
+<p><strong>Symptom</strong>: the Challenger becomes increasingly extreme, the Reasoner's learned skills only work on extreme cases, degrading on normal cases.</p>
+<p><strong>Ctx2Skill solution</strong>: Cross-Time Replay picks $\arg\max \rho^h \cdot \rho^e$; the product form forces retention of easy task performance.</p>
+<p><strong>General solutions</strong>:</p>
+<ul><li>Maintain a historical probe set (not just looking at current iteration)</li><li>Pick the most balanced rather than last-iteration skill</li><li>Use KL penalty to prevent abrupt skill set changes: $\mathcal{L}_\text{KL} = \beta \,D_\text{KL}(\mathcal{S}_i \| \mathcal{S}_{i-1})$ (textual KL can be approximated by BLEU/edit distance)</li></ul>
+<h3 id="122-memory-drift">12.2　Memory Drift</h3>
+<p><strong>Symptom</strong>: long-horizon agent accumulates contradictory / outdated information in K or memory, getting worse with use.</p>
+<p><strong>A²RD solution</strong>:</p>
+<ul><li>HITS cross-checks each segment against retrieved context</li><li>Typed memory schema enforces schema validation</li><li>failure_db separately stores "known unreliable" traces</li></ul>
+<p><strong>General solutions</strong>:</p>
+<ul><li>Periodically run self-consistency check: have the LLM read its own K to find internal contradictions</li><li>Add confidence decay to each entry</li><li>Trigger "K redistillation" mechanism (Native-Evolution-style)</li></ul>
+<h3 id="123-reward-hacking">12.3　Reward Hacking</h3>
+<p><strong>Symptom</strong>: in self-rewarding training (Yuan et al. 2024 Self-Rewarding LM), the model learns to game its own reward function.</p>
+<p><strong>Defenses</strong>:</p>
+<ul><li><strong>Cross-model reward</strong>: have a different model family act as verifier</li><li><strong>Outcome-grounded reward</strong>: don't let the LLM score itself; use code executor / math checker / labeled downstream task</li><li><strong>Reward dropout / regularization</strong>: random subset of reward components</li></ul>
+<h3 id="124-bias-amplification-echo-chamber">12.4　Bias Amplification (Echo Chamber)</h3>
+<p><strong>Symptom</strong>: STaR-style rationalization trains the model on its own generated rationales, amplifying mode collapse.</p>
+<p><strong>[arXiv:2601.05280]'s KL bound directly corresponds to this case</strong> — without exogenous grounding, KL does not decrease but rises.</p>
+<p><strong>Defenses</strong>:</p>
+<ul><li>Always retain a portion of ground-truth supervision</li><li>Use real human feedback as anchor</li><li>Diverse seed prompts to force multimodality</li></ul>
+<h3 id="125-sandbox-contamination">12.5　Sandbox Contamination</h3>
+<p><strong>Symptom</strong>: the agent generates its own test cases → trains on these cases → evaluation looks high but it's actually train-test overlap.</p>
+<p><strong>Defenses</strong>:</p>
+<ul><li>Strict holdout set, agent has zero access</li><li>Benchmark maintained by third party</li><li>Multi-round canonical eval (e.g. Ctx2Skill uses CL-bench)</li></ul>
+<h3 id="126-capability-ceiling">12.6　Capability Ceiling</h3>
+<p><strong>Symptom</strong>: after N rounds of self-improvement the curve saturates, no amount of additional compute helps.</p>
+<p><strong>Solver-Verifier Gap [arXiv:2507.00075] explanation</strong>: when gap $\Delta \to 0$, $\kappa \to 0$, improvement rate → 0.</p>
+<p><strong>Breakthrough methods</strong>:</p>
+<ul><li>Introduce a stronger verifier (e.g. replace with a stronger model as judge)</li><li>Increase task difficulty (Ctx2Skill's Challenger evolving)</li><li><strong>Symbolic model synthesis</strong> (the last-resort lifesaver proposed in [arXiv:2601.05280]): have the LLM maintain a simultaneous symbolic / programmatic model to prevent drift</li></ul>
+<h3 id="127-hallucination-compounding-independent-reviewers-can-co-hallucinate">12.7　Hallucination Compounding (independent reviewers can co-hallucinate)</h3>
+<p><strong>Symptom</strong>: cross-model reviewers all agree on a wrong conclusion (e.g. Claude writes + GPT reviews, both miss the same bug).</p>
+<p><strong>Defenses</strong> (also mentioned in briefing's codex round 2):</p>
+<ul><li>Reviewers must connect to raw evidence / executable checks (unit test, claim audit against raw experiment output)</li><li>Cannot rely only on LLM textual judgment</li></ul>
+<h2 id="13-25-frequently-asked-interview-questions-l1--l2--l3">§13 25 Frequently-Asked Interview Questions (L1 + L2 + L3)</h2>
+<h3 id="l1-must-know-q1-q10">L1 Must-Know (Q1-Q10)</h3>
+<details>
+
+<summary>Q1. What is a self-evolving agent? How does it differ from a regular LLM agent?</summary>
+<p>Regular agent: fixed policy / prompt / skill, <strong>all capability comes from pretrain + one-time prompt engineering</strong>.</p>
+<p>Self-evolving agent: continuously updates the capability of some layer (parameters / skill markdown / memory / workflow) during use.</p>
+<p>Key point: <strong>does not depend on manual annotation every time</strong> — may depend on exogenous verifier, but not on step-level human labels. Representative works: Voyager, Reflexion, Ctx2Skill, Native Evolution.</p>
+</details>
+<details>
+
+<summary>Q2. What are the three self-evolution paradigms? Give an example of each.</summary>
+<p>Per the Native Evolution paper §2 classification:</p>
+<ul><li><strong>Experience-Driven</strong>: human-made tasks + reward, e.g. AgentTuning, ToolLLM.</li><li><strong>Adversarial Self-Play</strong>: challenger-solver, e.g. Absolute Zero (arXiv 2505.03335), Ctx2Skill (arXiv 2604.27660).</li><li><strong>Meta-Learning / Reward-Free</strong>: outcome reward at training, no task and no reward at inference, e.g. Native Evolution (arXiv 2604.18131).</li></ul>
+</details>
+<details>
+
+<summary>Q3. What is Voyager's trio? Why doesn't it update GPT-4 weights?</summary>
+<p>Voyager (Wang et al. NeurIPS 2023, NVIDIA + Caltech):</p>
+<ul><li><strong>Automatic Curriculum</strong>: automatically generates next task based on inventory</li><li><strong>Skill Library</strong>: each skill is a JS function, retrieved by description embedding</li><li><strong>Iterative Prompting + Self-Verification</strong>: critic agent verifies, on failure revise</li></ul>
+<p>Reason for not updating GPT-4 weights: at the time (2023) GPT-4 API did not allow fine-tuning; and Voyager wanted to prove in-context skill accumulation alone can evolve. Drawback: high token cost + cannot internalize sub-token patterns.</p>
+</details>
+<details>
+
+<summary>Q4. Reflexion's relation to RL? Why is it called "verbal RL"?</summary>
+<p>Reflexion (Shinn 2023 NeurIPS, Northeastern) compresses sparse reward signal into natural-language reflections stored in memory.</p>
+<p>Analogy to standard RL:</p>
+<ul><li>$r_t$ → "reflection text" (structured failure summary)</li><li>$V(s_t)$ → reflection retrieved in the prompt</li><li>policy improvement → use reflection to change subsequent actions</li></ul>
+<p>But <strong>does not update weights</strong> — so called verbal RL (using text rather than gradient for credit assignment). <strong>Not real RL</strong>, no convergence guarantee.</p>
+</details>
+<details>
+
+<summary>Q5. How does STaR self-train? What's the key flaw?</summary>
+<p>STaR (Zelikman 2022 NeurIPS):</p>
+<ol><li>LM generates (rationale, answer)</li><li>If correct → collect (q, rationale, a)</li><li>If wrong → give ground truth, let LM reverse-rationalize</li><li>SFT on collected</li></ol>
+<p><strong>Key flaw</strong>: rationalization is reverse-engineering the answer, the rationale may not be the true reasoning process; distribution drift.</p>
+<p>[arXiv:2601.05280] gives a formalized critique: closed-loop training without exogenous grounding degenerates the KL.</p>
+</details>
+<details>
+
+<summary>Q6. Relation between Anthropic Skills and Native Evolution K?</summary>
+<p>Both are <strong>markdown files injected as system prompt</strong>. Native Evolution paper §3 footnote 1 explicitly cites <code>github.com/anthropics/skills/tree/main/skills</code> as a reference implementation for K.</p>
+<p>Differences:</p>
+<ul><li>Anthropic Skills: human-written, static, task-level</li><li>Native Evolution K: auto-distilled by agent, dynamic, environment-level</li></ul>
+<p>→ Convergence conclusion: <strong>system prompt is the new model weights</strong>.</p>
+</details>
+<details>
+
+<summary>Q7. Why doesn't self-evolving necessarily mean updating model parameters?</summary>
+<p>The vast majority of 2024-2026 work does not update parameters:</p>
+<ul><li>Voyager: frozen GPT-4</li><li>Reflexion: frozen base LM</li><li>Generative Agents: frozen LM</li><li>Ctx2Skill: frozen LM</li><li>A²RD: training-free</li></ul>
+<p>Reasons: (1) no GPU needed, (2) interpretable / auditable, (3) skills are portable (transferable to other backbones), (4) takes effect immediately.</p>
+<p>Representatives of parameter updates (Native Evolution, AgentTuning) are typically used to make the backbone learn "how to use skills / K," while the skills / K themselves remain files.</p>
+</details>
+<details>
+
+<summary>Q8. Reflexion's memory vs RAG?</summary>
+<ul><li>RAG: retrieves <strong>external knowledge documents</strong> (e.g. wiki)</li><li>Reflexion memory: retrieves <strong>reflections on the agent's own historical trajectories</strong></li></ul>
+<p>The latter forces the agent to reflect on its own failure/success patterns, not just retrieve facts written by others.</p>
+<p>In engineering Reflexion also does retrieval, just the doc library is self-generated.</p>
+</details>
+<details>
+
+<summary>Q9. Why does self-play training need "learnability reward"? Write the formula.</summary>
+<p>Absolute Zero (arXiv 2505.03335) proposes the learnability reward:</p>
+<p>$$R^\text{learn}(t) = \pi^\text{sol}_t(\text{correct}\mid t)\cdot \big(1 - \pi^\text{sol}_t(\text{correct}\mid t)\big)$$</p>
+<p>Maximizing it gives $\pi^\text{sol} = 0.5$ — task is neither too easy (reward → 0) nor too hard (reward → 0).</p>
+<p><strong>Why needed</strong>: without constraint, the Challenger will explode to extreme tasks (Solver always wrong) → signal becomes useless; this is the core trick of curriculum learning.</p>
+</details>
+<details>
+
+<summary>Q10. What is adversarial collapse? How to prevent?</summary>
+<p><strong>Symptom</strong>: after multi-round self-play, the Challenger becomes increasingly extreme, the Solver over-specializes to extreme cases and forgets the base task.</p>
+<p><strong>Ctx2Skill solution</strong>: Cross-Time Replay — maintain hard + easy probe set, pick $\arg\max_i \rho^h(i)\cdot \rho^e(i)$. The product form forces easy task performance to not collapse.</p>
+<p><strong>General solutions</strong>: early stopping, replay buffer, explicit KL penalty.</p>
+</details>
+<h3 id="l2-advanced-q11-q20">L2 Advanced (Q11-Q20)</h3>
+<details>
+
+<summary>Q11. Derive why Cross-Time Replay uses product ρ^h · ρ^e rather than ρ^h + ρ^e.</summary>
+<p>Let candidate A satisfy $(\rho^h, \rho^e) = (0.8, 0.1)$, candidate B satisfy $(0.45, 0.45)$.</p>
+<ul><li>Addition: A=0.9, B=0.9 → indistinguishable</li><li>Multiplication: A=0.08, B=0.2025 → pick B</li></ul>
+<p><strong>Why multiplication is more correct</strong>: A is nearly entirely wrong on easy (catastrophic forgetting), but addition smooths its hard performance into a tied total. Multiplication imposes a catastrophic penalty when any side → 0 — this is the key to anti-over-specialization.</p>
+<p>Ctx2Skill ablation shows using additive scoring ($\rho^h + \rho^e$) drops final accuracy by about 1-1.5 pts.</p>
+</details>
+<details>
+
+<summary>Q12. Why can't Native Evolution's outcome-based reward use step-level?</summary>
+<p>R_evolve = Success(T_E | K) − Success(T_E | ∅).</p>
+<p><strong>Step-level reward is infeasible</strong> because:</p>
+<ol><li>$\mathcal{K}$ generation trajectory ~374.8 steps × 3322.4 tokens/step, step-level signal is extremely sparse</li><li>There is no ground-truth intermediate state — each step's correctness is hard to judge</li><li>Step-level reward encourages shortcuts (generate K that "looks diligent" but is useless downstream)</li></ol>
+<p>Outcome-based uses downstream task pass rate as reward — direct, anti-hacking, tied to the true value of K.</p>
+</details>
+<details>
+
+<summary>Q13. Why does Native Evolution use RFT rather than GRPO?</summary>
+<p>(1) Trajectory horizon ~374 steps — GRPO/PPO backprop cannot stabilize on such a long horizon. (2) Reward evaluation requires running an auxiliary agent on downstream tasks — online evaluation is too expensive. (3) RFT (Rejection Sampling Fine-Tuning) decouples trajectory generation from policy update: first generate $C$ trajectories with $\pi_t$ → rank by reward → SFT on the best → next iter.</p>
+<p>→ Offline, parallelizable, controllable. Cost: data efficiency lower than GRPO, needs more samples.</p>
+</details>
+<details>
+
+<summary>Q14. Derive the KL argument for self-improvement degeneration under no grounding.</summary>
+<p>Let $p^\star$ be the target distribution, $p_t$ be the model's distribution at iteration $t$.</p>
+<p>Closed-loop self-training: continue training on $x_t$ sampled from $p_t$ itself (no ground truth label).</p>
+<p>$$p_{t+1}(x) = \mathbb{E}_{x' \sim p_t}\big[\pi_\text{train}(x \mid x')\big]$$</p>
+<p>If $\pi_\text{train}$ is maximum-likelihood-type training without external label correction:</p>
+<p>$$D_\text{KL}(p^\star \| p_{t+1}) \;\ge\; D_\text{KL}(p^\star \| p_t)$$</p>
+<p><strong>Intuition</strong>: $p_t$ is already biased, $p_{t+1}$ trained on its samples can only retain or amplify the bias.</p>
+<p>With grounding (exogenous label $y$ for $x$), training objective becomes conditional $p(x | y)$ correction:</p>
+<p>$$D_\text{KL}(p^\star \| p_{t+1}) \;\le\; D_\text{KL}(p^\star \| p_t) - \Delta_\text{grounding}$$</p>
+<p>where $\Delta_\text{grounding} > 0$ quantifies the KL correction from exogenous signal.</p>
+<p>Reference [arXiv:2601.05280] §3.</p>
+<blockquote><p><strong>Note</strong>: this is a simplified narrative (the formal version requires technical assumptions on the relation between $\pi_\text{train}$, $\pi_t$, see original). <strong>In interviews you can cite [arXiv:2601.05280], but do not claim you derived it independently</strong>.</p></blockquote>
+</details>
+<details>
+
+<summary>Q15. Explain the relation between solver-verifier gap and self-improvement rate.</summary>
+<p>Let capability $C(\theta_t)$ follow the empirical exponential law per [arXiv:2507.00075]:</p>
+<p>$$C(\theta_t) \approx C_\infty - (C_\infty - C_0)\, e^{-\kappa t}$$</p>
+<p>Define gap $\Delta := C^\text{ver} - C^\text{sol}$. In the paper, $\kappa = \kappa(\Delta)$ empirically <strong>correlates positively but non-monotonically</strong>:</p>
+<ul><li>$\Delta$ too small → verifier and solver are homogeneous, no new signal → $\kappa \approx 0$</li><li>$\Delta$ too large → solver cannot learn (feedback too complex) → $\kappa$ actually drops</li></ul>
+<p>→ Optimal: <strong>verifier is one notch stronger than solver</strong> (e.g. Claude executor + GPT-5.5 reviewer).</p>
+<p><strong>Note</strong>: the original paper gives <strong>modeling + empirical fit</strong>, not a ready-portable theorem; do not over-claim as "already proven theorem" in interviews or papers.</p>
+</details>
+<details>
+
+<summary>Q16. Difference between A²RD's MVMem and traditional vector memory?</summary>
+<p>Vector memory (e.g. MemGPT, LangChain memory):</p>
+<ul><li>Stores embedding + raw text chunk</li><li>Retrieval: cosine similarity</li><li>Drawback: long-range consistency (entity identity / spatial relation) easily lost</li></ul>
+<p>MVMem:</p>
+<ul><li>Stores <strong>textual states</strong> (Visual Arcs / Spatial Relations / Camera trajectories) + frames + videos + dependency DAG</li><li>Retrieval: MLLM-based retrieval (textual + image + context combined)</li><li>Advantage: can explicitly track entity identity, avoiding character look drift</li></ul>
+<p>Implication for long-horizon agents: <strong>typed memory schema</strong> (not free-form text) + <strong>dependency DAG</strong> to decide generation order.</p>
+</details>
+<details>
+
+<summary>Q17. How does HITS's frame-level differ from video-level? Why layered?</summary>
+<ul><li><strong>Frame-level HITS</strong>: cross-check single frame against textual state ("does this frame reflect entity X's identity")</li><li><strong>Video-level HITS</strong>: check the full video against narrative consistency ("does this video match story progression")</li></ul>
+<p>Why layered:</p>
+<ul><li>Single frame error → fix locally within that segment</li><li>Cross-segment narrative error → must check at larger scale</li><li>Analogy: unit test vs integration test</li></ul>
+<p>Transfer to general long-horizon agents: local artifact check + global workflow consistency check.</p>
+</details>
+<details>
+
+<summary>Q18. What is the memory retrieval formula in Generative Agents?</summary>
+<p>$$\text{score}(m) = \alpha_\text{recency}\, r(m) + \alpha_\text{importance}\, i(m) + \alpha_\text{relevance}\, s(m, q)$$</p>
+<p>where:</p>
+<ul><li>$r(m) = \gamma^{\Delta t}$ exponential decay</li><li>$i(m) \in [1, 10]$, importance self-rated by LLM</li><li>$s(m, q)$ cosine similarity</li></ul>
+<p>Park 2023 UIST sets $\gamma=0.995$/hour, $\alpha$ uniformly distributed.</p>
+<p><strong>Interview bonus</strong>: importance rating by LLM self-rating itself may hallucinate; modern systems use cross-model rating or task-conditioned importance.</p>
+</details>
+<details>
+
+<summary>Q19. How does MemGPT do "OS-style memory"? Why has this idea inspired follow-up work?</summary>
+<p>MemGPT (Packer 2023):</p>
+<ul><li>Main context (fast, expensive) = "RAM"</li><li>External archival (slow, cheap) = "HDD"</li><li>LLM function calls <code>pagein / pageout / summarize</code> for autonomous management</li></ul>
+<p>Inspiration:</p>
+<ul><li>Let the LLM see its own context state (token usage, visible vs invisible)</li><li>Let the LLM autonomously decide "now save this to disk" / "now load that"</li><li>This is the LLM agent's first implementation of <strong>truly active long-term memory management</strong> — independent of RAG frameworks</li></ul>
+<p>Follow-up work: MemoryBank, MemChat, MVMem are all inspired by it; ARIS-style research-wiki is also the same idea (agent decides writing / reading wiki itself).</p>
+</details>
+<details>
+
+<summary>Q20. Compare Voyager's (free exploration) and Ctx2Skill's (context-driven) skill discovery philosophies.</summary>
+<p><strong>Voyager</strong>: in an open sandbox (Minecraft) automatically generates tasks → skill is a concrete procedure of "how to craft / kill."</p>
+<ul><li>Skill form: JS code</li><li>Skill trigger: retrieved during task execution</li><li>Lacks external context</li></ul>
+<p><strong>Ctx2Skill</strong>: given a dense context $C$ (possibly 100k+ tokens), extract procedures / rules of that context.</p>
+<ul><li>Skill form: natural-language markdown</li><li>Skill trigger: directly prepended when context is loaded</li><li>Must depend on context</li></ul>
+<p><strong>Core difference</strong>: Voyager is <strong>environment-driven</strong> (skill = "how to do things in this world"), Ctx2Skill is <strong>context-driven</strong> (skill = "procedural knowledge of this document").</p>
+<p>Ctx2Skill is more suitable for <strong>new manual / new repo / new product doc</strong> scenarios; Voyager is more suitable for <strong>new environment exploration</strong>.</p>
+</details>
+<h3 id="l3-top-lab-q21-q25">L3 Top Lab (Q21-Q25)</h3>
+<details>
+
+<summary>Q21. Derive sufficient conditions for the Ctx2Skill 5-role loop to converge to a stable skill set (non-trivial setting).</summary>
+<p>Direct proof of 5-role loop convergence is hard, but we can give a narrative argument for sufficient conditions:</p>
+<p>Let $\mathcal{S}^R_i, \mathcal{S}^C_i$ be the two-sided skill sets at iteration $i$. Define capability: $C^R_i = \mathbb{E}_t[\rho^h(\mathcal{S}^R_i) \cdot \rho^e(\mathcal{S}^R_i)]$ (with Cross-Time Replay metric).</p>
+<p><strong>Sufficient conditions</strong> (intuitive version):</p>
+<ol><li><strong>Judge is calibrated</strong>: $\mathbb{E}[Judge(a, r)] = \mathbb{E}[\text{ground-truth}(a, r)]$. I.e. Judge does not drift.</li><li><strong>Proposer is a monotone improver</strong>: each diagnosis from the proposer leads the generator to produce a new skill that strictly improves expected pass rate on the batch (with prob $\ge 1 - \delta$).</li><li><strong>Probe set is stationary</strong>: $\mathcal{Q}^h, \mathcal{Q}^e$ have stable distribution after K updates (no abrupt change).</li><li><strong>Skill set has capacity ceiling</strong>: $|\mathcal{S}^R| \le L$ (preventing unbounded growth).</li></ol>
+<p>Under (1)-(4), $\{C^R_i\}$ is a <strong>bounded + almost everywhere monotone non-decreasing</strong> sequence (strictly improving with prob $\ge 1-\delta$; upper bound given by probe set's pass rate $\le 1$). This process is not strictly a supermartingale (supermartingale is $\mathbb{E}[C_{i+1}|\mathcal{F}_i] \le C_i$, opposite direction), more accurately described as a <strong>bounded monotone improvement sequence / submartingale-like</strong> — by classical monotone convergence theorem it converges to $C^R_\infty \le 1$.</p>
+<p><strong>Note</strong>: this is a narrative sketch; formal proof requires constructing the right probability space, defining $\sigma$-algebra, and carefully handling Judge's stochastic noise + the high-probability non-determinism of monotone improvement — it's a PhD-level theory question, <strong>should not be derived in full in an interview</strong>. Explaining "why bounded + monotone improvement implies convergence" is sufficient.</p>
+</details>
+<details>
+
+<summary>Q22. Derive how Native Evolution avoids policy degeneration to trivial behavior in the reward-free phase (information-theoretic argument).</summary>
+<p>Let $\pi^\star$ be the trained Native Evolution policy. Evolution phase:</p>
+<p>$$\mathcal{K}^\star = \arg\max_\mathcal{K} I(\mathcal{K}; E)$$</p>
+<p>where $I(\mathcal{K}; E)$ is the mutual information between K and environment. <strong>Intuition</strong>: a good K is a sufficient statistic of E.</p>
+<p>Degeneration (trivial $\mathcal{K}$) corresponds to $I(\mathcal{K}; E) \to 0$ ($\mathcal{K}$ is independent of E, an uninformative text).</p>
+<p><strong>Why outcome reward at training prevents degeneration</strong>:</p>
+<p>$$R_\text{evolve}(\mathcal{K}) = \text{Success}(\mathcal{T}_E \mid \mathcal{K}) - \text{Success}(\mathcal{T}_E \mid \varnothing)$$</p>
+<p>By data processing inequality:</p>
+<p>$$I(\mathcal{K}; \mathcal{T}_E) \le I(\mathcal{K}; E)$$</p>
+<p>and $\text{Success}(\mathcal{T}_E \mid \mathcal{K})$ monotonically depends on $I(\mathcal{K}; \mathcal{T}_E)$ (more task-relevant info in K → higher success rate).</p>
+<p>So maximizing $R_\text{evolve}$ at training → implicitly maximizes $I(\mathcal{K}; \mathcal{T}_E) \le I(\mathcal{K}; E)$ → pushes policy away from trivial K.</p>
+<p>→ At inference, the policy has internalized the instinct of "how to produce high-info K," so even without reward, it can maintain non-trivial behavior — but <strong>only on environments similar to training distribution</strong>.</p>
+<div class="callout callout-warn"><div class="callout-title">caveat</div><p>Outside the train distribution (OOD environments), without grounding signal to prevent degeneration, the policy may still fail. This is one of Native Evolution's open problems.</p></div>
+</details>
+<details>
+
+<summary>Q23. Why does self-improvement hit a capability ceiling on reasoning-hard tasks? Cite [arXiv:2601.05280] dynamics argument.</summary>
+<p>Characteristics of reasoning-hard tasks (e.g. IMO problems, theorem proofs):</p>
+<ol><li>Ground truth is rare, exogenous grounding signals are nearly unattainable</li><li>Intermediate reasoning step correctness is hard to auto-judge (no cheap verifier)</li><li>Self-rationalization (STaR-style) easily produces plausible-but-wrong rationales</li></ol>
+<p>By [arXiv:2601.05280]'s dynamics argument:</p>
+<p>$$D_\text{KL}(p^\star \| p_{t+1}) - D_\text{KL}(p^\star \| p_t) \;\ge\; -\Delta_\text{grounding}$$</p>
+<p>For reasoning-hard tasks $\Delta_\text{grounding} \to 0$ (no verifier) → KL does not decrease → capability does not grow.</p>
+<p><strong>Final implication of [arXiv:2601.05280]</strong>: to break through the reasoning-hard ceiling, need <strong>symbolic model synthesis</strong> — have the LLM simultaneously maintain a programmatic / symbolic model as a grounding anchor (e.g. Lean / Coq / Z3 verifier).</p>
+<p>This also explains why AlphaProof and similar work must hook up Lean as verifier to break through on IMO — while pure LLM self-improvement on Olympiad has long saturated at some level.</p>
+</details>
+<details>
+
+<summary>Q24. Fundamental mathematical difference between ARIS-style inference-time orchestration and Native Evolution's training-time meta-learning?</summary>
+<p><strong>Training-time meta-learning (Native Evolution)</strong>:</p>
+<p>Optimization target: model params $\theta$, objective $\arg\max_\theta \mathbb{E}_E\, R_\text{evolve}(\mathcal{K}_\theta(E))$.</p>
+<p>$\theta$ determined by gradient, evolution trajectory in <strong>continuous Euclidean space</strong> ($\mathbb{R}^d$, $d$ = number of parameters).</p>
+<p>Theoretical tools: RL theory (policy gradient theorem), meta-learning theory (MAML inner / outer loop).</p>
+<p>Convergence analyzed by traditional SGD analysis (Lipschitz, smoothness, variance bound).</p>
+<p><strong>Inference-time orchestration (ARIS-style)</strong>:</p>
+<p>Optimization target: external state $\Sigma_t = (\mathcal{S}_t, \mathcal{K}_t, \text{workflow}_t)$, objective $\arg\max_\Sigma \mathbb{E}_\tau\, U(\tau \mid \pi, \Sigma)$, where $\pi$ is frozen.</p>
+<p>$\Sigma$ determined by text diff, evolution trajectory in <strong>combinatorial discrete space</strong> (set of all markdown documents).</p>
+<p>Theoretical tools: online learning (regret bound), sequential decision making (bandit), textual KL or edit-distance bound.</p>
+<p>Convergence analysis needs new tools — traditional SGD does not apply.</p>
+<p><strong>Core difference list</strong>:</p>
+<table><thead><tr><th>Dimension</th><th>training-time</th><th>inference-time</th></tr></thead><tbody><tr><td>State space</td><td>$\mathbb{R}^d$</td><td>text strings $\Sigma^\star$</td></tr><tr><td>Update operator</td><td>gradient</td><td>LLM-generated edit</td></tr><tr><td>Persistence</td><td>weights</td><td>markdown files</td></tr><tr><td>Update frequency at test time</td><td>does not update</td><td>every task</td></tr><tr><td>Cross-backbone portability</td><td>hard</td><td>easy (files directly copyable)</td></tr><tr><td>Interpretability</td><td>low</td><td>high</td></tr><tr><td>GPU demand</td><td>high</td><td>low</td></tr><tr><td>Theoretical tools</td><td>RL theory</td><td>online / bandit / regret</td></tr></tbody></table>
+<p>→ <strong>The two are actually complementary layers</strong>: the bottom layer uses training-time to make the backbone learn generic skill following, the top layer uses inference-time to orchestrate concrete tasks.</p>
+<div class="callout callout-warn"><div class="callout-title">Commonly confused framing</div><p>Do not describe ARIS as "reward-free self-evolution" — it is <strong>inference-time, non-parametric, system-level adaptation</strong>, a different mathematical regime from Native Evolution's training-time meta-learning. This is a sanity check from cross-paper reading.</p></div>
+</details>
+<details>
+
+<summary>Q25. If you were to design the next generation of self-evolving agent benchmarks for the second half of 2026, what would you focus on?</summary>
+<p><strong>Problem observations</strong>:</p>
+<ul><li>GAIA / WebVoyager have saturated (90%+)</li><li>TRACE (2510.00415) lets the agent self-evolve the benchmark to avoid saturation</li><li>Ctx2Skill uses CL-bench (500 contexts × 1899 tasks × 31607 rubrics)</li><li>Native Evolution uses WebVoyager / WebWalker subset (1427 queries)</li></ul>
+<p><strong>Design principles to focus on</strong>:</p>
+<ol><li><strong>Strict holdout</strong>: maintained by 3rd party, agent does not see test environment during training</li><li><strong>Capability stratification</strong>: basic capability (reading / tool use) + long-horizon capability (multi-step reasoning, memory) + self-evolution capability (adapt to new env) scored separately</li><li><strong>Cost-aware</strong>: cost per task (API tokens / GPU hours), not allowing "use 100K tokens to answer 1 question" to score points</li><li><strong>Cross-time evaluation</strong>: take multiple time snapshots, check whether the model collapses / drifts long-term</li><li><strong>Adversarial held-in / held-out switching</strong>: train env evolution capability ≠ test env evolution capability</li><li><strong>Interpretable audit trail</strong>: each answer accompanied by reasoning trace for reviewer audit</li><li><strong>Multi-model reviewer</strong>: avoid same-model hallucination consensus</li><li><strong>Capability ceiling probing</strong>: deliberately construct tasks requiring symbolic verifier (IMO-style), seeing how far self-improvement on reasoning-hard hits the wall</li><li><strong>Negative transfer detection</strong>: test whether skills from env A hurt env B</li><li><strong>Knowledge transferability</strong>: portability test — A trains K, B model uses K, see if boost holds</li></ol>
+<p>→ Native Evolution paper has already demonstrated (10) in Cross-Model World Knowledge Transfer (Figure 3): K trained by Seed-36B added to Qwen3-14B can give +18.3%.</p>
+<p><strong>Bonus</strong>: can do "self-evolution dashboard" to quantify capability dynamics (using [arXiv:2507.00075]'s exponential law):</p>
+<p>$$C(t) = C_\infty - (C_\infty - C_0) e^{-\kappa t}$$</p>
+<p>Fit $\hat\kappa$ as the model's self-evolution rate metric — more informative than final accuracy.</p>
+</details>
+<h2 id="a-appendix-complete-from-scratch-code-skeleton">§A Appendix: Complete from-scratch code skeleton</h2>
+<h3 id="a1-complete-skill-library-implementation">A.1　Complete Skill library implementation</h3>
+<pre><code class="language-python">import json, time, math
+from dataclasses import dataclass, field, asdict
+from typing import Callable, Optional
+
+
+@dataclass
+class Skill:
+    &quot;&quot;&quot;Markdown skill with metadata for retrieval + lifecycle.&quot;&quot;&quot;
+    name: str
+    trigger: str            # when-to-use section
+    body: str               # The actual markdown injected into system prompt
+    exact_triggers: list = field(default_factory=list)
+    success_count: int = 0
+    fail_count: int = 0
+    last_updated: float = field(default_factory=time.time)
+    version: int = 1
+    embedding: list = field(default_factory=list)
+
+
+class SkillLibrary:
+    &quot;&quot;&quot;Skill persistence, retrieval, lifecycle management.&quot;&quot;&quot;
+
+    def __init__(self):
+        self.skills: dict[str, Skill] = {}
+        self.callbacks_on_update: list[Callable] = []
+
+    def add(self, s: Skill) -&gt; None:
+        self.skills[s.name] = s
+
+    def retrieve(self, query: str, embed_fn, k: int = 3) -&gt; list[Skill]:
+        &quot;&quot;&quot;Hybrid retrieval: keyword + dense + recency.&quot;&quot;&quot;
+        q_emb = embed_fn(query)
+        scored = []
+        now = time.time()
+        for name, s in self.skills.items():
+            sim = self._cos(s.embedding, q_emb) if s.embedding else 0.0
+            prior = math.log(1 + s.success_count)
+            recency = math.pow(0.999, max(0, (now - s.last_updated) / 3600))
+            kw_hit = 1.0 if any(t.lower() in query.lower()
+                                for t in s.exact_triggers) else 0.0
+            score = 0.5 * sim + 0.2 * prior + 0.2 * recency + 0.1 * kw_hit
+            scored.append((score, s))
+        scored.sort(reverse=True, key=lambda x: x[0])
+        return [s for _, s in scored[:k]]
+
+    @staticmethod
+    def _cos(a: list, b: list) -&gt; float:
+        if not a or not b: return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a))
+        nb = math.sqrt(sum(y * y for y in b))
+        return dot / (na * nb + 1e-9) if na &gt; 0 and nb &gt; 0 else 0.0
+
+    def update_outcome(self, skill_name: str, success: bool) -&gt; None:
+        s = self.skills[skill_name]
+        if success: s.success_count += 1
+        else:       s.fail_count    += 1
+
+    def should_revise(self, skill_name: str,
+                      tau_fail: float = 0.5,
+                      t_stale: float = 7 * 24 * 3600) -&gt; bool:
+        s = self.skills[skill_name]
+        total = s.success_count + s.fail_count
+        if total &gt; 0 and s.fail_count / total &gt; tau_fail:
+            return True
+        if time.time() - s.last_updated &gt; t_stale:
+            return True
+        return False
+
+    def revise(self, skill_name: str, new_body: str) -&gt; None:
+        s = self.skills[skill_name]
+        s.body = new_body
+        s.last_updated = time.time()
+        s.version += 1
+        s.success_count = 0
+        s.fail_count = 0
+        for cb in self.callbacks_on_update:
+            cb(s)
+
+    def serialize(self) -&gt; str:
+        return json.dumps({n: asdict(s) for n, s in self.skills.items()})
+
+    def assemble_prompt(self, skills: list[Skill]) -&gt; str:
+        return &quot;\n\n&quot;.join([f&quot;# {s.name}\n{s.body}&quot; for s in skills])</code></pre>
+<h3 id="a2-complete-reflexion-memory-implementation">A.2　Complete Reflexion memory implementation</h3>
+<pre><code class="language-python">@dataclass
+class Reflection:
+    trajectory_summary: str
+    failure_root_cause: str
+    fix_strategy: str
+    timestamp: float
+
+
+class ReflexionMemory:
+    &quot;&quot;&quot;verbal-RL style memory.&quot;&quot;&quot;
+
+    def __init__(self, max_entries: int = 50):
+        self.entries: list[Reflection] = []
+        self.max_entries = max_entries
+
+    def add(self, traj: str, llm: Callable) -&gt; None:
+        &quot;&quot;&quot;Let the LLM generate the reflection itself.&quot;&quot;&quot;
+        prompt = (
+            f&quot;Trajectory: {traj}\n\n&quot;
+            f&quot;Task FAILED. Write a short reflection in JSON with keys: &quot;
+            f&quot;trajectory_summary, failure_root_cause, fix_strategy.&quot;
+        )
+        raw = llm(prompt)
+        try:
+            obj = json.loads(raw)
+        except Exception:
+            obj = {&quot;trajectory_summary&quot;: traj[:400],
+                   &quot;failure_root_cause&quot;: &quot;parse_failed&quot;,
+                   &quot;fix_strategy&quot;: raw[:400]}
+        self.entries.append(Reflection(
+            trajectory_summary=obj[&quot;trajectory_summary&quot;],
+            failure_root_cause=obj[&quot;failure_root_cause&quot;],
+            fix_strategy=obj[&quot;fix_strategy&quot;],
+            timestamp=time.time(),
+        ))
+        # Keep the most recent max_entries entries
+        if len(self.entries) &gt; self.max_entries:
+            self.entries = self.entries[-self.max_entries:]
+
+    def render(self) -&gt; str:
+        &quot;&quot;&quot;Render as prefix prompt.&quot;&quot;&quot;
+        return &quot;\n&quot;.join([
+            f&quot;[Reflection {i}] cause: {r.failure_root_cause}\n&quot;
+            f&quot;           fix: {r.fix_strategy}&quot;
+            for i, r in enumerate(self.entries[-5:])
+        ])</code></pre>
+<h3 id="a3-sanity-check-output-illustrative">A.3　Sanity-check output (illustrative)</h3>
+<pre><code>[a] SkillLibrary.add + retrieve            ✓ topk = [&#x27;voyager_craft&#x27;, &#x27;minecraft_kill&#x27;]
+[b] update_outcome accumulates success_count ✓ s.success_count = 3
+[c] should_revise trigger condition (fail rate) ✓ tau_fail=0.5 → True
+[d] revise increments version by 1          ✓ s.version: 1 → 2
+[e] Reflexion.add parses LLM JSON           ✓ len(entries) = 1
+[f] Reflexion render takes the last 5       ✓ render len = 154 chars
+[g] keyword_hit weight in hybrid retrieval  ✓ keyword &gt; dense when exact match
+[h] cross-time replay arg max(rho_h * rho_e)✓ best_idx = 2 (out of 5)
+[i] Native Evolution outcome reward computation ✓ R_evolve = 0.18 (≥ 0)</code></pre>
+<p>Code has passed independent reviewer static checks, logic constrained by dataclass / type annotations.</p>
+<hr />
+<div class="callout callout-good"><div class="callout-title">Summary</div><p>The 2026 self-evolving agent is not magic, but <strong>a combined engineering of three core paradigms (Experience / Adversarial / Meta-Learning) + three core containers (params / skills / K) + three core defenses (Cross-Time Replay / typed memory + DAG / cross-model grounding)</strong>. The theoretical upper bound is given by [arXiv:2601.05280] and [arXiv:2507.00075] — <strong>the exogenous grounding signal determines the ceiling</strong>.</p>
+<p>Remember one sentence in interviews: <strong>self-evolution is not the singularity; it is the engineering of grounded, sustained capability growth under finite supervision</strong>.</p></div>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/self_evolving_agents_tutorial_en.md</code> ·
+  SHA256 <code>65f5baf62206</code> ·
+  generated at 2026-05-19 19:02 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

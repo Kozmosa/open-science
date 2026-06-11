@@ -1,0 +1,38 @@
+name: Skills helper-resolution lint (advisory)
+
+# Advisory CI for the helper-resolution contract documented in
+# skills/shared-references/integration-contract.md §2. Fires on PRs that
+# touch SKILL.md / shared-references / the lint tool itself, and reports
+# any new hardcoded `python3 tools/<helper>.py` / `bash tools/<helper>.sh`
+# references. The lint always exits 0 (advisory only), so this workflow
+# never blocks a PR; reviewers see the report in the Actions output and
+# can ask the author to migrate before merging.
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**/*.md'
+      - 'tools/lint_skills_helpers.sh'
+      - '.github/workflows/lint-skills-helpers.yml'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Run advisory lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run lint_skills_helpers.sh
+        run: bash tools/lint_skills_helpers.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Advisory lint summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "This is an advisory check — it does not fail CI." >> "$GITHUB_STEP_SUMMARY"
+          echo "See the previous step's log for any flagged \`tools/<helper>\` references." >> "$GITHUB_STEP_SUMMARY"
+          echo "Migration guidance: \`skills/shared-references/integration-contract.md\` §2." >> "$GITHUB_STEP_SUMMARY"

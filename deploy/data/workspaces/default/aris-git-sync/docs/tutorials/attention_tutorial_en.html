@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/attention_tutorial_en.md">
+<meta name="aris:source-sha256" content="ecb6fe924cee8db5b2dd0daa4fb81c3866ec6b47ceadaa73ba0011378eb07e67">
+<meta name="aris:generated-at" content="2026-05-19 18:47 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-attention-intuition">§1 Attention Intuition</a>
+</li>
+<li><a href="#2-scaled-dot-product-attention">§2 Scaled Dot-Product Attention</a>
+<ul>
+<li><a href="#21-formula">2.1　Formula</a></li>
+<li><a href="#22-why-divide-by-dk-mandatory-know-the-variance-derivation">2.2　Why divide by √d_k (mandatory: know the variance derivation)</a></li>
+<li><a href="#23-mask-and-the-nan-pitfall--classic-bug-mandatory-interview-topic">2.3　Mask and the NaN pitfall (💣 classic bug, mandatory interview topic)</a></li>
+<li><a href="#24-code-core-20-lines">2.4　Code (core 20 lines)</a></li>
+</ul>
+</li>
+<li><a href="#3-multi-head-attention">§3 Multi-Head Attention</a>
+<ul>
+<li><a href="#31-formula">3.1　Formula</a></li>
+<li><a href="#32-why-multi-head-would-a-single-head-work">3.2　Why multi-head (would a single head work?)</a></li>
+<li><a href="#33-parameter-count-and-flops">3.3　Parameter count and FLOPs</a></li>
+<li><a href="#34-code-core-30-lines">3.4　Code (core 30 lines)</a></li>
+</ul>
+</li>
+<li><a href="#4-self--cross--causal--padding">§4 Self / Cross / Causal / Padding</a>
+<ul>
+<li><a href="#41-self-vs-cross-attention-mandatory">4.1　Self vs Cross Attention (mandatory)</a></li>
+<li><a href="#42-causal-mask-decoder--gpt">4.2　Causal Mask (Decoder / GPT)</a></li>
+<li><a href="#43-padding-mask-variable-length-sequences">4.3　Padding Mask (variable-length sequences)</a></li>
+</ul>
+</li>
+<li><a href="#5-complexity-analysis">§5 Complexity Analysis</a>
+</li>
+<li><a href="#6-kv-cache--mqa--gqa">§6 KV Cache + MQA / GQA</a>
+<ul>
+<li><a href="#61-kv-cache-key-optimization-for-autoregressive-inference">6.1　KV Cache (key optimization for autoregressive inference)</a></li>
+<li><a href="#62-mqa--gqa-attacking-kv-cache-memory">6.2　MQA / GQA (attacking KV-cache memory)</a></li>
+</ul>
+</li>
+<li><a href="#7-flashattention-core-tricks">§7 FlashAttention Core Tricks</a>
+</li>
+<li><a href="#8-position-encoding-rope--alibi--absolute">§8 Position Encoding (RoPE / ALiBi / Absolute)</a>
+<ul>
+<li><a href="#81-attention-sink-advanced-topic">8.1　Attention Sink (advanced topic)</a></li>
+</ul>
+</li>
+<li><a href="#9-attention-in-diffusion-mandatory-if-you-mention-generative-work">§9 Attention in Diffusion (mandatory if you mention generative work)</a>
+<ul>
+<li><a href="#91-cross-attention-in-latent-diffusion-stable-diffusion">9.1　Cross-Attention in Latent Diffusion (Stable Diffusion)</a></li>
+<li><a href="#92-attention-in-video-diffusion">9.2　Attention in video diffusion</a></li>
+</ul>
+</li>
+<li><a href="#10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</a>
+<ul>
+<li><a href="#l1-must-know-any-ml-engineering-role-will-ask">L1 must-know (any ML engineering role will ask)</a></li>
+<li><a href="#l2-intermediate-research-oriented-roles">L2 intermediate (research-oriented roles)</a></li>
+<li><a href="#l3-advanced-variants-top-labs--diffusion-direction">L3 advanced variants (top labs / diffusion direction)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-full-from-scratch-code-skeleton">§A Appendix: Full from-scratch code skeleton</a>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Attention Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/attention_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>ecb6fe924cee</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 18:47 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">Attention in 7 sentences</div><p>one-page interview essentials (full derivations in §2-§9).</p></div>
+<ol><li><strong>Formula</strong>: $\text{Attention}(Q,K,V) = \text{softmax}\!\left(\dfrac{QK^\top}{\sqrt{d_k}}\right) V$.</li><li><strong>Why divide by √d_k</strong>: if $q_i, k_i \sim \mathcal{N}(0,1)$ are independent, then $\text{Var}(q\cdot k) = d_k$; dividing by $\sqrt{d_k}$ pulls variance back to 1 and avoids softmax saturation.</li><li><strong>Multi-Head</strong>: split $D$ into $H$ heads, each doing independent attention in its own subspace, then concat and project with $W_o$. <strong>For fixed $D$ with $d_k=D/H$, standard MHA parameter count is $\approx 4D^2$ (independent of $H$); MQA/GQA shrinks the K/V projections.</strong></li><li><strong>Self vs Cross</strong>: in self-attention Q/K/V share the same source; in cross-attention Q comes from the query stream while K/V come from the context stream (encoder output / image tokens / text embedding).</li><li><strong>Causal mask vs Padding mask</strong>: the former uses a lower triangle to block the future; the latter uses <code>[B,1,1,L_k]</code> to mask out padding columns.</li><li><strong>Complexity</strong>: $O(B H L^2 d_k)$ time and $O(B H L^2)$ score memory — long sequences are bottlenecked by the quadratic term.</li><li><strong>Common footguns</strong>: fully-masked row → softmax NaN; FP16 $QK^\top$ can overflow; attention weight ≠ causal explanation.</li></ol>
+<h2 id="1-attention-intuition">§1 Attention Intuition</h2>
+<p>The essence of attention is <strong>learned retrieval</strong>:</p>
+<ul><li>Each <strong>query</strong> ("what information do I need right now?")</li><li>Computes similarity against all <strong>keys</strong> ("what does each position claim to offer?")</li><li>Softmax-normalizes into a <strong>weight distribution</strong></li><li>Takes a weighted sum of all <strong>values</strong> ("what each position actually contributes")</li></ul>
+<p>Contrast with RNNs: an RNN <strong>compresses past information into a fixed-size hidden state</strong>, so long sequences inevitably lose information; attention <strong>directly, globally, and dynamically</strong> retrieves all past positions at every step, which is why it suits long-range dependencies.</p>
+<p>"Q/K/V come from the same vector passed through three different projections" — proactively say this in interviews, since newcomers often mistakenly think Q/K/V are three separate inputs.</p>
+<h2 id="2-scaled-dot-product-attention">§2 Scaled Dot-Product Attention</h2>
+<h3 id="21-formula">2.1　Formula</h3>
+<p>$$\boxed{\;\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V\;}$$</p>
+<p>Shapes:</p>
+<ul><li>$Q \in \mathbb{R}^{L_q \times d_k}$, $K \in \mathbb{R}^{L_k \times d_k}$, $V \in \mathbb{R}^{L_k \times d_v}$</li><li>Scores $QK^\top \in \mathbb{R}^{L_q \times L_k}$ (similarity of each query to all keys)</li><li>Softmax over the <strong>key dimension</strong>: weights per query row sum to 1</li><li>Output $\in \mathbb{R}^{L_q \times d_v}$</li></ul>
+<h3 id="22-why-divide-by-dk-mandatory-know-the-variance-derivation">2.2　Why divide by √d_k (mandatory: know the variance derivation)</h3>
+<p>Assume $q, k \in \mathbb{R}^{d_k}$ have i.i.d. components with $q_i, k_i \sim \mathcal{N}(0,1)$. Consider the dot product:</p>
+<p>$$q \cdot k = \sum_{i=1}^{d_k} q_i k_i$$</p>
+<p>By independence, each term $q_i k_i$ has mean $= \mathbb{E}[q_i]\mathbb{E}[k_i] = 0$ and variance $= \mathbb{E}[q_i^2]\mathbb{E}[k_i^2] = 1$. So:</p>
+<p>$$\mathbb{E}[q\cdot k] = 0, \quad \text{Var}[q\cdot k] = d_k$$</p>
+<p>When $d_k$ is large (e.g., 64, 128), the typical magnitude of $q\cdot k$ is $\sqrt{d_k}$. After softmax, <strong>the largest logit easily grabs nearly all the probability mass</strong>, softmax enters its saturation regime, gradients shrink dramatically, and training slows or stalls. Dividing by $\sqrt{d_k}$ pulls variance back to 1, <strong>alleviating saturation and improving gradient scale</strong>.</p>
+<div class="callout callout-warn"><div class="callout-title">Bonus interview point: FP16 overflow</div><p>even after dividing by √d_k, the <code>QK^T</code> accumulation itself can overflow in FP16 (fp16 max ≈ 65504). Production implementations use fused SDPA / FlashAttention or <strong>fp32 accumulation</strong> to solve this. <code>torch.softmax</code> internally does log-sum-exp stabilization (subtract max logit before exp), but that happens inside the softmax step and cannot prevent matmul accumulation overflow.</p></div>
+<h3 id="23-mask-and-the-nan-pitfall--classic-bug-mandatory-interview-topic">2.3　Mask and the NaN pitfall (💣 classic bug, mandatory interview topic)</h3>
+<p>Standard practice: fill positions to be masked with $-\infty$ in the scores; after softmax their probability is 0.</p>
+<p>But there's a pitfall: <strong>if every key in a row is masked</strong> (e.g., query 0 in cross-attn where context is all padding; causal + left padding; a query with no legal token after it), that row's scores are all $-\infty$, and softmax outputs:</p>
+<p>$$\text{softmax}([-\infty, -\infty, ..., -\infty]) = \text{NaN}$$</p>
+<p>because both numerator and denominator are $e^{-\infty} = 0$, $0/0 = $ NaN, which then contaminates the entire batch's gradient.</p>
+<div class="callout callout-good"><div class="callout-title">Fix: detect fully-masked rows → zero them after softmax</div></div>
+<pre><code class="language-python"># Detect fully-masked rows
+all_masked = (~mask).all(dim=-1, keepdim=True)   # [..., L_q, 1]
+# Temporarily unmask the row (to avoid NaN)
+safe_mask = mask | all_masked
+scores = scores.masked_fill(~safe_mask, float(&quot;-inf&quot;))
+
+# Softmax computes normally
+weights = F.softmax(scores, dim=-1)
+
+# Force the fully-masked row&#x27;s output to 0 (otherwise it yields a uniform distribution)
+weights = weights.masked_fill(all_masked, 0.0)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Mask semantics are inconsistent (proactively disambiguate)</div><p>this implementation / <code>F.scaled_dot_product_attention</code>: <strong>True = keep</strong></p></div>
+<p><code>nn.MultiheadAttention</code>'s <code>attn_mask</code> / <code>key_padding_mask</code>: <strong>True = mask out</strong> (opposite!)</p>
+<p>Before writing code in an interview, ask the interviewer for the convention, or proactively state your convention, otherwise it's easy to get this backward.</p>
+<h3 id="24-code-core-20-lines">2.4　Code (core 20 lines)</h3>
+<pre><code class="language-python">def scaled_dot_product_attention(Q, K, V, mask=None, dropout_p=0.0, training=True):
+    d_k = Q.size(-1)
+    scores = Q @ K.transpose(-2, -1)                 # [..., L_q, L_k]
+    scores = scores / math.sqrt(d_k)                 # ← key scale
+
+    if mask is not None:
+        all_masked = (~mask).all(dim=-1, keepdim=True)
+        safe_mask = mask | all_masked
+        scores = scores.masked_fill(~safe_mask, float(&quot;-inf&quot;))
+    else:
+        all_masked = None
+
+    weights = F.softmax(scores, dim=-1)
+
+    if all_masked is not None:
+        weights = weights.masked_fill(all_masked, 0.0)   # NaN guard
+
+    if dropout_p &gt; 0.0 and training:
+        weights = F.dropout(weights, p=dropout_p)
+
+    return weights @ V, weights                       # output, weights</code></pre>
+<h2 id="3-multi-head-attention">§3 Multi-Head Attention</h2>
+<h3 id="31-formula">3.1　Formula</h3>
+<p>$$\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_H) W_o$$</p>
+<p>$$\text{head}_h = \text{Attention}(Q W_q^{(h)},\; K W_k^{(h)},\; V W_v^{(h)})$$</p>
+<p>Each head has $W_q^{(h)}, W_k^{(h)}, W_v^{(h)} \in \mathbb{R}^{D \times d_k}$ with $d_k = D/H$. <strong>In practice we concat the H per-head projection matrices into one $D \times D$ matrix</strong> and run all heads' projections in a single matmul (GPU-friendly):</p>
+<pre class="diagram"><code>
+Input X [B, L, D]
+   │
+   │  W_q, W_k, W_v ∈ R^{D×D}   (each = concat of H matrices W^{(h)} ∈ R^{D×d_k})
+   ↓
+Q, K, V [B, L, D]
+   │
+   │  reshape [B, L, D] → [B, L, H, d_k] → transpose → [B, H, L, d_k]
+   ↓
+Scaled-Dot-Product Attention independently per head (batched matmul, parallel)
+   ↓
+heads [B, H, L_q, d_k]
+   │
+   │  transpose + reshape → [B, L_q, D]   (concat heads)
+   ↓
+W_o ∈ R^{D×D}    →    Output [B, L_q, D]</code></pre>
+<h3 id="32-why-multi-head-would-a-single-head-work">3.2　Why multi-head (would a single head work?)</h3>
+<ul><li><strong>Different subspaces</strong>: each head learns one relational pattern in its own $d_k$-dim subspace (syntax, coreference, long-distance dependency, local n-gram, ...)</li><li><strong>Expressiveness</strong>: a single head learns only one attention pattern; H heads give H different weighted-sum outputs <strong>in parallel</strong> at inference</li><li><strong>Parameter efficiency</strong>: $d_k = D/H$ rather than $D$, so parameter count doesn't grow linearly with H</li><li>Common interview question: are more heads always better? <strong>No.</strong> $d_k = D/H$ being too small (e.g., $d_k < 16$) limits each head's expressiveness; Mistral / LLaMA use head_dim ≈ 64-128 as the sweet spot</li></ul>
+<h3 id="33-parameter-count-and-flops">3.3　Parameter count and FLOPs</h3>
+<table><thead><tr><th>Component</th><th>Shape</th><th>Parameter count</th></tr></thead><tbody><tr><td>$W_q$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td>$W_k$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td>$W_v$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td>$W_o$</td><td>$D \times D$</td><td>$D^2$</td></tr><tr><td><strong>Total</strong></td><td></td><td><strong>$4D^2$</strong> (independent of $H$)</td></tr></tbody></table>
+<p>FLOPs (single self-attention forward, $L_q = L_k = L$):</p>
+<ul><li>QKV projection: $3 \cdot 2 B L D^2 = 6 B L D^2$</li><li>$QK^\top$: $2 B H L^2 d_k = 2 B L^2 D$</li><li>Softmax weight × V: $2 B L^2 D$</li><li>Output projection $W_o$: $2 B L D^2$</li><li><strong>Total $\approx 8 B L D^2 + 4 B L^2 D$</strong> — the first term is linear in $L$, the second quadratic (long-sequence bottleneck)</li></ul>
+<h3 id="34-code-core-30-lines">3.4　Code (core 30 lines)</h3>
+<pre><code class="language-python">class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads, dropout=0.0, bias=False):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_model, self.num_heads, self.d_k = d_model, num_heads, d_model // num_heads
+
+        # Merge H per-head W^(h) into one [D, D] matrix
+        self.W_q = nn.Linear(d_model, d_model, bias=bias)
+        self.W_k = nn.Linear(d_model, d_model, bias=bias)
+        self.W_v = nn.Linear(d_model, d_model, bias=bias)
+        self.W_o = nn.Linear(d_model, d_model, bias=bias)
+        self.dropout_p = dropout
+
+    def _split(self, x):  # [B, L, D] → [B, H, L, d_k]
+        B, L, _ = x.shape
+        return x.view(B, L, self.num_heads, self.d_k).transpose(1, 2)
+
+    def _merge(self, x):  # [B, H, L, d_k] → [B, L, D]
+        B, _, L, _ = x.shape
+        return x.transpose(1, 2).contiguous().view(B, L, self.d_model)
+
+    def forward(self, query, key, value, mask=None):
+        Q = self._split(self.W_q(query))
+        K = self._split(self.W_k(key))
+        V = self._split(self.W_v(value))
+
+        if mask is not None:
+            if mask.dim() == 2: mask = mask.unsqueeze(0).unsqueeze(0)   # [1,1,L_q,L_k]
+            elif mask.dim() == 3: mask = mask.unsqueeze(1)              # [B,1,L_q,L_k]
+            # dim=4: already aligned
+
+        out, w = scaled_dot_product_attention(Q, K, V, mask=mask, dropout_p=self.dropout_p, training=self.training)
+        return self.W_o(self._merge(out)), w</code></pre>
+<h2 id="4-self--cross--causal--padding">§4 Self / Cross / Causal / Padding</h2>
+<h3 id="41-self-vs-cross-attention-mandatory">4.1　Self vs Cross Attention (mandatory)</h3>
+<table><thead><tr><th></th><th>Self-Attention</th><th>Cross-Attention</th></tr></thead><tbody><tr><td><strong>Q source</strong></td><td>$X$</td><td>$X_\text{decoder}$ / latent / learnable queries</td></tr><tr><td><strong>K, V source</strong></td><td>$X$ (same)</td><td>$X_\text{encoder}$ / context / memory</td></tr><tr><td><strong>$L_q$ vs $L_k$</strong></td><td>equal</td><td>can differ</td></tr><tr><td><strong>Typical mask</strong></td><td>causal (decoder) or padding (encoder)</td><td>K/V-side padding mask (no causal)</td></tr><tr><td><strong>Purpose</strong></td><td>intra-position correlation</td><td>retrieve relevant info from external memory</td></tr><tr><td><strong>Examples</strong></td><td>every BERT layer; every GPT layer; ViT</td><td>Transformer Decoder's second sub-layer; DETR; Perceiver; Stable Diffusion (image Q × text K/V)</td></tr></tbody></table>
+<h3 id="42-causal-mask-decoder--gpt">4.2　Causal Mask (Decoder / GPT)</h3>
+<p>Lower-triangular matrix (including diagonal): row $i$ may attend to keys $j \le i$.</p>
+<pre><code class="language-python">def causal_mask(L, device=None):
+    return torch.tril(torch.ones(L, L, dtype=torch.bool, device=device))
+# L=4 →
+# [[T F F F]
+#  [T T F F]
+#  [T T T F]
+#  [T T T T]]</code></pre>
+<h3 id="43-padding-mask-variable-length-sequences">4.3　Padding Mask (variable-length sequences)</h3>
+<p>Each sample has a different valid length; padding tokens must not be attended:</p>
+<pre><code class="language-python">def padding_mask(lengths, max_len=None):
+    if max_len is None: max_len = int(lengths.max())
+    idx = torch.arange(max_len, device=lengths.device).unsqueeze(0).expand(len(lengths), -1)
+    return idx &lt; lengths.unsqueeze(1)    # [B, L]    True=valid, False=padding
+
+# Usage: must unsqueeze to [B, 1, 1, L_k] so it broadcasts to [B, H, L_q, L_k] inside MHA
+pmask = padding_mask(lengths).unsqueeze(1).unsqueeze(1)   # [B, 1, 1, L_k]
+out, _ = mha(x, x, x, mask=pmask)</code></pre>
+<div class="callout callout-info"><div class="callout-title">Causal + padding together</div><p>AND the two masks: <code>combined = causal_mask &amp; padding_mask_4d</code>. Mind the broadcast dims: causal is <code>[L,L]</code>, padding is <code>[B,1,1,L_k]</code>, and the AND yields <code>[B,1,L,L]</code>.</p></div>
+<h2 id="5-complexity-analysis">§5 Complexity Analysis</h2>
+<table><thead><tr><th></th><th>Time</th><th>Memory</th><th>Bottleneck</th></tr></thead><tbody><tr><td>RNN</td><td>$O(L \cdot D^2)$</td><td>$O(D)$</td><td>sequential, not parallelizable</td></tr><tr><td>Self-Attention</td><td>$O(L^2 \cdot D)$</td><td>$O(L^2 + L \cdot D)$</td><td>$L^2$ score matrix (long sequences)</td></tr><tr><td>Conv (kernel $k$)</td><td>$O(L \cdot k \cdot D^2)$</td><td>$O(D)$</td><td>limited receptive field</td></tr></tbody></table>
+<p>Key points:</p>
+<ul><li>Self-attention's $L^2$ <strong>compute</strong> is acceptable (GPU parallel), but <strong>$L^2$ memory</strong> (score matrix) is the real bottleneck — this is the pain point Flash Attention attacks</li><li>At LLM inference, the prefill stage is $O(L^2)$; the decode stage with KV cache is $O(L)$ per step (see §6)</li><li>When $L \approx D$, attention and FFN take similar time; when $L \gg D$, attention dominates</li></ul>
+<h2 id="6-kv-cache--mqa--gqa">§6 KV Cache + MQA / GQA</h2>
+<h3 id="61-kv-cache-key-optimization-for-autoregressive-inference">6.1　KV Cache (key optimization for autoregressive inference)</h3>
+<p>Problem: when GPT generates autoregressively, every new token re-runs the entire prefix through the forward pass — across $t$ steps that's $O(t^2)$ redundant computation.</p>
+<p>Solution: cache each layer's $K^{(\ell)}, V^{(\ell)}$. When generating the $(t+1)$-th token:</p>
+<ul><li>Compute only the new token's $q_{t+1}, k_{t+1}, v_{t+1}$ (size $1 \times D$)</li><li>Append $k_{t+1}, v_{t+1}$ to the cache</li><li>The new $q$ attends over the full cache ($O(t)$, not $O(t^2)$)</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Footgun</div><p>KV cache is an <strong>inference optimization</strong>; it <strong>cannot</strong> be used in training — at training time all positions do attention simultaneously, there is no "token-by-token generation".</p></div>
+<p><strong>KV cache memory (per sample)</strong>:</p>
+<p>$$\text{KV cache} = L_\text{ctx} \cdot n_\text{layers} \cdot \underbrace{2}_{K, V} \cdot H_\text{kv} \cdot d_\text{head} \cdot \text{bytes\_per\_elem}$$</p>
+<p>Note: under MQA/GQA $H_\text{kv} \ll H$, shrinking the cache dramatically. For LLaMA-2-70B (GQA, $H_\text{kv}=8$), $L_\text{ctx}=4096$, 80 layers, fp16: about <strong>1.25 GB / sample</strong> — this is why LLaMA-2 uses GQA instead of MHA (vanilla MHA would reach 10 GB / sample).</p>
+<h3 id="62-mqa--gqa-attacking-kv-cache-memory">6.2　MQA / GQA (attacking KV-cache memory)</h3>
+<table><thead><tr><th>Variant</th><th>Q heads</th><th>K/V heads</th><th>KV cache reduction</th><th>Used in</th></tr></thead><tbody><tr><td><strong>MHA</strong> (vanilla)</td><td>$H$</td><td>$H$</td><td>1×</td><td>original Transformer</td></tr><tr><td><strong>MQA</strong> (Multi-Query)</td><td>$H$</td><td><strong>1</strong></td><td>$H \times$</td><td>PaLM, Falcon</td></tr><tr><td><strong>GQA</strong> (Grouped-Query)</td><td>$H$</td><td>$G$ ($1 < G < H$)</td><td>$H/G \times$</td><td>LLaMA-2/3, Mistral</td></tr></tbody></table>
+<p>Core idea: <strong>multiple Q heads share one set of K/V</strong>. MQA is extreme but slightly hurts quality; GQA is a compromise (e.g., H=32, G=8) that cuts memory/bandwidth by 4× with essentially no quality loss.</p>
+<div class="callout callout-bad"><div class="callout-title">Footgun</div><p>MQA/GQA reduce <strong>KV-cache memory + memory bandwidth</strong>, <strong>not</strong> Q-projection compute (Q head count is unchanged). Interviewers love to push back with "what exactly did it reduce?".</p></div>
+<h2 id="7-flashattention-core-tricks">§7 FlashAttention Core Tricks</h2>
+<p>Problem: standard attention has to materialize the $L \times L$ score matrix, and HBM read/write IO is the bottleneck (not FLOPs).</p>
+<p>FlashAttention idea (<strong>IO-aware exact attention</strong>, not an approximation):</p>
+<ol><li><strong>Block tiling</strong>: split $Q, K, V$ into blocks and load only one $Q$ block plus one $K, V$ block into SRAM at a time</li><li><strong>Online softmax</strong>: maintain a running max $m$ and running sum $\ell$ incrementally, avoiding ever materializing the full score matrix</li><li><strong>Recompute on backward</strong>: recompute attention during the backward pass instead of storing $L^2$ scores</li></ol>
+<p>Effects:</p>
+<ul><li><strong>Avoids materializing</strong> the full $L \times L$ scores / probs matrix in HBM</li><li>The paper's HBM IO complexity is about $O(L^2 d^2 / M + Ld)$, vs $O(L^2 + Ld)$ HBM traffic for standard attention — when $L$ is large and $M$ (SRAM) is appropriate, IO drops sharply</li><li>Peak memory drops from $O(L^2)$ to $O(L)$ (no stored intermediate scores)</li><li>Typical speedup 2-4× (depends on sequence length &amp; GPU architecture)</li><li><strong>Mathematically equivalent</strong> (exact attention, not sparse / linear approximation)</li></ul>
+<div class="callout callout-info"><div class="callout-title">FlashAttention v1/v2/v3 key differences</div><p>v1 (2022): online softmax + block tiling + recompute. v2 (2023): swap the inner/outer loops (Q-outer, KV-inner) + better warp-level parallelism + fewer non-matmul FLOPs. v3 (2024): targets H100 Hopper with WGMMA / TMA / FP8 + asynchronous pipeline. Interviews usually focus on v1/v2 and online-softmax details.</p></div>
+<h2 id="8-position-encoding-rope--alibi--absolute">§8 Position Encoding (RoPE / ALiBi / Absolute)</h2>
+<table><thead><tr><th>Method</th><th>Principle</th><th>Extrapolation</th><th>Used in</th></tr></thead><tbody><tr><td><strong>Sinusoidal absolute</strong></td><td>Fixed sin/cos position vector added to the input embedding</td><td>Position encoding itself can be defined for any length, but the model may not generalize past trained lengths</td><td>Original Transformer (Vaswani 2017)</td></tr><tr><td><strong>Learned absolute</strong></td><td>Treat position as a token and learn an embedding table</td><td>Poor (the table is fixed-size, a hard limit)</td><td>BERT, GPT-2</td></tr><tr><td><strong>RoPE</strong> (Rotary)</td><td>Apply position-dependent rotation to $Q, K$: $q_m \to q_m e^{im\theta}$ (complex-number view) — <strong>the position-dependent term enters via relative shift $m-n$ in the inner product</strong> (content vectors still influence scores)</td><td>Medium (naturally captures relative position; out-of-length needs NTK-aware / YaRN)</td><td>LLaMA-1/2/3, Mistral, Qwen</td></tr><tr><td><strong>ALiBi</strong></td><td>Add a positional-distance bias to scores: $\text{score}_{ij} - m \cdot \lvert i-j \rvert$</td><td>Good (linear bias extrapolates naturally)</td><td>BLOOM, MPT</td></tr></tbody></table>
+<h3 id="81-attention-sink-advanced-topic">8.1　Attention Sink (advanced topic)</h3>
+<p>In trained LLMs, attention at decode time concentrates abnormally on the first 1-4 tokens (especially [BOS] / the first token), even when those tokens are content-irrelevant. This phenomenon is called <strong>attention sink</strong>. <strong>A common intuitive explanation</strong>: softmax forces weights to sum to 1, so when a query doesn't really want to attend to anything, it needs a "junk slot" to absorb probability mass; and because early tokens are visible to all subsequent tokens, training naturally produces a global sink. StreamingLLM (Xiao et al., ICLR 2024) exploits this for long-sequence inference (keep the attention sink + a sliding window).</p>
+<h2 id="9-attention-in-diffusion-mandatory-if-you-mention-generative-work">§9 Attention in Diffusion (mandatory if you mention generative work)</h2>
+<p>For candidates with a diffusion background, interviewers almost always ask about attention in generative models.</p>
+<h3 id="91-cross-attention-in-latent-diffusion-stable-diffusion">9.1　Cross-Attention in Latent Diffusion (Stable Diffusion)</h3>
+<pre><code>
+Image latent (z_t)  [B, C, H, W]
+   │
+   │  flatten to tokens [B, HW, D]
+   ↓
+Self-Attention (Q=K=V from image)
+   ↓
+Cross-Attention:
+    Q = image tokens [B, HW, D]
+    K, V = text embedding [B, L_text, D]    ← text conditioning
+   ↓
+FFN → next layer</code></pre>
+<p>Key points:</p>
+<ul><li>Text-to-image conditioning is realized via cross-attention: image tokens are queries, text embeddings are keys/values</li><li>Classifier-Free Guidance (CFG): two forwards (with text / without text), then take the difference. For $\epsilon$-pred: $\epsilon_\text{CFG} = \epsilon_\text{uncond} + s (\epsilon_\text{cond} - \epsilon_\text{uncond})$; for v-pred / x0-pred swap in the corresponding prediction — the linear guidance form is analogous</li><li>SD / SDXL U-Nets alternate self-attn and cross-attn inside Transformer blocks at multiple spatial resolutions</li><li>DiT (Diffusion Transformer) replaces the U-Net with a pure Transformer; conditioning enters via AdaLN / cross-attn / token-concat</li></ul>
+<h3 id="92-attention-in-video-diffusion">9.2　Attention in video diffusion</h3>
+<ul><li><strong>Spatial attention</strong>: within each frame (between image patches)</li><li><strong>Temporal attention</strong>: across frames (between the same position at different time steps)</li><li><strong>Spatiotemporal / full attention</strong>: all frames × all positions — most expensive, infeasible for long video</li><li>Long-video attention is an open problem ($L \sim 10^4$-$10^5$ tokens); common routes: factorization (spatial + temporal alternated), sparse window, hierarchical pooling, chunked attention</li></ul>
+<h2 id="10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</h2>
+<p>Compiled from the perspective of a top-lab interviewer by codex (gpt-5.5 xhigh), in 3 difficulty tiers. Click each question to see the key answer points + common pitfalls.</p>
+<h3 id="l1-must-know-any-ml-engineering-role-will-ask">L1 must-know (any ML engineering role will ask)</h3>
+<details>
+
+<summary>Q1. What is the attention formula?</summary>
+<ul><li>$\text{softmax}(QK^\top / \sqrt{d_k}) V$</li><li>Softmax over the keys dimension</li><li>Output is a weighted sum of values</li></ul>
+<p>Writing the softmax dim on the query axis.</p>
+</details>
+<details>
+
+<summary>Q2. Why divide by √d_k?</summary>
+<ul><li>If $q_i, k_i$ are independent zero-mean unit-variance</li><li>The dot-product variance is about $d_k$</li><li>After scaling, variance returns to 1, avoiding softmax saturation</li></ul>
+<p>Just saying "to prevent values from being too large" without giving the variance derivation.</p>
+</details>
+<details>
+
+<summary>Q3. What do Q/K/V represent?</summary>
+<ul><li>Q is the retrieval query</li><li>K is the matching index</li><li>V is the content to aggregate</li></ul>
+<p>Saying Q/K/V are three different inputs; in self-attn they share a source but use different projections.</p>
+</details>
+<details>
+
+<summary>Q4. Why is multi-head useful?</summary>
+<ul><li>Different subspaces model different relations</li><li>Multiple positional / semantic patterns in parallel</li><li>Concat then fuse</li></ul>
+<p>Saying "more heads is always better". In reality if $d_k$ is too small, expressiveness suffers.</p>
+</details>
+<details>
+
+<summary>Q5. How does MHA's parameter count scale with the number of heads?</summary>
+<ul><li>Fixed $D$ with $d_k = D/H$ (standard MHA)</li><li>$W_q + W_k + W_v + W_o$ sums to $4D^2$, <strong>independent of $H$</strong></li><li>But under MQA/GQA, the K/V projection matrix shrinks ($H_\text{kv} < H$ heads)</li><li>This is why "head count is free" holds for standard MHA but pays off in memory under MQA/GQA</li></ul>
+<p>Thinking parameter count grows linearly with H; or forgetting that MQA/GQA changes the K/V projection dimensions.</p>
+</details>
+<details>
+
+<summary>Q6. Self-attention vs cross-attention?</summary>
+<ul><li>Self: Q/K/V share a source</li><li>Cross: Q comes from the target, K/V from the context</li><li>Cross is common in encoder-decoder, diffusion text conditioning</li></ul>
+<p>Saying "cross has two inputs" without explaining the Q vs KV sourcing.</p>
+</details>
+<details>
+
+<summary>Q7. How do you write a causal mask?</summary>
+<ul><li><code>torch.tril(torch.ones(L, L, dtype=torch.bool))</code></li><li>Be explicit whether True=keep or True=mask (APIs differ)</li><li>Broadcast to <code>[B, H, L, L]</code> or rely on framework's implicit broadcasting</li></ul>
+<p>Flipping the upper/lower triangle; forgetting to align broadcast dimensions.</p>
+</details>
+<details>
+
+<summary>Q8. Which axis does the padding mask mask?</summary>
+<ul><li>Usually masks key/value columns (so padding-position probability is 0)</li><li>Shape can be <code>[B, 1, 1, L_k]</code> to align with head and query dims</li><li>Note: masking key columns is <strong>not enough</strong> to zero out padded-query outputs; padded query rows are usually handled separately via loss ignore / output zeroing / packed sequences</li></ul>
+<p>Thinking the padding mask handles everything — it only prevents "seeing padding", but padded queries' own outputs still need external handling.</p>
+</details>
+<details>
+
+<summary>Q9. Attention complexity?</summary>
+<ul><li>Time $O(B H L_q L_k d_k) = O(B L^2 D)$</li><li>Score memory $O(B H L_q L_k)$</li><li>Long-sequence bottleneck is the quadratic term</li></ul>
+<p>Just saying $O(n^2)$ and dropping the head and hidden dims.</p>
+</details>
+<details>
+
+<summary>Q10. Where does attention dropout go?</summary>
+<ul><li>After softmax weights, before the matmul with V</li><li>Enabled only in training, disabled at eval</li><li>After dropout, row sums aren't necessarily 1 (only 1 in expectation)</li></ul>
+<p>Demanding row-sum = 1 after dropout as a sanity check (it's wrong).</p>
+</details>
+<h3 id="l2-intermediate-research-oriented-roles">L2 intermediate (research-oriented roles)</h3>
+<details>
+
+<summary>Q11. Derive the softmax Jacobian by hand.</summary>
+<ul><li>$y_i = \dfrac{e^{x_i}}{\sum_j e^{x_j}}$</li><li>$\dfrac{\partial y_i}{\partial x_j} = y_i (\delta_{ij} - y_j)$</li><li>Matrix form: $J = \text{diag}(y) - yy^\top$</li></ul>
+<p>Writing only diagonal entries and dropping the cross terms $-y_i y_j$.</p>
+</details>
+<details>
+
+<summary>Q12. What's the pitfall of masking with -∞?</summary>
+<ul><li>Normal case: masked positions get softmax probability 0 ✓</li><li><strong>Fully-masked row → softmax outputs NaN</strong> ($0/0$)</li><li>Fix path: first avoid all-<code>-inf</code> rows (temporarily unmask), zero out that row's weights and output after softmax, and make sure that query doesn't enter the loss / residual accumulation</li><li>Fused kernels / APIs have constraints on sentinel values; under fp16, use a dtype-safe large negative (e.g., <code>finfo(dtype).min</code>) for stability</li></ul>
+<p>Thinking -inf is always safe; or zeroing only after softmax without preventing NaN.</p>
+</details>
+<details>
+
+<summary>Q13. What is the log-sum-exp trick?</summary>
+<ul><li>Subtract max(logits) before softmax — equivalent and preserves probabilities</li><li>Prevents $e^{x_i}$ overflow (fp32 max ≈ 3.4e38, but $e^{100}$ already overflows)</li><li>$\log \sum_j e^{x_j} = m + \log \sum_j e^{x_j - m}$ with $m = \max_j x_j$</li></ul>
+<p>Forgetting that $QK^\top$ overflow can happen before softmax (during the matmul accumulation).</p>
+</details>
+<details>
+
+<summary>Q14. PyTorch nn.MultiheadAttention's in_proj_weight ordering?</summary>
+<ul><li>Shape <code>[3D, D]</code></li><li>Order: <strong>Q, K, V</strong> (cat dim=0)</li><li>Linear weight is <code>[out, in]</code>, so <code>cat([W_q.weight, W_k.weight, W_v.weight], dim=0)</code></li></ul>
+<p>Concatenating as K/Q/V or transposing the weight.</p>
+</details>
+<details>
+
+<summary>Q15. attn_mask vs key_padding_mask?</summary>
+<ul><li><code>attn_mask</code> controls at the query-key pair level (typically causal)</li><li><code>key_padding_mask</code> controls overall visibility of a key token (typically padding)</li><li>Bool semantics: <code>nn.MultiheadAttention</code> uses <strong>True = mask out</strong>; <code>F.scaled_dot_product_attention</code>'s bool mask uses <strong>True = keep</strong> (opposite!)</li><li>When using both: under mask-out semantics, combine via <strong>OR</strong> (either True means blocked); under keep semantics, combine via AND (only both True means kept)</li></ul>
+<p>Applying True/False without checking API docs; or flipping AND/OR.</p>
+</details>
+<details>
+
+<summary>Q16. In cross-attention can L_q and L_k differ?</summary>
+<ul><li>Yes — this is the standard cross-attention case</li><li>Scores shape is $[L_q, L_k]$</li><li>The mask must align with the key dimension</li></ul>
+<p>Assuming cross-attn requires equal lengths.</p>
+</details>
+<details>
+
+<summary>Q17. Why do we need the output projection W_o?</summary>
+<ul><li>Fuses outputs from different heads</li><li>Maps back to $d_\text{model}$ for the residual add</li><li>Lets the model learn combinations across heads (not just simple concat)</li></ul>
+<p>Thinking the work ends after concat.</p>
+</details>
+<details>
+
+<summary>Q18. Pre-norm vs post-norm impact on the attention block?</summary>
+<ul><li>Pre-norm: <code>x + Attn(LN(x))</code>, more stable for deep training, gradient along the residual path is relatively preserved</li><li>Post-norm: <code>LN(x + Attn(x))</code>, used in the original Vaswani paper, needs warmup / careful init at extreme depths</li><li><strong>Most decoder-only LLMs use pre-norm (often with RMSNorm variants)</strong>, but specific architectures have exceptions</li></ul>
+<p>Treating norm position as a pure engineering detail; or asserting too absolutely that "all modern LLMs use pre-norm".</p>
+</details>
+<details>
+
+<summary>Q19. Are attention weights equivalent to "model explanations"?</summary>
+<ul><li>Visualization has reference value (where attention focuses)</li><li>But <strong>not equivalent to causal explanation</strong></li><li>The value path and subsequent layers change the actual contribution</li><li>Jain &amp; Wallace "Attention is not Explanation" (2019)</li></ul>
+<p>Treating high attention weight as "the model's reason" outright.</p>
+</details>
+<details>
+
+<summary>Q20. What to watch in mixed-precision attention?</summary>
+<ul><li><strong>fp32 accumulation</strong>: matmul accumulation / critical softmax steps in fp32, then cast back to low precision</li><li><strong>Softmax max-subtraction</strong> (log-sum-exp) to prevent exp overflow — PyTorch's <code>F.softmax</code> does this internally</li><li><strong>Mask sentinel</strong>: under fp16 use <code>torch.finfo(dtype).min</code> instead of literal -inf</li><li><strong>BF16 vs FP16</strong>: BF16's dynamic range is close to fp32, more suitable for attention; fp16 has narrow range and QK^T overflows easily</li><li><strong>Fused kernels</strong> (FlashAttention, <code>F.scaled_dot_product_attention</code>) include kernel-level stabilization and are safer than hand-written naive code</li></ul>
+<p>Writing naive attention by hand under FP16 without fp32 accumulation.</p>
+</details>
+<h3 id="l3-advanced-variants-top-labs--diffusion-direction">L3 advanced variants (top labs / diffusion direction)</h3>
+<details>
+
+<summary>Q21. How does KV cache optimize autoregressive decoding?</summary>
+<ul><li>At decode step $t+1$, compute $Q$ only for the new token (1×D)</li><li>Reuse historical $K, V$ (already in the cache) and append the new $k_{t+1}, v_{t+1}$</li><li>Per-step attention goes from $O(t^2)$ to $O(t)$; whole-sequence generation from $O(L^3)$ to $O(L^2)$</li><li>Per-sample memory: $L_\text{ctx} \cdot n_\text{layers} \cdot 2 \cdot H_\text{kv} \cdot d_\text{head} \cdot \text{bytes}$ (under MQA/GQA, $H_\text{kv} \ll H$)</li></ul>
+<p>Saying KV cache reduces training cost — wrong. It only applies to autoregressive inference. Also: cache scales with KV head count, not Q head count.</p>
+</details>
+<details>
+
+<summary>Q22. What do MQA and GQA solve?</summary>
+<ul><li>MQA: multiple Q heads share one set of K/V (K/V has only 1 head)</li><li>GQA: compromise with $G$ K/V groups ($1 < G < H$)</li><li>Main benefit: <strong>decode-time KV-cache memory + memory bandwidth</strong> (large reduction)</li><li>It also reduces K/V projection params and compute (smaller K/V projection matrices), <strong>but does not reduce Q / O projection</strong></li><li>Quality impact: usually <strong>GQA's quality loss is smaller than MQA's</strong>, depending on model scale and training (LLaMA-2 70B / LLaMA-3 / Mistral / Qwen-2 all use GQA)</li></ul>
+<p>Thinking it reduces Q projection; or saying "GQA causes essentially no quality loss" too absolutely.</p>
+</details>
+<details>
+
+<summary>Q23. Core tricks of FlashAttention?</summary>
+<ul><li><strong>Block tiling</strong>: split $Q, K, V$ into SRAM-sized blocks, load in batches</li><li><strong>Online softmax</strong>: incrementally maintain running max $m$ and running sum $\ell$, <strong>avoiding materialization</strong> of the full $L \times L$ scores / probs matrix in HBM</li><li><strong>Recompute on backward</strong>: recompute scores during backward using saved $m, \ell$, no intermediates stored</li><li>Key: <strong>IO-aware exact attention</strong> (mathematically equivalent, not an approximation)</li><li>HBM IO complexity about $O(L^2 d^2 / M + Ld)$ vs $O(L^2 + Ld)$ HBM traffic for standard attention — under long sequences this is a large IO (not FLOPs) reduction</li></ul>
+<p>Saying it's approximate attention (like Performer / Linformer) — wrong, FlashAttn is exact; or conflating IO complexity with FLOPs complexity.</p>
+</details>
+<details>
+
+<summary>Q24. RoPE vs ALiBi vs absolute position? What is attention sink?</summary>
+<ul><li><strong>Absolute</strong>: position vectors added to the input embedding (Vaswani sinusoidal / GPT-2 learned)</li><li><strong>RoPE</strong>: apply position-dependent rotation to $Q, K$, preserving <strong>relative position</strong> info ($q_m^\top k_n$ depends only on $m-n$)</li><li><strong>ALiBi</strong>: add a distance bias $-m |i-j|$ to scores, extrapolates naturally</li><li><strong>Attention sink</strong>: trained LLMs assign abnormally high attention to the first 1-4 tokens (especially [BOS]) even when content-irrelevant — softmax forces sum to 1 so the model needs a "junk slot". StreamingLLM exploits this for long-sequence inference.</li></ul>
+<p>Treating attention sink as normal padding / CLS token behavior.</p>
+</details>
+<details>
+
+<summary>Q25. How is attention used in diffusion / latent diffusion?</summary>
+<ul><li><strong>U-Net latent tokens as Q</strong>, text embedding as K/V, doing <strong>cross-attention</strong> to inject text conditioning</li><li>Self-attention within each spatial resolution (image patches × image patches)</li><li><strong>CFG (Classifier-Free Guidance)</strong>: two forwards, take difference to amplify the conditional signal</li><li>DiT (Diffusion Transformer): replace U-Net with pure Transformer; conditioning via AdaLN / cross-attn / token-concat</li><li>Video diffusion: combinations of spatial / temporal / spatiotemporal attn (long video is open, $L \sim 10^5$)</li></ul>
+<p>Saying diffusion relies only on convolutions; or that attention exists only in DiT (wrong — U-Net has plenty too).</p>
+</details>
+<h2 id="a-appendix-full-from-scratch-code-skeleton">§A Appendix: Full from-scratch code skeleton</h2>
+<p>The reference from-scratch implementation contains:</p>
+<ul><li><code>scaled_dot_product_attention()</code> — with NaN guard</li><li><code>MultiHeadAttention</code> — standard MHA, supports 4 mask shapes</li><li><code>SelfAttention</code> / <code>CrossAttention</code> — thin wrappers with clear call semantics</li><li><code>causal_mask()</code> / <code>padding_mask()</code> / <code>combine_masks()</code></li><li>9 sanity checks (self / causal / padding / cross / wrappers / nn.MHA alignment / NaN guard / d_model%H / return_weights=False)</li></ul>
+<p>Actual sanity-check output (PyTorch 2.x, single-machine GPU):</p>
+<pre><code>[a] self-attn  out=(2, 5, 16) weights=(2, 4, 5, 5)  weights row-sum=1 ✓
+[b] causal mask: upper triangle ~ 0  ✓
+[c] padding mask: pad-key columns ~ 0 in sample-1  ✓
+[d] cross-attn out=(2, 7, 16) weights=(2, 4, 7, 5)  ✓
+[e] SelfAttention(causal) ✓   CrossAttention(context-pad) ✓
+[f] vs nn.MultiheadAttention:  |Δout|=0.00e+00  |Δweights|=0.00e+00  ✓
+[g] all-masked row: no NaN, weights row = 0  ✓
+[h] d_model not divisible by num_heads -&gt; ValueError  ✓
+[i] return_weights=False -&gt; weights is None  ✓</code></pre>
+<p>Code passed independent reviewer static check + PyTorch sanity-check run, diff vs <code>nn.MultiheadAttention</code> = 0.</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/attention_tutorial_en.md</code> ·
+  SHA256 <code>ecb6fe924cee</code> ·
+  generated at 2026-05-19 18:47 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

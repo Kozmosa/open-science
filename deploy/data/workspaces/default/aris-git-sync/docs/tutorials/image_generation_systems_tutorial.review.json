@@ -1,0 +1,49 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/image_generation_systems_tutorial.md",
+  "output": "docs/tutorials/image_generation_systems_tutorial.html",
+  "topic": "Image Generation Systems (LDM / SD / SDXL / SD3 / FLUX / ControlNet / IP-Adapter / LoRA / DreamBooth)",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per round",
+  "math_code_review": {
+    "verdict": "PASS (with length WARN)",
+    "rounds": [
+      {
+        "run": "1-3 (subagent)",
+        "verdict": "FAIL→FAIL→PASS",
+        "notes": "Multiple rounds of cross-model codex review run by writing agent; substantive issues caught and fixed each round (see issues caught list)."
+      },
+      {
+        "run": 4,
+        "verdict": "FAIL → fixed",
+        "thread_id": "019e3f40-38ab-7163-a25b-45c13a11cbab",
+        "reviewer": "main-session DIY backfill",
+        "issues_caught": [
+          "Q4 off-by-resolution: '1024² + DS=8 = 8×8' wrong (actual: 1024²/8 VAE → 128² latent, DS=8 = 16×16; 8×8 corresponds to 512² input)",
+          "SD3-Turbo conflated with SDXL-Turbo/ADD (arXiv 2311.17042); SD3-Turbo is LADD (Latent Adversarial Diffusion Distillation, arXiv 2403.12015)",
+          "Length 1446 lines (target 800-1200) — accepted as content-dense WARN"
+        ],
+        "fixes_applied": [
+          "Updated Q4 to clarify f=8 VAE compression and dimension arithmetic for both 512² and 1024² inputs",
+          "Split §9.2 to attribute SDXL-Turbo→ADD (arXiv 2311.17042 / ECCV 2024) and SD3-Turbo→LADD (arXiv 2403.12015) separately"
+        ]
+      }
+    ]
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "PASS",
+        "thread_id": "019e3f66-8f8c-7622-af8a-f367d6dd925c",
+        "reviewer": "codex gpt-5.5 xhigh, fresh thread (main session)",
+        "notes": "13/13 functional checks pass. 59 headings, 14 code blocks, 13 tables, 15 callouts, 25 details blocks. Source SHA256 matches."
+      }
+    ]
+  },
+  "summary": "Image Gen Systems tutorial: subagent did 3 rounds, main-session DIY did 1 more round catching 2 substantive errors (Q4 resolution arithmetic + SD3-Turbo citation). Final 13/13 render PASS. 1446 lines content-dense (WARN).",
+  "rendered_at": "2026-05-19",
+  "notes": "Subagent was killed during continuation (codex MCP concurrency issue). Math/code review + fixes + render + render review all completed in main session DIY."
+}

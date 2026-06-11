@@ -1,0 +1,55 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/kl_divergence_rlhf_tutorial.md",
+  "output": "docs/tutorials/kl_divergence_rlhf_tutorial.html",
+  "topic": "KL Divergence in RLHF — Schulman k1/k2/k3, PPO/GRPO/DPO/RLOO KL, forward vs reverse, Rethinking KL + Comedy of Estimators",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per round",
+  "math_code_review": {
+    "verdict": "PASS (after 5 rounds of substantive fixes; no deferred items)",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL — 1 CRITICAL + 8 MAJOR",
+        "thread_id": "019e418f-4362-7a10-96f0-ec0ade6293a0",
+        "real_issues_caught": [
+          "CRITICAL: k3-as-loss recommendation conflates value-estimator and gradient-optimization (new Rethinking KL paper shows k3-as-loss has O(Δ²) gradient bias)",
+          "MAJOR: forward/reverse terminology — tutorial labeled KL(πθ||πref) as 'forward' (RL convention) but standard VI/DPO/RLOO/Rethinking-KL all call it reverse KL",
+          "MAJOR: §2.4.1 k3 derivation sign error: f(-log r) = π_ref/π_θ + log(π_θ/π_ref) - 1, not minus",
+          "MAJOR: §3.6 (new section needed) — placement vs gradient bias analysis missing",
+          "MAJOR: Q16 k2 Taylor used E[r-1]=0 — wrong sampling; should use s=π_ref/π_θ with E[s]=1",
+          "MAJOR: §1.3 sequence-level KL claim — needs expectation framing + estimator distinction",
+          "MAJOR: §7.1 PPO reward shaping code — missing detach + wrong naming (logp_theta should be rollout_logp_theta)",
+          "MAJOR: §7.3 DPO `avg_seq_kl_k1` — preference data is NOT KL estimator (sampling distribution mismatch)",
+          "MAJOR: Paper citations — Rethinking KL = 2510.01555 (Liu) not 2401.11458; Comedy of Estimators = 2512.21852 (Shah) not 2025 (Hu)"
+        ]
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL — 7 MAJOR (residuals after round 1 fixes)",
+        "thread_id": "019e419c-9ba4-7260-91f8-318c181445b5",
+        "issues": "Q7 forward residual, Q8 DPO KL margin residual, DPO code comment, §3.6 P2 too weak, TL;DR 'mathematically equivalent' too strong, §5.2 GRPO old reasoning, Q5/Q10/Q21 interview answers"
+      },
+      {
+        "run": 3,
+        "verdict": "FAIL — 2 MAJOR (Q10 k1-as-loss expected gradient + Q21 final summary residual + §3.2 P2 stale)",
+        "thread_id": "019e41a2-7340-7e03-865a-f74a4cddc290"
+      },
+      {
+        "run": 4,
+        "verdict": "FAIL — 2 MAJOR (k3 docstring 'Recommended for RLHF KL loss' + reference table k2 'small KL unbiased')",
+        "thread_id": "019e41a6-30a0-7a50-a2b6-4151a9c55168"
+      },
+      {
+        "run": 5,
+        "verdict": "PASS",
+        "thread_id": "019e41a8-b398-7010-be92-3fdfbb6ec8c2",
+        "notes": "All k3-as-loss recommended/principled residuals eliminated. k2 properly framed as value-estimator-biased but gradient-equivalent to k1-in-reward on-policy. All citations updated to verified arXiv 2510.01555 (Rethinking KL) + 2512.21852 (Comedy of Estimators). Forward/reverse terminology standardized to VI/RLHF convention throughout."
+      }
+    ]
+  },
+  "summary": "KL Divergence in RLHF tutorial: 5 rounds of cross-model codex gpt-5.5 xhigh review. Caught 1 CRITICAL (k3-as-loss recommendation conflation) + 14 MAJOR (forward/reverse mis-label, k3 sign error, missing §3.6 placement analysis, Q16 wrong Taylor sampling distribution, sequence KL framing, PPO detach missing, DPO 'KL margin' misframing, paper citation errors, multiple interview-answer residuals). New §3.6 added analyzing P1/P2/P3 placement gradient bias with Rethinking KL (arXiv 2510.01555) citation. Paper references corrected: Rethinking KL = Kezhao Liu et al. 2510.01555; Comedy of Estimators = Vedant Shah et al. 2512.21852. All fixes substantive per user no-defer policy.",
+  "no_defer_compliance": true,
+  "rendered_at": "2026-05-20"
+}

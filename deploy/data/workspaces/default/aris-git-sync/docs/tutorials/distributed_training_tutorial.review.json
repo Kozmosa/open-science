@@ -1,0 +1,98 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/distributed_training_tutorial.md",
+  "source_sha256_prefix": "86087779b70e",
+  "output": "docs/tutorials/distributed_training_tutorial.html",
+  "topic": "Distributed Training (DDP / FSDP2 / ZeRO / TP / PP / EP / SP / CP / DualPipe / TorchTitan / Llama 3)",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "math_code_review": {
+    "verdict": "FAIL_AT_ROUND_3_FIXED_POST_HOC",
+    "reviewer": "codex gpt-5.5 xhigh, fresh thread per run",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL",
+        "thread_id": "019e3ea5-2ab7-73a1-bcbd-9358256fb33a",
+        "issues": [
+          "TP+SP activation memory derivation double-counted A on both sides (line ~582)",
+          "Interleaved 1F1B bubble formula written as (1/V) * (P-1)/(M+P/V-1) — wrong form, inconsistent with later Q21 line ~1311",
+          "Ring Attention per-rank total comm written as 2LD/C — should be ~2LD (C-1)/C ~ 2LD",
+          "TP code (ColumnParallelLinear) missing math import + missing backward all-reduce on input gradients",
+          "MoE EP code uses undefined E, send_counts_reversed; top-K token expansion shape wrong",
+          "Gradient Checkpointing citation written as arXiv 2016.06174 — should be arXiv:1604.06174",
+          "Phi unit convention ambiguous in §3/§4 communication-volume tables"
+        ],
+        "fixes": [
+          "Renamed A to A_in + A_out, derivation now A_out * (1 - 1/T)",
+          "Corrected to (P-1)/(VM+P-1) ~ (P-1)/(VM) and aligned Q21 derivation",
+          "Recomputed Ring Attention per-rank total comm as (C-1)/C * 2LD ~ 2LD",
+          "Added math/torch/nn imports; introduced _CopyToTPRegion + _ReduceFromTPRegion autograd.Functions for col / row backward",
+          "Made MoE EP block self-contained with E_total/K parameters and proper top-K expansion shapes",
+          "Fixed arXiv ID to 1604.06174",
+          "Added '记号约定' note: Phi = parameter count; tabled buffer volumes equal 2*Phi bytes for fp16"
+        ]
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL",
+        "thread_id": "019e3eac-e0da-7ac2-a514-d5eb42ff41d7",
+        "issues": [
+          "SP communication-volume sentence had typo equating all-gather/reduce-scatter/all-reduce as equal terms",
+          "Llama 3 405B 128K context CP written as 8 — paper Table 4 says CP=16",
+          "Llama 3 training precision written as 'fp8/bf16 mixed' — paper trains in BF16; FP8 is inference quantization",
+          "Llama 3 interruption count summarized as 419 — should be 466 total (419 unexpected + 47 planned)",
+          "MoE EP block still used undefined exchange_counts() + Ellipsis for received_ids",
+          "Float8 code used non-existent Float8LinearConfig.dynamic() and missed nn import",
+          "TorchTitan ScheduleInterleaved1F1B passed a single PipelineStage — API expects List[PipelineStage]"
+        ],
+        "fixes": [
+          "Rewrote SP comm sentence to '1x all-gather + 1x reduce-scatter equivalent to nominal 1x all-reduce, total equal to pure TP'",
+          "Corrected CP from 8 to 16 in 3 locations (§0 TL;DR via interruption note, §10.2, §13.1, Q18, Q25)",
+          "Removed 'fp8/bf16 mixed'; replaced with 'BF16 training; FP8 is inference quantization'",
+          "Updated to '466 total = 419 unexpected + 47 planned/maintenance' in TL;DR + §13.1 + Q18",
+          "Replaced exchange_counts() with explicit dist.all_to_all_single(recv_t, send_t) on int64 counts tensor; replaced Ellipsis with a real all-to-all of expand_ids",
+          "Added 'import torch.nn as nn'; replaced Float8LinearConfig.dynamic() with Float8LinearConfig()",
+          "Made TorchTitan PP example use a stages list of two PipelineStage + loss_fn"
+        ]
+      },
+      {
+        "run": 3,
+        "verdict": "FAIL_BUT_FIXED_AFTER",
+        "thread_id": "019e3eb3-c2a2-7b40-8e2b-2dda1da29f33",
+        "issues": [
+          "Llama 3 405B parallelism arithmetic inconsistent: TP=8 x CP=16 x PP=16 x DP=128 = 262144, not 16384"
+        ],
+        "fixes_post_round3": [
+          "Split Llama 3 topology into two phases: short context (8K) uses TP=8 x CP=1 x PP=16 x DP=128 = 16384; long context (128K) uses TP=8 x CP=16 x PP=16 x DP=8 = 16384. Reflected in §13.1, Q18, Q25."
+        ],
+        "note": "SKILL.md gates math/code review at 3 rounds. Round-3 reviewer caught one residual arithmetic inconsistency which was fixed via direct edit. No 4th review round was run; render-stage review (independent gate) was run on the post-fix file and passed."
+      }
+    ]
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "reviewer": "codex gpt-5.5 xhigh, fresh thread per run",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL",
+        "thread_id": "019e3eb9-d9cc-75f3-8be3-da626e9b3858",
+        "issue": "Q20 list items starting with '- + activation...' parsed as nested list (markdown sees + as bullet marker)",
+        "fix": "Replaced '+' with Chinese word '加' to avoid markdown list-marker collision"
+      },
+      {
+        "run": 2,
+        "verdict": "PASS",
+        "thread_id": "019e3ebe-0942-7151-925d-02c455481675",
+        "issue": null,
+        "fix": null
+      }
+    ]
+  },
+  "summary": "3-round math/code review (FAIL/FAIL/FAIL — each round caught + fixed real bugs; round 3 residual arithmetic was patched post-hoc) + 2-round render review (FAIL list-marker -> PASS). Final HTML passes all 13 render-stage checks.",
+  "rendered_at": "2026-05-19",
+  "lines_md": 1587,
+  "bytes_html": 88974,
+  "toc_entries": 78
+}

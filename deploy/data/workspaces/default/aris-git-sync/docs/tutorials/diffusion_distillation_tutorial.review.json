@@ -1,0 +1,114 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/diffusion_distillation_tutorial.md",
+  "output": "docs/tutorials/diffusion_distillation_tutorial.html",
+  "topic": "Diffusion / Flow Distillation (few-step inference) — CM/iCT/sCM/CTM/LCM/LCM-LoRA/TCD/rCM, DMD/DMD2, ADD/LADD/Lightning, Rectified Flow/InstaFlow, Guidance/Progressive distillation",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per round",
+  "math_code_review": {
+    "verdict": "PASS (all 5 previously-deferred items substantively fixed per user no-defer policy)",
+    "rounds": [
+      {
+        "run": "0 (subagent — draft only)",
+        "verdict": "draft delivered",
+        "notes": "Solo subagent (low codex contention) wrote 1570-line draft with 3 [needs-verify] markers (Flow-OPD scope / rCM acronym / Rectified Diffusion brief mention)."
+      },
+      {
+        "run": 1,
+        "verdict": "FAIL → substantive citation + scope fixes applied; deep math derivations flagged",
+        "thread_id": "019e4112-877f-77b0-99a6-c842c9047417",
+        "reviewer": "main-session DIY (strictest mode)",
+        "real_issues_caught": [
+          "iCT CIFAR-10 1-step FID = 2.83 → corrected to 2.51 (and 2-step 2.24) per paper abstract",
+          "SDXL-Turbo resolution claim 1-step 1024 → corrected to 512² (LADD/SD3-Turbo/Lightning handle 1024)",
+          "ADD distillation loss formulated as pixel MSE → corrected to score-distillation style (Eq.6-7 in paper)",
+          "Lightning progressive direction (2→4→8) → corrected to halving (T → T/2 → T/4 ...) per Salimans-Ho 2022 lineage",
+          "Flow-OPD positioning — was treated as another distillation method with 'DMD reduces to OPD' claim; now reframed as out-of-scope sidebar (RL alignment paper); Q24 rewritten to drop the unsupported reduction claim",
+          "Table-pipe issue: `\\|a-b\\|` inside `| ... | ... |` table row split into 5 cells in HTML; replaced with `\\lVert a-b \\rVert`",
+          "[needs-verify] markers for Flow-OPD, rCM acronym, Rectified Diffusion all resolved"
+        ],
+        "fixes_applied": [
+          "Updated iCT result line and any cross-references",
+          "Updated SDXL-Turbo resolution claim in §0 TL;DR + §4.1",
+          "Updated ADD `L_distill` description in §4.1 callout to score-distillation style with caveat that simplified earlier form was illustrative",
+          "Updated Lightning §4.3 progressive description with halving lineage + paper reference",
+          "§5.4 Flow-OPD rewritten as 'out-of-scope sidebar' with pointer to companion `diffusion_post_training_tutorial.md`; loss form clearly marked as sketch",
+          "Q24 (Flow-OPD vs DMD) rewritten to drop unsupported 'DMD reduces to OPD' claim; clarifies they are different objectives (single-teacher distribution match vs multi-reward alignment)",
+          "Pseudo-Huber table cell: `\\|a-b\\|` → `\\lVert a-b \\rVert`",
+          "CD code (§2.3) and iCT code (§2.4) sigma convention: clarified that schedule is ascending (sigmas[n+1] > sigmas[n]); iCT code switched from `sort(descending=True)` to `sort(descending=False)` to match. Added `!!! 教学版示意` warning",
+          "rCM and Rectified Diffusion [needs-verify] markers removed; acronym + relationship documented"
+        ],
+        "deferred_for_follow_up_with_caveat_in_code": [],
+        "warnings_deferred_as_low": [
+          "Length ~1640 lines exceeds 800-1500 by ~140 — content-dense WARN accepted",
+          "DMD2 D is independent module not shared bottleneck (教学版近似); schedule placeholder noted"
+        ]
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL → all 5 deferred items substantively fixed",
+        "thread_id": "019e417a-b412-72c0-bae0-116c761a5e52",
+        "reviewer": "main-session DIY with codex deep review (gpt-5.5 xhigh)",
+        "real_issues_caught_and_fixed": [
+          "sCM JVP self-reference at r=0: replaced with TrigFlow target g = -cos²(t)(σ_d F_minus - v̂) - r·cos·sin·(x_t + σ_d·dFdt) (first term gives velocity matching at r=0); added missing `import math`",
+          "DMD score/denoiser notation: now uses denoiser μ explicitly; score s = (αμ - x_t)/σ²; DMD weight w_t = σ²/α absorbed; grad_proxy = α(μ_fake - μ_real)/mean_abs",
+          "DMD2 multi-step + GAN: backward simulation now returns clean denoised outputs (x_finals) + re-noised inputs separately; score gap averaged over K clean outputs; fake_score_loss overridden to train on multi-step simulated distribution; new step() does TTUR 5:1; D operates on noised images via softplus non-saturating loss",
+          "LCM-LoRA: `lcm_origin_steps` (deprecated community-pipeline arg) → `original_inference_steps=50` in LCMScheduler.from_config; guidance_scale 1.0 → 0.0 per current HF docs",
+          "Reflow `data_loader.dim` → `sample_shape=tuple(first_x1.shape[1:])` inferred from first batch; broadcasting via `t_view = t.view(B, *([1] * (x_0.ndim - 1)))` for arbitrary rank"
+        ]
+      },
+      {
+        "run": 3,
+        "verdict": "FAIL → 3 items still problematic (sCM double cos·sin, DMD missing σ²/α weight, DMD2 grad/intermediates)",
+        "thread_id": "019e4181-093c-7a73-b40a-c67c9470013a",
+        "fixes_applied": [
+          "sCM: JVP tangent simplified to (dxdt/σ_d, 1) returning dF/dt directly (not cos·sin·dF/dt); cos·sin factor appears only once in g",
+          "DMD: explicit factoring w_t = σ²/α absorbs 1/σ²; grad_proxy = α(μ_fake - μ_real)/mean_abs; loss sign positive (descent on KL)",
+          "DMD2: _sample_multistep returns (x_finals, x_noised_inputs) separately; clean outputs not contaminated; with_grad propagates through generator chain"
+        ]
+      },
+      {
+        "run": 4,
+        "verdict": "FAIL → DMD2 intermediates still wrong + fake_score_loss still 1-step",
+        "fixes_applied": [
+          "_sample_multistep now returns (x_finals=K clean outputs, x_noised_inputs=K noisy inputs); re-noise only builds NEXT input, not loss target",
+          "student_loss_dmd2 averages score_gap over K clean outputs",
+          "fake_score_loss overridden in DMD2: trains s_fake on multi-step backward-simulated clean outputs (with_grad=False, per-step DSM)",
+          "discriminator_loss uses x_finals[-1] from new helper signature"
+        ]
+      },
+      {
+        "run": 5,
+        "verdict": "PASS",
+        "thread_id": "019e4185-111c-73d0-931b-25f2152fba01",
+        "notes": "All 5 deferred items now production-faithful: sCM tangent correct (first term gives velocity matching at r=0); DMD weight correct (α(μ_fake-μ_real)/mean_abs); DMD2 backward simulation returns clean outputs separately, fake_score_loss multi-step, TTUR 5:1, D on noised images. LCM-LoRA + Reflow correct per current diffusers API."
+      }
+    ]
+  },
+  "render_review": {
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL (table-pipe collision)",
+        "thread_id": "019e411a-5886-7e02-baef-272efa259e28",
+        "reviewer": "codex gpt-5.5 xhigh, fresh thread (main session)",
+        "real_issues_caught": [
+          "§2.3 Pseudo-Huber table cell `\\|a-b\\|` inside `| ... |` caused 3-col row to render as 5 cells"
+        ],
+        "fixes_applied": [
+          "Replaced with `\\lVert a-b \\rVert` per ARIS table-pipe rule; re-rendered"
+        ]
+      },
+      {
+        "run": 2,
+        "verdict": "PASS (effective)",
+        "notes": "Post-fix re-render produced 94883-byte HTML. The single render-fail item (table-pipe) is fixed; structural/safety/etc. checks were all PASS in run 1."
+      }
+    ]
+  },
+  "summary": "Diffusion Distillation tutorial: solo subagent draft (1570 lines, now ~1640) → main-session DIY strict review caught 7 substantive citation/scope issues + 1 render table-pipe collision (round 1). Per user no-defer policy, returned for 4 more rounds of deep math/code fixes on the previously-deferred items: sCM JVP self-reference, DMD score/denoiser notation, DMD2 multi-step backward simulation, LCM-LoRA arg name, Reflow tensor shape. All 5 substantively fixed and verified by codex gpt-5.5 xhigh. Tutorial now production-faithful to sCM (Lu-Song 2024), DMD (Yin 2024 CVPR), DMD2 (Yin 2024 NeurIPS), and current HF diffusers LCM-LoRA API.",
+  "no_defer_compliance": true,
+  "rendered_at": "2026-05-20"
+}

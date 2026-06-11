@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vlm Multimodal Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/vlm_multimodal_tutorial_en.md">
+<meta name="aris:source-sha256" content="de321e4d3dec5699eff7277bb4b2558d3a0c6dd7c5bc5186a9f166ef71be609a">
+<meta name="aris:generated-at" content="2026-05-19 18:58 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-intuition-what-is-a-vlm-doing">§1 Intuition: what is a VLM doing?</a>
+</li>
+<li><a href="#2-vit-turning-an-image-into-a-token-sequence">§2 ViT: turning an image into a token sequence</a>
+<ul>
+<li><a href="#21-patch-tokenize">2.1　Patch tokenize</a></li>
+<li><a href="#22-transformer-backbone">2.2　Transformer backbone</a></li>
+<li><a href="#23-vit-specifications">2.3　ViT specifications</a></li>
+<li><a href="#24-code-vit-patch-embed--backbone-core-60-lines">2.4　Code: ViT patch embed + backbone (core 60 lines)</a></li>
+</ul>
+</li>
+<li><a href="#3-clip-symmetric-infonce-must-derive">§3 CLIP: symmetric InfoNCE (must derive)</a>
+<ul>
+<li><a href="#31-formalizing-the-objective">3.1　Formalizing the objective</a></li>
+<li><a href="#32-symmetric-infonce-loss-average-of-row--column-softmax">3.2　Symmetric InfoNCE loss (average of row + column softmax)</a></li>
+<li><a href="#33-gradient-derivation-why-symmetry-matters">3.3　Gradient derivation (why symmetry matters)</a></li>
+<li><a href="#34-role-of-temperature">3.4　Role of temperature</a></li>
+<li><a href="#35-code-clip-symmetric-infonce-core-50-lines">3.5　Code: CLIP symmetric InfoNCE (core 50 lines)</a></li>
+<li><a href="#36-clip-training-data--scale">3.6　CLIP training data &amp; scale</a></li>
+<li><a href="#37-clips-failure-modes">3.7　CLIP&#x27;s failure modes</a></li>
+</ul>
+</li>
+<li><a href="#4-siglip-replacing-softmax-with-sigmoid-batch-scaling-rewritten">§4 SigLIP: replacing softmax with sigmoid; batch scaling rewritten</a>
+<ul>
+<li><a href="#41-motivation">4.1　Motivation</a></li>
+<li><a href="#42-sigmoid-loss-derivation">4.2　Sigmoid loss derivation</a></li>
+<li><a href="#43-siglip-vs-clip-comparison">4.3　SigLIP vs CLIP comparison</a></li>
+<li><a href="#44-siglip-2-google-2025">4.4　SigLIP-2 (Google 2025)</a></li>
+<li><a href="#45-code-siglip-sigmoid-loss-core-35-lines">4.5　Code: SigLIP sigmoid loss (core 35 lines)</a></li>
+</ul>
+</li>
+<li><a href="#5-eva-clip--openclip--other-clip-variants">§5 EVA-CLIP / OpenCLIP / other CLIP variants</a>
+<ul>
+<li><a href="#51-openclip">5.1　OpenCLIP</a></li>
+<li><a href="#52-eva-clip">5.2　EVA-CLIP</a></li>
+<li><a href="#53-datacomp-data-vs-model-vs-algorithm">5.3　DataComp (data vs model vs algorithm)</a></li>
+<li><a href="#54-comparison-overview">5.4　Comparison overview</a></li>
+</ul>
+</li>
+<li><a href="#6-llava-projector--2-stage-training">§6 LLaVA: projector + 2-stage training</a>
+<ul>
+<li><a href="#61-architecture">6.1　Architecture</a></li>
+<li><a href="#62-two-stage-training">6.2　Two-stage training</a></li>
+<li><a href="#63-code-llava-style-projector--forward-core-60-lines">6.3　Code: LLaVA-style projector + forward (core 60 lines)</a></li>
+<li><a href="#64-llava-15--16--next-key-upgrades">6.4　LLaVA-1.5 / 1.6 / NeXT key upgrades</a></li>
+</ul>
+</li>
+<li><a href="#7-blip-2-q-former-cross-attention">§7 BLIP-2: Q-Former cross-attention</a>
+<ul>
+<li><a href="#71-motivation">7.1　Motivation</a></li>
+<li><a href="#72-q-former-structure">7.2　Q-Former structure</a></li>
+<li><a href="#73-two-stage-training">7.3　Two-stage training</a></li>
+<li><a href="#74-code-a-single-q-former-cross-attention-layer-core-40-lines">7.4　Code: a single Q-Former cross-attention layer (core 40 lines)</a></li>
+<li><a href="#75-q-former-vs-llava-projector-trade-off">7.5　Q-Former vs LLaVA Projector: trade-off</a></li>
+</ul>
+</li>
+<li><a href="#8-flamingo-perceiver-resampler--gated-cross-attn">§8 Flamingo: Perceiver Resampler + Gated Cross-Attn</a>
+<ul>
+<li><a href="#81-design-goals">8.1　Design goals</a></li>
+<li><a href="#82-perceiver-resampler">8.2　Perceiver Resampler</a></li>
+<li><a href="#83-gated-cross-attention-the-core-innovation">8.3　Gated Cross-Attention (the core innovation)</a></li>
+<li><a href="#84-flamingo--llama-32-v-vs-llava-comparison">8.4　Flamingo / Llama-3.2-V vs LLaVA comparison</a></li>
+</ul>
+</li>
+<li><a href="#9-cogvlm-and-visual-experts--cross-attn-fusion-variants">§9 CogVLM and &quot;visual experts&quot; / cross-attn fusion variants</a>
+<ul>
+<li><a href="#91-cogvlm-a-visual-expert-branch">9.1　CogVLM: a visual expert branch</a></li>
+<li><a href="#92-llama-32-vision-flamingo-style-cross-attn-revived-on-a-large-llm">9.2　Llama-3.2 Vision: Flamingo-style cross-attn revived on a large LLM</a></li>
+<li><a href="#93-claude-3537-sonnet-vision-and-gpt-4v4o">9.3　Claude 3.5/3.7 Sonnet Vision and GPT-4V/4o</a></li>
+</ul>
+</li>
+<li><a href="#10-qwen2-vl--deepseek-vl-dynamic-resolution--m-rope">§10 Qwen2-VL / DeepSeek-VL: dynamic resolution + M-RoPE</a>
+<ul>
+<li><a href="#101-native-dynamic-resolution">10.1　Native dynamic resolution</a></li>
+<li><a href="#102-m-rope-multimodal-rope">10.2　M-RoPE (Multimodal RoPE)</a></li>
+<li><a href="#103-qwen25-vl-upgrades">10.3　Qwen2.5-VL upgrades</a></li>
+<li><a href="#104-deepseek-vl--vl2-high-resolution-tiling--hybrid-encoder">10.4　DeepSeek-VL / VL2: high-resolution tiling + hybrid encoder</a></li>
+<li><a href="#105-code-m-rope-three-dim-positional-embedding-core-50-lines-matching-qwen2-vls-hf-implementation">10.5　Code: M-RoPE three-dim positional embedding (core 50 lines, matching Qwen2-VL&#x27;s HF implementation)</a></li>
+</ul>
+</li>
+<li><a href="#11-video-vlm-longva--videollama--long-video-problem">§11 Video VLM: LongVA / VideoLLaMA / long-video problem</a>
+<ul>
+<li><a href="#111-basic-pipeline">11.1　Basic pipeline</a></li>
+<li><a href="#112-common-compression-strategies">11.2　Common compression strategies</a></li>
+<li><a href="#113-longva--long-context-video">11.3　LongVA / Long-context video</a></li>
+<li><a href="#114-video-benchmarks">11.4　Video benchmarks</a></li>
+</ul>
+</li>
+<li><a href="#12-training-pipeline-alignment--instruct--preference">§12 Training pipeline: alignment / instruct / preference</a>
+<ul>
+<li><a href="#121-stage-1-alignment--pre-training">12.1　Stage 1: Alignment / Pre-training</a></li>
+<li><a href="#122-stage-2-visual-instruction-tuning">12.2　Stage 2: Visual instruction tuning</a></li>
+<li><a href="#123-stage-3-preference--rlhf">12.3　Stage 3: Preference / RLHF</a></li>
+<li><a href="#124-data-scale-vs-stage">12.4　Data scale vs stage</a></li>
+</ul>
+</li>
+<li><a href="#13-multimodal-embeddings-bge-vl--jina-clip--vlm2vec">§13 Multimodal Embeddings: BGE-VL / Jina-CLIP / VLM2Vec</a>
+<ul>
+<li><a href="#131-why-a-new-generation-of-multimodal-embeddings">13.1　Why a new generation of multimodal embeddings?</a></li>
+<li><a href="#132-representative-methods">13.2　Representative methods</a></li>
+<li><a href="#133-core-tricks">13.3　Core tricks</a></li>
+</ul>
+</li>
+<li><a href="#14-25-frequently-asked-interview-questions-l1-must-know--l2-advanced--l3-top-labs">§14 25 frequently-asked interview questions (L1 must-know · L2 advanced · L3 top labs)</a>
+<ul>
+<li><a href="#l1-basics-must-know-10">L1 basics (must-know 10)</a></li>
+<li><a href="#l2-advanced-10-questions">L2 advanced (10 questions)</a></li>
+<li><a href="#l3-advanced-top-labs--research-directions-5-questions">L3 advanced (top labs / research directions, 5 questions)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-sanity-check-outputs--references">§A Appendix: sanity-check outputs &amp; references</a>
+<ul>
+<li><a href="#a1-key-code-sanity-check-illustrated-by-actual-runs">A.1 Key code sanity check (illustrated by actual runs)</a></li>
+<li><a href="#a2-key-references-by-topic">A.2 Key references (by topic)</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Vlm Multimodal Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/vlm_multimodal_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>de321e4d3dec</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 18:58 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">VLM in 8 sentences</div><p>one page covering the core interview points for vision-language models (see §1–§13 below for derivations and code).</p></div>
+<ol><li><strong>Vision encoder = ViT-dominated</strong>: Dosovitskiy et al. 2021 (ICLR) slice images into $P\times P$ patches (typically $P=14$ or $16$), apply a linear projection + learnable positional embedding + optional <code>[CLS]</code> token, and feed them into a Transformer encoder. <strong>The vision side of CLIP / SigLIP / LLaVA is all a ViT variant.</strong></li><li><strong>CLIP symmetric InfoNCE (must derive)</strong>: Radford et al. 2021 (ICML) make image embeddings $\mathbf{u}_i$ and text embeddings $\mathbf{v}_i$ do contrastive learning in a shared space, with loss = <strong>average of row softmax + column softmax</strong>: $\mathcal{L} = \tfrac{1}{2}(\mathcal{L}_{i\to t} + \mathcal{L}_{t\to i})$. The temperature $\tau$ is learnable (log-parameterized, clipped to $[0,100]$).</li><li><strong>SigLIP replaces softmax with sigmoid</strong>: Zhai et al. 2023 (ICCV) treat each entry of the N×N similarity matrix as an independent binary CE, <strong>getting rid of batch-wise softmax normalization</strong>, so it is no longer linearly sensitive to batch size and can train with 32k+ batches on a single machine; a learnable bias $b$ corrects early negative dominance. <strong>SigLIP-2 (Google 2025)</strong> adds caption + self-distillation + dense local objectives and extends to multilingual.</li><li><strong>LLaVA = projector + 2-stage train</strong>: Liu et al. 2023 (NeurIPS) use a <strong>lightweight MLP projector</strong> to project frozen CLIP visual features into LLM token space. <strong>Stage 1</strong> trains only the projector for feature alignment (caption data); <strong>Stage 2</strong> unfreezes the LLM for visual instruction tuning (158K instructions generated by GPT-4).</li><li><strong>Q-Former vs Projector is the central BLIP-2 trade-off</strong>: Li et al. 2023 (ICML) use 32 learnable query tokens that do <strong>cross-attention</strong> over a frozen image encoder, compressing any resolution / number of patches into a fixed 32 tokens — stable compute budget but <strong>lossy + complex to train</strong>. LLaVA's MLP is simple but token count grows quadratically with resolution.</li><li><strong>Flamingo / Llama-3.2-Vision = gated cross-attn</strong>: Alayrac et al. 2022 (NeurIPS) use a <strong>Perceiver Resampler</strong> (64 latent queries) to compress visual features into a fixed token count, then insert <strong>gated cross-attention</strong> layers every few LLM layers ($\tanh$ gating initialized at 0, preserving the frozen LLM's text-only capability).</li><li><strong>Qwen2-VL's M-RoPE — must-know</strong>: Wang et al. 2024 split RoPE along head_dim into 6 chunks, assigning (t / h / w, three groups of position ids) following the axis sequence $(t, h, w, t, h, w)$; the typical config <code>mrope_section=[16,24,24]</code> (units are pairs of half head_dim, so $\sum \times 2 = $ head_dim=128, <strong>all 128 dims rotate</strong>). This way each token carries (t, h, w) three-dim positions without flattening. <strong>Pairs with native dynamic resolution</strong> (no longer padded to a fixed 224×224).</li><li><strong>Three-stage training + preference optimization</strong>: (1) <strong>alignment</strong> trains the projector / Q-Former; (2) <strong>visual instruction tune</strong> unfreezes part of the LLM; (3) <strong>preference</strong> (LLaVA-RLHF, RLAIF-V, VLM-R1, DPO/PPO) addresses hallucinations and long-tail alignment. <strong>VLM-R1 (2025)</strong> uses GRPO + verifiable reward to transfer reasoning ability into vision-language tasks.</li></ol>
+<h2 id="1-intuition-what-is-a-vlm-doing">§1 Intuition: what is a VLM doing?</h2>
+<p>Think of an image as "another language". The work of a VLM splits into three parts:</p>
+<ul><li><strong>Visual tokenizer</strong>: compress pixels into a discrete or continuous token sequence (ViT patch → embedding)</li><li><strong>Cross-modal alignment</strong>: bring image / text of the same semantics close in a shared space — this is what CLIP / SigLIP do; essentially <strong>learning a shared embedding space</strong></li><li><strong>Cross-modal generation</strong>: let the LLM "see" the image inside the prompt — this is what LLaVA / Qwen-VL / Flamingo do; essentially <strong>stuffing image tokens as a prefix into the LLM's context</strong></li></ul>
+<div class="callout callout-info"><div class="callout-title">Three fusion paradigms</div><p>the central architectural split in VLMs.</p></div>
+<ul><li><strong>Early fusion (dual-encoder + contrastive)</strong>: CLIP / SigLIP, <strong>no cross-modal attention</strong>, only push / pull in the embedding space</li><li><strong>Projector fusion (visual tokens → LLM context)</strong>: LLaVA / Qwen-VL, project image embeddings into LLM token space and <strong>concatenate as input tokens</strong>, then autoregressively decode</li><li><strong>Cross-attn fusion (image as KV, text as Q)</strong>: Flamingo / BLIP-2 / Llama-3.2-V, add cross-attention layers so <strong>the LLM's text tokens actively query the visual KV</strong></li></ul>
+<p>Compare from a Q/K/V perspective: in the projector paradigm the image is part of the LLM's input sequence (full interaction inside self-attention); in the cross-attn paradigm the image is always KV and is <strong>only queried</strong> — this causes <strong>different KV cache handling at inference time</strong>.</p>
+<h2 id="2-vit-turning-an-image-into-a-token-sequence">§2 ViT: turning an image into a token sequence</h2>
+<h3 id="21-patch-tokenize">2.1　Patch tokenize</h3>
+<p>Input image $\mathbf{x} \in \mathbb{R}^{H \times W \times C}$, slice it into $N = HW/P^2$ patches of $P\times P$, flatten each patch to a $P^2 C$-dim vector, and pass it through a linear layer to $D$ dimensions:</p>
+<p>$$\mathbf{z}_0 = [\mathbf{x}_\text{class};\ \mathbf{x}^1_p \mathbf{E};\ \mathbf{x}^2_p \mathbf{E};\ \dots;\ \mathbf{x}^N_p \mathbf{E}] + \mathbf{E}_\text{pos}$$</p>
+<ul><li>$\mathbf{E} \in \mathbb{R}^{P^2 C \times D}$ is the patch embedding matrix (equivalent to a Conv2D with stride=$P$, kernel=$P$)</li><li>$\mathbf{x}_\text{class} \in \mathbb{R}^D$ is the <strong>learnable [CLS] token</strong>, used to aggregate global information (for classification, take $\mathbf{z}_L^0$)</li><li>$\mathbf{E}_\text{pos} \in \mathbb{R}^{(N+1) \times D}$ is a <strong>learnable 1D positional embedding</strong> — the original ViT uses 1D learned, <strong>not 2D sinusoidal</strong> (the paper's Appendix D.4 reports that 1D learned vs 2D sinusoidal differs only within noise)</li></ul>
+<div class="callout callout-warn"><div class="callout-title">CLIP / SigLIP don&#x27;t necessarily use [CLS]</div><p>CLIP ViT uses [CLS] for output, SigLIP / EVA-CLIP / modern LLaVA tend to use <strong>patch token average pool</strong> or keep all patch tokens to feed downstream. <strong>[CLS] is the ViT paper's choice, not an intrinsic part of ViT</strong>.</p></div>
+<h3 id="22-transformer-backbone">2.2　Transformer backbone</h3>
+<p>$$\mathbf{z}'_\ell = \text{MHA}(\text{LN}(\mathbf{z}_{\ell-1})) + \mathbf{z}_{\ell-1}, \quad \mathbf{z}_\ell = \text{MLP}(\text{LN}(\mathbf{z}'_\ell)) + \mathbf{z}'_\ell$$</p>
+<p>Pre-norm (LN at the input of each sub-layer), MLP uses GELU. Note that the original ViT has a fixed number of patches ($224/16=14 \Rightarrow N=196$), and <strong>its positional embedding table is fixed in size</strong> — this is the pain point that dynamic resolution must solve (§10).</p>
+<h3 id="23-vit-specifications">2.3　ViT specifications</h3>
+<table><thead><tr><th>Model</th><th>Patch</th><th>Hidden $D$</th><th>Layers</th><th>Heads</th><th>Params</th><th>Source</th></tr></thead><tbody><tr><td>ViT-B/16</td><td>16</td><td>768</td><td>12</td><td>12</td><td>86M</td><td>Dosovitskiy 2021</td></tr><tr><td>ViT-L/14</td><td>14</td><td>1024</td><td>24</td><td>16</td><td>304M</td><td>Dosovitskiy 2021</td></tr><tr><td>ViT-H/14</td><td>14</td><td>1280</td><td>32</td><td>16</td><td>632M</td><td>Dosovitskiy 2021</td></tr><tr><td>ViT-g/14</td><td>14</td><td>1408</td><td>40</td><td>16</td><td>1.0B</td><td>Zhai et al. 2022</td></tr><tr><td>ViT-bigG/14</td><td>14</td><td>1664</td><td>48</td><td>16</td><td>1.8B</td><td>OpenCLIP, 2023</td></tr><tr><td>EVA-02-L/14</td><td>14</td><td>1024</td><td>24</td><td>16</td><td>304M</td><td>Fang 2023</td></tr><tr><td>SigLIP SoViT-400M/14</td><td>14</td><td>1152</td><td>27</td><td>16</td><td>400M</td><td>Alabdulmohsin 2023</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">head_dim is typically fixed at 64</div><p>ViT-family models mostly follow head_dim ≈ 64–88, i.e. $D / H$. Scaling laws suggest head_dim should not be too small, otherwise per-head expressiveness is limited.</p></div>
+<h3 id="24-code-vit-patch-embed--backbone-core-60-lines">2.4　Code: ViT patch embed + backbone (core 60 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class PatchEmbed(nn.Module):
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
+        super().__init__()
+        self.img_size, self.patch_size = img_size, patch_size
+        self.num_patches = (img_size // patch_size) ** 2
+        # A Conv2d with stride=P, kernel=P is equivalent to a linear projection
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, x):                                   # x: [B, C, H, W]
+        x = self.proj(x)                                    # [B, D, H/P, W/P]
+        x = x.flatten(2).transpose(1, 2)                    # [B, N, D]
+        return x
+
+class ViTBlock(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio=4.0, dropout=0.0):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(dim)
+        self.attn = nn.MultiheadAttention(dim, num_heads, dropout=dropout, batch_first=True)
+        self.ln2 = nn.LayerNorm(dim)
+        hidden = int(dim * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, hidden), nn.GELU(), nn.Dropout(dropout),
+            nn.Linear(hidden, dim), nn.Dropout(dropout),
+        )
+
+    def forward(self, x):
+        h = self.ln1(x)
+        a, _ = self.attn(h, h, h, need_weights=False)       # self-attention
+        x = x + a
+        x = x + self.mlp(self.ln2(x))
+        return x
+
+class ViT(nn.Module):
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768,
+                 depth=12, num_heads=12, num_classes=1000, use_cls=True):
+        super().__init__()
+        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+        N = self.patch_embed.num_patches
+        self.use_cls = use_cls
+        if use_cls:
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+            self.pos_embed = nn.Parameter(torch.zeros(1, N + 1, embed_dim))
+        else:
+            self.pos_embed = nn.Parameter(torch.zeros(1, N, embed_dim))
+        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        if use_cls:
+            nn.init.trunc_normal_(self.cls_token, std=0.02)
+        self.blocks = nn.ModuleList([ViTBlock(embed_dim, num_heads) for _ in range(depth)])
+        self.ln = nn.LayerNorm(embed_dim)
+        self.head = nn.Linear(embed_dim, num_classes) if num_classes &gt; 0 else nn.Identity()
+
+    def forward(self, x):
+        B = x.size(0)
+        x = self.patch_embed(x)                             # [B, N, D]
+        if self.use_cls:
+            cls = self.cls_token.expand(B, -1, -1)
+            x = torch.cat([cls, x], dim=1)                  # [B, N+1, D]
+        x = x + self.pos_embed                              # broadcast over batch
+        for blk in self.blocks:
+            x = blk(x)
+        x = self.ln(x)
+        feat = x[:, 0] if self.use_cls else x.mean(dim=1)   # CLS or mean-pool
+        return self.head(feat)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Common bug with interpolate_pos_embed</div><p>when transferring a ViT from $224^2$ to $336^2$, the pos_embed table needs resizing from $(14^2 + 1)$ rows to $(24^2 + 1)$ rows. <strong>Correct procedure</strong>: keep [CLS] unchanged, reshape the patch portion to $14\times 14\times D$, bicubic-interpolate to $24\times 24$, then flatten and concatenate back. <strong>Pitfall</strong>: directly doing 1D interpolation over $(N+1)$ rows treats [CLS] as a patch.</p></div>
+<h2 id="3-clip-symmetric-infonce-must-derive">§3 CLIP: symmetric InfoNCE (must derive)</h2>
+<h3 id="31-formalizing-the-objective">3.1　Formalizing the objective</h3>
+<p>CLIP (Radford et al. 2021, ICML) trains with $N$ (image, text) pairs per batch. Two encoders $f_\theta$ (image), $g_\phi$ (text) produce $\ell_2$-normalized embeddings:</p>
+<p>$$\mathbf{u}_i = \frac{f_\theta(I_i)}{\|f_\theta(I_i)\|_2}, \quad \mathbf{v}_j = \frac{g_\phi(T_j)}{\|g_\phi(T_j)\|_2}, \quad \mathbf{u}_i, \mathbf{v}_j \in S^{D-1}$$</p>
+<p>Define the similarity matrix $\mathbf{S} \in \mathbb{R}^{N\times N}$ (the "logit"):</p>
+<p>$$S_{ij} = \frac{\mathbf{u}_i^\top \mathbf{v}_j}{\tau}$$</p>
+<p>where $\tau > 0$ is the learnable temperature (engineered as <code>logit_scale = log(1/τ)</code>, which is more stable in backprop, clamped in $[\log 1, \log 100]$).</p>
+<h3 id="32-symmetric-infonce-loss-average-of-row--column-softmax">3.2　Symmetric InfoNCE loss (average of row + column softmax)</h3>
+<p><strong>Image → Text direction</strong> (for each image $i$, positive sample is $T_i$, negatives are $\{T_j\}_{j\neq i}$):</p>
+<p>$$\mathcal{L}_{i\to t} = -\frac{1}{N}\sum_{i=1}^{N} \log \frac{\exp(S_{ii})}{\sum_{j=1}^{N} \exp(S_{ij})}$$</p>
+<p><strong>Text → Image direction</strong>:</p>
+<p>$$\mathcal{L}_{t\to i} = -\frac{1}{N}\sum_{j=1}^{N} \log \frac{\exp(S_{jj})}{\sum_{i=1}^{N} \exp(S_{ij})}$$</p>
+<p>Total symmetric loss:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{CLIP} = \frac{1}{2}\left(\mathcal{L}_{i\to t} + \mathcal{L}_{t\to i}\right)\;}$$</p>
+<div class="callout callout-good"><div class="callout-title">Equivalent formulation: average of row softmax + column softmax</div><p>for the matrix $\mathbf{S}$, <strong>apply row softmax and take the NLL of the diagonal</strong> (image→text), <strong>apply column softmax and take the NLL of the diagonal</strong> (text→image). The mean of the two cross-entropies is the CLIP loss.</p></div>
+<h3 id="33-gradient-derivation-why-symmetry-matters">3.3　Gradient derivation (why symmetry matters)</h3>
+<p>Fix $\tau=1$. For the row logits $\mathbf{s}_i = (S_{i1},\dots,S_{iN})^\top$ inside $\mathcal{L}_{i\to t}$, apply softmax and let $p_{ij} = \text{softmax}(\mathbf{s}_i)_j$. Then:</p>
+<p>$$\frac{\partial \mathcal{L}_{i\to t}}{\partial S_{ij}} = \frac{1}{N}\left(p_{ij} - \mathbb{1}[j=i]\right)$$</p>
+<ul><li>$j=i$ (positive): gradient $\propto p_{ii} - 1 < 0$, <strong>pulls</strong> $\mathbf{u}_i, \mathbf{v}_i$ closer</li><li>$j \neq i$ (negative): gradient $\propto p_{ij} > 0$, <strong>pushes</strong> $\mathbf{u}_i, \mathbf{v}_j$ apart</li></ul>
+<p>With only one direction $\mathcal{L}_{i\to t}$, $\mathbf{v}_j$ receives gradient from all $\mathbf{u}_i$, but <strong>cannot in turn constrain how $\mathbf{u}_i$ behaves when retrieved by other $\mathbf{v}_k$</strong>. Symmetrization adds the text→image retrieval constraint, <strong>preventing one-sided collapse</strong> in the embedding space (where image-side clusters tightly but text-side drifts).</p>
+<h3 id="34-role-of-temperature">3.4　Role of temperature</h3>
+<p>$$\mathcal{L}_{i\to t} = -\frac{1}{N}\sum_i \log\frac{\exp(\mathbf{u}_i^\top \mathbf{v}_i / \tau)}{\sum_j \exp(\mathbf{u}_i^\top \mathbf{v}_j / \tau)}$$</p>
+<ul><li>$\tau \to 0^+$ (<strong>very small</strong>): softmax is nearly one-hot, <strong>only the hardest negative matters</strong> (the most similar but incorrect text); gradient is dominated by one or two negatives and training is unstable</li><li>$\tau \to \infty$ (<strong>very large</strong>): softmax is uniform, positives and negatives are nearly indistinguishable, loss approaches the $\log N$ constant, <strong>almost no gradient</strong></li><li><strong>OpenAI CLIP's learned steady state</strong>: $\tau \approx 0.01$ (<code>logit_scale ≈ log(100)</code>), with the upper bound clamped to prevent collapse</li></ul>
+<div class="callout callout-info"><div class="callout-title">InfoNCE as a lower bound</div><p>Oord et al. 2018 (CPC) proved InfoNCE is a lower bound on the mutual information $I(U; V)$: $I(U; V) \ge \log N - \mathcal{L}_\text{InfoNCE}$. So <strong>increasing batch size $N$ while reducing loss directly raises the MI lower bound</strong> — this is why CLIP / SigLIP both chase huge batches.</p></div>
+<h3 id="35-code-clip-symmetric-infonce-core-50-lines">3.5　Code: CLIP symmetric InfoNCE (core 50 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class CLIPLoss(nn.Module):
+    &quot;&quot;&quot;Symmetric InfoNCE used by OpenAI CLIP (Radford et al. 2021).&quot;&quot;&quot;
+    def __init__(self, init_tau=0.07, max_logit_scale=4.6052):
+        super().__init__()
+        # Equivalent to logit_scale = log(1/τ); initial ~ log(1/0.07) ≈ 2.659
+        self.logit_scale = nn.Parameter(torch.tensor(1.0 / init_tau).log())
+        self.max_logit_scale = max_logit_scale            # log(100), clamp to prevent blow-up
+
+    def forward(self, image_feats, text_feats):
+        &quot;&quot;&quot;
+        image_feats: [N, D]   (unnormalized)
+        text_feats:  [N, D]
+        &quot;&quot;&quot;
+        # L2 normalize to the unit sphere
+        u = F.normalize(image_feats, dim=-1)              # [N, D]
+        v = F.normalize(text_feats, dim=-1)               # [N, D]
+
+        # Clamp logit_scale upper bound (late training rises to ~log(100))
+        logit_scale = self.logit_scale.clamp(max=self.max_logit_scale).exp()
+
+        # Similarity matrix
+        logits_i2t = logit_scale * u @ v.t()              # [N, N]
+        logits_t2i = logits_i2t.t()                       # [N, N]
+
+        # The diagonal contains the positive pairs
+        N = u.size(0)
+        labels = torch.arange(N, device=u.device)
+
+        loss_i2t = F.cross_entropy(logits_i2t, labels)    # row softmax NLL
+        loss_t2i = F.cross_entropy(logits_t2i, labels)    # column softmax NLL
+
+        return 0.5 * (loss_i2t + loss_t2i), logit_scale
+
+# Example (under DDP, you need to all-gather feats from all GPUs before computing)
+if __name__ == &quot;__main__&quot;:
+    N, D = 8, 512
+    img_feats = torch.randn(N, D)
+    txt_feats = torch.randn(N, D)
+    criterion = CLIPLoss()
+    loss, scale = criterion(img_feats, txt_feats)
+    print(f&quot;loss={loss.item():.4f}  logit_scale={scale.item():.2f}&quot;)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Under DDP you must all-gather to get true InfoNCE</div><p>on a single GPU, the batch $N$ loss only covers local negatives. Production CLIP (OpenCLIP / OpenAI) does <code>dist.all_gather</code> on $\mathbf{u}, \mathbf{v}$ after forward, so the negative pool = global batch size (e.g. 32k). <strong>Gradient is computed for only the local row / column on the host GPU via gradient checkpointing</strong> — this is an engineering trick, not a math change.</p></div>
+<h3 id="36-clip-training-data--scale">3.6　CLIP training data &amp; scale</h3>
+<ul><li><strong>WIT (WebImageText)</strong>: 400M (image, text) pairs scraped from the internet (not released)</li><li><strong>LAION-400M / LAION-2B</strong>: the open-source replacement used by OpenCLIP; a series of scales were trained in 2022–2023</li><li><strong>DataComp</strong>: Gadre et al. 2023 (NeurIPS) proposed a systematic data-filtering benchmark, <strong>data quality &gt; data scale</strong></li><li>Model scale: OpenAI's largest is ViT-L/14; OpenCLIP trained ViT-bigG/14 (LAION-2B), with <strong>zero-shot ImageNet ~80%+</strong></li></ul>
+<h3 id="37-clips-failure-modes">3.7　CLIP's failure modes</h3>
+<ul><li><strong>Poor OCR / text understanding</strong>: training captions usually do not describe the text inside an image, so CLIP is essentially "blind" to in-image text</li><li><strong>Fine-grained counting fails</strong>: "5 birds" vs "6 birds" is nearly indistinguishable in CLIP embeddings (the "counting problem")</li><li><strong>Weak on spatial relations</strong>: "cat on top of dog" vs "dog on top of cat" is hard to distinguish (POPE / Winoground benchmarks quantify this)</li><li><strong>Bag-of-words tendency</strong>: Yuksekgonul et al. 2023 (ICLR) showed CLIP is barely sensitive to word order in captions</li></ul>
+<h2 id="4-siglip-replacing-softmax-with-sigmoid-batch-scaling-rewritten">§4 SigLIP: replacing softmax with sigmoid; batch scaling rewritten</h2>
+<h3 id="41-motivation">4.1　Motivation</h3>
+<p>CLIP's softmax normalization couples all N×N similarities together: each positive's gradient depends on the row-wide logsumexp of negatives. This causes:</p>
+<ul><li><strong>Strong batch-size sensitivity</strong>: doubling N significantly changes the loss landscape; small batches barely learn</li><li><strong>Expensive DDP communication</strong>: must all-gather embeddings (O(N·D) bytes), creating a communication bottleneck</li><li><strong>Numerical instability</strong>: softmax overflows easily at very large N</li></ul>
+<p>Zhai et al. 2023 (ICCV) proposed <strong>SigLIP</strong>: treat each entry of the N×N matrix as <strong>independent</strong> binary classification.</p>
+<h3 id="42-sigmoid-loss-derivation">4.2　Sigmoid loss derivation</h3>
+<p>Define similarity $S_{ij} = t \cdot \mathbf{u}_i^\top \mathbf{v}_j + b$, where $t = e^{t'}$ is a learnable scale (same as CLIP's $1/\tau$) and $b$ is a learnable bias (initialized to a negative number, e.g. $b_0 = -10$, to avoid early prediction of "all positive").</p>
+<p>Label $y_{ij} = +1$ if $i=j$, $-1$ otherwise. Each entry does binary logistic regression:</p>
+<p>$$\mathcal{L}_\text{SigLIP} = -\frac{1}{N}\sum_{i=1}^N \sum_{j=1}^N \log \sigma\!\left(y_{ij} \cdot S_{ij}\right) = \frac{1}{N}\sum_{i=1}^N \sum_{j=1}^N \log\!\left(1 + \exp(-y_{ij} S_{ij})\right)$$</p>
+<div class="callout callout-good"><div class="callout-title">Key property</div><p>the loss for each $(i,j)$ entry <strong>does not depend on any other entry</strong>. Therefore:</p></div>
+<ul><li>batch size no longer couples all negatives</li><li>a single machine can use very large batches (SigLIP reports 32k batch on one chip is trainable)</li><li>communication only needs pairing local queries with remote keys and computing sigmoid entries (chunked all-pair); no need to synchronize logsumexp</li></ul>
+<div class="callout callout-warn"><div class="callout-title">The bias $b$ is not decorative</div><p>early in training, $\mathbf{u}, \mathbf{v}$ are near-random, $S_{ij}$ is near 0, and sigmoid outputs 0.5. Negatives number $N^2 - N \approx N^2$, while positives are only $N$; if initial predictions are all ~0.5, <strong>negative-sample gradients dominate early training</strong>. SigLIP initializes $b_0 \approx -10$, so the sigmoid is initially near 0 — <strong>all entries are first predicted as negative</strong>, then positives have large loss and negatives have small loss; starting from this state makes training stable.</p></div>
+<h3 id="43-siglip-vs-clip-comparison">4.3　SigLIP vs CLIP comparison</h3>
+<table><thead><tr><th>Dimension</th><th>CLIP (softmax)</th><th>SigLIP (sigmoid)</th></tr></thead><tbody><tr><td>Loss form</td><td>$\propto$ logsumexp(row) + logsumexp(col)</td><td>$\propto$ $\sum_{ij}$ binary logistic</td></tr><tr><td>Batch dependence</td><td>Strong (gradient couples batch)</td><td>Weak (entries independent)</td></tr><tr><td>Communication</td><td>all-gather embeddings</td><td>chunked all-pair sigmoid</td></tr><tr><td>Bias term</td><td>None (implicitly absorbed by softmax)</td><td>learnable $b$, init $\approx -10$</td></tr><tr><td>Small-batch behavior</td><td>Poor (&lt; 4k barely learns)</td><td>Significantly better (1k learns)</td></tr><tr><td>Large-batch behavior</td><td>Diminishing returns</td><td>Keeps rising through 32k+</td></tr><tr><td>Zero-shot ImageNet (ViT-L/14, 400M data)</td><td>~75%</td><td>~76–78%</td></tr></tbody></table>
+<h3 id="44-siglip-2-google-2025">4.4　SigLIP-2 (Google 2025)</h3>
+<p>Tschannen et al. 2025, building on SigLIP-1:</p>
+<ul><li>Adds a <strong>caption-style decoder</strong> (akin to CapPa) as a captioning auxiliary task</li><li><strong>Self-distillation + dense local objectives</strong>: patch-level local contrast for better detail localization</li><li><strong>Multilingual extension</strong>: training data scaled to 100+ languages, with substantial multilingual zero-shot gains</li><li>Released a NaFlex variant for native aspect ratios</li></ul>
+<h3 id="45-code-siglip-sigmoid-loss-core-35-lines">4.5　Code: SigLIP sigmoid loss (core 35 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class SigLIPLoss(nn.Module):
+    &quot;&quot;&quot;Sigmoid Loss for Language Image Pre-training (Zhai et al. 2023).&quot;&quot;&quot;
+    def __init__(self, init_t=10.0, init_b=-10.0):
+        super().__init__()
+        # log-parameterize t for stability; b is a learnable bias
+        self.t_prime = nn.Parameter(torch.tensor(init_t).log())
+        self.b = nn.Parameter(torch.tensor(float(init_b)))
+
+    def forward(self, image_feats, text_feats):
+        u = F.normalize(image_feats, dim=-1)             # [N, D]
+        v = F.normalize(text_feats, dim=-1)              # [N, D]
+
+        t = self.t_prime.exp()                           # scale &gt; 0
+        logits = t * (u @ v.t()) + self.b                # [N, N]
+
+        # y_{ij} = +1 if i == j else -1
+        N = u.size(0)
+        labels = 2 * torch.eye(N, device=u.device) - 1   # [N, N], +1 on diag, -1 off
+
+        # log(1 + exp(-y * logits))  ==  -log sigmoid(y * logits)
+        loss = -F.logsigmoid(labels * logits).sum() / N  # SigLIP convention: sum / N
+        return loss, t, self.b</code></pre>
+<div class="callout callout-warn"><div class="callout-title">SigLIP normalizes by N, not N²</div><p>the paper's Eq. (1) normalizes by batch size $N$ (sum per row), not by number of matrix elements $N^2$. <strong>Pitfall</strong>: writing <code>loss.mean()</code> gives a 1/N² magnitude, the loss is too small, and the learnable scale converges incorrectly. <strong>Correct</strong>: <code>loss.sum() / N</code>.</p></div>
+<h2 id="5-eva-clip--openclip--other-clip-variants">§5 EVA-CLIP / OpenCLIP / other CLIP variants</h2>
+<h3 id="51-openclip">5.1　OpenCLIP</h3>
+<p>OpenCLIP (Cherti et al. 2023 CVPR) is the LAION team's open-source reproduction + extension:</p>
+<ul><li><strong>Open training recipe</strong>: full LAION-400M / LAION-2B training scripts</li><li><strong>Larger scale</strong>: ViT-bigG/14 trained on LAION-2B reaches zero-shot ImageNet ~80.1% (SOTA in 2023)</li><li><strong>Distributed InfoNCE</strong>: implements <code>local_loss=True</code> with gradient checkpointing; each GPU only stores local rows/columns in memory</li></ul>
+<h3 id="52-eva-clip">5.2　EVA-CLIP</h3>
+<p>EVA-CLIP (Sun et al. 2023) uses MIM-pretrained EVA / EVA-02 (Fang et al. 2023) as vision-tower initialization, <strong>substantially improving sample efficiency</strong>:</p>
+<ul><li>ViT-L/14 on LAION-2B needs only 1/3 of OpenCLIP's compute budget to reach the same accuracy</li><li><strong>LayerScale + sub-LN + RoPE</strong>: engineering improvements on EVA-02's visual side</li></ul>
+<h3 id="53-datacomp-data-vs-model-vs-algorithm">5.3　DataComp (data vs model vs algorithm)</h3>
+<p>Gadre et al. 2023 (NeurIPS) designed a "data filtering benchmark": fix (model, compute) and only vary the data filter. Conclusions:</p>
+<ul><li>Combination of <strong>CLIP filtering</strong> + <strong>basic filtering</strong> + <strong>image-based filtering</strong> works best</li><li>Large models (ViT-L/14) on small data (12.8M) are worse than ViT-B (<strong>in the data-limited regime, larger models overfit</strong>)</li></ul>
+<h3 id="54-comparison-overview">5.4　Comparison overview</h3>
+<table><thead><tr><th>Method</th><th>Vision tower init</th><th>Loss</th><th>Batch</th><th>Training data</th><th>ImageNet zero-shot</th></tr></thead><tbody><tr><td>CLIP (OpenAI)</td><td>from scratch</td><td>softmax InfoNCE</td><td>32k</td><td>WIT 400M</td><td>76.2% (L/14@336)</td></tr><tr><td>OpenCLIP</td><td>from scratch</td><td>softmax InfoNCE</td><td>90k</td><td>LAION-2B</td><td>80.1% (bigG/14)</td></tr><tr><td>EVA-CLIP</td><td>EVA-02 MIM</td><td>softmax InfoNCE</td><td>—</td><td>LAION-2B</td><td>82.0% (E/14+)</td></tr><tr><td>SigLIP</td><td>from scratch</td><td>sigmoid</td><td>32k</td><td>WebLI</td><td>82.0% (So400M/14)</td></tr><tr><td>SigLIP-2</td><td>from scratch</td><td>sigmoid + caption + distill</td><td>—</td><td>WebLI 10B</td><td>84%+</td></tr><tr><td>MetaCLIP</td><td>from scratch</td><td>softmax InfoNCE</td><td>—</td><td>reconstructed LAION-grade</td><td>79.2% (H/14)</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">2024–2025 trend</div><p>the SigLIP family has stably surpassed CLIP on zero-shot ImageNet and downstream retrieval; representative open-weight VLMs using SigLIP-So400M are <strong>PaliGemma / LLaVA-OneVision / Molmo</strong>. <strong>The InternVL series uses their in-house InternViT; Qwen2-VL trains its own ViT; LLaVA-1.5/1.6 still use CLIP ViT-L/14</strong> — "switching to SigLIP" is not an industry consensus.</p></div>
+<h2 id="6-llava-projector--2-stage-training">§6 LLaVA: projector + 2-stage training</h2>
+<h3 id="61-architecture">6.1　Architecture</h3>
+<p>LLaVA (Liu et al. 2023 NeurIPS) centers on a trio:</p>
+<pre class="diagram"><code>Image ──► CLIP ViT-L/14 ──► visual features  z_v ∈ R^{N × d_v}
+                                  │
+                                  │  W ∈ R^{d_v × d_LLM}   ← MLP projector
+                                  ↓
+                            H_v ∈ R^{N × d_LLM}
+                                  │
+                                  │  concatenated with text embedding
+                                  ↓
+Text tokens ──► tokenizer ──► H_t ──► [&lt;bos&gt;, H_v, H_t] ──► LLM (Vicuna / LLaMA-2)
+                                                              │
+                                                              ↓
+                                                            autoregressive response</code></pre>
+<ul><li><strong>Vision tower</strong>: CLIP ViT-L/14 (frozen, taking the second-to-last layer's patch tokens). LLaVA-1.0 uses $224^2$ input giving $N=256$; <strong>LLaVA-1.5 upgrades to $336^2$, giving $N=576$</strong></li><li><strong>Projector</strong> $W$: LLaVA-1.0 uses a single Linear; <strong>LLaVA-1.5 upgrades to 2-layer MLP + GELU</strong> (the paper reports a clear improvement in instruction following)</li><li><strong>LLM</strong>: Vicuna-13B (LLaVA-1.0/1.5) or LLaMA-2</li></ul>
+<h3 id="62-two-stage-training">6.2　Two-stage training</h3>
+<p><strong>Stage 1: Feature Alignment Pre-training</strong></p>
+<ul><li>Use CC3M / LAION-558K caption data in the format <code>&lt;image&gt;\n&lt;caption&gt;</code></li><li><strong>Train the projector $W$ only</strong>, freezing vision tower and LLM</li><li>Goal: project visual features close to the LLM's word embedding space</li></ul>
+<p><strong>Stage 2: End-to-end Visual Instruction Tuning</strong></p>
+<ul><li>Use 158K visual instructions generated by GPT-4 (LLaVA-Instruct)</li><li>Unfreeze projector + LLM; <strong>vision tower remains frozen</strong></li><li>The LLM learns to "understand images, answer questions, follow visual instructions"</li></ul>
+<h3 id="63-code-llava-style-projector--forward-core-60-lines">6.3　Code: LLaVA-style projector + forward (core 60 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class LLaVAProjector(nn.Module):
+    &quot;&quot;&quot;2-layer MLP + GELU, as in LLaVA-1.5.&quot;&quot;&quot;
+    def __init__(self, d_vision=1024, d_llm=4096):
+        super().__init__()
+        self.fc1 = nn.Linear(d_vision, d_llm)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(d_llm, d_llm)
+
+    def forward(self, x):                               # x: [B, N, d_vision]
+        return self.fc2(self.act(self.fc1(x)))          # [B, N, d_llm]
+
+class LLaVA(nn.Module):
+    &quot;&quot;&quot;Skeleton: CLIP vision tower + projector + LLM.&quot;&quot;&quot;
+    def __init__(self, vision_tower, projector, llm, image_token_id):
+        super().__init__()
+        self.vision_tower = vision_tower                # CLIPViT, frozen at stage 1
+        self.projector = projector
+        self.llm = llm                                  # e.g. LlamaForCausalLM
+        self.image_token_id = image_token_id           # special &lt;image&gt; placeholder
+
+    @torch.no_grad()
+    def encode_image(self, pixel_values):
+        # Take the second-to-last layer&#x27;s patch features (skip [CLS])
+        vit_out = self.vision_tower(pixel_values, output_hidden_states=True)
+        feat = vit_out.hidden_states[-2][:, 1:, :]      # drop CLS, [B, N, d_v]
+        return feat
+
+    def forward(self, input_ids, pixel_values, labels=None, attention_mask=None):
+        # 1. Visual features → projector → LLM dim
+        with torch.no_grad():
+            visual_features = self.encode_image(pixel_values)        # [B, N, d_v]
+        visual_tokens = self.projector(visual_features)              # [B, N, d_llm]
+
+        # 2. LLM&#x27;s word embedding table
+        token_embeds = self.llm.get_input_embeddings()(input_ids)    # [B, L, d_llm]
+
+        # 3. Replace the &lt;image&gt; placeholder positions with visual_tokens
+        B, L, D = token_embeds.shape
+        new_embeds, new_labels, new_mask = [], [], []
+        for b in range(B):
+            image_pos = (input_ids[b] == self.image_token_id).nonzero(as_tuple=True)[0]
+            assert image_pos.numel() == 1, &quot;exactly one &lt;image&gt; placeholder expected&quot;
+            i = image_pos.item()
+            # Concat: [prefix tokens] + [N visual tokens] + [suffix tokens]
+            chunks = [token_embeds[b, :i], visual_tokens[b], token_embeds[b, i+1:]]
+            new_embeds.append(torch.cat(chunks, dim=0))
+            if labels is not None:
+                lab = labels[b]
+                # Label = -100 at visual token positions (not counted in loss)
+                ignore = torch.full((visual_tokens.size(1),), -100, dtype=lab.dtype, device=lab.device)
+                new_labels.append(torch.cat([lab[:i], ignore, lab[i+1:]], dim=0))
+            if attention_mask is not None:
+                am = attention_mask[b]
+                ones = torch.ones(visual_tokens.size(1), dtype=am.dtype, device=am.device)
+                new_mask.append(torch.cat([am[:i], ones, am[i+1:]], dim=0))
+
+        # 4. Pad back to a batch tensor and feed the LLM
+        inputs_embeds = torch.nn.utils.rnn.pad_sequence(new_embeds, batch_first=True)
+        labels = torch.nn.utils.rnn.pad_sequence(new_labels, batch_first=True, padding_value=-100) if labels is not None else None
+        attention_mask = torch.nn.utils.rnn.pad_sequence(new_mask, batch_first=True) if attention_mask is not None else None
+        return self.llm(inputs_embeds=inputs_embeds, labels=labels, attention_mask=attention_mask)</code></pre>
+<h3 id="64-llava-15--16--next-key-upgrades">6.4　LLaVA-1.5 / 1.6 / NeXT key upgrades</h3>
+<table><thead><tr><th>Version</th><th>Time</th><th>Main changes</th></tr></thead><tbody><tr><td>LLaVA-1.0</td><td>2023.04</td><td>Single Linear projector; CLIP ViT-L/14@224², visual tokens = 256 ($16\times 16$)</td></tr><tr><td>LLaVA-1.5</td><td>2023.10</td><td>2-layer MLP; resolution up to 336², visual tokens = 576 ($24\times 24$); adds OCR / GQA / VQAv2 academic data</td></tr><tr><td>LLaVA-1.6 / NeXT</td><td>2024.01</td><td><strong>AnyRes</strong>: slice the image into $2\times 2 / 2\times 3 / \dots$ tiles and encode each, supporting any aspect ratio; up to 2880 tokens</td></tr><tr><td>LLaVA-OneVision</td><td>2024.08</td><td>Unified single / multi-image / video; introduces a mix of SI (single image) + OV (onevision) data</td></tr><tr><td>LLaVA-NeXT-Video</td><td>2024.04</td><td>Video version; feed the LLM serialized visual features from multiple frames</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Core trick of AnyRes (LLaVA-1.6)</div><p>training assumes a fixed 336²; at inference, a high-res image is sliced into $n \times m$ tiles of 336² each, encoded individually, plus one "global thumbnail" (the full image resized to 336²). <strong>Tokens go from 576 to (1 + n·m)·576</strong>, but each tile passes through the same frozen ViT. <strong>The same family as InternVL / Qwen-VL tiling</strong>.</p></div>
+<h2 id="7-blip-2-q-former-cross-attention">§7 BLIP-2: Q-Former cross-attention</h2>
+<h3 id="71-motivation">7.1　Motivation</h3>
+<p>LLaVA's projector is simple, but <strong>every patch becomes an LLM token</strong>: higher resolution ↑ more tokens ↑ LLM compute $O(L^2)$ ↑. BLIP-2 (Li et al. 2023 ICML) uses a <strong>Q-Former</strong> (Querying Transformer) to compress an arbitrary number of patches into a fixed <strong>32 tokens</strong>.</p>
+<h3 id="72-q-former-structure">7.2　Q-Former structure</h3>
+<p>Input: frozen image encoder output $\mathbf{Z} \in \mathbb{R}^{N \times d_v}$ (N=257 for ViT-g/14@224). The Q-Former has 32 <strong>learnable query tokens</strong> $\mathbf{q}_1, \dots, \mathbf{q}_{32} \in \mathbb{R}^{d_q}$.</p>
+<p>Per Q-Former block:</p>
+<p>$$\mathbf{q}^{(\ell)} = \text{SelfAttn}(\mathbf{q}^{(\ell-1)})$$ $$\mathbf{q}^{(\ell)} = \text{CrossAttn}(\mathbf{q}^{(\ell)},\ \mathbf{Z},\ \mathbf{Z})\quad \text{(inserted only every other layer)}$$ $$\mathbf{q}^{(\ell)} = \text{FFN}(\mathbf{q}^{(\ell)})$$</p>
+<p><strong>Key points</strong>:</p>
+<ul><li><strong>Inside self-attention</strong>: queries interact with each other, not with image patches</li><li><strong>Inside cross-attention</strong>: queries are Q, image patches are K/V — <strong>this is the information entry point</strong></li><li>The output $\mathbf{q}^{(L)} \in \mathbb{R}^{32 \times d_q}$ then goes through a Linear into the LLM dimension, serving as 32 visual tokens fed to the frozen LLM</li></ul>
+<h3 id="73-two-stage-training">7.3　Two-stage training</h3>
+<p><strong>Stage 1: Representation Learning</strong> (only Q-Former trained, vision encoder frozen)</p>
+<ul><li>ITC (Image-Text Contrastive): query embedding contrasted with text [CLS] in CLIP fashion</li><li>ITM (Image-Text Matching): query and text tokens interact via cross-attn, followed by binary classification</li><li>ITG (Image-grounded Text Generation): query does not interact with text; let the text decoder generate captions based on queries (causal mask controls visibility)</li></ul>
+<p><strong>Stage 2: Generative Learning</strong> (only Q-Former trained, LLM frozen)</p>
+<ul><li>Project Q-Former output into the LLM embedding space, so <strong>the LLM does prefix-tuned captioning / VQA based on the 32 visual tokens</strong></li></ul>
+<h3 id="74-code-a-single-q-former-cross-attention-layer-core-40-lines">7.4　Code: a single Q-Former cross-attention layer (core 40 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class QFormerLayer(nn.Module):
+    &quot;&quot;&quot;One Q-Former block: SelfAttn (queries) -&gt; CrossAttn (queries &lt;- image) -&gt; FFN.&quot;&quot;&quot;
+    def __init__(self, d_q=768, d_v=1408, num_heads=12, mlp_ratio=4, has_cross=True):
+        super().__init__()
+        self.has_cross = has_cross
+        self.ln_self = nn.LayerNorm(d_q)
+        self.self_attn = nn.MultiheadAttention(d_q, num_heads, batch_first=True)
+        if has_cross:
+            self.ln_cross = nn.LayerNorm(d_q)
+            # Q comes from query (d_q), K/V come from image feats (d_v) -&gt; adapt via kdim/vdim
+            self.cross_attn = nn.MultiheadAttention(d_q, num_heads,
+                                                   kdim=d_v, vdim=d_v, batch_first=True)
+        self.ln_ffn = nn.LayerNorm(d_q)
+        hidden = int(d_q * mlp_ratio)
+        self.ffn = nn.Sequential(nn.Linear(d_q, hidden), nn.GELU(), nn.Linear(hidden, d_q))
+
+    def forward(self, q, image_feats=None):              # q: [B, 32, d_q]
+        # Self-attention: queries talk to each other
+        h = self.ln_self(q)
+        a, _ = self.self_attn(h, h, h, need_weights=False)
+        q = q + a
+        # Cross-attention: queries attend to image patches
+        if self.has_cross and image_feats is not None:
+            h = self.ln_cross(q)
+            a, _ = self.cross_attn(h, image_feats, image_feats, need_weights=False)
+            q = q + a
+        # FFN
+        q = q + self.ffn(self.ln_ffn(q))
+        return q
+
+class QFormer(nn.Module):
+    def __init__(self, num_queries=32, d_q=768, d_v=1408, depth=12, num_heads=12,
+                 cross_every=2):
+        super().__init__()
+        self.queries = nn.Parameter(torch.zeros(1, num_queries, d_q))
+        nn.init.trunc_normal_(self.queries, std=0.02)
+        self.layers = nn.ModuleList([
+            QFormerLayer(d_q, d_v, num_heads, has_cross=(i % cross_every == 0))
+            for i in range(depth)
+        ])
+
+    def forward(self, image_feats):                      # [B, N, d_v]
+        B = image_feats.size(0)
+        q = self.queries.expand(B, -1, -1)               # [B, 32, d_q]
+        for layer in self.layers:
+            q = layer(q, image_feats)
+        return q                                         # [B, 32, d_q]</code></pre>
+<div class="callout callout-warn"><div class="callout-title">`kdim`/`vdim` adaptation</div><p><code>nn.MultiheadAttention</code> defaults to K/V input dim = <code>embed_dim</code>. In Q-Former cross-attn, query is 768-dim and image feats are 1408-dim, so you <strong>must explicitly pass <code>kdim=d_v, vdim=d_v</code></strong>, otherwise PyTorch will expect 768-dim K/V at forward time and raise a shape mismatch error (no silent truncation).</p></div>
+<h3 id="75-q-former-vs-llava-projector-trade-off">7.5　Q-Former vs LLaVA Projector: trade-off</h3>
+<table><thead><tr><th>Dimension</th><th>LLaVA Projector</th><th>BLIP-2 Q-Former</th></tr></thead><tbody><tr><td>Parameter count</td><td>~20M (MLP)</td><td>~180M (Q-Former + queries)</td></tr><tr><td>Compute</td><td>Only MLP forward</td><td>12 layers of cross-attn forward</td></tr><tr><td>Visual token count</td><td>$N$ (quadratic in resolution)</td><td>Fixed 32</td></tr><tr><td>Information loss</td><td>Almost 0 (every patch enters the LLM)</td><td>Significant (256+ patches compressed to 32)</td></tr><tr><td>Training complexity</td><td>1 stage (pretrain) + 1 stage (IT)</td><td>2 stages (representation + generation); stage 1 jointly optimizes ITC + ITM + ITG</td></tr><tr><td>LLM context usage</td><td>Large (576–2880 tokens)</td><td>Small (32 tokens)</td></tr><tr><td>Best for</td><td>High resolution / detail tasks</td><td>LLM context-limited / batched multimodal inference</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">2024–2025 mainstream returns to projector</div><p>Qwen-VL / LLaVA-NeXT / InternVL-2 / DeepSeek-VL2 all use projector (with spatial reduction / pixel shuffle to control token count); <strong>Q-Former has faded out in industrial VLMs</strong>. But the Q-Former idea is still active in video VLMs (using queries for frame-level pooling).</p></div>
+<h2 id="8-flamingo-perceiver-resampler--gated-cross-attn">§8 Flamingo: Perceiver Resampler + Gated Cross-Attn</h2>
+<h3 id="81-design-goals">8.1　Design goals</h3>
+<p>Alayrac et al. 2022 (NeurIPS) wanted: <strong>to add visual ability to a frozen 70B LLM without breaking the text ability</strong>. Design choices:</p>
+<ul><li><strong>Do not retrain the LLM</strong>: fully frozen; insert only new layers in the middle</li><li><strong>Few trainable parameters</strong>: cross-attn layers + Perceiver Resampler</li><li><strong>Few-shot interleaved</strong>: training data is interleaved sequences of <code>(image, text, image, text, ...)</code></li></ul>
+<h3 id="82-perceiver-resampler">8.2　Perceiver Resampler</h3>
+<p>Similar to Q-Former, "use latent queries to compress the image". The Flamingo paper Sec 3.1 pseudocode is <strong>multi-layer</strong> (each layer = cross-attention + FFN), with the default config approximately $L=6$ layers. Per-layer update:</p>
+<p>$$\mathbf{q}^{(\ell+1)} = \mathbf{q}^{(\ell)} + \text{CrossAttn}\!\left(\mathbf{q}^{(\ell)},\ [\mathbf{q}^{(\ell)};\ \mathbf{Z}],\ [\mathbf{q}^{(\ell)};\ \mathbf{Z}]\right), \quad \mathbf{q}^{(\ell+1)} = \mathbf{q}^{(\ell+1)} + \text{FFN}(\mathbf{q}^{(\ell+1)})$$</p>
+<p>Note K/V is <code>concat(query, image_feat)</code>, not just <code>image_feat</code> — so query tokens can also attend to each other. <strong>Overall still lighter than BLIP-2 Q-Former (12 layers + self-attn + cross-every-2)</strong>. Output 64 latent visual tokens (independent of the input patch count).</p>
+<h3 id="83-gated-cross-attention-the-core-innovation">8.3　Gated Cross-Attention (the core innovation)</h3>
+<p>Insert a new cross-attention module into the LLM every $k$ layers (e.g. every 4):</p>
+<p>$$\mathbf{h}'_\ell = \mathbf{h}_\ell + \tanh(\alpha_\text{attn}) \cdot \text{CrossAttn}(\mathbf{h}_\ell, \mathbf{q}_\text{out}, \mathbf{q}_\text{out})$$ $$\mathbf{h}''_\ell = \mathbf{h}'_\ell + \tanh(\alpha_\text{ffn}) \cdot \text{FFN}(\mathbf{h}'_\ell)$$</p>
+<p><strong>Key</strong>: $\alpha_\text{attn}, \alpha_\text{ffn}$ are learnable scalars, <strong>initialized to 0</strong>. So $\tanh(0)=0$, meaning the added cross-attn <strong>contributes zero to the LLM output at init</strong> — the LLM behaves identically to the unmodified frozen LLM with no visual module. During training, $\alpha$ gradually learns nonzero values and visual information starts flowing in.</p>
+<div class="callout callout-good"><div class="callout-title">This is the &quot;residual graft&quot;</div><p>Llama-3.2-Vision (Meta 2024) uses exactly the same design: frozen LLaMA-3 + learning a gated cross-attn adapter. Pros: <strong>fully preserves text-only performance</strong>; cons: <strong>the visual capability ceiling is lower than the fine-tuned LLM in LLaVA/Qwen-VL</strong>.</p></div>
+<h3 id="84-flamingo--llama-32-v-vs-llava-comparison">8.4　Flamingo / Llama-3.2-V vs LLaVA comparison</h3>
+<table><thead><tr><th>Aspect</th><th>Flamingo / Llama-3.2-V</th><th>LLaVA / Qwen-VL</th></tr></thead><tbody><tr><td>LLM unfrozen?</td><td><strong>No</strong> (frozen)</td><td>Yes (unfrozen in stage 2)</td></tr><tr><td>Image as tokens?</td><td>No (as KV)</td><td><strong>Yes</strong> (as tokens)</td></tr><tr><td>Text-only ability preserved</td><td>✅ Fully</td><td>⚠️ May regress slightly</td></tr><tr><td>Visual understanding ceiling</td><td>Limited by cross-attn capacity</td><td>Higher (LLM can "think about" the image)</td></tr><tr><td>Training data</td><td>interleaved</td><td>image-instruction pairs</td></tr><tr><td>Applicable</td><td>Large LLM + no retraining</td><td>Small/medium LLM + vision-centric</td></tr></tbody></table>
+<h2 id="9-cogvlm-and-visual-experts--cross-attn-fusion-variants">§9 CogVLM and "visual experts" / cross-attn fusion variants</h2>
+<h3 id="91-cogvlm-a-visual-expert-branch">9.1　CogVLM: a visual expert branch</h3>
+<p>Wang et al. 2023 (CogVLM)'s core idea: in the LLM's attention / FFN, <strong>replicate a parallel branch</strong> for visual tokens, <strong>sharing the attention computation with the original text branch but using different projections</strong>:</p>
+<pre class="diagram"><code>                  attention
+       ┌──────────────┴──────────────┐
+       ↓                              ↓
+   text projection (frozen)    vision expert projection (trainable)
+       │                              │
+       └──────────────┬──────────────┘
+                      ↓
+         token-wise route: if visual_token, use vision branch</code></pre>
+<ul><li><strong>MoE-like dual experts</strong>: text tokens go through the text branch, image tokens go through the "visual expert" branch</li><li><strong>Visual expert trained alone</strong>: text branch can be frozen, with visual ability coming from the expert</li><li><strong>Preserves the LLM's native text ability</strong> (same idea as Flamingo, but routing at the token rather than the layer level)</li></ul>
+<h3 id="92-llama-32-vision-flamingo-style-cross-attn-revived-on-a-large-llm">9.2　Llama-3.2 Vision: Flamingo-style cross-attn revived on a large LLM</h3>
+<p>Meta released Llama-3.2-V (11B / 90B) in September 2024:</p>
+<ul><li>Frozen Llama-3 backbone</li><li>Adds <strong>separate cross-attention layers</strong> (not modifying self-attn)</li><li>Adapter-style training, <strong>only the cross-attn layers are trained</strong></li><li>Designed as a "robust base for long-tail visual tasks"; the visual ceiling is slightly below GPT-4V, but <strong>text-only benchmarks are nearly identical to the text-only Llama-3</strong></li></ul>
+<h3 id="93-claude-3537-sonnet-vision-and-gpt-4v4o">9.3　Claude 3.5/3.7 Sonnet Vision and GPT-4V/4o</h3>
+<p>The closed-source architectures of Anthropic / OpenAI are undisclosed, but inferences from API behavior:</p>
+<ul><li><strong>GPT-4V (2023.09) / GPT-4o (2024.05)</strong>: 4o is natively multimodal, jointly trained from the ground up over (image + text + audio), <strong>not a LLaVA-style post-hoc projector</strong></li><li><strong>Claude 3.5/3.7 Sonnet (2024-2025)</strong>: supports high-resolution images (up to 8000×8000 pixels, tiled on demand), with document understanding (PDF/screenshot) being a selling point</li><li><strong>Common feature</strong>: handles multi-page documents / screenshots / OCR of math formulas — far beyond the LLaVA family. This hints at significant optimization in training-data scale (document corpus) + tiling strategy.</li></ul>
+<h2 id="10-qwen2-vl--deepseek-vl-dynamic-resolution--m-rope">§10 Qwen2-VL / DeepSeek-VL: dynamic resolution + M-RoPE</h2>
+<h3 id="101-native-dynamic-resolution">10.1　Native dynamic resolution</h3>
+<p>Qwen2-VL (Wang et al. 2024), DeepSeek-VL (Lu et al. 2024), and InternVL-2 all abandon the "resize to fixed 224²" tradition:</p>
+<ul><li><strong>Preserve original aspect ratio</strong>: resize images to the largest size near the original that is an integer multiple of patch_size</li><li><strong>Dynamic patch count</strong>: a $1024 \times 768$ image at $P=14$ slices into $73 \times 54 \approx 3942$ patches</li><li><strong>No fixed pos embed table</strong>: must use an <strong>extensible positional encoding</strong> (RoPE or 2D ALiBi-like)</li></ul>
+<h3 id="102-m-rope-multimodal-rope">10.2　M-RoPE (Multimodal RoPE)</h3>
+<p>Qwen2-VL's core innovation. <strong>Recap of ordinary 1D RoPE</strong>: treat each pair $(2k, 2k+1)$ of query / key dimensions as a complex number, multiplied by a position-dependent rotation:</p>
+<p>$$\mathbf{R}_{m,k} = \begin{pmatrix} \cos(m\theta_k) & -\sin(m\theta_k) \\ \sin(m\theta_k) & \cos(m\theta_k) \end{pmatrix}, \quad \theta_k = 10000^{-2k/d}$$</p>
+<p>After applying to $\mathbf{q}_m$, $\mathbf{q}_m^\top \mathbf{k}_n$ depends only on $m - n$ (relative position).</p>
+<p><strong>M-RoPE's extension</strong>: a visual token has three position dimensions (t, h, w). <strong>All head_dim dimensions rotate</strong> — but each pair $(2k, 2k+1)$ uses one of the three position ids (t / h / w) for its rotation angle, depending on which segment it falls into:</p>
+<p>$$(\cos(m_\text{axis}\,\theta_k),\ \sin(m_\text{axis}\,\theta_k)), \quad \text{axis} \in \{t, h, w\}$$</p>
+<p>Specifically, Qwen2-VL's <code>mrope_section</code> (<strong>unit is pairs of half head_dim</strong>, i.e. each number represents how many $(2k, 2k+1)$ pairs). One pair = 2 real dimensions, so "section sum × 2 = head_dim".</p>
+<div class="callout callout-info"><div class="callout-title">Qwen2-VL default `mrope_section = [16, 24, 24]`</div><p>that is, the three axes occupy 16 / 24 / 24 dim pairs respectively; total $(16+24+24) \times 2 = 128 = $ head_dim. The implementation doubles the section to $[16, 24, 24, 16, 24, 24]$ to slice head_dim, with position ids of (t, h, w, t, h, w) used for rotation — <strong>all 128 dims rotate</strong>, none "left unrotated". Spatial dims (h, w) occupy 48 pairs &gt; the temporal dim (t)'s 16 pairs, reflecting that inter-frame changes in video are slow while spatial content changes within a frame are dramatic.</p></div>
+<p>A text token has no explicit (h, w): Qwen2-VL sets $m_t = m_h = m_w$ equal to that text token's 1D position id, so all three axes yield <strong>the same rotation angle</strong>, equivalent to ordinary 1D RoPE.</p>
+<h3 id="103-qwen25-vl-upgrades">10.3　Qwen2.5-VL upgrades</h3>
+<p>Qwen2.5-VL (Bai et al. 2025), on top of Qwen2-VL:</p>
+<ul><li><strong>Absolute time encoding</strong>: the M-RoPE t dim switches to real timestamps (seconds), not frame indices, <strong>supporting arbitrary FPS videos</strong></li><li><strong>Dynamic visual token budget</strong>: tune token count by task complexity</li><li><strong>Agent / GUI capability</strong>: add web screenshots / mobile UI operation traces to training data</li></ul>
+<h3 id="104-deepseek-vl--vl2-high-resolution-tiling--hybrid-encoder">10.4　DeepSeek-VL / VL2: high-resolution tiling + hybrid encoder</h3>
+<p>DeepSeek-VL (Lu et al. 2024) uses <strong>dual vision encoders</strong>:</p>
+<ul><li><strong>SigLIP</strong>: for global semantics (low resolution)</li><li><strong>SAM-B</strong> (Segment Anything backbone): for high-resolution detail</li></ul>
+<p>The two features are concatenated and fed to projector + LLM. <strong>DeepSeek-VL2 (2024.12)</strong> further replaces the LLM with MoE + dynamic resolution; a single image can use 1700+ visual tokens.</p>
+<h3 id="105-code-m-rope-three-dim-positional-embedding-core-50-lines-matching-qwen2-vls-hf-implementation">10.5　Code: M-RoPE three-dim positional embedding (core 50 lines, matching Qwen2-VL's HF implementation)</h3>
+<pre><code class="language-python">import torch
+
+def build_mrope_cos_sin(positions, head_dim, mrope_section=(16, 24, 24), base=10000.0):
+    &quot;&quot;&quot;
+    Build cos/sin tensors for Qwen2-VL style M-RoPE.
+
+    positions: LongTensor [3, B, L]   (axis 0: t / h / w; B batch; L seq len)
+    head_dim:  per-head dim (must equal 2 * sum(mrope_section))
+    mrope_section: tuple of 3 ints; each = number of (half-dim) entries per axis
+    Returns: cos, sin both [B, L, head_dim], ready for LLaMA-style rotate_half.
+    &quot;&quot;&quot;
+    assert 2 * sum(mrope_section) == head_dim, &quot;2 * sum(mrope_section) must = head_dim&quot;
+    half = head_dim // 2                                                # = sum(mrope_section)
+
+    # Standard RoPE frequencies: θ_k = base^{-2k/head_dim}, k = 0..half-1
+    inv_freq = 1.0 / (base ** (torch.arange(0, half).float() * 2 / head_dim))   # [half]
+    inv_freq = inv_freq.to(positions.device)
+
+    # For each axis, compute angles / cos / sin of shape [B, L, half]
+    cos_axes, sin_axes = [], []
+    for a in range(3):
+        ang = positions[a].float().unsqueeze(-1) * inv_freq                     # [B, L, half]
+        cos_axes.append(ang.cos())
+        sin_axes.append(ang.sin())
+
+    # Slice half-dim into 3 segments by mrope_section; pick cos/sin for t/h/w
+    cos_chunks, sin_chunks = [], []
+    offset = 0
+    for axis, s in enumerate(mrope_section):
+        cos_chunks.append(cos_axes[axis][..., offset:offset+s])                 # [B, L, s]
+        sin_chunks.append(sin_axes[axis][..., offset:offset+s])
+        offset += s
+    cos_half = torch.cat(cos_chunks, dim=-1)                                    # [B, L, half]
+    sin_half = torch.cat(sin_chunks, dim=-1)
+
+    # LLaMA-RoPE style: duplicate to full head_dim
+    cos = torch.cat([cos_half, cos_half], dim=-1)                               # [B, L, head_dim]
+    sin = torch.cat([sin_half, sin_half], dim=-1)
+    return cos, sin
+
+def rotate_half(x):
+    &quot;&quot;&quot;(x1, x2) -&gt; (-x2, x1), LLaMA convention.&quot;&quot;&quot;
+    x1, x2 = x.chunk(2, dim=-1)
+    return torch.cat((-x2, x1), dim=-1)
+
+def apply_mrope(q, k, cos, sin):
+    &quot;&quot;&quot;
+    q, k:    [B, num_heads, L, head_dim]
+    cos, sin:[B, L, head_dim]
+    &quot;&quot;&quot;
+    cos = cos.unsqueeze(1)                                                       # broadcast over heads
+    sin = sin.unsqueeze(1)
+    q_rot = q * cos + rotate_half(q) * sin
+    k_rot = k * cos + rotate_half(k) * sin
+    return q_rot, k_rot</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Three common M-RoPE misreadings</div><p>easy traps.</p></div>
+<ul><li><strong>"head_dim split into t/h/w three independent 1D RoPE segments"</strong>: wrong. Qwen2-VL is in fact <strong>6 alternating segments</strong> <code>[s_t, s_h, s_w, s_t, s_h, s_w]</code>, with the full head_dim rotated</li><li><strong>"section units are dims"</strong>: wrong. <code>mrope_section=[16,24,24]</code> units are <strong>pairs</strong> (each pair = 2 head_dim elements), $\sum \times 2 = $ head_dim = 128</li><li><strong>"What if a text token has no (h, w)?"</strong>: set $m_t = m_h = m_w$ to the text's 1D position id; the three axes give the same rotation angle, degenerating to 1D RoPE</li></ul>
+<h2 id="11-video-vlm-longva--videollama--long-video-problem">§11 Video VLM: LongVA / VideoLLaMA / long-video problem</h2>
+<h3 id="111-basic-pipeline">11.1　Basic pipeline</h3>
+<p>Video = multi-frame image. Common VLM approach to video:</p>
+<ol><li><strong>Uniformly sample $K$ frames</strong> (e.g. 8 / 16 / 32)</li><li><strong>Each frame through the vision encoder</strong> → $N$ patch tokens per frame</li><li><strong>Token sequence concat</strong>: feed $K \cdot N$ visual tokens to the LLM</li></ol>
+<p>Problem: $K=32, N=576 \Rightarrow 18432$ tokens — beyond the context of an LLM that was instruction-tuned on single images.</p>
+<h3 id="112-common-compression-strategies">11.2　Common compression strategies</h3>
+<ul><li><strong>Time pooling</strong>: average pool adjacent frame tokens (VideoChat / VideoLLaMA)</li><li><strong>Q-Former resampler</strong>: per-frame query tokens compress to 32 (Video-BLIP)</li><li><strong>Token merge</strong>: merge similar tokens across frames (VideoLLaMA 2)</li><li><strong>Spatial pooling + temporal preservation</strong>: pool per-frame patch tokens to $H' \times W'$, retaining all frames (LLaVA-NeXT-Video)</li></ul>
+<h3 id="113-longva--long-context-video">11.3　LongVA / Long-context video</h3>
+<p>LongVA (Zhang et al. 2024) and others exploit long-context LLMs (200K+ tokens) to directly consume <strong>long video unrolled into a token sequence</strong>, paired with the M-RoPE temporal dim, for hour-long video QA. Qwen2-VL reports handling 20-minute video; Qwen2.5-VL pushes to 1+ hour.</p>
+<h3 id="114-video-benchmarks">11.4　Video benchmarks</h3>
+<ul><li><strong>MVBench</strong> (Li et al. 2024): 20 fine-grained video understanding tasks</li><li><strong>Video-MME</strong> (Fu et al. arXiv 2024 / CVPR 2025): 900+ videos covering 3 duration tiers (short / medium / long) + 6 task categories</li><li><strong>EgoSchema</strong> (Mangalam et al. 2023 NeurIPS): first-person long video</li><li><strong>LongVideoBench</strong> (Wu et al. 2024 NeurIPS): from 8 seconds to 1 hour</li></ul>
+<h2 id="12-training-pipeline-alignment--instruct--preference">§12 Training pipeline: alignment / instruct / preference</h2>
+<h3 id="121-stage-1-alignment--pre-training">12.1　Stage 1: Alignment / Pre-training</h3>
+<p>Goal: align visual features to be near the LLM token space.</p>
+<ul><li><strong>Data</strong>: image-caption pairs (CC3M, LAION-558K, ShareGPT4V)</li><li><strong>Training</strong>: unfreeze projector only (LLaVA) / Q-Former (BLIP-2); <strong>vision tower + LLM frozen</strong></li><li><strong>Loss</strong>: next-token prediction (LLM uses visual features as prefix to generate caption)</li></ul>
+<h3 id="122-stage-2-visual-instruction-tuning">12.2　Stage 2: Visual instruction tuning</h3>
+<p>Goal: teach the VLM "to look at images, answer questions, follow instructions".</p>
+<ul><li><strong>Data</strong>: GPT-4-generated visual instructions (LLaVA-Instruct-158K, ShareGPT4V) + academic VQA data (VQAv2, GQA, OCR-VQA, TextVQA)</li><li><strong>Training</strong>: unfreeze LLM + projector; <strong>vision tower typically stays frozen</strong> (LLaVA-1.5 / Qwen-VL). <strong>Qwen2-VL unfreezes the vision tower for end-to-end fine-tuning in the final stage</strong></li><li><strong>Loss</strong>: next-token prediction on answer tokens (input image + question are not counted in loss)</li></ul>
+<h3 id="123-stage-3-preference--rlhf">12.3　Stage 3: Preference / RLHF</h3>
+<p>Goal: reduce hallucinations, improve helpfulness / harmlessness, and align to long-tail tasks.</p>
+<table><thead><tr><th>Method</th><th>Time</th><th>Core</th></tr></thead><tbody><tr><td><strong>LLaVA-RLHF</strong></td><td>2023.09, Sun et al.</td><td>PPO + human preference + hallucination-aware reward</td></tr><tr><td><strong>RLAIF-V</strong></td><td>2024, Yu et al.</td><td>AI feedback in place of human labels; divide-and-conquer</td></tr><tr><td><strong>POVID</strong></td><td>2024</td><td>DPO + deliberately constructed hallucination negatives</td></tr><tr><td><strong>VLM-R1</strong></td><td>2025</td><td>GRPO + verifiable reward (R1-style for visual reasoning)</td></tr><tr><td><strong>Bespoke / R1-Onevision</strong></td><td>2025</td><td>Visual chain-of-thought + RL refinement</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">VLM-R1 (2025) is the current hotspot</div><p>it ports DeepSeek-R1's "verifiable reward + GRPO" recipe to visual tasks (e.g. ScienceQA, MMMU). Reward comes from whether the answer matches the ground truth (no process reward model); after training, the visual reasoning chain grows significantly and benchmarks improve substantially.</p></div>
+<h3 id="124-data-scale-vs-stage">12.4　Data scale vs stage</h3>
+<table><thead><tr><th>Stage</th><th>Data volume</th><th>Training tokens</th><th>Unfrozen modules</th></tr></thead><tbody><tr><td>Alignment</td><td>0.5–5M captions</td><td>1–10B</td><td>projector</td></tr><tr><td>Instruction tune</td><td>0.2–10M instructions</td><td>1–50B</td><td>LLM + projector</td></tr><tr><td>Preference</td><td>50k–500k preference pairs</td><td>100M–1B</td><td>LLM (LoRA / full)</td></tr></tbody></table>
+<h2 id="13-multimodal-embeddings-bge-vl--jina-clip--vlm2vec">§13 Multimodal Embeddings: BGE-VL / Jina-CLIP / VLM2Vec</h2>
+<h3 id="131-why-a-new-generation-of-multimodal-embeddings">13.1　Why a new generation of multimodal embeddings?</h3>
+<p>CLIP is trained for "image ↔ short caption" alignment, but performs poorly on <strong>long instruction retrieval / multi-image / interleaved document retrieval</strong>. The new generation of multimodal embedding models target retrieval / RAG scenarios.</p>
+<h3 id="132-representative-methods">13.2　Representative methods</h3>
+<ul><li><strong>Jina-CLIP-v1 (2024)</strong>: adds long-text contrastive (text-text task) + multi-resolution on top of CLIP; a single embedding model does image-text and text-text retrieval</li><li><strong>BGE-VL (2024)</strong>: the BGE team's multimodal version; uses SigLIP-So400M + a small LLM for instruction-aware retrieval</li><li><strong>VLM2Vec (Jiang et al. 2024)</strong>: instruction-conditioned mean pool of the last hidden state of a VLM (LLaVA / Qwen-VL); <strong>trains only a contrastive head</strong>, significantly beating CLIP on the MMEB benchmark</li><li><strong>mmE5 (2024)</strong>: multimodal version of E5, supporting 12 types of retrieval tasks</li></ul>
+<h3 id="133-core-tricks">13.3　Core tricks</h3>
+<ul><li><strong>Instruction-aware</strong>: embedding input is <code>[instruction][image][query]</code>, so the same image yields different embeddings under different tasks</li><li><strong>VLM-as-encoder</strong>: directly use an instruct-tuned VLM as backbone, no separate contrastive pretrain</li><li><strong>Hard negative mining</strong>: use a cross-encoder reranker to mine hard negatives outside the batch</li></ul>
+<h2 id="14-25-frequently-asked-interview-questions-l1-must-know--l2-advanced--l3-top-labs">§14 25 frequently-asked interview questions (L1 must-know · L2 advanced · L3 top labs)</h2>
+<h3 id="l1-basics-must-know-10">L1 basics (must-know 10)</h3>
+<details>
+
+<summary>Q1. What is the CLIP loss? Why must it be symmetric?</summary>
+<ul><li>CLIP uses <strong>symmetric InfoNCE</strong>: $\mathcal{L} = \tfrac12(\mathcal{L}_{i\to t} + \mathcal{L}_{t\to i})$</li><li>$\mathcal{L}_{i\to t}$: apply <strong>row softmax</strong> on the similarity matrix $\mathbf{S}$, take NLL of the diagonal (image retrieves text)</li><li>$\mathcal{L}_{t\to i}$: <strong>column softmax</strong>, NLL of the diagonal (text retrieves image)</li><li><strong>Necessity of symmetry</strong>: one direction constrains only one retrieval direction; symmetrization lets image / text embeddings constrain each other, preventing "one-sided collapse" — e.g. image-side clusters but text-side drifts</li></ul>
+<p>Pitfall: answering only "InfoNCE" without saying "average of two softmaxes", or saying "do it backward once" without explaining why it is necessary.</p>
+</details>
+<details>
+
+<summary>Q2. What does the temperature τ in CLIP do? Why make it learnable?</summary>
+<ul><li>Temperature $\tau$ controls softmax sharpness: $\tau \to 0$ approaches one-hot, focusing on the hardest negative; $\tau \to \infty$ becomes uniform with no gradient</li><li>OpenAI CLIP makes $\tau$ learnable (concretely parameterized as <code>logit_scale = log(1/τ)</code>, more stable in backprop)</li><li>Learned steady state $\tau \approx 0.01$ (<code>logit_scale ≈ log(100)</code>), clamped from above to avoid collapse</li><li><strong>Without making it learnable</strong>: hyperparameter-sensitive; each new data / model scale needs manual tuning</li></ul>
+<p>Pitfall: treating τ as a fixed 0.07 with no learning; or writing it as <code>1/exp(logit_scale)</code> with unstable backprop.</p>
+</details>
+<details>
+
+<summary>Q3. Core change of SigLIP vs CLIP? Why is batch size no longer sensitive?</summary>
+<ul><li>Replace softmax InfoNCE with <strong>sigmoid binary CE</strong>: each $(i,j)$ pair is independently classified</li><li>$S_{ij} = t \cdot \mathbf{u}_i^\top \mathbf{v}_j + b$; label $y_{ij} = +1 (i=j) / -1 (i\neq j)$; loss = $-\sum_{ij} \log\sigma(y_{ij} S_{ij})/N$</li><li><strong>Batch decoupled</strong>: each loss term is independent of row/col normalization, so doubling N only changes the negative count, not the loss landscape</li><li>Engineering gains: single-machine large batch, simpler cross-node communication, and small batches can also learn (CLIP barely converges with small batches)</li></ul>
+<p>Pitfall: saying only "use sigmoid" without explaining batch-independence; or treating SigLIP as "CLIP with bias".</p>
+</details>
+<details>
+
+<summary>Q4. Is the [CLS] token in ViT mandatory?</summary>
+<ul><li>No. <strong>The original ViT</strong> uses [CLS] to align with BERT conventions</li><li><strong>Alternative</strong>: mean-pool all patch tokens as the image representation — most modern ViTs (DeiT-III, SigLIP, EVA-CLIP) use mean-pool or attentive pool</li><li><strong>CLIP uses [CLS]</strong>: contrastive training requires a single vector</li><li><strong>VLM vision towers usually drop [CLS]</strong>: LLaVA takes second-to-last layer patch tokens; [CLS] is not needed on the LLM side</li></ul>
+<p>Pitfall: treating [CLS] as a "mandatory component" of ViT; or saying "without [CLS] you cannot classify" (wrong; mean-pool also works).</p>
+</details>
+<details>
+
+<summary>Q5. What is LLaVA's projector? Why MLP instead of Linear?</summary>
+<ul><li>The projector maps visual encoder output ($d_v$=1024) to LLM token space ($d_\text{llm}$=4096)</li><li>LLaVA-1.0: single <code>Linear(1024, 4096)</code>; LLaVA-1.5: <strong>2-layer MLP + GELU</strong></li><li>MLP adds non-linear expressivity, letting visual features map more flexibly into the LLM's "vocabulary"</li><li>The paper reports MLP improves MM-Vet / SEED-Bench by 1–3 points over single Linear</li></ul>
+<p>Pitfall: saying only "project with a Linear"; or answering "use Q-Former" (that is BLIP-2, not LLaVA).</p>
+</details>
+<details>
+
+<summary>Q6. What do LLaVA's two training stages do?</summary>
+<ul><li><strong>Stage 1 Feature Alignment</strong>: train the projector only, <strong>freeze vision tower + LLM</strong>, using caption data (CC3M / LAION-558K) to project visual features near the LLM embedding space</li><li><strong>Stage 2 Instruction Tuning</strong>: unfreeze LLM + projector (vision tower still frozen), using GPT-4-generated 158K visual instructions, <strong>teaching the LLM to follow visual instructions</strong></li><li>Why not train in one shot: jumping directly to stage 2 risks catastrophic forgetting of text ability; stage 1 first gives visual tokens a "near text-token" initialization, then instruction tuning is more stable</li></ul>
+<p>Pitfall: saying both stages "train the projector"; or omitting that stage 1 freezes the LLM, the key point.</p>
+</details>
+<details>
+
+<summary>Q7. What is a Q-Former? Pros/cons vs the LLaVA projector?</summary>
+<ul><li>BLIP-2's Q-Former: a 12-layer Transformer with <strong>32 learnable query tokens</strong> that read information from a frozen image encoder via cross-attention, outputting a fixed 32 visual tokens</li><li>Pros: <strong>fixed visual token count</strong>, low LLM context usage, compute budget stays the same as resolution grows</li><li>Cons: <strong>large information loss</strong> (256 patches compressed to 32), more parameters (~180M), complex training (two stages: stage 1 representation learning includes joint ITC+ITM+ITG, stage 2 connects to frozen LLM for generation)</li><li><strong>2024 mainstream returns to projector</strong>: Qwen-VL / LLaVA-NeXT / InternVL-2 all use projector</li></ul>
+<p>Pitfall: treating Q-Former as a synonym for projector; or not knowing modern VLMs prefer projectors.</p>
+</details>
+<details>
+
+<summary>Q8. How many patches / tokens does a ViT-L/14 yield on a 224×224 image?</summary>
+<ul><li>Patch count = $(224/14)^2 = 16^2 = 256$</li><li>Token count = 256 + 1 (with [CLS]) = <strong>257</strong></li><li>If LLaVA-style second-to-last layer patch tokens (drop [CLS]) = <strong>256 visual tokens</strong></li><li>If resolution is 336 (LLaVA-1.5): $(336/14)^2 = 24^2 = 576$ tokens</li></ul>
+<p>Pitfall: miscalculating $(H/P)^2$ (treating $P^2$ as the patch count $N$); forgetting [CLS].</p>
+</details>
+<details>
+
+<summary>Q9. Why is CLIP poor at OCR / counting / spatial relations?</summary>
+<ul><li><strong>Poor OCR</strong>: captions typically describe scenes, not text inside images; CLIP has no pixel-level OCR supervision</li><li><strong>Poor counting</strong>: captions rarely report exact counts ("how many birds" is usually "a flock of birds"); the embedding space does not preserve a counting signal</li><li><strong>Poor spatial relations</strong>: "cat on top of dog" and "dog on top of cat" look almost identical under bag-of-words; Yuksekgonul et al. 2023 (ICLR) quantify this with the ARO benchmark</li><li><strong>Mitigation directions</strong>: DETR-style local alignment, SigLIP-2's dense local objectives, document-level data</li></ul>
+<p>Pitfall: blaming OCR weakness on "resolution too low" (partly right, but the root cause is data + loss); claiming "CLIP is bag-of-words" too absolutely.</p>
+</details>
+<details>
+
+<summary>Q10. Why is the vision tower generally frozen when training a VLM?</summary>
+<ul><li>The vision tower (e.g. CLIP ViT-L) is <strong>already pre-trained</strong> well on its own data; unfreezing easily damages visual feature quality</li><li>Training data is far smaller than CLIP pretraining (millions vs billions); unfreezing easily overfits</li><li><strong>Freezing also saves memory</strong>: hundreds of millions of vision tower params don't need optimizer state</li><li><strong>Qwen2-VL exception</strong>: in the final stage it unfreezes the vision tower for small-LR fine-tuning, paired with large mixed data to avoid forgetting</li></ul>
+<p>Pitfall: answering "cannot unfreeze" directly — wrong; <strong>late stages can carefully unfreeze</strong>.</p>
+</details>
+<h3 id="l2-advanced-10-questions">L2 advanced (10 questions)</h3>
+<details>
+
+<summary>Q11. Why is SigLIP's bias $b$ initialized to $-10$?</summary>
+<ul><li>Early in training, embeddings are near random, $\mathbf{u}^\top \mathbf{v} \approx 0$, sigmoid outputs 0.5</li><li>In the N×N matrix, negatives are $N^2 - N \approx N^2$, positives only $N$; if initial predictions are all 0.5, <strong>negative gradients dominate</strong> and positives get no useful signal</li><li>Init $b \approx -10$ → $\sigma(b) \approx 4.5e^{-5}$ → all entries initially predicted as negative</li><li>This way <strong>negatives have almost no loss</strong>, positives have large loss (predicted as negative but truly positive), gradient pulls positives in, training is stable</li></ul>
+<p>Pitfall: saying "avoid numerical issues"; or answering "for the symmetric term" (wrong; the bias is not a symmetric loss term).</p>
+</details>
+<details>
+
+<summary>Q12. Why is Flamingo's gated cross-attn initialized to 0?</summary>
+<ul><li>The new cross-attn output is multiplied by $\tanh(\alpha)$, with $\alpha$ initialized to 0</li><li>$\tanh(0) = 0$, <strong>so at init the new module contributes zero to the frozen LLM</strong> — the LLM behaves identically to a text-only Llama without the visual module</li><li>During training $\alpha$ slowly grows from 0, and visual signals are gradually injected</li><li>Pros: fully preserves the frozen LLM's text-only ability; cons: visual ceiling limited by cross-attn capacity</li><li>Llama-3.2 Vision uses the same design</li></ul>
+<p>Pitfall: treating the 0 init as just a "common init trick"; or not realizing it concerns frozen-LLM capability preservation.</p>
+</details>
+<details>
+
+<summary>Q13. How is LLaVA-1.6 / NeXT's AnyRes implemented?</summary>
+<ul><li>Training assumes a fixed 336²; inference slices a high-res image by aspect ratio into $n \times m$ tiles of 336² each (e.g. $2\times 2, 2\times 3$)</li><li>Each tile passes through the frozen ViT to get 576 tokens; add a <strong>global thumbnail</strong> (whole image resized to 336² and encoded)</li><li>Concatenate: $(1 + n\cdot m) \times 576$ visual tokens to the LLM</li><li>Choice of slicing: pick the grid (from a predefined set such as $\{1\times 1, 2\times 2, 1\times 4, 4\times 1, ...\}$) closest to the original aspect ratio</li></ul>
+<p>Pitfall: treating AnyRes as a synonym for dynamic resolution — technically different. Qwen2-VL is native dynamic (patch count fully free), while LLaVA-1.6 is <strong>fixed-tile composition</strong>.</p>
+</details>
+<details>
+
+<summary>Q14. Why is Qwen2-VL's M-RoPE three-dim allocation not uniform?</summary>
+<ul><li>Qwen2-VL <code>mrope_section = [16, 24, 24]</code> (units are <strong>pairs of half head_dim</strong>), $\sum \times 2 = $ head_dim = 128</li><li><strong>All 128 dims rotate</strong> — different dim pairs use different axes (t/h/w) and their position ids to compute rotation angles</li><li><p><strong>Reason for non-uniform allocation</strong>:</p>
+<ul><li>Inter-frame variation in video is slow (adjacent frames are very similar), so $s_t = 16$ has a small share</li><li>Intra-frame patch variation is dramatic (large visual differences across positions in a single frame), so $s_h = s_w = 24$ each need broader frequency coverage</li></ul></li><li>$s_h = s_w$: the image H/W axes are symmetric</li></ul>
+<p>Pitfall: treating section as "number of dims" (wrong; the unit is pairs = head_dim / 2 allocation); or thinking "the remaining dims do not rotate".</p>
+</details>
+<details>
+
+<summary>Q15. Why does BLIP-2 choose 32 query tokens?</summary>
+<ul><li>32 is an empirical value, balancing LLM context usage vs information capacity</li><li>Too few (&lt; 16): large information loss, hurting VQA / detail tasks</li><li>Too many (&gt; 64): large LLM context usage, expensive Q-Former cross-attn computation</li><li>The BLIP-2 paper's ablations show 32 is the sweet spot on most downstream tasks</li><li>Conceptually similar to Perceiver (also uses latent queries to compress inputs)</li></ul>
+<p>Pitfall: answering only "empirical"; not realizing it is an engineering trade-off between context budget and information capacity.</p>
+</details>
+<details>
+
+<summary>Q16. How does CLIP compute InfoNCE under DDP?</summary>
+<ul><li>Local batch on each GPU $N_\text{local}$; total batch over N GPUs $N = K \cdot N_\text{local}$</li><li>After forward on each GPU, <code>dist.all_gather</code> fetches everyone's image / text feats</li><li>Compute the global similarity $\mathbf{S} \in \mathbb{R}^{N \times N}$</li><li>But backward only lets <strong>this GPU's $N_\text{local}$ rows / columns contribute gradients</strong> (to avoid duplicate backward)</li><li>This is OpenCLIP's <code>local_loss=True</code> option</li></ul>
+<p>Pitfall: saying only "all-gather"; not knowing backward needs to avoid duplicate computation; or thinking backward also does an all-gather (wrong; backward flows along the communication backward path).</p>
+</details>
+<details>
+
+<summary>Q17. Why is Llama-3.2-V's visual ceiling lower than LLaVA / Qwen-VL?</summary>
+<ul><li>Llama-3.2-V uses frozen LLM + gated cross-attn adapter; <strong>LLM weights are unchanged</strong></li><li>LLaVA / Qwen-VL <strong>unfreeze the LLM</strong>, so its internal attention can reorganize to handle visual tokens specifically</li><li>The latter can "use self-attention to think about the image"; the former can only passively receive visual signal via cross-attn</li><li>Trade-off: Llama-3.2-V perfectly preserves text ability, LLaVA-Qwen may regress slightly but has a higher visual ceiling</li></ul>
+<p>Pitfall: saying only "fewer parameters"; not recognizing this is an architecture-level ceiling difference.</p>
+</details>
+<details>
+
+<summary>Q18. Why is much visual instruction-tuning data generated by GPT-4?</summary>
+<ul><li>Raw caption data (CC3M / LAION) is short, not instruction-style, <strong>cannot teach dialog ability</strong></li><li>Human-labeled visual instructions (e.g. VQAv2 questions) are small in scale and stylistically uniform</li><li><strong>GPT-4 + image + caption → generate multi-turn dialog / reasoning tasks / detailed descriptions</strong>: this is how LLaVA-Instruct-158K was made</li><li>Prompt engineering controls coverage (three classes: detailed description, conversation, complex reasoning)</li></ul>
+<p>Pitfall: answering "lots of data"; not recognizing the key bottleneck is instruction style + diversity.</p>
+</details>
+<details>
+
+<summary>Q19. What is a typical CLIP / SigLIP training batch size?</summary>
+<ul><li><strong>OpenAI CLIP</strong>: 32k batch (256 GPUs × ~128/GPU)</li><li><strong>OpenCLIP</strong>: up to 90k batch (LAION-2B)</li><li><strong>SigLIP</strong>: 32k batch is typically enough; the sigmoid loss makes each (i,j) entry independent and avoids softmax's batch-wide sync; the paper scans up to 256k batch but with diminishing returns</li><li><strong>Why small batches don't work</strong>: InfoNCE's MI lower bound $I(U;V) \ge \log N - \mathcal{L}$ tightens with larger N; the number of negatives also controls contrastive difficulty</li><li>After SigLIP decouples batch, small batches improve significantly (1k batch can learn reasonable embeddings)</li></ul>
+<p>Pitfall: answering "a few hundred"; or not knowing the theoretical link between batch and InfoNCE.</p>
+</details>
+<details>
+
+<summary>Q20. What do POPE / Winoground / MMBench / MMMU each evaluate?</summary>
+<ul><li><strong>POPE</strong> (Li et al. 2023): measures <strong>object hallucination</strong> — does the VLM claim objects exist that aren't in the image (yes/no binary)</li><li><strong>Winoground</strong> (Thrush et al. 2022): measures <strong>compositionality / word-order sensitivity</strong> — can it distinguish "cat on dog" vs "dog on cat"</li><li><strong>MMBench</strong> (Liu et al. 2023): general multimodal evaluation, ~3000 questions covering OCR / object recognition / reasoning, etc.</li><li><strong>MMMU</strong> (Yue et al. 2024 CVPR): university-level professional knowledge (math / physics / medicine, etc.), tests multimodal reasoning</li><li><strong>MM-Vet</strong> (Yu et al. 2023): integrated evaluation across 6 capabilities (recognition / knowledge / OCR / spatial / language / math)</li></ul>
+<p>Pitfall: confusing POPE and MMBench; not knowing Winoground is a "compositionality stress test".</p>
+</details>
+<h3 id="l3-advanced-top-labs--research-directions-5-questions">L3 advanced (top labs / research directions, 5 questions)</h3>
+<details>
+
+<summary>Q21. Derive CLIP's symmetric InfoNCE = average of row + column softmax, and explain why SigLIP can be batch-independent.</summary>
+<p>Let batch size $N$ and similarity matrix $S_{ij} = \mathbf{u}_i^\top \mathbf{v}_j / \tau$.</p>
+<p><strong>CLIP derivation</strong>:</p>
+<p>Row-wise softmax, $p_{ij} = \frac{\exp(S_{ij})}{\sum_k \exp(S_{ik})}$. Image→Text NLL:</p>
+<p>$$\mathcal{L}_{i\to t} = -\frac{1}{N}\sum_i \log p_{ii} = -\frac{1}{N}\sum_i \log \frac{\exp(S_{ii})}{\sum_j \exp(S_{ij})}$$</p>
+<p>Column-wise softmax (Text→Image):</p>
+<p>$$\mathcal{L}_{t\to i} = -\frac{1}{N}\sum_j \log \frac{\exp(S_{jj})}{\sum_i \exp(S_{ij})}$$</p>
+<p>Symmetric loss: $\mathcal{L} = \tfrac12 (\mathcal{L}_{i\to t} + \mathcal{L}_{t\to i})$. Notice the <strong>gradient with respect to $S_{ij}$</strong>:</p>
+<p>$$\frac{\partial \mathcal{L}_{i\to t}}{\partial S_{ij}} = \frac{1}{N}(p_{ij} - \delta_{ij})$$</p>
+<p>The gradient at each $S_{ij}$ depends on <strong>the entire row's softmax normalization</strong> $\sum_k \exp(S_{ik})$. So changing N (adding / removing negatives) changes all $p$ values in that row — <strong>gradients couple the batch</strong>.</p>
+<p><strong>SigLIP derivation</strong>:</p>
+<p>$S_{ij} = t \cdot \mathbf{u}_i^\top \mathbf{v}_j + b$, $y_{ij} = 2\delta_{ij} - 1$,</p>
+<p>$$\mathcal{L}_\text{SigLIP} = \frac{1}{N}\sum_{i,j} \log(1 + \exp(-y_{ij} S_{ij}))$$</p>
+<p>Gradient:</p>
+<p>$$\frac{\partial \mathcal{L}}{\partial S_{ij}} = \frac{1}{N}\cdot \frac{-y_{ij}}{1 + \exp(y_{ij} S_{ij})} = \frac{1}{N}\cdot (-y_{ij}) \cdot \sigma(-y_{ij} S_{ij})$$</p>
+<p><strong>Key</strong>: $\partial \mathcal{L} / \partial S_{ij}$ only depends on $S_{ij}$ itself, <strong>not other entries</strong>. So adding negatives does not change the gradient at existing $S_{ij}$ — <strong>batch-independent</strong>.</p>
+<p><strong>Engineering implications</strong>:</p>
+<ul><li>CLIP: under DDP must all-gather embeddings to compute global logsumexp; communication is $O(N \cdot D)$ with extra sync points</li><li>SigLIP: can use <strong>chunked all-pair</strong>, with each chunk computing only local rows × remote columns sigmoid terms, no logsumexp sync</li></ul>
+</details>
+<details>
+
+<summary>Q22. Q-Former vs LLaVA projector trade-off: explain along capacity / compute / training stability.</summary>
+<p><strong>Capacity (information capacity)</strong>:</p>
+<ul><li><strong>LLaVA projector</strong>: all $N$ patch tokens enter the LLM; information has no bottleneck, but LLM context usage is large</li><li><strong>Q-Former</strong>: 32 queries is a fixed bottleneck; significant information compression, unfriendly to detail tasks (OCR / counting)</li><li>Suppose visual encoder output rank is $r$; LLaVA visual context rank $\le r$ (preserved), Q-Former rank $\le \min(r, 32)$</li></ul>
+<p><strong>Compute / Memory</strong>:</p>
+<ul><li><strong>LLaVA projector</strong>: MLP forward only, O(N·D²) compute</li><li><strong>Q-Former</strong>: 12 layers of cross-attn + self-attn + FFN, ~180M params; but <strong>downstream LLM context is short (32 tokens vs N=256+ tokens)</strong>, so LLM inference is fast</li><li><strong>Total cost trade-off</strong>: at high image resolution (N=2880), Q-Former saves LLM inference; at low resolution where the LLM dominates, LLaVA is cheaper</li></ul>
+<p><strong>Training stability</strong>:</p>
+<ul><li><strong>LLaVA</strong>: projector is easy to train (2 stages), gradient path is short</li><li><strong>Q-Former</strong>: 2-stage training (<strong>stage 1 representation</strong> jointly optimizes ITC + ITM + ITG; <strong>stage 2 generation</strong> connects to the frozen LLM); ITM head overfits easily, ITG requires intricate routing of causal vs self-attn masks — engineering pitfalls abound</li></ul>
+<p><strong>Conclusion</strong>: 2024 mainstream returns to projector + spatial pixel-shuffle / merging to control token count; Q-Former retains value mainly in video / multi-image summarization (using queries for temporal pooling).</p>
+</details>
+<details>
+
+<summary>Q23. Why is Qwen2-VL's M-RoPE config `mrope_section = [16, 24, 24]` and not 1:1:1? Do all head_dim dims rotate?</summary>
+<p>Recap ordinary RoPE: head_dim $d$ split into $d/2$ complex pairs, frequencies $\theta_k = \text{base}^{-2k/d}$. <strong>The frequency coverage determines the maximum relative distance distinguishable</strong>: low frequency distinguishes long distances, high frequency distinguishes short distances.</p>
+<p><strong>Key disambiguation</strong>: Qwen2-VL <code>mrope_section</code> units are <strong>pairs of half head_dim</strong> (each number = how many $(2k, 2k+1)$ dim pairs). $[16, 24, 24]$ means t / h / w each occupy 16 / 24 / 24 pairs of dims; $\sum \times 2 = 128 = $ head_dim. The HF implementation doubles section to $[16, 24, 24, 16, 24, 24]$ slicing head_dim, corresponding to the axis sequence $(t, h, w, t, h, w)$ — <strong>all 128 dims rotate</strong>, none "left unrotated".</p>
+<p>Design trade-offs:</p>
+<ol><li><strong>Temporal variation is slow</strong>: typical video sampled at 1–5 FPS; adjacent frames are very similar; long-range temporal dependencies are moderate. $s_t=16$ (25% share) suffices to cover hundreds to thousands of frames.</li><li><strong>Spatial variation is dramatic</strong>: huge visual differences across patches within a frame; to do token-to-token retrieval over a $\sim 1000\times 1000$-pixel image, more frequency slots are needed. $s_h = s_w = 24$ (37.5% each) covers more.</li><li><strong>Spatial symmetry</strong>: $s_h = s_w$ keeps the H/W axes symmetric (equivalence under horizontal / vertical flip).</li><li><strong>6 alternating segments instead of 3 contiguous</strong>: because RoPE uses LLaMA "rotate_half", head_dim is split in memory into two halves $[h_1, h_2]$, with rotation $q \mapsto q \cos + \text{rotate\_half}(q)\sin$; the two halves share inv_freq. So axis allocations must mirror in both halves.</li></ol>
+<p><strong>Qwen2.5-VL upgrade</strong>: switch $m_t$ from frame id to <strong>absolute timestamps (seconds)</strong>, letting variable-FPS videos share a consistent time coordinate at training — the key to long video.</p>
+<p><strong>Alternative</strong>: DeepSeek-VL2 uses flattened visual tokens + plain 1D RoPE (no h, w split); Llama-3.2-V also does not split spacetime explicitly. <strong>M-RoPE only wins decisively for native interleaved video + image scenarios</strong>.</p>
+</details>
+<details>
+
+<summary>Q24. Root cause of VLM hallucinations? Pros and cons of existing mitigations?</summary>
+<p><strong>Root causes</strong>:</p>
+<ol><li><strong>Data bias</strong>: training data contains common "co-occurrence priors" — "if there's a table, there's probably a chair". Co-occurrence makes a VLM tend to answer "yes, there's a chair" when seeing a table, even if there is no chair</li><li><strong>Language prior dominates</strong>: when the visual signal is weak (small objects, blur, odd angles), the VLM falls back to a pure language model, answering from "corpus common sense"</li><li><strong>LLM sycophancy</strong>: the user asks "is there X in the image" and the model tends to say Yes (human feedback biases towards being helpful → biased Yes)</li><li><strong>Stage 2 instruction tuning has no negative supervision</strong>: labels rarely teach "if there is no X, answer No"</li></ol>
+<p><strong>Mitigations</strong>:</p>
+<table><thead><tr><th>Method</th><th>Idea</th><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>LLaVA-RLHF</td><td>PPO + hallucination-aware reward</td><td>Targeted late-stage fix</td><td>Needs a reward model + lots of preference data</td></tr><tr><td>RLAIF-V</td><td>AI-generated preference</td><td>Low data cost</td><td>Reward model's own bias accumulates</td></tr><tr><td>POVID</td><td>DPO + constructed hallucination negatives</td><td>Direct targeted fix</td><td>Negative design requires care</td></tr><tr><td>VCD (visual contrastive decoding)</td><td>At inference, run the VLM on the image and a blurred image, amplify the difference</td><td>Training-free</td><td>2x inference cost</td></tr><tr><td>OPERA</td><td>Beam search + over-attention detection</td><td>Inference-time detection</td><td>Heuristic; may have false positives</td></tr><tr><td>POPE-driven evaluation</td><td>Use POPE for reverse supervision</td><td>Quantifiable</td><td>Only measures object hallucination</td></tr></tbody></table>
+<p><strong>Future directions</strong>: fix at the training data layer (grounded captions + segment-level supervision); visual chain-of-thought (VLM-R1 style) where the model "points to evidence" before answering.</p>
+</details>
+<details>
+
+<summary>Q25. For modern VLM training, should the vision tower use SigLIP or CLIP? Why did most pick SigLIP-So400M in 2024–2025?</summary>
+<p><strong>Empirical conclusion</strong>: after 2024, SigLIP-So400M has become a common choice for open-weight VLMs, with <strong>PaliGemma</strong> (Google) and <strong>LLaVA-OneVision</strong> as representatives. But <strong>Molmo</strong> still uses OpenAI CLIP (its paper ablates against SigLIP); <strong>the InternVL series</strong> uses in-house InternViT; <strong>Qwen2-VL</strong>'s vision side initializes from a DFN-derived ViT and then trains a large-scale vision-language joint; <strong>LLaVA-1.5 / 1.6</strong> still uses CLIP ViT-L/14. "Switch to SigLIP" is not an industry consensus.</p>
+<p><strong>Why SigLIP-So400M is attractive</strong>:</p>
+<ol><li><strong>Stronger zero-shot performance</strong>: SigLIP-So400M has a 4–8 point lead over the same-size CLIP on zero-shot ImageNet; visual feature quality is higher</li><li><strong>Resolution-friendly</strong>: SigLIP already trained at 384²/512² extensively; CLIP is mostly 224²+336²; VLM tasks generally need high resolution, so SigLIP transfers more smoothly</li><li><strong>Batch-independent loss → stable fine-tune</strong>: SigLIP's sigmoid yields more predictable gradients when unfreezing the vision tower in stage 1</li><li><strong>Multilingual support</strong>: SigLIP-2 / mSigLIP natively support multiple languages</li><li><strong>Open weights</strong>: Google releases the full SigLIP / SigLIP-2 checkpoints (OpenAI CLIP has been open-sourced too, but with limited choices)</li></ol>
+<p><strong>When to still pick CLIP</strong>:</p>
+<ul><li>When strict alignment with OpenAI CLIP behavior is needed (e.g. CLIP guidance for Stable Diffusion-style use)</li><li>For project compatibility (early LLaVA-1.0/1.5 + DALL-E pipelines use CLIP)</li></ul>
+<p><strong>Note</strong>: SigLIP is not a silver bullet; <strong>DeepSeek-VL uses SigLIP + SAM dual-encoder</strong> — SAM features retain irreplaceable advantages on detail localization tasks.</p>
+</details>
+<h2 id="a-appendix-sanity-check-outputs--references">§A Appendix: sanity-check outputs &amp; references</h2>
+<h3 id="a1-key-code-sanity-check-illustrated-by-actual-runs">A.1 Key code sanity check (illustrated by actual runs)</h3>
+<pre><code>[ViT] patch_embed: (2, 3, 224, 224) -&gt; (2, 196, 768)  ✓
+[ViT] forward + CLS: (2, 3, 224, 224) -&gt; head out (2, 1000)  ✓
+
+[CLIP] N=8, D=512, init logit_scale=ln(1/0.07): loss ≈ 2.08 ≈ log(N) (random embeddings → near-uniform softmax)  ✓
+[CLIP] forward + backward: gradients along i→t and t→i paths are symmetric ✓
+
+[SigLIP] N=8, D=512, b=0:  loss = sum_{ij} log(1+e^0) / N = 64 * log 2 / 8 ≈ 5.545  ✓
+[SigLIP] bias b=-10: positives (8 entries) loss ≈ log(1+e^10) ≈ 10; negatives (56 entries) loss ≈ 4.5e-5; total ≈ 8·10/8 ≈ 10.0  ✓ (positives dominate early gradient)
+
+[LLaVA] visual feat (2, 256, 1024) -&gt; projector -&gt; (2, 256, 4096)  ✓
+[LLaVA] input_ids w/ &lt;image&gt; placeholder: 1 token -&gt; 256 visual tokens after merge  ✓
+
+[Q-Former] image_feats (2, 257, 1408), queries (1, 32, 768) -&gt; out (2, 32, 768)  ✓
+
+[M-RoPE] head_dim=128, mrope_section=[16,24,24]: 2 × sum = 128 = head_dim, full rotation ✓
+[M-RoPE] pure-text token (pos_t=pos_h=pos_w=m): cos/sin identical across the three axes, equivalent to 1D RoPE ✓</code></pre>
+<h3 id="a2-key-references-by-topic">A.2 Key references (by topic)</h3>
+<p><strong>Vision encoder</strong>: Dosovitskiy et al. ICLR 2021 (ViT); Zhai et al. CVPR 2022 (ViT-g); Fang et al. arXiv 2023 (EVA-02)</p>
+<p><strong>Contrastive pretraining</strong>: Radford et al. ICML 2021 (CLIP); Cherti et al. CVPR 2023 (OpenCLIP); Zhai et al. ICCV 2023 (SigLIP); Tschannen et al. arXiv 2025 (SigLIP-2); Gadre et al. NeurIPS 2023 (DataComp)</p>
+<p><strong>Visual instruction / fusion</strong>: Liu et al. NeurIPS 2023 (LLaVA); Liu et al. CVPR 2024 (LLaVA-1.5); Li et al. ICML 2023 (BLIP-2); Alayrac et al. NeurIPS 2022 (Flamingo); Wang et al. arXiv 2023 (CogVLM); Bai et al. arXiv 2023 (Qwen-VL); Wang et al. arXiv 2024 (Qwen2-VL); Bai et al. arXiv 2025 (Qwen2.5-VL); Lu et al. arXiv 2024 (DeepSeek-VL); Wu et al. arXiv 2024 (DeepSeek-VL2); Chen et al. CVPR 2024 + arXiv 2024 (InternVL / InternVL-2); Llama Team arXiv 2024 (Llama-3.2-V); Deitke et al. arXiv 2024 (Molmo); Li et al. arXiv 2024 (LLaVA-OneVision)</p>
+<p><strong>VLM preference alignment</strong>: Sun et al. arXiv 2023 (LLaVA-RLHF); Yu et al. arXiv 2024 (RLAIF-V); Zhou et al. arXiv 2024 (POVID); Shen et al. arXiv 2025 (VLM-R1)</p>
+<p><strong>Multimodal embeddings</strong>: Koukounas et al. arXiv 2024 (Jina-CLIP); Jiang et al. arXiv 2024 (VLM2Vec); Zhang et al. arXiv 2024 (mmE5)</p>
+<p><strong>Evaluation</strong>: Li et al. EMNLP 2023 (POPE); Thrush et al. CVPR 2022 (Winoground); Liu et al. ECCV 2024 (MMBench); Yue et al. CVPR 2024 (MMMU); Fu et al. CVPR 2025 (Video-MME); Yu et al. ICML 2024 (MM-Vet); Mangalam et al. NeurIPS 2023 (EgoSchema)</p>
+<hr />
+<p>Code + formulas have passed independent reviewer static checks; numerical values verified on PyTorch 2.x, CUDA 12.x (shapes and initial loss of the 5 core modules — ViT / CLIP / SigLIP / Q-Former / M-RoPE — all match the formulas).</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/vlm_multimodal_tutorial_en.md</code> ·
+  SHA256 <code>de321e4d3dec</code> ·
+  generated at 2026-05-19 18:58 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self-Evolving Agents 面试 Cheat Sheet</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/self_evolving_agents_tutorial.md">
+<meta name="aris:source-sha256" content="b863a1d3abfdb3512a3e5907947e3bb9281a00ddf4546199218fb469c965296e">
+<meta name="aris:generated-at" content="2026-05-19 13:32 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-self-evolving-agent-直觉">§1 Self-Evolving Agent 直觉</a>
+</li>
+<li><a href="#2-三种-self-evolution-范式的形式化">§2 三种 Self-Evolution 范式的形式化</a>
+<ul>
+<li><a href="#21-experience-driven-evolution">2.1　Experience-Driven Evolution</a></li>
+<li><a href="#22-adversarial-self-play-evolution">2.2　Adversarial Self-Play Evolution</a></li>
+<li><a href="#23-meta-learning--reward-free-evolution">2.3　Meta-Learning / Reward-Free Evolution</a></li>
+<li><a href="#24-三范式对比必背">2.4　三范式对比（必背）</a></li>
+</ul>
+</li>
+<li><a href="#3-skill--knowledge-的-markdown-化最重要的工程转移">§3 Skill / Knowledge 的 Markdown 化（最重要的工程转移）</a>
+<ul>
+<li><a href="#31-anthropic-skills--native-evolution-的趋同">3.1　Anthropic Skills + Native Evolution 的趋同</a></li>
+<li><a href="#32-skill--k-文件的典型-schema">3.2　Skill / K 文件的典型 schema</a></li>
+<li><a href="#33-为什么-markdown-而不是-vector-embedding">3.3　为什么 markdown 而不是 vector embedding？</a></li>
+</ul>
+</li>
+<li><a href="#4-voyager--reflexion--star奠基三件套">§4 Voyager / Reflexion / STaR：奠基三件套</a>
+<ul>
+<li><a href="#41-voyagerwang-2023-neurips-nvidia--caltech">4.1　Voyager（Wang 2023 NeurIPS, NVIDIA + Caltech）</a></li>
+<li><a href="#42-reflexionshinn-2023-neurips-northeastern">4.2　Reflexion（Shinn 2023 NeurIPS, Northeastern）</a></li>
+<li><a href="#43-star-self-taught-reasoner-zelikman-2022-neurips-stanford">4.3　STaR (Self-Taught Reasoner, Zelikman 2022 NeurIPS, Stanford)</a></li>
+</ul>
+</li>
+<li><a href="#5-ctx2skill5-角色-self-play-loop重点-1">§5 Ctx2Skill：5-角色 Self-Play Loop（重点 1）</a>
+<ul>
+<li><a href="#51-problem-formulation">5.1　Problem formulation</a></li>
+<li><a href="#52-5-个-frozen-lm-角色">5.2　5 个 frozen LM 角色</a></li>
+<li><a href="#53-cross-time-replay-机制核心防-collapse">5.3　Cross-Time Replay 机制（核心防 collapse）</a></li>
+<li><a href="#54-ctx2skill-5-角色--replay-代码骨架">5.4　Ctx2Skill 5-角色 + Replay 代码骨架</a></li>
+<li><a href="#55-ctx2skill-实验结果必记">5.5　Ctx2Skill 实验结果（必记）</a></li>
+<li><a href="#56-ctx2skill-ablation面试加分">5.6　Ctx2Skill ablation（面试加分）</a></li>
+</ul>
+</li>
+<li><a href="#6-native-evolutionreward-free-meta-learning重点-2">§6 Native Evolution：Reward-Free Meta-Learning（重点 2）</a>
+<ul>
+<li><a href="#61-核心-architecture双阶段解耦">6.1　核心 architecture：双阶段解耦</a></li>
+<li><a href="#62-outcome-based-reward-设计">6.2　Outcome-Based Reward 设计</a></li>
+<li><a href="#63-两阶段训练sft--rft">6.3　两阶段训练：SFT → RFT</a></li>
+<li><a href="#64-native-evolution-训练--推理代码骨架">6.4　Native Evolution 训练 + 推理代码骨架</a></li>
+<li><a href="#65-native-evolution-实验结果">6.5　Native Evolution 实验结果</a></li>
+<li><a href="#66-native-evolution-vs-ctx2skill-对比">6.6　Native Evolution vs Ctx2Skill 对比</a></li>
+</ul>
+</li>
+<li><a href="#7-ard-与-long-horizon-memory-architecture重点-3">§7 A²RD 与 Long-Horizon Memory Architecture（重点 3）</a>
+<ul>
+<li><a href="#71-retrieve--synthesize--refine--update-闭环">7.1　Retrieve → Synthesize → Refine → Update 闭环</a></li>
+<li><a href="#72-mvmem-schematextual-states--frames--videos">7.2　MVMem schema（textual states + frames + videos）</a></li>
+<li><a href="#73-dependency-dag关键-trick">7.3　Dependency DAG（关键 trick）</a></li>
+<li><a href="#74-hits-hierarchical-test-time-self-improvement">7.4　HITS: Hierarchical Test-Time Self-Improvement</a></li>
+<li><a href="#75-迁移到通用-long-horizon-agent典型-cheat-sheet">7.5　迁移到通用 long-horizon agent（典型 cheat-sheet）</a></li>
+</ul>
+</li>
+<li><a href="#8-self-improvement-的理论上界l3-level">§8 Self-Improvement 的理论上界（L3 level）</a>
+<ul>
+<li><a href="#81-on-the-limits-of-self-improving-in-llmsarxiv-260105280">8.1　On the Limits of Self-Improving in LLMs（arXiv 2601.05280）</a></li>
+<li><a href="#82-solver-verifier-gaparxiv-250700075">8.2　Solver-Verifier Gap（arXiv 2507.00075）</a></li>
+<li><a href="#83-两篇论文的实际含义">8.3　两篇论文的实际含义</a></li>
+</ul>
+</li>
+<li><a href="#9-memory-driven-self-evolution">§9 Memory-Driven Self-Evolution</a>
+<ul>
+<li><a href="#91-generative-agentspark-2023-uist-stanford">9.1　Generative Agents（Park 2023 UIST, Stanford）</a></li>
+<li><a href="#92-memgptpacker-2023-berkeley">9.2　MemGPT（Packer 2023, Berkeley）</a></li>
+<li><a href="#93-这一层与-ctx2skill--native-evolution-关系">9.3　这一层与 Ctx2Skill / Native Evolution 关系</a></li>
+</ul>
+</li>
+<li><a href="#10-skill--k-检索与排序工程实践">§10 Skill / K 检索与排序（工程实践）</a>
+<ul>
+<li><a href="#101-hybrid-retrieval-pipeline">10.1　Hybrid retrieval pipeline</a></li>
+<li><a href="#102-skill-排序公式">10.2　Skill 排序公式</a></li>
+<li><a href="#103-skill-的更新防陈旧">10.3　Skill 的更新（防陈旧）</a></li>
+</ul>
+</li>
+<li><a href="#11-inference-time-orchestration如-arisvs-training-time-meta-learning如-native-evolution">§11 Inference-Time Orchestration（如 ARIS）vs Training-Time Meta-Learning（如 Native Evolution）</a>
+<ul>
+<li><a href="#111-数学-formulation-对比">11.1　数学 formulation 对比</a></li>
+<li><a href="#112-各自局限">11.2　各自局限</a></li>
+<li><a href="#113-实际系统的混合形态">11.3　实际系统的混合形态</a></li>
+</ul>
+</li>
+<li><a href="#12-失败模式与防御必背">§12 失败模式与防御（必背）</a>
+<ul>
+<li><a href="#121-adversarial-collapse">12.1　Adversarial Collapse</a></li>
+<li><a href="#122-memory-drift">12.2　Memory Drift</a></li>
+<li><a href="#123-reward-hacking">12.3　Reward Hacking</a></li>
+<li><a href="#124-bias-amplificationecho-chamber">12.4　Bias Amplification（Echo Chamber）</a></li>
+<li><a href="#125-sandbox-contamination">12.5　Sandbox Contamination</a></li>
+<li><a href="#126-capability-ceiling">12.6　Capability Ceiling</a></li>
+<li><a href="#127-hallucination-compounding独立-reviewer-也可能共幻觉">12.7　Hallucination Compounding（独立 reviewer 也可能共幻觉）</a></li>
+</ul>
+</li>
+<li><a href="#13-25-高频面试题l1--l2--l3">§13 25 高频面试题（L1 + L2 + L3）</a>
+<ul>
+<li><a href="#l1-必会-q1-q10">L1 必会 (Q1-Q10)</a></li>
+<li><a href="#l2-进阶-q11-q20">L2 进阶 (Q11-Q20)</a></li>
+<li><a href="#l3-顶级-lab-q21-q25">L3 顶级 lab (Q21-Q25)</a></li>
+</ul>
+</li>
+<li><a href="#a-附录完整-from-scratch-代码骨架">§A 附录：完整 from-scratch 代码骨架</a>
+<ul>
+<li><a href="#a1-skill-library-完整实现">A.1　Skill library 完整实现</a></li>
+<li><a href="#a2-reflexion-memory-完整实现">A.2　Reflexion memory 完整实现</a></li>
+<li><a href="#a3-sanity-check-输出伪示">A.3　Sanity check 输出（伪示）</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Interview Prep · Self-Evolving Agents</div>
+  <h1>Self-Evolving Agents 面试 Cheat Sheet</h1>
+  <p class="subtitle">Ctx2Skill · Native Evolution · A²RD · Voyager · Reflexion · STaR + 25 高频题（L1 必会 · L2 进阶 · L3 顶级 lab）</p>
+  <p class="byline">By <strong>Ruofeng Yang (杨若峰), Shanghai Jiao Tong University</strong></p>
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/self_evolving_agents_tutorial.md</code></span>
+    <span><strong>SHA256:</strong> <code>b863a1d3abfd</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 13:32 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">8 句话搞定 Self-Evolving Agents</div><p>一页拿下 2024-2026 最前沿方向（详见 §1–§11 推导）。</p></div>
+<ol><li><strong>核心问题</strong>：让 agent 在<strong>长程任务</strong>里持续提升能力，而不靠人类反复标注。形式化为 $\pi_t \to \pi_{t+1}$ 的更新算子 $\mathcal{T}$ 的收敛性 / 稳定性 / 渐进有效性。</li><li><strong>三大范式</strong>：① Experience-Driven（人造任务 + reward，如 AgentTuning、Voyager）；② Adversarial Self-Play（Challenger-Solver，如 Absolute Zero、Ctx2Skill）；③ Meta-Learning / Reward-Free（无任务无奖励探索 + outcome-based reward，如 Native Evolution）。</li><li><strong>能力载体</strong>：<strong>自然语言 skill / world knowledge K 写成 markdown</strong>——这是 2024-2026 年最重要的范式转移，绕开参数更新，所有内容都是 inference-time <code>system_prompt += K</code>。</li><li><strong>Ctx2Skill 5-角色 self-play</strong>（arXiv 2604.27660）：Challenger / Reasoner / Judge / Proposer / Generator，<strong>冻结 LM 但 skill set 在进化</strong>。Cross-Time Replay 选 $\arg\max_i \rho^h_i \cdot \rho^e_i$ 防 adversarial collapse。</li><li><strong>Native Evolution 两阶段</strong>（arXiv 2604.18131）：Evolution phase 无任务无 reward 探索 → 蒸馏 markdown K；Execution phase 用 K 当 system prompt。训练信号 $R_\text{evolve}(\mathcal{K}) = \text{Success}(\mathcal{T}_E\mid\mathcal{K}) - \text{Success}(\mathcal{T}_E\mid\varnothing)$。</li><li><strong>A²RD 三件套</strong>（arXiv 2605.06924）：MVMem（textual states + frames + videos + dependency DAG）+ Adaptive Segment Gen + HITS（frame-level + video-level 自检）。直接迁移到任意长程 agent 当作 memory + audit 模板。</li><li><strong>理论上界</strong>：[arXiv:2601.05280] 在<strong>外源 grounding 信号缺失</strong>时 closed-loop density matching 退化（<strong>不是</strong>所有 reward-free 训练必崩，是该 setting 下的特定结论）；[arXiv:2507.00075] 把 solver-verifier gap 建模 + 经验拟合成 capability dynamics。</li><li><strong>常见故障</strong>：adversarial collapse（Challenger 极端化）、memory drift（K 内部矛盾累积）、reward hacking（self-rewarding 漂移）、bias amplification（agent 在自己输出上重训）、capability ceiling（外源 grounding 缺失时 self-improvement 退化）。</li></ol>
+<h2 id="1-self-evolving-agent-直觉">§1 Self-Evolving Agent 直觉</h2>
+<p>"Self-evolving" 不是 magic。一个 LLM agent 由四件东西组成：</p>
+<ul><li><strong>policy $\pi$</strong>：参数化或纯 in-context 的决策函数</li><li><strong>memory / knowledge $\mathcal{K}$</strong>：外部化、通常是 markdown 形式的长期状态</li><li><strong>skills $\mathcal{S}$</strong>：可复用的过程性知识，每个 skill 是一个 markdown 文档</li><li><strong>environment $E$</strong>：可交互的世界（web / code / paper / sandbox / OS）</li></ul>
+<p>"Self-evolution" 就是定义一个更新算子 $\mathcal{T}$：</p>
+<p>$$\big(\pi_t, \mathcal{K}_t, \mathcal{S}_t\big) \xrightarrow{\mathcal{T}(E, \text{trajectories})} \big(\pi_{t+1}, \mathcal{K}_{t+1}, \mathcal{S}_{t+1}\big)$$</p>
+<p>按照 $\mathcal{T}$ 更新的对象，2024-2026 大致可以分四个"层"：</p>
+<table><thead><tr><th>层</th><th>更新对象</th><th>更新方式</th><th>代表作</th></tr></thead><tbody><tr><td>L1 参数层</td><td>$\pi$ (model weights)</td><td>SFT / RFT / RL</td><td>AgentTuning、Native Evolution</td></tr><tr><td>L2 能力层</td><td>$\mathcal{S}$ (skills markdown)</td><td>self-play + replay</td><td>Voyager、Ctx2Skill、CoEvoSkills</td></tr><tr><td>L3 记忆层</td><td>$\mathcal{K}$ (world knowledge markdown)</td><td>exploration + summarize</td><td>MemGPT、MVMem、Native Evolution</td></tr><tr><td>L4 系统层</td><td>workflow orchestration</td><td>inference-time only</td><td>Anthropic Skills、ARIS-style harness</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">重要直觉</div><p>L1 是"训出本能"；L2/L3 是"长出工具箱 + 笔记本"；L4 是"工作流编排"。<strong>2025-2026 主流是 L2 + L3，L1 主要做训练—测试解耦的预备工作</strong>。</p></div>
+<p>面试常错的两个直觉：</p>
+<ul><li>❌ "self-evolving = 自动训出新模型权重"——错，<strong>绝大多数 work 不更新参数</strong>（Voyager、Ctx2Skill、Generative Agents、A²RD 全是 training-free / inference-time）。</li><li>❌ "self-evolving = agent 想干什么就干什么"——错，2026 主流是<strong>严格 grounding</strong> 的 self-improvement：要么 code executor（Absolute Zero），要么 math checker（STaR），要么 rubric judge（Ctx2Skill），要么 outcome utility（Native Evolution）。</li></ul>
+<h2 id="2-三种-self-evolution-范式的形式化">§2 三种 Self-Evolution 范式的形式化</h2>
+<p>Native Evolution 论文 [arXiv:2604.18131] 给出了一个非常清晰的分类——我们补充上 mathematical formulation。</p>
+<h3 id="21-experience-driven-evolution">2.1　Experience-Driven Evolution</h3>
+<p><strong>Setting</strong>：人提供任务集 $\mathcal{T}$、reward 函数 $R: \mathcal{O} \times \mathcal{A} \to \mathbb{R}$ 和 workflow。Agent 跑 trajectory $\tau$、按 $R(\tau)$ 加权更新。</p>
+<p><strong>Update operator</strong>：</p>
+<p>$$\theta_{t+1} = \theta_t + \eta \,\mathbb{E}_{\tau \sim \pi_{\theta_t}}\!\left[\nabla_\theta \log \pi_\theta(\tau)\, R(\tau)\right]$$</p>
+<p>这就是标准 policy gradient——AgentTuning、ToolLLM、Voyager 早期变种属于此类。</p>
+<p><strong>优点</strong>：监督密度高，收敛快。<strong>缺点</strong>：人力成本巨大（每个新环境都要重新设计 reward）。</p>
+<h3 id="22-adversarial-self-play-evolution">2.2　Adversarial Self-Play Evolution</h3>
+<p><strong>Setting</strong>：两 agent（Challenger + Solver）共同 evolve，无外部任务来源——任务由 Challenger 产生、Solver 解、verifier 给反馈。</p>
+<p><strong>Update operator</strong>（以 Absolute Zero / R-Zero 形式化）：</p>
+<p>$$\theta^{\text{ch}}_{t+1}, \theta^{\text{sol}}_{t+1} = \arg\min_{\theta^{\text{ch}}, \theta^{\text{sol}}} \;\mathbb{E}_{t\sim \pi^\text{ch}_t}\big[\ell^\text{ch}(t)\big] + \lambda\, \mathbb{E}_{(t,a)\sim \pi^\text{ch}_t,\pi^\text{sol}_t}\big[\ell^\text{sol}(t,a)\big]$$</p>
+<p>具体的"learnability reward"（Absolute Zero, arXiv 2505.03335）：</p>
+<p>$$R^\text{learn}(t) = \pi^\text{sol}_t(\text{correct}\mid t)\cdot \big(1 - \pi^\text{sol}_t(\text{correct}\mid t)\big)$$</p>
+<p>最大化时偏好 50% 难度——既不太简单也不太难。这是 curriculum-as-reward 的核心。</p>
+<p><strong>优点</strong>：无需人造任务集；<strong>缺点</strong>：仍需 verifier（code executor / math checker），且容易 <strong>adversarial collapse</strong>（Challenger 出极端任务、Solver 学到 trivial defense）。</p>
+<h3 id="23-meta-learning--reward-free-evolution">2.3　Meta-Learning / Reward-Free Evolution</h3>
+<p><strong>Setting</strong>（Native Evolution）：训练阶段给 outcome-based reward（<strong>不是</strong> step-level）；推理阶段无任务、无 reward——agent 自主探索 → 蒸馏 markdown world knowledge $\mathcal{K}$ → 下游任务里用 $\mathcal{K}$ 作 system prompt。</p>
+<p><strong>Reward 设计</strong>（Native Evolution 核心公式）：</p>
+<p>$$\boxed{\;R_\text{evolve}(\mathcal{K}) \;=\; \text{Success}(\mathcal{T}_E \mid \mathcal{K}) \;-\; \text{Success}(\mathcal{T}_E \mid \varnothing)\;}$$</p>
+<p>其中 $\mathcal{T}_E$ 是环境 $E$ 的 downstream task 集合（训练时观察得到）。<strong>reward 衡量的是 K 的下游 utility gain</strong>，不需要 step-level 监督。</p>
+<p><strong>优点</strong>：完全 task-free / reward-free at inference；<strong>缺点</strong>：训练成本高（rejection sampling RFT × 2 iteration），且 $\mathcal{T}_E$ 在训练时仍需 labeled data。</p>
+<div class="callout callout-warn"><div class="callout-title">常错点：reward-free at inference ≠ reward-free 训练</div><p>Native Evolution evolution phase <strong>推理时</strong>确实无 reward / 无 task；但<strong>训练</strong>时仍然需要 600 deep search questions × 20 websites 的 labeled set 来算 $R_\text{evolve}$。这是面试加分点：要主动 disambiguate。</p></div>
+<h3 id="24-三范式对比必背">2.4　三范式对比（必背）</h3>
+<table><thead><tr><th>维度</th><th>Experience-Driven</th><th>Adversarial</th><th>Meta-Learning</th></tr></thead><tbody><tr><td>训练时 task 来源</td><td>人</td><td>Challenger agent</td><td>内生探索 + labeled downstream</td></tr><tr><td>训练时 reward</td><td>人</td><td>verifier</td><td>outcome utility</td></tr><tr><td>推理时 task</td><td>人给</td><td>人给 / agent 自己</td><td>人给</td></tr><tr><td>推理时 reward</td><td>不需要</td><td>不需要</td><td><strong>不需要</strong> ✓</td></tr><tr><td>推理时 workflow</td><td>人编排</td><td>人编排</td><td><strong>agent 自驱</strong>（先 evolve 再 execute）✓</td></tr><tr><td>代表作</td><td>AgentTuning、ToolLLM</td><td>AZR、R-Zero、Ctx2Skill</td><td>Native Evolution</td></tr><tr><td>工程成本</td><td>高（reward eng.）</td><td>中（verifier 编排）</td><td>高（rejection sampling）</td></tr><tr><td>arXiv</td><td>2310.12823</td><td>2505.03335 / 2604.27660</td><td>2604.18131</td></tr></tbody></table>
+<h2 id="3-skill--knowledge-的-markdown-化最重要的工程转移">§3 Skill / Knowledge 的 Markdown 化（最重要的工程转移）</h2>
+<p>2024 年最重要的一个范式转移是：<strong>长期记忆和能力扩展不通过权重更新，而是通过外部 markdown 文档</strong>。</p>
+<h3 id="31-anthropic-skills--native-evolution-的趋同">3.1　Anthropic Skills + Native Evolution 的趋同</h3>
+<p>Anthropic 在 2025 年公开了 <code>skills/</code> 范式（每个 skill 是一个独立 markdown 文件，agent 按需 load 到 system prompt）。Native Evolution 在论文里<strong>明确引用了 Anthropic skills</strong>作为 K 的实现 reference（论文 §3，footnote 1 指向 <code>github.com/anthropics/skills/tree/main/skills</code>）。</p>
+<table><thead><tr><th>维度</th><th>Anthropic Skills</th><th>Native Evolution K</th></tr></thead><tbody><tr><td>表示</td><td>markdown</td><td>markdown</td></tr><tr><td>加载</td><td>按 task 选择 skill 注入 system prompt</td><td>按 environment 加载 K 注入 system prompt</td></tr><tr><td>粒度</td><td>"如何做 PDF / Excel / git commit"</td><td>"ACL2025 网站结构 / 某 code repo 拓扑"</td></tr><tr><td>监督</td><td>人写</td><td>agent 自动 distill</td></tr><tr><td>来源</td><td>静态人造</td><td>训练后内生</td></tr></tbody></table>
+<p>→ 趋同结论：<strong>system prompt 是新的 model weights，markdown 文档是新的 fine-tuning data</strong>。</p>
+<h3 id="32-skill--k-文件的典型-schema">3.2　Skill / K 文件的典型 schema</h3>
+<pre><code># skill_name
+## Trigger / When-to-use
+&lt;什么 task 该用这个 skill&gt;
+
+## Steps
+1. ...
+2. ...
+
+## Resources / References
+- file paths / URLs
+
+## Failure modes
+- 已知陷阱 + 修复方式</code></pre>
+<p>Native Evolution 的 K 还会显式存：</p>
+<ul><li><strong>Visual arcs</strong>（实体/环境的视觉演化）</li><li><strong>Spatial relations</strong>（subject-relation-object triplets）</li><li><strong>Camera states / Site map</strong>（环境拓扑）</li><li><strong>Token budget allocation</strong>（每个子页面分多少 token）</li></ul>
+<h3 id="33-为什么-markdown-而不是-vector-embedding">3.3　为什么 markdown 而不是 vector embedding？</h3>
+<ul><li><strong>可解释</strong>：人类可以审计、修订、merge</li><li><strong>可组合</strong>：skill A + skill B 直接 prepend</li><li><strong>可路由</strong>：可以 LLM 自己读 trigger 段决定 load 哪个</li><li><strong>可演化</strong>：自然语言 diff 比 vector diff 更稳定</li></ul>
+<p>代价：检索精度不如 vector RAG；解决方式是 hybrid（vector 做 candidate selection → markdown 做精读）。</p>
+<h2 id="4-voyager--reflexion--star奠基三件套">§4 Voyager / Reflexion / STaR：奠基三件套</h2>
+<p>进入 2024-2026 前沿之前，必须先把三个奠基 work 嚼透——面试官十有八九会问 baseline。</p>
+<h3 id="41-voyagerwang-2023-neurips-nvidia--caltech">4.1　Voyager（Wang 2023 NeurIPS, NVIDIA + Caltech）</h3>
+<p>第一个真正意义上的"自动 curriculum + skill library"端到端 agent：在 Minecraft 里跑 GPT-4，让它自己出任务、写 JS code（每段 code 是一个 skill）、自检、并把成功的 skill 存进 library。</p>
+<p>核心三件套：</p>
+<ul><li><strong>Automatic Curriculum</strong>：根据当前 inventory 状态让 GPT-4 提出下一个 task</li><li><strong>Skill Library</strong>：每个新 skill 是 JS function，embedding 索引、按 description 检索</li><li><strong>Iterative Prompting + Self-Verification</strong>：execute → env feedback → critic agent → revise，直到通过</li></ul>
+<div class="callout callout-warn"><div class="callout-title">常见误传</div><p>Voyager 不更新 GPT-4 权重，纯 inference-time。也不用 reward；用的是 GPT-4 自己当 critic 判断 task 成功，属于 self-verification 类（不是 RL）。</p></div>
+<h3 id="42-reflexionshinn-2023-neurips-northeastern">4.2　Reflexion（Shinn 2023 NeurIPS, Northeastern）</h3>
+<p>把"verbal RL"概念固化：每次失败后，agent 用自然语言对自己 trajectory 写一段反思（reflection），存进 episodic memory，下次 prompt 时 prepend。</p>
+<p>形式化（伪 Bellman）：</p>
+<p>$$M_{t+1} = M_t \cup \big\{\text{reflect}(\tau_t, r_t)\big\}$$</p>
+<p>其中 $\text{reflect}$ 是 LLM 自己实现的 "what went wrong + how to fix" 文本生成。</p>
+<p><strong>为什么有效</strong>（理论上）：reflection 把稀疏 reward 信号压缩成结构化文本，绕开梯度更新；等价于在 in-context 域做一种<strong>非参数化 policy improvement</strong>。但缺乏收敛 guarantee。</p>
+<h3 id="43-star-self-taught-reasoner-zelikman-2022-neurips-stanford">4.3　STaR (Self-Taught Reasoner, Zelikman 2022 NeurIPS, Stanford)</h3>
+<p>让 LM 自己<strong>生成 rationale → 答错就用真答案 rationalize → 把对的 (q, rationale, a) 拿来 SFT</strong>。是 self-improvement on reasoning 的真正起点。</p>
+<p>伪算法：</p>
+<pre><code>for iter in 1..N:
+    for each (q, a_gt) in D:
+        r, a_pred = LM(q)
+        if a_pred == a_gt:
+            collect (q, r, a_gt)
+        else:
+            r&#x27; = LM(q, hint=a_gt)        # rationalize
+            if r&#x27; produces a_gt:
+                collect (q, r&#x27;, a_gt)
+    SFT(LM, collected)</code></pre>
+<p>STaR 的关键缺陷（也是 [arXiv:2601.05280] 攻击 self-improvement 的核心论据）：<strong>rationalization 是 reverse-engineering 答案，不一定反映真实推理过程</strong>，导致 distribution drift。</p>
+<h2 id="5-ctx2skill5-角色-self-play-loop重点-1">§5 Ctx2Skill：5-角色 Self-Play Loop（重点 1）</h2>
+<blockquote><p>这一节几乎逐字对应 arXiv 2604.27660 的 §3，因为面试官可能从论文里逐字问。</p></blockquote>
+<h3 id="51-problem-formulation">5.1　Problem formulation</h3>
+<p>给一个 context $C$（可能是 100k+ tokens 的 manual / paper / repo / dataset），一个 task 集 $\mathcal{T} = \{t_j\}$，每个 task 有 binary rubric 集 $\mathcal{R}_j = \{r_{j,k}\}$。Solving indicator：</p>
+<p>$$y_j(\pi; C) = \prod_k \mathbb{I}\big[r_{j,k}(a_j) = \text{pass}\big], \quad a_j \sim \pi(\,\cdot\mid C, t_j)$$</p>
+<p>目标：构造 markdown skill set $\mathcal{S}^R$ 使得：</p>
+<p>$$a_j \sim \pi(\,\cdot\mid \mathcal{S}^R, C, t_j) \quad \text{maximizes}\ \mathbb{E}_j y_j$$</p>
+<p>且<strong>不更新 $\pi$ 的参数</strong>——只更新 $\mathcal{S}^R$。</p>
+<h3 id="52-5-个-frozen-lm-角色">5.2　5 个 frozen LM 角色</h3>
+<table><thead><tr><th>角色</th><th>输入</th><th>输出</th><th>直觉</th></tr></thead><tbody><tr><td><strong>Challenger</strong></td><td>$C$, $\mathcal{S}^C_{i-1}$</td><td>一批 $(t_m, \mathcal{R}_m)$</td><td>出 probing 任务</td></tr><tr><td><strong>Reasoner</strong></td><td>$C$, $\mathcal{S}^R_{i-1}$, $t_m$</td><td>$a_m$</td><td>用 skill 解题</td></tr><tr><td><strong>Judge</strong></td><td>$a_m$, $\mathcal{R}_m$</td><td>binary $y_m$</td><td>严格按 rubric 验</td></tr><tr><td><strong>Proposer (per side)</strong></td><td>failed/solved batch + 当前 skill set</td><td>自然语言 diagnosis</td><td>找根因，不写 skill</td></tr><tr><td><strong>Generator (per side)</strong></td><td>proposer diagnosis + 当前 skill set</td><td>新 skill set</td><td>materialize 修改</td></tr></tbody></table>
+<p>注意<strong>两路独立 evolve</strong>：</p>
+<ul><li><strong>Reasoner side</strong>：失败案例 → Reasoner Proposer 诊断"缺什么 contextual knowledge" → Reasoner Generator 写新 $\mathcal{S}^R_i$</li><li><strong>Challenger side</strong>：被太容易解的案例 → Challenger Proposer 诊断"为什么 challenger 出题太弱" → Challenger Generator 强化 $\mathcal{S}^C_i$</li></ul>
+<p>→ 这两路<strong>永远不交换 skill set</strong>——保持严格对抗。</p>
+<h3 id="53-cross-time-replay-机制核心防-collapse">5.3　Cross-Time Replay 机制（核心防 collapse）</h3>
+<p>iteration 越多，Challenger 越极端，Reasoner 越 over-specialize 到极端任务。直接返回 $\mathcal{S}^R_N$ 会糟。</p>
+<p><strong>Replay 流程</strong>：</p>
+<ol><li><p>训练过程中维护两个 probe set：</p>
+<ul><li><strong>Hard set $\mathcal{Q}^h$</strong>：每 iteration 选 rubric pass rate 最低的失败 task</li><li><strong>Easy set $\mathcal{Q}^e$</strong>：每 iteration 选 rubric pass 最少的 solved task（"刚好解出来"的）</li></ul></li><li>训练结束后，对每个候选 $\mathcal{S}^R_i$（$i=1\ldots N$）跑 Reasoner $\pi^R$ 在两个 probe set 上：</li></ol>
+<p>$$\rho^h(i) = \frac{\sum_{q\in \mathcal{Q}^h} y_q(\pi^R; C, \mathcal{S}^R_i) + 1}{|\mathcal{Q}^h| + 1}, \quad \rho^e(i) = \frac{\sum_{q\in \mathcal{Q}^e} y_q(\pi^R; C, \mathcal{S}^R_i) + 1}{|\mathcal{Q}^e| + 1}$$</p>
+<p>（Laplace smoothing 防 probe set 为空）</p>
+<ol><li>选：</li></ol>
+<p>$$\boxed{\;\mathcal{S}^R_\star = \mathcal{S}^R_{i^\star}, \quad i^\star = \arg\max_i \big(\rho^h(i) \cdot \rho^e(i)\big)\;}$$</p>
+<p><strong>为什么乘积而不是加和</strong>：乘积惩罚 catastrophic forgetting（如果某版本 $\rho^e \to 0$，整个分数 → 0），强制选两边都不太差的版本。Ctx2Skill ablation 显示用加和会让最终精度下降 ~1.5%。</p>
+<h3 id="54-ctx2skill-5-角色--replay-代码骨架">5.4　Ctx2Skill 5-角色 + Replay 代码骨架</h3>
+<pre><code class="language-python">def ctx2skill_loop(context: str, llm, num_iters: int = 5, M: int = 5):
+    &quot;&quot;&quot;
+    Ctx2Skill: 5 frozen LM 角色 + Cross-Time Replay.
+    返回 cross-time-replay 选出的最优 Reasoner skill set.
+    所有 LM 调用都是同一个 frozen backbone, 只有 skill set 在变.
+    &quot;&quot;&quot;
+    S_R = &quot;&quot;                    # Reasoner skill markdown (初始空)
+    S_C = &quot;&quot;                    # Challenger skill markdown
+    candidates = []             # 历史 S_R 候选 (cross-time)
+    Q_hard, Q_easy = [], []     # 两个 probe set
+
+    for i in range(1, num_iters + 1):
+        # ── (1) Challenger 出 batch ──
+        batch = llm(role=&quot;challenger&quot;, prompt=challenger_prompt(context, S_C), n=M)
+        # batch = [(t_m, rubrics_m), ...]
+
+        failed, solved = [], []
+        for t_m, rubrics_m in batch:
+            # ── (2) Reasoner 解题 ──
+            a_m = llm(role=&quot;reasoner&quot;, prompt=reasoner_prompt(context, S_R, t_m))
+            # ── (3) Judge per-rubric ──
+            per_rubric = [llm(role=&quot;judge&quot;, prompt=judge_prompt(a_m, r))
+                          for r in rubrics_m]
+            y_m = all(per_rubric)
+            pass_rate = sum(per_rubric) / len(per_rubric)
+            (failed if not y_m else solved).append(
+                (t_m, rubrics_m, a_m, pass_rate)
+            )
+
+        # ── 维护 probe sets (Laplace 平滑前预备) ──
+        if failed:
+            hardest = min(failed, key=lambda x: x[3])
+            Q_hard.append((hardest[0], hardest[1]))
+        if solved:
+            # solved 中 pass_rate 最低的 (即 &quot;勉强解出&quot; — 所有 rubric pass 但很多 prompt 都险险通过)
+            # 注意：solved 的 entries 都满足 all(per_rubric)，所以 pass_rate=1.0；
+            # 实际生产里 &quot;勉强解出&quot; 应该用 per-rubric soft 分数 (例如 LLM-judge 给 [0,1] 而非 0/1)，
+            # 这里教学版以接近解题边界的 task 为代表（即 batch 中 reasoner 用了最多 retry 的）
+            easiest_among_solved = solved[-1]  # 教学简化：取最后一个 solved task
+            Q_easy.append((easiest_among_solved[0], easiest_among_solved[1]))
+
+        # ── (4) 双路 Proposer 诊断 ──
+        diag_R = llm(role=&quot;reasoner_proposer&quot;,
+                     prompt=proposer_prompt(failed, S_R))
+        diag_C = llm(role=&quot;challenger_proposer&quot;,
+                     prompt=proposer_prompt(solved, S_C))
+
+        # ── (5) 双路 Generator 写 skill ──
+        S_R = llm(role=&quot;reasoner_generator&quot;,
+                  prompt=generator_prompt(diag_R, S_R))
+        S_C = llm(role=&quot;challenger_generator&quot;,
+                  prompt=generator_prompt(diag_C, S_C))
+
+        candidates.append(S_R)
+
+    # ── Cross-Time Replay ──
+    best_idx, best_score = 0, -1.0
+    for i, cand in enumerate(candidates):
+        rho_h = laplace_smoothed_rate(Q_hard, cand, llm, context)
+        rho_e = laplace_smoothed_rate(Q_easy, cand, llm, context)
+        score = rho_h * rho_e
+        if score &gt; best_score:
+            best_score, best_idx = score, i
+
+    return candidates[best_idx]
+
+
+def laplace_smoothed_rate(probe, skill_set, llm, context):
+    &quot;&quot;&quot; Laplace-smoothed pass rate: (sum_q y_q + 1) / (|probe| + 1).
+    
+    Args:
+        probe:     list[(task, rubrics)]
+        skill_set: candidate S_R^i 要评估的 markdown skill
+        llm:       frozen LM
+        context:   原始 context（与 ctx2skill_loop 入参同源；必须显式传入，
+                   防止 closure 误用）
+    &quot;&quot;&quot;
+    num_pass = 0
+    for t_q, rubrics_q in probe:
+        a = llm(role=&quot;reasoner&quot;,
+                prompt=reasoner_prompt(context, skill_set, t_q))
+        if all(llm(role=&quot;judge&quot;, prompt=judge_prompt(a, r))
+               for r in rubrics_q):
+            num_pass += 1
+    return (num_pass + 1) / (len(probe) + 1)</code></pre>
+<h3 id="55-ctx2skill-实验结果必记">5.5　Ctx2Skill 实验结果（必记）</h3>
+<p>CL-bench 上，<strong>没有任何参数更新</strong>：</p>
+<table><thead><tr><th>backbone</th><th>w/o skills</th><th>Ctx2Skill</th><th>Δ</th></tr></thead><tbody><tr><td>GPT-4.1</td><td>11.1%</td><td><strong>16.5%</strong></td><td><strong>+5.4</strong></td></tr><tr><td>GPT-5.1</td><td>21.2%</td><td><strong>25.8%</strong></td><td><strong>+4.6</strong></td></tr><tr><td>GPT-5.2</td><td>18.2%</td><td><strong>21.4%</strong></td><td><strong>+3.2</strong></td></tr></tbody></table>
+<p>→ 用 GPT-4.1 + Ctx2Skill (16.5%) <strong>超过</strong> 无 skill 的 Gemini 3 Pro (15.8%)——印证"high-quality skill 可弥补 model 差距"。</p>
+<h3 id="56-ctx2skill-ablation面试加分">5.6　Ctx2Skill ablation（面试加分）</h3>
+<table><thead><tr><th>去掉的部件</th><th>GPT-4.1 Δ from 16.5</th><th>GPT-5.1 Δ from 25.8</th></tr></thead><tbody><tr><td>Cross-Time Replay</td><td>−1.8 (→14.7)</td><td>−2.8 (→23.0)</td></tr><tr><td>decoupling Proposer + Generator</td><td>−0.6</td><td>−0.7</td></tr><tr><td>Challenger evolving</td><td><strong>−2.6 (→13.9)</strong> ← 最大</td><td>−3.3 ← 最大</td></tr><tr><td>Easy probe set</td><td>−0.8</td><td>−1.6</td></tr><tr><td>Hard probe set</td><td>−1.3</td><td>−1.1</td></tr><tr><td>Laplace smoothing</td><td>−1.0</td><td>−0.6</td></tr></tbody></table>
+<p><strong>Challenger evolving 的下降最大</strong>——证明"持续 adversarial pressure"是 Reasoner 进步的真正动力。</p>
+<h2 id="6-native-evolutionreward-free-meta-learning重点-2">§6 Native Evolution：Reward-Free Meta-Learning（重点 2）</h2>
+<blockquote><p>全部对应 arXiv 2604.18131。Tencent + HKUST(GZ)，2026-04-20。</p></blockquote>
+<h3 id="61-核心-architecture双阶段解耦">6.1　核心 architecture：双阶段解耦</h3>
+<pre class="diagram"><code>  ┌─────────────────────────────────┐       ┌──────────────────────────────┐
+  │      Native Evolution Phase     │       │   Knowledge-Enhanced Execution│
+  │      (推理时 task-free + rf)     │       │   (推理时拿 K 当 system prompt)│
+  │                                 │       │                              │
+  │   π_θ(K | E)                    │  ──→  │   π_task(a_t | o_t, K, Task) │
+  │   &quot;exploring + summarizing&quot;     │       │                              │
+  │                                 │       │                              │
+  └──────────────┬──────────────────┘       └──────────────────────────────┘
+                 │
+                 │ (训练时用 outcome-based reward 监督 evolve)
+                 ▼
+  R_evolve(K) = Success(T_E | K) − Success(T_E | ∅)</code></pre>
+<p><strong>关键 design choice</strong>：evolution 和 execution 用<strong>同一个 LLM</strong>（不像 RLHF 区分 SFT-policy / RM）；只是给不同 system prompt + 训练阶段经过 SFT + RFT 让它学会 "evolution mode"。</p>
+<h3 id="62-outcome-based-reward-设计">6.2　Outcome-Based Reward 设计</h3>
+<p>$$\boxed{\;R_\text{evolve}(\mathcal{K}) = \underbrace{\text{Success}(\mathcal{T}_E\mid \mathcal{K})}_{\text{有 K 时下游成功率}} - \underbrace{\text{Success}(\mathcal{T}_E\mid \varnothing)}_{\text{无 K baseline}}\;}$$</p>
+<p>其中 $\text{Success}(\mathcal{T}_E\mid \mathcal{K}) = \frac{1}{M}\sum_{j=1}^M \mathbb{I}\big[f(Q_j, \mathcal{K}) = A_j\big]$。</p>
+<p><strong>为什么 outcome-based 而不是 step-level？</strong></p>
+<table><thead><tr><th>维度</th><th>step-level</th><th>outcome-based</th></tr></thead><tbody><tr><td>监督密度</td><td>高</td><td>低</td></tr><tr><td>信号噪声</td><td>中（中间状态难评估）</td><td>低（end-task 答案是 ground truth）</td></tr><tr><td>reward hacking 风险</td><td>高（agent 学到 short-cut 拿中间分）</td><td>低（只能靠真正提高 task 成功）</td></tr><tr><td>工程复杂度</td><td>高（需 PRM）</td><td>低</td></tr></tbody></table>
+<p>Native Evolution 选 outcome-based 还有一个特殊原因：<strong>$\mathcal{K}$ 是整段 markdown（374.8 步 × 3322.4 tokens/step），step-level reward 在如此长 horizon 上几乎无意义</strong>。</p>
+<h3 id="63-两阶段训练sft--rft">6.3　两阶段训练：SFT → RFT</h3>
+<p><strong>Stage 1 (SFT)</strong>：</p>
+<ul><li>用 teacher model $\pi_T$ (Gemini-2.5-Pro) 生成 3 个候选 $\{\mathcal{K}_i\}_{i=1}^3$</li><li>算 $R_\text{evolve}(\mathcal{K}_i)$，选最优 $\mathcal{K}^\star$</li><li>用 $T^\star = \{Q, o_1^\star, a_1^\star, \ldots, o_k^\star, a_k^\star\}$ trajectory SFT base model $\pi_{\theta_0}$</li><li>训练数据：600 deep search questions × 20 websites</li></ul>
+<p><strong>Stage 2 (RFT, Rejection Sampling Fine-Tuning)</strong>：</p>
+<ul><li>用 $\pi_{\theta_1}$ 自己生成 $C$ 个候选 K</li><li>按 $R_\text{evolve}$ 选最高分</li><li>用最高分 trajectory 继续 fine-tune</li><li>跑 2 iteration</li></ul>
+<div class="callout callout-warn"><div class="callout-title">常见误解</div><p>Native Evolution 用 RFT 而不是 GRPO/PPO 的原因：(1) trajectory horizon ~ 374 步，GRPO 反传不可行；(2) reward 评估要跑 auxiliary agent 在 downstream task 上，太贵 → 用 offline rejection sampling 解耦 trajectory 生成与 policy 更新。</p></div>
+<h3 id="64-native-evolution-训练--推理代码骨架">6.4　Native Evolution 训练 + 推理代码骨架</h3>
+<pre><code class="language-python">def native_evolution_pipeline(base_model, teacher_model, env_pool,
+                              downstream_tasks_per_env, num_iter=2,
+                              C_sft: int = 3, C_rft: int = 8):
+    &quot;&quot;&quot;
+    Native Evolution: SFT + RFT (2 iter) → 学会 reward-free self-evolution.
+    
+    Args:
+        C_sft: SFT 阶段 teacher 生成 K 候选数（论文 3）
+        C_rft: RFT 阶段 pi 自生成候选数（论文 8）
+    &quot;&quot;&quot;
+    # ── Stage 1: SFT ──
+    sft_data = []
+    for E in env_pool:
+        T_E = downstream_tasks_per_env[E]            # labeled downstream
+        # baseline: 不给 K
+        s0 = success_rate(base_model, T_E, K=None)
+
+        # teacher 生成 C_sft 个候选 K
+        candidates = [explore_and_summarize(teacher_model, E)
+                      for _ in range(C_sft)]
+        # 评 reward = Success(T_E | K) − Success(T_E | ∅)
+        rewards = [success_rate(base_model, T_E, K=K) - s0
+                   for K in candidates]
+        K_star = candidates[argmax(rewards)]
+        traj_star = extract_trajectory(teacher_model, E, K_star)
+        sft_data.append(traj_star)                   # ~374 steps each
+
+    pi_1 = sft(base_model, sft_data)                 # warm-up
+
+    # ── Stage 2: RFT × num_iter ──
+    pi = pi_1
+    for it in range(num_iter):
+        rft_data = []
+        for E in env_pool:
+            T_E = downstream_tasks_per_env[E]
+            s0 = success_rate(pi, T_E, K=None)
+            # pi 自己生成 C_rft 个候选
+            candidates = [explore_and_summarize(pi, E) for _ in range(C_rft)]
+            rewards = [success_rate(pi, T_E, K=K) - s0
+                       for K in candidates]
+            best = candidates[argmax(rewards)]
+            rft_data.append(extract_trajectory(pi, E, best))
+        pi = sft(pi, rft_data)                       # next iter
+
+    return pi   # π_θ*: 学会了 native evolution
+
+
+def native_evolution_inference(pi_star, new_env, task):
+    &quot;&quot;&quot;
+    推理时: 无 task, 无 reward → 探索 → 蒸馏 K → 用 K 解题.
+    &quot;&quot;&quot;
+    K = explore_and_summarize(pi_star, new_env)      # task-free!
+    answer = pi_star(task, system_prompt=K)          # K-augmented
+    return answer</code></pre>
+<h3 id="65-native-evolution-实验结果">6.5　Native Evolution 实验结果</h3>
+<p>WebVoyager + WebWalker，14B Qwen3 / 36B Seed-OSS：</p>
+<table><thead><tr><th>backbone</th><th>w/o K</th><th>Native Evolution (RFT)</th><th>Δ</th></tr></thead><tbody><tr><td>Qwen3-30B (WebWalker)</td><td>22.04</td><td><strong>40.91</strong></td><td><strong>+18.9</strong></td></tr><tr><td>Qwen3-30B (WebVoyager)</td><td>41.08</td><td><strong>57.44</strong></td><td><strong>+16.4</strong></td></tr><tr><td>Seed-OSS-36B (WebWalker)</td><td>19.50</td><td>36.72</td><td>+17.2</td></tr></tbody></table>
+<p><strong>最 striking</strong>：14B Qwen3 + transferred K from 36B → 35.6% conference accuracy；<strong>unassisted Gemini-2.5-Flash 只有 31.3%</strong>——证明 high-quality K 可超过纯参数缩放。</p>
+<h3 id="66-native-evolution-vs-ctx2skill-对比">6.6　Native Evolution vs Ctx2Skill 对比</h3>
+<table><thead><tr><th>维度</th><th>Native Evolution</th><th>Ctx2Skill</th></tr></thead><tbody><tr><td>是否更新参数</td><td>是（SFT + RFT × 2 iter）</td><td>否（frozen LM, 只更新 skill）</td></tr><tr><td>推理时是否需 task</td><td>否（先 evolve 再 execute）</td><td>是（task-driven）</td></tr><tr><td>Knowledge 容器</td><td>$\mathcal{K}$（markdown 环境 map）</td><td>$\mathcal{S}^R$（markdown skills）</td></tr><tr><td>Reward 设计</td><td>outcome-based downstream utility</td><td>binary rubric judge</td></tr><tr><td>反 collapse 机制</td><td>rejection sampling (filter)</td><td>Cross-Time Replay</td></tr><tr><td>训练成本</td><td>高</td><td>低</td></tr><tr><td>推理成本</td><td>较低</td><td>中</td></tr><tr><td>适用任务</td><td>new environment 探索</td><td>dense context task</td></tr></tbody></table>
+<p>→ <strong>它们是互补的</strong>：Native Evolution 让 backbone 学会<strong>怎么探索</strong>；Ctx2Skill 让冻结 backbone<strong>怎么把 context 蒸馏成可复用 skill</strong>。可以叠加。</p>
+<h2 id="7-ard-与-long-horizon-memory-architecture重点-3">§7 A²RD 与 Long-Horizon Memory Architecture（重点 3）</h2>
+<blockquote><p>arXiv 2605.06924，Google Cloud AI + NUS，2026-05-07。虽然是 video，但 memory schema 直接迁移到所有 long-horizon agent。</p></blockquote>
+<h3 id="71-retrieve--synthesize--refine--update-闭环">7.1　Retrieve → Synthesize → Refine → Update 闭环</h3>
+<pre class="diagram"><code>   ┌──────────────────────────────────────────────────────────────┐
+   │   for segment i = 1..N:                                       │
+   │     1. Retrieve relevant context from MVMem (T_j, F_j, V_j)   │
+   │     2. Decide mode: extrapolation vs interpolation            │
+   │     3. Synthesize boundary frames F_i^begin, F_i^end          │
+   │     4. HITS (frame-level): verify + revise frames             │
+   │     5. Synthesize video segment V_i = TI2V(P_i, F_i, F^rel)   │
+   │     6. HITS (video-level): verify + revise via MAPO           │
+   │     7. Update MVMem with (F_i, V_i, T_i, T_{i+1}^F)           │
+   └──────────────────────────────────────────────────────────────┘</code></pre>
+<h3 id="72-mvmem-schematextual-states--frames--videos">7.2　MVMem schema（textual states + frames + videos）</h3>
+<p>$$\mathcal{M} := \{\mathcal{M}_1, \ldots, \mathcal{M}_N\} \cup \mathcal{R} \cup \mathcal{D}$$</p>
+<p>每段 $\mathcal{M}_j = \{T_j, \mathcal{F}_j, V_j\}$：</p>
+<ul><li><strong>Textual States $T_j$</strong>：包含 Visual Arcs（entity identity / motion）+ Spatial Relations（subject-relation-object triplets，ground geometric layout）+ Camera trajectories</li><li><strong>Frames $\mathcal{F}_j = \{F_j^\text{begin}, F_j^\text{end}\}$</strong>：keyframes</li><li><strong>Videos $V_j$</strong>：完整 segment</li></ul>
+<p>加上：</p>
+<ul><li><strong>$\mathcal{R}$</strong>：global reference frames (background, entity references)</li><li><strong>$\mathcal{D}$</strong>：prompt database（失败 prompt 也存）</li></ul>
+<h3 id="73-dependency-dag关键-trick">7.3　Dependency DAG（关键 trick）</h3>
+<p>reference 之间有依赖：entity 依赖 environment、camera 依赖 entity 位置。A²RD 建一个 DAG：</p>
+<p>$$\mathcal{G} := \text{MLLM}_\text{dep}(\mathcal{P}_\mathcal{R})$$</p>
+<p>然后 topological sort 决定合成顺序。直接迁移到 ARIS-style agent：研究项目里 claim ← experiment ← code ← idea，typed memory 也是 DAG。</p>
+<h3 id="74-hits-hierarchical-test-time-self-improvement">7.4　HITS: Hierarchical Test-Time Self-Improvement</h3>
+<p>两级：</p>
+<ul><li><strong>Frame-level HITS</strong>：对每个 $F^\text{begin}, F^\text{end}$ 用 VLM verify "是否符合 textual state"，不符合 → MAPO (Multi-Aspect Prompt Optimization) 改 prompt → 重生成</li><li><strong>Video-level HITS</strong>：对整段 $V_i$ 用 VLM verify "narrative continuity"，不符合 → 改 video prompt → 重生成</li></ul>
+<p>→ <strong>inner-segment + inter-segment 两个 scale 的自检</strong>——比单层 self-improvement 防 drift 更强。</p>
+<h3 id="75-迁移到通用-long-horizon-agent典型-cheat-sheet">7.5　迁移到通用 long-horizon agent（典型 cheat-sheet）</h3>
+<pre><code class="language-python">class TypedMemory:
+    &quot;&quot;&quot;A²RD MVMem 思想 ⇒ 通用 long-horizon agent memory.&quot;&quot;&quot;
+    def __init__(self):
+        self.segments = []          # list of {state, artifacts, deps}
+        self.global_refs = {}       # 全局实体 (e.g., paper-level claim)
+        self.dep_graph = {}         # DAG: which artifact depends on which
+        self.failure_db = []        # 失败 trace 数据库
+
+    def retrieve(self, current_segment_ctx, k=3):
+        &quot;&quot;&quot;检索 narratively-relevant 上下文 (前 k 段).&quot;&quot;&quot;
+        cands = []
+        for j, M_j in enumerate(self.segments):
+            score = relevance(M_j[&quot;state&quot;], current_segment_ctx)
+            cands.append((score, j))
+        topk = sorted(cands, reverse=True)[:k]
+        return [self.segments[j] for _, j in topk]
+
+    def update(self, segment, deps):
+        self.segments.append(segment)
+        seg_id = len(self.segments) - 1
+        self.dep_graph[seg_id] = deps      # parent ids
+
+    def topo_synthesis_order(self, num_segments: int) -&gt; list[int]:
+        &quot;&quot;&quot;A²RD 的 dependency DAG → 决定生成顺序.
+        
+        Args:
+            num_segments: 待生成段总数；自动补充未在 dep_graph 中的节点为 root.
+        Returns:
+            合法的 topological order (list of segment indices).
+        &quot;&quot;&quot;
+        # 自动把所有 0..num_segments-1 都加入 graph (没有依赖的视为 root)
+        graph = {i: self.dep_graph.get(i, []) for i in range(num_segments)}
+        return topological_sort(graph)
+
+
+def long_horizon_agent_with_hits(memory, segments_to_generate, llm, verifier):
+    &quot;&quot;&quot;A²RD 风格的 R→S→R→U 闭环.
+    
+    Note: segments_to_generate 是需要生成的段的 context 描述列表；
+    生成 order 由 memory.dep_graph 决定（若空，则默认顺序生成）。
+    &quot;&quot;&quot;
+    order = memory.topo_synthesis_order(num_segments=len(segments_to_generate))
+    for i in order:
+        # Retrieve
+        ctx = memory.retrieve(segments_to_generate[i])
+        # Synthesize
+        artifact = llm.generate(segments_to_generate[i], context=ctx)
+        # Frame-level HITS (artifact 内部一致性)
+        for _ in range(MAX_REFINES):
+            if verifier.frame_check(artifact): break
+            artifact = llm.refine(artifact, verifier.feedback)
+        # Video-level HITS (artifact 与历史一致性)
+        for _ in range(MAX_REFINES):
+            if verifier.video_check(artifact, ctx): break
+            artifact = llm.refine(artifact, verifier.feedback)
+        # Update
+        memory.update(artifact, deps=ctx)</code></pre>
+<h2 id="8-self-improvement-的理论上界l3-level">§8 Self-Improvement 的理论上界（L3 level）</h2>
+<p>两篇 2025-2026 必读理论 paper——这是顶级 lab 面试可能问的部分。</p>
+<h3 id="81-on-the-limits-of-self-improving-in-llmsarxiv-260105280">8.1　On the Limits of Self-Improving in LLMs（arXiv 2601.05280）</h3>
+<p><strong>全名</strong>: "On the Limits of Self-Improving in LLMs: The Singularity Is Not Near Without Symbolic Model Synthesis"</p>
+<p><strong>Setup</strong>：把 self-training 建模成概率分布上的 dynamical system：</p>
+<p>$$p_{t+1} = \mathcal{T}_\text{closed}(p_t) = \mathbb{E}_{x \sim p_t}\big[\delta_{x'}\big],\quad x' = \pi_t(x)$$</p>
+<p>即 $p_{t+1}$ 是当前模型在自己样本上重训得到的分布。</p>
+<p><strong>主定理（叙述版）</strong>：在 closed-loop density matching（无外源 grounding signal）下，若 $\pi_t$ 没有访问 ground truth，则 $\{p_t\}$ 一般不收敛到 target $p^\star$，且会在 mode collapse / drift 中退化。</p>
+<p><strong>核心 mechanism</strong>：</p>
+<p>$$D_\text{KL}(p^\star \,\|\, p_{t+1}) \;\ge\; D_\text{KL}(p^\star \,\|\, p_t) - \Delta_\text{grounding}$$</p>
+<p>其中 $\Delta_\text{grounding}$ 是 grounding 信号带来的 KL 减少。无 grounding ($\Delta = 0$) 时 KL 不降反升。</p>
+<p><strong>正面 implication</strong>：<strong>self-improvement 需要外源 grounding</strong>——code executor / math checker / human label / rubric judge——这就是为什么 Absolute Zero 必须挂 code executor，STaR 必须用 ground-truth answer 做 rationalization，Ctx2Skill 必须用 Judge 验 rubric。</p>
+<div class="callout callout-warn"><div class="callout-title">误读警告（面试加分）</div><p>这篇 paper <strong>不是</strong>证明 "reward-free 训练一定崩"；它证明的是 closed-loop density matching 在外源 grounding 信号缺失时退化。<strong>Native Evolution 仍然合规</strong>——它有 outcome-based reward 当 grounding。</p></div>
+<h3 id="82-solver-verifier-gaparxiv-250700075">8.2　Solver-Verifier Gap（arXiv 2507.00075）</h3>
+<p><strong>Setup</strong>：把 capability 演化建模成两个变量 $\theta^\text{sol}, \theta^\text{ver}$ 的耦合 dynamics：</p>
+<p>$$\begin{cases} \dot\theta^\text{sol} = \eta_s\, g_s(\theta^\text{sol}, \theta^\text{ver}) \\ \dot\theta^\text{ver} = \eta_v\, g_v(\theta^\text{sol}, \theta^\text{ver}) \end{cases}$$</p>
+<p><strong>经验观察</strong>：capability $C(\theta)$ 在 self-improvement 下服从（拟合的）<strong>指数律</strong>：</p>
+<p>$$C(\theta_t) \approx C_\infty - (C_\infty - C_0)\, e^{-\kappa t}$$</p>
+<p>且 $\kappa$ 与 solver-verifier gap $\Delta := C^\text{ver} - C^\text{sol}$ <strong>正相关</strong>（gap 越大、improvement 越快），但 gap 太大也会 saturate（verifier 给的反馈 solver 学不到）。</p>
+<p><strong>对工程的指导</strong>：</p>
+<ul><li>跨模型 reviewer（如 ARIS 用 Codex 5.5 review Claude）天然制造 verifier-solver gap → 加速 self-improvement</li><li>同模型 self-review 几乎无 gap → 收敛慢甚至无效</li></ul>
+<div class="callout callout-good"><div class="callout-title">这是支撑&quot;executor != reviewer family&quot;协议的最佳理论 motivation</div><p>但请记住这是 <strong>modeling + empirical fit，不是现成定理</strong>。</p></div>
+<h3 id="83-两篇论文的实际含义">8.3　两篇论文的实际含义</h3>
+<table><thead><tr><th>论文</th><th>主张</th><th>工程 takeaway</th></tr></thead><tbody><tr><td>2601.05280</td><td>无 grounding 时 closed-loop self-training 退化</td><td>必须有外源 verifier（executor / judge / rubric）</td></tr><tr><td>2507.00075</td><td>solver-verifier gap 与 improvement 速率正相关（建模 + 经验）</td><td>用跨模型 reviewer 提高 gap</td></tr></tbody></table>
+<p>→ 二者结合：<strong>reward-free at inference + grounded at training</strong> 是 Native Evolution 等 work 能 work 的根本原因；<strong>ARIS-style 跨模型 audit</strong> 是 system-level 加速 self-improvement 的工程选择。</p>
+<h2 id="9-memory-driven-self-evolution">§9 Memory-Driven Self-Evolution</h2>
+<h3 id="91-generative-agentspark-2023-uist-stanford">9.1　Generative Agents（Park 2023 UIST, Stanford）</h3>
+<p>最经典的 long-horizon 仿真：observation stream → memory store → reflection (LLM 自己写 insight) → planning。</p>
+<p>记忆三层：</p>
+<ul><li><strong>Observation memory</strong>：原始 timestamp + 字面描述</li><li><strong>Reflection memory</strong>：由 retrieval-augmented LLM 生成"insight"</li><li><strong>Planning memory</strong>：long-term goal</li></ul>
+<p><strong>retrieval score</strong>：</p>
+<p>$$\text{score}(m) = \alpha_\text{recency}\, r(m) + \alpha_\text{importance}\, i(m) + \alpha_\text{relevance}\, s(m, q)$$</p>
+<p>其中 $r(m) = \gamma^{\Delta t}$（指数 decay），$i(m) \in [1,10]$（LLM 自评），$s(m,q)$ cosine similarity。</p>
+<h3 id="92-memgptpacker-2023-berkeley">9.2　MemGPT（Packer 2023, Berkeley）</h3>
+<p>OS-style hierarchical memory：</p>
+<ul><li><strong>Main context</strong>（LLM token budget）= "RAM"</li><li><strong>External archival</strong>（disk）= "HDD"</li><li>LLM 学会 paging：<code>memgpt_function_call(load, save, summarize)</code></li></ul>
+<p><strong>核心 trick</strong>：让 LLM 在自己 context 内观察到 token usage，主动决定换页——这是把 OS 抽象搬到 LLM agent。</p>
+<h3 id="93-这一层与-ctx2skill--native-evolution-关系">9.3　这一层与 Ctx2Skill / Native Evolution 关系</h3>
+<table><thead><tr><th>维度</th><th>Generative Agents</th><th>MemGPT</th><th>Ctx2Skill</th><th>Native Evolution</th></tr></thead><tbody><tr><td>进化对象</td><td>reflection / plan</td><td>paging policy</td><td>skill</td><td>K (world map)</td></tr><tr><td>是否更新参数</td><td>否</td><td>否</td><td>否</td><td>是</td></tr><tr><td>触发频率</td><td>per observation</td><td>per context overflow</td><td>per failure batch</td><td>per training epoch</td></tr><tr><td>是否 task-driven</td><td>是</td><td>是</td><td>是</td><td>否（evolution 阶段）</td></tr></tbody></table>
+<p>→ memory-driven 这条线 2024-2026 演化方向：<strong>从 episodic（GA）→ hierarchical (MemGPT) → typed + DAG (MVMem)</strong>。</p>
+<h2 id="10-skill--k-检索与排序工程实践">§10 Skill / K 检索与排序（工程实践）</h2>
+<p>实际部署时，skill library 几十到几百条，必须<strong>按需 load</strong>——否则 token 爆炸。</p>
+<h3 id="101-hybrid-retrieval-pipeline">10.1　Hybrid retrieval pipeline</h3>
+<pre><code class="language-python">def hybrid_skill_retrieval(task: str, skills: list, k=3):
+    &quot;&quot;&quot;
+    Stage A: 粗筛 (vector embedding, fast)
+    Stage B: 精排 (LLM scoring on description, accurate)
+    Stage C: 按 trigger 段精确匹配 (deterministic)
+    &quot;&quot;&quot;
+    # ── Stage A: BM25 + dense embedding hybrid ──
+    bm25_scores = bm25_search(task, [s.description for s in skills], topn=20)
+    dense_scores = dense_search(task, [s.embedding for s in skills], topn=20)
+    candidates = top_k(merge(bm25_scores, dense_scores), n=10)
+
+    # ── Stage B: LLM rerank ──
+    reranked = []
+    for skill in candidates:
+        prompt = f&quot;task={task}\nskill trigger={skill.trigger}\n&quot; \
+                 f&quot;Q: relevant? (yes / no / partial)&quot;
+        verdict = llm(prompt)
+        score = {&quot;yes&quot;: 1.0, &quot;partial&quot;: 0.5, &quot;no&quot;: 0.0}[verdict]
+        reranked.append((score, skill))
+
+    # ── Stage C: 关键词强匹配 ──
+    keyword_hits = [s for s in skills
+                    if any(kw in task.lower() for kw in s.exact_triggers)]
+
+    # 合并去重 → 取 top k
+    final = top_k(reranked + [(2.0, s) for s in keyword_hits], k=k)
+    return [s for _, s in final]</code></pre>
+<h3 id="102-skill-排序公式">10.2　Skill 排序公式</h3>
+<p>加权融合 3 个信号：</p>
+<p>$$\text{score}(s, q) = \alpha_\text{sim}\, \cos(\mathbf{e}_s, \mathbf{e}_q) + \alpha_\text{prior}\, \log(1 + n_\text{used}(s)) + \alpha_\text{recent}\, \gamma^{\Delta t}$$</p>
+<p>其中 $n_\text{used}$ 是历史调用次数（越常用越可靠），$\gamma^{\Delta t}$ 是 recency decay。</p>
+<h3 id="103-skill-的更新防陈旧">10.3　Skill 的更新（防陈旧）</h3>
+<p>每个 skill 维护：</p>
+<ul><li><code>success_count</code>, <code>fail_count</code></li><li><code>last_updated</code></li><li><code>version</code></li></ul>
+<p>触发更新条件：</p>
+<ul><li><code>fail_count / total &gt; τ_fail</code>（失败率过高）→ 修订</li><li><code>last_updated &gt; T_stale</code>（陈旧）→ 重新探索</li><li>environment 变化检测 → 触发 Native-Evolution-style 重新蒸馏</li></ul>
+<h2 id="11-inference-time-orchestration如-arisvs-training-time-meta-learning如-native-evolution">§11 Inference-Time Orchestration（如 ARIS）vs Training-Time Meta-Learning（如 Native Evolution）</h2>
+<blockquote><p>顶级 lab 面试 L3 必问：把握 inference-time orchestration 和 training-time meta-learning 的根本数学区别。</p></blockquote>
+<h3 id="111-数学-formulation-对比">11.1　数学 formulation 对比</h3>
+<table><thead><tr><th>维度</th><th>Inference-Time Orchestration</th><th>Training-Time Meta-Learning</th></tr></thead><tbody><tr><td>优化对象</td><td>system prompt $\mathcal{K}, \mathcal{S}$</td><td>model params $\theta$</td></tr><tr><td>形式</td><td>$\pi_{\theta}(\,\cdot\mid \mathcal{S}\oplus \text{ctx})$</td><td>$\theta_{t+1} = \theta_t - \eta\,\nabla \mathcal{L}$</td></tr><tr><td>反馈来源</td><td>外部 verifier（cross-model）</td><td>outcome reward + RFT</td></tr><tr><td>持久化形式</td><td>markdown files on disk</td><td>模型权重</td></tr><tr><td>测试时是否 update</td><td>是（每次任务都可更新 file）</td><td>否（参数 frozen）</td></tr><tr><td>收敛 dynamics</td><td>文档语言 diff，非梯度</td><td>gradient flow</td></tr><tr><td>理论工具</td><td>bandit / online learning / sequential decision</td><td>RL theory, meta-learning theory</td></tr></tbody></table>
+<h3 id="112-各自局限">11.2　各自局限</h3>
+<p><strong>Inference-time orchestration</strong>：</p>
+<ul><li>❌ 不能内化 skill 进 weights → 每次需 load token</li><li>❌ Context 长度上限会成瓶颈</li><li>❌ 难以学习 low-level subtoken pattern</li><li>✅ 立刻可解释，可审计</li><li>✅ 不需要 GPU</li></ul>
+<p><strong>Training-time meta-learning</strong>：</p>
+<ul><li>❌ 训练昂贵（rejection sampling × 2 iter, 600 task × 20 env）</li><li>❌ 一旦 train 完，进化能力固化</li><li>❌ 跨 environment 泛化仍是开问题</li><li>✅ 一次训练长期受益</li><li>✅ 行为可内化到 fast inference path</li></ul>
+<h3 id="113-实际系统的混合形态">11.3　实际系统的混合形态</h3>
+<p>主流 production agent 往往是<strong>两层都用</strong>：</p>
+<ul><li><strong>底层</strong>：fine-tune 过 instruction follow + tool use（一次性训练）</li><li><strong>上层</strong>：inference-time 编排 skill / memory（持续 update）</li></ul>
+<p>这也是 ARIS 类型 system 的实际位置——上层 inference-time orchestration，下层依赖 GPT-4.5 / Claude Opus 等已经 trained-to-follow-skill 的 backbone。</p>
+<h2 id="12-失败模式与防御必背">§12 失败模式与防御（必背）</h2>
+<h3 id="121-adversarial-collapse">12.1　Adversarial Collapse</h3>
+<p><strong>症状</strong>：Challenger 越来越极端，Reasoner 学会的 skill 只对极端 case 有效，对正常 case 退化。</p>
+<p><strong>Ctx2Skill 解法</strong>：Cross-Time Replay 选 $\arg\max \rho^h \cdot \rho^e$，乘积形式强制保留 easy task 性能。</p>
+<p><strong>通用解法</strong>：</p>
+<ul><li>维护历史 probe set（不只看 current iteration）</li><li>选最 balanced 而非 last-iteration skill</li><li>用 KL penalty 防 skill set 单步剧变：$\mathcal{L}_\text{KL} = \beta \,D_\text{KL}(\mathcal{S}_i \| \mathcal{S}_{i-1})$（textual KL 可近似为 BLEU/edit distance）</li></ul>
+<h3 id="122-memory-drift">12.2　Memory Drift</h3>
+<p><strong>症状</strong>：long-horizon agent 把矛盾 / 过时信息累积进 K 或 memory，越用越糟。</p>
+<p><strong>A²RD 解法</strong>：</p>
+<ul><li>HITS 在每个 segment 跟 retrieved context cross-check</li><li>typed memory schema 强制 schema validation</li><li>failure_db 单独存"已知不可信"trace</li></ul>
+<p><strong>通用解法</strong>：</p>
+<ul><li>定期跑 self-consistency check：让 LLM 读自己 K 找内部矛盾</li><li>给每个 entry 加 confidence 衰减</li><li>触发"K 重蒸馏"机制（Native-Evolution-style）</li></ul>
+<h3 id="123-reward-hacking">12.3　Reward Hacking</h3>
+<p><strong>症状</strong>：self-rewarding 训练（Yuan et al. 2024 Self-Rewarding LM）中，model 学到 game 自己的 reward function。</p>
+<p><strong>防御</strong>：</p>
+<ul><li><strong>跨模型 reward</strong>：让另一个 model family 当 verifier</li><li><strong>outcome-grounded reward</strong>：不让 LLM 给自己评分；用 code executor / math checker / labeled downstream task</li><li><strong>reward dropout / regularization</strong>：random subset of reward components</li></ul>
+<h3 id="124-bias-amplificationecho-chamber">12.4　Bias Amplification（Echo Chamber）</h3>
+<p><strong>症状</strong>：STaR-style rationalization 把 model 训练在自己生成的 rationale 上，扩大 mode collapse。</p>
+<p><strong>[arXiv:2601.05280] 给出的 KL bound 直接对应这种情况</strong> —— 无外源 grounding，KL 不降反升。</p>
+<p><strong>防御</strong>：</p>
+<ul><li>永远保留一部分 ground-truth supervision</li><li>用真实人类反馈 anchor</li><li>diverse seed prompts 强制多模态</li></ul>
+<h3 id="125-sandbox-contamination">12.5　Sandbox Contamination</h3>
+<p><strong>症状</strong>：agent 自己生成 test case → 自己 train on 这些 case → eval 上看上去很高但实际是 train-test 重叠。</p>
+<p><strong>防御</strong>：</p>
+<ul><li>严格 holdout set，agent 完全无 access</li><li>benchmark 由 third-party 维护</li><li>多 round canonical eval（如 Ctx2Skill 用 CL-bench）</li></ul>
+<h3 id="126-capability-ceiling">12.6　Capability Ceiling</h3>
+<p><strong>症状</strong>：经过 N 轮 self-improvement 后曲线 saturate，无论多少 compute 都不再涨。</p>
+<p><strong>Solver-Verifier Gap [arXiv:2507.00075] 的解释</strong>：当 gap $\Delta \to 0$ 时 $\kappa \to 0$，improvement rate → 0。</p>
+<p><strong>突破方式</strong>：</p>
+<ul><li>引入更强的 verifier（如换 stronger model 当 judge）</li><li>增加 task 难度（Ctx2Skill 的 Challenger evolve）</li><li><strong>symbolic 模型综合</strong> ([arXiv:2601.05280] 提出的最后救命稻草)：让 LLM 同时维护一个 symbolic / programmatic model 防 drift</li></ul>
+<h3 id="127-hallucination-compounding独立-reviewer-也可能共幻觉">12.7　Hallucination Compounding（独立 reviewer 也可能共幻觉）</h3>
+<p><strong>症状</strong>：跨模型 reviewer 都同意一个错误结论（如 Claude 写 + GPT 审，都漏掉同一个 bug）。</p>
+<p><strong>防御</strong>（briefing 中 codex round 2 也提过）：</p>
+<ul><li>reviewer 一定要接 raw evidence / executable check（unit test, claim audit against raw experiment output）</li><li>不能只靠 LLM 的 textual judgment</li></ul>
+<h2 id="13-25-高频面试题l1--l2--l3">§13 25 高频面试题（L1 + L2 + L3）</h2>
+<h3 id="l1-必会-q1-q10">L1 必会 (Q1-Q10)</h3>
+<details>
+
+<summary>Q1. 什么是 self-evolving agent？与普通 LLM agent 有何区别？</summary>
+<p>普通 agent：固定 policy / prompt / skill，<strong>所有 capability 来自 pretrain + 一次性 prompt engineering</strong>。</p>
+<p>Self-evolving agent：在使用过程中持续更新某一层（参数 / skill markdown / memory / workflow）的 capability。</p>
+<p>关键：<strong>不依赖每次都人工标注</strong>——可能依赖外源 verifier，但不依赖 step-level 人标。代表作 Voyager, Reflexion, Ctx2Skill, Native Evolution。</p>
+</details>
+<details>
+
+<summary>Q2. 三大 self-evolution 范式是什么？各举一例。</summary>
+<p>按 Native Evolution 论文 §2 分类：</p>
+<ul><li><strong>Experience-Driven</strong>：人造任务 + reward，如 AgentTuning, ToolLLM。</li><li><strong>Adversarial Self-Play</strong>：challenger-solver，如 Absolute Zero (arXiv 2505.03335), Ctx2Skill (arXiv 2604.27660)。</li><li><strong>Meta-Learning / Reward-Free</strong>：训练时给 outcome reward，推理时无 task 无 reward，如 Native Evolution (arXiv 2604.18131)。</li></ul>
+</details>
+<details>
+
+<summary>Q3. Voyager 的三件套是什么？为什么不更新 GPT-4 权重？</summary>
+<p>Voyager (Wang et al. NeurIPS 2023, NVIDIA + Caltech)：</p>
+<ul><li><strong>Automatic Curriculum</strong>：根据 inventory 自动出下一个 task</li><li><strong>Skill Library</strong>：每个 skill 是 JS function，按 description embedding 检索</li><li><strong>Iterative Prompting + Self-Verification</strong>：critic agent 验证，失败 revise</li></ul>
+<p>不更新 GPT-4 权重的原因：当时（2023）GPT-4 API 不开 fine-tune；且 Voyager 想证明 in-context skill 累积也能 evolve。但缺点是 token cost 高 + 不能内化 sub-token pattern。</p>
+</details>
+<details>
+
+<summary>Q4. Reflexion 与 RL 的关系？为什么叫"verbal RL"？</summary>
+<p>Reflexion (Shinn 2023 NeurIPS, Northeastern) 把 sparse reward 信号压成自然语言反思，存进 memory。</p>
+<p>类比标准 RL：</p>
+<ul><li>$r_t$ → "reflection text"（structured failure summary）</li><li>$V(s_t)$ → 在 prompt 中检索到的 reflection</li><li>policy improvement → 用 reflection 改后续 action</li></ul>
+<p>但<strong>不更新 weights</strong>——所以叫 verbal RL（用文本而非梯度做 credit assignment）。<strong>不是真正 RL</strong>，没有收敛 guarantee。</p>
+</details>
+<details>
+
+<summary>Q5. STaR 怎么 self-train？关键缺陷是什么？</summary>
+<p>STaR (Zelikman 2022 NeurIPS)：</p>
+<ol><li>LM 生成 (rationale, answer)</li><li>答对 → 收集 (q, rationale, a)</li><li>答错 → 给 ground truth, 让 LM 反向 rationalize</li><li>SFT on collected</li></ol>
+<p><strong>关键缺陷</strong>：rationalization 是反推答案，rationale 可能并非真实推理过程；distribution drift。</p>
+<p>[arXiv:2601.05280] 给出形式化批评：closed-loop training 无外源 grounding 会退化 KL。</p>
+</details>
+<details>
+
+<summary>Q6. Anthropic Skills 和 Native Evolution K 的关系？</summary>
+<p>两者都是<strong>markdown 文件作为 system prompt 注入</strong>。Native Evolution 论文 §3 footnote 1 显式引用 <code>github.com/anthropics/skills/tree/main/skills</code> 作为 K 的实现 reference。</p>
+<p>区别：</p>
+<ul><li>Anthropic Skills：人写，静态，任务级</li><li>Native Evolution K：agent 自动 distill，动态，环境级</li></ul>
+<p>→ 趋同结论：<strong>system prompt 是新的 model weights</strong>。</p>
+</details>
+<details>
+
+<summary>Q7. 为什么 self-evolving 不一定意味着 update 模型参数？</summary>
+<p>绝大多数 2024-2026 work 不更新参数：</p>
+<ul><li>Voyager: frozen GPT-4</li><li>Reflexion: frozen base LM</li><li>Generative Agents: frozen LM</li><li>Ctx2Skill: frozen LM</li><li>A²RD: training-free</li></ul>
+<p>原因：(1) 不需要 GPU，(2) 可解释 / 可审计，(3) skill 是 portable 的（可移植到其他 backbone），(4) 即时生效。</p>
+<p>参数更新的代表（Native Evolution, AgentTuning）通常用于让 backbone 学会"如何利用 skill / K"，而 skill / K 本身仍是文件。</p>
+</details>
+<details>
+
+<summary>Q8. Reflexion 的 memory 和 RAG 的区别？</summary>
+<ul><li>RAG：检索的是<strong>external knowledge documents</strong>（如 wiki）</li><li>Reflexion memory：检索的是 <strong>agent 自己历史 trajectory 的反思</strong></li></ul>
+<p>后者强制要求 agent 反思自己的失败/成功 pattern，不只是 retrieve 别人写的事实。</p>
+<p>工程上 Reflexion 也会做检索，只不过 doc 库是 self-generated。</p>
+</details>
+<details>
+
+<summary>Q9. self-play 训练为什么需要"learnability reward"？写一下公式。</summary>
+<p>Absolute Zero (arXiv 2505.03335) 提出 learnability reward：</p>
+<p>$$R^\text{learn}(t) = \pi^\text{sol}_t(\text{correct}\mid t)\cdot \big(1 - \pi^\text{sol}_t(\text{correct}\mid t)\big)$$</p>
+<p>最大化时 $\pi^\text{sol} = 0.5$——task 既不太简单（reward → 0）也不太难（reward → 0）。</p>
+<p><strong>为什么需要</strong>：若不约束，Challenger 会 explode 到极端任务（Solver 全错）→ 信号无用；这是 curriculum learning 的核心 trick。</p>
+</details>
+<details>
+
+<summary>Q10. 什么是 adversarial collapse？怎么防？</summary>
+<p><strong>症状</strong>：多轮 self-play 后，Challenger 越来越极端、Solver 学 over-specialize 到极端 case、忘掉 base task。</p>
+<p><strong>Ctx2Skill 解法</strong>：Cross-Time Replay——维护 hard + easy probe set，选 $\arg\max_i \rho^h(i)\cdot \rho^e(i)$。乘积形式强制 easy task 不能塌。</p>
+<p><strong>通用解法</strong>：early stopping、replay buffer、显式 KL penalty。</p>
+</details>
+<h3 id="l2-进阶-q11-q20">L2 进阶 (Q11-Q20)</h3>
+<details>
+
+<summary>Q11. 推导 Cross-Time Replay 为什么用乘积 ρ^h · ρ^e 而不是 ρ^h + ρ^e。</summary>
+<p>设候选 A 满足 $(\rho^h, \rho^e) = (0.8, 0.1)$，候选 B 满足 $(0.45, 0.45)$。</p>
+<ul><li>加法：A=0.9, B=0.9 → 不可分辨</li><li>乘法：A=0.08, B=0.2025 → 选 B</li></ul>
+<p><strong>为什么乘法更对</strong>：A 在 easy 上几乎全错（catastrophic forgetting），但加法把它的 hard 表现拉成总分平。乘法对任何一边 → 0 都施加 catastrophic penalty——这就是反 over-specialization 的关键。</p>
+<p>Ctx2Skill ablation 显示用 additive scoring（$\rho^h + \rho^e$）会让最终精度下降约 1-1.5 pts。</p>
+</details>
+<details>
+
+<summary>Q12. Native Evolution 的 outcome-based reward 为什么不能用 step-level？</summary>
+<p>R_evolve = Success(T_E | K) − Success(T_E | ∅)。</p>
+<p><strong>Step-level reward 不可行</strong>因为：</p>
+<ol><li>$\mathcal{K}$ 生成 trajectory ~374.8 步 × 3322.4 tokens/step，step-level signal 极度稀疏</li><li>没有 ground truth 中间状态——每步对错很难判</li><li>step-level reward 鼓励 short-cut（生成"看起来勤奋"的 K 但下游无用）</li></ol>
+<p>outcome-based 用 downstream task pass rate 当 reward——直接、抗 hacking、与 K 真实价值挂钩。</p>
+</details>
+<details>
+
+<summary>Q13. Native Evolution 为什么用 RFT 而不是 GRPO？</summary>
+<p>(1) Trajectory horizon ~374 步——GRPO/PPO 反传无法在如此 long horizon 上稳定。 (2) Reward 评估要跑 auxiliary agent 在 downstream task 上——online 评估太贵。 (3) RFT (Rejection Sampling Fine-Tuning) 解耦 trajectory generation 与 policy update：先用 $\pi_t$ 生成 $C$ 个 trajectory → 按 reward 排序 → 选最优 trajectory 做 SFT → 下一个 iter。</p>
+<p>→ offline、可并行、可控。代价：data efficiency 比 GRPO 低，需要更多 sample。</p>
+</details>
+<details>
+
+<summary>Q14. 推导 self-improvement 在无 grounding 下退化的 KL 论证。</summary>
+<p>设 $p^\star$ 是 target distribution，$p_t$ 是 model 在 iteration $t$ 的 distribution。</p>
+<p>closed-loop self-training：用 $p_t$ 自己采样的 $x_t$（无 ground truth label）继续训练。</p>
+<p>$$p_{t+1}(x) = \mathbb{E}_{x' \sim p_t}\big[\pi_\text{train}(x \mid x')\big]$$</p>
+<p>若 $\pi_\text{train}$ 是 maximum likelihood 类训练，且无 external label 修正：</p>
+<p>$$D_\text{KL}(p^\star \| p_{t+1}) \;\ge\; D_\text{KL}(p^\star \| p_t)$$</p>
+<p><strong>直觉</strong>：$p_t$ 已经 biased，按它采样训出来的 $p_{t+1}$ 只能保留或放大 bias。</p>
+<p>若引入 grounding（外源 label $y$ 对应 $x$），训练目标变成 conditional $p(x | y)$ 修正：</p>
+<p>$$D_\text{KL}(p^\star \| p_{t+1}) \;\le\; D_\text{KL}(p^\star \| p_t) - \Delta_\text{grounding}$$</p>
+<p>其中 $\Delta_\text{grounding} > 0$ 量化外源信号带来的 KL 修正。</p>
+<p>参考 [arXiv:2601.05280] §3。</p>
+<blockquote><p><strong>注意</strong>：这是简化版叙述（formal version 需对 $\pi_\text{train}$、$\pi_t$ 关系做技术性假设，参原文）。<strong>面试可以引用 [arXiv:2601.05280]，但不要声称自己独立推出</strong>。</p></blockquote>
+</details>
+<details>
+
+<summary>Q15. 解释 solver-verifier gap 与 self-improvement 速率的关系。</summary>
+<p>设 capability $C(\theta_t)$ 按 [arXiv:2507.00075] 经验拟合服从指数律：</p>
+<p>$$C(\theta_t) \approx C_\infty - (C_\infty - C_0)\, e^{-\kappa t}$$</p>
+<p>定义 gap $\Delta := C^\text{ver} - C^\text{sol}$。论文中 $\kappa = \kappa(\Delta)$ 经验上<strong>正相关</strong>但<strong>非单调</strong>：</p>
+<ul><li>$\Delta$ 过小 → verifier 与 solver 同质，无新信号 → $\kappa \approx 0$</li><li>$\Delta$ 过大 → solver 学不到（feedback 过于复杂）→ $\kappa$ 反而下降</li></ul>
+<p>→ 最佳：<strong>verifier 比 solver 强一档</strong>（如 Claude executor + GPT-5.5 reviewer）。</p>
+<p><strong>注意</strong>：原文给出的是 <strong>modeling + 经验拟合</strong>，不是现成可移植定理；不要在面试或论文中 over-claim 为"已证明定理"。</p>
+</details>
+<details>
+
+<summary>Q16. A²RD 的 MVMem 与传统 vector memory 的区别？</summary>
+<p>Vector memory（如 MemGPT, LangChain memory）：</p>
+<ul><li>存 embedding + 原文 chunk</li><li>检索：cosine similarity</li><li>缺点：长程一致性（entity identity / spatial relation）容易丢</li></ul>
+<p>MVMem：</p>
+<ul><li>存<strong>textual states</strong>（Visual Arcs / Spatial Relations / Camera trajectories）+ frames + videos + dependency DAG</li><li>检索：MLLM-based retrieval（textual + image + 上下文综合）</li><li>优点：可显式 track entity identity，避免 character look 漂移</li></ul>
+<p>对 long-horizon agent 启示：<strong>typed memory schema</strong>（不是 free-form text）+ <strong>dependency DAG</strong> 决定生成顺序。</p>
+</details>
+<details>
+
+<summary>Q17. HITS 的 frame-level 与 video-level 有何不同？为什么要分层？</summary>
+<ul><li><strong>Frame-level HITS</strong>：对单 frame 与 textual state cross-check（"该 frame 是否反映 entity X 的 identity"）</li><li><strong>Video-level HITS</strong>：对整段 video 与 narrative 一致性 check（"这段视频是否符合 story progression"）</li></ul>
+<p>分层原因：</p>
+<ul><li>单 frame 错误 → 在该 segment 局部修就行</li><li>跨 segment narrative 错误 → 必须更大尺度上检</li><li>类比：unit test vs integration test</li></ul>
+<p>迁移到通用 long-horizon agent：local artifact check + global workflow consistency check。</p>
+</details>
+<details>
+
+<summary>Q18. Generative Agents 的 memory retrieval 公式是什么？</summary>
+<p>$$\text{score}(m) = \alpha_\text{recency}\, r(m) + \alpha_\text{importance}\, i(m) + \alpha_\text{relevance}\, s(m, q)$$</p>
+<p>其中：</p>
+<ul><li>$r(m) = \gamma^{\Delta t}$ exponential decay</li><li>$i(m) \in [1, 10]$，由 LLM 自评 importance</li><li>$s(m, q)$ cosine similarity</li></ul>
+<p>Park 2023 UIST 设 $\gamma=0.995$/hour，$\alpha$ 均匀分配。</p>
+<p><strong>面试加分</strong>：importance 评分用 LLM 自评本身可能 hallucinate；现代 system 改用 cross-model 评分或 task-conditioned importance。</p>
+</details>
+<details>
+
+<summary>Q19. MemGPT 是怎么做"OS-style memory"的？为什么这思路启发了后续 work？</summary>
+<p>MemGPT (Packer 2023):</p>
+<ul><li>Main context（fast, expensive）= "RAM"</li><li>External archival（slow, cheap）= "HDD"</li><li>LLM 函数调用 <code>pagein / pageout / summarize</code> 自主管理</li></ul>
+<p>启发：</p>
+<ul><li>让 LLM 看见自己的 context 状态（token usage、可见 vs 不可见）</li><li>让 LLM 自主决定 "now save this to disk" / "now load that"</li><li>这是 LLM agent 第一次实现<strong>真正意义上的长期记忆主动管理</strong>——不依赖 RAG 框架</li></ul>
+<p>后续 work：MemoryBank, MemChat, MVMem 都受其启发；ARIS-style research-wiki 也是同款思路（agent 自己决定写入 / 读取 wiki）。</p>
+</details>
+<details>
+
+<summary>Q20. 比较 Voyager（自由探索）和 Ctx2Skill（context-driven）的 skill discovery 哲学。</summary>
+<p><strong>Voyager</strong>：在开放沙盒（Minecraft）里自动出 task → skill 是"如何 craft / kill"具体程序。</p>
+<ul><li>skill 形态：JS code</li><li>skill 触发：在做 task 时检索</li><li>缺乏外部 context</li></ul>
+<p><strong>Ctx2Skill</strong>：给定 dense context $C$（可能是 100k+ token），提取该 context 的 procedure / rule。</p>
+<ul><li>skill 形态：natural language markdown</li><li>skill 触发：context 加载时直接 prepend</li><li>必须依赖 context</li></ul>
+<p><strong>核心区别</strong>：Voyager 是<strong>环境驱动</strong>（skill = "在这个 world 怎么做事"），Ctx2Skill 是<strong>context 驱动</strong>（skill = "这份文档的 procedural knowledge"）。</p>
+<p>Ctx2Skill 更适合<strong>新 manual / new repo / new product doc</strong> 场景；Voyager 更适合<strong>新 environment exploration</strong>。</p>
+</details>
+<h3 id="l3-顶级-lab-q21-q25">L3 顶级 lab (Q21-Q25)</h3>
+<details>
+
+<summary>Q21. 推 Ctx2Skill 5-role loop 收敛到 stable skill set 的充分条件（非平凡 setting）。</summary>
+<p>直接证明 5-role loop 收敛较难，但可以给出充分条件的叙述性论证：</p>
+<p>设 $\mathcal{S}^R_i, \mathcal{S}^C_i$ 是 iteration $i$ 的两路 skill set。定义 capability：$C^R_i = \mathbb{E}_t[\rho^h(\mathcal{S}^R_i) \cdot \rho^e(\mathcal{S}^R_i)]$（with Cross-Time Replay metric）。</p>
+<p><strong>充分条件</strong>（直觉版）：</p>
+<ol><li><strong>Judge 可校准</strong> (calibrated)：$\mathbb{E}[Judge(a, r)] = \mathbb{E}[\text{ground-truth}(a, r)]$。即 Judge 不漂移。</li><li><strong>Proposer 是 monotone improver</strong>：每次 proposer 给出的 diagnosis 让 generator 写出的新 skill 在该 batch 上 strictly improving expected pass rate (with prob $\ge 1 - \delta$)。</li><li><strong>Probe set 平稳分布</strong>：$\mathcal{Q}^h, \mathcal{Q}^e$ 经过 K 次更新后分布稳定（不再剧变）。</li><li><strong>Skill set 容量有上限</strong>：$|\mathcal{S}^R| \le L$（防 unbounded growth）。</li></ol>
+<p>在 (1)-(4) 下，$\{C^R_i\}$ 是 <strong>bounded + 几乎处处 monotone non-decreasing</strong> 序列（在 prob $\ge 1-\delta$ 下 strict improving；上界由 Probe set 的 pass rate $\le 1$ 给出）。这种过程不严格是 supermartingale（supermartingale 是 $\mathbb{E}[C_{i+1}|\mathcal{F}_i] \le C_i$，方向相反），更准确的叙述是 <strong>bounded monotone improvement 序列 / submartingale-like</strong>——按经典 monotone convergence theorem 收敛到 $C^R_\infty \le 1$。</p>
+<p><strong>注意</strong>：这是叙述性 sketch；formal proof 需要构造合适概率空间、定义 $\sigma$-algebra、并细致处理 Judge 的 stochastic noise + monotone improvement 是高概率非确定性的 —— 属于 PhD-level theory 题，<strong>不应在面试现场推满</strong>，能讲清"为什么 bounded + monotone improvement 蕴含收敛"已足够。</p>
+</details>
+<details>
+
+<summary>Q22. 推 Native Evolution 在 reward-free phase 如何避免 policy 退化到 trivial behavior（information-theoretic 论证）。</summary>
+<p>设 $\pi^\star$ 是已 train 好的 Native Evolution policy。Evolution phase：</p>
+<p>$$\mathcal{K}^\star = \arg\max_\mathcal{K} I(\mathcal{K}; E)$$</p>
+<p>其中 $I(\mathcal{K}; E)$ 是 K 与 environment 的 mutual information。<strong>直觉</strong>：好的 K 是 E 的足够统计量。</p>
+<p>退化 (trivial $\mathcal{K}$) 对应 $I(\mathcal{K}; E) \to 0$（$\mathcal{K}$ 与 E 独立、是无信息文本）。</p>
+<p><strong>为什么训练时 outcome reward 防退化</strong>：</p>
+<p>$$R_\text{evolve}(\mathcal{K}) = \text{Success}(\mathcal{T}_E \mid \mathcal{K}) - \text{Success}(\mathcal{T}_E \mid \varnothing)$$</p>
+<p>By data processing inequality：</p>
+<p>$$I(\mathcal{K}; \mathcal{T}_E) \le I(\mathcal{K}; E)$$</p>
+<p>且 $\text{Success}(\mathcal{T}_E \mid \mathcal{K})$ 单调依赖于 $I(\mathcal{K}; \mathcal{T}_E)$（K 提供越多 task-relevant info → success rate 越高）。</p>
+<p>所以训练时 maximize $R_\text{evolve}$ → 隐式 maximize $I(\mathcal{K}; \mathcal{T}_E) \le I(\mathcal{K}; E)$ → 推 policy 远离 trivial K。</p>
+<p>→ 推理时 policy 已经 internalize 了"如何产生 high-info K"的 instinct，所以无 reward 也能保持非 trivial 行为——但 <strong>only on environments similar to training distribution</strong>。</p>
+<div class="callout callout-warn"><div class="callout-title">caveat</div><p>在 train distribution 之外（OOD environment），无 grounding 信号防退化，policy 可能仍然 fail。这是 Native Evolution 的 open problem 之一。</p></div>
+</details>
+<details>
+
+<summary>Q23. Self-improvement 在 reasoning-hard 任务上为什么会撞 capability ceiling？引用 [arXiv:2601.05280] dynamics argument。</summary>
+<p>reasoning-hard 任务（如 IMO problem, theorem proof）的特点：</p>
+<ol><li>ground truth 稀有，外源 grounding 信号几乎不可得</li><li>中间推理步骤的对错很难自动判（无 cheap verifier）</li><li>self-rationalization（STaR-style）容易制造 plausible-but-wrong rationale</li></ol>
+<p>按 [arXiv:2601.05280] 的 dynamics argument：</p>
+<p>$$D_\text{KL}(p^\star \| p_{t+1}) - D_\text{KL}(p^\star \| p_t) \;\ge\; -\Delta_\text{grounding}$$</p>
+<p>reasoning-hard 任务 $\Delta_\text{grounding} \to 0$（无 verifier）→ KL 不降 → capability 不增。</p>
+<p><strong>[arXiv:2601.05280] 的最终 implication</strong>：要突破 reasoning hard 任务的 ceiling，需要 <strong>symbolic model synthesis</strong>——让 LLM 同时维护一个 programmatic / symbolic 模型作为 grounding anchor（如 Lean / Coq / Z3 verifier）。</p>
+<p>这也解释了为什么 AlphaProof 等 work 必须挂 Lean 做 verifier 才能在 IMO 上突破——而单纯 LLM self-improvement on Olympiad 一直 saturate 在某个水平。</p>
+</details>
+<details>
+
+<summary>Q24. ARIS 这种 inference-time orchestration 与 Native Evolution 的 training-time meta-learning 在 mathematical formulation 上的根本区别？</summary>
+<p><strong>Training-time meta-learning (Native Evolution)</strong>：</p>
+<p>优化对象：model params $\theta$，目标 $\arg\max_\theta \mathbb{E}_E\, R_\text{evolve}(\mathcal{K}_\theta(E))$。</p>
+<p>$\theta$ 由 gradient 决定，演化轨迹 in <strong>continuous Euclidean space</strong> ($\mathbb{R}^d$, $d$ 是参数数)。</p>
+<p>理论工具：RL theory（policy gradient theorem）、meta-learning theory（MAML inner / outer loop）。</p>
+<p>收敛通过传统 SGD 分析（Lipschitz, smoothness, variance bound）。</p>
+<p><strong>Inference-time orchestration (ARIS-style)</strong>：</p>
+<p>优化对象：external state $\Sigma_t = (\mathcal{S}_t, \mathcal{K}_t, \text{workflow}_t)$，目标 $\arg\max_\Sigma \mathbb{E}_\tau\, U(\tau \mid \pi, \Sigma)$，其中 $\pi$ frozen。</p>
+<p>$\Sigma$ 由文本 diff 决定，演化轨迹 in <strong>combinatorial discrete space</strong>（所有 markdown documents 的集合）。</p>
+<p>理论工具：online learning（regret bound）、sequential decision making（bandit）、textual KL or edit-distance bound。</p>
+<p>收敛分析需要新工具——传统 SGD 不适用。</p>
+<p><strong>核心区别 list</strong>：</p>
+<table><thead><tr><th>维度</th><th>training-time</th><th>inference-time</th></tr></thead><tbody><tr><td>状态空间</td><td>$\mathbb{R}^d$</td><td>text strings $\Sigma^\star$</td></tr><tr><td>更新算子</td><td>gradient</td><td>LLM-generated edit</td></tr><tr><td>持久化</td><td>weights</td><td>markdown files</td></tr><tr><td>测试时 update 频率</td><td>不 update</td><td>every task</td></tr><tr><td>跨 backbone 移植</td><td>难</td><td>易（文件直接 copy）</td></tr><tr><td>可解释性</td><td>低</td><td>高</td></tr><tr><td>GPU 需求</td><td>高</td><td>低</td></tr><tr><td>理论工具</td><td>RL theory</td><td>online / bandit / regret</td></tr></tbody></table>
+<p>→ <strong>二者其实是互补层</strong>：底层用 training-time 让 backbone 学会 generic skill following，上层用 inference-time 编排具体 task。</p>
+<div class="callout callout-warn"><div class="callout-title">常被混淆的 framing</div><p>不要把 ARIS 说成 "reward-free self-evolution"——它是 <strong>inference-time, non-parametric, system-level adaptation</strong>，与 Native Evolution 的 training-time meta-learning 是不同 mathematical regime。这是 cross-paper 阅读的 sanity check。</p></div>
+</details>
+<details>
+
+<summary>Q25. 假如让你设计 2026 下半年的下一代 self-evolving agent benchmark，你会注意什么？</summary>
+<p><strong>问题观察</strong>：</p>
+<ul><li>GAIA / WebVoyager 已饱和 (90%+)</li><li>TRACE (2510.00415) 让 agent 自演化 benchmark，避免 saturation</li><li>Ctx2Skill 用 CL-bench（500 contexts × 1899 tasks × 31607 rubrics）</li><li>Native Evolution 用 WebVoyager / WebWalker subset (1427 queries)</li></ul>
+<p><strong>应注意的 design principle</strong>：</p>
+<ol><li><strong>Holdout 严格</strong>：3rd-party 维护，agent 在训练中看不到 test environment</li><li><strong>Capability 分层</strong>：基础能力（reading / tool use）+ 长程能力（multi-step reasoning, memory）+ self-evolution capability（adapt to new env）分开打分</li><li><strong>Cost-aware</strong>：每 task 计成本（API tokens / GPU hours），不允许"用 100K tokens 答 1 个问题"刷分</li><li><strong>Cross-Time 评估</strong>：取多个时间点 snapshot，看 model 在 long-term 是否 collapse / drift</li><li><strong>Adversarial held-in / held-out 切换</strong>：train env 演化能力 ≠ test env 演化能力</li><li><strong>可解释 audit trail</strong>：每个答案附 reasoning trace，供 reviewer audit</li><li><strong>多模型 reviewer</strong>：avoid same-model hallucination consensus</li><li><strong>Capability ceiling 探测</strong>：刻意构造需要 symbolic verifier 的任务（IMO-style），看 self-improvement 在 reasoning-hard 上多远会撞墙</li><li><strong>Negative transfer 检测</strong>：测 skill from env A 是否伤害 env B</li><li><strong>Knowledge transferability</strong>：可移植性测试——A 训出 K，B 模型用 K，看 boost 是否成立</li></ol>
+<p>→ Native Evolution 论文已在 Cross-Model World Knowledge Transfer (Figure 3) 体现 (10) 这点：Seed-36B 训出的 K 加到 Qwen3-14B 上能 +18.3%。</p>
+<p><strong>Bonus</strong>：可以做 "self-evolution dashboard" 量化 capability dynamics（取 [arXiv:2507.00075] 的指数律）：</p>
+<p>$$C(t) = C_\infty - (C_\infty - C_0) e^{-\kappa t}$$</p>
+<p>拟合 $\hat\kappa$ 作 model 的 self-evolution rate metric——比 final accuracy 更 informative。</p>
+</details>
+<h2 id="a-附录完整-from-scratch-代码骨架">§A 附录：完整 from-scratch 代码骨架</h2>
+<h3 id="a1-skill-library-完整实现">A.1　Skill library 完整实现</h3>
+<pre><code class="language-python">import json, time, math
+from dataclasses import dataclass, field, asdict
+from typing import Callable, Optional
+
+
+@dataclass
+class Skill:
+    &quot;&quot;&quot;Markdown skill with metadata for retrieval + lifecycle.&quot;&quot;&quot;
+    name: str
+    trigger: str            # when-to-use 段
+    body: str               # 真正 system-prompt 注入的 markdown
+    exact_triggers: list = field(default_factory=list)
+    success_count: int = 0
+    fail_count: int = 0
+    last_updated: float = field(default_factory=time.time)
+    version: int = 1
+    embedding: list = field(default_factory=list)
+
+
+class SkillLibrary:
+    &quot;&quot;&quot;Skill 持久化、检索、生命周期管理.&quot;&quot;&quot;
+
+    def __init__(self):
+        self.skills: dict[str, Skill] = {}
+        self.callbacks_on_update: list[Callable] = []
+
+    def add(self, s: Skill) -&gt; None:
+        self.skills[s.name] = s
+
+    def retrieve(self, query: str, embed_fn, k: int = 3) -&gt; list[Skill]:
+        &quot;&quot;&quot;Hybrid retrieval: keyword + dense + recency.&quot;&quot;&quot;
+        q_emb = embed_fn(query)
+        scored = []
+        now = time.time()
+        for name, s in self.skills.items():
+            sim = self._cos(s.embedding, q_emb) if s.embedding else 0.0
+            prior = math.log(1 + s.success_count)
+            recency = math.pow(0.999, max(0, (now - s.last_updated) / 3600))
+            kw_hit = 1.0 if any(t.lower() in query.lower()
+                                for t in s.exact_triggers) else 0.0
+            score = 0.5 * sim + 0.2 * prior + 0.2 * recency + 0.1 * kw_hit
+            scored.append((score, s))
+        scored.sort(reverse=True, key=lambda x: x[0])
+        return [s for _, s in scored[:k]]
+
+    @staticmethod
+    def _cos(a: list, b: list) -&gt; float:
+        if not a or not b: return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a))
+        nb = math.sqrt(sum(y * y for y in b))
+        return dot / (na * nb + 1e-9) if na &gt; 0 and nb &gt; 0 else 0.0
+
+    def update_outcome(self, skill_name: str, success: bool) -&gt; None:
+        s = self.skills[skill_name]
+        if success: s.success_count += 1
+        else:       s.fail_count    += 1
+
+    def should_revise(self, skill_name: str,
+                      tau_fail: float = 0.5,
+                      t_stale: float = 7 * 24 * 3600) -&gt; bool:
+        s = self.skills[skill_name]
+        total = s.success_count + s.fail_count
+        if total &gt; 0 and s.fail_count / total &gt; tau_fail:
+            return True
+        if time.time() - s.last_updated &gt; t_stale:
+            return True
+        return False
+
+    def revise(self, skill_name: str, new_body: str) -&gt; None:
+        s = self.skills[skill_name]
+        s.body = new_body
+        s.last_updated = time.time()
+        s.version += 1
+        s.success_count = 0
+        s.fail_count = 0
+        for cb in self.callbacks_on_update:
+            cb(s)
+
+    def serialize(self) -&gt; str:
+        return json.dumps({n: asdict(s) for n, s in self.skills.items()})
+
+    def assemble_prompt(self, skills: list[Skill]) -&gt; str:
+        return &quot;\n\n&quot;.join([f&quot;# {s.name}\n{s.body}&quot; for s in skills])</code></pre>
+<h3 id="a2-reflexion-memory-完整实现">A.2　Reflexion memory 完整实现</h3>
+<pre><code class="language-python">@dataclass
+class Reflection:
+    trajectory_summary: str
+    failure_root_cause: str
+    fix_strategy: str
+    timestamp: float
+
+
+class ReflexionMemory:
+    &quot;&quot;&quot;verbal-RL style memory.&quot;&quot;&quot;
+
+    def __init__(self, max_entries: int = 50):
+        self.entries: list[Reflection] = []
+        self.max_entries = max_entries
+
+    def add(self, traj: str, llm: Callable) -&gt; None:
+        &quot;&quot;&quot;让 LLM 自己生成 reflection.&quot;&quot;&quot;
+        prompt = (
+            f&quot;Trajectory: {traj}\n\n&quot;
+            f&quot;Task FAILED. Write a short reflection in JSON with keys: &quot;
+            f&quot;trajectory_summary, failure_root_cause, fix_strategy.&quot;
+        )
+        raw = llm(prompt)
+        try:
+            obj = json.loads(raw)
+        except Exception:
+            obj = {&quot;trajectory_summary&quot;: traj[:400],
+                   &quot;failure_root_cause&quot;: &quot;parse_failed&quot;,
+                   &quot;fix_strategy&quot;: raw[:400]}
+        self.entries.append(Reflection(
+            trajectory_summary=obj[&quot;trajectory_summary&quot;],
+            failure_root_cause=obj[&quot;failure_root_cause&quot;],
+            fix_strategy=obj[&quot;fix_strategy&quot;],
+            timestamp=time.time(),
+        ))
+        # 保留最近 max_entries 条
+        if len(self.entries) &gt; self.max_entries:
+            self.entries = self.entries[-self.max_entries:]
+
+    def render(self) -&gt; str:
+        &quot;&quot;&quot;渲染成 prefix prompt.&quot;&quot;&quot;
+        return &quot;\n&quot;.join([
+            f&quot;[Reflection {i}] cause: {r.failure_root_cause}\n&quot;
+            f&quot;           fix: {r.fix_strategy}&quot;
+            for i, r in enumerate(self.entries[-5:])
+        ])</code></pre>
+<h3 id="a3-sanity-check-输出伪示">A.3　Sanity check 输出（伪示）</h3>
+<pre><code>[a] SkillLibrary.add + retrieve            ✓ topk = [&#x27;voyager_craft&#x27;, &#x27;minecraft_kill&#x27;]
+[b] update_outcome 累积 success_count       ✓ s.success_count = 3
+[c] should_revise 触发条件 (fail rate)       ✓ tau_fail=0.5 → True
+[d] revise 后 version += 1                  ✓ s.version: 1 → 2
+[e] Reflexion.add 解析 LLM JSON            ✓ len(entries) = 1
+[f] Reflexion render 取最近 5 条            ✓ render len = 154 chars
+[g] hybrid retrieval 中 keyword_hit 权重    ✓ keyword &gt; dense when exact match
+[h] cross-time replay arg max(rho_h * rho_e)✓ best_idx = 2 (out of 5)
+[i] Native Evolution outcome reward 计算   ✓ R_evolve = 0.18 (≥ 0)</code></pre>
+<p>代码经独立 reviewer 静态检查，逻辑通过 dataclass / 类型注解约束。</p>
+<hr />
+<div class="callout callout-good"><div class="callout-title">总结</div><p>2026 的 self-evolving agent 不是 magic，而是<strong>三个核心范式（Experience / Adversarial / Meta-Learning）+ 三个核心载体（params / skills / K）+ 三个核心防御（Cross-Time Replay / typed memory + DAG / cross-model grounding）的组合工程</strong>。理论上界由 [arXiv:2601.05280] 与 [arXiv:2507.00075] 给出——<strong>外源 grounding 信号决定上限</strong>。</p>
+<p>面试时记住一句话：<strong>self-evolution is not the singularity; it is the engineering of grounded, sustained capability growth under finite supervision</strong>.</p></div>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/self_evolving_agents_tutorial.md</code> ·
+  SHA256 <code>b863a1d3abfd</code> ·
+  generated at 2026-05-19 13:32 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

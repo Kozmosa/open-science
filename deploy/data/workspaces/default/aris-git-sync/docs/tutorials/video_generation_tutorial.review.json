@@ -1,0 +1,72 @@
+{
+  "skill": "interview-cheatsheet",
+  "source": "docs/tutorials/video_generation_tutorial.md",
+  "source_sha256_prefix": "4aaa64ff3f54473d",
+  "output": "docs/tutorials/video_generation_tutorial.html",
+  "topic": "Video Generation (Sora / Hunyuan-Video / Kling / Wan / Mochi / Movie Gen / OpenSora)",
+  "effort": "max",
+  "byline": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "math_code_review": {
+    "reviewer": "codex gpt-5.5 xhigh, fresh thread per run (never codex-reply)",
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL",
+        "thread_id": "019e3ea6-56ba-7ce0-826b-a8fbb8cbc682",
+        "issue": "I2V broadcast over raw T instead of latent t; 32x45x80 ≠ 28800; 1080p latent height 135 not divisible by 2; Q11 causal Conv3d T=1 derivation wrong; Q13 Mochi VAE 4x8x8 attribution wrong; A.2 code does not mask reference frame; A.3 sampler T//4 off-by-one + undefined `euler_sampler_rf` / `model_dit_only`; Kling 2024-03 (should be 2024-06); CogVideoX 2024-05 (should be 2024-08); AnimateDiff 2024-07 (should be arXiv 2023-07 / ICLR 2024); recruitment context '2026 春招视角'; length 1343 lines (34% over)",
+        "fix": "Fixed I2V broadcast to latent time; corrected math in §10.1 table; rewrote Q11 with correct output length and weight activation argument; corrected Q13 with model-specific config; rewrote A.2 / A.3 with mask-aware loss + clean ref clamp; updated timeline; removed recruitment phrase; trimmed file to 1208 lines"
+      },
+      {
+        "run": 2,
+        "verdict": "FAIL",
+        "thread_id": "019e3eb5-95cc-7901-9d8c-185a1d2ba2c7",
+        "issue": "Q11 still over-counts output length; A.2 noised reference latent (broke noise-only-on-future-frames trick); Q21 standard 3D VAE T=1 claim incorrect; RoPE-3D formula written as matrix product instead of block-diagonal concat",
+        "fix": "Re-derived Q11 with conv output length formula yielding output_t=1; added z_tau clamp to z1 at reference position before run_dit in video_gen_forward; corrected Q21 to use floor notation and acknowledge symmetric 3D VAE also has T=1 zero-pad behavior; rewrote RoPE-3D as block-diagonal concat"
+      },
+      {
+        "run": 3,
+        "verdict": "FAIL",
+        "thread_id": "019e3ebd-a75c-7a50-96ff-1961fc8fa4b9",
+        "issue": "§4.1 factorized table composition order inconsistent with code (TempAttn outer instead of inner); §4.1 memory column too small; A.3 sampler did not clamp ref before first run_dit step; Wan 2.2 date 2025-08 (should be 2025-07-28)",
+        "fix": "Corrected §4.1 to TempAttn(SpatialAttn(x)) and full score-memory O(T_t S^2 + S T_t^2); added pre-loop clamp to z = where(ref_mask, ref_full, z) before Euler integration; updated Wan 2.2 to 2025-07"
+      },
+      {
+        "run": 4,
+        "verdict": "FAIL",
+        "thread_id": "019e3ec5-1a1d-76d2-b636-87d2556c3226",
+        "issue": "Sora patch size stated as 'p_t=1, p_h=p_w=2' as if disclosed (it isn't); SD3-Video referenced as if a public model (it isn't); RoPE-3D in Q15 still written as matrix product",
+        "fix": "Softened Sora patch claim to 'Sora 未公开 / 开源复刻常用 p_t=1, p_h=p_w=2'; replaced SD3-Video with Wan / Hunyuan / Mochi where appropriate; rewrote Q15 RoPE-3D as block-diagonal concat formula"
+      },
+      {
+        "run": 5,
+        "verdict": "PASS",
+        "thread_id": "019e3ecd-dadc-7091-8ae4-1098b84e16d4",
+        "issue": null,
+        "fix": null
+      }
+    ]
+  },
+  "render_review": {
+    "reviewer": "codex gpt-5.5 xhigh, fresh thread per run (never codex-reply)",
+    "verdict": "PASS",
+    "rounds": [
+      {
+        "run": 1,
+        "verdict": "FAIL",
+        "thread_id": "019e3ed2-82e7-7412-9dba-ba5310dbf560",
+        "issue": "Q12 summary tag contained raw markdown `**表达力**` (HTML <summary> does not process markdown bold)",
+        "fix": "Removed bold markers from Q12 summary in source MD; re-rendered HTML"
+      },
+      {
+        "run": 2,
+        "verdict": "PASS",
+        "thread_id": "019e3ed5-4188-7713-89e4-fc7e22f3cdef",
+        "issue": null,
+        "fix": null
+      }
+    ]
+  },
+  "summary": "5-round math/code review (4 FAIL → 1 PASS) + 2-round render review (1 FAIL → 1 PASS). Issues caught: I2V time-axis confusion, multiple arithmetic errors in attention/VAE complexity tables, Q11 causal Conv3d T=1 derivation, model-citation timeline corrections (Kling / CogVideoX / AnimateDiff / Wan 2.2), Sora/SD3-Video over-attribution, A.2/A.3 I2V noise/clamp trick, RoPE-3D block-diagonal vs matrix-product, Q12 summary raw-markdown leak.",
+  "rendered_at": "2026-05-19"
+}

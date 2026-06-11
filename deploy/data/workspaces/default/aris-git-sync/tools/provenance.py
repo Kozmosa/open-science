@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Provenance-as-authorization for ARIS auto-authored artifacts.
+
+The primitive ARIS needs the MOMENT it auto-writes a skill / memory node: a
+record of WHO authored an artifact and WHO acquitted it, so that (a) auto-curation
+(meta-optimize, a future skill-curator) only ever touches MACHINE-authored
+artifacts — never the hand-written canonical skills or the user's own notes — and
+(b) it is provably true that no single model both wrote and approved an artifact.
+
+This is the provenance-as-authorization-boundary pattern (adapted from
+NousResearch/hermes-agent's skill_provenance ContextVar, MIT). ARIS's increment:
+Hermes records only `created_by`, and its cross-model curator is OPTIONAL config
+(defaults to the SAME chat model). ARIS records the RICHER tuple
+{author_model, reviewer_model, verdict_id, content_hash} AND makes cross-family
+a NON-NEGOTIABLE invariant: `stamp()` REFUSES to record a provenance where the
+author and reviewer are the same model family (self-acquittal), unless the
+reviewer is a deterministic verifier (a process is not a model family). See
+shared-references/skill-governance.md.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+# Model-name → family. Vendor words match as substrings ("gpt5" → openai); the
+# short, ambiguous o-series needles (_SHORT) match only as EXACT tokens, so they
+# can't substring-bleed into an unrelated name. ARIS routes oracle-pro to a
+# GPT-Pro tier, so `oracle` is the OPENAI family (NOT a separate one) — getting
+# this wrong would let oracle "cross-check" a GPT executor.
+_FAMILY = [
+    ("anthropic", ("claude", "opus", "sonnet", "haiku")),
+    ("openai", ("gpt", "codex", "oracle", "chatgpt", "o1", "o3", "o4")),
+    ("google", ("gemini", "palm", "bard")),
+    ("deepseek", ("deepseek",)),
+    ("minimax", ("minimax", "abab")),
+    ("moonshot", ("kimi", "moonshot")),
+    ("qwen", ("qwen", "tongyi")),
+    ("xai", ("grok",)),
+    ("meta", ("llama",)),
+    ("mistral", ("mistral", "mixtral")),
+]
+_SHORT = {"o1", "o3", "o4"}  # ambiguous → exact-token match only
+
+
+def model_family(name: str) -> str:
+    """Map a model/reviewer name to a coarse family ('unknown' if unrecognized).
+
+    A 'deterministic:<verifier>' reviewer maps to 'deterministic' — a verifier is
+    a process, not a model family, and is always a valid cross-check.
+
+    Fails closed on COLLISION: a name that matches TWO families' needles (e.g. a
+    mislabeled 'claude-gpt-4') returns 'unknown' rather than letting first-match-wins
+    silently pick one — so a colliding name can never slip through assert_cross_family
+    as a (wrong) cross-family pair; it raises instead.
+    """
+    n = (name or "").strip().lower()
+    if n.startswith("deterministic:") or n == "deterministic":
+        return "deterministic"
+    tokens = set(re.split(r"[^a-z0-9.]+", n))
+    matched = set()
+    for fam, needles in _FAMILY:
+        if any((k in tokens) if k in _SHORT else (k in n) for k in needles):
+            matched.add(fam)
+    return next(iter(matched)) if len(matched) == 1 else "unknown"
+
+
+def assert_cross_family(author_model: str, reviewer_model: str) -> None:
+    """Raise unless the reviewer is a different model family than the author (or a
+    deterministic verifier). This is the structural cross-model invariant — a
+    same-family acquittal is forbidden, and an unrecognized family fails closed."""
+    fr = model_family(reviewer_model)
+    if fr == "deterministic":
+        return
+    fa = model_family(author_model)
+    if fa == "unknown" or fr == "unknown":
+        raise ValueError(
+            f"unrecognized model family for author={author_model!r} ({fa}) / "
+            f"reviewer={reviewer_model!r} ({fr}) — cannot assert the cross-model "
+            f"invariant; use a recognized reviewer or a 'deterministic:<verifier>'.")
+    if fa == fr:
+        raise ValueError(
+            f"author ({author_model}={fa}) and reviewer ({reviewer_model}={fr}) are "
+            f"the SAME model family — self-acquittal is forbidden. The reviewer must "
+            f"be a different family (e.g. executor=Claude → reviewer=codex/gemini) "
+            f"or a deterministic verifier.")
+
+
+def content_hash(path: str) -> str:
+    """SHA-256 of the file at `path` (tamper-evident anchor for the provenance)."""
+    h = hashlib.sha256()
+    h.update(Path(path).read_bytes())
+    return h.hexdigest()
+
+
+def _sidecar(target: str) -> Path:
+    p = Path(target)
+    return (p / ".provenance.json") if p.is_dir() else p.with_name(p.name + ".provenance.json")
+
+
+def stamp(target: str, author_model: str, reviewer_model: str, verdict_id: str,
+          created_by: str = "aris-auto", ts: Optional[str] = None) -> dict:
+    """Record provenance for an auto-authored artifact. REFUSES (raises) if author
+    and reviewer are the same model family, or verdict_id is empty.
+
+    The hash is of the artifact file (for a dir target, of its SKILL.md if present).
+    """
+    if not verdict_id:
+        raise ValueError("provenance requires a non-empty verdict_id (the reviewer's "
+                         "thread/trace id, or the verifier report path/sha).")
+    assert_cross_family(author_model, reviewer_model)  # the structural gate
+    p = Path(target)
+    hash_target = (p / "SKILL.md") if p.is_dir() and (p / "SKILL.md").is_file() else p
+    record = {
+        "created_by": created_by,
+        "author_model": author_model,
+        "author_family": model_family(author_model),
+        "reviewer_model": reviewer_model,
+        "reviewer_family": model_family(reviewer_model),
+        "verdict_id": verdict_id,
+        "content_hash": content_hash(str(hash_target)) if hash_target.is_file() else None,
+        "stamped_at": ts or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    _sidecar(target).write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    return record
+
+
+def read(target: str) -> Optional[dict]:
+    sc = _sidecar(target)
+    return json.loads(sc.read_text(encoding="utf-8")) if sc.exists() else None
+
+
+def is_auto_authored(target: str) -> bool:
+    """True iff the artifact has a provenance record marking it machine-authored.
+    Auto-curation (meta-optimize etc.) may ONLY touch artifacts where this is True —
+    canonical hand-written skills and user notes have no such record and are off-limits."""
+    rec = read(target)
+    return bool(rec and rec.get("created_by") == "aris-auto")
+
+
+__all__ = ["model_family", "assert_cross_family", "content_hash", "stamp", "read", "is_auto_authored"]
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="ARIS provenance-as-authorization.")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("stamp"); s.add_argument("target"); s.add_argument("--author", required=True)
+    s.add_argument("--reviewer", required=True); s.add_argument("--verdict-id", required=True)
+    s = sub.add_parser("read"); s.add_argument("target")
+    s = sub.add_parser("is-auto"); s.add_argument("target")
+    s = sub.add_parser("check"); s.add_argument("--author", required=True); s.add_argument("--reviewer", required=True)
+    a = ap.parse_args()
+    try:
+        if a.cmd == "stamp":
+            print(json.dumps(stamp(a.target, a.author, a.reviewer, a.verdict_id), ensure_ascii=False, indent=2))
+        elif a.cmd == "read":
+            rec = read(a.target)
+            print(json.dumps(rec, ensure_ascii=False, indent=2) if rec else "no provenance record")
+            return 0 if rec else 1
+        elif a.cmd == "is-auto":
+            ok = is_auto_authored(a.target)
+            print("aris-auto" if ok else "not aris-auto (canonical/user — off-limits to auto-curation)")
+            return 0 if ok else 1
+        elif a.cmd == "check":
+            assert_cross_family(a.author, a.reviewer)
+            print(f"OK: {model_family(a.author)} ≠ {model_family(a.reviewer)} (cross-family)")
+    except ValueError as e:
+        print(f"REJECTED: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

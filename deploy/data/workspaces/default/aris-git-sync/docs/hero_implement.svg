@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 425 295" font-family="monospace">
+  <rect width="425" height="295" fill="#fafbfc" rx="12"/>
+
+  <!-- ====== CC Pixel Character (top center, scaled 0.7) ====== -->
+  <g transform="translate(180,8) scale(0.7)">
+    <rect x="20" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="27" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="34" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="41" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="13" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="20" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="27" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="34" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="41" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="48" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="13" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="20" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="27" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="34" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="41" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="48" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="13" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="20" y="63" width="7" height="7" fill="#333"/>
+    <rect x="27" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="34" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="41" y="63" width="7" height="7" fill="#333"/>
+    <rect x="48" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="13" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="20" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="27" y="70" width="7" height="7" fill="#E8967A"/>
+    <rect x="34" y="70" width="7" height="7" fill="#E8967A"/>
+    <rect x="41" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="48" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <!-- Arms reaching out -->
+    <rect x="0" y="77" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="7" y="80" width="7" height="5" fill="#FFDAB9"/>
+    <rect x="55" y="80" width="7" height="5" fill="#FFDAB9"/>
+    <rect x="62" y="77" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="13" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="20" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="27" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="34" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="41" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="48" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="13" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="20" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="27" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="34" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="41" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="48" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="16" y="91" width="7" height="7" fill="#444"/>
+    <rect x="23" y="91" width="7" height="7" fill="#444"/>
+    <rect x="37" y="91" width="7" height="7" fill="#444"/>
+    <rect x="44" y="91" width="7" height="7" fill="#444"/>
+  </g>
+  <text x="212" y="88" text-anchor="middle" fill="#4A9EDA" font-size="7px" font-weight="bold">Claude Code</text>
+
+  <!-- ====== Code editor panel (top area) ====== -->
+  <rect x="30" y="100" width="170" height="95" fill="#2d2d2d" rx="6"/>
+  <rect x="30" y="100" width="170" height="14" fill="#3d3d3d" rx="6"/>
+  <rect x="30" y="108" width="170" height="6" fill="#3d3d3d"/>
+  <circle cx="41" cy="107" r="3" fill="#ff5f57"/>
+  <circle cx="51" cy="107" r="3" fill="#febc2e"/>
+  <circle cx="61" cy="107" r="3" fill="#28c840"/>
+  <text x="120" y="108" font-size="6px" fill="#999" text-anchor="middle">model.py</text>
+  <text x="38" y="126" font-size="8px" fill="#c678dd">class</text>
+  <text x="62" y="126" font-size="8px" fill="#e5c07b"> Denoiser</text>
+  <text x="114" y="126" font-size="8px" fill="#abb2bf">(nn.Module):</text>
+  <text x="44" y="138" font-size="8px" fill="#c678dd">def</text>
+  <text x="62" y="138" font-size="8px" fill="#61afef"> forward</text>
+  <text x="104" y="138" font-size="8px" fill="#abb2bf">(self, x, t):</text>
+  <text x="50" y="150" font-size="8px" fill="#abb2bf">h = self.backbone(x, t)</text>
+  <text x="50" y="162" font-size="8px" fill="#abb2bf">logits = self.head(h)</text>
+  <text x="50" y="174" font-size="8px" fill="#c678dd">return</text>
+  <text x="80" y="174" font-size="8px" fill="#abb2bf"> logits</text>
+  <text x="50" y="186" font-size="8px" fill="#555">...</text>
+
+  <!-- ====== Terminal panel (top right) ====== -->
+  <rect x="225" y="100" width="170" height="95" fill="#1a1a2e" rx="6"/>
+  <rect x="225" y="100" width="170" height="14" fill="#2a2a3e" rx="6"/>
+  <rect x="225" y="108" width="170" height="6" fill="#2a2a3e"/>
+  <circle cx="236" cy="107" r="3" fill="#ff5f57"/>
+  <circle cx="246" cy="107" r="3" fill="#febc2e"/>
+  <circle cx="256" cy="107" r="3" fill="#28c840"/>
+  <text x="330" y="108" font-size="6px" fill="#999" text-anchor="middle">Your_Server ~ 4x A100</text>
+  <text x="233" y="126" font-size="8px" fill="#4aaa4a">$</text>
+  <text x="241" y="126" font-size="8px" fill="#ccc"> ssh Your_Server</text>
+  <text x="233" y="138" font-size="8px" fill="#4aaa4a">$</text>
+  <text x="241" y="138" font-size="8px" fill="#ccc"> conda activate env</text>
+  <text x="233" y="150" font-size="8px" fill="#4aaa4a">$</text>
+  <text x="241" y="150" font-size="8px" fill="#ccc"> screen -dmS exp0</text>
+  <text x="233" y="162" font-size="8px" fill="#4aaa4a">$</text>
+  <text x="241" y="162" font-size="8px" fill="#ccc"> python train.py</text>
+  <text x="233" y="178" font-size="8px" fill="#e5c07b">GPU 0-3:</text>
+  <text x="275" y="178" font-size="8px" fill="#4aaa4a"> ████░ 78%</text>
+  <text x="233" y="190" font-size="8px" fill="#4aaa4a">Loss: 2.341 → 1.872</text>
+
+  <!-- ====== Connecting arrow: code → deploy ====== -->
+  <line x1="202" y1="148" x2="222" y2="148" stroke="#e67e22" stroke-width="2" stroke-dasharray="4,2"/>
+
+  <!-- ====== Results collection panel (bottom) ====== -->
+  <rect x="65" y="208" width="295" height="52" fill="#fff" stroke="#ddd" stroke-width="1" rx="6"/>
+  <text x="75" y="223" font-size="8px" fill="#666">📊 Results collected:</text>
+  <text x="75" y="237" font-size="8px" fill="#2a7a2a">✓ Eval CE: 2.798 → 2.651  (↓5.3%)</text>
+  <text x="75" y="251" font-size="8px" fill="#2a7a2a">✓ TC: 108.4 → 112.7       (↑4.0%)</text>
+
+  <!-- ====== Bottom tagline ====== -->
+  <text x="212" y="282" text-anchor="middle" font-size="10px" fill="#bbb" font-style="italic">Workflow 1.5: Implement &amp; Deploy</text>
+</svg>

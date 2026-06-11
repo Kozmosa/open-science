@@ -1,0 +1,37 @@
+{
+  "skill": "render-html",
+  "source": "docs/tutorials/flow_matching_tutorial.md",
+  "source_sha256_prefix": "ab4358901d204fec",
+  "output": "docs/tutorials/flow_matching_tutorial.html",
+  "author": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per run (never codex-reply)",
+  "verdict": "PASS",
+  "checks": {
+    "information_fidelity": "pass",
+    "structure": "pass",
+    "math_code_tables": "pass",
+    "callouts": "pass",
+    "details_inner_markdown_rendered": "pass",
+    "safety_escaping": "pass",
+    "placeholder_leak": "pass",
+    "author_byline_rendered": "pass",
+    "eyebrow_subtitle_title": "pass",
+    "no_absolute_local_path_leak": "pass",
+    "no_personal_info_leak": "pass",
+    "heading_glue_fix": "pass",
+    "toc_sidebar_links_resolve": "pass"
+  },
+  "blocking_issues": [],
+  "warnings": [],
+  "history": [
+    {
+      "run": 1,
+      "verdict": "PASS",
+      "thread_id": "019e3e54-aed3-7600-a5c0-989f345596ed",
+      "issue": null,
+      "fix": "Pre-render fixes: §0 TL;DR / §1 Convention / Sampler cheat sheet / Production list — separated callout intro from bullet/numbered list so neither gets swallowed; redacted personal info (SJTU JHC PhD, Server5, job market, absolute paths)."
+    }
+  ],
+  "summary": "Single-round PASS after pre-render structural cleanup (callout-list separation) and personal-info redaction.",
+  "rendered_at": "2026-05-19"
+}

@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Rl Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/agentic_rl_tutorial_en.md">
+<meta name="aris:source-sha256" content="9dd920e9292be2a57353c0f123d48af9f77fab2a9e3c60a7606b1cfd297d6f9c">
+<meta name="aris:generated-at" content="2026-05-19 19:03 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-intuition-from-rlhf-to-agentic-rl">§1 Intuition: from RLHF to Agentic RL</a>
+<ul>
+<li><a href="#11-upgrading-an-llm-from-policy-that-writes-to-agent-that-acts">1.1　Upgrading an LLM from &quot;policy that writes&quot; to &quot;agent that acts&quot;</a></li>
+<li><a href="#12-mental-model-mdp--pomdp-formulation">1.2　Mental model: MDP / POMDP formulation</a></li>
+<li><a href="#13-agentic-rl-relative-to-three-rl-neighbors">1.3　Agentic RL relative to three RL neighbors</a></li>
+</ul>
+</li>
+<li><a href="#2-key-modifications-ppo--grpo-need-for-agents">§2 Key modifications PPO / GRPO need for agents</a>
+<ul>
+<li><a href="#21-token-mask-loss-only-on-agent-tokens">2.1　Token mask: loss only on agent tokens</a></li>
+<li><a href="#22-trajectory-level-gae-for-agents">2.2　Trajectory-level GAE for agents</a></li>
+<li><a href="#23-ppo-loss-adapted-to-agents">2.3　PPO loss adapted to agents</a></li>
+<li><a href="#24-grpo-for-agents-trace-level-group-relative-advantage">2.4　GRPO for agents: trace-level group-relative advantage</a></li>
+</ul>
+</li>
+<li><a href="#3-reward-design-for-agents-core">§3 Reward design for agents (core)</a>
+<ul>
+<li><a href="#31-outcome-reward-vs-process-reward">3.1　Outcome reward vs process reward</a></li>
+<li><a href="#32-verifier-based-reward-rule-based">3.2　Verifier-based reward (rule-based)</a></li>
+<li><a href="#33-format-reward--shaping-reward">3.3　Format reward / shaping reward</a></li>
+<li><a href="#34-length-penalty-prevent-the-agent-from-dragging-too-long">3.4　Length penalty (prevent the agent from dragging too long)</a></li>
+<li><a href="#35-tool-call-shaping-reward">3.5　Tool-call shaping reward</a></li>
+<li><a href="#36-rlaif-for-agents-llm-as-reward">3.6　RLAIF for agents: LLM as reward</a></li>
+</ul>
+</li>
+<li><a href="#4-long-horizon-credit-assignment">§4 Long-horizon credit assignment</a>
+<ul>
+<li><a href="#41-sparse-reward-is-the-core-pain-of-agent-rl">4.1　Sparse reward is the core pain of agent RL</a></li>
+<li><a href="#42-degeneration-of-discount--gae-on-agents">4.2　Degeneration of discount + GAE on agents</a></li>
+<li><a href="#43-hindsight-relabeling-for-agents">4.3　Hindsight relabeling for agents</a></li>
+<li><a href="#44-subgoal-decomposition--process-reward">4.4　Subgoal decomposition + process reward</a></li>
+<li><a href="#45-per-step-kl-penalty-to-prevent-policy-collapse">4.5　Per-step KL penalty to prevent policy collapse</a></li>
+</ul>
+</li>
+<li><a href="#5-self-rewarding--exploration-in-agent-rl">§5 Self-rewarding &amp; exploration in agent RL</a>
+<ul>
+<li><a href="#51-self-rewarding-lm-yuan-et-al-2024-meta-arxiv-240110020">5.1　Self-Rewarding LM (Yuan et al. 2024 Meta arXiv 2401.10020)</a></li>
+<li><a href="#52-risks-of-self-rewarding-on-agents">5.2　Risks of self-rewarding on agents</a></li>
+<li><a href="#53-exploration-in-agent-rl">5.3　Exploration in agent RL</a></li>
+<li><a href="#54-curriculum--difficulty-scheduling">5.4　Curriculum &amp; difficulty scheduling</a></li>
+</ul>
+</li>
+<li><a href="#6-specific-algorithms-representative-agentic-rl-papers">§6 Specific algorithms (representative Agentic RL papers)</a>
+<ul>
+<li><a href="#61-vpt-baker-et-al-2022-neurips-openai-arxiv-220611795">6.1　VPT (Baker et al. 2022 NeurIPS OpenAI, arXiv 2206.11795)</a></li>
+<li><a href="#62-agenttuning-zeng-et-al-2023-thu-arxiv-231012823">6.2　AgentTuning (Zeng et al. 2023 THU arXiv 2310.12823)</a></li>
+<li><a href="#63-agent-flan-chen-et-al-2024-acl-findings-arxiv-240312881">6.3　Agent-FLAN (Chen et al. 2024 ACL Findings, arXiv 2403.12881)</a></li>
+<li><a href="#64-reft-trung-et-al-2024-acl-arxiv-240108967">6.4　ReFT (Trung et al. 2024 ACL arXiv 2401.08967)</a></li>
+<li><a href="#65-deepseek-r1-deepseek-ai-2025-arxiv-250112948-extension-on-agents">6.5　DeepSeek-R1 (DeepSeek-AI 2025 arXiv 2501.12948) extension on agents</a></li>
+<li><a href="#66-toolrl-qian-et-al-2025-arxiv-250413958">6.6　ToolRL (Qian et al. 2025 arXiv 2504.13958)</a></li>
+<li><a href="#67-research-chen-et-al-2025-arxiv-250319470">6.7　ReSearch (Chen et al. 2025 arXiv 2503.19470)</a></li>
+<li><a href="#68-ragen--starpo-wang-et-al-2025-arxiv-250420073">6.8　RAGEN / StarPO (Wang et al. 2025 arXiv 2504.20073)</a></li>
+<li><a href="#69-webrl-qi-et-al-2024-iclr-25-arxiv-241102337">6.9　WebRL (Qi et al. 2024 ICLR-25 arXiv 2411.02337)</a></li>
+<li><a href="#610-agentq-putta-et-al-2024-arxiv-240807199">6.10　AgentQ (Putta et al. 2024 arXiv 2408.07199)</a></li>
+<li><a href="#611-webgum-furuta-et-al-2024-iclr-arxiv-230511854">6.11　WebGUM (Furuta et al. 2024 ICLR arXiv 2305.11854)</a></li>
+<li><a href="#612-coderl-le-et-al-2022-neurips-arxiv-220701780">6.12　CodeRL (Le et al. 2022 NeurIPS arXiv 2207.01780)</a></li>
+<li><a href="#613-ppocoder-shojaee-et-al-2023-arxiv-230113816">6.13　PPOCoder (Shojaee et al. 2023 arXiv 2301.13816)</a></li>
+<li><a href="#614-swe-rl-wei-et-al-2025-meta-fair-arxiv-250218449">6.14　SWE-RL (Wei et al. 2025 Meta FAIR arXiv 2502.18449)</a></li>
+<li><a href="#615-openvla-kim-et-al-2024-arxiv-240609246">6.15　OpenVLA (Kim et al. 2024 arXiv 2406.09246)</a></li>
+<li><a href="#616-anthropic-computer-use-public-knowledge--training-details-undisclosed">6.16　Anthropic Computer-Use (public knowledge — training details undisclosed)</a></li>
+</ul>
+</li>
+<li><a href="#7-code-patterns-pytorch--pseudocode">§7 Code patterns (PyTorch / pseudocode)</a>
+<ul>
+<li><a href="#71-agent-rollout-state-action-reward-collection">7.1　Agent rollout (state, action, reward collection)</a></li>
+<li><a href="#72-trajectory-level-gae-advantage">7.2　Trajectory-level GAE advantage</a></li>
+<li><a href="#73-ppo-loss-adapted-to-agents-with-actionmask">7.3　PPO loss adapted to agents (with action_mask)</a></li>
+<li><a href="#74-grpo-group-relative-reward-on-agent-trajectories">7.4　GRPO group-relative reward on agent trajectories</a></li>
+<li><a href="#75-outcome--step-reward-combination">7.5　Outcome + step reward combination</a></li>
+<li><a href="#76-verifier-based-reward-code-test--math-match">7.6　Verifier-based reward (code test / math match)</a></li>
+</ul>
+</li>
+<li><a href="#8-frontier-key-2024-2026-trends">§8 Frontier (key 2024-2026 trends)</a>
+<ul>
+<li><a href="#81-critic-free-rl-is-the-new-default">8.1　Critic-free RL is the new default</a></li>
+<li><a href="#82-the-victory-of-rule-based-reward-on-agents">8.2　The victory of rule-based reward on agents</a></li>
+<li><a href="#83-the-infra-challenges-of-long-horizon-training">8.3　The infra challenges of long-horizon training</a></li>
+<li><a href="#84-tool-rl-on-tau-bench--swe-bench--osworld">8.4　Tool-RL on TAU-bench / SWE-bench / OSWorld</a></li>
+<li><a href="#85-anthropic-computer-use-claude-35--45--opus-4x">8.5　Anthropic Computer-Use (Claude 3.5 → 4.5 → Opus 4.x)</a></li>
+<li><a href="#86-2025-2026-papers-panorama">8.6　2025-2026 papers panorama</a></li>
+</ul>
+</li>
+<li><a href="#9-failure-modes--engineering-experience">§9 Failure modes &amp; engineering experience</a>
+<ul>
+<li><a href="#91-the-seven-deadly-sins-of-agentic-rl">9.1　The &quot;seven deadly sins&quot; of Agentic RL</a></li>
+<li><a href="#92-online-vs-offline-rl-trade-offs">9.2　Online vs offline RL trade-offs</a></li>
+<li><a href="#93-rollout-optimization-tips">9.3　Rollout optimization tips</a></li>
+<li><a href="#94-debug-checklist">9.4　Debug checklist</a></li>
+</ul>
+</li>
+<li><a href="#10-25-frequently-asked-interview-questions-l1-must-know--l2-advanced--l3-top-lab">§10 25 frequently-asked interview questions (L1 must-know / L2 advanced / L3 top-lab)</a>
+<ul>
+<li><a href="#l1-must-know-10-questions">L1 must-know (10 questions)</a></li>
+<li><a href="#l2-advanced-10-questions">L2 advanced (10 questions)</a></li>
+<li><a href="#l3-top-lab-5-questions">L3 top-lab (5 questions)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-reference-list">§A Appendix: reference list</a>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Agentic Rl Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/agentic_rl_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>9dd920e9292b</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:03 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">9 sentences to nail Agentic RL</div><p>RL for LLM agents is the 2024-2026 paradigm pushing reasoning RL into real tool use, the web, code, and GUI (see §1-§9 for derivations + §10 for the 25 frequently-asked questions).</p></div>
+<ol><li><strong>The fundamental difference between Agentic RL and RLHF</strong>: RLHF is single-turn preference alignment with reward from an RM scoring an entire response; <strong>Agentic RL is multi-turn decision-making, state is (obs, history), action is (thought, tool_call), and reward comes from the external environment (test-pass, task success, verifier) rather than an RM</strong>. Trajectory length grows from RLHF's hundreds of tokens to an agent's thousands or even tens of thousands of tokens, taking credit assignment difficulty up a notch.</li><li><strong>Key modifications PPO/GRPO need on agents</strong> (must memorize): the <strong>token mask</strong> must restrict the loss to tokens the agent itself generates — observation tokens (the stdout / search snippet returned by tools) belong to the environment, the policy gradient must not flow there; otherwise the model will try to "teach the tool how to respond" and behavior collapses. GRPO's advantage is more pronounced: on long-horizon trajectories, a value model can hardly learn per-token V (almost all middle rewards are 0); intra-group normalization is a more stable baseline.</li><li><strong>Three-tier reward design pyramid</strong>: (a) <strong>Outcome reward</strong> is cheapest and sparsest — final answer/task success 0/1; (b) <strong>Process reward</strong> scores each step, requiring a PRM or step verifier; (c) <strong>Hybrid / shaping</strong> — tool-call shaping (encourage calling the right tool), length penalty (prevent the agent from dragging too long), format reward (strictly constrain output schema). The R1 line uses rule-based outcome reward (math correctness + format), SWE-RL uses test-pass, WebRL uses task success — <strong>rule-based outcome reward + dense format shaping</strong> is the most stable combination empirically in 2025 industry.</li><li><strong>Representative early work</strong>: <strong>AgentTuning</strong> (Zeng et al. 2023 arXiv 2310.12823 THU) — agent SFT dataset + multi-task training; <strong>Agent-FLAN</strong> (Chen et al. 2024 ACL Findings arXiv 2403.12881) — splits agent corpus into multi-turn / formatted / negative example three classes; <strong>ReFT</strong> (Trung et al. 2024 ACL arXiv 2401.08967) — SFT warm-start + online RL on math reasoning, PPO gains +9pp on GSM8K. These three are the "SFT first, then RL" standard three-stage of Agentic RL.</li><li><strong>Tool-augmented reasoning RL</strong>: <strong>ToolRL</strong> (Qian et al. 2025 arXiv 2504.13958) — embeds tool calls into GRPO with reward = correctness + format + tool-use efficiency; <strong>ReSearch</strong> (Chen et al. 2025 arXiv 2503.19470) — treats search calls as first-class actions and learns multi-hop search with rule-based reward; <strong>RAGEN / StarPO</strong> (Wang et al. 2025 arXiv 2504.20073) — a multi-turn RL training framework with state-action token-level loss + critic-free GRPO variant. Common thread: <strong>outcome-only reward + format shaping + token-mask loss + GRPO</strong>.</li><li><strong>Web / GUI agent RL</strong>: <strong>WebRL</strong> (Qi et al. 2024 ICLR-25 arXiv 2411.02337) — self-evolving curriculum + ORM + retrospective rollout, pushing 8B Llama to 43% on WebArena; <strong>AgentQ</strong> (Putta et al. 2024 arXiv 2408.07199) — MCTS search + AI critique + DPO offline training; <strong>Computer-Use</strong> (Anthropic Claude 3.5/3.7/4 Sonnet, since 2024-10-22) — RLHF + RL on screenshot + mouse/keyboard action space for GUI control (public knowledge: training details undisclosed, but system card mentions extensive human + AI feedback).</li><li><strong>Code agent RL</strong>: <strong>CodeRL</strong> (Le et al. 2022 NeurIPS arXiv 2207.01780) was the first to use unit tests as reward signal + actor-critic; <strong>PPOCoder</strong> (Shojaee et al. 2023 arXiv 2301.13816) adds a composite reward of compilable + functional correctness; <strong>SWE-RL</strong> (Wei et al. 2025 Meta FAIR arXiv 2502.18449) does RL with rule-based reward (patch similarity + test-pass) on GitHub PR data, with Llama-3.3-70B pushing SWE-bench Verified to 41%.</li><li><strong>Self-rewarding &amp; exploration</strong>: <strong>Self-Rewarding LM</strong> (Yuan et al. 2024 Meta arXiv 2401.10020) has the policy serve as judge for iterative DPO with LLM-as-judge; but self-rewarding is more dangerous in agents than in single-turn alignment — the judge is also the agent itself, and <strong>reward drift / model collapse easily occur</strong>. In production the common trio is LLM-as-judge ensemble + rule-based grounding (test-pass, math checker) + human spot check.</li><li><strong>Three weapons for long-horizon credit assignment</strong>: (a) <strong>GAE + γ &lt; 1</strong> propagates credit along the trajectory but degenerates to MC return under sparse outcome reward; (b) <strong>Hindsight relabeling</strong> (the agent-side counterpart to HER) — failed trajectories are relabeled with "intermediate state as goal"; (c) <strong>subgoal decomposition + process reward</strong> — slice a 50-step trajectory into 5 subgoals × 10 steps and have a PRM score each subgoal. The L3 interview question "why is GRPO more sample efficient than PPO on long-horizon agents" — the answer is <strong>trace-level reward directly matches trace-level credit</strong>, bypassing the pain that a value model can hardly learn anything on long CoT.</li></ol>
+<h2 id="1-intuition-from-rlhf-to-agentic-rl">§1 Intuition: from RLHF to Agentic RL</h2>
+<h3 id="11-upgrading-an-llm-from-policy-that-writes-to-agent-that-acts">1.1　Upgrading an LLM from "policy that writes" to "agent that acts"</h3>
+<p>RLHF trains an LLM into a policy that "writes per human preference"; but an RLHF policy is still fragile on tool calling / multi-turn interaction / long-horizon tasks:</p>
+<ul><li><strong>single-turn preferences</strong> do not directly transfer to multi-turn task success</li><li><strong>The RM learns "which style humans prefer"</strong>, not "which call order solves the problem"</li><li><strong>Reward is over the entire response</strong>, with no way to distinguish "the first 100 tokens reasoned correctly but token 101 chose the wrong tool"</li></ul>
+<p>The essence of Agentic RL is to hang the RL signal on <strong>objective trajectory-terminal outcomes</strong> (test pass, math correct, web task completed) rather than the RM's subjective preference. This step upgrades alignment-style RL into <strong>decision-making RL</strong>.</p>
+<h3 id="12-mental-model-mdp--pomdp-formulation">1.2　Mental model: MDP / POMDP formulation</h3>
+<table><thead><tr><th>Element</th><th>RLHF (single-turn)</th><th>Agentic RL</th></tr></thead><tbody><tr><td>State $s_t$</td><td>prompt</td><td>$(o_0, a_0, o_1, \dots, o_{t-1}, a_{t-1})$ (history)</td></tr><tr><td>Action $a_t$</td><td>entire response</td><td>one <code>(thought, tool_call)</code> step or token-level sub-action</td></tr><tr><td>Reward $r_t$</td><td>terminal RM score</td><td>terminal task success (most steps are 0)</td></tr><tr><td>Horizon $T$</td><td>1 (one response)</td><td>10-200 steps (agent loop)</td></tr><tr><td>Trajectory length (tokens)</td><td>$10^2$-$10^3$</td><td>$10^3$-$10^5$</td></tr><tr><td>Environment</td><td>RM (neural net)</td><td>Real environment (shell / browser / search / Python)</td></tr></tbody></table>
+<pre class="diagram"><code>
+      ┌──────────────────────────────┐
+      │   Policy π_θ (LLM)           │  agent
+      └──────────────┬───────────────┘
+                     │ action a_t = (thought, tool_call)
+                     ↓
+      ┌──────────────────────────────┐
+      │   Environment / Tool         │
+      │   - search / shell / browser │
+      │   - Python / unit test       │
+      └──────────────┬───────────────┘
+                     │ observation o_t
+                     ↓
+      ┌──────────────────────────────┐
+      │   History buffer             │
+      │   (concat back to prompt)    │
+      └──────────────┬───────────────┘
+                     │
+                     └─→ back to π_θ</code></pre>
+<h3 id="13-agentic-rl-relative-to-three-rl-neighbors">1.3　Agentic RL relative to three RL neighbors</h3>
+<table><thead><tr><th>Neighbor</th><th>Common ground</th><th>Differences</th></tr></thead><tbody><tr><td><strong>RLHF / DPO</strong></td><td>LLM + KL-anchored RL</td><td>Agentic must be multi-turn + tool I/O; reward comes from the environment, not an RM</td></tr><tr><td><strong>Reasoning RL (R1, R1-Zero)</strong></td><td>rule-based outcome reward + GRPO</td><td>R1 only on math/code answers, no tools; Agentic RL on tool calls + multi-step interaction</td></tr><tr><td><strong>Classical robotic RL (VPT, OpenVLA)</strong></td><td>Sparse terminal reward + long horizon</td><td>LLM agent action space = token sequence; robotic RL action = continuous control</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Interview framing</div><p>when asked "what is Agentic RL", <strong>disambiguate first</strong>.</p></div>
+<ul><li>(1) Strict definition: multi-turn + tool I/O + outcome reward RL</li><li>(2) Boundary vs RLHF: RLHF is single-turn alignment, Agentic is multi-turn decision-making</li><li>(3) Boundary vs reasoning RL: reasoning RL only checks answer correctness; Agentic RL evaluates task success on a real environment</li></ul>
+<p>These three sentences anchor the interviewer's expectations within 30 seconds.</p>
+<h2 id="2-key-modifications-ppo--grpo-need-for-agents">§2 Key modifications PPO / GRPO need for agents</h2>
+<h3 id="21-token-mask-loss-only-on-agent-tokens">2.1　Token mask: loss only on agent tokens</h3>
+<p><strong>This is the first iron law of Agentic RL</strong>. Tokens in an agent trajectory split into two classes:</p>
+<ul><li><strong>Agent token</strong>: generated by the policy $\pi_\theta$ (thought, action JSON, final answer)</li><li><strong>Environment token</strong>: observation returned by the tool (search snippet, stdout, screenshot caption)</li></ul>
+<p>PPO/GRPO log-prob ratios and loss <strong>must be computed only on agent tokens</strong>. If loss is also applied on observation tokens:</p>
+<ul><li>The policy will try to "teach the tool how to respond" (meaningless and reward-hackable)</li><li>The gradient will be diluted by huge amounts of low-information observation tokens</li><li>KL penalty will mistakenly estimate the policy's own distribution from environment text</li></ul>
+<p>The implementation is an <strong>action_mask: [B, L]</strong> tensor: 1 marks agent-generated tokens, 0 marks prompt / observation / padding. Loss computation: <code>(loss * action_mask).sum() / action_mask.sum()</code>.</p>
+<div class="callout callout-warn"><div class="callout-title">Common bug</div><p>early open-source implementations (including the early TRL agent example) missed the observation mask, causing training metrics to look like they were improving while task success dropped — a classic reward hack on tool output. OpenRLHF / verl / TRL 2024 versions have all fixed this; if you write your own trainer you must add it explicitly.</p></div>
+<h3 id="22-trajectory-level-gae-for-agents">2.2　Trajectory-level GAE for agents</h3>
+<p>Agent trajectories are long (50-200 steps) and rewards are extremely sparse (only at the terminal). Let:</p>
+<ul><li>$r_t \in \mathbb{R}$: reward at step $t$ (mostly $r_t = 0$, terminal $r_T = R \in \{0, 1\}$)</li><li>$V_\phi(s_t)$: critic estimate</li></ul>
+<p>TD residual:</p>
+<p>$$\delta_t = r_t + \gamma V_\phi(s_{t+1}) - V_\phi(s_t)$$</p>
+<p>GAE:</p>
+<p>$$A_t^{\text{GAE}(\gamma, \lambda)} = \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}$$</p>
+<p><strong>How to choose $\gamma$ for LLM agents?</strong> Depends on the definition of "step":</p>
+<ul><li>If step = <strong>single token</strong>: $\gamma$ close to 1 (token-level discount has no meaning)</li><li>If step = <strong>one thought-action-obs cycle</strong>: $\gamma \in [0.95, 0.99]$ is reasonable, controlling long-horizon discounting</li></ul>
+<p><strong>How GAE degenerates in LLM agents</strong>: under sparse terminal reward, $\lambda = 1$ + $\gamma = 1$ is equivalent to sequence-level MC return minus baseline. This is exactly the implicit explanation of GRPO directly using trace-level reward.</p>
+<h3 id="23-ppo-loss-adapted-to-agents">2.3　PPO loss adapted to agents</h3>
+<p>Masked PPO-Clip (outer expectation over the whole trajectory, inner sum over tokens):</p>
+<p>$$\boxed{\;L^{\text{CLIP-agent}}(\theta) = \mathbb{E}_{\tau \sim \pi_\text{old}}\!\left[\frac{\sum_{t=1}^{T} m_t \cdot \min\!\big(\rho_t A_t,\, \text{clip}(\rho_t, 1-\epsilon, 1+\epsilon) A_t\big)}{\sum_{t=1}^{T} m_t}\right]\;}$$</p>
+<p>where $\tau$ is the trajectory (containing all $T$ tokens / steps), $m_t \in \{0, 1\}$ is the agent action_mask (1 for agent-generated tokens, 0 for observation/system tokens), and $\rho_t = \pi_\theta(a_t \mid s_t) / \pi_{\theta_\text{old}}(a_t \mid s_t)$ is the token-level importance ratio. Note that the outer expectation index is the trajectory $\tau$ while the inner sum index is the token $t$; do not confuse them.</p>
+<p>Per-token KL penalty (written into the reward):</p>
+<p>$$\tilde{r}_t = m_t \cdot \big(\text{rule}\_\text{reward}_t - \beta \log \tfrac{\pi_\theta(a_t \mid s_t)}{\pi_\text{ref}(a_t \mid s_t)}\big)$$</p>
+<p>Note: KL is computed only on agent tokens; the $\pi$ on observation tokens is meaningless (those are emitted by the environment, not sampled by the model).</p>
+<h3 id="24-grpo-for-agents-trace-level-group-relative-advantage">2.4　GRPO for agents: trace-level group-relative advantage</h3>
+<p>GRPO fits agents better because:</p>
+<ol><li><strong>Saves the critic</strong> — agent value is hard to learn (long horizon + sparse reward)</li><li><strong>Trace-level reward directly corresponds to trace-level advantage</strong> — no per-step value needed</li><li><strong>Multiple rollouts per prompt automatically reduce variance</strong> — agent tasks are usually deterministic-env, multi-rollout gives the true reward variance</li></ol>
+<p>The formula (keep the PPO-Clip structure, advantage switched to intra-group normalization):</p>
+<p>$$\hat{A}_i = \frac{r_i - \text{mean}(\{r_1, \dots, r_G\})}{\text{std}(\{r_1, \dots, r_G\}) + \epsilon}$$</p>
+<p>All <strong>agent tokens</strong> in the whole trajectory share the same $\hat{A}_i$ (observation tokens are still masked out):</p>
+<p>$$L^{\text{GRPO-agent}}(\theta) = \mathbb{E}\!\left[\frac{1}{G}\sum_{i=1}^G \frac{1}{\sum_t m_{i,t}}\sum_{t=1}^{T_i} m_{i,t} \cdot \Big(\min(\rho_{i,t} \hat{A}_i, \text{clip}(\rho_{i,t}, 1-\epsilon, 1+\epsilon) \hat{A}_i) - \beta\, \text{KL}_{i,t}\Big)\right]$$</p>
+<p>KL typically uses the K3 estimator (Schulman 2020 blog): $\text{KL}_{i,t} = \exp(\log\pi_\text{ref} - \log\pi_\theta) - (\log\pi_\text{ref} - \log\pi_\theta) - 1$.</p>
+<div class="callout callout-good"><div class="callout-title">The &quot;four savings&quot; of GRPO-agent</div><p>listed below.</p></div>
+<ul><li>Saves the value model (one model's VRAM)</li><li>Saves per-token credit assignment (trace-level advantage)</li><li>Saves reward shaping (rule-based terminal is enough)</li><li>Saves hyperparameters ($c_v, \lambda$ are not needed)</li></ul>
+<div class="callout callout-warn"><div class="callout-title">The &quot;three pains&quot; of GRPO-agent</div><p>three trade-offs still need to be acknowledged.</p></div>
+<ul><li>On long trajectories the trace-level advantage is too coarse (all agent tokens share the same $\hat{A}$) — credit dilution on long trajectories</li><li>All-success / all-fail groups have $\text{std} = 0$ degeneracy (agent task reward is binary, this happens frequently)</li><li>On-policy rollout is slow (agent rollout includes tool I/O latency, far slower than chat completion)</li></ul>
+<h2 id="3-reward-design-for-agents-core">§3 Reward design for agents (core)</h2>
+<p>Reward is the lifeline of Agentic RL. <strong>If the reward is wrong, no model size or new algorithm will save you</strong>; if the reward is right, plain GRPO can hit SOTA.</p>
+<h3 id="31-outcome-reward-vs-process-reward">3.1　Outcome reward vs process reward</h3>
+<table><thead><tr><th>Dimension</th><th><strong>Outcome reward</strong></th><th><strong>Process reward</strong></th></tr></thead><tbody><tr><td>Supervision granularity</td><td>1 reward at trajectory terminal</td><td>1 reward per step (or per subgoal)</td></tr><tr><td>Source of labels</td><td>Task success (test pass / answer match)</td><td>PRM / step verifier / human</td></tr><tr><td>Sparsity</td><td>Very sparse (most steps 0)</td><td>Dense</td></tr><tr><td>Credit assignment</td><td>Hard (GAE is hard on long horizons)</td><td>Easy (each step is scored directly)</td></tr><tr><td>Reward hacking</td><td>Lower (with rule-based)</td><td>Higher (PRM can be hacked)</td></tr><tr><td>Implementation difficulty</td><td>Easy (test-pass / answer match)</td><td>Hard (PRM training costs)</td></tr></tbody></table>
+<p><strong>Interview take</strong>: reasoning RL (R1) chose outcome reward because math/code can be programmatically verified; mainstream agent RL also chose outcome reward because agent task ground truth is clearer (task completed yes/no). <strong>Process reward is mainly used for reasoning-heavy tasks</strong> (PRM on math steps); it is rare in tool-use agents.</p>
+<h3 id="32-verifier-based-reward-rule-based">3.2　Verifier-based reward (rule-based)</h3>
+<p>This is the cleanest reward form for Agentic RL: write the reward as an <strong>executable verifier function</strong>.</p>
+<pre><code class="language-python">def verifier_reward(trajectory) -&gt; float:
+    &quot;&quot;&quot;
+    trajectory: list of (thought, action, observation)
+    Returns an outcome reward of 0 or 1
+    &quot;&quot;&quot;
+    final_answer = trajectory[-1].final_answer
+
+    # 1. Math: exact-match ground truth
+    if task_type == &quot;math&quot;:
+        return 1.0 if normalize_math(final_answer) == ground_truth else 0.0
+
+    # 2. Code: run unit tests
+    if task_type == &quot;code&quot;:
+        code = extract_code(final_answer)
+        pass_count = run_unit_tests(code, test_cases)
+        return pass_count / len(test_cases)   # partial credit
+
+    # 3. SWE-bench: apply patch + run test
+    if task_type == &quot;swe&quot;:
+        try:
+            apply_patch(repo, final_answer)
+            return 1.0 if run_test(repo, expected_test) else 0.0
+        except PatchError:
+            return 0.0
+
+    # 4. Web agent: task-specific verifier
+    if task_type == &quot;webshop&quot;:
+        return webshop_grader(final_state)    # provided by the benchmark</code></pre>
+<p><strong>Key advantages of verifier-based reward</strong>:</p>
+<ul><li>Close to ground truth, <strong>avoiding the main failure mode of reward hacking on learned RMs</strong></li><li>Repeatable (the same trajectory gets the same reward), making advantage estimates well-defined</li><li>Memory / compute overhead is minimal (executing a verifier is hundreds of times cheaper than one LLM forward pass)</li></ul>
+<p><strong>Core limitation</strong>: usable only on "verifiable tasks" — math, code, formal verification, grader-able web/GUI tasks. Open-ended tasks (writing, dialogue) still need an RM.</p>
+<h3 id="33-format-reward--shaping-reward">3.3　Format reward / shaping reward</h3>
+<p>With outcome reward alone, agents often learn "format-broken but happens to be correct" trajectories — e.g. skipping the <code>&lt;think&gt;</code> block and going straight to <code>Action: answer(42)</code>. A <strong>format reward</strong> adds a lightweight format constraint signal:</p>
+<pre><code class="language-python">def format_reward(trajectory) -&gt; float:
+    &quot;&quot;&quot;
+    Check whether the trajectory matches the expected format schema
+    Returns a continuous score in [0, 1]
+    &quot;&quot;&quot;
+    score = 0.0
+
+    # Must contain a &lt;think&gt;...&lt;/think&gt; block
+    if &quot;&lt;think&gt;&quot; in trajectory.text and &quot;&lt;/think&gt;&quot; in trajectory.text:
+        score += 0.3
+
+    # Tool calls must be valid JSON
+    for action in trajectory.actions:
+        if is_valid_json(action.tool_call):
+            score += 0.1
+        else:
+            score -= 0.2   # serious error
+
+    # The final answer must be wrapped in \boxed{...} (math task)
+    if has_boxed_answer(trajectory.final):
+        score += 0.2
+
+    return max(0.0, min(1.0, score))</code></pre>
+<p>A typical <strong>composite reward</strong> formulation:</p>
+<p>$$r_\text{total} = \alpha \cdot r_\text{outcome} + \beta \cdot r_\text{format} + \gamma \cdot r_\text{shaping}$$</p>
+<p>R1 / R1-Zero use a simple <code>accuracy_reward + format_reward</code> sum; ToolRL / RAGEN etc. add tool-call efficiency shaping.</p>
+<h3 id="34-length-penalty-prevent-the-agent-from-dragging-too-long">3.4　Length penalty (prevent the agent from dragging too long)</h3>
+<p>An emergent failure mode of agent RL: <strong>the model learns that "dragging out the trajectory raises the probability of a correct answer"</strong> — for a 5-step task the agent goes 50 steps. This is a form of reward hacking.</p>
+<p>Mitigation:</p>
+<p>$$r_\text{adjusted} = r_\text{outcome} - \lambda \cdot \max(0, T - T_\text{target})$$</p>
+<p>or a softer sigmoid form:</p>
+<p>$$r_\text{adjusted} = r_\text{outcome} \cdot \sigma\!\big(-(T - T_\text{target}) / \tau\big)$$</p>
+<p>DAPO reports "overlong shaping" — exponential reward decay after exceeding the length budget, preventing the agent from extending to the context limit.</p>
+<h3 id="35-tool-call-shaping-reward">3.5　Tool-call shaping reward</h3>
+<p>Reward "calling the right tool", penalize "calling the wrong tool / repeated calls":</p>
+<pre><code class="language-python">def tool_shaping(trajectory) -&gt; float:
+    score = 0.0
+
+    # Calling the right tool (task-relevance heuristic)
+    if task_needs_search and any(a.tool == &quot;search&quot; for a in trajectory.actions):
+        score += 0.1
+
+    # Penalize consecutive duplicate calls
+    consecutive_dup = count_consecutive_duplicate_calls(trajectory.actions)
+    score -= 0.05 * consecutive_dup
+
+    # Penalize calls to non-existent tools
+    invalid_calls = sum(1 for a in trajectory.actions if a.tool not in TOOL_REGISTRY)
+    score -= 0.3 * invalid_calls
+
+    return score</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Risks of shaping reward</div><p>if shaping is given improperly, the agent will over-fit the shaping signal and ignore the outcome. <strong>Mainstream practice</strong>: shaping reward weight ≪ outcome reward weight (typically 0.1 : 1), and shaping must be capped (cannot accumulate without bound).</p></div>
+<h3 id="36-rlaif-for-agents-llm-as-reward">3.6　RLAIF for agents: LLM as reward</h3>
+<p>When an external verifier is hard to write (open-ended tasks), use a strong LLM as judge:</p>
+<pre><code class="language-python">def llm_judge_reward(trajectory, judge_model) -&gt; float:
+    &quot;&quot;&quot;
+    Use a judge LLM to score the trajectory
+    &quot;&quot;&quot;
+    prompt = f&quot;&quot;&quot;
+    Judge whether the agent completed this task successfully.
+    Task: {trajectory.task}
+    Final state: {trajectory.final_state}
+    Return JSON: {{&quot;success&quot;: bool, &quot;reasoning&quot;: str}}
+    &quot;&quot;&quot;
+    judgment = judge_model(prompt)
+    return 1.0 if judgment[&quot;success&quot;] else 0.0</code></pre>
+<p><strong>Risks</strong>:</p>
+<ul><li>The judge LLM has its own biases (length preference, sycophancy) → amplified into the student</li><li>The judge itself may be prompt-injected (the agent trajectory contains malicious instructions)</li><li>High compute cost (one judge call per trajectory)</li></ul>
+<p>Mainstream mitigations: (a) <strong>judge ensemble</strong> (3-5 different models judge, majority vote); (b) <strong>judge with rubric</strong> (strictly constrain output structure); (c) <strong>rule + LLM hybrid</strong> (verifiable parts use rule, open-ended parts use LLM).</p>
+<h2 id="4-long-horizon-credit-assignment">§4 Long-horizon credit assignment</h2>
+<h3 id="41-sparse-reward-is-the-core-pain-of-agent-rl">4.1　Sparse reward is the core pain of agent RL</h3>
+<p>Classical game RL (Atari, Mujoco) has dense reward; an LLM agent on a long trajectory <strong>gets reward 0 almost everywhere and a signal only at the terminal</strong>. This causes:</p>
+<ul><li>The value model can barely learn anything (what should middle V be?)</li><li>Per-token policy gradient has huge variance</li><li>The causal chain from early steps to reward is diluted — did "step 3 picking search tool" cause "step 50 being correct"?</li></ul>
+<h3 id="42-degeneration-of-discount--gae-on-agents">4.2　Degeneration of discount + GAE on agents</h3>
+<p>Recall GAE:</p>
+<p>$$A_t = \sum_l (\gamma\lambda)^l \delta_{t+l}, \quad \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$$</p>
+<p>Under sparse terminal reward ($r_t = 0$ for $t \lt T$, $r_T = R$):</p>
+<p>$$A_t = \gamma^{T-t} R - V(s_t) + \text{value correction terms}$$</p>
+<p>That is, <strong>advantage ≈ discounted return - baseline</strong>. If $V_\phi$ is inaccurate (often the case in agents), this degenerates into raw MC return; GAE's bias-variance trade-off fails.</p>
+<p><strong>Practical take</strong>: on agent RL, GAE is less stable than group-relative advantage (GRPO); this is one of the fundamental reasons why GRPO is more sample efficient than PPO on agents.</p>
+<h3 id="43-hindsight-relabeling-for-agents">4.3　Hindsight relabeling for agents</h3>
+<p>Hindsight Experience Replay (Andrychowicz et al. 2017 NeurIPS) originated in robot manipulation: failed trajectories aren't thrown away; instead the <strong>state actually reached is treated as the goal</strong> and reward is relabeled.</p>
+<p>LLM agent version:</p>
+<pre><code class="language-python">def hindsight_relabel(trajectory):
+    &quot;&quot;&quot;
+    Turn a failed trajectory into a successful trajectory for an &quot;alternative task&quot;
+    &quot;&quot;&quot;
+    if trajectory.outcome == 1:
+        return [trajectory]   # successful trajectories untouched
+
+    # Suppose the agent meant to buy item A on the web but ended on item B&#x27;s page
+    # → relabel as &quot;find item B&quot;; reward = 1
+    alt_task = describe_terminal_state(trajectory.final_state)
+    relabeled = trajectory.with_task(alt_task)
+    relabeled.outcome = 1
+    return [trajectory, relabeled]</code></pre>
+<div class="callout callout-info"><div class="callout-title">Difficulty of agentic hindsight</div><p>requires that "any terminal state can be described as a reasonable task". Easy for open web environments (shopping, navigation); hard for math/code tasks (a wrong answer can't be rewritten as "the correct answer to another problem").</p></div>
+<h3 id="44-subgoal-decomposition--process-reward">4.4　Subgoal decomposition + process reward</h3>
+<p>Slicing a long trajectory into subgoals is another credit-assignment route:</p>
+<ul><li>Slice a 100-step trajectory into 5 subgoals × 20 steps</li><li>Each subgoal terminal gets a process reward (whether the subgoal is completed)</li><li>Subgoal rewards sum to the trajectory reward</li></ul>
+<p>Implementations:</p>
+<ul><li><strong>Hand-crafted subgoals</strong>: humans write the criterion for each subgoal (e.g. "reaching the cart page" triggers subgoal-1 reward)</li><li><strong>LLM-decomposed subgoals</strong>: a planner LLM splits the task into subgoals; a verifier judges each</li><li><strong>PRM-style step reward</strong>: train a PRM to score each step (Math-Shepherd line)</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Cost of subgoal RL</div><p>wrong subgoal boundaries make the agent learn "deliberately trigger subgoal reward without actually completing the task". This is the general problem of process reward.</p></div>
+<h3 id="45-per-step-kl-penalty-to-prevent-policy-collapse">4.5　Per-step KL penalty to prevent policy collapse</h3>
+<p>Over long agent trajectories the policy easily "all-ins" (generates high-confidence tokens at every step), causing entropy collapse:</p>
+<p>$$\tilde{r}_t = m_t \cdot \big(r_t - \beta \cdot \text{KL}(\pi_\theta(\cdot \mid s_t) \| \pi_\text{ref}(\cdot \mid s_t))\big)$$</p>
+<p><strong>Key</strong>: KL must be per-step + only on agent tokens. Once KL is computed on observation tokens, the policy gets penalized for "mimicking environment text" — but this penalty is meaningless (the policy shouldn't mimic the environment, only use observations as conditioning).</p>
+<p>R1-Zero uses $\beta = 0.001$; agent tasks commonly use $\beta \in [0.001, 0.05]$.</p>
+<h2 id="5-self-rewarding--exploration-in-agent-rl">§5 Self-rewarding &amp; exploration in agent RL</h2>
+<h3 id="51-self-rewarding-lm-yuan-et-al-2024-meta-arxiv-240110020">5.1　Self-Rewarding LM (Yuan et al. 2024 Meta arXiv 2401.10020)</h3>
+<p>Core idea: have the policy serve as judge, iterative DPO:</p>
+<pre><code>
+  Iteration k:
+    1. policy_k generates multiple responses per prompt
+    2. policy_k self-scores via LLM-as-judge (also a policy_k prompt)
+    3. High vs low scores form a preference pair
+    4. policy_{k+1} = DPO(policy_k, preference_pair)</code></pre>
+<p>Effect: on AlpacaEval, iterative self-scoring continuously improves.</p>
+<h3 id="52-risks-of-self-rewarding-on-agents">5.2　Risks of self-rewarding on agents</h3>
+<p>Biggest difference between agent task and alignment task: alignment has an "objective preference distribution" (humans find it helpful, polite) suitable for LLM judging; <strong>agent tasks have objective ground truth (test pass / task success)</strong> — self-rewarding then:</p>
+<ul><li>The judge itself may be wrong (the agent got it wrong but self-evaluates correct) → training collapse</li><li>Iterative drift: each round reinforces trajectories "I thought were correct", drifting away from ground truth</li><li>Exploration degeneration: high self-scores prefer known patterns, suppressing exploration of new tools</li></ul>
+<p><strong>Mainstream practice</strong>: agent RL <strong>prefers rule-based ground truth</strong>, with self-rewarding only as an auxiliary signal (e.g. open-ended task fallback).</p>
+<h3 id="53-exploration-in-agent-rl">5.3　Exploration in agent RL</h3>
+<p>Agent action space includes:</p>
+<ul><li><strong>Token-level exploration</strong>: sampling temperature, controlling token-choice diversity</li><li><strong>Tool-call-level exploration</strong>: each thought-action cycle picks different tools / different queries</li><li><strong>Trajectory-level exploration</strong>: entirely different trajectory plans</li></ul>
+<p>Classical practices:</p>
+<table><thead><tr><th>Method</th><th>Implementation</th></tr></thead><tbody><tr><td>Temperature schedule</td><td>At rollout $T \in [0.7, 1.2]$, anneal down with training</td></tr><tr><td>Top-p / Top-k</td><td>Restrict sampling range to avoid outlier tokens</td></tr><tr><td>ε-tool-choice</td><td>With probability $\epsilon$, pick a random tool (replacing the LLM-policy choice)</td></tr><tr><td>Diverse beam</td><td>Multi-trajectory with diverse beam search ensures diversity</td></tr><tr><td>GRPO group sampling</td><td>$G = 16$ rollouts per prompt, natural exploration</td></tr></tbody></table>
+<p>The key insight of <strong>RAGEN / StarPO</strong> (Wang et al. 2025 arXiv 2504.20073): in multi-turn agent RL <strong>rollout diversity is the "firebreak" for collapse</strong> — single-trajectory training causes the policy to degenerate into deterministic mode.</p>
+<h3 id="54-curriculum--difficulty-scheduling">5.4　Curriculum &amp; difficulty scheduling</h3>
+<p>Sort agent tasks from easy to hard, schedule based on the model's current ability:</p>
+<ul><li><strong>WebRL</strong> (Qi et al. 2024 ICLR-25 arXiv 2411.02337) uses a self-evolving curriculum — failed tasks are recorded and added to the buffer in the next round</li><li><strong>Absolute Zero</strong> / R-Zero use a learnability reward: pick tasks where the model's success rate is ≈ 50% (maximum learning signal)</li></ul>
+<div class="callout callout-info"><div class="callout-title">Curriculum is the &quot;hidden component&quot; of long-horizon agent RL</div><p>not an algorithmic contribution, but empirically it <strong>affects sample efficiency more than swapping the algorithm</strong>. R1 / R1-Zero's reasoning RL also uses an implicit curriculum (data difficulty rises gradually).</p></div>
+<h2 id="6-specific-algorithms-representative-agentic-rl-papers">§6 Specific algorithms (representative Agentic RL papers)</h2>
+<p>Sorted by "time + data/task type", each with one sentence + key formula.</p>
+<h3 id="61-vpt-baker-et-al-2022-neurips-openai-arxiv-220611795">6.1　VPT (Baker et al. 2022 NeurIPS OpenAI, arXiv 2206.11795)</h3>
+<p><strong>Setting</strong>: Minecraft; first pretrain an inverse dynamics model (IDM) on 70k hours of YouTube videos, then have the IDM auto-label action → behavior clone → RL fine-tune.</p>
+<p><strong>Key</strong>: the first large-scale "video → action label → policy → RL" pipeline. The early blueprint for agent RL, proving <strong>scaling RL with imitation pretrain</strong> is feasible.</p>
+<h3 id="62-agenttuning-zeng-et-al-2023-thu-arxiv-231012823">6.2　AgentTuning (Zeng et al. 2023 THU arXiv 2310.12823)</h3>
+<p><strong>Setting</strong>: construct the AgentInstruct dataset (demonstrations from 6 agent tasks), multi-task SFT.</p>
+<p><strong>Key</strong>: not RL, but <strong>agent SFT</strong> — yet this is the standard warm-start step for Agentic RL. After AgentTuning, Llama-2 averages +50% on agent tasks.</p>
+<div class="callout callout-info"><div class="callout-title">Position of AgentTuning</div><p>in the Agentic RL pipeline, AgentTuning-style SFT is a necessary warm-start before RL. Doing RL on an agent from scratch is extremely hard because the base model does not know how to emit legal tool-call schemas.</p></div>
+<h3 id="63-agent-flan-chen-et-al-2024-acl-findings-arxiv-240312881">6.3　Agent-FLAN (Chen et al. 2024 ACL Findings, arXiv 2403.12881)</h3>
+<p><strong>Setting</strong>: Agent SFT data split into three classes — multi-turn dialogue / formatted tool calls / negative examples (refusal / failure cases).</p>
+<p><strong>Key</strong>: <strong>negative examples significantly reduce hallucinated tool calls</strong> — SFT doesn't just see "how to do it right", it also sees "why this is wrong". An important milestone for agent SFT engineering.</p>
+<h3 id="64-reft-trung-et-al-2024-acl-arxiv-240108967">6.4　ReFT (Trung et al. 2024 ACL arXiv 2401.08967)</h3>
+<p><strong>Setting</strong>: math reasoning agent; SFT warm-start, then PPO with rule-based outcome reward (answer correctness).</p>
+<p><strong>Key formula</strong> (standard PPO + verifier):</p>
+<p>$$r(\tau) = \mathbb{1}[\text{answer}(\tau) = y^*] - \beta \cdot \text{KL}(\pi_\theta \| \pi_\text{SFT})$$</p>
+<p><strong>Result</strong>: GSM8K +9pp over SFT, MathQA +7pp. Proves PPO + outcome reward is stable and feasible on reasoning agents — the predecessor experiment for R1.</p>
+<h3 id="65-deepseek-r1-deepseek-ai-2025-arxiv-250112948-extension-on-agents">6.5　DeepSeek-R1 (DeepSeek-AI 2025 arXiv 2501.12948) extension on agents</h3>
+<p>R1 itself isn't an agent paper, but R1's GRPO + rule-based reward + format reward methodology was directly inherited by ToolRL / ReSearch / RAGEN. <strong>R1 = the algorithmic baseline template of Agentic RL</strong>.</p>
+<p>Review of GRPO on agents:</p>
+<ul><li>$G$ rollouts per prompt</li><li>Trace-level reward (rule-based)</li><li>Group-relative advantage</li><li>Per-step KL with K3 estimator</li><li>Agent token mask</li></ul>
+<h3 id="66-toolrl-qian-et-al-2025-arxiv-250413958">6.6　ToolRL (Qian et al. 2025 arXiv 2504.13958)</h3>
+<p><strong>Setting</strong>: GRPO on a tool-augmented LLM with reward = correctness + format + tool-use efficiency.</p>
+<p><strong>Key formula</strong>:</p>
+<p>$$r(\tau) = r_\text{correct} + \alpha \cdot r_\text{format} + \gamma \cdot r_\text{tool-eff}$$</p>
+<p>where $r_\text{tool-eff}$ penalizes redundant/invalid tool calls.</p>
+<p><strong>Result</strong>: 7B model approaches GPT-4 on BFCL (Berkeley Function Calling Leaderboard). Open-source validation of GRPO + tool shaping stability.</p>
+<h3 id="67-research-chen-et-al-2025-arxiv-250319470">6.7　ReSearch (Chen et al. 2025 arXiv 2503.19470)</h3>
+<p><strong>Setting</strong>: search-augmented agent treating search as a first-class action; reward = answer correctness only (rule-based).</p>
+<p><strong>Key idea</strong>: multi-hop search can be learned without process reward; <strong>outcome-only + GRPO is enough</strong> — provided the base model, after SFT warm-start, can already emit legal search queries.</p>
+<h3 id="68-ragen--starpo-wang-et-al-2025-arxiv-250420073">6.8　RAGEN / StarPO (Wang et al. 2025 arXiv 2504.20073)</h3>
+<p><strong>Paper</strong>: "Understanding Self-Evolution in LLM Agents via Multi-Turn Reinforcement Learning".</p>
+<p><strong>Setting</strong>: multi-turn RL agent training framework with state-action token-level loss + critic-free.</p>
+<p><strong>Key contributions</strong>:</p>
+<ol><li><strong>StarPO</strong> (<strong>S</strong>tate-<strong>T</strong>hinking-<strong>A</strong>ctions-<strong>R</strong>eward Policy Optimization): critic-free, the whole trajectory shares the advantage, with a strict token mask that limits loss to agent tokens. The <strong>StarPO-S</strong> variant introduces fine-grained reasoning-aware reward + optional critic incorporation, further mitigating multi-turn reward sparsity (the paper abstract's exact wording).</li><li><strong>Rollout diversity = collapse firebreak</strong>: empirically, group size $G = 16$ is significantly more stable than $G = 4$</li><li><strong>Trajectory length signal</strong>: when failed-trajectory length is large, reward shaping should add a length penalty</li></ol>
+<h3 id="69-webrl-qi-et-al-2024-iclr-25-arxiv-241102337">6.9　WebRL (Qi et al. 2024 ICLR-25 arXiv 2411.02337)</h3>
+<p><strong>Setting</strong>: web agent (WebArena), self-evolving curriculum + ORM + retrospective rollout.</p>
+<p><strong>Key components</strong>:</p>
+<ul><li>ORM (Outcome Reward Model) trained from task success → gives reward online</li><li>Failed tasks enter the curriculum buffer; the next round increases their weight</li><li>Retrospective rollout: failed trajectories are rewritten into "correct trajectories" by an LLM and re-SFT'd</li></ul>
+<p><strong>Result</strong>: Llama-3.1-8B reaches 43% on WebArena (vs GPT-4 14.4%), proving that small model + good RL pipeline &gt; large model + zero-shot.</p>
+<h3 id="610-agentq-putta-et-al-2024-arxiv-240807199">6.10　AgentQ (Putta et al. 2024 arXiv 2408.07199)</h3>
+<p><strong>Setting</strong>: web agent, MCTS + AI critique + offline DPO.</p>
+<p><strong>Key idea</strong>: MCTS searches for "reward-balanced" preference pairs (high-score trajectory vs low-score trajectory) and DPO offline-trains them. No online RL infra needed; practical for compute-limited scenarios.</p>
+<h3 id="611-webgum-furuta-et-al-2024-iclr-arxiv-230511854">6.11　WebGUM (Furuta et al. 2024 ICLR arXiv 2305.11854)</h3>
+<p><strong>Setting</strong>: HTML + screenshot multimodal web agent, offline SFT from demonstrations (<strong>not RL fine-tune</strong> — the paper is the imitation/supervised paradigm).</p>
+<p><strong>Key</strong>: feeds DOM + screenshot together into the model, improving grounding accuracy over pure text. It's the dataset + base stage for Computer-Use / web agent RL (e.g. WebRL, AgentQ). Subsequent web agent RL often does RL fine-tune on top of WebGUM-class bases.</p>
+<h3 id="612-coderl-le-et-al-2022-neurips-arxiv-220701780">6.12　CodeRL (Le et al. 2022 NeurIPS arXiv 2207.01780)</h3>
+<p><strong>Setting</strong>: code generation + actor-critic, reward = unit-test pass.</p>
+<p><strong>Key formula</strong>: classical actor-critic with the critic as a token-level baseline; the PG signal comes from final test-pass.</p>
+<h3 id="613-ppocoder-shojaee-et-al-2023-arxiv-230113816">6.13　PPOCoder (Shojaee et al. 2023 arXiv 2301.13816)</h3>
+<p><strong>Setting</strong>: code generation + PPO with composite reward = compilable + functional correctness.</p>
+<p><strong>Key</strong>: early attempt at PPO for code-gen. Proves multi-component reward is more stable than single test-pass training.</p>
+<h3 id="614-swe-rl-wei-et-al-2025-meta-fair-arxiv-250218449">6.14　SWE-RL (Wei et al. 2025 Meta FAIR arXiv 2502.18449)</h3>
+<p><strong>Setting</strong>: SWE-bench / GitHub PR data, rule-based reward = patch similarity + test-pass, GRPO.</p>
+<p><strong>Key features</strong>:</p>
+<ul><li>Data scale: Meta constructs 76M+ context-issue-patch triples from GitHub PR commit history</li><li>Reward: edit similarity (oracle patch ↔ predicted patch) + binary test pass</li><li>Algorithm: pure GRPO + format reward</li></ul>
+<p><strong>Result</strong>: Llama-3.3-70B + SWE-RL reaches 41% on SWE-bench Verified (no scaffold), proving <strong>rule-based RL on real PR data can let the model learn emergent reasoning behavior</strong> — e.g. file-level retrieval planning, root-cause analysis, test self-validation.</p>
+<h3 id="615-openvla-kim-et-al-2024-arxiv-240609246">6.15　OpenVLA (Kim et al. 2024 arXiv 2406.09246)</h3>
+<p><strong>Setting</strong>: a 7B vision-language-action model for robot manipulation, fine-tuned on 970K real robot demonstrations (open-source base + LoRA fine-tuning recipe); the paper focuses on imitation learning + parameter-efficient adaptation, <strong>not task-specific RL fine-tune</strong>.</p>
+<p><strong>Key</strong>: a robot agent rather than an LLM agent; often used to compare "LLM agent vs robot agent". Subsequent work (OpenVLA-OFT, π-RL family, etc.) does RL on top of the OpenVLA base, but the OpenVLA paper itself does not.</p>
+<h3 id="616-anthropic-computer-use-public-knowledge--training-details-undisclosed">6.16　Anthropic Computer-Use (public knowledge — training details undisclosed)</h3>
+<p>Anthropic Claude 3.5 Sonnet (new) supports Computer-Use since 2024-10-22; 3.7 / 4.0 / 4.5 / Opus 4.x continue to iterate.</p>
+<p><strong>Public materials describe only capability + safety guardrails; the training algorithm / reward form is undisclosed</strong>:</p>
+<ul><li>Action space = screen coordinates + keyboard events + mouse events (screenshot as observation)</li><li>Safety: constitutional-AI-style guardrails + red-teaming + prompt-injection defense</li><li>The system card mentions training involves human demonstrations + synthetic data, but <strong>does not disclose</strong> specifics like RLHF / GRPO / verifier reward</li></ul>
+<p>Community <strong>speculation</strong> (<strong>speculative only, not official</strong>): possibly GRPO/PPO + verifier-based reward + Constitutional-AI-style AI feedback, but with no official confirmation. When discussing Computer-Use training in interviews, clearly distinguish "public capability" from "speculated internals".</p>
+<h2 id="7-code-patterns-pytorch--pseudocode">§7 Code patterns (PyTorch / pseudocode)</h2>
+<p>The most easily mis-implemented pieces when writing Agentic RL. Each block is independently readable.</p>
+<h3 id="71-agent-rollout-state-action-reward-collection">7.1　Agent rollout (state, action, reward collection)</h3>
+<pre><code class="language-python">import torch
+from dataclasses import dataclass
+
+@dataclass
+class Step:
+    obs: str                   # previous-step observation or prompt
+    thought_tokens: list[int]  # thought generated by the agent
+    action_tokens: list[int]   # tool_call JSON generated by the agent
+    tool_name: str
+    tool_args: dict
+    observation: str           # tool&#x27;s returned result
+    done: bool
+
+def rollout(policy, env, prompt, max_steps=20, max_tokens_per_step=512):
+    &quot;&quot;&quot;
+    One agent trajectory rollout
+    Returns: trajectory (list of Step), final reward
+    &quot;&quot;&quot;
+    trajectory = []
+    history = prompt
+    for step_idx in range(max_steps):
+        # ── Agent generates (thought, action) ──
+        agent_output = policy.generate(
+            prompt=history,
+            stop_tokens=[&quot;&lt;/action&gt;&quot;],
+            max_new_tokens=max_tokens_per_step,
+            temperature=0.7,
+        )
+        thought, action_json = parse_thought_action(agent_output)
+
+        # ── Call the tool ──
+        tool_name = action_json[&quot;tool&quot;]
+        tool_args = action_json[&quot;args&quot;]
+        if tool_name == &quot;final_answer&quot;:
+            obs = action_json[&quot;answer&quot;]
+            done = True
+        else:
+            obs = env.call(tool_name, tool_args)
+            done = False
+
+        # Update history (append back to the prompt)
+        history = history + agent_output + f&quot;\n&lt;obs&gt;{obs}&lt;/obs&gt;\n&quot;
+
+        trajectory.append(Step(
+            obs=history,                    # history up to this point
+            thought_tokens=tokenize(thought),
+            action_tokens=tokenize(action_json),
+            tool_name=tool_name,
+            tool_args=tool_args,
+            observation=obs,
+            done=done,
+        ))
+
+        if done or step_idx == max_steps - 1:
+            break
+
+    # ── Terminal reward ──
+    final_reward = env.compute_reward(trajectory)
+    return trajectory, final_reward</code></pre>
+<h3 id="72-trajectory-level-gae-advantage">7.2　Trajectory-level GAE advantage</h3>
+<pre><code class="language-python">import torch
+
+def trajectory_gae(rewards, values, dones, gamma=0.99, lam=0.95):
+    &quot;&quot;&quot;
+    Compute step-level GAE advantages
+    rewards: [T]    per-step reward (mostly = 0, terminal = R)
+    values:  [T+1]  V(s_0)...V(s_T); V(s_T) should be 0 (terminal)
+    dones:   [T]    1 if terminal else 0
+    Returns: advantages [T], returns [T]
+    &quot;&quot;&quot;
+    T = rewards.shape[0]
+    advantages = torch.zeros_like(rewards)
+    gae = 0.0
+    for t in reversed(range(T)):
+        non_term = 1.0 - dones[t]
+        delta = rewards[t] + gamma * values[t + 1] * non_term - values[t]
+        gae = delta + gamma * lam * non_term * gae
+        advantages[t] = gae
+    returns = advantages + values[:T]
+    return advantages, returns</code></pre>
+<h3 id="73-ppo-loss-adapted-to-agents-with-actionmask">7.3　PPO loss adapted to agents (with action_mask)</h3>
+<p><strong>This is the most important piece of Agentic RL code</strong>. Difference from RLHF PPO: observation tokens must be explicitly masked out.</p>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def ppo_agent_step(policy, value, batch, eps_clip=0.2, c_v=0.5, c_e=0.01):
+    &quot;&quot;&quot;
+    batch:
+      input_ids:       [B, L]    full trajectory tokens (prompt + thought + action + obs ...)
+      action_mask:     [B, L]    1 = agent-generated token, 0 = prompt/observation/pad
+      old_log_probs:   [B, L]    log π_θ_old at sample time, 0 at masked positions
+      advantages:      [B, L]    step-level GAE advantages (broadcast to all agent tokens of that step)
+      returns:         [B, L]    GAE returns for value loss
+    &quot;&quot;&quot;
+    logits = policy(batch[&quot;input_ids&quot;]).logits           # [B, L, V]
+    log_probs = F.log_softmax(logits[:, :-1], dim=-1)    # [B, L-1, V]
+    targets = batch[&quot;input_ids&quot;][:, 1:].unsqueeze(-1)
+    new_log_probs = log_probs.gather(-1, targets).squeeze(-1)  # [B, L-1]
+    new_log_probs = F.pad(new_log_probs, (1, 0))               # align to [B, L]
+
+    # ── Key: action_mask ──
+    mask = batch[&quot;action_mask&quot;].float()
+    # Compute ratio / loss only on agent-generated tokens
+    ratio = torch.exp((new_log_probs - batch[&quot;old_log_probs&quot;]) * mask)
+    # At observation positions: ratio = exp(0) = 1, does not affect surr1/surr2
+
+    A = batch[&quot;advantages&quot;]
+    surr1 = ratio * A
+    surr2 = torch.clamp(ratio, 1.0 - eps_clip, 1.0 + eps_clip) * A
+    # Mean over masked positions (avoid observation tokens lowering loss scale)
+    policy_loss = -((torch.min(surr1, surr2) * mask).sum() / mask.sum().clamp_min(1.0))
+
+    # Value loss: also only on agent tokens (V of observation tokens is meaningless)
+    V = value(batch[&quot;input_ids&quot;]).squeeze(-1)            # [B, L]
+    value_loss = (((V - batch[&quot;returns&quot;]) ** 2) * mask).sum() / mask.sum().clamp_min(1.0)
+
+    # Entropy bonus: only on agent tokens
+    probs = log_probs.exp()
+    entropy = -(probs * log_probs).sum(-1)               # [B, L-1]
+    entropy = F.pad(entropy, (1, 0))
+    entropy_bonus = (entropy * mask).sum() / mask.sum().clamp_min(1.0)
+
+    loss = policy_loss + c_v * value_loss - c_e * entropy_bonus
+
+    # Monitoring
+    with torch.no_grad():
+        approx_kl = ((ratio - 1) - torch.log(ratio.clamp_min(1e-8))) * mask
+        approx_kl = approx_kl.sum() / mask.sum().clamp_min(1.0)
+    return loss, {
+        &quot;policy&quot;: policy_loss.item(),
+        &quot;value&quot;: value_loss.item(),
+        &quot;entropy&quot;: entropy_bonus.item(),
+        &quot;approx_kl&quot;: approx_kl.item(),
+    }</code></pre>
+<div class="callout callout-warn"><div class="callout-title">5 common mistakes with agent_mask</div></div>
+<ul><li>Must cover <strong>prompt tokens</strong>: prompts aren't agent-generated; mask = 0</li><li>Must cover <strong>all observation tokens</strong>: every token returned by the tool (including the <code>&lt;obs&gt;</code> tag itself) mask = 0</li><li>Must cover <strong>all padding</strong>: right-pad positions mask = 0</li><li><strong>Separator tokens</strong> (e.g. <code>&lt;action&gt;</code>, <code>&lt;/thought&gt;</code>) count as agent tokens; mask = 1</li><li>Multi-turn batches have <strong>different mask patterns for different trajectories</strong>; must be computed per-sample</li></ul>
+<h3 id="74-grpo-group-relative-reward-on-agent-trajectories">7.4　GRPO group-relative reward on agent trajectories</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def grpo_agent_loss(policy, ref_policy, batch, eps_clip=0.2, beta=0.04):
+    &quot;&quot;&quot;
+    batch:
+      input_ids:     [N, L]   N = sum_b G samples in batch
+      action_mask:   [N, L]   agent-generated token mask
+      old_log_probs: [N, L]   detached log probs at rollout time
+      rewards:       [N]      trajectory-level outcome reward
+      group_id:      [N]      same prompt → same group_id
+    &quot;&quot;&quot;
+    rewards = batch[&quot;rewards&quot;]
+    gid = batch[&quot;group_id&quot;].long()
+
+    # ── Intra-group normalization ──
+    num_groups = int(gid.max().item()) + 1
+    counts = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, torch.ones_like(rewards))
+    sums = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, rewards)
+    group_mean = sums / counts.clamp_min(1.0)
+    diff_sq = (rewards - group_mean[gid]) ** 2
+    sq_sums = torch.zeros(num_groups, device=rewards.device).scatter_add_(
+        0, gid, diff_sq)
+    group_std = (sq_sums / counts.clamp_min(1.0)).sqrt()
+
+    A = (rewards - group_mean[gid]) / (group_std[gid] + 1e-8)   # [N]
+    A = A.unsqueeze(-1)                                          # [N, 1] shared across the trajectory
+
+    # ── log-prob ratio ──
+    logits = policy(batch[&quot;input_ids&quot;]).logits[:, :-1]
+    log_probs = F.log_softmax(logits, dim=-1)
+    tgt = batch[&quot;input_ids&quot;][:, 1:].unsqueeze(-1)
+    new_log_probs = log_probs.gather(-1, tgt).squeeze(-1)
+    new_log_probs = F.pad(new_log_probs, (1, 0))                 # [N, L]
+    mask = batch[&quot;action_mask&quot;].float()
+
+    ratio = torch.exp((new_log_probs - batch[&quot;old_log_probs&quot;]) * mask)
+
+    # ── PPO-Clip surrogate (advantage broadcast to the whole trajectory) ──
+    surr1 = ratio * A
+    surr2 = torch.clamp(ratio, 1.0 - eps_clip, 1.0 + eps_clip) * A
+
+    # ── KL with K3 estimator (Schulman 2020 blog) ──
+    with torch.no_grad():
+        ref_logits = ref_policy(batch[&quot;input_ids&quot;]).logits[:, :-1]
+        ref_log_probs = F.log_softmax(ref_logits, dim=-1)
+        ref_token_lp = ref_log_probs.gather(-1, tgt).squeeze(-1)
+        ref_token_lp = F.pad(ref_token_lp, (1, 0))
+    delta = ref_token_lp - new_log_probs                          # log(π_ref / π_θ)
+    kl_per_token = torch.exp(delta) - delta - 1.0                 # K3, non-negative
+
+    token_obj = torch.min(surr1, surr2) - beta * kl_per_token     # [N, L]
+    seq_len = mask.sum(dim=-1).clamp_min(1.0)                     # [N]
+    per_seq = (token_obj * mask).sum(dim=-1) / seq_len            # [N]
+    loss = -per_seq.mean()
+
+    return loss, {
+        &quot;reward_mean&quot;: rewards.mean().item(),
+        &quot;advantage_std&quot;: A.squeeze(-1).std().item(),
+        &quot;kl&quot;: (kl_per_token * mask).sum().item() / mask.sum().clamp_min(1.0).item(),
+    }</code></pre>
+<h3 id="75-outcome--step-reward-combination">7.5　Outcome + step reward combination</h3>
+<pre><code class="language-python">def composite_reward(trajectory, weights=None):
+    &quot;&quot;&quot;
+    Combine outcome / format / shaping rewards into the final reward
+    weights: dict[str, float]
+    &quot;&quot;&quot;
+    if weights is None:
+        weights = {&quot;outcome&quot;: 1.0, &quot;format&quot;: 0.2, &quot;tool_eff&quot;: 0.1, &quot;length&quot;: -0.05}
+
+    r = {}
+    r[&quot;outcome&quot;] = outcome_verifier(trajectory)                  # in {0, 1}
+    r[&quot;format&quot;]  = format_score(trajectory)                      # in [0, 1]
+    r[&quot;tool_eff&quot;] = tool_efficiency_score(trajectory)            # in [-1, 1]
+    r[&quot;length&quot;]  = max(0, len(trajectory.steps) - target_len)    # excess steps
+
+    total = sum(weights[k] * r[k] for k in r)
+    return total, r</code></pre>
+<div class="callout callout-info"><div class="callout-title">Process-then-outcome composite form</div><p>if you have a PRM, you can let the PRM provide step-level shaping first, but <strong>at least 50% of the final trajectory reward should come from outcome</strong>, otherwise the agent will exploit a local optimum that only cares about PRM scores.</p></div>
+<h3 id="76-verifier-based-reward-code-test--math-match">7.6　Verifier-based reward (code test / math match)</h3>
+<pre><code class="language-python">import re
+import subprocess
+
+def verifier_reward(trajectory, task_type, ground_truth):
+    &quot;&quot;&quot;
+    Rule-based outcome reward
+    &quot;&quot;&quot;
+    final = trajectory.final_answer
+
+    if task_type == &quot;math&quot;:
+        return float(extract_boxed_answer(final) == normalize(ground_truth))
+
+    if task_type == &quot;code&quot;:
+        code = extract_python_code(final)
+        if code is None:
+            return 0.0
+        passed = 0
+        for test in ground_truth[&quot;tests&quot;]:
+            try:
+                result = subprocess.run(
+                    [&quot;python&quot;, &quot;-c&quot;, code + &quot;\n&quot; + test],
+                    capture_output=True, timeout=5,
+                )
+                if result.returncode == 0:
+                    passed += 1
+            except subprocess.TimeoutExpired:
+                continue
+        return passed / len(ground_truth[&quot;tests&quot;])
+
+    if task_type == &quot;swe&quot;:
+        patch = extract_unified_diff(final)
+        if patch is None:
+            return 0.0
+        success = apply_patch_and_run_test(
+            repo=ground_truth[&quot;repo&quot;],
+            patch=patch,
+            test=ground_truth[&quot;test&quot;],
+        )
+        return float(success)
+
+    if task_type == &quot;webshop&quot;:
+        return webshop_grader(trajectory.final_state, ground_truth)
+
+    raise ValueError(f&quot;Unknown task type: {task_type}&quot;)</code></pre>
+<h2 id="8-frontier-key-2024-2026-trends">§8 Frontier (key 2024-2026 trends)</h2>
+<h3 id="81-critic-free-rl-is-the-new-default">8.1　Critic-free RL is the new default</h3>
+<p>After DeepSeek-R1 (Jan 2025), <strong>critic-free RL (the GRPO family) became the open-source agent RL mainstream</strong>. Reasons:</p>
+<ul><li>The value model can hardly learn anything on long-horizon agents</li><li>One model's worth of VRAM saved → bigger batches / group sizes</li><li>Easier tuning (no $c_v$, value lr to tune)</li></ul>
+<p>verl (ByteDance 2024+), OpenRLHF, TRL have all made GRPO / RLOO / ReMax first-class trainers.</p>
+<h3 id="82-the-victory-of-rule-based-reward-on-agents">8.2　The victory of rule-based reward on agents</h3>
+<p>What WebRL / ReSearch / SWE-RL / RAGEN have in common: <strong>outcome reward + format reward, all rule-based</strong>, avoiding the main failure mode of reward hacking on learned RMs.</p>
+<p><strong>Why has rule-based suddenly become viable</strong>:</p>
+<ul><li>Agent tasks are more "programmatically verifiable" than alignment tasks — test pass / answer match / task complete</li><li>DeepSeek-R1 proved rule-based reward is stable and scalable for LLM RL</li><li>Learned RMs are more easily hacked in multi-turn settings (the trajectory space is large)</li></ul>
+<h3 id="83-the-infra-challenges-of-long-horizon-training">8.3　The infra challenges of long-horizon training</h3>
+<p>Agent RL rollout is slow because every trajectory includes tool I/O latency. Infra trends:</p>
+<ul><li><strong>vLLM / SGL async rollout</strong>: decouple generation from training; pool rollouts</li><li><strong>Sandboxed execution</strong>: tool execution inside isolated containers, parallelizable</li><li><strong>Trajectory queue</strong>: rollout workers / training workers are async; trajectories flow through a message queue</li><li><strong>Off-policy correction</strong>: there's lag between rollout and update; use IS clip or V-trace to correct</li></ul>
+<p>Representative implementations: <strong>verl</strong> (ByteDance Seed open source), <strong>AReaL</strong> (Ant Group + Tsinghua, async RL system arXiv 2505.24298), <strong>OpenRLHF v0.5+</strong>.</p>
+<h3 id="84-tool-rl-on-tau-bench--swe-bench--osworld">8.4　Tool-RL on TAU-bench / SWE-bench / OSWorld</h3>
+<p>Industry-benchmark SOTA trends (public numbers in 2025-2026):</p>
+<table><thead><tr><th>Benchmark</th><th>Task</th><th>2024 SOTA</th><th>2025-2026 SOTA</th><th>Key approach</th></tr></thead><tbody><tr><td><strong>TAU-bench (retail)</strong></td><td>customer service multi-turn</td><td>~50% (GPT-4)</td><td>70-80% (Claude 4.x, GPT-5)</td><td>RLHF + agent SFT</td></tr><tr><td><strong>SWE-bench Verified</strong></td><td>GitHub PR fix</td><td>~25% (Claude 3.5)</td><td><strong>70-80%+</strong> (Claude 4.x, o3)</td><td>Agent scaffold + RL</td></tr><tr><td><strong>OSWorld</strong></td><td>OS GUI task</td><td>~12% (GPT-4V)</td><td>~50-60% (Claude 4.x, Operator)</td><td>Computer-Use RL</td></tr><tr><td><strong>WebArena</strong></td><td>web nav</td><td>14.4% (GPT-4)</td><td>43% (WebRL Llama-8B)</td><td>curriculum + RL</td></tr><tr><td><strong>GAIA</strong></td><td>general assistant</td><td>15% (GPT-4)</td><td>60-70% (Claude 4.x, o3)</td><td>Agent + tool RL</td></tr></tbody></table>
+<p>Note: benchmark contamination risk is high; <strong>as of 2026Q1, OpenAI has retired SWE-bench Verified</strong> (reasons: contamination + test flaws); more credible benchmarks now are SWE-Lancer, SWE-bench Multilingual, private holdouts.</p>
+<h3 id="85-anthropic-computer-use-claude-35--45--opus-4x">8.5　Anthropic Computer-Use (Claude 3.5 → 4.5 → Opus 4.x)</h3>
+<p><strong>Public knowledge</strong>:</p>
+<ul><li>2024-10-22 Claude 3.5 Sonnet (new) first shipped Computer-Use beta</li><li>2025: Claude 3.7 / 4.0 / 4.5 continued iterating with speed + accuracy improvements</li><li>Training involves many human demonstrations + AI-generated rollouts + RLHF + safety red-teaming</li><li>Action space = screenshots + mouse + keyboard + filesystem access</li><li>Public system cards mention Constitutional AI + Computer-Use specific safety filter</li></ul>
+<p><strong>Algorithm-level inferred information</strong> (academic speculation, not officially confirmed):</p>
+<ul><li>Training likely involves RLHF on screenshot trajectories</li><li>Reward likely includes a task-completion grader (LLM-as-judge) + safety classifier</li><li>Possibly GRPO / RLOO style critic-free RL (multiple public papers mention critic-free)</li></ul>
+<h3 id="86-2025-2026-papers-panorama">8.6　2025-2026 papers panorama</h3>
+<table><thead><tr><th>Paper</th><th>Direction</th><th>Core contribution</th></tr></thead><tbody><tr><td><strong>KodCode</strong> (Xu et al. 2025)</td><td>code agent RL</td><td>High-quality code RL dataset + GRPO baseline</td></tr><tr><td><strong>DAPO</strong> (Yu et al. 2025 ByteDance)</td><td>GRPO improvement</td><td>clip higher / dynamic sampling / token loss / overlong shaping</td></tr><tr><td><strong>VAPO</strong> (ByteDance 2025)</td><td>GRPO + lightweight critic</td><td>Alleviates trace-level credit dilution</td></tr><tr><td><strong>CISPO</strong> (MiniMax 2025)</td><td>Importance sampling improvement</td><td>Solves the instability of negative-advantage large ratios</td></tr><tr><td><strong>R-Zero</strong></td><td>Self-Play RL</td><td>Challenger-Solver self-play, learnability reward</td></tr><tr><td><strong>Absolute Zero</strong></td><td>Self-Play RL</td><td>Completely without external tasks; code executor as verifier</td></tr><tr><td><strong>Search-R1</strong></td><td>Search agent RL</td><td>Search as first-class action + rule reward</td></tr><tr><td><strong>Light-R1</strong> / <strong>Sky-T1</strong></td><td>Reasoning + tool RL</td><td>Open-source reproduction of R1 + agent extension</td></tr><tr><td><strong>OpenAgent</strong> / <strong>Llama-Agent</strong></td><td>Data + framework</td><td>Large-scale agent SFT + RL pipeline</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">2026Q1-Q2 trend</div><p>agent RL on real environments (OS, browser, IDE) is becoming the open-source mainline. <strong>simulator → real environment → deployment RL</strong> sim-to-real pipelines are the next frontier. Anthropic / OpenAI / DeepSeek / Meta are all working on this but the details are not public.</p></div>
+<h2 id="9-failure-modes--engineering-experience">§9 Failure modes &amp; engineering experience</h2>
+<h3 id="91-the-seven-deadly-sins-of-agentic-rl">9.1　The "seven deadly sins" of Agentic RL</h3>
+<table><thead><tr><th>Failure mode</th><th>Symptom</th><th>Root cause</th><th>Mitigation</th></tr></thead><tbody><tr><td><strong>Token mask misses observation</strong></td><td>Reward stalls / agent learns weird behavior</td><td>Gradient flows to environment tokens</td><td>Strict per-sample action_mask</td></tr><tr><td><strong>Reward hacking on grader</strong></td><td>Benchmark rises but human eval drops</td><td>The grader has loopholes</td><td>Grader ensemble + holdout test</td></tr><tr><td><strong>Length-explosion</strong></td><td>Agent drags to context limit</td><td>Reward positively correlated with length</td><td>Length penalty + max_steps cap</td></tr><tr><td><strong>Tool-call hallucination</strong></td><td>Agent calls non-existent tools</td><td>Insufficient SFT on base model</td><td>Agent-FLAN-style negative SFT</td></tr><tr><td><strong>Loop / repetition</strong></td><td>Agent repeats the same tool</td><td>Not enough exploration</td><td>Tool-call diversity bonus + ε-tool</td></tr><tr><td><strong>Group $\sigma = 0$ collapse</strong></td><td>Advantage = NaN / 0</td><td>All success or all fail</td><td>Data filter + std clamp</td></tr><tr><td><strong>KL collapse</strong></td><td>Policy entropy → 0</td><td>β too small</td><td>Per-step KL + entropy bonus</td></tr></tbody></table>
+<h3 id="92-online-vs-offline-rl-trade-offs">9.2　Online vs offline RL trade-offs</h3>
+<table><thead><tr><th>Dimension</th><th>Online RL (PPO/GRPO)</th><th>Offline RL (DPO/RFT)</th></tr></thead><tbody><tr><td>Data efficiency</td><td>Low (new rollouts each round)</td><td>High (one dataset, multiple epochs)</td></tr><tr><td>Training speed</td><td>Slow (rollout includes tool I/O)</td><td>Fast (pure SFT-style)</td></tr><tr><td>Performance ceiling</td><td>High (continually learns new distributions)</td><td>Medium (limited by dataset distribution)</td></tr><tr><td>Implementation complexity</td><td>High (trajectory queue + verifier server)</td><td>Low</td></tr><tr><td>Suited for</td><td>Long-term investment + real environment</td><td>Resource-constrained + existing demo data</td></tr></tbody></table>
+<p><strong>Practical advice</strong>: start with offline RL (agent SFT + DPO) to establish a baseline; once compute is available, migrate to online RL (PPO/GRPO + verifier).</p>
+<h3 id="93-rollout-optimization-tips">9.3　Rollout optimization tips</h3>
+<ul><li><strong>vLLM PagedAttention</strong> is 5-10× faster than HF generate; a must-install for agent rollout</li><li><strong>Tool sandbox</strong> with Docker + gVisor; 64-128 trajectories per machine in parallel is fine</li><li><strong>Async rollout pipeline</strong>: rollout worker doesn't block the trainer worker</li><li><strong>Trajectory replay buffer</strong>: mix FIFO + priority; weight replay by reward</li><li><strong>Batch size = group_size × prompt_per_batch</strong>: typical $G = 16$, prompt = 32 → 512 trajectories / batch</li></ul>
+<h3 id="94-debug-checklist">9.4　Debug checklist</h3>
+<p>When agent RL crashes, troubleshoot in order:</p>
+<ol><li><strong>Look at the reward</strong>: do most trajectories have reward = 0? Is the rule wrong?</li><li><strong>Look at the length distribution</strong>: are most trajectories truncated at max_steps? Means the agent can't finish</li><li><strong>Look at the action_mask</strong>: does it correctly cover prompt + observation + padding?</li><li><strong>Look at KL</strong>: is approx_kl blowing up? Increase β; is entropy collapsing? Increase entropy_bonus</li><li><strong>Look at group_std</strong>: are many groups all 0 / all 1? Need a data filter</li><li><strong>Look at the tool-call distribution</strong>: over-reliance on a single tool? Add diversity bonus</li><li><strong>Look at sample efficiency</strong>: is the reward variance over multiple rollouts per prompt reasonable? Too large → base is too weak</li></ol>
+<h2 id="10-25-frequently-asked-interview-questions-l1-must-know--l2-advanced--l3-top-lab">§10 25 frequently-asked interview questions (L1 must-know / L2 advanced / L3 top-lab)</h2>
+<p>Sorted into 3 tiers by difficulty: L1 = asked at any agent / LLM RL role; L2 = asked by research / alignment teams; L3 = hardcore questions for top labs. Each links to answer points + footguns.</p>
+<h3 id="l1-must-know-10-questions">L1 must-know (10 questions)</h3>
+<details>
+
+<summary>Q1. What is the fundamental difference between Agentic RL and RLHF?</summary>
+<ul><li><strong>RLHF</strong>: single-turn alignment; state = prompt, action = entire response, reward from RM scoring preference, horizon = 1</li><li><strong>Agentic RL</strong>: multi-turn decision-making; state = (obs, history), action = (thought, tool_call), reward from the external environment (test pass / task success), horizon = 10-200</li><li>Algorithmically both use PPO/GRPO, but Agentic must add <strong>action_mask</strong> (loss only on agent tokens)</li><li>Reward form: RLHF preference score (subjective); Agentic objective outcome (objective)</li></ul>
+<p>Treating them as the same thing; or not knowing the necessity of action_mask.</p>
+</details>
+<details>
+
+<summary>Q2. Why must Agentic RL use action_mask?</summary>
+<ul><li>Agent trajectories contain two kinds of tokens: those generated by the agent itself + observations returned by tools</li><li>Without the mask, PPO/GRPO's ratio and loss flow into observation tokens</li><li>Consequences: (a) the policy tries to "teach the tool how to respond" — meaningless and reward-hackable; (b) gradients diluted by low-information observations; (c) the KL penalty mistakenly estimates its own distribution from environment text</li><li>Implementation: <code>action_mask: [B, L]</code>, 1 = agent token, 0 = prompt/obs/pad; loss normalizes by <code>mask.sum()</code></li></ul>
+<p>Saying "only on the response" isn't specific enough (agent tasks have no clear "response" boundary); or forgetting that the mask must cover all observation tokens.</p>
+</details>
+<details>
+
+<summary>Q3. Why is GRPO better than PPO on agents?</summary>
+<ul><li><strong>Saves the critic</strong>: agent value can hardly be learned under long horizon + sparse reward</li><li><strong>Trace-level reward directly matches trace-level credit</strong>: no per-token V needed, avoids the pain that value can't be learned</li><li><strong>Intra-group normalization</strong> does variance reduction automatically, more stable than raw advantage</li><li><strong>Saves one model's VRAM</strong>: can expand batch / group size</li><li>Limitations: long trajectories have advantage too coarse (shared across the whole trace), credit dilution still exists</li></ul>
+<p>Saying only "saves the critic" is incomplete; or not knowing the alignment between trace-level reward and trace-level credit.</p>
+</details>
+<details>
+
+<summary>Q4. Difference between outcome reward and process reward? Which is common on agents?</summary>
+<ul><li><strong>Outcome reward</strong>: 1 reward at trajectory terminal (test pass / answer match); very sparse; hard credit assignment; but low reward-hacking risk</li><li><strong>Process reward</strong>: scored per step; dense; easy credit assignment; but high reward-hacking risk (PRM can be hacked)</li><li><strong>Mainstream on agents: outcome reward</strong> — agent task ground truth is clear (test/grader); R1, SWE-RL, ReSearch, RAGEN all use outcome-only</li><li>Process reward is mainly for reasoning-heavy tasks (PRM on math steps); rare on agents</li></ul>
+<p>Thinking process reward is always good (in practice outcome is more stable on agents); or not knowing the reward-hacking risk difference.</p>
+</details>
+<details>
+
+<summary>Q5. Where is verifier-based reward better than learned RM?</summary>
+<ul><li><strong>Close to ground truth</strong>: avoids the main failure mode of learned RMs drifting outside the training distribution</li><li><strong>Repeatable</strong>: the same trajectory gets the same reward (learned RM outputs are noisy)</li><li><strong>Cheap memory</strong>: executing a verifier is hundreds of times cheaper than one LLM forward pass</li><li><strong>Interpretable</strong>: rewards come from objective rules; failures are traceable</li><li><strong>Limitation</strong>: only for verifiable tasks (math/code/grader-able web)</li></ul>
+<p>Saying verifier-based "has no hacking at all" — wrong, it can still be hacked via regex loopholes / format tricks / test leakage, but it's easier to plug than RM hacking.</p>
+</details>
+<details>
+
+<summary>Q6. Can the R1 / R1-Zero method be directly used on agents?</summary>
+<ul><li>The algorithm can be ported directly: GRPO + rule-based reward + per-step KL + token mask</li><li><p>But needs additions:</p>
+<ul><li><strong>action_mask</strong>: agents have observation tokens; R1 math tasks don't</li><li><strong>Trajectory rollout infrastructure</strong>: with tool I/O, more complex than pure generation</li><li><strong>Format reward adjustment</strong>: agent task format is JSON tool calls, not just <code>&lt;think&gt;</code></li></ul></li><li>Representative works ReSearch / RAGEN / ToolRL / SWE-RL are all R1 algorithm + the above adaptations</li></ul>
+<p>Saying "R1 cannot be directly ported" — it can be, with wrappers; or not knowing about ReSearch / RAGEN / ToolRL.</p>
+</details>
+<details>
+
+<summary>Q7. Why is SFT warm-start needed in agent RL?</summary>
+<ul><li>The base model doesn't know how to emit legal tool-call schemas (JSON format / argument names)</li><li>Direct from-scratch RL almost never explores into legal tool calls → reward all 0 → can't learn</li><li>SFT warm-start (AgentTuning / Agent-FLAN data) lets the model "know what the action space looks like"</li><li>Then RL optimizes within the legal-action subspace</li></ul>
+<p>Saying only "RL is slow, SFT speeds it up" isn't enough; the core issue is action-space exploration; SFT solves "knowing the action space".</p>
+</details>
+<details>
+
+<summary>Q8. What role does length penalty play in agent RL?</summary>
+<ul><li>Agents easily learn the shortcut of "drag the trajectory to get the answer correct" (reward hacking)</li><li>Length penalty deducts for over-budget trajectories: $r = r_\text{outcome} - \lambda \max(0, T - T_\text{target})$</li><li>DAPO's "overlong shaping" is an industrial implementation (exponential decay)</li><li>Limitation: too large a penalty discourages exploration; cap is needed</li></ul>
+<p>Not knowing that length-explosion is a common agent RL failure mode; or unable to write the length-penalty formula.</p>
+</details>
+<details>
+
+<summary>Q9. How to handle Group std = 0?</summary>
+<ul><li>When all G rollouts in a group have the same reward (all success / all fail) → $\sigma = 0$</li><li>With $\epsilon$ added, advantage = 0 and the policy-gradient term zeroes out, <strong>but the KL term still exists</strong> (the policy is still pulled back to reference)</li><li>Without $\epsilon$ it's NaN</li><li><p>Practice:</p>
+<ul><li><strong>Skip the prompt</strong> (data filter): common approach, avoids signal-less updates</li><li><strong>Clamp σ at a lower bound</strong> (e.g. 0.1): keeps a small signal</li><li><strong>DAPO dynamic sampling</strong>: drop all-correct / all-wrong groups</li></ul></li></ul>
+<p>Saying it always NaNs (depends on implementation); or not knowing that such prompts indicate the task is too easy/hard.</p>
+</details>
+<details>
+
+<summary>Q10. How is SWE-RL trained?</summary>
+<ul><li>Data: GitHub PR commit history, constructing ~76M context-issue-patch triples (Meta public)</li><li>Reward: rule-based = patch similarity (oracle ↔ pred) + binary test pass</li><li>Algorithm: pure GRPO + format reward</li><li>Model: Llama-3.3-70B</li><li>Result: 41% on SWE-bench Verified (no scaffold), proving rule-based RL lets the model learn emergent reasoning: file retrieval / root cause / test self-validation</li></ul>
+<p>Not knowing SWE-RL's reward design; or thinking it's SFT rather than RL.</p>
+</details>
+<h3 id="l2-advanced-10-questions">L2 advanced (10 questions)</h3>
+<details>
+
+<summary>Q11. Derive the form of PPO loss on agents with action_mask added.</summary>
+<ol><li>Standard PPO-Clip: $L = \mathbb{E}[\min(\rho_t A_t, \text{clip}(\rho_t, 1-\epsilon, 1+\epsilon) A_t)]$</li><li>Agents have $m_t \in \{0, 1\}$, 1 = agent token, 0 = obs/prompt</li><li>ratio computation: $\rho_t = \exp((\log\pi_\theta - \log\pi_\text{old}) \cdot m_t)$; at observation positions $\rho = e^0 = 1$, doesn't affect surr1/surr2</li><li>Loss normalization: $L^\text{agent} = -\sum_t m_t \cdot \min(\rho_t A_t, \text{clip}) / \sum_t m_t$</li><li>KL term also only on agent tokens: $\text{KL}_\text{total} = \sum_t m_t \cdot \text{KL}_t / \sum_t m_t$</li></ol>
+<p>Writing the formula without explaining the mask's role; or forgetting that normalization uses mask.sum() rather than batch size.</p>
+</details>
+<details>
+
+<summary>Q12. Key contributions of RAGEN / StarPO?</summary>
+<ul><li><strong>StAble multi-tuRn Policy Optimization</strong>: critic-free GRPO variant; whole trajectory shares the advantage</li><li><strong>Strict token mask</strong>: observation positions mask = 0; loss only on agent tokens</li><li><strong>Rollout diversity = collapse firebreak</strong>: group_size $G = 16$ is significantly more stable than $G = 4$</li><li><strong>Trajectory length signal</strong>: when failed trajectories are long, add a length penalty</li><li>Applicable: multi-turn agent tasks (distinguishing from single-turn alignment)</li></ul>
+<p>Saying only "GRPO variant" is not enough; mention the stability contribution in multi-turn.</p>
+</details>
+<details>
+
+<summary>Q13. How does WebRL's self-evolving curriculum work?</summary>
+<ul><li>Start with a small task set $\mathcal{T}_0$, train the policy to roll out trajectories</li><li>Failed trajectories enter the buffer and join the next round's curriculum $\mathcal{T}_{k+1}$</li><li>Retrospective rollout: failed trajectories rewritten into "correct trajectories" by an LLM (hindsight relabel) and re-SFT</li><li>ORM (Outcome Reward Model) trained from task success → gives RL reward online</li><li>Result: Llama-3.1-8B 43% on WebArena (vs GPT-4 14.4%)</li></ul>
+<p>Not knowing the loop structure of self-evolving; or treating WebRL as pure SFT.</p>
+</details>
+<details>
+
+<summary>Q14. Why is self-rewarding LM more risky on agents than on alignment?</summary>
+<ul><li>Alignment tasks have an "objective preference distribution"; LLM judges correlate reasonably with human eval</li><li>Agent tasks have <strong>objective ground truth</strong> (test pass / task success) — the judge itself can be wrong (mistaking correct for wrong)</li><li>Iterative drift: each round reinforces "self-evaluated as correct" trajectories → drifts from ground truth</li><li>Exploration degeneration: self-eval prefers known patterns → suppresses new-tool exploration</li><li>Mainstream practice: agent RL prefers rule-based ground truth; self-rewarding only as open-ended task fallback</li></ul>
+<p>Saying self-rewarding is always dangerous (it can still be used on alignment); or not knowing that objective ground truth is the key on agents.</p>
+</details>
+<details>
+
+<summary>Q15. Derive the effect of outcome-reward sparsity on critic learning.</summary>
+<ul><li>Value $V_\phi(s_t) = \mathbb{E}_\pi[\sum_{l \ge 0} \gamma^l r_{t+l} \mid s_t]$</li><li>Sparse terminal reward → $V(s_t) \approx \gamma^{T-t} \cdot P(\text{success} \mid s_t)$</li><li>The value of an intermediate state $s_t$ depends almost entirely on "will it succeed in the future" — implicit long-horizon prediction</li><li>Value MSE loss $(V_\phi - V_\text{target})^2$ has target near 0 on most steps, gradient is tiny</li><li>Equivalent to "almost no supervision" — value can't be learned, an inevitable consequence of sparse reward</li><li>This is also the theoretical basis for GRPO saving the critic: the critic couldn't be learned anyway; saving it avoids noise</li></ul>
+<p>Saying only "the critic can't be learned"; unable to derive $V \approx \gamma^{T-t} P(\text{success})$; or not knowing this is GRPO's design motivation.</p>
+</details>
+<details>
+
+<summary>Q16. What is nontrivial about ToolRL's reward design?</summary>
+<ul><li>composite: $r = r_\text{correct} + \alpha r_\text{format} + \gamma r_\text{tool-eff}$</li><li>$r_\text{tool-eff}$ penalizes redundant tool calls (repeated calls of the same tool / calls to invalid tools)</li><li>A typical shaping reward: alleviates two failure modes — length-explosion + tool-overuse</li><li>Weight balance: outcome ≫ format &gt; tool-eff, preventing shaping from overriding outcome</li><li>7B approaches GPT-4 on BFCL benchmark</li></ul>
+<p>Saying only "add a tool-call reward"; not knowing the shaping-weight balance is the key.</p>
+</details>
+<details>
+
+<summary>Q17. How is hindsight relabeling used in agent RL?</summary>
+<ul><li>Failed trajectories aren't discarded; they're rewritten as successful trajectories for an "alternative task"</li><li>Example: the agent wanted to buy item A but ended up at B → rewrite as "find item B"; reward = 1</li><li>Implementation: <code>alt_task = describe(trajectory.final_state)</code>, relabel reward = 1</li><li>Applicable: open web environments, navigation; not applicable: math/code (wrong answers can't become correct answers)</li><li>Originates from HER (Andrychowicz 2017 NeurIPS) for robot manipulation</li></ul>
+<p>Not knowing the HER origin; or not knowing the applicability boundary (open env vs answer task).</p>
+</details>
+<details>
+
+<summary>Q18. Difference between per-step KL penalty and trajectory KL penalty?</summary>
+<ul><li><strong>Per-step KL</strong>: compute KL($\pi_\theta(\cdot \mid s_t) \| \pi_\text{ref}(\cdot \mid s_t)$) on every agent token; added to reward or loss</li><li><strong>Trajectory KL</strong>: one KL for the entire trajectory; added to loss</li><li>Per-step is finer-grained and controls per-step drift; trajectory is simpler but lacks token-level resolution</li><li>GRPO uses per-step + K3 estimator (numerically stable)</li><li>Per-step is the mainstream on agent RL (trajectories are long; a single KL is numerically unstable)</li></ul>
+<p>Confusing the two; or not knowing the K3 estimator solves numerical issues (K3: $\text{KL} \approx \exp(\Delta) - \Delta - 1$ non-negative).</p>
+</details>
+<details>
+
+<summary>Q19. How to do subgoal decomposition + process reward? When?</summary>
+<ul><li>Slice long trajectories into subgoals: 100-step trajectory → 5 subgoals × 20 steps</li><li>Each subgoal terminal gets a process reward (whether the subgoal is completed)</li><li><p>Implementation paths:</p>
+<ul><li>hand-crafted: humans write the subgoal criterion</li><li>LLM planner: a planner LLM splits subgoals, a verifier judges</li><li>PRM-style: a PRM scores each step</li></ul></li><li>Applicable: long-horizon agents + tasks where subgoals can be hand-crafted</li><li>Risk: wrong subgoal boundaries → the agent learns "deliberately trigger subgoal reward without actually completing the task"</li></ul>
+<p>Saying process reward is always good — wrong; mention risks and limitations.</p>
+</details>
+<details>
+
+<summary>Q20. Trade-off between online and offline RL on agents?</summary>
+<ul><li><strong>Online RL (PPO/GRPO)</strong>: low data efficiency (new rollouts each round), but continually learns new distributions</li><li><strong>Offline RL (DPO/RFT)</strong>: high data efficiency, but limited by dataset distribution</li><li>Agent rollout is slow (includes tool I/O); online RL training throughput is low</li><li>Practice: start offline (SFT + DPO), then online refinement</li><li>Representatives: AgentQ is offline (MCTS + DPO); WebRL is online; SWE-RL is online</li></ul>
+<p>Saying only "online is slow"; not knowing that agent rollout includes tool I/O is the main bottleneck.</p>
+</details>
+<h3 id="l3-top-lab-5-questions">L3 top-lab (5 questions)</h3>
+<details>
+
+<summary>Q21. Derive the GRPO advantage formula + the full loss with token mask, and explain the two equivalent ways to place the agent token mask.</summary>
+<ol><li><p><strong>Group-relative advantage</strong>:</p>
+<ul><li>rollout group $\{r_1, ..., r_G\}$ per prompt</li><li>$\mu = \frac{1}{G}\sum r_i$, $\sigma = \sqrt{\frac{1}{G}\sum (r_i - \mu)^2}$</li><li>$\hat{A}_i = (r_i - \mu) / (\sigma + \epsilon)$</li></ul></li><li><strong>Trajectory-level broadcast</strong>: $\hat{A}_{i,t} = \hat{A}_i$ (all agent tokens share)</li><li><p><strong>Token-masked ratio + loss</strong>:</p>
+<ul><li>Naively $\rho_{i,t} = \exp(\log\pi_\theta(a_{i,t} \mid s_{i,t}) - \log\pi_\text{old}(a_{i,t} \mid s_{i,t}))$ — there's also a value at observation positions (the model assigns a probability to the env text)</li><li><p><strong>Key</strong>: as long as the final objective / gradient only covers agent tokens, whether the mask sits inside the ratio or outside the loss is <strong>mathematically equivalent</strong>:</p>
+<ul><li><strong>Inside-ratio</strong>: $\rho_{i,t} = \exp((\log\pi_\theta - \log\pi_\text{old}) \cdot m_{i,t})$ → at obs positions $\rho=1$, the $\min(\cdot)$ term inside clip = $A_{i,t}$ but is zeroed by $m_{i,t}=0$ (in the outer sum of the loss)</li><li><strong>Outside-ratio (mask loss only)</strong>: keep the $\rho_{i,t}$ value at obs positions; the final loss = $-\sum_t m_t \cdot \min(...)$, with $m_t = 0$ at obs positions zeroing the contribution</li></ul></li><li><strong>Both have gradients only on agent tokens</strong> (mask is multiplicative; gradient w.r.t. obs positions is 0)</li><li>But in practice <strong>Inside-ratio is safer</strong>: avoids obs-position $\rho$ values participating in clip-trigger judgments or being mis-read by logging / monitoring (e.g. mean ratio) as anomalies. Production implementations (verl / OpenRLHF) mostly use inside-ratio</li></ul></li><li><strong>Full loss</strong>:  $$L = -\frac{1}{G} \sum_i \frac{1}{\sum_t m_{i,t}} \sum_t m_{i,t} \cdot \Big(\min(\rho_{i,t} \hat{A}_i, \text{clip}(\rho_{i,t}, 1-\epsilon, 1+\epsilon) \hat{A}_i) - \beta \cdot \text{KL}_{i,t}\Big)$$</li></ol>
+<p>Unable to derive step 4 (mask placement affecting ratio values); or memorizing the formula but unable to explain the design philosophy of the mask.</p>
+</details>
+<details>
+
+<summary>Q22. Fundamental reason GRPO is more sample efficient than PPO on long-horizon agents?</summary>
+<p><strong>Natural alignment of trace-level reward with trace-level credit</strong> (not just "saves the critic"):</p>
+<ol><li><strong>Critic can't learn under sparse terminal reward</strong>: $V(s_t) \approx \gamma^{T-t} P(\text{success})$, gradient is tiny; PPO's GAE-advantage is dragged by a noisy critic</li><li><strong>GRPO uses trace-level reward as the advantage directly</strong>: equivalent to sequence-level MC return, an unbiased estimator under sparse reward</li><li><strong>Group baseline is more stable than critic baseline</strong>: G rollouts per prompt → group mean automatically reflects task difficulty; variance reduction is more precise</li><li><strong>PPO clipping + group size jointly limit update magnitude</strong>: avoids a single outlier reward sending the policy flying</li><li><strong>Saving value-model VRAM</strong> is a secondary benefit, not the primary reason</li><li><strong>Rule-based outcome reward is hard to RM-hack</strong>: more stable than learned RM on agents</li></ol>
+<p>Saying only "saves the critic" — insufficient; the root cause is that the critic can't learn under sparse reward.</p>
+</details>
+<details>
+
+<summary>Q23. How to design an RL framework that supports both reasoning RL (R1) and Agentic RL (ReSearch / WebRL)?</summary>
+<p>Abstract five layers:</p>
+<ol><li><p><strong>Data layer</strong>:</p>
+<ul><li>reasoning: (prompt, ground_truth) tuples</li><li>agent: (task, env_spec, reward_fn) triples</li><li>Unified as <code>Task(prompt, verifier)</code>; verifier is a callable</li></ul></li><li><p><strong>Rollout layer</strong>:</p>
+<ul><li>reasoning: generate directly</li><li>agent: multi-step rollout with tool I/O (vLLM + sandboxed tool executor)</li><li>Unified as <code>Trajectory(tokens, action_mask, reward)</code> interface</li></ul></li><li><p><strong>Reward layer</strong>:</p>
+<ul><li>reasoning: rule-based (answer match / test pass)</li><li>agent: composite (outcome + format + tool_eff + length penalty)</li><li>Unified as <code>Reward(traj) -&gt; float</code></li></ul></li><li><p><strong>Loss layer</strong>:</p>
+<ul><li>PPO with action_mask</li><li>GRPO with group_id + action_mask</li><li>DPO with chosen_mask / rejected_mask</li><li>Via <code>loss_fn(batch, model, ref_model) -&gt; loss</code> interface</li></ul></li><li><p><strong>Infra layer</strong>:</p>
+<ul><li>vLLM rollout pool</li><li>Sandboxed tool executor (Docker + gVisor)</li><li>Trajectory replay buffer (FIFO + priority)</li><li>Async trainer / rollout</li></ul></li></ol>
+<p>Representative implementations: <strong>verl</strong> (ByteDance) already supports reasoning + agent; <strong>OpenRLHF</strong> partially supports.</p>
+<p>Listing only PPO without considering agent rollout infra; or not knowing the current support scope of verl / OpenRLHF.</p>
+</details>
+<details>
+
+<summary>Q24. Anthropic Computer-Use training method — clear boundary between known vs speculated</summary>
+<p><strong>Officially public (system card / blog)</strong>:</p>
+<ul><li>Action space = screenshot (vision observation) + mouse + keyboard events</li><li>Capability iterates: Claude 3.5 (new) 2024-10-22 → 3.7 / 4.0 / 4.5 / Opus 4.x</li><li>Safety: constitutional-AI-style guardrails + red-teaming + prompt-injection defense</li><li>Training involves human demonstrations + synthetic data (general statement in system card)</li></ul>
+<p><strong>Not public / fully confidential</strong>:</p>
+<ul><li>Specific RL algorithm (PPO? GRPO? Critic-free? Never said)</li><li>Reward signal form (task-completion grader? pair-wise preference? safety classifier weight?)</li><li>Training data scale / source / demonstration vs synthetic ratio</li><li>Whether there's a dedicated screenshot RM / VLM-as-judge</li></ul>
+<p><strong>Reasonable community speculation</strong> (<strong>speculation only, do not state as fact in interviews</strong>):</p>
+<ul><li>May be RLHF on screenshot trajectories (pair-wise preference + task-success outcome mixture)</li><li>Possibly critic-free (echoing open-source trends like DeepSeek-R1 GRPO)</li><li>May use VLM-as-judge for screenshot understanding</li><li>Curriculum likely simple → complex</li></ul>
+<p><strong>In interviews, strictly distinguish "public capability" from "speculated internals"</strong>: saying "Anthropic uses GRPO + screenshot RM" is wrong (no evidence); saying "I speculate it may use critic-free RL because Anthropic tends toward GRPO/RLHF-style in other scenarios" is the honest framing. This ability to distinguish is a plus in advanced interviews.</p>
+</details>
+<details>
+
+<summary>Q25. If asked to design a next-gen Agentic RL algorithm, how would you improve it?</summary>
+<p>Possible directions (answer 3-4; each with a trade-off discussion):</p>
+<ol><li><strong>Lightweight critic for long-horizon</strong>: not a full-size value model, but a small step-level critic to alleviate trace-level credit dilution. VAPO has tried this. Trade-off: extra VRAM vs alleviating long-trajectory signal dilution</li><li><strong>Hierarchical reward</strong>: subgoal-level reward + outcome reward combination. Trade-off: requires subgoal definition (humans or planner LLM), risk of wrong boundaries</li><li><strong>Off-policy correction with V-trace / Retrace</strong>: rollout is slow; let stale samples be used. Trade-off: IS bias vs sample efficiency</li><li><strong>Trajectory hindsight relabeling + RL</strong>: failed trajectories auto-rewritten as successful trajectories for alternative tasks, expanding data. Trade-off: applies to open-ended tasks, not closed-form answers</li><li><strong>Multi-task reward normalization</strong>: independent normalization per task domain (math/code/web), avoiding reward-scale imbalance</li><li><strong>Reward model uncertainty</strong>: multi-RM ensembles, min/mean-std to prevent over-optimization. Trade-off: compute</li><li><strong>Async distributed rollout</strong>: rollout and train fully async, trajectory queue + worker pool. Already industry default (verl, OpenRLHF v0.5+)</li><li><strong>Self-curriculum + adaptive difficulty</strong>: WebRL idea + R-Zero learnability reward combined; automatically find tasks where model success rate is ~50%</li><li><strong>Multi-objective Pareto optimization</strong>: no longer a single scalar reward; jointly optimize task success + safety + efficiency, output Pareto front</li></ol>
+<p>Just listing "add attention / add more models" without trade-offs; or not knowing recent work like DAPO / VAPO / CISPO; or ignoring the importance of the infra layer (async rollout).</p>
+</details>
+<h2 id="a-appendix-reference-list">§A Appendix: reference list</h2>
+<p>Grouped by direction; papers verified via web search + arXiv for authors / year / venue. A few 2025-2026 papers without a fixed conference are listed by arXiv.</p>
+<p><strong>Agent SFT / fundamentals</strong></p>
+<ul><li>Zeng et al. 2023 arXiv 2310.12823 <em>AgentTuning: Enabling Generalized Agent Abilities for LLMs</em> (THU)</li><li>Chen et al. 2024 ACL Findings arXiv 2403.12881 <em>Agent-FLAN: Designing Data and Methods of Effective Agent Tuning for LLMs</em></li><li>Trung et al. 2024 ACL arXiv 2401.08967 <em>ReFT: Reasoning with Reinforced Fine-Tuning</em></li></ul>
+<p><strong>RL for agent / reasoning (fundamental algorithms)</strong></p>
+<ul><li>Schulman et al. 2017 arXiv 1707.06347 <em>Proximal Policy Optimization Algorithms</em></li><li>Schulman et al. 2016 ICLR <em>High-Dimensional Continuous Control Using GAE</em></li><li>Shao et al. 2024 arXiv 2402.03300 <em>DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models</em> (GRPO proposed)</li><li>DeepSeek-AI 2025 arXiv 2501.12948 <em>DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning</em></li><li>Yu et al. 2025 ByteDance arXiv 2503.14476 <em>DAPO: An Open-Source LLM Reinforcement Learning System at Scale</em></li></ul>
+<p><strong>Tool-augmented RL</strong></p>
+<ul><li>Qian et al. 2025 arXiv 2504.13958 <em>ToolRL: Reward is All Tool Learning Needs</em> (arXiv preprint; no formal venue as of 2026-05)</li><li>Chen et al. 2025 arXiv 2503.19470 <em>ReSearch: Learning to Reason with Search for LLMs via Reinforcement Learning</em> (accepted to <strong>NeurIPS 2025</strong>)</li><li>Wang et al. 2025 arXiv 2504.20073 <em>Understanding Self-Evolution in LLM Agents via Multi-Turn Reinforcement Learning</em> (RAGEN; StarPO = <strong>S</strong>tate-<strong>T</strong>hinking-<strong>A</strong>ctions-<strong>R</strong>eward Policy Optimization)</li></ul>
+<p><strong>Web / GUI agent RL</strong></p>
+<ul><li>Qi et al. 2024 ICLR-25 arXiv 2411.02337 <em>WebRL: Training LLM Web Agents via Self-Evolving Online Curriculum Reinforcement Learning</em></li><li>Putta et al. 2024 arXiv 2408.07199 <em>Agent Q: Advanced Reasoning and Learning for Autonomous AI Agents</em></li><li>Furuta et al. 2024 ICLR arXiv 2305.11854 <em>Multimodal Web Navigation with Instruction-Finetuned Foundation Models</em> (WebGUM)</li></ul>
+<p><strong>Code agent RL</strong></p>
+<ul><li>Le et al. 2022 NeurIPS arXiv 2207.01780 <em>CodeRL: Mastering Code Generation through Pretrained Models and Deep Reinforcement Learning</em></li><li>Shojaee et al. 2023 arXiv 2301.13816 <em>Execution-Based Code Generation Using Deep Reinforcement Learning</em> (PPOCoder)</li><li>Wei et al. 2025 Meta FAIR arXiv 2502.18449 <em>SWE-RL: Advancing LLM Reasoning via Reinforcement Learning on Open Software Evolution</em></li></ul>
+<p><strong>Embodied / robot agent</strong></p>
+<ul><li>Baker et al. 2022 NeurIPS arXiv 2206.11795 <em>Video PreTraining (VPT): Learning to Act by Watching Unlabeled Online Videos</em></li><li>Kim et al. 2024 arXiv 2406.09246 <em>OpenVLA: An Open-Source Vision-Language-Action Model</em></li></ul>
+<p><strong>Self-rewarding / exploration</strong></p>
+<ul><li>Yuan et al. 2024 ICML arXiv 2401.10020 <em>Self-Rewarding Language Models</em></li><li>Andrychowicz et al. 2017 NeurIPS arXiv 1707.01495 <em>Hindsight Experience Replay</em></li></ul>
+<p><strong>RLHF / DPO fundamentals (cross-reference)</strong></p>
+<ul><li>Ouyang et al. 2022 NeurIPS <em>Training Language Models to Follow Instructions with Human Feedback</em></li><li>Rafailov et al. 2023 NeurIPS <em>Direct Preference Optimization</em></li><li>Bai et al. 2022 Anthropic arXiv 2212.08073 <em>Constitutional AI</em></li><li>Lee et al. 2023 Google arXiv 2309.00267 <em>RLAIF: Scaling RLHF with AI Feedback</em></li></ul>
+<p><strong>Reward model / verification</strong></p>
+<ul><li>Lightman et al. 2024 ICLR arXiv 2305.20050 (OpenAI 2023) <em>Let's Verify Step by Step</em> (PRM800K)</li><li>Wang et al. 2024 ACL arXiv 2312.08935 <em>Math-Shepherd: Verify and Reinforce LLMs Step-by-Step without Human Annotations</em></li><li>Coste et al. 2024 ICLR <em>Reward Model Ensembles Help Mitigate Overoptimization</em></li></ul>
+<p><strong>Infrastructure / frameworks</strong></p>
+<ul><li>TRL (HuggingFace): https://github.com/huggingface/trl — standard PPO / DPO / GRPO trainer</li><li>OpenRLHF: https://github.com/OpenRLHF/OpenRLHF — industrial-grade PPO / GRPO / RLOO implementation</li><li>verl (ByteDance): https://github.com/volcengine/verl — mainstream framework for GRPO / DAPO / agent RL</li><li>ReaLHF / AReaL (Ant Group + Tsinghua, async RL system, arXiv 2505.24298)</li></ul>
+<p><strong>SOTA benchmarks (2024-2026)</strong></p>
+<ul><li>Jimenez et al. 2024 ICLR arXiv 2310.06770 <em>SWE-bench: Can Language Models Resolve Real-World GitHub Issues?</em></li><li>Yao et al. 2024 arXiv 2406.12045 <em>τ-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains</em></li><li>Xie et al. 2024 NeurIPS arXiv 2404.07972 <em>OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments</em></li><li>Zhou et al. 2024 ICLR arXiv 2307.13854 <em>WebArena: A Realistic Web Environment for Building Autonomous Agents</em></li><li>Mialon et al. 2024 ICLR <em>GAIA: A Benchmark for General AI Assistants</em></li><li>Chan et al. 2024 arXiv 2410.07095 <em>MLE-bench: Evaluating Machine Learning Agents on Machine Learning Engineering</em> (OpenAI)</li></ul>
+<p><strong>Anthropic Computer-Use (public knowledge)</strong></p>
+<ul><li>Claude 3.5 Sonnet (new) 2024-10-22 Computer Use beta launch (Anthropic blog + system card)</li><li>Claude 3.7 / 4.0 / 4.5 / Opus 4.x system cards (Anthropic public)</li></ul>
+<p>Code framework recommendations:</p>
+<ul><li>Get started with HF TRL's GRPOTrainer + your own verifier</li><li>For industrial use, use verl (GRPO/RLOO/DAPO all supported, includes agent rollout)</li><li>For custom multi-turn use OpenRLHF v0.5+ agent examples + add a tool sandbox</li></ul>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/agentic_rl_tutorial_en.md</code> ·
+  SHA256 <code>9dd920e9292b</code> ·
+  generated at 2026-05-19 19:03 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

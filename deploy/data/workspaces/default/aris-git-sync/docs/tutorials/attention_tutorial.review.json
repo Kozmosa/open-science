@@ -1,0 +1,51 @@
+{
+  "skill": "render-html",
+  "source": "docs/tutorials/attention_tutorial.md",
+  "source_sha256_prefix": "8d8d5146c1a9a924",
+  "output": "docs/tutorials/attention_tutorial.html",
+  "author": "Ruofeng Yang (杨若峰), Shanghai Jiao Tong University",
+  "reviewer": "codex gpt-5.5 xhigh, fresh thread per run (never codex-reply)",
+  "verdict": "PASS",
+  "checks": {
+    "information_fidelity": "pass",
+    "structure": "pass",
+    "math_code_tables": "pass",
+    "callouts": "pass",
+    "details_inner_markdown_rendered": "pass",
+    "safety_escaping": "pass",
+    "placeholder_leak": "pass",
+    "author_byline_rendered": "pass",
+    "eyebrow_subtitle_title": "pass",
+    "no_absolute_local_path_leak": "pass",
+    "no_personal_info_leak": "pass",
+    "heading_glue_fix": "pass",
+    "toc_sidebar_links_resolve": "pass"
+  },
+  "blocking_issues": [],
+  "warnings": [],
+  "history": [
+    {
+      "run": 1,
+      "verdict": "FAIL",
+      "thread_id": "019e3e4a-1b4b-7901-9173-376a9099cc3d",
+      "issue": "§8 Position Encoding ALiBi row contained `|i-j|` math literal which was parsed as table-cell separators, breaking the 4-column table into 6 cells",
+      "fix": "Escaped pipes with \\lvert i-j \\rvert in source MD"
+    },
+    {
+      "run": 2,
+      "verdict": "FAIL",
+      "thread_id": "019e3e4d-caf6-7c31-b398-c1864bd0ee5a",
+      "issue": "§0 TL;DR callout swallowed list item 1 (`> 💡 ...— 1. **公式**：...`), then items 2-7 rendered as a fresh <ol> starting at 1",
+      "fix": "Split: callout now contains a one-line summary; all 7 TL;DR items follow as a standalone <ol>"
+    },
+    {
+      "run": 3,
+      "verdict": "PASS",
+      "thread_id": "019e3e52-83b0-7b32-9778-f81b118470c2",
+      "issue": null,
+      "fix": null
+    }
+  ],
+  "summary": "Three-round review: FAIL (table-pipe math collision) → FAIL (TL;DR list numbering reset) → PASS. 13 checks pass on run 3.",
+  "rendered_at": "2026-05-19"
+}

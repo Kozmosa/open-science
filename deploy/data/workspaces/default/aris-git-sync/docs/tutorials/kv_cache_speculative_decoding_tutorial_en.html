@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kv Cache Speculative Decoding Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/kv_cache_speculative_decoding_tutorial_en.md">
+<meta name="aris:source-sha256" content="3357e2dd8dc0b865cf18f49e60842241679e7af6c296d7d80820b6f6c1ebc292">
+<meta name="aris:generated-at" content="2026-05-19 19:04 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-intuition">§1 Intuition</a>
+<ul>
+<li><a href="#11-why-is-inference-systems-work-so-counter-intuitive">1.1　Why is inference systems work so &quot;counter-intuitive&quot;</a></li>
+<li><a href="#12-differences-from-training-time-attention">1.2　Differences from training-time attention</a></li>
+</ul>
+</li>
+<li><a href="#2-kv-cache-memory-accounting">§2 KV Cache Memory Accounting</a>
+<ul>
+<li><a href="#21-exact-formula">2.1　Exact formula</a></li>
+<li><a href="#22-cache-size-for-some-concrete-models-fp16-ltextctx4096">2.2　Cache size for some concrete models (fp16, $L_\text{ctx}=4096$)</a></li>
+<li><a href="#23-batch-dimension">2.3　Batch dimension</a></li>
+</ul>
+</li>
+<li><a href="#3-prefill-vs-decode-asymmetry">§3 Prefill vs Decode Asymmetry</a>
+<ul>
+<li><a href="#31-per-phase-flops--bandwidth-differences">3.1　Per-phase FLOPs / bandwidth differences</a></li>
+<li><a href="#32-chunked-prefill-sarathi-serve">3.2　Chunked Prefill (Sarathi-Serve)</a></li>
+<li><a href="#33-continuous-batching-orca">3.3　Continuous Batching (Orca)</a></li>
+<li><a href="#34-prefix-caching">3.4　Prefix Caching</a></li>
+</ul>
+</li>
+<li><a href="#4-kv-cache-optimization-routes">§4 KV Cache Optimization Routes</a>
+<ul>
+<li><a href="#41-overview-of-routes">4.1　Overview of routes</a></li>
+<li><a href="#42-mqa--gqa-formula-recap">4.2　MQA / GQA formula recap</a></li>
+<li><a href="#43-mla-low-rank-latent-kv-deepseek-v2s-core-innovation">4.3　MLA: low-rank latent K/V (DeepSeek-V2&#x27;s core innovation)</a></li>
+<li><a href="#44-mlas-rope-problem--why-decoupling-is-necessary">4.4　MLA&#x27;s RoPE problem — why decoupling is necessary</a></li>
+<li><a href="#45-kv-quantization-kivi--kvquant--fp8">4.5　KV quantization (KIVI / KVQuant / FP8)</a></li>
+</ul>
+</li>
+<li><a href="#5-pagedattention-vllm-memory-management">§5 PagedAttention (vLLM memory management)</a>
+<ul>
+<li><a href="#51-problem-fragmentation-of-kv-cache">5.1　Problem: fragmentation of KV cache</a></li>
+<li><a href="#52-solution-virtual-memory-style-paging">5.2　Solution: virtual-memory-style paging</a></li>
+<li><a href="#53-block-table-data-structure-sketch">5.3　Block-table data structure (sketch)</a></li>
+</ul>
+</li>
+<li><a href="#6-kv-cache-implementation-code">§6 KV Cache Implementation Code</a>
+<ul>
+<li><a href="#61-naive-append--autoregressive-decode">6.1　Naive append + autoregressive decode</a></li>
+<li><a href="#62-pagedattention-data-structure-sketch">6.2　PagedAttention data structure sketch</a></li>
+<li><a href="#63-differences-in-mqa--gqa--mla-forward">6.3　Differences in MQA / GQA / MLA forward</a></li>
+</ul>
+</li>
+<li><a href="#7-speculative-decoding-core-mechanism">§7 Speculative Decoding Core Mechanism</a>
+<ul>
+<li><a href="#71-setup">7.1　Setup</a></li>
+<li><a href="#72-acceptance-probability-alpha-derivation-must-know">7.2　Acceptance probability $\alpha$ derivation (must-know)</a></li>
+<li><a href="#73-residual-distribution-p-how-to-sample-on-reject">7.3　Residual distribution $p&#x27;$ (how to sample on reject)</a></li>
+<li><a href="#74-expected-speedup-etau-formula">7.4　Expected speedup: $E[\tau]$ formula</a></li>
+<li><a href="#75-sampling-equivalence-under-temperature--top-p">7.5　Sampling equivalence under temperature / top-p</a></li>
+<li><a href="#76-code-speculative-decoding-loop">7.6　Code: speculative decoding loop</a></li>
+</ul>
+</li>
+<li><a href="#8-main-speculative-decoding-variants">§8 Main Speculative Decoding Variants</a>
+<ul>
+<li><a href="#81-variant-overview">8.1　Variant overview</a></li>
+<li><a href="#82-medusa-multi-head-in-parallel">8.2　Medusa: multi-head in parallel</a></li>
+<li><a href="#83-eagle-family-feature-level-autoregression">8.3　EAGLE family: feature-level autoregression</a></li>
+<li><a href="#84-lookahead-decoding-jacobi-iteration">8.4　Lookahead Decoding: Jacobi iteration</a></li>
+<li><a href="#85-long-context-specialists-triforce--magicdec">8.5　Long-context specialists: TriForce / MagicDec</a></li>
+<li><a href="#86-self-speculative-decoding">8.6　Self-Speculative Decoding</a></li>
+</ul>
+</li>
+<li><a href="#9-complexity--resource-accounting">§9 Complexity / Resource Accounting</a>
+<ul>
+<li><a href="#91-kv-cache-memory-summary">9.1　KV cache memory (summary)</a></li>
+<li><a href="#92-speculative-decoding-expected-throughput">9.2　Speculative decoding expected throughput</a></li>
+<li><a href="#93-rough-budget-70b--4k-context--gqa">9.3　Rough budget (70B + 4K context + GQA)</a></li>
+</ul>
+</li>
+<li><a href="#10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</a>
+<ul>
+<li><a href="#l1-must-know-asked-at-every-inference--serving-interview">L1 must-know (asked at every inference / serving interview)</a></li>
+<li><a href="#l2-advanced-research-oriented--inference-systems-roles">L2 advanced (research-oriented / inference systems roles)</a></li>
+<li><a href="#l3-top-lab-questions-hardest-tier">L3 top-lab questions (hardest tier)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-reference-implementation--sanity-check">§A Appendix: Reference Implementation + Sanity Check</a>
+<ul>
+<li><a href="#a1-components-summary">A.1　Components summary</a></li>
+<li><a href="#a2-sanity-check-expected-outputs">A.2　Sanity-check expected outputs</a></li>
+<li><a href="#a3-main-references">A.3　Main references</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Kv Cache Speculative Decoding Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/kv_cache_speculative_decoding_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>3357e2dd8dc0</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:04 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">8 sentences to nail KV cache + Speculative Decoding</div><p>one page covering interview essentials (see §2–§9 for derivations).</p></div>
+<ol><li><strong>KV cache formula</strong>: per-sample memory $= 2 \cdot L_\text{ctx} \cdot N_\text{layers} \cdot N_\text{kv\_heads} \cdot d_\text{head} \cdot \text{bytes}$; the "2" comes from K+V. LLaMA-3-70B (GQA, $H_\text{kv}=8$) at 4K context fp16 ≈ <strong>1.25 GB/sample</strong> — which is why MHA is not used.</li><li><strong>Prefill vs Decode asymmetry</strong>: prefill processes the entire prompt ($O(L^2)$ FLOPs, compute-bound); decode generates 1 token per step ($O(L)$ FLOPs per step, but must read the entire KV cache — <strong>memory-bandwidth-bound</strong>). This asymmetry explains every modern inference system design.</li><li><strong>PagedAttention</strong> (Kwon et al., SOSP 2023, vLLM): partition KV cache into pages, use a block table to resolve fragmentation; memory utilization improves from ~70% to ~96%.</li><li><strong>Continuous batching</strong> (Orca, Yu et al., OSDI 2022): iteration-level scheduling — completed requests don't wait for the whole batch; combined with PagedAttention, these are vLLM's two pillars.</li><li><strong>MQA → GQA → MLA</strong>: MQA (Shazeer 2019) shares K/V extremely aggressively, slightly hurting quality; GQA (Ainslie et al., EMNLP 2023) groups into $G$ as a middle ground; MLA (DeepSeek-V2, May 2024) uses low-rank latent $c_t^{KV}$ + <strong>decoupled RoPE</strong> — RoPE cannot be absorbed into latent compression directly, so a small independent dimension $d_\text{head}^R$ must carry position.</li><li><strong>Speculative Decoding core</strong> (Leviathan et al., ICML 2023; Chen et al., 2023): a small draft model $q$ proposes $K$ tokens, and the target model $p$ <strong>verifies in parallel in one forward</strong>; rejection sampling guarantees the output distribution is exactly equivalent to $p$ (exact, not approximate).</li><li><strong>Acceptance probability formula</strong>: per-token acceptance rate $\alpha = \mathbb{E}_{x \sim q}[\min(1, p(x)/q(x))]$; expected generated tokens $E[\tau] = \dfrac{1-\alpha^{K+1}}{1-\alpha}$ ($K$ is the draft length, plus the final bonus token).</li><li><strong>Medusa / EAGLE / Lookahead</strong>: Medusa (Cai et al., ICML 2024) multi-head + static tree attention; EAGLE/2/3 (Li et al., 2024-2025) feature-level draft + dynamic tree; Lookahead Decoding (Fu et al., ICML 2024) Jacobi iteration — <strong>all different drafters under the same acceptance-rate framework</strong>.</li></ol>
+<h2 id="1-intuition">§1 Intuition</h2>
+<h3 id="11-why-is-inference-systems-work-so-counter-intuitive">1.1　Why is inference systems work so "counter-intuitive"</h3>
+<p>In training we worry about FLOPs: model size, batch size, when OOM happens. But deploying a 70B model — the bottleneck is often not compute but <strong>HBM bandwidth</strong> and <strong>memory</strong>, both eaten by the KV cache.</p>
+<p>A core mental model:</p>
+<blockquote><p>Modern LLM inference is <strong>bandwidth-bound during decode and memory-bound during long-context prefill</strong>, not compute-bound.</p></blockquote>
+<p>KV cache is the classic "swap recomputation for storage + bandwidth" trade. Once you cache all the K/V of the entire conversation history, generating each new token only requires:</p>
+<ul><li>Computing Q/K/V for the new token (tiny compute)</li><li>Appending the new K/V to the cache</li><li>One attention with the new Q against the full cache</li></ul>
+<p>But the cost is: <strong>for every new token, the entire KV cache must be read from HBM to SRAM</strong> — which is why 8× H100 + LLaMA-3-70B at batch=1 decode runs far below theoretical FLOPs utilization (often 1-5%).</p>
+<p>Speculative decoding attacks exactly this asymmetry: since decode is bandwidth-bound while GPU compute is spare, <strong>why not compute $K$ candidate tokens in one forward, since weights are read only once?</strong></p>
+<h3 id="12-differences-from-training-time-attention">1.2　Differences from training-time attention</h3>
+<table><thead><tr><th>Phase</th><th>Input</th><th>KV cache behavior</th><th>Bottleneck</th></tr></thead><tbody><tr><td><strong>Training</strong></td><td>$[B, L, D]$ full sequence</td><td>Not needed — all positions computed simultaneously</td><td>FLOPs (compute)</td></tr><tr><td><strong>Prefill (inference)</strong></td><td>$[B, L_\text{prompt}, D]$ entire prompt</td><td><strong>Writes</strong> to cache, fills $L_\text{prompt}$ positions</td><td>FLOPs ($L^2$ attention)</td></tr><tr><td><strong>Decode (inference)</strong></td><td>$[B, 1, D]$ single token</td><td><strong>Reads</strong> + appends 1 position</td><td><strong>HBM bandwidth</strong> (each step must read the entire cache + weights)</td></tr></tbody></table>
+<p>A common interview cross-examination: "can training use KV cache?" — <strong>No</strong>. Training computes all positions at once; there's no "existing K/V waiting to be appended". Using KV cache during training is a beginner mistake.</p>
+<h2 id="2-kv-cache-memory-accounting">§2 KV Cache Memory Accounting</h2>
+<h3 id="21-exact-formula">2.1　Exact formula</h3>
+<p>Per sample (batch=1), fp16:</p>
+<p>$$\boxed{\;\text{KV cache}_\text{bytes} = 2 \cdot L_\text{ctx} \cdot N_\text{layers} \cdot N_\text{kv\_heads} \cdot d_\text{head} \cdot \text{bytes\_per\_elem}\;}$$</p>
+<p>Each factor:</p>
+<ul><li><strong><code>2</code></strong>: one K tensor + one V tensor</li><li><strong>$L_\text{ctx}$</strong>: current context length (prompt + tokens generated so far)</li><li><strong>$N_\text{layers}$</strong>: Transformer layers (each has its own cache)</li><li><strong>$N_\text{kv\_heads}$</strong>: number of K/V heads. <strong>In MHA = $H$; MQA = 1; GQA = $G$ ($1 < G < H$)</strong></li><li><strong>$d_\text{head}$</strong>: head dimension, usually 64 or 128</li><li><strong><code>bytes_per_elem</code></strong>: fp16 = 2, fp8/int8 = 1, int4 = 0.5</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Common pitfall: don&#x27;t multiply by $H$ (Q-heads count)</div><p>KV cache scales only with K/V heads, <strong>not with Q heads</strong>. When MQA reduces K/V heads to 1, Q still has $H$ heads, so Q-projection compute is unchanged.</p></div>
+<h3 id="22-cache-size-for-some-concrete-models-fp16-ltextctx4096">2.2　Cache size for some concrete models (fp16, $L_\text{ctx}=4096$)</h3>
+<p>Plug into the §2.1 formula $2 \cdot L_\text{ctx} \cdot N_\text{layers} \cdot N_\text{kv\_heads} \cdot d_\text{head} \cdot 2\text{B}$:</p>
+<table><thead><tr><th>Model</th><th>$N_\text{layers}$</th><th>$N_\text{kv\_heads}$</th><th>$d_\text{head}$</th><th>cache/sample</th><th>Notes</th></tr></thead><tbody><tr><td>LLaMA-2-7B (MHA)</td><td>32</td><td>32</td><td>128</td><td><strong>2.0 GB</strong></td><td>full MHA, large cache</td></tr><tr><td>LLaMA-2-70B (hypothetical MHA)</td><td>80</td><td>64</td><td>128</td><td><strong>10.0 GB</strong></td><td>this is why 70B uses GQA</td></tr><tr><td>LLaMA-2-70B (GQA)</td><td>80</td><td>8</td><td>128</td><td><strong>1.25 GB</strong></td><td>GQA cuts $H$=64 to $G$=8</td></tr><tr><td>LLaMA-3-70B (GQA)</td><td>80</td><td>8</td><td>128</td><td><strong>1.25 GB</strong></td><td>same as LLaMA-2-70B</td></tr><tr><td>DeepSeek-V2 (MLA)</td><td>60</td><td>—</td><td>$d_c$=512 + $d_r$=64</td><td><strong>~0.27 GB</strong></td><td>MLA formula: $N_\text{layers} \cdot L_\text{ctx} \cdot (d_c+d_r) \cdot 2\text{B}$</td></tr></tbody></table>
+<p>DeepSeek-V2 cache uses $d_c=512$ (latent dim shared by K/V via the same latent vector) + decoupled RoPE component $d_r=64$ (shared across all heads), following $N_\text{layers} \cdot L_\text{ctx} \cdot (d_c + d_r) \cdot \text{bytes}$ (<strong>no "$\times 2$"</strong>, since K/V no longer store separately). Under fp16, $60 \cdot 4096 \cdot 576 \cdot 2 \approx$ <strong>0.27 GB / sample</strong> — an order of magnitude smaller than same-scale MHA.</p>
+<h3 id="23-batch-dimension">2.3　Batch dimension</h3>
+<p>In real serving, KV cache must also be multiplied by <strong>active batch size</strong>. A 70B + 4K context + GQA deployment on 8×A100 80GB:</p>
+<ul><li>weights ≈ 140 GB (fp16, sharded across cards)</li><li>single-sample cache ≈ 1.25 GB</li><li>remaining usable memory ≈ $8 \times 80 - 140 \approx 500$ GB → subtract activations + framework overhead, ~400 GB allocatable to KV cache</li><li>theoretical max batch ≈ $400 / 1.25 \approx$ <strong>320</strong> — but fragmentation prevents reaching it in practice; hence PagedAttention.</li></ul>
+<h2 id="3-prefill-vs-decode-asymmetry">§3 Prefill vs Decode Asymmetry</h2>
+<h3 id="31-per-phase-flops--bandwidth-differences">3.1　Per-phase FLOPs / bandwidth differences</h3>
+<p>Let prompt length be $L$, hidden $D$, FFN intermediate $4D$, and $N$ layers. Per-layer attention + FFN approximately:</p>
+<p>$$\text{FLOPs}_\text{layer} \approx \underbrace{6BLD^2}_\text{QKV proj (3 mat)} + \underbrace{4BL^2 D}_\text{attention (QK + AV)} + \underbrace{2BLD^2}_\text{O proj} + \underbrace{16 BLD^2}_\text{FFN (up + down)}$$</p>
+<p><strong>Prefill</strong> with $L = L_\text{prompt}$: every term is $\Omega(L D^2)$ or $\Omega(L^2 D)$ — <strong>compute-bound</strong>, GPU saturated.</p>
+<p><strong>Decode</strong> with $L=1$ (one token per step), but the attention term becomes $4 B L_\text{ctx} D$ (QK and AV each $2 B L_\text{ctx} D$, since $L_q=1, L_k=L_\text{ctx}$):</p>
+<ul><li>per-step FLOPs ≈ $\Theta(B (L_\text{ctx} D + D^2))$</li><li>per-step <strong>HBM read</strong>: weights ≈ total model bytes (70B fp16 ≈ 140 GB) + KV cache ≈ $2 B L_\text{ctx} N H_\text{kv} d_\text{head} \cdot \text{bytes}$</li><li>Arithmetic intensity (FLOPs / byte) $\to$ far below the GPU roofline (A100 BF16 ≈ 200 FLOPs/byte)</li></ul>
+<p>So <strong>decode at small-to-medium batch is memory-bandwidth-bound</strong> (until batch grows enough to saturate compute) — memorize this single line and you cover 80% of the interview score.</p>
+<h3 id="32-chunked-prefill-sarathi-serve">3.2　Chunked Prefill (Sarathi-Serve)</h3>
+<div class="callout callout-info"><div class="callout-title">Key insight</div><p>the longer the prompt, the more a single prefill saturates GPU compute, and <strong>decode requests get stuck</strong> (head-of-line blocking).</p></div>
+<p>Sarathi-Serve (Agrawal et al., OSDI 2024) splits long prefill into equal-size chunks; each iteration schedules one prefill chunk + a batch of decode tokens together:</p>
+<pre><code>       Traditional: prompt 4096 → one prefill saturates GPU → decode stuck 100+ ms
+       Sarathi:     prompt split into 4 chunks × 1024 → each iteration coalesces with decode</code></pre>
+<p><strong>Stall-free schedule</strong>: every iteration contains decode + prefill-chunk coalesced; decode latency jitter disappears. The paper reports Mistral-7B on a single A100 with 2.6× over vLLM, and Yi-34B on 2×A100 with 3.7×.</p>
+<h3 id="33-continuous-batching-orca">3.3　Continuous Batching (Orca)</h3>
+<p>Traditional static batching: wait for the entire batch to finish before admitting new requests — <strong>short requests get blocked by long ones</strong>. Orca (Yu et al., OSDI 2022) changes the scheduling granularity from request to <strong>iteration</strong>: every forward checks the batch, kicks out completed sequences (EOS), and admits new requests in their place.</p>
+<div class="callout callout-good"><div class="callout-title">vLLM = Orca&#x27;s continuous batching + PagedAttention memory management</div><p>these two together raise LLM serving throughput by roughly 24× over the previous baseline.</p></div>
+<h3 id="34-prefix-caching">3.4　Prefix Caching</h3>
+<p>If multiple requests share a prompt prefix (e.g., system prompt, few-shot prompt), the <strong>same KV cache can be reused</strong>:</p>
+<ul><li>vLLM's prefix caching: index cache pages by hash(prompt prefix); on a hit, skip prefill</li><li>For prompt-heavy services like ChatGPT, prefix cache hit rate can reach 90%+, drastically cutting prefill cost</li><li>Implementation key: page-level sharing + COW (copy-on-write); branched requests only write to their own pages</li></ul>
+<h2 id="4-kv-cache-optimization-routes">§4 KV Cache Optimization Routes</h2>
+<h3 id="41-overview-of-routes">4.1　Overview of routes</h3>
+<table><thead><tr><th>Route</th><th>Core idea</th><th>What is reduced</th><th>Representative</th></tr></thead><tbody><tr><td><strong>Shared heads</strong> (MQA/GQA)</td><td>Multiple Q heads share one set of K/V</td><td>K/V head count $H \to G$ or 1</td><td>LLaMA-2/3, Mistral, PaLM</td></tr><tr><td><strong>Low-rank compression</strong> (MLA)</td><td>Project to a low-dim latent; cache latent instead of K/V</td><td>Effective head dim shrinks $d_\text{head} \to d_c/H$</td><td>DeepSeek-V2/V3</td></tr><tr><td><strong>Quantization</strong> (KIVI/KVQuant)</td><td>Cache elements fp16 → int4/int2</td><td>bytes per element</td><td>KIVI, KVQuant, FP8 KV</td></tr><tr><td><strong>Sparsification / eviction</strong></td><td>Keep only "important" K/V positions</td><td>Effective $L_\text{ctx}$ shortened</td><td>H2O, StreamingLLM, TriForce</td></tr><tr><td><strong>Memory management</strong> (PagedAttention)</td><td>Doesn't reduce total, but eliminates fragmentation</td><td>fragmentation overhead</td><td>vLLM</td></tr></tbody></table>
+<h3 id="42-mqa--gqa-formula-recap">4.2　MQA / GQA formula recap</h3>
+<p>MHA: each head has independent $W_k^{(h)}, W_v^{(h)} \in \mathbb{R}^{D \times d_\text{head}}$; total $H \cdot 2 \cdot D \cdot d_\text{head} = 2 D^2$ parameters (K+V).</p>
+<p>MQA (Shazeer 2019): $H$ Q-heads share <strong>1</strong> set of K/V. $W_k, W_v \in \mathbb{R}^{D \times d_\text{head}}$, K+V parameters $= 2 D d_\text{head}$, <strong>$H$× smaller</strong>. At forward, K and V are broadcast to all $H$ heads for attention.</p>
+<p>GQA (Ainslie 2023): $H$ Q-heads divided into $G$ groups, each group shares one K/V set. K+V parameters $= 2 G D d_\text{head}$. LLaMA-2-70B uses $H=64, G=8 \Rightarrow$ KV cache shrunk 8×.</p>
+<div class="callout callout-warn"><div class="callout-title">MQA training instability phenomenon</div><p>training MQA from scratch often gives slight quality drops or training instability vs MHA. The GQA paper's practice: <strong>train MHA fully, then "uptrain" to GQA</strong> — mean-pool the $H$ K/V groups along the head axis to initialize $G$ groups, then briefly fine-tune (5% of original training compute). This is why LLaMA-2 70B can switch to GQA zero-shot.</p></div>
+<h3 id="43-mla-low-rank-latent-kv-deepseek-v2s-core-innovation">4.3　MLA: low-rank latent K/V (DeepSeek-V2's core innovation)</h3>
+<div class="callout callout-good"><div class="callout-title">One-sentence MLA</div><p>project K/V into a shared low-dim latent $c_t^{KV} \in \mathbb{R}^{d_c}$ ($d_c \ll H d_\text{head}$), <strong>cache only the latent</strong>; at each attention step, <strong>linearly reconstruct</strong> each head's K/V.</p></div>
+<h4 id="431-compression--decompression">4.3.1　Compression / decompression</h4>
+<p>Input hidden state $h_t \in \mathbb{R}^D$. MLA introduces:</p>
+<p>$$c_t^{KV} = W^{DKV} h_t \in \mathbb{R}^{d_c}, \quad d_c \ll H d_\text{head}$$</p>
+<p>Then <strong>only $c_t^{KV}$ is cached</strong>. To generate the $i$-th head's K and V:</p>
+<p>$$k_t^{C, (i)} = W^{UK, (i)} c_t^{KV}, \quad v_t^{(i)} = W^{UV, (i)} c_t^{KV}$$</p>
+<p>where $W^{UK, (i)}, W^{UV, (i)} \in \mathbb{R}^{d_\text{head} \times d_c}$ are head-specific up-projections.</p>
+<p>Similarly, Q is also low-rank compressed (this step is optional and mainly saves training memory rather than inference):</p>
+<p>$$c_t^Q = W^{DQ} h_t, \quad q_t^{C, (i)} = W^{UQ, (i)} c_t^Q$$</p>
+<h4 id="432-cache-size-comparison">4.3.2　Cache size comparison</h4>
+<table><thead><tr><th>Scheme</th><th>Cache elements per token</th></tr></thead><tbody><tr><td>MHA</td><td>$2 \cdot H \cdot d_\text{head}$</td></tr><tr><td>GQA</td><td>$2 \cdot G \cdot d_\text{head}$</td></tr><tr><td>MQA</td><td>$2 \cdot d_\text{head}$</td></tr><tr><td>MLA (bare latent part)</td><td>$d_c$ (<strong>a single vector, no $\times 2$</strong> — because K and V share the same latent)</td></tr></tbody></table>
+<p>DeepSeek-V2 takes $d_c = 4 d_\text{head}$; relative to MHA ($2 H d_\text{head}$), compression ratio is about $H/2$ — for $H=128$ that's roughly 64×.</p>
+<h4 id="433-inference-equivalence-transformation-the-absorb-trick">4.3.3　Inference equivalence transformation (the absorb trick)</h4>
+<p>In a naive implementation, every step would have to un-project $c_t^{KV}$ back to $k_t, v_t$ then compute attention — which defeats the "save cache" benefit (still doing the up-projection). MLA's elegance is in <strong>matrix absorption</strong>:</p>
+<p>Attention score (ignoring RoPE, content only):</p>
+<p>$$q_t^{(i)\top} k_s^{(i)} = (W^{UQ, (i)} c_t^Q)^\top (W^{UK, (i)} c_s^{KV}) = c_t^{Q\top} \underbrace{(W^{UQ, (i)\top} W^{UK, (i)})}_\text{constant matrix \tilde W^{QK,(i)}} c_s^{KV}$$</p>
+<p><strong>$\tilde W^{QK, (i)} \in \mathbb{R}^{d_c' \times d_c}$ is fixed at inference time</strong>, and can be pre-multiplied once when loading the model. So:</p>
+<ul><li>inference only caches $c_s^{KV}$</li><li>attention score computation is just $c_t^{Q\top} \tilde W^{QK, (i)} c_s^{KV}$, <strong>no K/V reconstruction at all</strong></li><li>Similarly $W^{UV, (i)}$ can be absorbed into the output projection $W^O$</li></ul>
+<p>This is why MLA has tiny cache but inference FLOPs don't blow up: <strong>matrix absorption decouples "save cache" from "save compute"</strong>.</p>
+<h3 id="44-mlas-rope-problem--why-decoupling-is-necessary">4.4　MLA's RoPE problem — why decoupling is necessary</h3>
+<h4 id="441-problem-rope-breaks-absorb">4.4.1　Problem: RoPE breaks absorb</h4>
+<p>RoPE injects positional information as a <strong>rotation matrix</strong> $R_t \in \mathbb{R}^{d_\text{head} \times d_\text{head}}$ into Q and K:</p>
+<p>$$q_t^{\text{RoPE}, (i)} = R_t q_t^{(i)}, \quad k_s^{\text{RoPE}, (i)} = R_s k_s^{(i)}$$</p>
+<p>Attention score becomes:</p>
+<p>$$q_t^{\text{RoPE}, (i)\top} k_s^{\text{RoPE}, (i)} = q_t^{(i)\top} R_t^\top R_s k_s^{(i)} = q_t^{(i)\top} R_{s-t} k_s^{(i)}$$</p>
+<p>(using $R_t^\top R_s = R_{s-t}$, the essence of RoPE — relative position depends only on $s-t$.)</p>
+<p>Now plug in the latent form:</p>
+<p>$$q_t^{\text{RoPE}, (i)\top} k_s^{\text{RoPE}, (i)} = c_t^{Q\top} \underbrace{W^{UQ, (i)\top} R_{s-t} W^{UK, (i)}}_\text{not constant — depends on (s-t)} c_s^{KV}$$</p>
+<p><strong>The middle matrix varies with $s-t$</strong> — meaning it can no longer be pre-absorbed into a constant matrix. Each $(t, s)$ pair must compute $R_{s-t}$ on the fly; the absorb trick fails outright, and compute reverts to MHA-equivalent.</p>
+<h4 id="442-solution-separate-the-rope-component-into-an-independent-channel">4.4.2　Solution: separate the RoPE component into an independent channel</h4>
+<p>DeepSeek-V2's solution: <strong>give RoPE an independent small-dim channel</strong>.</p>
+<ul><li>Latent channel (no RoPE): carries content information, cached as $c_t^{KV} \in \mathbb{R}^{d_c}$, with attention scoring via absorb</li><li>RoPE channel (with RoPE): carries positional information, cached as $k_t^R \in \mathbb{R}^{d_r}$, with attention scoring via standard rotation-aware dot product</li></ul>
+<p>Specifically, introduce two new projections $W^{KR} \in \mathbb{R}^{D \times d_r}$ and $W^{QR, (i)} \in \mathbb{R}^{d_c' \times d_r}$ (per-head). <strong>$k_t^R$ is shared across all heads</strong>:</p>
+<p>$$k_t^R = \text{RoPE}_t(W^{KR} h_t), \quad q_t^{R, (i)} = \text{RoPE}_t(W^{QR, (i)} c_t^Q)$$</p>
+<p>Full K/Q is a concat of two segments:</p>
+<p>$$k_t^{(i)} = [k_t^{C, (i)}; k_t^R], \quad q_t^{(i)} = [q_t^{C, (i)}; q_t^{R, (i)}], \quad k_t^{(i)}, q_t^{(i)} \in \mathbb{R}^{d_\text{head} + d_r}$$</p>
+<p>Attention score becomes the sum of two parts:</p>
+<p>$$q_t^{(i)\top} k_s^{(i)} = \underbrace{q_t^{C, (i)\top} k_s^{C, (i)}}_\text{latent, absorb} + \underbrace{q_t^{R, (i)\top} k_s^{R}}_\text{RoPE, standard dot}$$</p>
+<div class="callout callout-good"><div class="callout-title">Why the RoPE channel is shared across all heads</div><p>a single independent RoPE dimension $k_t^R$ is shared across all heads, adding only $d_r$ elements (typical $d_r = d_\text{head}/2 = 64$) to the cache. This is MLA's "last mile of cache saving".</p></div>
+<h4 id="443-total-cache-formula">4.4.3　Total cache formula</h4>
+<p>$$\boxed{\;\text{MLA cache}_\text{per token} = \underbrace{d_c}_\text{latent K/V shared} + \underbrace{d_r}_\text{RoPE K (shared across heads)}\;}$$</p>
+<p>DeepSeek-V2: $d_c = 512, d_r = 64$, 576 fp16 elements per token. Compared to LLaMA-3-70B (GQA, $H_\text{kv}=8, d_\text{head}=128$) with $2 \cdot 8 \cdot 128 = 2048$ elements per token, <strong>MLA is about 1/3.5 of GQA</strong>; vs same-scale MHA ($2 \cdot 64 \cdot 128 = 16384$) about 1/28. DeepSeek-V2 paper reports <strong>93.3% KV reduction vs its internal MHA baseline</strong> (numbers differ across model scales and head counts; the 1/28 here is an estimate under another parameter set).</p>
+<div class="callout callout-bad"><div class="callout-title">Common interview mistake</div><p>saying "MLA is just an extreme version of GQA": wrong. GQA still caches complete K and V, only with fewer heads; MLA caches the latent, and K/V are reconstructed from latent at inference. The two differ mathematically (MLA changes the attention structure; GQA doesn't).</p></div>
+<h3 id="45-kv-quantization-kivi--kvquant--fp8">4.5　KV quantization (KIVI / KVQuant / FP8)</h3>
+<p>KV cache quantization routes compress each cache element from fp16 (2 bytes) to fewer:</p>
+<table><thead><tr><th>Method</th><th>Quantization granularity</th><th>Precision loss</th><th>Notes</th></tr></thead><tbody><tr><td><strong>FP8 KV</strong></td><td>per-tensor / per-channel FP8</td><td>nearly lossless</td><td>H100 native, production-grade default</td></tr><tr><td><strong>KIVI</strong> (Liu et al., ICML 2024)</td><td><strong>K per-channel, V per-token</strong> 2-bit</td><td>&lt;1 PPL</td><td>tuning-free, asymmetric quant</td></tr><tr><td><strong>KVQuant</strong> (Hooper et al., NeurIPS 2024)</td><td>per-channel 4-bit + outlier handling</td><td>minimal</td><td>paper shows 10M context feasible</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">KIVI&#x27;s key insight</div><p>K and V have <strong>different</strong> outlier distributions. K has significant outliers along the channel dimension (a few channels have large values), absorbed by per-channel quant; V has no channel-level outliers but is heterogeneous along the token axis, better handled by per-token quant. KIVI's core contribution is decoupling these two with an asymmetric scheme.</p></div>
+<h2 id="5-pagedattention-vllm-memory-management">§5 PagedAttention (vLLM memory management)</h2>
+<h3 id="51-problem-fragmentation-of-kv-cache">5.1　Problem: fragmentation of KV cache</h3>
+<p>Traditional attention implementations treat each request's KV cache as a <strong>contiguous large tensor</strong> $[L_\text{max}, n_\text{layers}, 2, H_\text{kv}, d_\text{head}]$. Issues:</p>
+<ul><li>Must pre-allocate length $L_\text{max}$ (actual usage may be only 10%) → <strong>internal fragmentation</strong></li><li>Different requests have different lengths, cache block sizes differ → <strong>external fragmentation</strong></li><li>After freeing a request, fragmentation means new requests can't find a large enough block → memory utilization ~70%</li></ul>
+<h3 id="52-solution-virtual-memory-style-paging">5.2　Solution: virtual-memory-style paging</h3>
+<p>PagedAttention (Kwon et al., SOSP 2023) borrows from OS paging:</p>
+<ol><li><strong>Partition KV cache into equal-size pages</strong> (e.g., 16 tokens per page)</li><li>Each request maintains a <strong>block table</strong>: logical block idx → physical block idx</li><li>The physical page pool is global; pages are allocated on demand and reclaimed on free</li><li>Attention kernel is rewritten as <strong>paged attention</strong>: indirect lookup via block table (gather)</li></ol>
+<p>Effects:</p>
+<ul><li>Memory utilization from ~70% → <strong>~96%</strong></li><li>Active batch size doubled or quadrupled on the same GPU, throughput rises accordingly</li><li>Supports <strong>copy-on-write sharing</strong>: beam search, parallel sampling, prefix caching naturally fall out</li></ul>
+<div class="callout callout-warn"><div class="callout-title">PagedAttention&#x27;s cost</div><p>indirect lookup introduces ~1-5% kernel overhead (block lookup + scattered HBM access). But the throughput gain from larger batches completely dominates. CUDA Graphs are hard to compose (every block-table change requires re-capture), so vLLM uses piecewise CUDA Graphs.</p></div>
+<h3 id="53-block-table-data-structure-sketch">5.3　Block-table data structure (sketch)</h3>
+<pre><code>Request A:  logical_blocks = [0, 1, 2, 3]   →   physical = [12, 7, 34, 19]
+Request B:  logical_blocks = [0, 1, 2]      →   physical = [12, 7, 5]    ← prefix shared!</code></pre>
+<p>Request A and B share the first 32 tokens (2 blocks × 16 tokens); vLLM maintains a ref count for each physical block; when A wants to write new content with ref &gt; 1, it triggers COW (copy + change mapping).</p>
+<h2 id="6-kv-cache-implementation-code">§6 KV Cache Implementation Code</h2>
+<h3 id="61-naive-append--autoregressive-decode">6.1　Naive append + autoregressive decode</h3>
+<pre><code class="language-python">import math
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+class NaiveCachedAttention(nn.Module):
+    &quot;&quot;&quot;Single-layer attention with KV cache (MHA / for learning, do not deploy).&quot;&quot;&quot;
+    def __init__(self, d_model, num_heads):
+        super().__init__()
+        self.H, self.d = num_heads, d_model // num_heads
+        self.W_q = nn.Linear(d_model, d_model, bias=False)
+        self.W_k = nn.Linear(d_model, d_model, bias=False)
+        self.W_v = nn.Linear(d_model, d_model, bias=False)
+        self.W_o = nn.Linear(d_model, d_model, bias=False)
+
+    def _split(self, x):  # [B, L, D] → [B, H, L, d]
+        B, L, _ = x.shape
+        return x.view(B, L, self.H, self.d).transpose(1, 2)
+
+    def forward(self, x, cache=None):
+        &quot;&quot;&quot;
+        x:    [B, L_new, D]  new input (L_new=L_prompt during prefill, L_new=1 during decode)
+        cache: dict with &#x27;k&#x27;,&#x27;v&#x27; of shape [B, H, L_past, d] or None
+        Returns: out [B, L_new, D], new_cache
+        &quot;&quot;&quot;
+        B, L_new, D = x.shape
+        q = self._split(self.W_q(x))                   # [B, H, L_new, d]
+        k = self._split(self.W_k(x))                   # [B, H, L_new, d]
+        v = self._split(self.W_v(x))                   # [B, H, L_new, d]
+
+        # ── KV cache append ────────────────────────────────────────
+        if cache is not None:
+            k = torch.cat([cache[&#x27;k&#x27;], k], dim=2)      # [B, H, L_total, d]
+            v = torch.cat([cache[&#x27;v&#x27;], v], dim=2)
+        new_cache = {&#x27;k&#x27;: k, &#x27;v&#x27;: v}
+
+        # ── causal attention (when L_new=1 in decode, causal is automatic) ──
+        L_total = k.size(2)
+        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.d)
+        if L_new &gt; 1:                                  # causal mask only needed during prefill
+            causal = torch.tril(torch.ones(L_new, L_total, dtype=torch.bool,
+                                          device=x.device), diagonal=L_total - L_new)
+            scores = scores.masked_fill(~causal, float(&#x27;-inf&#x27;))
+        w = F.softmax(scores, dim=-1)
+        out = (w @ v).transpose(1, 2).contiguous().view(B, L_new, D)
+        return self.W_o(out), new_cache
+
+
+# ── Autoregressive generation loop (simplified; real models add sampling/stop/multi-layer) ─
+@torch.no_grad()
+def generate(model, prompt_ids, max_new_tokens, embed, lm_head):
+    cache = None
+    out, cache = model(embed(prompt_ids), cache=cache)        # prefill
+    next_tok = lm_head(out[:, -1:]).argmax(-1)
+    generated = [next_tok]
+    for _ in range(max_new_tokens - 1):
+        out, cache = model(embed(next_tok), cache=cache)      # decode L_new=1
+        next_tok = lm_head(out[:, -1:]).argmax(-1)
+        generated.append(next_tok)
+    return torch.cat(generated, dim=1)</code></pre>
+<p>Note: every <code>torch.cat</code> triggers <strong>a new memory allocation</strong> + memcpy; in production, swap to pre-allocated buffer + index assignment, or PagedAttention.</p>
+<h3 id="62-pagedattention-data-structure-sketch">6.2　PagedAttention data structure sketch</h3>
+<pre><code class="language-python">class PagedKVCache:
+    &quot;&quot;&quot;Simplified page table (no CUDA kernel; data structure + COW demo).&quot;&quot;&quot;
+    def __init__(self, n_layers, n_kv_heads, head_dim, page_size=16,
+                 n_pages=1024, dtype=torch.float16, device=&#x27;cuda&#x27;):
+        self.page_size = page_size
+        # Global page pool: [n_pages, page_size, n_layers, 2 (K,V), n_kv_heads, head_dim]
+        self.pool = torch.empty(n_pages, page_size, n_layers, 2,
+                                n_kv_heads, head_dim, dtype=dtype, device=device)
+        self.free_list = list(range(n_pages))
+        self.ref_count = [0] * n_pages
+        self.block_table = {}                          # req_id → list of physical page ids
+
+    def allocate(self, req_id, n_tokens):
+        n = (n_tokens + self.page_size - 1) // self.page_size
+        assert len(self.free_list) &gt;= n, &quot;OOM&quot;
+        physical = [self.free_list.pop() for _ in range(n)]
+        for pid in physical: self.ref_count[pid] = 1
+        self.block_table[req_id] = physical
+
+    def append_token(self, req_id, pos, layer, k_new, v_new):
+        &quot;&quot;&quot;k_new, v_new: [n_kv_heads, head_dim]&quot;&quot;&quot;
+        page_idx, slot = pos // self.page_size, pos % self.page_size
+        if page_idx &gt;= len(self.block_table[req_id]):
+            new_pid = self.free_list.pop()
+            self.ref_count[new_pid] = 1
+            self.block_table[req_id].append(new_pid)
+        pid = self.block_table[req_id][page_idx]
+        if self.ref_count[pid] &gt; 1:                    # COW
+            new_pid = self.free_list.pop()
+            self.pool[new_pid] = self.pool[pid]
+            self.ref_count[pid] -= 1; self.ref_count[new_pid] = 1
+            self.block_table[req_id][page_idx] = new_pid
+            pid = new_pid
+        self.pool[pid, slot, layer, 0] = k_new
+        self.pool[pid, slot, layer, 1] = v_new
+
+    def free(self, req_id):
+        for pid in self.block_table[req_id]:
+            self.ref_count[pid] -= 1
+            if self.ref_count[pid] == 0: self.free_list.append(pid)
+        del self.block_table[req_id]
+
+    def share_prefix(self, src, dst, n_tokens):
+        &quot;&quot;&quot;beam search / parallel sampling: reuse the first n_tokens of pages.&quot;&quot;&quot;
+        n = n_tokens // self.page_size
+        prefix = self.block_table[src][:n]
+        for pid in prefix: self.ref_count[pid] += 1
+        self.block_table[dst] = list(prefix)</code></pre>
+<p>Production implementations also need a fused paged-attention kernel (per-block gather + FlashAttention-style) and device-side block-table layout.</p>
+<h3 id="63-differences-in-mqa--gqa--mla-forward">6.3　Differences in MQA / GQA / MLA forward</h3>
+<pre><code class="language-python">class MQA_GQA_Attention(nn.Module):
+    &quot;&quot;&quot;Unified MHA / MQA / GQA version (num_kv_heads ≤ num_heads).&quot;&quot;&quot;
+    def __init__(self, d_model, num_heads, num_kv_heads):
+        super().__init__()
+        assert num_heads % num_kv_heads == 0, &quot;H must be divisible by H_kv&quot;
+        self.H, self.H_kv = num_heads, num_kv_heads
+        self.d = d_model // num_heads
+        self.group = num_heads // num_kv_heads        # # of Q heads each KV head serves
+        self.W_q = nn.Linear(d_model, num_heads * self.d, bias=False)
+        self.W_k = nn.Linear(d_model, num_kv_heads * self.d, bias=False)   # ← smaller
+        self.W_v = nn.Linear(d_model, num_kv_heads * self.d, bias=False)   # ← smaller
+        self.W_o = nn.Linear(num_heads * self.d, d_model, bias=False)
+
+    def forward(self, x, cache=None):
+        B, L_new, _ = x.shape
+        q = self.W_q(x).view(B, L_new, self.H, self.d).transpose(1, 2)
+        k = self.W_k(x).view(B, L_new, self.H_kv, self.d).transpose(1, 2)
+        v = self.W_v(x).view(B, L_new, self.H_kv, self.d).transpose(1, 2)
+
+        if cache is not None:
+            k = torch.cat([cache[&#x27;k&#x27;], k], dim=2)
+            v = torch.cat([cache[&#x27;v&#x27;], v], dim=2)
+        new_cache = {&#x27;k&#x27;: k, &#x27;v&#x27;: v}
+
+        # ── Key: broadcast K/V to all Q heads ────────────────────────
+        k = k.repeat_interleave(self.group, dim=1)    # [B, H, L_total, d]
+        v = v.repeat_interleave(self.group, dim=1)
+        # repeat_interleave is explicit broadcast; production uses torch implicit broadcast or fused kernel
+
+        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.d)
+        L_total = k.size(2)
+        if L_new &gt; 1:
+            causal = torch.tril(torch.ones(L_new, L_total, dtype=torch.bool,
+                                          device=x.device), diagonal=L_total - L_new)
+            scores = scores.masked_fill(~causal, float(&#x27;-inf&#x27;))
+        w = F.softmax(scores, dim=-1)
+        out = (w @ v).transpose(1, 2).contiguous().view(B, L_new, -1)
+        return self.W_o(out), new_cache
+
+
+class MLAAttention(nn.Module):
+    &quot;&quot;&quot;MLA with decoupled RoPE (simplified DeepSeek-V2).&quot;&quot;&quot;
+    def __init__(self, d_model, num_heads, d_head, d_c, d_r):
+        super().__init__()
+        self.H = num_heads
+        self.d_head = d_head          # content head dim
+        self.d_c = d_c                # latent dim (shared by K/V)
+        self.d_r = d_r                # RoPE head dim (per query head)
+        # KV side: compress to latent, then up-project to K_C, V
+        self.W_DKV = nn.Linear(d_model, d_c, bias=False)
+        self.W_UK = nn.Linear(d_c, num_heads * d_head, bias=False)
+        self.W_UV = nn.Linear(d_c, num_heads * d_head, bias=False)
+        # RoPE channel: K is shared (across heads)
+        self.W_KR = nn.Linear(d_model, d_r, bias=False)
+        # Q side: compress to latent (saves training memory), then up-project to Q_C and Q_R
+        d_c_q = 4 * d_head            # in the paper d_c_q ≠ d_c
+        self.W_DQ = nn.Linear(d_model, d_c_q, bias=False)
+        self.W_UQ = nn.Linear(d_c_q, num_heads * (d_head + d_r), bias=False)
+        self.W_o = nn.Linear(num_heads * d_head, d_model, bias=False)
+
+    def _rope(self, x, positions, l_axis=-2, base=10000.0):
+        &quot;&quot;&quot;Standard RoPE 2D rotation. L is on l_axis, d_r is the last dim; positions: [L].&quot;&quot;&quot;
+        assert x.size(-1) % 2 == 0
+        D, L = x.size(-1), x.size(l_axis)
+        assert positions.shape == (L,)
+        i = torch.arange(D // 2, device=x.device, dtype=x.dtype)
+        theta = base ** (-2.0 * i / D)                              # [D/2]
+        angles = positions.to(x.dtype).unsqueeze(-1) * theta        # [L, D/2]
+        cos, sin = angles.cos(), angles.sin()
+        ndim = x.dim()
+        cos_shape = [1] * ndim
+        cos_shape[l_axis % ndim] = L
+        cos_shape[-1] = D // 2
+        cos_b, sin_b = cos.view(cos_shape), sin.view(cos_shape)
+        x2 = x.view(*x.shape[:-1], D // 2, 2)
+        x_real, x_imag = x2.unbind(-1)
+        rot_real = x_real * cos_b - x_imag * sin_b
+        rot_imag = x_real * sin_b + x_imag * cos_b
+        return torch.stack([rot_real, rot_imag], dim=-1).flatten(-2)
+
+    def forward(self, x, positions, cache=None):
+        B, L_new, _ = x.shape
+        # ── KV side: compute latent + RoPE-K ─────────────────────────
+        c_kv = self.W_DKV(x)                           # [B, L_new, d_c]
+        k_r = self._rope(self.W_KR(x), positions)      # [B, L_new, d_r]  (shared across heads)
+        if cache is not None:
+            c_kv = torch.cat([cache[&#x27;c_kv&#x27;], c_kv], dim=1)
+            k_r  = torch.cat([cache[&#x27;k_r&#x27;],  k_r],  dim=1)
+        new_cache = {&#x27;c_kv&#x27;: c_kv, &#x27;k_r&#x27;: k_r}        # ← only cache latent + RoPE, not full K/V
+
+        # Reconstruct K_C, V (this step can be absorbed into Q/O projection at inference; shown naively here)
+        k_c = self.W_UK(c_kv).view(B, -1, self.H, self.d_head).transpose(1,2)  # [B,H,L_tot,d_head]
+        v   = self.W_UV(c_kv).view(B, -1, self.H, self.d_head).transpose(1,2)
+
+        # ── Q side: split into content and RoPE segments ─────────────
+        c_q = self.W_DQ(x)                             # [B, L_new, d_c_q]
+        q_full = self.W_UQ(c_q).view(B, L_new, self.H, self.d_head + self.d_r)
+        q_c, q_r_raw = q_full.split([self.d_head, self.d_r], dim=-1)
+        q_c = q_c.transpose(1, 2)                      # [B, H, L_new, d_head]
+        q_r = self._rope(q_r_raw, positions, l_axis=1).transpose(1, 2)  # [B, H, L_new, d_r]
+
+        # ── attention scores: sum the two parts ──────────────────────
+        L_tot = c_kv.size(1)
+        scale = math.sqrt(self.d_head + self.d_r)
+        scores_c = q_c @ k_c.transpose(-2, -1)         # content part [B, H, L_new, L_tot]
+        # k_r is shared across heads, broadcast:
+        scores_r = q_r @ k_r.transpose(-2, -1).unsqueeze(1)  # [B, H, L_new, L_tot]
+        scores = (scores_c + scores_r) / scale
+
+        if L_new &gt; 1:
+            causal = torch.tril(torch.ones(L_new, L_tot, dtype=torch.bool,
+                                          device=x.device), diagonal=L_tot - L_new)
+            scores = scores.masked_fill(~causal, float(&#x27;-inf&#x27;))
+        w = F.softmax(scores, dim=-1)
+        out = (w @ v).transpose(1, 2).contiguous().view(B, L_new, -1)
+        return self.W_o(out), new_cache</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Demo code vs production code</div><p>the MLA implementation above "naively" reconstructs full K/V at every step, so it doesn't actually save compute. Production implementations should do the absorb trick from §4.3.3 — pre-multiplying $W^{UQ\top} W^{UK}$ and $W^{UV} W^O$ at model load, and scoring directly against the latent at inference.</p></div>
+<h2 id="7-speculative-decoding-core-mechanism">§7 Speculative Decoding Core Mechanism</h2>
+<h3 id="71-setup">7.1　Setup</h3>
+<ul><li><strong>Target model</strong> $p$: the large model to accelerate (e.g., LLaMA-70B), $p(x_{t+1} | x_{\le t})$ is its per-step conditional distribution</li><li><strong>Draft model</strong> $q$: a much smaller model (e.g., LLaMA-7B or EAGLE's feature head), $q(x_{t+1} | x_{\le t})$ is its conditional distribution</li><li><strong>Goal</strong>: make the final output distribution <strong>exactly</strong> equal $p$ (exact), not approximate</li></ul>
+<p>Each spec step:</p>
+<ol><li>Use $q$ to <strong>autoregressively</strong> draft $K$ tokens: $\tilde x_1, \tilde x_2, \dots, \tilde x_K$</li><li>Feed prefix + $K$ drafts to $p$ at once, <strong>in parallel</strong> computing $p(x_{t+i} | x_{\le t+i-1})$ for $i=1..K$ (plus $i=K+1$ for bonus-token logits)</li><li>For each draft position, do <strong>rejection sampling</strong>: accept with probability $\min(1, p(\tilde x_i) / q(\tilde x_i))$</li><li>At the first rejected position $j$: resample from the corrected residual distribution $p'$; discard positions $j+1, \dots, K$</li><li>If all accepted ($j = K+1$), also sample a <strong>bonus token</strong> for free from the target's last logit set</li></ol>
+<h3 id="72-acceptance-probability-alpha-derivation-must-know">7.2　Acceptance probability $\alpha$ derivation (must-know)</h3>
+<div class="callout callout-good"><div class="callout-title">Core theorem (Leviathan et al. 2023, Chen et al. 2023)</div><p>rejection sampling makes the whole spec step's output distribution <strong>exactly equivalent</strong> to one step of sampling from $p$.</p></div>
+<p><strong>Derivation</strong>: at a position, draft gives $\tilde x \sim q(\cdot)$.</p>
+<p>Accept rule: accept with probability $r(\tilde x) = \min(1, p(\tilde x)/q(\tilde x))$.</p>
+<p>Probability of accepted token:</p>
+<p>$$\Pr[\text{accept} \land X = x] = q(x) \cdot r(x) = q(x) \cdot \min\!\left(1, \frac{p(x)}{q(x)}\right) = \min(q(x), p(x))$$</p>
+<p>Rejection probability:</p>
+<p>$$\beta = 1 - \alpha = \sum_x q(x) - \sum_x \min(q(x), p(x)) = \sum_x \max(0, q(x) - p(x))$$</p>
+<p>Overall acceptance:</p>
+<p>$$\boxed{\;\alpha = \sum_x \min(q(x), p(x)) = 1 - \tfrac{1}{2}\|p - q\|_1\;}$$</p>
+<p>The last step uses the identity $\sum_x \min(p, q) = 1 - \tfrac{1}{2} \sum_x |p - q|$ (since $\sum_x p = \sum_x q = 1$).</p>
+<p><strong>Corollary</strong>: the closer $p$ and $q$ are (smaller TV distance), the closer $\alpha$ is to 1.</p>
+<h3 id="73-residual-distribution-p-how-to-sample-on-reject">7.3　Residual distribution $p'$ (how to sample on reject)</h3>
+<p>After rejection, sample a new token from $p$ with the "accepted mass" removed:</p>
+<p>$$p'(x) = \frac{\max(0, p(x) - q(x))}{\sum_x \max(0, p(x) - q(x))} = \frac{\max(0, p(x) - q(x))}{1 - \alpha}$$</p>
+<p><strong>Equivalence proof</strong> (key, must derive in interviews): the total probability that token $x$ is output in one spec step:</p>
+<p>$$\Pr[X = x] = \underbrace{q(x) \min(1, p(x)/q(x))}_\text{accept path} + \underbrace{(1-\alpha) \cdot p'(x)}_\text{reject path}$$</p>
+<ul><li>First term $= \min(p(x), q(x))$</li><li>Second term $= (1-\alpha) \cdot \dfrac{\max(0, p(x) - q(x))}{1-\alpha} = \max(0, p(x) - q(x))$</li></ul>
+<p>Sum: $\min(p, q) + \max(0, p - q) = p$. ✅</p>
+<p>So <strong>the output distribution at each position equals $p$ exactly</strong> — this is the mathematical basis of spec decoding's "exact" property.</p>
+<h3 id="74-expected-speedup-etau-formula">7.4　Expected speedup: $E[\tau]$ formula</h3>
+<p>Assume each draft position's acceptance is i.i.d. (slightly correlated in practice; the paper uses this approximation). $K$ drafts + 1 bonus:</p>
+<ul><li>If first $j$ accepted, position $j+1$ rejected ($j < K$): output $j$ accepted + 1 resample = $j+1$ tokens</li><li>If all $K$ accepted: output $K$ + 1 bonus = $K+1$ tokens</li></ul>
+<p>Expected token count:</p>
+<p>$$E[\tau] = \sum_{j=0}^{K-1} \alpha^j (1-\alpha) (j+1) + \alpha^K (K+1)$$</p>
+<p>Simplification (standard geometric-series trick):</p>
+<p>$$\boxed{\;E[\tau] = \frac{1 - \alpha^{K+1}}{1 - \alpha}\;}$$</p>
+<p><strong>Limit analysis</strong>:</p>
+<ul><li>$\alpha \to 1$ (perfect draft): $E[\tau] \to K+1$, speedup $K+1$×</li><li>$\alpha \to 0$ (draft always wrong): $E[\tau] \to 1$, no speedup but no regression either</li><li>In practice, LLaMA-7B drafting LLaMA-70B: $\alpha \approx 0.6-0.7$, $K=4$ gives $E[\tau] \approx 2.7$</li></ul>
+<div class="callout callout-info"><div class="callout-title">Real speedup formula</div><p>subtract the draft model's own forward overhead. Let $c = T_q / T_p$ (draft step time / target step time, typical 0.05-0.15):</p></div>
+<p>$$\text{speedup} = \frac{E[\tau]}{1 + Kc}$$</p>
+<p>The numerator is mean accepted token count; the denominator's 1 is the single target verify, and $Kc$ is $K$ draft forwards. If $c$ is too large (draft too big), it eats the gain, so picking a small draft matters.</p>
+<h3 id="75-sampling-equivalence-under-temperature--top-p">7.5　Sampling equivalence under temperature / top-p</h3>
+<p>The rejection sampling equivalence requires only two things: (1) <strong>at the target side, replace $p$ with the post-sampler distribution $\tilde p$</strong> for acceptance and residual; (2) the draft proposal distribution $\tilde q$ can be any valid probability distribution. <strong>Mathematically it does not require draft and target to use the same sampler</strong> — pure greedy draft is also legal, just with $\tilde q$ far from $\tilde p$ and $\alpha$ plummeting. In practice the draft typically uses the same temperature/top-p so $\tilde q$ stays close to $\tilde p$.</p>
+<div class="callout callout-bad"><div class="callout-title">Wrong equivalence approach</div><p>"draft uses the same sampling, then just compare tokens for agreement" is wrong — that loses distribution equivalence. The correct approach is the §7.3 rejection formula, <strong>comparing probabilities rather than token agreement</strong>.</p></div>
+<h3 id="76-code-speculative-decoding-loop">7.6　Code: speculative decoding loop</h3>
+<p>Below is a single-batch demo. Convention: both models expose <code>forward(input_ids, cache)</code>; the cache object has a <code>length</code> attribute + <code>truncate(L)</code> method (in production, PagedAttention rollbacks via block-table pointer changes in $O(1)$). <strong>Core invariant</strong>: at the start of each loop iteration, <code>cache.length == seq.size(1) - 1</code> (i.e., the cache holds all of seq except the last 1 token).</p>
+<pre><code class="language-python">import torch
+
+@torch.no_grad()
+def speculative_decode(target, draft, prompt_ids, max_new_tokens, K=4, temperature=1.0):
+    &quot;&quot;&quot;
+    target, draft: callable(input_ids, cache) → (logits [1,L_new,V], new_cache).
+    Mathematically exact equivalent to directly sampling from target (Leviathan/Chen 2023).
+    &quot;&quot;&quot;
+    seq = prompt_ids.clone()                                   # [1, L_prompt]
+    L_prompt = seq.size(1)
+    # Prefill the first L-1 tokens; keep the last token as the first verify input.
+    _, target_cache = target(seq[:, :-1], cache=None)
+    _, draft_cache  = draft(seq[:, :-1],  cache=None)
+
+    while seq.size(1) - L_prompt &lt; max_new_tokens:
+        last_tok = seq[:, -1:]                                  # [1, 1], not yet in cache
+        draft_chk, target_chk = draft_cache.length, target_cache.length
+
+        # ── 1. Draft: feed last_tok, d_1, ..., d_{K-1}; sample d_1..d_K ──
+        cur = last_tok
+        draft_tokens, draft_probs = [], []
+        for _ in range(K):
+            logits, draft_cache = draft(cur, cache=draft_cache)
+            probs = torch.softmax(logits[:, -1, :] / temperature, dim=-1)
+            tok = torch.multinomial(probs, 1)
+            draft_tokens.append(tok); draft_probs.append(probs)
+            cur = tok
+        draft_tokens = torch.cat(draft_tokens, dim=1)            # [1, K]
+
+        # ── 2. Target: one forward over [last_tok, d_1..d_K], yielding K+1 distributions ──
+        target_in = torch.cat([last_tok, draft_tokens], dim=1)   # [1, K+1]
+        target_logits, target_cache = target(target_in, cache=target_cache)
+        # target_logits[:, i, :] verifies d_{i+1} (i&lt;K) or samples bonus (i=K)
+
+        # ── 3. Rejection sampling position by position ──
+        accepted = 0; rejected = False
+        for i in range(K):
+            p_i = torch.softmax(target_logits[:, i, :] / temperature, dim=-1)
+            q_i = draft_probs[i]
+            x = draft_tokens[:, i:i+1]
+            p_x = p_i.gather(-1, x).squeeze(-1)
+            q_x = q_i.gather(-1, x).squeeze(-1)
+            r = (p_x / (q_x + 1e-9)).clamp(max=1.0)
+            if torch.rand_like(r).item() &lt; r.item():             # accept
+                accepted += 1
+            else:                                                 # reject
+                p_prime = (p_i - q_i).clamp(min=0.0)              # residual distribution p&#x27;
+                p_prime = p_prime / (p_prime.sum(-1, keepdim=True) + 1e-9)
+                new_tok = torch.multinomial(p_prime, 1)
+                seq = torch.cat([seq, draft_tokens[:, :accepted], new_tok], dim=1)
+                # rollback: keep last_tok + accepted drafts; new_tok not yet in cache
+                draft_cache.truncate(draft_chk + 1 + accepted)
+                target_cache.truncate(target_chk + 1 + accepted)
+                rejected = True
+                break
+
+        if not rejected:                                          # all accepted → bonus token
+            p_bonus = torch.softmax(target_logits[:, K, :] / temperature, dim=-1)
+            bonus = torch.multinomial(p_bonus, 1)
+            seq = torch.cat([seq, draft_tokens, bonus], dim=1)
+            # draft_cache previously saw only d_1..d_{K-1}; feed d_K to maintain invariant
+            _, draft_cache = draft(draft_tokens[:, -1:], cache=draft_cache)
+            # target_cache already contains last_tok + d_1..d_K, matches invariant
+
+    return seq[:, :L_prompt + max_new_tokens]                     # trim overshoot</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Production implementation points</div><p>(1) <strong>Cache rollback</strong> must actually rewind the KV cache write position; vLLM uses PagedAttention's block-table pointer change for $O(1)$. (2) <strong>Numerical stability</strong>: $r=p/q$ explodes as $q \to 0$ — compute in fp32 and clamp. (3) <strong>Invariant</strong>: at the start of each loop iteration, cache holds all of seq except the last token — all rollback/refeed logic is to maintain this invariant.</p></div>
+<h2 id="8-main-speculative-decoding-variants">§8 Main Speculative Decoding Variants</h2>
+<h3 id="81-variant-overview">8.1　Variant overview</h3>
+<table><thead><tr><th>Method</th><th>Draft source</th><th>Multi-token structure</th><th>Needs draft training?</th><th>Representative paper</th></tr></thead><tbody><tr><td><strong>Vanilla SD</strong></td><td>Independent small model</td><td>Linear chain</td><td>No (use off-the-shelf small LM)</td><td>Leviathan 2023, Chen 2023</td></tr><tr><td><strong>SpecInfer</strong></td><td>Multiple drafts together</td><td><strong>Static tree</strong></td><td>No</td><td>Miao 2024 (ASPLOS)</td></tr><tr><td><strong>Medusa</strong></td><td>Add N heads on target</td><td>Static tree</td><td>Yes (fine-tune heads)</td><td>Cai 2024 (ICML)</td></tr><tr><td><strong>EAGLE-1</strong></td><td>Feature-level autoregression + small model</td><td>Tree</td><td>Yes (small draft head)</td><td>Li 2024 (ICML)</td></tr><tr><td><strong>EAGLE-2</strong></td><td>Same as EAGLE-1</td><td><strong>Dynamic tree</strong></td><td>Yes</td><td>Li 2024</td></tr><tr><td><strong>EAGLE-3</strong></td><td>Multi-layer feature fusion + training-time test</td><td>Dynamic tree</td><td>Yes</td><td>Li 2025</td></tr><tr><td><strong>Hydra</strong></td><td>Sequential draft heads</td><td>Static tree</td><td>Yes</td><td>Ankner 2024</td></tr><tr><td><strong>Lookahead Decoding</strong></td><td><strong>Jacobi iteration</strong> + n-gram pool</td><td>Self-verify</td><td>No</td><td>Fu 2024 (ICML)</td></tr><tr><td><strong>REST</strong></td><td>Retrieval (datastore)</td><td>Static tree</td><td>No</td><td>He 2024 (NAACL)</td></tr><tr><td><strong>Self-Speculative</strong></td><td>Target skips layers</td><td>Linear</td><td>No (use a subset of target layers)</td><td>Zhang 2024</td></tr><tr><td><strong>TriForce</strong></td><td>Hierarchical (small LM + sparse target)</td><td>Hierarchical</td><td>No</td><td>Sun 2024</td></tr><tr><td><strong>MagicDec</strong></td><td>Small draft + sparse KV</td><td>Linear</td><td>No</td><td>Sadhukhan 2024</td></tr></tbody></table>
+<h3 id="82-medusa-multi-head-in-parallel">8.2　Medusa: multi-head in parallel</h3>
+<p>Medusa's core (Cai et al., ICML 2024): <strong>add $N$ parallel prediction heads on top of the target's final hidden state</strong>; the $k$-th head directly predicts the "$(k+1)$-th future token".</p>
+<ul><li>No need for a separate draft model; only fine-tune these heads (small parameter count)</li><li>The top-$K$ candidates from each of $N$ heads compose a <strong>static tree</strong> (e.g., top-5 per head, $5^N$ paths total, pruned by typical acceptance)</li><li>Tree attention: flatten all tree nodes into one input for the target's forward; each node's attention mask sees only its ancestors (causal on the tree)</li></ul>
+<div class="callout callout-info"><div class="callout-title">Tree attention mask</div><p>arrange tree nodes by BFS into a linear sequence $[t_0, t_1, \dots, t_M]$. Let $\mathcal A(i)$ denote node $i$'s ancestors (inclusive). Mask $M[i, j] = 1$ iff $j \in \mathcal A(i)$. Each node thus only sees the root-to-self path; logits are correct.</p></div>
+<ul><li><strong>Verification defaults to typical acceptance</strong> (proposed in the paper): accept draft tokens based on the typical-set threshold of the target distribution; this rule <strong>does not strictly guarantee exact sampling</strong>, but in practice quality is essentially unchanged. For exact, switch to standard rejection sampling (Leviathan/Chen formula).</li><li><strong>Medusa-1 vs Medusa-2 differ in training paradigm</strong>: Medusa-1 freezes the backbone and only trains heads; Medusa-2 jointly trains backbone + heads for higher quality; both default to typical acceptance.</li></ul>
+<h3 id="83-eagle-family-feature-level-autoregression">8.3　EAGLE family: feature-level autoregression</h3>
+<p>EAGLE's core insight (Li et al., ICML 2024): <strong>the target's previous-layer hidden feature $h_{t-1}$ contains more information than tokens</strong> — drafting in feature space is more accurate than in token space.</p>
+<ul><li>Draft model: one transformer layer; inputs $h_{t-1}$ (target's feature) + token embedding; predicts $h_t$ and $x_t$</li><li>Training objective: make draft's $h_t$ close to target's $h_t$ (feature loss) + token prediction loss</li></ul>
+<p><strong>EAGLE-2</strong> (Li 2024): replaces the static tree with a dynamic tree — at each step, use draft's probability to expand the most promising paths.</p>
+<p><strong>EAGLE-3</strong> (Li et al., 2025):</p>
+<ol><li>Drop feature regression, <strong>predict tokens directly</strong> (feature error accumulation is the bottleneck)</li><li>Use <strong>multi-layer feature fusion</strong> instead of just the top layer</li><li><strong>Training-Time Test (TTT)</strong>: simulate draft-chain errors during training, avoiding train-test gap</li><li>On Vicuna-7B: 4-5× speedup, ~30% improvement over EAGLE-2</li></ol>
+<div class="callout callout-warn"><div class="callout-title">EAGLE training cost</div><p>although the draft model is small (1-layer transformer, ~tens of M parameters), it must be retrained on the target's features, requiring the target's forward-pass dataset (distillation-style). A single EAGLE-3 training run takes hours to days; it is not free.</p></div>
+<h3 id="84-lookahead-decoding-jacobi-iteration">8.4　Lookahead Decoding: Jacobi iteration</h3>
+<p><strong>Jacobi viewpoint</strong> (Fu et al., ICML 2024): autoregressive generation is equivalent to solving the nonlinear system $x_i = f(x_{<i})$ for $i=1..L$; can use Jacobi iteration to update all positions in parallel.</p>
+<pre><code>Step 0:  x = [&lt;random&gt;, &lt;random&gt;, ..., &lt;random&gt;]
+Step 1:  x&#x27;_i = f(x_{&lt;i})  ∀ i  in parallel
+Step 2:  x = x&#x27;, another round
+... until fixed point</code></pre>
+<p>Lookahead Decoding:</p>
+<ul><li><strong>Lookahead branch</strong>: maintain a 2D window (lookahead size × window depth), Jacobi-style updates over the whole window each step</li><li>Extract apparently-stable <strong>n-grams</strong> from the trajectory into a pool</li><li><strong>Verification branch</strong>: per forward, simultaneously verify promising n-grams in the pool (multi-path tree attention)</li><li>No draft model; no training; pure inference-time trick</li></ul>
+<p>Effect: MT-bench 1.8×, code completion multi-card 4× speedup. But for open-ended generation without repetition (e.g., complex reasoning), the gain is limited.</p>
+<h3 id="85-long-context-specialists-triforce--magicdec">8.5　Long-context specialists: TriForce / MagicDec</h3>
+<div class="callout callout-warn"><div class="callout-title">Vanilla SD breaks down in long context</div><p>when context is long (e.g., 128K), every target forward must scan the entire KV cache, and <strong>HBM bandwidth</strong> is the bottleneck, not weight loading. Vanilla SD's savings come from reducing weight-load frequency; in this regime the benefit shrinks.</p></div>
+<p><strong>TriForce</strong> (Sun et al., 2024, arxiv 2404.11912): three-tier hierarchy.</p>
+<ol><li>First-tier draft: small LM</li><li>Second-tier draft: target model + <strong>sparse KV cache</strong> (keep only heavy-hitter / retrieved portions)</li><li>Third-tier verify: target model + <strong>full KV cache</strong></li></ol>
+<p>Speedup core: second-tier draft is fast under sparse cache, then the full-cache target verifies a long batch in one go.</p>
+<p><strong>MagicDec</strong> (Sadhukhan et al., 2024, arxiv 2408.11049, ICLR 2025): observes that the KV cache is the bottleneck in long context, so the draft uses <strong>StreamingLLM-style sparse cache</strong> (attention sink + sliding window) and the target uses full cache for verify.</p>
+<h3 id="86-self-speculative-decoding">8.6　Self-Speculative Decoding</h3>
+<div class="callout callout-info"><div class="callout-title">An extreme version without an external draft model</div><p>Zhang et al. 2024 propose "self-speculative": use the <strong>target model itself with some layers skipped</strong> as the draft.</p></div>
+<ul><li>Take logits from layer $L_d < L$ in target as draft (early exit)</li><li>Use the full target for verify</li><li>Fully backwards-compatible: no new model to train, no fine-tuning</li><li>Typical speedup 1.5-2× (not as fast as EAGLE, but zero extra training)</li></ul>
+<h2 id="9-complexity--resource-accounting">§9 Complexity / Resource Accounting</h2>
+<h3 id="91-kv-cache-memory-summary">9.1　KV cache memory (summary)</h3>
+<p>Using LLaMA-2/3-70B architecture ($N_\text{layers}=80, d_\text{head}=128$, MHA $H=64$) as baseline, $L_\text{ctx}=4096$, fp16:</p>
+<table><thead><tr><th>Scheme</th><th>per-token-per-layer bytes</th><th>70B / 4K context (whole model)</th></tr></thead><tbody><tr><td>MHA ($H_\text{kv}=64$)</td><td>$2 \cdot 2 \cdot 64 \cdot 128 = 32768$</td><td>10.0 GB</td></tr><tr><td>GQA ($H_\text{kv}=8$)</td><td>$2 \cdot 2 \cdot 8 \cdot 128 = 4096$</td><td>1.25 GB</td></tr><tr><td>MQA ($H_\text{kv}=1$)</td><td>$2 \cdot 2 \cdot 1 \cdot 128 = 512$</td><td>0.16 GB</td></tr><tr><td>MLA ($d_c=512, d_r=64$, 60 layers)</td><td>$2 \cdot (512+64) = 1152$</td><td>~0.27 GB</td></tr><tr><td>MHA + INT4 KV</td><td>$32768 / 4 = 8192$</td><td>2.5 GB</td></tr></tbody></table>
+<h3 id="92-speculative-decoding-expected-throughput">9.2　Speculative decoding expected throughput</h3>
+<p>$$\text{tokens / sec}_\text{SD} = \frac{\text{tokens / sec}_\text{baseline} \cdot E[\tau]}{1 + Kc}$$</p>
+<p>Empirical numbers (A100, LLaMA-2-7B target + 68M draft):</p>
+<ul><li>vanilla SD: 1.6-2.2×</li><li>Medusa-2: 2.5-3.0×</li><li>EAGLE-2: 3.0-3.5×</li><li>EAGLE-3: ~4.0× (short context)</li></ul>
+<p>Long context (128K+) regime: vanilla SD drops to 1.1-1.3×; TriForce / MagicDec still hold 2-2.5×.</p>
+<h3 id="93-rough-budget-70b--4k-context--gqa">9.3　Rough budget (70B + 4K context + GQA)</h3>
+<table><thead><tr><th>Item</th><th>Memory</th></tr></thead><tbody><tr><td>weights (fp16)</td><td>140 GB</td></tr><tr><td>KV cache @ batch 8</td><td>$8 \times 1.25$ GB $= 10$ GB</td></tr><tr><td>activation peak (decode, batch 8)</td><td>~2 GB</td></tr><tr><td>total</td><td>~152 GB → tight on 2×80GB A100; typically 4×80GB</td></tr></tbody></table>
+<p>For vanilla SD, the draft model (7B fp16) adds +14 GB; EAGLE's draft head is only ~200 MB.</p>
+<h2 id="10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</h2>
+<p>By difficulty L1 (must-know) / L2 (advanced) / L3 (top labs). Expand each entry for answers + common pitfalls.</p>
+<h3 id="l1-must-know-asked-at-every-inference--serving-interview">L1 must-know (asked at every inference / serving interview)</h3>
+<details>
+
+<summary>Q1. What is the KV cache formula?</summary>
+<ul><li>Per sample: $2 \cdot L_\text{ctx} \cdot N_\text{layers} \cdot N_\text{kv\_heads} \cdot d_\text{head} \cdot \text{bytes}$</li><li>The "2" comes from K + V</li><li>$N_\text{kv\_heads}$: MHA = $H$, MQA = 1, GQA = $G$</li><li>LLaMA-3-70B (GQA, $H_\text{kv}=8$) @4K fp16 ≈ 1.25 GB/sample</li></ul>
+<p>Pitfall: writing $H$ (Q heads); forgetting × 2; forgetting that $L_\text{ctx}$ is the current length, not max length.</p>
+</details>
+<details>
+
+<summary>Q2. Why doesn't training use KV cache?</summary>
+<ul><li>Training computes all positions at once (teacher forcing, ground truth known)</li><li>There's no "partial sequence with K/V waiting to be appended" timing</li><li>KV cache is <strong>inference-only</strong> optimization</li></ul>
+<p>Pitfall: applying KV cache as a generic optimization to training.</p>
+</details>
+<details>
+
+<summary>Q3. What are the bottlenecks of prefill and decode?</summary>
+<ul><li>Prefill: $O(L^2)$ attention FLOPs, <strong>compute-bound</strong></li><li>Decode: one token per step, but must read the full cache + weights, <strong>memory-bandwidth-bound</strong></li><li>Arithmetic intensity is extremely low → GPU FLOPs utilization often &lt; 10%</li></ul>
+<p>Pitfall: saying "decode is also compute-bound" — wrong. With small decode batch, the GPU spends most time waiting on memory.</p>
+</details>
+<details>
+
+<summary>Q4. Difference between MQA / GQA / MHA?</summary>
+<ul><li>MHA: $H$ K/V heads (same as Q)</li><li>MQA: all Q heads share <strong>1</strong> set of K/V</li><li>GQA: $H$ Q heads divided into $G$ groups ($1<G<H$), each group shares K/V</li><li>Mainly saves <strong>KV cache memory + memory bandwidth</strong>, not Q projection</li></ul>
+<p>Pitfall: thinking MQA saves Q compute; saying GQA quality "doesn't drop at all" too absolutely.</p>
+</details>
+<details>
+
+<summary>Q5. Speculative decoding formula?</summary>
+<ul><li>Draft $q$ proposes $K$ tokens; target $p$ verifies in one forward</li><li>Per-position acceptance $r = \min(1, p(\tilde x)/q(\tilde x))$</li><li>Overall acceptance $\alpha = \sum_x \min(p(x), q(x))$</li><li>Expected generation $E[\tau] = \dfrac{1 - \alpha^{K+1}}{1 - \alpha}$</li></ul>
+<p>Pitfall: saying "spec decoding is approximate sampling" — wrong, it's <strong>exact</strong> (rejection sampling guarantees it).</p>
+</details>
+<details>
+
+<summary>Q6. What does PagedAttention solve?</summary>
+<ul><li>Naive KV cache must be a contiguous large tensor, pre-allocated to max length → internal fragmentation</li><li>Different request lengths → external fragmentation</li><li>Memory utilization only ~70%</li><li>PagedAttention: pages + block table, utilization up to ~96%</li><li>Supports prefix sharing (COW)</li></ul>
+<p>Pitfall: saying PagedAttention reduces attention FLOPs — wrong, FLOPs are unchanged; it optimizes <strong>memory utilization + concurrent request count</strong>.</p>
+</details>
+<details>
+
+<summary>Q7. What is continuous batching?</summary>
+<ul><li>Scheduling granularity changes from request to iteration (re-check the batch at every forward)</li><li>Completed requests are immediately removed, freeing slots for new ones</li><li>Proposed by: Orca (Yu et al., OSDI 2022)</li><li>Reduces average wait time, improves GPU utilization</li><li>vLLM = Orca continuous batching + PagedAttention</li></ul>
+<p>Pitfall: thinking continuous batching pads all different-length sequences to the longest — that's the old static-batching approach.</p>
+</details>
+<details>
+
+<summary>Q8. How to pick the draft model?</summary>
+<ul><li>Size: typically target / 30 - target / 10 (e.g., 70B target + 7B draft)</li><li>Same tokenizer, same vocab (else rejection sampling can't compute $p/q$)</li><li>Same prompt format / same RLHF post-training (else large distribution gap → low $\alpha$)</li><li>Experience: $\alpha \in [0.5, 0.8]$; too low, don't bother with SD</li></ul>
+<p>Pitfall: picking too-large draft (e.g., target / 3); or different tokenizer.</p>
+</details>
+<details>
+
+<summary>Q9. Most common KV cache quantization approach?</summary>
+<ul><li>FP8 (H100 native) is essentially lossless</li><li>INT8 per-token quant is also acceptable</li><li>INT4 / INT2 (KIVI, KVQuant) requires careful outlier handling</li><li>KIVI's key: <strong>K per-channel, V per-token</strong> asymmetric quantization</li></ul>
+<p>Pitfall: using the same quant scheme for K and V — easy to lose accuracy; K and V have different outlier distributions.</p>
+</details>
+<details>
+
+<summary>Q10. What is prefix caching?</summary>
+<ul><li>Multiple requests share the same prompt prefix (system prompt, few-shot)</li><li>Index page pool by hash(prefix); on hit, skip prefill</li><li>Combined with COW to handle subsequent divergence</li><li>Services like ChatGPT (system-prompt-heavy) have 90%+ hit rates</li></ul>
+<p>Pitfall: thinking prefix caching = caching the entire prompt — only the prefix is cached; user-specific parts still require prefill.</p>
+</details>
+<h3 id="l2-advanced-research-oriented--inference-systems-roles">L2 advanced (research-oriented / inference systems roles)</h3>
+<details>
+
+<summary>Q11. Derive spec decoding's acceptance probability $\alpha$ and explain why it guarantees exact sampling.</summary>
+<ul><li>Let draft $\tilde x \sim q$, accept rule $r = \min(1, p/q)$</li><li>$\Pr[\text{accept} \land X=x] = q(x) \cdot \min(1, p(x)/q(x)) = \min(p(x), q(x))$</li><li>$\alpha = \sum_x \min(p, q) = 1 - \tfrac{1}{2} \|p - q\|_1$</li><li>After rejection, resample from residual $p'(x) = \max(0, p-q) / (1-\alpha)$</li><li>Total output probability $= \min(p, q) + \max(0, p-q) = p(x)$ ∀x</li><li>So each position is equivalent to a single-step sample from $p$</li></ul>
+<p>Pitfall: only writing the accept part, missing the reject residual; not proving $\min + \max = p$; saying spec is approximate.</p>
+</details>
+<details>
+
+<summary>Q12. Why must MLA decouple RoPE? Detailed derivation.</summary>
+<ul><li>Naive MLA absorb trick: $q^\top k = c_q^\top (W^{UQ\top} W^{UK}) c_{kv}$ — middle is a constant matrix $\tilde W^{QK}$, can be pre-multiplied</li><li>With RoPE: $q^{R\top} k^R = c_q^\top W^{UQ\top} R_{s-t} W^{UK} c_{kv}$</li><li>Middle block $W^{UQ\top} R_{s-t} W^{UK}$ <strong>depends on relative position $(s-t)$</strong>, cannot be pre-multiplied</li><li>Absorb fails → cache saved but compute reverts to MHA</li><li>Fix: split out an independent RoPE channel $k^R \in \mathbb{R}^{d_r}$ (shared across heads); content channel goes through absorb, RoPE channel uses standard dot product</li><li>Total cache: $d_c + d_r$ per token</li></ul>
+<p>Pitfall: just saying "RoPE causes a problem" without expansion; unaware of the RoPE property $R_t^\top R_s = R_{s-t}$; unaware that $k^R$ is shared across heads.</p>
+</details>
+<details>
+
+<summary>Q13. How does continuous batching handle prefill + decode mixed runs?</summary>
+<ul><li>Prefill computes long segments in one go, high FLOPs; decode one token, low FLOPs</li><li>Mixing them directly leaves decode waiting for prefill (HOL blocking)</li><li>Sarathi-Serve's <strong>chunked prefill</strong>: split long prefill into equal-size chunks</li><li>Each iteration coalesces one prefill chunk + multiple decode tokens</li><li>Stall-free schedule: decode is always running</li></ul>
+<p>Pitfall: assuming prefill must run as one unit; forgetting Sarathi-Serve is OSDI 2024.</p>
+</details>
+<details>
+
+<summary>Q14. How to write the tree-attention mask (for Medusa / EAGLE)?</summary>
+<ul><li>Flatten tree nodes by BFS into linear sequence $[t_0, \dots, t_M]$</li><li>$\mathcal A(i)$ = ancestors of node $i$ (inclusive)</li><li>Attention mask $M[i, j] = 1 \iff j \in \mathcal A(i)$</li><li>I.e., "causal on the tree"</li><li>Used to verify all tree paths in one forward</li></ul>
+<p>Pitfall: writing it as a lower-triangular causal mask (only valid for chains, not trees); forgetting to generalize mask shape from $[L,L]$.</p>
+</details>
+<details>
+
+<summary>Q15. What is the real speedup formula for spec decoding? Why does an oversized draft backfire?</summary>
+<ul><li>$\text{speedup} = E[\tau] / (1 + Kc)$, $c = T_q/T_p$</li><li>$E[\tau] = (1-\alpha^{K+1})/(1-\alpha)$</li><li>$Kc$ in the denominator is the cost of $K$ draft forwards</li><li>If $c$ is too large (draft too big), even high $\alpha$ gets eaten by the denominator</li><li>Extreme: $c=1$ → speedup ≤ 1 (draft is as slow as target)</li></ul>
+<p>Pitfall: writing only $E[\tau]$ without draft overhead; missing the bonus token term.</p>
+</details>
+<details>
+
+<summary>Q16. Difference between self-speculative and standard speculative decoding?</summary>
+<ul><li>Self-spec: draft = target with layers skipped / early exit</li><li>No separate draft model needed; zero extra training</li><li>But draft and target are highly correlated, $\alpha$ is usually high</li><li>Typical speedup 1.5-2× (less than EAGLE but more convenient)</li><li>Paper: Zhang et al. 2024 ("Draft &amp; Verify")</li></ul>
+<p>Pitfall: saying it requires extra training; conflating self-spec with layer-skipping inference (the latter is not exact).</p>
+</details>
+<details>
+
+<summary>Q17. How do KV cache eviction / sparse attention affect spec decoding?</summary>
+<ul><li>In long context, KV cache is the bandwidth bottleneck; weights are amortized in prefill</li><li>Draft with sparse / sliding-window KV (StreamingLLM-style) runs faster</li><li>Target uses full cache for verify → still exact</li><li>Representatives: MagicDec, TriForce (hierarchical: small draft → sparse target → full target)</li><li>Gain: vanilla SD breaks down in long context (1.1×); MagicDec holds 2×+</li></ul>
+<p>Pitfall: treating sparse KV as lossy approximation (it's only used in draft; verification uses full cache and remains exact).</p>
+</details>
+<details>
+
+<summary>Q18. Medusa uses typical acceptance instead of rejection sampling — what is lost?</summary>
+<ul><li>Strictly, <strong>exact sampling is lost</strong> — output distribution is no longer guaranteed equal to target's</li><li>But typical acceptance uses the target's own typical-set threshold; quality basically holds (paper shows near-base scores)</li><li>For strict exactness, swap verification for standard rejection sampling (Leviathan/Chen formula)</li><li><strong>Medusa-1 vs Medusa-2 differ in training paradigm</strong>: Medusa-1 freezes backbone and only trains heads; Medusa-2 jointly trains backbone + heads; both default to typical acceptance</li></ul>
+<p>Pitfall: saying Medusa-1 / Medusa-2 differ in "exact vs non-exact" (wrong — they differ in training paradigm); saying Medusa is exactly equivalent to target sampling.</p>
+</details>
+<details>
+
+<summary>Q19. Core difference between EAGLE and Medusa?</summary>
+<ul><li>Medusa: multiple heads <strong>directly predict future tokens</strong>, independently (not autoregressive)</li><li>EAGLE: draft is <strong>autoregressive in feature space</strong> (prev hidden + prev token → next hidden + token)</li><li>EAGLE is more accurate (features are richer), but requires training the draft (incl. transformer layer)</li><li>EAGLE-3 further drops feature regression — directly predicts tokens + multi-layer fusion + training-time test</li><li>Empirically, EAGLE &gt; Medusa in acceptance rate, but Medusa is easier to deploy (fewer params)</li></ul>
+<p>Pitfall: treating EAGLE as a minor Medusa improvement; saying "EAGLE is also multi-head" — wrong, EAGLE is one mini-transformer.</p>
+</details>
+<details>
+
+<summary>Q20. Relationship between PagedAttention and FlashAttention?</summary>
+<ul><li>FlashAttention: SRAM tiling + online softmax inside the attention kernel, <strong>single-kernel</strong> optimization (avoid materializing $L^2$ scores)</li><li>PagedAttention: split KV cache into pages, indirect lookup via block table; <strong>memory layout</strong> optimization</li><li>Orthogonal; can be combined: vLLM uses paged + flash ideas in its paged-attention kernel</li><li>Distinction: FlashAttention reduces HBM IO; PagedAttention reduces fragmentation</li></ul>
+<p>Pitfall: confusing the two; thinking PagedAttention is an attention algorithm variant (actually it's just memory management + accompanying kernel).</p>
+</details>
+<h3 id="l3-top-lab-questions-hardest-tier">L3 top-lab questions (hardest tier)</h3>
+<details>
+
+<summary>Q21. Prove the complete derivation of spec decoding's acceptance $\alpha$ and explain how sampling equivalence generalizes to temperature / top-p.</summary>
+<ul><li>Single token: $\Pr[X=x] = q(x) \min(1, p(x)/q(x)) + (1-\alpha) p'(x)$; plug in $p'$ to get $\min(p,q) + \max(0, p-q) = p$</li><li>$\alpha = \sum_x \min(p, q) = 1 - \tfrac{1}{2}\|p-q\|_1$</li><li>Equivalent to the TV-distance connection</li><li>Key principle: rejection sampling equivalence depends only on having a valid "draft proposal distribution $\tilde q$" and a valid "target distribution $\tilde p$". <strong>Replace $p, q$ in the formulas with the sampler-processed $\tilde p, \tilde q$ and the equivalence still holds</strong></li><li>Temperature $T$: a common practice is $\tilde p_T(x) \propto p(x)^{1/T}$ and $\tilde q_T(x) \propto q(x)^{1/T}$; plug them into the $\alpha, p'$ formulas</li><li>Top-p: truncate $p$ + renormalize over $p$'s top-p set to get $\tilde p$; the <strong>draft proposal distribution</strong> $\tilde q$ is whatever the draft actually samples from; as long as both are valid distributions, rejection is exact</li><li>In practice the draft typically uses the same sampler as target (so $\tilde q$ stays close to $\tilde p$ raising $\alpha$), but this is not mathematically required — even greedy draft is valid, just with $\alpha$ plummeting</li><li>Multi-token: each position $\alpha_i$ uses the corresponding $\tilde p_i, \tilde q_i$; bonus token uses the corrected logits at position $K+1$ (post-sampler) for direct sampling</li></ul>
+<p>Pitfall: only writing single-token equivalence; misstating "draft must use the same sampler" as a math requirement (it's a strategy for high $\alpha$); ignoring bonus token.</p>
+</details>
+<details>
+
+<summary>Q22. Full math derivation of MLA's absorb trick: why don't we reconstruct K/V at inference?</summary>
+<ul><li>KV cache: $c_t^{KV} = W^{DKV} h_t \in \mathbb{R}^{d_c}$</li><li>K, V up-projection: $k_t^{(i)} = W^{UK,(i)} c_t^{KV}, v_t^{(i)} = W^{UV,(i)} c_t^{KV}$</li><li>Q similarly: $q_t^{(i)} = W^{UQ,(i)} c_t^Q$</li><li>Attention score (no RoPE): $(q_t^{(i)})^\top k_s^{(i)} = (c_t^Q)^\top \underbrace{W^{UQ,(i)\top} W^{UK,(i)}}_{\tilde W^{QK,(i)}} c_s^{KV}$</li><li>$\tilde W^{QK,(i)}$ shape $d_c' \times d_c$, <strong>independent of (t, s)</strong>, pre-multiply at model load</li><li>At inference, just $(c_t^Q)^\top \tilde W^{QK,(i)} c_s^{KV}$, <strong>no $k_s$ computed</strong></li><li>Similarly attention output: $\text{out}^{(i)} = \sum_s w_s v_s^{(i)} = (\sum_s w_s c_s^{KV})^\top W^{UV,(i)\top}$</li><li>Absorb $W^{UV,(i)}$ into $W^O$: $W^O_\text{absorbed} = W^O (\text{blockdiag}(W^{UV,(i)}))$</li><li>Conclusion: cache only latent, compute in latent space, <strong>cache savings don't increase compute</strong></li></ul>
+<p>Pitfall: naively saying "just reconstruct K/V" — reconstruction reverts to MHA compute; unaware that absorb is inference-only (cannot absorb at training since backprop is needed).</p>
+</details>
+<details>
+
+<summary>Q23. Explain why MLA must separate an independent channel for RoPE; can we keep absorb in any other way?</summary>
+<ul><li>Core: RoPE inserts $R_{s-t}$ into $\tilde W^{QK,(i)}$, breaking the "constant matrix" property</li><li>Alternative 1: apply RoPE directly on latent $c^{KV}$ — but latent dim is small and rotation semantics mismatch (RoPE pairs sin/cos along the head dim)</li><li>Alternative 2: use ALiBi (additive bias, no rotation) — but breaks LLaMA-3-compatible pretraining</li><li>Alternative 3: give up absorb, reconstruct K/V at every step — compute reverts to MHA</li><li>DeepSeek-V2's choice: <strong>decoupled RoPE channel $d_r=64$ shared across all heads</strong>, very small cache increment (~5%), content channel keeps absorb</li><li>Elegance: this independent channel shares $k_t^R$ across all heads — the "last mile of cache saving"</li></ul>
+<p>Pitfall: saying "RoPE doesn't affect MLA" — wrong; unaware that the decoupled channel is head-shared.</p>
+</details>
+<details>
+
+<summary>Q24. Why does vanilla speculative decoding's gain collapse in long context (128K+)? How to fix?</summary>
+<ul><li>Vanilla SD's gain assumption: weight loading is the bottleneck; one verify amortizes $K$ tokens' weight load</li><li>In long context, <strong>KV cache is far larger than weights</strong>; bandwidth goes mostly to reading the cache</li><li>Each verify reads the full cache once; cache loading cannot be saved</li><li>Intuition: vanilla SD speedup $\propto E[\tau] / (1 + Kc)$ assumes $T_p$ is mainly weight loading, but in long context $T_p \approx T_\text{cache\_read} + T_\text{weight\_read}$ with the former dominating; every verify still reads the full cache, <strong>$K$ tokens cannot amortize cache loading</strong>, so $E[\tau]$'s advantage is eaten</li><li>Fix 1: <strong>MagicDec</strong> — draft uses sparse KV (StreamingLLM), target uses full cache for verify</li><li>Fix 2: <strong>TriForce</strong> — three tiers: small LM → target+sparse cache → target+full cache</li><li>Fix 3: combine KV cache compression (H2O eviction) + SD: smaller cache makes vanilla SD viable again</li></ul>
+<p>Pitfall: just saying "long-context spec decoding doesn't work" without explaining why; unaware that MagicDec/TriForce are 2024 long-context SD SOTAs.</p>
+</details>
+<details>
+
+<summary>Q25. What is the mental model for deciding which optimizations to apply when designing an LLM serving system?</summary>
+<ul><li><strong>Step 1 measure workload</strong>: prompt length distribution, generation length distribution, QPS</li><li><strong>Step 2 pick optimizations by bottleneck</strong>: (a) insufficient memory for a batch → PagedAttention + prefix caching + KV quantization; (b) long prefill blocks decode → Sarathi-Serve chunked prefill; (c) small-batch decode bandwidth-bound → spec decoding (gains highest at small batch); (d) long-context bandwidth-bound → MagicDec / TriForce; (e) cross-request prompt reuse → prefix caching + COW</li><li><strong>Step 3 mind interactions</strong>: SD + large batch sees diminishing gain (large batch is already compute-bound); PagedAttention + SD use page-table pointer changes for cache rollback; KV quantization + SD requires consistent quant schemes between draft/target</li><li><strong>Step 4 monitor metrics</strong>: tokens/sec, p95 TTFT, p95 TPOT, GPU utilization</li><li>Key trade-off: throughput vs latency; SD leans toward latency improvement, continuous batching leans toward throughput</li></ul>
+<p>Pitfall: just listing tech terms without trigger conditions; unaware that SD's gain drops at large batch; ignoring real workload measurement.</p>
+</details>
+<h2 id="a-appendix-reference-implementation--sanity-check">§A Appendix: Reference Implementation + Sanity Check</h2>
+<h3 id="a1-components-summary">A.1　Components summary</h3>
+<p>From-scratch reference implementations include:</p>
+<ul><li><code>NaiveCachedAttention</code> — single-layer MHA + KV cache append</li><li><code>PagedKVCache</code> — page table + COW sharing sketch</li><li><code>MQA_GQA_Attention</code> — three-in-one unified version</li><li><code>MLAAttention</code> — with decoupled RoPE channel</li><li><code>speculative_decode</code> — exact-equivalent spec loop (with rejection + bonus token)</li></ul>
+<h3 id="a2-sanity-check-expected-outputs">A.2　Sanity-check expected outputs</h3>
+<pre><code>[a] naive cache append    prefill (1,16,128) → decode 8 token  ✓
+[b] MQA/GQA/MHA shape + cache size consistent                   ✓
+[c] MLA cache = d_c + d_r elements                              ✓
+[d] spec decode rejection: 100k samples estimate α within 1%    ✓
+[e] spec decode output vs direct target sampling: TV &lt; 0.01     ✓
+[f] paged cache COW: ref_count + share correct                  ✓</code></pre>
+<h3 id="a3-main-references">A.3　Main references</h3>
+<ul><li><p><strong>KV / Serving systems</strong></p>
+<ul><li>Kwon et al., "Efficient Memory Management for Large Language Model Serving with PagedAttention", SOSP 2023.</li><li>Yu et al., "Orca: A Distributed Serving System for Transformer-Based Generative Models", OSDI 2022.</li><li>Agrawal et al., "Taming Throughput-Latency Tradeoff in LLM Inference with Sarathi-Serve", OSDI 2024.</li></ul></li><li><p><strong>Attention variants</strong></p>
+<ul><li>Shazeer, "Fast Transformer Decoding: One Write-Head is All You Need", arXiv:1911.02150, 2019 (MQA).</li><li>Ainslie et al., "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints", EMNLP 2023.</li><li>DeepSeek-AI, "DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model", arXiv:2405.04434, May 2024 (MLA).</li></ul></li><li><p><strong>KV cache quantization</strong></p>
+<ul><li>Liu et al., "KIVI: A Tuning-Free Asymmetric 2bit Quantization for KV Cache", ICML 2024.</li><li>Hooper et al., "KVQuant: Towards 10 Million Context Length LLM Inference with KV Cache Quantization", NeurIPS 2024.</li></ul></li><li><p><strong>Speculative decoding</strong></p>
+<ul><li>Leviathan, Kalman, Matias, "Fast Inference from Transformers via Speculative Decoding", ICML 2023.</li><li>Chen et al., "Accelerating Large Language Model Decoding with Speculative Sampling", arXiv:2302.01318, 2023 (DeepMind).</li><li>Cai et al., "Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads", ICML 2024.</li><li>Li et al., "EAGLE: Speculative Sampling Requires Rethinking Feature Uncertainty", ICML 2024.</li><li>Li et al., "EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees", EMNLP 2024 (arXiv:2406.16858).</li><li>Li et al., "EAGLE-3: Scaling up Inference Acceleration of LLMs via Training-Time Test", arXiv:2503.01840, 2025.</li><li>Fu et al., "Break the Sequential Dependency of LLM Inference Using Lookahead Decoding", ICML 2024.</li><li>Miao et al., "SpecInfer: Accelerating Large Language Model Serving with Tree-based Speculative Inference and Verification", ASPLOS 2024.</li><li>Sun et al., "TriForce: Lossless Acceleration of Long Sequence Generation with Hierarchical Speculative Decoding", arXiv:2404.11912, 2024.</li><li>Sadhukhan et al., "MagicDec: Breaking the Latency-Throughput Tradeoff for Long Context Generation with Speculative Decoding", arXiv:2408.11049, 2024 (ICLR 2025).</li><li>Zhang et al., "Draft &amp; Verify: Lossless Large Language Model Acceleration via Self-Speculative Decoding", ACL 2024.</li></ul></li></ul>
+<p>Code and formulas have passed independent reviewer static checks (gpt-5.5 xhigh, cross-model); mathematical equivalence arguments verified.</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/kv_cache_speculative_decoding_tutorial_en.md</code> ·
+  SHA256 <code>3357e2dd8dc0</code> ·
+  generated at 2026-05-19 19:04 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,49 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+
+# Claude Code local config — contains API keys and personal settings
+.claude/
+
+# Patent output — contains confidential invention details, do not commit
+patent/
+# Allow patent framework files (skills, templates, shared references)
+!skills/patent-pipeline/
+!skills/prior-art-search/
+!skills/patent-novelty-check/
+!skills/invention-structuring/
+!skills/claims-drafting/
+!skills/embodiment-description/
+!skills/figure-description/
+!skills/specification-writing/
+!skills/patent-review/
+!skills/jurisdiction-format/
+!skills/shared-references/patent-format-cn.md
+!skills/shared-references/patent-format-ep.md
+!skills/shared-references/patent-format-us.md
+!skills/shared-references/patent-writing-principles.md
+!skills/shared-references/prior-art-databases.md
+!templates/INVENTION_BRIEF_TEMPLATE.md
+!templates/PATENT_CLAIMS_TEMPLATE.md
+!templates/PATENT_SPECIFICATION_TEMPLATE.md
+
+# OMC runtime state
+.omc/
+
+# ARIS runtime state (per-project traces, caches, installed-skills manifest)
+.aris/

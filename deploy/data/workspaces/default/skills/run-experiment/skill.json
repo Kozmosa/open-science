@@ -1,0 +1,13 @@
+{
+  "skill_id": "run-experiment",
+  "label": "run-experiment",
+  "description": "Deploy and run ML experiments on local, remote, Vast.ai, or Modal serverless GPU. Use when user says \"run experiment\", \"deploy to server\", \"跑实验\", or needs to launch training jobs.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

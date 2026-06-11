@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Generation Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/video_generation_tutorial_en.md">
+<meta name="aris:source-sha256" content="4fa0ce035daf77d9b135b7c0d4e328c1f5977598cc414e89c98dcf067ed9f3a0">
+<meta name="aris:generated-at" content="2026-05-19 18:58 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-intuition-and-landscape">§1 Intuition and Landscape</a>
+<ul>
+<li><a href="#11-why-video-is-harder-than-images">1.1 Why video is harder than images</a></li>
+<li><a href="#12-2024-2025-timeline-by-release-order">1.2 2024-2025 timeline (by release order)</a></li>
+<li><a href="#13-overall-pipeline-the-common-skeleton">1.3 Overall pipeline (the common skeleton)</a></li>
+</ul>
+</li>
+<li><a href="#2-3d-causal-vae--the-foundation-of-video-compression">§2 3D Causal VAE — the foundation of video compression</a>
+<ul>
+<li><a href="#21-formalization">2.1 Formalization</a></li>
+<li><a href="#22-why-must-it-be-causal--three-key-benefits">2.2 Why must it be &quot;Causal&quot; — three key benefits</a></li>
+<li><a href="#23-causal-conv3d-implementation">2.3 Causal Conv3d implementation</a></li>
+<li><a href="#24-loss-function-same-backbone-as-image-vae">2.4 Loss function (same backbone as image VAE)</a></li>
+<li><a href="#25-code-causal-conv3d-and-encoder-skeleton">2.5 Code: Causal Conv3d and encoder skeleton</a></li>
+</ul>
+</li>
+<li><a href="#3-spacetime-patches-the-sora-perspective">§3 Spacetime Patches (the Sora perspective)</a>
+<ul>
+<li><a href="#31-one-liner">3.1 One-liner</a></li>
+<li><a href="#32-why-patchify-instead-of-one-token-per-voxel">3.2 Why patchify (instead of one token per voxel)</a></li>
+<li><a href="#33-variable-resolution--duration--aspect-ratio-soras-key-contribution">3.3 Variable resolution / duration / aspect ratio (Sora&#x27;s key contribution)</a></li>
+<li><a href="#34-code-spacetime-patchify--unpatchify">3.4 Code: Spacetime patchify / unpatchify</a></li>
+</ul>
+</li>
+<li><a href="#4-three-variants-of-spatiotemporal-attention">§4 Three variants of Spatiotemporal Attention</a>
+<ul>
+<li><a href="#41-complexity-comparison-a-core-interview-question">4.1 Complexity comparison (a core interview question)</a></li>
+<li><a href="#42-factorized-21d-attention-latte--opensora">4.2 Factorized 2+1D Attention (Latte / OpenSora)</a></li>
+<li><a href="#43-full-3d-spatiotemporal-attention-sora--hunyuan--mochi">4.3 Full 3D Spatiotemporal Attention (Sora / Hunyuan / Mochi)</a></li>
+<li><a href="#44-rope-3d-positional-encoding">4.4 RoPE-3D (positional encoding)</a></li>
+<li><a href="#45-code-factorized-21d-implementation">4.5 Code: Factorized 2+1D implementation</a></li>
+<li><a href="#46-code-full-3d-spatiotemporal-attention-with-flashattention-via-sdpa">4.6 Code: Full 3D Spatiotemporal Attention (with FlashAttention via SDPA)</a></li>
+</ul>
+</li>
+<li><a href="#5-mm-dit-for-video-hunyuan-video--mochi-1-idea">§5 MM-DiT for Video (Hunyuan-Video / Mochi-1 idea)</a>
+<ul>
+<li><a href="#51-from-sd3-mm-dit-to-video">5.1 From SD3 MM-DiT to video</a></li>
+<li><a href="#52-hunyuan-videos-dual-stream--single-stream-design">5.2 Hunyuan-Video&#x27;s dual-stream → single-stream design</a></li>
+<li><a href="#53-text-encoders-overview">5.3 Text encoders (overview)</a></li>
+<li><a href="#54-code-mm-dit-video-block">5.4 Code: MM-DiT video block</a></li>
+<li><a href="#55-training-objective">5.5 Training objective</a></li>
+</ul>
+</li>
+<li><a href="#6-image-to-video-i2v--three-main-conditioning-injection-methods">§6 Image-to-Video (I2V) — three main conditioning injection methods</a>
+<ul>
+<li><a href="#61-first-frame-channel-concat-simplest-most-common">6.1 First-Frame Channel Concat (simplest, most common)</a></li>
+<li><a href="#62-cross-attention-injection-fine-grained-control">6.2 Cross-Attention injection (fine-grained control)</a></li>
+<li><a href="#63-animatediff-style-plug-in-motion-module">6.3 AnimateDiff-style plug-in motion module</a></li>
+<li><a href="#64-code-first-frame-concat-i2v">6.4 Code: first-frame concat I2V</a></li>
+<li><a href="#65-the-noise-only-on-future-frames-training-trick">6.5 The &quot;noise-only on future frames&quot; training trick</a></li>
+</ul>
+</li>
+<li><a href="#7-long-video-generation-open-problems">§7 Long video generation (open problems)</a>
+<ul>
+<li><a href="#71-three-mainstream-routes">7.1 Three mainstream routes</a></li>
+<li><a href="#72-soras-duration-as-condition">7.2 Sora&#x27;s &quot;duration as condition&quot;</a></li>
+<li><a href="#73-autoregressive-video-generation-compatibility-causal-vae-earns-its-keep">7.3 Autoregressive video generation compatibility (Causal VAE earns its keep)</a></li>
+<li><a href="#74-simple-chunk-autoregressive-pseudocode">7.4 Simple chunk autoregressive pseudocode</a></li>
+</ul>
+</li>
+<li><a href="#8-control--editing--character-consistency-overview-table">§8 Control / editing / character consistency (overview table)</a>
+</li>
+<li><a href="#9-evaluation-vbench--fvd--clipsim-v">§9 Evaluation: VBench / FVD / CLIPSim-V</a>
+</li>
+<li><a href="#10-complexity-and-memory">§10 Complexity and memory</a>
+<ul>
+<li><a href="#101-token-count-and-attention-cost">10.1 Token count and attention cost</a></li>
+<li><a href="#102-memory-and-flops-key-points">10.2 Memory and FLOPs key points</a></li>
+</ul>
+</li>
+<li><a href="#11-relation-to-other-generative-models">§11 Relation to other generative models</a>
+<ul>
+<li><a href="#111-image-diffusion-vs-video-diffusion">11.1 Image diffusion vs Video diffusion</a></li>
+<li><a href="#112-video-llm-vs-video-generation-vs-ar-video">11.2 Video LLM vs Video Generation vs AR Video</a></li>
+</ul>
+</li>
+<li><a href="#12-25-frequently-asked-interview-questions">§12 25 frequently-asked interview questions</a>
+<ul>
+<li><a href="#l1-must-know-basics--any-video-generation-related-role">L1 must-know (basics — any video-generation-related role)</a></li>
+<li><a href="#l2-advanced-research-oriented--mid-level-role">L2 advanced (research-oriented / mid-level role)</a></li>
+<li><a href="#l3-top-lab-questions-deep--diffusion--video-specialist">L3 top-lab questions (deep — diffusion / video specialist)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-full-from-scratch-video-generation-model-skeleton">§A Appendix: Full from-scratch video generation model skeleton</a>
+<ul>
+<li><a href="#a1-overall-class-diagram">A.1 Overall class diagram</a></li>
+<li><a href="#a2-training-forward--a3-euler-rf-sampler">A.2 Training forward + A.3 Euler RF sampler</a></li>
+<li><a href="#a4-current-sota-overview">A.4 Current SoTA overview</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Video Generation Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/video_generation_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>4fa0ce035daf</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 18:58 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">Video Generation in 7 sentences</div><p>the 2024-2025 video generation explosion. One page covering the most frequently-asked interview points (see §1–§11 below for derivations).</p></div>
+<ol><li><strong>Paradigm</strong>: mainstream video generation = <strong>3D Causal VAE compression + Latent DiT diffusion / Flow Matching</strong>. Sora (2024-02) was the first to push the Transformer to 60s + high resolution; Hunyuan-Video (Tencent 2024-12) / Wan 2.x (Alibaba 2024-2025) / Mochi-1 / CogVideoX / Movie Gen / Kling / Veo 2 are all variants of this architectural family.</li><li><strong>3D Causal VAE</strong>: compresses an $H \times W \times T$ video into an $h \times w \times t$ latent (typical spatial downsampling $8\times$, temporal downsampling $4\times$). The key is <strong>causal</strong>: the current frame latent <strong>cannot see future frames</strong> — this lets the trained VAE simultaneously support images ($t{=}1$) and videos ($t{>}1$), and enables streaming / autoregressive generation of subsequent frames.</li><li><strong>Spacetime Patches (Sora)</strong>: slice the video latent into $p_t \times p_h \times p_w$ 3D patches as tokens; like ViT but with the added time dimension. Supports <strong>variable resolution / variable duration / variable aspect ratio</strong>: directly pack patch sequences of different shapes into a single batch (using masks to distinguish them), with no need to resize to a fixed shape.</li><li><strong>Three spatiotemporal attention variants</strong>: (a) <strong>Factorized 2+1D</strong> (Latte / OpenSora / AnimateDiff): spatial-only first, then temporal-only, complexity $O(T \cdot S^2 + S \cdot T^2)$; (b) <strong>Full 3D</strong> (Sora / Hunyuan-Video / Mochi): all tokens attend to each other, complexity $O((ST)^2)$, most expensive but best quality; (c) <strong>Window / sparse ST</strong> (Wan 2.x / portions of CogVideoX): sliding-window 3D, a middle ground.</li><li><strong>MM-DiT for Video (Hunyuan-Video / Mochi)</strong>: text tokens and video tokens share the <strong>same sequence</strong> in self-attention (no longer cross-attn), with each stream having its own QKV projection + AdaLN modulation; conditioning information interacts directly at the token level — Hunyuan / Mochi / Wan extend the SD3 image MM-DiT idea to video.</li><li><strong>Image-to-Video (I2V)</strong>: three mainstream techniques — (i) <strong>First-frame concat</strong>: encode the ref image and concat along the channel dim of the latent; (ii) <strong>Cross-attention injection</strong>: ref image tokens serve as K/V; (iii) <strong>AnimateDiff</strong> style: freeze the T2I backbone and insert only a temporal module. SVD / DynamiCrafter / I2VGen-XL / Wan-I2V are representative.</li><li><strong>Long video</strong> = keyframe + interpolation / hierarchical / autoregressive chunks. <strong>Evaluation</strong>: VBench (Huang CVPR 2024) provides 16-dimensional fine-grained scoring and is the de facto standard; FVD (Unterthiner 2018) remains as an auxiliary metric; CLIPSim-V evaluates text-video alignment.</li></ol>
+<div class="callout callout-warn"><div class="callout-title">Caveat</div><p>the model-specific numbers in this article (parameter counts, compression ratios, attention types) are based on each model's public paper / tech report; refer to the originals for exact training hyperparameters and final architectures.</p></div>
+<h2 id="1-intuition-and-landscape">§1 Intuition and Landscape</h2>
+<h3 id="11-why-video-is-harder-than-images">1.1 Why video is harder than images</h3>
+<p>For an $H{\times}W{\times}T$ video, the pixel count grows linearly with $T$, and the token count (after patchification) also grows linearly. <strong>Attention complexity is quadratic in token count</strong> — meaning full 3D attention in raw pixel space already explodes for $T \ge 16$. So the core engineering problem of video generation is:</p>
+<ul><li><strong>Compression</strong>: 3D VAE compresses token count in both spatial and temporal dimensions (typically $8 \times 8 \times 4$)</li><li><strong>Architecture</strong>: run attention on the latent (spatiotemporal patterns are the design point)</li><li><strong>Generative paradigm</strong>: DDPM / Rectified Flow / FM (v-prediction is mainstream; SD3-style)</li></ul>
+<h3 id="12-2024-2025-timeline-by-release-order">1.2 2024-2025 timeline (by release order)</h3>
+<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Key contribution</th></tr></thead><tbody><tr><td>2023-07 → ICLR'24</td><td><strong>AnimateDiff</strong></td><td>Guo et al.</td><td>T2I backbone + plug-in motion module; the open-source ancestor of I2V/T2V</td></tr><tr><td>2023-11</td><td><strong>SVD</strong></td><td>Stability</td><td>I2V open-source baseline; SD2.1 + temporal layers</td></tr><tr><td>2024-01</td><td><strong>Latte</strong></td><td>Ma et al.</td><td>Early DiT-Video; factorized spatial+temporal</td></tr><tr><td>2024-02</td><td><strong>Sora</strong></td><td>OpenAI</td><td>DiT + spacetime patches + large-scale captioning; closed source</td></tr><tr><td>2024-05</td><td><strong>Veo</strong></td><td>Google DeepMind</td><td>Closed-source 1080p / 1 minute</td></tr><tr><td>2024-06</td><td><strong>Kling</strong></td><td>Kuaishou</td><td>Closed-source from China, up to 2 minutes</td></tr><tr><td>2024-08</td><td><strong>CogVideoX</strong> (arXiv)</td><td>Zhipu/THU</td><td>Open-source 5B/15B; Expert Transformer + 3D VAE</td></tr><tr><td>2024-10</td><td><strong>Movie Gen</strong></td><td>Meta</td><td>30B; joint video + audio; DiT + FM</td></tr><tr><td>2024-10</td><td><strong>Mochi-1</strong></td><td>Genmo</td><td>10B open source; AsymmDiT asymmetric MM-DiT</td></tr><tr><td>2024-11</td><td><strong>LTX-Video</strong></td><td>Lightricks</td><td>Real-time (2B); strong-compression VAE + DiT</td></tr><tr><td>2024-12</td><td><strong>Hunyuan-Video</strong></td><td>Tencent</td><td>13B open-source SoTA; 3D Causal VAE + MM-DiT + prompt rewriter</td></tr><tr><td>2024-12</td><td><strong>Veo 2</strong></td><td>Google</td><td>4K / 2 minutes</td></tr><tr><td>2025-02</td><td><strong>Wan 2.1</strong></td><td>Alibaba (Team Wan)</td><td>14B open source; dual T2V + I2V</td></tr><tr><td>2025-07</td><td><strong>Wan 2.2</strong></td><td>Alibaba</td><td>Upgraded; MoE experts + longer temporal range</td></tr><tr><td>2024-2025</td><td><strong>OpenSora / OpenSora-Plan</strong></td><td>HPC-AI / PKU</td><td>Fully open-source training stack replicating the Sora pipeline</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">Closed vs open source</div><p>Sora / Veo / Kling / Movie Gen do not release weights; all architectural details are based on official technical reports. When interviewing, do not take internal ablations as hard numbers; explicitly say "according to their report".</p></div>
+<h3 id="13-overall-pipeline-the-common-skeleton">1.3 Overall pipeline (the common skeleton)</h3>
+<pre><code>Text  --T5/CLIP/MLLM--&gt;  text tokens [B, L_t, D]
+Video --3D Causal VAE--&gt;  latent z₁ [B, C, t, h, w] --patchify (p_t×p_h×p_w)--&gt; tokens [B, N_v, D]
+                                       │
+                              Latent DiT / MM-DiT
+                (full 3D / factorized 2+1D / window ST attention)
+                              │  Train: regress v_θ(τ, z_τ, text) -&gt; z₁ - z₀ (RF)
+                              ↓
+                       sampled z₁ --3D Causal VAE Decoder--&gt; Generated video [B, 3, T, H, W]</code></pre>
+<h2 id="2-3d-causal-vae--the-foundation-of-video-compression">§2 3D Causal VAE — the foundation of video compression</h2>
+<h3 id="21-formalization">2.1 Formalization</h3>
+<p>VAE encoder $E$ and decoder $D$:</p>
+<p>$$E: \mathbb{R}^{3 \times T \times H \times W} \to \mathbb{R}^{C \times t \times h \times w}, \quad D: \mathbb{R}^{C \times t \times h \times w} \to \mathbb{R}^{3 \times T \times H \times W}$$</p>
+<p>Downsampling ratios $T/t \in \{4, 8\}$ (temporal), $H/h, W/w \in \{8, 16\}$ (spatial). Hunyuan-Video / CogVideoX / Wan use $4{\times}8{\times}8$; LTX-Video pushes to an extreme $8{\times}32{\times}32 = 8192\times$ token compression.</p>
+<p>Latent dim $C$ is typically $16$ (Hunyuan) or $4$ (OpenSora); larger retains more information, but the latent prior becomes farther from $\mathcal{N}(0,I)$, slowing diffusion convergence.</p>
+<h3 id="22-why-must-it-be-causal--three-key-benefits">2.2 Why must it be "Causal" — three key benefits</h3>
+<div class="callout callout-good"><div class="callout-title">OK</div><p><strong>Three advantages of 3D Causal VAE</strong></p></div>
+<ul><li><strong>Image / video unified</strong>: when $T=1$ (single frame), causal 3D conv degenerates to 2D conv (the kernel only looks at history in the time dim, but history is empty → equivalent to no time dim). The encoder can compress both video and images, <strong>and images and video can share the same latent space</strong> — this is the prerequisite for Hunyuan-Video / Wan to simultaneously support I2V/T2V.</li><li><strong>Streaming / autoregressive inference</strong>: causality guarantees the current frame latent only depends on past frames, so <strong>long videos can be processed in chunks</strong>, without having to decode all $T$ frames at once; same idea as KV cache in LLMs.</li><li><strong>Training data utilization</strong>: when mixing image + video training, images can be treated as $T{=}1$ videos. A standard 3D VAE has its kernel center looking into the future, so it cannot do this.</li></ul>
+<h3 id="23-causal-conv3d-implementation">2.3 Causal Conv3d implementation</h3>
+<p>A standard 3D conv pads $\lfloor k_t/2 \rfloor$ zeros on each side of the time dimension (symmetric), so output[t] depends on input[t-1], input[t], input[t+1] — <strong>leaking the future</strong>.</p>
+<p><strong>Causal 3D conv</strong> = stack all the padding on the left (past direction) of the time dim, with no padding on the right (future):</p>
+<p>$$\text{output}[t] = \sum_{\tau=0}^{k_t - 1} W[\tau] \cdot \text{input}[t - (k_t - 1) + \tau]$$</p>
+<p>So the output at time $t$ only sees the historical window $[t - k_t + 1, t]$. Spatial dims still use symmetric padding (image problem, no directionality).</p>
+<div class="callout callout-warn"><div class="callout-title">Making downsampling causal</div><p>for downsampling layers with time stride &gt; 1 (e.g. $T \to T/2$), window alignment must be preserved. The common practice: have stride see only the historical window <code>[t-1, t]</code> in time, outputting <code>t&#x27; = t//2</code>. Hunyuan-Video / Mochi both draw this layer in their papers.</p></div>
+<h3 id="24-loss-function-same-backbone-as-image-vae">2.4 Loss function (same backbone as image VAE)</h3>
+<p>$$\mathcal{L}_\text{VAE} = \mathcal{L}_\text{recon} + \lambda_\text{KL} \cdot \mathcal{L}_\text{KL} + \lambda_\text{LPIPS} \cdot \mathcal{L}_\text{LPIPS} + \lambda_\text{GAN} \cdot \mathcal{L}_\text{GAN}$$</p>
+<p>Video VAE additionally needs a <strong>temporal consistency loss</strong> (e.g. adjacent-frame reconstruction difference + optical flow constraint) to prevent flickering. Hunyuan-Video uses GAN (PatchGAN over spatiotemporal patches) + 3D perceptual loss.</p>
+<h3 id="25-code-causal-conv3d-and-encoder-skeleton">2.5 Code: Causal Conv3d and encoder skeleton</h3>
+<pre><code class="language-python">import math
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class CausalConv3d(nn.Module):
+    &quot;&quot;&quot;
+    Causal conv3d along the temporal dimension.
+    Input [B, C_in, T, H, W] -&gt; Output [B, C_out, T, H, W] (shape preserved when stride=1).
+    Temporal kernel size k_t -&gt; left pad (k_t-1), no right padding; spatial dims use symmetric padding.
+    &quot;&quot;&quot;
+    def __init__(self, in_ch, out_ch, kernel=(3, 3, 3), stride=(1, 1, 1), dilation=(1, 1, 1)):
+        super().__init__()
+        k_t, k_h, k_w = kernel
+        d_t, d_h, d_w = dilation
+        # Causal padding in time dim (all stacked on the left)
+        self.t_pad_left = (k_t - 1) * d_t
+        # Symmetric padding in spatial dims
+        self.h_pad = ((k_h - 1) * d_h) // 2
+        self.w_pad = ((k_w - 1) * d_w) // 2
+        # nn.Conv3d&#x27;s built-in padding is symmetric; pad manually + disable conv&#x27;s own padding
+        self.conv = nn.Conv3d(in_ch, out_ch, kernel_size=kernel,
+                              stride=stride, dilation=dilation, padding=0)
+
+    def forward(self, x):
+        # x: [B, C, T, H, W]
+        # F.pad order: (W_left, W_right, H_left, H_right, T_left, T_right)
+        x = F.pad(x, (self.w_pad, self.w_pad,
+                      self.h_pad, self.h_pad,
+                      self.t_pad_left, 0))   # No right padding in time =&gt; no future
+        return self.conv(x)
+
+
+class CausalResBlock3D(nn.Module):
+    def __init__(self, ch, groups=8):
+        super().__init__()
+        self.norm1 = nn.GroupNorm(groups, ch)
+        self.conv1 = CausalConv3d(ch, ch, kernel=(3, 3, 3))
+        self.norm2 = nn.GroupNorm(groups, ch)
+        self.conv2 = CausalConv3d(ch, ch, kernel=(3, 3, 3))
+
+    def forward(self, x):
+        h = self.conv1(F.silu(self.norm1(x)))
+        h = self.conv2(F.silu(self.norm2(h)))
+        return x + h
+
+
+class CausalVAEEncoder(nn.Module):
+    &quot;&quot;&quot;
+    Pedagogical 3D Causal VAE encoder. Real Hunyuan / CogVideoX use deeper stacks + GAN discriminators.
+    Downsampling uses CausalConv3d with stride=(2,2,2) (still causal in time).
+    &quot;&quot;&quot;
+    def __init__(self, in_ch=3, base_ch=64, z_ch=16, num_levels=3, blocks_per_level=2):
+        super().__init__()
+        self.in_proj = CausalConv3d(in_ch, base_ch, kernel=(3, 3, 3))
+        levels, ch = [], base_ch
+        for _ in range(num_levels):
+            blocks = [CausalResBlock3D(ch) for _ in range(blocks_per_level)]
+            blocks.append(CausalConv3d(ch, ch * 2, kernel=(3, 3, 3), stride=(2, 2, 2)))
+            levels.append(nn.Sequential(*blocks))
+            ch *= 2
+        self.levels = nn.ModuleList(levels)
+        self.norm_out = nn.GroupNorm(8, ch)
+        self.head = CausalConv3d(ch, 2 * z_ch, kernel=(1, 1, 1))     # mu + logvar
+
+    def forward(self, x):
+        # Expects T, H, W to be divisible by 2^num_levels
+        h = self.in_proj(x)
+        for lvl in self.levels:
+            h = lvl(h)
+        h = F.silu(self.norm_out(h))
+        return self.head(h).chunk(2, dim=1)                          # (mu, logvar)
+
+    @staticmethod
+    def reparameterize(mu, logvar):
+        return mu + torch.exp(0.5 * logvar) * torch.randn_like(mu)</code></pre>
+<div class="callout callout-info"><div class="callout-title">First-frame / chunk boundary handling (interview plus)</div><p>causal padding makes the first frame "see 0" along the time dim. During VAE training, either randomly drop the loss contribution from the first $k_t{-}1$ frames, or use anchor padding (replicate the first frame as padding). Hunyuan-Video discusses boundary frame consistency for chunk-by-chunk encoding in their paper; in engineering this is often handled by chunked overlapping.</p></div>
+<h2 id="3-spacetime-patches-the-sora-perspective">§3 Spacetime Patches (the Sora perspective)</h2>
+<h3 id="31-one-liner">3.1 One-liner</h3>
+<p>Just as ViT slices images into $p \times p$ patches as tokens, Sora slices the <strong>video latent</strong> into $p_t \times p_h \times p_w$ <strong>3D patches</strong> as tokens. $N = (t/p_t) \cdot (h/p_h) \cdot (w/p_w)$ tokens are fed to the Transformer.</p>
+<p>Formally, rearrange a latent $z \in \mathbb{R}^{C \times t \times h \times w}$:</p>
+<p>$$z \mapsto Z \in \mathbb{R}^{N \times (C \cdot p_t \cdot p_h \cdot p_w)} \xrightarrow{W_\text{proj}} Z' \in \mathbb{R}^{N \times D}$$</p>
+<h3 id="32-why-patchify-instead-of-one-token-per-voxel">3.2 Why patchify (instead of one token per voxel)</h3>
+<ul><li><strong>Token count reduction</strong>: $N$ is reduced by a factor of $p_t \cdot p_h \cdot p_w$, hugely cutting the quadratic attention cost.</li><li><strong>Local inductive bias</strong>: within each patch, a fixed MLP projection acts like a conv with local fusion.</li><li><strong>Variable shape support</strong>: different resolutions / durations directly produce different $N$, and the Transformer is insensitive to $N$.</li></ul>
+<h3 id="33-variable-resolution--duration--aspect-ratio-soras-key-contribution">3.3 Variable resolution / duration / aspect ratio (Sora's key contribution)</h3>
+<p>Sora does not resize every video clip to a fixed shape (e.g. $256 \times 256 \times 16$). It slices every $(T, H, W)$ video into a patch sequence and uses <strong>packing</strong> (different samples mixed into the same batch, separated by segment masks) for training.</p>
+<p>Key implementation points:</p>
+<ul><li><strong>Positional encoding uses relative / decoupled</strong> schemes: RoPE-2D for space, RoPE-1D for time; not bound to a maximum length.</li><li><strong>Attention mask</strong>: tokens from different samples in the same batch are masked out from each other.</li><li><strong>Target aspect ratio token</strong>: an additional conditioning token telling the model whether to generate 16:9 or 9:16.</li></ul>
+<p>This is what lets Sora train / generate videos at arbitrary aspect ratios; Wan-2.x and Hunyuan-Video later borrowed this.</p>
+<h3 id="34-code-spacetime-patchify--unpatchify">3.4 Code: Spacetime patchify / unpatchify</h3>
+<pre><code class="language-python">class SpacetimePatchify(nn.Module):
+    &quot;&quot;&quot;
+    Slice a video latent [B, C, t, h, w] into 3D patch tokens [B, N, D].
+    p_t / p_h / p_w must divide t / h / w (ensure this on the input side).
+    &quot;&quot;&quot;
+    def __init__(self, in_ch, patch=(2, 2, 2), embed_dim=1024):
+        super().__init__()
+        self.p_t, self.p_h, self.p_w = patch
+        self.proj = nn.Conv3d(
+            in_ch, embed_dim,
+            kernel_size=(self.p_t, self.p_h, self.p_w),
+            stride=(self.p_t, self.p_h, self.p_w),
+        )
+
+    def forward(self, z):
+        # z: [B, C, t, h, w]
+        x = self.proj(z)                        # [B, D, t/p_t, h/p_h, w/p_w]
+        B, D, tt, hh, ww = x.shape
+        N = tt * hh * ww
+        x = x.flatten(2).transpose(1, 2)        # [B, N, D]
+        return x, (tt, hh, ww)
+
+
+class SpacetimeUnpatchify(nn.Module):
+    &quot;&quot;&quot; Inverse of Patchify: [B, N, D] + shape -&gt; [B, C_out, t, h, w] &quot;&quot;&quot;
+    def __init__(self, embed_dim, out_ch, patch=(2, 2, 2)):
+        super().__init__()
+        self.p_t, self.p_h, self.p_w = patch
+        self.out_ch = out_ch
+        # Each token decodes back into an (out_ch * p_t * p_h * p_w) voxel block
+        self.proj = nn.Linear(embed_dim, out_ch * self.p_t * self.p_h * self.p_w)
+
+    def forward(self, x, grid):
+        # x: [B, N, D], grid = (tt, hh, ww)
+        B, N, D = x.shape
+        tt, hh, ww = grid
+        assert N == tt * hh * ww
+        y = self.proj(x)                                 # [B, N, out_ch * p_t * p_h * p_w]
+        y = y.view(B, tt, hh, ww, self.out_ch, self.p_t, self.p_h, self.p_w)
+        # Splice intra-patch coordinates back into original space: (tt, p_t) -&gt; T, (hh, p_h) -&gt; H, ...
+        y = y.permute(0, 4, 1, 5, 2, 6, 3, 7).contiguous()
+        return y.view(B, self.out_ch, tt * self.p_t, hh * self.p_h, ww * self.p_w)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">How to choose patch size</div><p>$p_t$ is typically 1-2 (time was already compressed 4x by the VAE, no room to compress further), $p_h = p_w$ typically 2. Open-source models often use $p_t{=}1, p_h{=}p_w{=}2$ (Mochi-1 / Hunyuan-Video, paired with a 4×8×8 latent VAE). Sora has not disclosed implementation details, only describing the "spacetime patches" concept.</p></div>
+<h2 id="4-three-variants-of-spatiotemporal-attention">§4 Three variants of Spatiotemporal Attention</h2>
+<h3 id="41-complexity-comparison-a-core-interview-question">4.1 Complexity comparison (a core interview question)</h3>
+<p>Define $S = h \cdot w / (p_h p_w)$ (tokens per frame), $T_t = t / p_t$ (temporal tokens), $N = S \cdot T_t$.</p>
+<table><thead><tr><th>Type</th><th>Formula</th><th>Time</th><th>Score memory (vanilla)</th><th>Where used</th></tr></thead><tbody><tr><td><strong>Factorized 2+1D</strong></td><td>$\text{TempAttn}(\text{SpatialAttn}(x))$</td><td>$O(T_t S^2 + S T_t^2) \cdot d$</td><td>$O(T_t S^2 + S T_t^2)$</td><td>Latte, OpenSora, AnimateDiff</td></tr><tr><td><strong>Full 3D ST</strong></td><td>$\text{Attn}_{\text{ST}}(x \in \mathbb{R}^{N \times D})$</td><td>$O(N^2 d) = O(S^2 T_t^2 d)$</td><td>$O(N^2)$</td><td>Hunyuan-Video, Mochi, (Sora speculated)</td></tr><tr><td><strong>2+1D + occasional full</strong></td><td>Mostly 2+1D, a few full blocks</td><td>Between the two</td><td>Between the two</td><td>OpenSora-Plan, CogVideoX</td></tr><tr><td><strong>Window 3D / sparse</strong></td><td>Local 3D window</td><td>$O(N \cdot w^3 d)$ ($w$ = window)</td><td>$O(N \cdot w^3)$</td><td>Some engineering practice</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Core comparison</div><p>Full 3D has all spacetime tokens fully interacting and is <strong>most expressive</strong>; Factorized does first spatial then temporal attn twice, <strong>strongly assuming space ⊗ time is separable</strong>, but at $\min(S, T_t)$ times lower cost. Sora has not officially disclosed its attention type; community speculation based on its "spacetime patches" description generally guesses full 3D / a single-sequence unified attention (Hunyuan-Video / Mochi already adopt this design).</p></div>
+<h3 id="42-factorized-21d-attention-latte--opensora">4.2 Factorized 2+1D Attention (Latte / OpenSora)</h3>
+<pre class="diagram"><code>
+Input [B, T_t, S, D]
+   │
+   │  rearrange -&gt; [B*T_t, S, D]
+   ↓
+SpatialAttn (intra-frame self-attention)  →    [B*T_t, S, D]
+   │
+   │  rearrange -&gt; [B*S, T_t, D]
+   ↓
+TempAttn (cross-frame self-attention)      →    [B*S, T_t, D]
+   │
+   │  rearrange -&gt; [B, T_t, S, D]
+   ↓
+FFN</code></pre>
+<p>Strong assumption: per-frame spatial relations and cross-frame temporal relations are <strong>separable</strong>. This is a simplification but very engineering-friendly — most of the time, adjacent frames in a video are largely similar (temporal "optical flow" information can be captured by 1D attn), and intra-frame patch relations resemble those in images.</p>
+<h3 id="43-full-3d-spatiotemporal-attention-sora--hunyuan--mochi">4.3 Full 3D Spatiotemporal Attention (Sora / Hunyuan / Mochi)</h3>
+<p>Treat $N = S \cdot T_t$ tokens as a single 1D sequence and apply standard self-attention:</p>
+<p>$$\text{Attn}(Z) = \text{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) V, \quad Z \in \mathbb{R}^{N \times D}$$</p>
+<p>Complexity $O(N^2 d)$. $N$ is large for long videos: e.g. 720p × 5s × 24fps after a $4{\times}8{\times}8$ VAE yields a latent shape of about $30 \times 90 \times 160$, then (1,2,2) patchify gives $N = 30 \cdot 45 \cdot 80 = 108000$ tokens, $N^2 \approx 1.17 \times 10^{10}$. <strong>So in production, FlashAttention v2/v3 + Tensor Parallelism + Sequence Parallelism are mandatory</strong>.</p>
+<h3 id="44-rope-3d-positional-encoding">4.4 RoPE-3D (positional encoding)</h3>
+<p>Video tokens need to encode (time, height, width) all at once. <strong>Approach 1 (decoupled)</strong>: split the $d$-dim vector into three chunks, applying RoPE to (t, h, w) separately. <strong>Approach 2 (shared)</strong>: each chunk stacks all three frequency rotations (Hunyuan-Video).</p>
+<p>CogVideoX uses <strong>3D RoPE</strong>: split the $d$-dim query/key into three chunks $q = [q^{(t)} \,|\, q^{(h)} \,|\, q^{(w)}]$ (disjoint subspaces), and apply 1D RoPE to each chunk with the corresponding (t, h, w) frequency, then concat:</p>
+<p>$$\text{RoPE}_{3D}(q,\, t, h, w) = \big[\, R_t(\theta_t) q^{(t)} \,\big|\, R_h(\theta_h) q^{(h)} \,\big|\, R_w(\theta_w) q^{(w)} \,\big]$$</p>
+<p>In practice this is three independent 1D RoPE rotations concatenated (block-diagonal rotation), naturally yielding relative spatiotemporal position encoding.</p>
+<h3 id="45-code-factorized-21d-implementation">4.5 Code: Factorized 2+1D implementation</h3>
+<pre><code class="language-python">class AxisAttention(nn.Module):
+    &quot;&quot;&quot;
+    Self-attention along a specified axis (spatial &#x27;S&#x27; or temporal &#x27;T&#x27;).
+    Input [B, T, S, D] -&gt; Output [B, T, S, D].
+    &quot;&quot;&quot;
+    def __init__(self, dim, heads, head_dim, axis=&quot;S&quot;, causal=False):
+        super().__init__()
+        assert axis in (&quot;S&quot;, &quot;T&quot;)
+        self.heads, self.head_dim, self.axis, self.causal = heads, head_dim, axis, causal
+        self.qkv = nn.Linear(dim, 3 * heads * head_dim, bias=False)
+        self.out = nn.Linear(heads * head_dim, dim, bias=False)
+
+    def forward(self, x):
+        B, T, S, D = x.shape
+        if self.axis == &quot;S&quot;:
+            x_ = x.reshape(B * T, S, D); L_seq = S; merge_batch = T
+        else:   # &quot;T&quot;: collapse spatial dim into batch, time dim becomes seq
+            x_ = x.permute(0, 2, 1, 3).reshape(B * S, T, D); L_seq = T; merge_batch = S
+        qkv = self.qkv(x_).reshape(-1, L_seq, 3, self.heads, self.head_dim)
+        q, k, v = (t.transpose(1, 2) for t in qkv.unbind(dim=2))  # [B&#x27;, H, L, d_k]
+        # PyTorch SDPA automatically picks FlashAttention v2/v3
+        out = F.scaled_dot_product_attention(q, k, v, is_causal=self.causal)
+        out = out.transpose(1, 2).reshape(-1, L_seq, self.heads * self.head_dim)
+        out = self.out(out)
+        if self.axis == &quot;S&quot;:
+            return out.reshape(B, T, S, D)
+        else:
+            return out.reshape(B, S, T, D).permute(0, 2, 1, 3)
+
+
+class Factorized2plus1DBlock(nn.Module):
+    &quot;&quot;&quot; Latte-style: SpatialAttn -&gt; TempAttn -&gt; FFN. &quot;&quot;&quot;
+    def __init__(self, dim, heads, head_dim, mlp_ratio=4.0):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim); self.spatial = AxisAttention(dim, heads, head_dim, &quot;S&quot;)
+        self.norm2 = nn.LayerNorm(dim); self.temporal = AxisAttention(dim, heads, head_dim, &quot;T&quot;)
+        self.norm3 = nn.LayerNorm(dim)
+        hidden = int(dim * mlp_ratio)
+        self.mlp = nn.Sequential(nn.Linear(dim, hidden), nn.GELU(), nn.Linear(hidden, dim))
+
+    def forward(self, x):
+        x = x + self.spatial(self.norm1(x))
+        x = x + self.temporal(self.norm2(x))
+        x = x + self.mlp(self.norm3(x))
+        return x</code></pre>
+<h3 id="46-code-full-3d-spatiotemporal-attention-with-flashattention-via-sdpa">4.6 Code: Full 3D Spatiotemporal Attention (with FlashAttention via SDPA)</h3>
+<pre><code class="language-python">class Full3DSpatiotemporalAttention(nn.Module):
+    &quot;&quot;&quot;
+    Treat [B, T, S, D] as [B, N, D] (N = T*S) and run self-attention.
+    Uses PyTorch SDPA; on H100/A100 it dispatches to FlashAttention v2/v3 automatically.
+    When combined with MM-DiT, text/video tokens are directly concat into this sequence (see §5.4).
+    &quot;&quot;&quot;
+    def __init__(self, dim, heads, head_dim):
+        super().__init__()
+        self.heads = heads
+        self.head_dim = head_dim
+        self.qkv = nn.Linear(dim, 3 * heads * head_dim, bias=False)
+        self.out = nn.Linear(heads * head_dim, dim, bias=False)
+
+    def forward(self, x, attn_bias=None):
+        # x: [B, N, D] (caller flattens T*S first)
+        B, N, D = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.heads, self.head_dim)
+        q, k, v = qkv.unbind(dim=2)                          # [B, N, H, d_k]
+        q, k, v = (t.transpose(1, 2) for t in (q, k, v))      # [B, H, N, d_k]
+        out = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_bias)
+        out = out.transpose(1, 2).reshape(B, N, -1)
+        return self.out(out)</code></pre>
+<h2 id="5-mm-dit-for-video-hunyuan-video--mochi-1-idea">§5 MM-DiT for Video (Hunyuan-Video / Mochi-1 idea)</h2>
+<h3 id="51-from-sd3-mm-dit-to-video">5.1 From SD3 MM-DiT to video</h3>
+<p>SD3 (Esser et al. 2024) introduced <strong>MM-DiT</strong>: concat text tokens and image tokens into the same sequence for self-attention, where <strong>each stream has its own QKV / FFN / AdaLN parameters</strong>, but the attention matrix is shared:</p>
+<p>$$Z = [Z_\text{text} \,|\, Z_\text{img}], \quad \text{Attn}(Z) \text{ shared, FFN per-stream}$$</p>
+<p>Going video = replace the image stream with a video stream (spacetime tokens); the text stream is unchanged.</p>
+<h3 id="52-hunyuan-videos-dual-stream--single-stream-design">5.2 Hunyuan-Video's dual-stream → single-stream design</h3>
+<p>The Hunyuan-Video tech report splits DiT into two phases:</p>
+<ul><li><strong>Dual-stream blocks</strong> (first N layers): text tokens and video tokens share attention but have independent FFN / AdaLN — letting each modality first refine its own representation.</li><li><strong>Single-stream blocks</strong> (last M layers): text and video tokens fully share weights, behaving like an ordinary Transformer over a unified sequence.</li></ul>
+<p>Similar to Mochi-1's <strong>AsymmDiT</strong> (Mochi makes the video stream 4x wider than the text stream, since video carries far more information than text).</p>
+<h3 id="53-text-encoders-overview">5.3 Text encoders (overview)</h3>
+<table><thead><tr><th>Model</th><th>Text encoder</th><th>Notes</th></tr></thead><tbody><tr><td>Hunyuan-Video</td><td>CLIP-L + MLLM (LLaVA-style)</td><td>MLLM provides long prompts + object relationships</td></tr><tr><td>Mochi-1</td><td>T5-XXL</td><td>Same as SD3</td></tr><tr><td>Wan 2.1 / 2.2</td><td>UMT5 (multilingual)</td><td>Supports Chinese + English</td></tr><tr><td>CogVideoX</td><td>T5-XXL</td><td>—</td></tr><tr><td>Sora</td><td>Not disclosed</td><td>OpenAI's report only mentions a re-captioning pipeline</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Prompt rewriter (Hunyuan-Video / Sora reports)</div><p>training-data captions are usually long and detailed, while user short prompts have a gap with the training distribution. The Sora report mentions dense re-captioning of training videos; Hunyuan-Video uses an LLM at inference time to rewrite short prompts into dense captions before feeding the model. A common interview question is "why do we need a prompt rewriter" — answer: align train / inference caption distributions + user prompts are too short on their own.</p></div>
+<h3 id="54-code-mm-dit-video-block">5.4 Code: MM-DiT video block</h3>
+<pre><code class="language-python">class MMDiTVideoBlock(nn.Module):
+    &quot;&quot;&quot;
+    Dual-stream MM-DiT block (Hunyuan-Video / Mochi-1 / SD3 style).
+    Text and video tokens share the self-attention matrix, but QKV / FFN / AdaLN have separate parameters.
+    &quot;&quot;&quot;
+    def __init__(self, dim, heads, head_dim, mlp_ratio=4.0):
+        super().__init__()
+        self.heads = heads
+        self.head_dim = head_dim
+        self.scale = 1.0 / math.sqrt(head_dim)
+
+        # Separate QKV for each stream
+        self.qkv_text = nn.Linear(dim, 3 * heads * head_dim, bias=False)
+        self.qkv_vid  = nn.Linear(dim, 3 * heads * head_dim, bias=False)
+        self.out_text = nn.Linear(heads * head_dim, dim, bias=False)
+        self.out_vid  = nn.Linear(heads * head_dim, dim, bias=False)
+
+        # Separate FFN per stream
+        hidden = int(dim * mlp_ratio)
+        self.mlp_text = nn.Sequential(nn.Linear(dim, hidden), nn.GELU(), nn.Linear(hidden, dim))
+        self.mlp_vid  = nn.Sequential(nn.Linear(dim, hidden), nn.GELU(), nn.Linear(hidden, dim))
+
+        # Separate AdaLN per stream (modulated by timestep + pooled text condition)
+        self.norm_text = nn.LayerNorm(dim, elementwise_affine=False)
+        self.norm_vid  = nn.LayerNorm(dim, elementwise_affine=False)
+        self.norm_ff_text = nn.LayerNorm(dim, elementwise_affine=False)
+        self.norm_ff_vid  = nn.LayerNorm(dim, elementwise_affine=False)
+        self.cond_text = nn.Linear(dim, 6 * dim)
+        self.cond_vid  = nn.Linear(dim, 6 * dim)
+
+    @staticmethod
+    def _modulate(x, shift, scale):
+        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
+    def _proj_qkv(self, x, qkv_mod):
+        B, L, _ = x.shape
+        qkv = qkv_mod(x).reshape(B, L, 3, self.heads, self.head_dim)
+        q, k, v = qkv.unbind(dim=2)                         # [B, L, H, d_k]
+        return q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)   # [B, H, L, d_k]
+
+    def forward(self, text, vid, cond):
+        &quot;&quot;&quot;
+        text: [B, L_t, D]  vid: [B, N_v, D]
+        cond: [B, D]  (timestep emb + pooled text)
+        &quot;&quot;&quot;
+        # Modulation params
+        st_a, sc_t_a, gt_a, st_m, sc_t_m, gt_m = self.cond_text(F.silu(cond)).chunk(6, dim=-1)
+        sv_a, sc_v_a, gv_a, sv_m, sc_v_m, gv_m = self.cond_vid(F.silu(cond)).chunk(6, dim=-1)
+
+        # Pre-norm + modulate (per stream, independent)
+        t = self._modulate(self.norm_text(text), st_a, sc_t_a)
+        v_ = self._modulate(self.norm_vid(vid),  sv_a, sc_v_a)
+
+        # Per-stream QKV (independent parameters)
+        qt, kt, vt = self._proj_qkv(t, self.qkv_text)
+        qv, kv, vv = self._proj_qkv(v_, self.qkv_vid)
+
+        # Concat both streams along seq dim, then joint self-attention
+        q = torch.cat([qt, qv], dim=2)                       # [B, H, L_t + N_v, d_k]
+        k = torch.cat([kt, kv], dim=2)
+        v = torch.cat([vt, vv], dim=2)
+        out = F.scaled_dot_product_attention(q, k, v)        # [B, H, L_t + N_v, d_k]
+
+        L_t = text.shape[1]
+        out_t, out_v = out[:, :, :L_t], out[:, :, L_t:]
+        out_t = out_t.transpose(1, 2).reshape(*text.shape[:2], -1)
+        out_v = out_v.transpose(1, 2).reshape(*vid.shape[:2], -1)
+
+        # Out projection (per stream)
+        text = text + gt_a.unsqueeze(1) * self.out_text(out_t)
+        vid  = vid  + gv_a.unsqueeze(1) * self.out_vid(out_v)
+
+        # FFN (per stream)
+        text = text + gt_m.unsqueeze(1) * self.mlp_text(
+            self._modulate(self.norm_ff_text(text), st_m, sc_t_m))
+        vid = vid + gv_m.unsqueeze(1) * self.mlp_vid(
+            self._modulate(self.norm_ff_vid(vid), sv_m, sc_v_m))
+        return text, vid</code></pre>
+<h3 id="55-training-objective">5.5 Training objective</h3>
+<p>Mainstream = <strong>v-prediction or rectified flow vector</strong> (consistent with SD3). Given video latent $x_1$, noise $x_0$, and random $\tau \in [0, 1]$ (logit-normal distribution is more common):</p>
+<p>$$x_\tau = (1 - \tau) x_0 + \tau\, x_1, \quad u_\tau = x_1 - x_0$$</p>
+<p>$$\mathcal{L} = \mathbb{E}_{\tau, x_0, x_1, c} \, \| v_\theta(\tau, x_\tau, c) - u_\tau \|^2$$</p>
+<p>where $c$ is the text condition (+ optional image / video conditioning). Hunyuan-Video / Mochi / Wan all use RF (same paradigm as SD3 on the image side); Sora is not disclosed but the community speculates it is also in the RF / v-pred family.</p>
+<h2 id="6-image-to-video-i2v--three-main-conditioning-injection-methods">§6 Image-to-Video (I2V) — three main conditioning injection methods</h2>
+<h3 id="61-first-frame-channel-concat-simplest-most-common">6.1 First-Frame Channel Concat (simplest, most common)</h3>
+<p>Encode the reference image $I_\text{ref}$ into a latent $z_\text{ref}^{(0)} \in \mathbb{R}^{C \times 1 \times h \times w}$ (the VAE degenerates to 2D encoding when $T{=}1$), broadcast along the latent's temporal dim $t$ (not the original frame dim $T$) with zero padding, and concat with the noisy latent along the channel dim:</p>
+<p>$$\tilde{z}_\tau = \text{concat}_C\!\left(z_\tau, \, \tilde{z}_\text{ref}, \, m\right) \in \mathbb{R}^{(2C+1) \times t \times h \times w}$$</p>
+<p>where $\tilde{z}_\text{ref}[:, t', :, :] = z_\text{ref}^{(0)}$ if $t'$ is a reference position (typically $t' = 0$), and 0 elsewhere; $m \in \{0, 1\}^{1 \times t \times h \times w}$ is a mask channel of the same shape (1 at reference positions, 0 at positions to be generated). The first conv layer of the model has its in_channels changed from $C$ to $2C + 1$.</p>
+<p><strong>Pros</strong>: simple to implement, fully compatible with the T2V backbone; only one conv layer needs to change. <strong>Cons</strong>: reference information is mixed into the channels and the model has to extract it via conv; long-range frame guidance is weak.</p>
+<p>SVD (Stable Video Diffusion, Blattmann 2023) / DynamiCrafter / I2VGen-XL all use this approach.</p>
+<h3 id="62-cross-attention-injection-fine-grained-control">6.2 Cross-Attention injection (fine-grained control)</h3>
+<p>Patchify $z_\text{ref}$ into tokens, then inject them as additional K/V into the video stream's attention:</p>
+<p>$$\text{CrossAttn}: \quad Q = z_\text{video tokens}, \, K, V = [z_\text{text}, z_\text{ref tokens}]$$</p>
+<p>Or more complex still — add a dedicated cross-attention layer for the ref image. AnimateDiff-style LoRA tuning basically follows this route too.</p>
+<h3 id="63-animatediff-style-plug-in-motion-module">6.3 AnimateDiff-style plug-in motion module</h3>
+<div class="callout callout-good"><div class="callout-title">AnimateDiff (Guo et al. arXiv 2023-07, ICLR 2024)</div><p>freeze a T2I (Stable Diffusion) and <strong>only insert and train a temporal motion module</strong> (temporal self-attention), turning a T2I into a T2V. Pros: reuse the entire T2I ecosystem (LoRA / ControlNet); cons: quality is bounded by the base T2I. The motion module is usually inserted after each spatial block: <code>[B,T,C,H,W] -&gt; rearrange [B*H*W, T, C] -&gt; temporal self-attn -&gt; back</code>.</p></div>
+<h3 id="64-code-first-frame-concat-i2v">6.4 Code: first-frame concat I2V</h3>
+<pre><code class="language-python">class FirstFrameI2VAdapter(nn.Module):
+    &quot;&quot;&quot;
+    Broadcast the ref image latent along the time dim + concat it along the channel dim with the noisy latent.
+    Usage: replace the DiT&#x27;s patchify input projection; change in_ch from C to (2C + 1).
+    &quot;&quot;&quot;
+    def __init__(self, latent_ch=16, embed_dim=1024, patch=(1, 2, 2)):
+        super().__init__()
+        self.patch = patch
+        # +1 is the mask channel
+        self.proj = nn.Conv3d(
+            in_channels=2 * latent_ch + 1,
+            out_channels=embed_dim,
+            kernel_size=patch, stride=patch,
+        )
+
+    def forward(self, noisy_latent, ref_latent, ref_mask):
+        &quot;&quot;&quot;
+        noisy_latent: [B, C, t, h, w]   - noised latent
+        ref_latent:   [B, C, t, h, w]   - reference-frame latent (0 at positions to be generated)
+        ref_mask:     [B, 1, t, h, w]   - 1 = this position (along t) is a reference frame, 0 = to be generated
+        &quot;&quot;&quot;
+        x = torch.cat([noisy_latent, ref_latent, ref_mask], dim=1)  # [B, 2C+1, t, h, w]
+        x = self.proj(x)                                            # [B, D, t&#x27;, h&#x27;, w&#x27;]
+        B, D, tt, hh, ww = x.shape
+        return x.flatten(2).transpose(1, 2), (tt, hh, ww)           # [B, N, D]</code></pre>
+<div class="callout callout-info"><div class="callout-title">Pseudocode for building ref_latent + mask</div><p>given a video latent <code>z_full</code> and reference frame indices <code>ref_indices</code> (e.g. <code>[0]</code> for first-frame I2V), copy <code>z_full[:, :, idx]</code> to the same positions in <code>ref_latent</code>, set the others to 0, and set the corresponding positions in <code>ref_mask</code> to 1. See §A.2 <code>video_gen_forward</code> for the concrete implementation.</p></div>
+<h3 id="65-the-noise-only-on-future-frames-training-trick">6.5 The "noise-only on future frames" training trick</h3>
+<p>During I2V training, reference-frame latents get no noise (or extremely small noise), while frames-to-generate get the normal $\tau$ noise. Loss is computed only at to-be-generated positions. This trick is mentioned in SVD / Hunyuan-Video I2V variants.</p>
+<h2 id="7-long-video-generation-open-problems">§7 Long video generation (open problems)</h2>
+<h3 id="71-three-mainstream-routes">7.1 Three mainstream routes</h3>
+<table><thead><tr><th>Route</th><th>Method</th><th>Representatives</th><th>Drawbacks</th></tr></thead><tbody><tr><td><strong>Keyframe + interpolation</strong></td><td>Generate $K$ keyframes (far apart) first, then interpolate intermediate frames in each segment</td><td>NUWA-XL, parts of Movie Gen's pipeline</td><td>Keyframe transitions may be unnatural</td></tr><tr><td><strong>Hierarchical (coarse → fine)</strong></td><td>First generate a low-fps low-res version, then cascade super-resolution + frame interpolation</td><td>Phenaki, Imagen Video, parts of Sora</td><td>Multi-stage error accumulation</td></tr><tr><td><strong>Autoregressive chunks</strong></td><td>Generate $T$ frames per chunk, conditioning the next chunk on the end of the previous chunk</td><td>Mochi-1 partial mode, StreamingT2V</td><td>Error accumulation → drift, "looping"</td></tr></tbody></table>
+<h3 id="72-soras-duration-as-condition">7.2 Sora's "duration as condition"</h3>
+<p>Sora treats video duration as conditioning (instead of a fixed $T$); training sees videos of different durations, and inference, given a target duration, generates a corresponding patch sequence length. Only briefly mentioned in the public report.</p>
+<h3 id="73-autoregressive-video-generation-compatibility-causal-vae-earns-its-keep">7.3 Autoregressive video generation compatibility (Causal VAE earns its keep)</h3>
+<p>Since the 3D <strong>Causal</strong> VAE encoder does not look into the future, it naturally supports chunk-wise autoregression: the encoder can process segments one by one. But for the DiT part to be autoregressive, causality at the token level is also required — this is an active research direction ("VAR for Video" and friends). Current versions of Hunyuan-Video / Wan are still non-AR diffusion.</p>
+<h3 id="74-simple-chunk-autoregressive-pseudocode">7.4 Simple chunk autoregressive pseudocode</h3>
+<pre><code class="language-python">@torch.no_grad()
+def chunk_autoregressive(rf_sample_fn, vae, text, num_chunks, chunk_t_lat=4, overlap=1,
+                         latent_shape=(16, 60, 90)):
+    &quot;&quot;&quot;
+    Pseudocode skeleton for chunk-wise autoregressive long-video generation.
+    rf_sample_fn(z_init, text, ref_full, ref_mask) -&gt; z_out
+        — uses the §A.3 video_gen_sample style, but accepts external z_init and ref clamp.
+    latent_shape = (C, h_lat, w_lat); each chunk&#x27;s latent temporal length = chunk_t_lat.
+    &quot;&quot;&quot;
+    chunks = []
+    ref_latent = None
+    C, hl, wl = latent_shape
+    device = next(vae.parameters()).device
+    for c in range(num_chunks):
+        # Initial noise
+        z_init = torch.randn(1, C, chunk_t_lat, hl, wl, device=device)
+        # Use the last `overlap` frames of the previous chunk as the reference
+        if ref_latent is not None:
+            z_init[:, :, :overlap] = ref_latent[:, :, -overlap:]
+            ref_full = torch.zeros_like(z_init)
+            ref_full[:, :, :overlap] = ref_latent[:, :, -overlap:]
+            ref_mask = torch.zeros(1, 1, chunk_t_lat, hl, wl, device=device)
+            ref_mask[:, :, :overlap] = 1.0
+        else:
+            ref_full, ref_mask = None, None
+        z = rf_sample_fn(z_init, text, ref_full, ref_mask)   # [1, C, chunk_t_lat, h, w]
+        chunks.append(z)
+        ref_latent = z
+
+    # Concatenate chunks (deduplicating overlap), then VAE decode
+    z_full = torch.cat([chunks[0]] + [c[:, :, overlap:] for c in chunks[1:]], dim=2)
+    return vae.decoder(z_full)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Drift problem</div><p>even with overlap, later chunks under AR mode tend to drift in content (characters disappear, color shifts). Movie Gen / Hunyuan generate short clips (5–10s) in one shot with global attention + extend duration via post-processing super-resolution, rather than pure AR.</p></div>
+<h2 id="8-control--editing--character-consistency-overview-table">§8 Control / editing / character consistency (overview table)</h2>
+<table><thead><tr><th>Task</th><th>Representative method</th><th>Injection mechanism</th></tr></thead><tbody><tr><td>Camera control</td><td><strong>MotionCtrl</strong> (Wang et al. 2023)</td><td>CMCM: camera trajectory $R, T$ sequence → temporal embedding</td></tr><tr><td>Object trajectory control</td><td><strong>MotionCtrl</strong> OMCM module</td><td>2D trajectory points → spatial heatmap as conditioning</td></tr><tr><td>Character animation</td><td><strong>AnimateAnyone</strong> (Hu et al. CVPR 2024)</td><td>ReferenceNet (sibling SD backbone) + Pose Guider (OpenPose/DWPose) + temporal layers</td></tr><tr><td>Character consistency</td><td>IP-Adapter / DreamBooth-style</td><td>ID embedding injected via cross-attn</td></tr><tr><td>Local editing</td><td>Mask-guided generation</td><td>Character mask + ref image injected together</td></tr></tbody></table>
+<h2 id="9-evaluation-vbench--fvd--clipsim-v">§9 Evaluation: VBench / FVD / CLIPSim-V</h2>
+<div class="callout callout-good"><div class="callout-title">VBench (Huang et al. CVPR 2024) — the current SoTA standard</div><p>16 fine-grained dimensions across two categories.</p></div>
+<ul><li><strong>Video Quality (7 dims)</strong>: Subject Consistency, Background Consistency, Temporal Flickering, Motion Smoothness, Dynamic Degree, Aesthetic Quality, Imaging Quality</li><li><strong>Video-Condition Consistency (9 dims)</strong>: Object Class, Multiple Objects, Human Action, Color, Spatial Relationship, Scene, Appearance Style, Temporal Style, Overall Consistency</li></ul>
+<p>Each dimension has a custom prompt set + automatic evaluator (GroundingDINO / DOVER / RAFT / CLIP, etc.), with a final weighted composite score. Hunyuan-Video / Mochi / Movie Gen / Sora etc. all self-report or are independently measured on VBench.</p>
+<p><strong>FVD (Unterthiner et al. 2018)</strong> — generalization of FID to video. Generated / real videos are each passed through a pretrained video classifier (I3D / VideoMAE / S3D) to get intermediate features, then the Fréchet distance between the two distributions is computed:</p>
+<p>$$\text{FVD} = \|\mu_g - \mu_r\|^2 + \text{Tr}\!\left(\Sigma_g + \Sigma_r - 2\sqrt{\Sigma_g \Sigma_r}\right)$$</p>
+<p>Lower FVD = generated distribution closer to real; drawback: depends on classifier domain and doesn't reflect text-video alignment.</p>
+<p><strong>CLIPSim-V</strong> — for each frame compute the cosine between the CLIP image embedding and the prompt CLIP text embedding: $\frac{1}{T} \sum_t \cos(\text{CLIP-I}(f_t), \text{CLIP-T}(\text{prompt}))$. Measures text-video alignment but ignores temporal coherence.</p>
+<p><strong>In practice</strong>: the Hunyuan-Video tech report reports both VBench + human eval (1-5 Likert user study); Sora / Veo demos give only qualitative visualizations. When asked "how do you evaluate" in an interview — answer VBench + human eval + FVD on UCF-101 / MSR-VTT.</p>
+<h2 id="10-complexity-and-memory">§10 Complexity and memory</h2>
+<h3 id="101-token-count-and-attention-cost">10.1 Token count and attention cost</h3>
+<table><thead><tr><th>Video spec</th><th>VAE downsample</th><th>Post-VAE latent shape</th><th>$N$ after (1,2,2) patchify</th><th>Full-3D Attn $N^2$</th></tr></thead><tbody><tr><td>$256{\times}256{\times}16$ (2s, 8fps)</td><td>$4{\times}8{\times}8$</td><td>$4 \times 32 \times 32$</td><td>$4 \cdot 16 \cdot 16 = 1024$</td><td>$\approx 10^6$</td></tr><tr><td>$720p{\times}48$ (2s, 24fps, latent $12{\times}90{\times}160$)</td><td>$4{\times}8{\times}8$</td><td>$12 \times 90 \times 160$</td><td>$12 \cdot 45 \cdot 80 = 43200$</td><td>$\approx 1.9 \times 10^9$</td></tr><tr><td>$1080p{\times}120$ (5s, 24fps, latent $30{\times}136{\times}240$)</td><td>$4{\times}8{\times}8$</td><td>$30 \times 136 \times 240$</td><td>$30 \cdot 68 \cdot 120 = 244800$</td><td>$\approx 6.0 \times 10^{10}$</td></tr></tbody></table>
+<p>Blows up fast. A common interview question is "the attention bottleneck for long video / high resolution" — answer: $O(N^2)$ quadratic cost, and even FlashAttention does not reduce the token count itself; the fix is factorized / window / cascaded multi-stage.</p>
+<h3 id="102-memory-and-flops-key-points">10.2 Memory and FLOPs key points</h3>
+<ul><li><strong>Score matrix memory</strong>: vanilla is $O(L^2)$; FlashAttention drops it to $O(L)$ activation</li><li><strong>KV cache</strong>: pure diffusion has no AR steps, so there is no KV cache during training; activation checkpointing + ZeRO-3 are essential</li><li><strong>3D Causal VAE inference</strong>: chunkable, memory $O(\text{chunk}_T \cdot h \cdot w \cdot C)$</li><li><strong>Training FLOPs</strong>: a 13B model's per-batch attention FLOPs ≈ $4 B N^2 d$ × layers ($B$ = batch size); Hunyuan-Video full model ≈ several hundred to a thousand PFLOP / sample, requiring thousands of H100s for months of training</li></ul>
+<h2 id="11-relation-to-other-generative-models">§11 Relation to other generative models</h2>
+<h3 id="111-image-diffusion-vs-video-diffusion">11.1 Image diffusion vs Video diffusion</h3>
+<table><thead><tr><th>Dimension</th><th>Image (SD3 / SDXL / FLUX)</th><th>Video (Hunyuan / Mochi / Wan)</th></tr></thead><tbody><tr><td>VAE</td><td>2D VAE, $\downarrow 8\times$</td><td>3D Causal VAE, $\downarrow 4\times8\times8$</td></tr><tr><td>Token count</td><td>$\sim 10^3$ (1024² @ 16²)</td><td>$\sim 10^4 - 10^5$</td></tr><tr><td>Attention</td><td>Self + Cross</td><td>ST (factorized / full 3D) + Cross / MM-DiT</td></tr><tr><td>Training token volume</td><td>Billions of image-text pairs</td><td>Tens of millions of video-text pairs (video data is scarce)</td></tr><tr><td>Evaluation</td><td>FID, CLIPScore</td><td>VBench, FVD, CLIPSim-V</td></tr><tr><td>Main challenges</td><td>Aesthetics / prompt following</td><td>Temporal consistency / physical plausibility / long duration</td></tr></tbody></table>
+<h3 id="112-video-llm-vs-video-generation-vs-ar-video">11.2 Video LLM vs Video Generation vs AR Video</h3>
+<ul><li><strong>Video LLM</strong> (VideoChat / Video-LLaVA / NaVit): input video, output text (understanding direction); CLIP/ViViT/VideoMAE features + LLM</li><li><strong>Diffusion Video Gen</strong> (the focus of this article): high quality, with long video via chunk / hierarchical</li><li><strong>AR Video</strong> (Cosmos-Predict, VAR-Video family): video tokenized (VQ-VAE / FSQ) + LM-style generation. Pros: natural streaming + long video; cons: quality currently below diffusion</li><li><strong>Unified</strong> (Show-o / Emu3, etc. — emerging 2025): simultaneous understanding + generation; the video version has not yet taken off</li><li>2024-2025 SoTA is still dominated by diffusion</li></ul>
+<h2 id="12-25-frequently-asked-interview-questions">§12 25 frequently-asked interview questions</h2>
+<p>Grouped into 3 levels: L1 must-know (any MLE position), L2 advanced (research-oriented), L3 top labs (diffusion / video specialist). Each item opens to answer key points + common pitfalls.</p>
+<h3 id="l1-must-know-basics--any-video-generation-related-role">L1 must-know (basics — any video-generation-related role)</h3>
+<details>
+
+<summary>Q1. What is the overall pipeline of today's mainstream video generation models?</summary>
+<ul><li><strong>3D Causal VAE</strong> compresses video from $H{\times}W{\times}T$ to an $h{\times}w{\times}t$ latent</li><li><strong>Latent DiT / MM-DiT</strong> performs diffusion / flow matching in the latent space</li><li><strong>Text encoder</strong> (T5 / CLIP / MLLM) provides conditioning</li><li><strong>VAE Decoder</strong> decodes the latent back to video</li><li>Inference uses an ODE/SDE sampler (Euler / Heun / DDIM) integrating from noise to data</li></ul>
+<p>Pitfall: saying only "diffusion + UNet" while forgetting the latent / 3D / VAE trio; or claiming attention runs in pixel space (long since infeasible).</p>
+</details>
+<details>
+
+<summary>Q2. What does "Causal" in 3D Causal VAE mean? Why must it be causal?</summary>
+<ul><li>In the temporal dim, conv padding is all stacked on the <strong>left (past)</strong>, with no right padding, so the <strong>current frame cannot see the future</strong></li><li>Three key benefits: (1) <strong>images and video can share the latent space</strong> (when $T{=}1$ it degenerates to 2D, so images also pass through the encoder), enabling joint image+video training; (2) <strong>streaming / autoregressive inference</strong>, long videos can be processed chunk-wise; (3) during training images count as $T{=}1$ videos for high data utilization</li><li>Hunyuan-Video / Wan / Mochi / CogVideoX all use causal 3D VAE</li></ul>
+<p>Pitfall: saying "causal just means masking the future" — that is the surface; the key is why those 3 engineering benefits matter.</p>
+</details>
+<details>
+
+<summary>Q3. What problem do Sora's "spacetime patches" solve?</summary>
+<ul><li>Slice the video latent into 3D patches $p_t \times p_h \times p_w$, each patch becoming a token</li><li><strong>Supports variable resolution / duration / aspect ratio</strong> — different-shape videos can be packed into the same batch (separated by attention masks)</li><li>Like ViT but with the added time dim; decouples network architecture from concrete input shape</li></ul>
+<p>Pitfall: saying only "slice patches" without explaining the key benefit (variable-shape training / inference).</p>
+</details>
+<details>
+
+<summary>Q4. How big is the complexity gap between Factorized 2+1D attention and Full 3D attention?</summary>
+<ul><li>Let per-frame tokens be $S$, temporal tokens $T_t$, total tokens $N = S T_t$</li><li><strong>Factorized 2+1D</strong>: spatial $O(T_t S^2)$ + temporal $O(S T_t^2)$</li><li><strong>Full 3D</strong>: $O(N^2) = O(S^2 T_t^2)$</li><li>Full 3D is $\min(S, T_t)$ times more expensive than Factorized</li><li>But Full 3D <strong>has more expressive power</strong> (allowing joint spatial + temporal patterns)</li></ul>
+<p>Pitfall: comparing only Full 3D without counting the temporal term; or ignoring that the essential difference is "whether you assume space ⊗ time is separable".</p>
+</details>
+<details>
+
+<summary>Q5. How does MM-DiT for video inject text?</summary>
+<ul><li>Text tokens and video tokens are <strong>concatenated into a single sequence</strong> for self-attention</li><li>Each stream has independent QKV / FFN / AdaLN parameters (dual-stream), but the attention matrix is shared</li><li>Compared to traditional cross-attention (Q from video, KV from text), MM-DiT lets the two modalities interact <strong>at the token level on equal footing</strong></li><li>Hunyuan-Video / Mochi adopt this architecture (video side); SD3 (Esser et al. 2024) is the original MM-DiT on the image side</li></ul>
+<p>Pitfall: saying "video backbone + cross-attn from text" — that's SDXL style; MM-DiT has replaced it.</p>
+</details>
+<details>
+
+<summary>Q6. What is the simplest implementation of I2V (Image-to-Video)?</summary>
+<ul><li>Encode the reference image $I_\text{ref}$ into a latent $z_\text{ref}$</li><li>Broadcast along the time dim, concat along the channel dim with the noisy latent: change input channels from $C$ to $2C{+}1$ (plus a mask channel marking which positions are ref)</li><li>Other parts of the model unchanged; only the first patchify conv layer is modified</li><li>During training, ref frames receive no noise / extremely small noise, and loss is computed only on to-be-generated frames</li></ul>
+<p>Pitfall: saying "just feed in another image" without explaining where the concat happens or how the mask is handled.</p>
+</details>
+<details>
+
+<summary>Q7. What is the core idea of AnimateDiff?</summary>
+<ul><li><strong>Freeze</strong> a T2I model (Stable Diffusion)</li><li><strong>Insert + only train a temporal motion module</strong> (temporal self-attention), placed after each spatial block</li><li>Pros: directly reuses the entire T2I ecosystem (LoRA, ControlNet, custom checkpoints)</li><li>Cons: quality is bounded by the base T2I model; long video is hard</li></ul>
+<p>Pitfall: saying "replace UNet with Transformer" — wrong; AnimateDiff is a plug-in that does not replace the backbone.</p>
+</details>
+<details>
+
+<summary>Q8. What does VBench evaluate? How does it differ from FVD?</summary>
+<ul><li><strong>VBench</strong> (Huang CVPR 2024): 16 <strong>fine-grained dimensions</strong> (Subject Consistency, Motion Smoothness, Object Class, Color, ...), each scored by a dedicated detector / classifier; the current SoTA video generation standard</li><li><strong>FVD</strong> (Unterthiner 2018): FID generalized to video; uses I3D / VideoMAE features to compute Fréchet distance between two distributions; a single number</li><li>VBench is more interpretable and pinpoints which dimension is weak; FVD is single-number but black box</li><li>In practice: both are reported + human eval</li></ul>
+<p>Pitfall: only knowing FVD without VBench — a big gap after 2024.</p>
+</details>
+<details>
+
+<summary>Q9. Which of Sora / Hunyuan-Video / Mochi-1 / Kling are open source?</summary>
+<ul><li><strong>Open source</strong>: Hunyuan-Video (13B, 2024-12), Mochi-1 (10B, 2024-10), CogVideoX (5B/15B, arXiv 2024-08), OpenSora / OpenSora-Plan, LTX-Video (2B, 2024-11), Wan 2.1/2.2 (14B, 2025), SVD (2023-11)</li><li><strong>Closed source</strong>: Sora (2024-02), Veo / Veo 2 (Google), Kling (Kuaishou 2024-06), Movie Gen (Meta, 30B)</li><li>Domestic Chinese open-source mainstays: Hunyuan / Wan / CogVideoX</li></ul>
+<p>Pitfall: only remembering Sora and SVD — you must know both open and closed timelines.</p>
+</details>
+<details>
+
+<summary>Q10. Text encoder choice: T5 vs CLIP vs MLLM?</summary>
+<ul><li><strong>CLIP-L / G</strong>: aligned well with image latents (image-text jointly trained), works well for short text but poor at long-prompt following</li><li><strong>T5-XXL</strong>: sequence-to-sequence model, <strong>better at long-prompt following</strong>; SD3 / Mochi / CogVideoX all use it</li><li><strong>MLLM</strong> (LLaVA-like): strong at understanding object relationships within prompts; Hunyuan-Video uses a dual CLIP-L + MLLM encoder</li><li>In production, long prompts are also handled at inference time by a <strong>prompt rewriter</strong> (LLM rewrites) to bridge the train/test caption distribution gap</li></ul>
+<p>Pitfall: saying "just CLIP" — after 2024 it has largely been replaced by T5 / MLLM or used alongside them.</p>
+</details>
+<h3 id="l2-advanced-research-oriented--mid-level-role">L2 advanced (research-oriented / mid-level role)</h3>
+<details>
+
+<summary>Q11. Derive why a 3D Causal VAE at $T{=}1$ is "behaviorally" equivalent to 2D conv.</summary>
+<ul><li>Causal 3D conv with temporal kernel size $k_t$, left pad $k_t - 1$, right pad 0, stride=1.</li><li>Input shape $[B, C, 1, H, W]$ ($T{=}1$ single frame); after left-padding $k_t - 1$, the time-dim length becomes $1 + (k_t - 1) = k_t$, where the first $k_t - 1$ positions are padding zeros and the last 1 is the true frame.</li><li>Output time length $= (k_t + 0 - k_t)/1 + 1 = 1$ (using the conv output length formula $(L_\text{in} + p - k) / s + 1$, with $L_\text{in}=1$, $p=k_t-1$, $k=k_t$, $s=1$). So <strong>only a single time slot is produced</strong>.</li><li>Let the time-dim weight sequence be $W_0, W_1, \dots, W_{k_t-1}$; the computation at the sole output position is $\sum_{\tau=0}^{k_t-1} W_\tau \star x_\tau$. But only $\tau = k_t - 1$ corresponds to the real frame; the rest of the $x_\tau$ are padding zeros — <strong>only the time slice $W_{k_t - 1}$ contributes to the output</strong>.</li><li><strong>Conclusion</strong>: at $T{=}1$ the entire causal 3D conv degenerates to an <strong>effective</strong> 2D conv (kernel = $W_{k_t - 1}[:, :, :, :]$); the remaining time-slice weights are not exercised by any real input on the image path.</li></ul>
+<blockquote><p>Engineering: at training time, image $T{=}1$ batches traverse the "2D conv subset" path, with no need for an additional 2D head; this is the prerequisite that lets Hunyuan-Video / Mochi / CogVideoX jointly train image + video.</p></blockquote>
+<p>Pitfall: treating "equivalent to 2D conv" as a physical weight merge — actually, padding-0 simply causes the other time slices to have no effect on image inputs.</p>
+</details>
+<details>
+
+<summary>Q12. Expressive-power difference between Full 3D attention and factorized 2+1D? (between L2/L3)</summary>
+<ul><li>Factorized: first $\text{Attn}_S$ lets spatial tokens attend to each other (within each frame), then $\text{Attn}_T$ attends along the time dim</li><li><strong>Assumption</strong>: spatiotemporal interactions are separable — the relation between any two spacetime positions $(t_1, s_1)$ and $(t_2, s_2)$ decomposes into "first $s_1 \leftrightarrow s_2$ at $t_1$" then "$t_1 \leftrightarrow t_2$ at $s_2$"</li><li>Full 3D makes no separability assumption: any two tokens attend directly; can learn <strong>diagonal spatiotemporal patterns</strong> (e.g. diagonal motion)</li><li><strong>Mathematically</strong>: factorized is a <strong>strict subset</strong> of full 3D (a constrained parameterization)</li><li>Empirically: full 3D is better at fast motion / complex spatiotemporal patterns</li></ul>
+<p>Pitfall: saying only "full 3D is more accurate" without identifying what patterns it can learn (diagonal / non-separable motion).</p>
+</details>
+<details>
+
+<summary>Q13. Why are video VAEs mainstream-bounded in the $\downarrow 4{\sim}8 \times 8 \times 8$ range?</summary>
+<ul><li>Voxel compression ratio $= 4 \cdot 8 \cdot 8 = 256$ ($1{:}256$); with $C=16$ latent channels, the net ratio is about $1{:}48$</li><li><strong>More aggressive (e.g. LTX-Video reports $1{:}8192$ overall) → fewer tokens but degraded reconstruction quality</strong> (detail / sharpness loss)</li><li>DiT backbone attention is $O(N^2)$, so aggressive compression is engineering-friendly; but lost detail is hard to recover</li><li>$4{\times}$ temporal downsampling is empirically the upper bound where motion smoothness stays acceptable — higher temporal compression introduces jitter in fast-motion scenes</li><li>Each model is configured differently: CogVideoX uses $4{\times}8{\times}8$; Hunyuan-Video uses $4{\times}8{\times}8$; Mochi-1 is more aggressive on the temporal dim (about $6{\times}8{\times}8$, per the Mochi blog); LTX-Video goes for extreme high compression + real-time</li><li>Even with the same backbone, VAE choice is an active design decision</li></ul>
+<p>Pitfall: lumping all models into the same $4{\times}8{\times}8$ bucket — Mochi-1 / LTX-Video use more aggressive temporal compression.</p>
+</details>
+<details>
+
+<summary>Q14. Why is logit-normal $t$ sampling useful in video FM training?</summary>
+<ul><li>SD3 (Esser 2024) found that $t \sim \mathcal{U}[0,1]$ is suboptimal: the middle region $t \approx 0.5$ has the hardest noise/signal ratio</li><li>Switch to $t = \sigma(\tau), \tau \sim \mathcal{N}(m, s^2)$, concentrating $t$ near 0.5</li><li>The same phenomenon is observed in video (Hunyuan / Mochi both default to logit-normal)</li><li>Intuition: away from $t=0$ and $t=1$, the model must learn on mixed noise/signal, which is the hardest region</li></ul>
+<p>Pitfall: saying "loss reweighting" — logit-normal is not loss reweighting but a change of the $t$ sampling distribution.</p>
+</details>
+<details>
+
+<summary>Q15. How does RoPE-3D encode (time, height, width)?</summary>
+<ul><li>Split the $d$-dim query/key into 3 chunks $q = [q^{(t)} \,|\, q^{(h)} \,|\, q^{(w)}]$ (disjoint subspaces), one per (t, h, w)</li><li>Each chunk uses 1D RoPE (frequencies $\theta_d = 1 / 10000^{2k/d}$ like vanilla Transformer)</li><li>Result is the concat of block-diagonal rotations: $\text{RoPE}_{3D}(q) = [R_t(\theta_t) q^{(t)} \,|\, R_h(\theta_h) q^{(h)} \,|\, R_w(\theta_w) q^{(w)}]$</li><li>Done per head independently; after attention, <strong>relative spatiotemporal position</strong> information emerges naturally</li><li>CogVideoX / Hunyuan-Video both use similar schemes</li></ul>
+<p>Pitfall: treating it as absolute embedding — RoPE is fundamentally a relative position encoding.</p>
+</details>
+<details>
+
+<summary>Q16. Difference between Stable Video Diffusion (SVD) and AnimateDiff?</summary>
+<ul><li><strong>SVD</strong> (Blattmann 2023): finetune the entire SD2.1 UNet, add temporal layers; I2V-focused, with 14-frame and 25-frame variants; entire model trained</li><li><strong>AnimateDiff</strong> (Guo 2024 ICLR): <strong>freeze SD-T2I</strong> and only train a plug-in temporal motion module; T2V-focused</li><li>SVD has better quality but loses the SD T2I ecosystem; AnimateDiff sacrifices quality for plug-and-play</li><li>Both are early 2023 methods, surpassed in 2024 by DiT-based large models</li></ul>
+<p>Pitfall: saying "both are video diffusion" — the difference is finetune vs plug-in.</p>
+</details>
+<details>
+
+<summary>Q17. Comparison between DiT with AdaLN vs cross-attn? Why does DiT-Video also prefer AdaLN?</summary>
+<ul><li><strong>AdaLN</strong> (DiT default): pool the condition into a single vector $c$ and predict the LayerNorm scale + shift + gate</li><li><strong>Cross-attn</strong>: condition tokens are K/V, video tokens are Q</li><li>AdaLN is simple / cheap / stable; but provides <strong>global conditioning</strong> — every token sees the same modulation</li><li>Cross-attn lets each token selectively attend to the condition; expensive when tokens are many</li><li>MM-DiT (SD3 / Hunyuan / Mochi) actually <strong>combines</strong> the two: the MM part shares attention while AdaLN modulates the norm</li><li>Pure video DiT with AdaLN started with Latte / OpenSora; later supplanted by MM-DiT</li></ul>
+<p>Pitfall: treating AdaLN as outdated — MM-DiT still embeds AdaLN modulation.</p>
+</details>
+<details>
+
+<summary>Q18. What is special about CFG in video generation?</summary>
+<ul><li>Same formula as image: $v_\text{CFG} = v_\theta(\emptyset) + s \cdot (v_\theta(c) - v_\theta(\emptyset))$</li><li><strong>CFG done per frame</strong>, so 2x forward cost $\times$ T frames</li><li><strong>Guidance scale typically 5-7.5</strong> (close to SDXL / SD3)</li><li>In video, an overly large $s$ easily causes <strong>frame flickering / oversaturation</strong> — more sensitive than images</li><li>Some implementations use <strong>temporal-aware CFG</strong> (different $s$ at different timesteps / frames)</li></ul>
+<p>Pitfall: saying "CFG is the same in video as in image" — usually true, but the flickering sensitivity is video-specific.</p>
+</details>
+<details>
+
+<summary>Q19. What is Hunyuan-Video's dual-stream → single-stream design?</summary>
+<ul><li><strong>Dual-stream blocks</strong> (early layers): text and video tokens share the attention matrix but have independent QKV / FFN / AdaLN per stream — letting each modality first refine its own representation</li><li><strong>Single-stream blocks</strong> (later layers): fully shared parameters, equivalent to a unified Transformer</li><li>Intuition: early stages need to preserve modality specificity (text is sequential, video is spatiotemporal); later stages can unify</li><li>Mochi's AsymmDiT is similar in spirit but more aggressive — the video stream is 4x wider than the text stream</li></ul>
+<p>Pitfall: saying "they are all self-attn on a unified sequence" — missing stream-specific parameters / the early-vs-late distinction.</p>
+</details>
+<details>
+
+<summary>Q20. What is Mochi-1's AsymmDiT (asymmetric MM-DiT)?</summary>
+<ul><li>The two streams (text / video) have different hidden dims: video is 4x wider than text (e.g. video $D{=}3072$ / text $D{=}768$)</li><li>Intuition: video carries much more information than text, so allocate more parameters to the video stream</li><li>During attention, text and video project to a common head dim and run self-attention</li><li>FFN is independent per stream, sized per its own width</li><li>Uses fewer text-side parameters than standard MM-DiT, saving memory without losing quality</li></ul>
+<p>Pitfall: treating "asymmetric" as if the two streams don't interact — wrong; they still share attention.</p>
+</details>
+<h3 id="l3-top-lab-questions-deep--diffusion--video-specialist">L3 top-lab questions (deep — diffusion / video specialist)</h3>
+<details>
+
+<summary>Q21. 3D Causal VAE vs standard 3D VAE: besides streaming, what other essential differences are there? (must-ask)</summary>
+<ul><li><strong>Standard 3D VAE</strong>: the time kernel is center-aligned, needs symmetric padding, so <strong>output[t] depends on input[t-\lfloor k_t/2 \rfloor \ldots t+\lfloor k_t/2 \rfloor]</strong> — looks at the future</li><li><strong>3D Causal VAE</strong>: the time kernel is causally aligned, with left pad $k_t - 1$ and no right pad, so <strong>output[t] depends only on input[t-k_t+1 \ldots t]</strong></li></ul>
+<p><strong>Essential differences</strong>:</p>
+<ul><li><strong>Streaming / autoregressive inference</strong>: causal allows chunk-wise encoding, encoding each new segment of video on arrival; a standard VAE must wait for the full clip (the kernel center needs future frames)</li><li><strong>Image-video same space</strong>: both, at $T{=}1$, can in principle "degenerate to 2D" (zero padding renders other time slices ineffective), but the causal design is "past all visible + future all zero", consistent with its behavior at large $T$ during training; with symmetric padding at $T{=}1$, the kernel sees $\lfloor k_t/2 \rfloor$ padding positions on each side, behaviorally inconsistent with the $T \gg 1$ boundary case — <strong>worse consistency</strong></li><li><strong>Train + inference consistency</strong>: a causal VAE uses one padding rule for training (full clip) and inference (AR chunk); a standard 3D VAE lacks the future frames at AR chunk inference time and needs special padding</li><li><strong>Compatibility with AR video</strong>: causal is a necessary prerequisite for AR video generation (VAR-Video / Cosmos)</li><li><strong>Training data utilization</strong>: image-only batches behave the same in the causal VAE encoder as during training; a standard 3D VAE needs dummy symmetric padding, with a gap to the normal training distribution</li></ul>
+<div class="callout callout-info"><div class="callout-title">Bonus</div><p>explain how a causal VAE's downsampling layer works (preserving causality when time stride is 2); explain the implementation details for mixing image + video in training batches.</p></div>
+<p>Pitfall: saying only "causal means masking the future" — necessary but not sufficient; expand on "why this closes the ecosystem loop (image + video same stack, AR compatibility, streaming)".</p>
+</details>
+<details>
+
+<summary>Q22. Engineering implementation for handling arbitrary resolution / duration / aspect ratio with spacetime patches?</summary>
+<ul><li><strong>Patchify token count $N = (t/p_t)(h/p_h)(w/p_w)$ varies with input shape</strong>; the Transformer is insensitive to $N$ (self-attn is set-like)</li><li><strong>RoPE-3D</strong>: relative position encoding, not bound to a maximum length; any $(t, h, w)$ triple can be rotated</li><li><strong>Packing</strong>: within a batch, concatenate samples of mixed shapes into one seq + a segment attention mask (visible within a sample, masked across samples) + pad to max length</li><li><strong>Aspect ratio / duration as conditioning</strong>: extra tokens / scalars injected via AdaLN, so the model can learn reasonable composition for different ratios</li><li>Sora first productionized; community reproductions include OpenSora-Plan / OpenSora 1.2+</li></ul>
+<p>Pitfall: saying only "Transformers don't care about length" — expand on the full engineering stack: packing + segment mask + RoPE-3D + aspect ratio conditioning.</p>
+</details>
+<details>
+
+<summary>Q23. Precise complexity formulas for Factorized 2+1D vs Full 3D attention + when to choose which?</summary>
+<ul><li>Let per-frame spatial tokens $S = (h/p_h)(w/p_w)$, temporal tokens $T_t = t/p_t$, total tokens $N = S T_t$</li><li><p><strong>Factorized 2+1D</strong>:</p>
+<ul><li>Spatial attn (independent per frame): $T_t \cdot S^2 \cdot d$</li><li>Temporal attn (independent per spatial position): $S \cdot T_t^2 \cdot d$</li><li>Total $O\!\left(d \cdot (T_t S^2 + S T_t^2)\right) = O\!\left(d \cdot S T_t (S + T_t)\right)$</li></ul></li><li><strong>Full 3D</strong>: $O(d \cdot N^2) = O\!\left(d \cdot S^2 T_t^2\right)$</li><li>Ratio = full / factorized = $\frac{S^2 T_t^2}{S T_t(S + T_t)} = \frac{S T_t}{S + T_t}$, of order $\min(S, T_t)$</li><li>For $S \approx 10^3$ (720p latent), $T_t \approx 30$ (5s): full is $\approx 30\times$ more expensive than factorized (dominated by $\min$)</li></ul>
+<p><strong>When to choose which</strong>:</p>
+<ul><li><strong>Sufficient compute + high quality target</strong>: Full 3D (Sora / Hunyuan / Mochi)</li><li><strong>Budget constrained / fast iteration</strong>: Factorized 2+1D (Latte / OpenSora / AnimateDiff)</li><li><strong>Quality–speed compromise</strong>: most blocks factorized + a few full 3D (the OpenSora-Plan approach)</li><li>For memory-sensitive cases, factorized + recompute is the cheaper option</li></ul>
+<p>Pitfall: giving only a qualitative answer "full is more expensive" — for L3, give precise formulas + engineering trade-off.</p>
+</details>
+<details>
+
+<summary>Q24. What is the most promising route for long video (>30s) right now? Why does chunk AR drift easily?</summary>
+<ul><li><strong>Drift, mathematically</strong>: each chunk samples from $p(x | \hat{z}_\text{prev})$, where $\hat{z}_\text{prev}$ is itself model-generated (not real data); multi-step conditioning accumulates error (like RNN exposure bias)</li><li><strong>Mitigation</strong>: overlap + clamp the known portion; multi-frame reference (not just the last 1 frame); global learned motif tokens</li><li><p><strong>More promising routes</strong>:</p>
+<ul><li><strong>Hierarchical</strong>: first generate low-fps keyframes, then temporal super-resolution to interpolate middle frames</li><li><strong>Long-context full attention</strong>: long video directly + sparse / sliding / hierarchical to control cost</li><li><strong>Diffusion Forcing and other hybrid approaches</strong></li></ul></li><li>Sora's public 60s demo doesn't disclose internal details; Movie Gen uses multi-stage keyframe + interp + super-res</li></ul>
+<p>Pitfall: saying only "AR drifts" — give a concrete mathematical explanation of drift + the current SoTA response.</p>
+</details>
+<details>
+
+<summary>Q25. Hunyuan-Video / Mochi-1 / Wan all use Rectified Flow; what's the advantage over DDPM ε-pred?</summary>
+<ul><li><strong>Target is stationary</strong>: RF's $u_t = x_1 - x_0$ is a constant given $(x_0, x_1)$; magnitude variation across $t$ is much smaller than ε-pred</li><li><strong>Few-step sampling</strong>: the path is a straight line (ideal), so few-step ODE has small error; after Reflow, 1-4 steps suffice</li><li><strong>Natural loss conditioning</strong>: no need for explicit reweighting like SNR / VLB / EDM-preconditioning of DDPM</li><li><strong>Shared stack with SD3</strong>: image / video use one recipe (v-pred + logit-normal $t$)</li><li>DDPM ε-pred needs careful noise schedule design + the target scale at different $t$ varies hugely, complicating training reweighting; RF "works once for all".</li></ul>
+<p>Pitfall: saying only "RF has a straighter path" — expand on training objective / numerical stability / sampler compatibility from multiple angles.</p>
+</details>
+<h2 id="a-appendix-full-from-scratch-video-generation-model-skeleton">§A Appendix: Full from-scratch video generation model skeleton</h2>
+<h3 id="a1-overall-class-diagram">A.1 Overall class diagram</h3>
+<pre class="diagram"><code>
+VideoGenModel
+├── encoder: CausalVAEEncoder        (3D Causal VAE)
+├── decoder: CausalVAEDecoder
+├── text_encoder: T5Encoder / MLLM   (frozen)
+├── patchify: SpacetimePatchify      (3D patch -&gt; token)
+├── unpatchify: SpacetimeUnpatchify
+├── time_embed: SinusoidalTimeEmbed  (timestep τ)
+├── transformer:
+│     ├── MMDiTVideoBlock × N_dual   (dual-stream)
+│     └── SingleStreamBlock × N_sing (single-stream)
+└── i2v_adapter: FirstFrameI2VAdapter (optional, for I2V mode)</code></pre>
+<h3 id="a2-training-forward--a3-euler-rf-sampler">A.2 Training forward + A.3 Euler RF sampler</h3>
+<pre><code class="language-python">def run_dit(model, z, text, tau, ref_full=None, ref_mask=None):
+    &quot;&quot;&quot; DiT forward: noisy latent z -&gt; predicted vector field. &quot;&quot;&quot;
+    if ref_full is None:
+        tokens, grid = model.patchify(z)
+    else:
+        tokens, grid = model.i2v_adapter(z, ref_full, ref_mask)
+    text_tok = model.text_encoder(text)
+    cond = model.time_embed(tau) + text_tok.mean(dim=1)        # [B, D]
+    for blk in model.transformer.dual_stream:
+        text_tok, tokens = blk(text_tok, tokens, cond)
+    for blk in model.transformer.single_stream:
+        cat = torch.cat([text_tok, tokens], dim=1)
+        cat = blk(cat, cond)
+        text_tok, tokens = cat[:, :text_tok.size(1)], cat[:, text_tok.size(1):]
+    return model.unpatchify(tokens, grid)                       # [B, C, t, h, w]
+
+
+def video_gen_forward(model, video_clean, text, ref_image=None):
+    &quot;&quot;&quot; RF v-prediction MSE loss. video_clean: [B,3,T,H,W]; ref_image: optional [B,3,H,W]. &quot;&quot;&quot;
+    B = video_clean.size(0); device = video_clean.device
+    mu, logvar = model.encoder(video_clean)
+    z1 = model.encoder.reparameterize(mu, logvar)
+    z0 = torch.randn_like(z1)
+    tau = torch.sigmoid(torch.randn(B, device=device))          # SD3 logit-normal
+    tau_b = tau.view(-1, 1, 1, 1, 1)
+    z_tau = (1 - tau_b) * z0 + tau_b * z1
+    u_target = z1 - z0
+    ref_full, ref_mask = None, None
+    if ref_image is not None:
+        mu_r, _ = model.encoder(ref_image.unsqueeze(2))         # T=1 path
+        ref_full = torch.zeros_like(z1); ref_full[:, :, :1] = mu_r
+        ref_mask = torch.zeros(B, 1, *z1.shape[2:], device=device); ref_mask[:, :, :1] = 1.0
+        # I2V trick: ref frames kept clean (no noise), aligning train and inference distributions
+        ref_mask_C = ref_mask.expand_as(z_tau).bool()
+        z_tau = torch.where(ref_mask_C, z1, z_tau)
+    v_pred = run_dit(model, z_tau, text, tau, ref_full, ref_mask)
+    # I2V: compute loss only on to-be-generated frames
+    if ref_mask is not None:
+        gen = (1 - ref_mask).expand_as(v_pred)
+        return ((v_pred - u_target).pow(2) * gen).sum() / gen.sum().clamp(min=1.0)
+    return F.mse_loss(v_pred, u_target)
+
+
+@torch.no_grad()
+def video_gen_sample(model, text, t_lat=12, h_lat=90, w_lat=160, steps=50,
+                     ref_image=None, guidance_scale=6.0, C=16):
+    &quot;&quot;&quot; End-to-end inference: t_lat/h_lat/w_lat directly specify the latent shape (avoiding the T/4 divisibility trap). &quot;&quot;&quot;
+    device = next(model.parameters()).device
+    z = torch.randn(1, C, t_lat, h_lat, w_lat, device=device)
+    ref_full, ref_mask = None, None
+    if ref_image is not None:
+        mu_r, _ = model.encoder(ref_image.unsqueeze(2))
+        ref_full = torch.zeros_like(z); ref_full[:, :, :1] = mu_r
+        ref_mask = torch.zeros(1, 1, t_lat, h_lat, w_lat, device=device); ref_mask[:, :, :1] = 1.0
+        # At inference time, clamp the ref frame positions to clean latent right from start
+        # (consistent with training), otherwise the first DiT step sees noise there
+        z = torch.where(ref_mask.bool().expand_as(z), ref_full, z)
+    taus = torch.linspace(0, 1, steps + 1, device=device)
+    for i in range(steps):
+        tau_i = taus[i].expand(1)
+        v_cond   = run_dit(model, z, text, tau_i, ref_full, ref_mask)
+        v_uncond = run_dit(model, z, [&quot;&quot;],  tau_i, ref_full, ref_mask)
+        v = v_uncond + guidance_scale * (v_cond - v_uncond)
+        z = z + (taus[i + 1] - taus[i]) * v
+        if ref_mask is not None:                                # I2V: clamp ref frames at every step
+            z = torch.where(ref_mask.bool().expand_as(z), ref_full, z)
+    return model.decoder(z)</code></pre>
+<div class="callout callout-good"><div class="callout-title">Sanity checks commonly done on video generation models</div></div>
+<ul><li><strong>Reconstruction-only</strong>: VAE encode then decode, check PSNR / SSIM / LPIPS to verify the model can reconstruct the original</li><li><strong>Random latent decode</strong>: sample latent from $\mathcal{N}(0, I)$ and decode, to see whether the VAE has degraded (should yield "natural-looking" videos whose semantics may not be coherent)</li><li><strong>Class / prompt overfit</strong>: train on a single prompt for 1000 steps to see if the model can memorize</li><li><strong>VBench partial dimensions</strong>: mid-training, first evaluate Subject Consistency / Motion Smoothness to verify temporal stability</li><li><strong>CFG sweep</strong>: scale = 0/1/3/6/10 to see the effect (too high → saturation / flicker)</li></ul>
+<h3 id="a4-current-sota-overview">A.4 Current SoTA overview</h3>
+<table><thead><tr><th>Dimension</th><th>Current SoTA</th><th>Notes</th></tr></thead><tbody><tr><td>Best open-source T2V</td><td>Hunyuan-Video 13B</td><td>2024-12, quality approaches closed-source</td></tr><tr><td>Open-source I2V</td><td>Wan 2.2 I2V / Hunyuan-Video I2V</td><td>Friendly to Chinese prompts</td></tr><tr><td>Best closed-source</td><td>Veo 2 / Sora / Kling</td><td>4K / long duration</td></tr><tr><td>Real-time</td><td>LTX-Video 2B</td><td>Real-time on RTX 4090</td></tr><tr><td>Video + audio</td><td>Movie Gen (closed)</td><td>30B joint generation</td></tr><tr><td>Control</td><td>AnimateAnyone / MotionCtrl</td><td>Character / camera control</td></tr></tbody></table>
+<hr />
+<p><strong>Video Generation Quick Reference</strong> · Main references: Sora technical report (OpenAI 2024), Hunyuan-Video tech report (Tencent 2024), Mochi-1 blog (Genmo 2024), CogVideoX (Yang et al. arXiv 2024-08 → ICLR 2025), Wan tech report (Team Wan / Ang Wang et al. arXiv 2025), Movie Gen tech report (Meta 2024), VBench (Huang et al. CVPR 2024), AnimateDiff (Guo et al. arXiv 2023-07 → ICLR 2024), SVD (Blattmann et al. arXiv 2023-11), Latte (Ma et al. arXiv 2024-01 → TMLR 2025), MotionCtrl (Wang et al. 2023 → SIGGRAPH 2024), AnimateAnyone (Hu et al. CVPR 2024), SD3 (Esser et al. ICML 2024)</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/video_generation_tutorial_en.md</code> ·
+  SHA256 <code>4fa0ce035daf</code> ·
+  generated at 2026-05-19 18:58 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

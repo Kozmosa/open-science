@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Llm Opd Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/llm_opd_tutorial_en.md">
+<meta name="aris:source-sha256" content="70c85782439f0b5a5c6c9b6dff2637a7911ad95b525b9969d90ba883502953d8">
+<meta name="aris:generated-at" content="2026-05-19 19:03 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-intuition-why-on-policy-distillation-is-needed">§1 Intuition: Why On-Policy Distillation Is Needed</a>
+<ul>
+<li><a href="#11-a-brief-history-of-knowledge-distillation-hinton--distilbert--minillm--opd">1.1　A Brief History of Knowledge Distillation (Hinton → DistilBERT → MiniLLM → OPD)</a></li>
+<li><a href="#12-forward-kl-vs-reverse-kl-mode-covering-vs-mode-seeking">1.2　Forward KL vs Reverse KL: mode-covering vs mode-seeking</a></li>
+<li><a href="#13-exposure-bias-the-structural-flaw-of-off-policy-distillation">1.3　Exposure bias: the structural flaw of off-policy distillation</a></li>
+<li><a href="#14-bit-rate-perspective-dense-teacher-signal-vs-sparse-rl-reward">1.4　Bit-rate perspective: dense teacher signal vs sparse RL reward</a></li>
+</ul>
+</li>
+<li><a href="#2-precise-definition-and-core-formula-of-opd">§2 Precise Definition and Core Formula of OPD</a>
+<ul>
+<li><a href="#21-formalization">2.1　Formalization</a></li>
+<li><a href="#22-reverse-kl-expansion--token-level-loss">2.2　Reverse KL expansion + token-level loss</a></li>
+<li><a href="#23-two-implementation-routes-full-vocab-supervised-kl-vs-reinforce">2.3　Two implementation routes: full-vocab supervised KL vs REINFORCE</a></li>
+<li><a href="#24-relation-to-kl-constrained-rl">2.4　Relation to KL-constrained RL</a></li>
+<li><a href="#25-forward-kl-form-sampled-token-opd">2.5　Forward KL form (&quot;Sampled-Token OPD&quot;)</a></li>
+</ul>
+</li>
+<li><a href="#3-the-relationship-of-opd-with-dpo--grpo--rlhf-unified-view">§3 The Relationship of OPD with DPO / GRPO / RLHF (Unified View)</a>
+<ul>
+<li><a href="#31-big-picture-comparison-table">3.1　Big-picture comparison table</a></li>
+<li><a href="#32-opd-vs-dpo">3.2　OPD vs DPO</a></li>
+<li><a href="#33-opd-vs-grpo">3.3　OPD vs GRPO</a></li>
+<li><a href="#34-opd-vs-vanilla-rl-distillation-r1-distill">3.4　OPD vs vanilla RL distillation (R1-Distill)</a></li>
+</ul>
+</li>
+<li><a href="#4-implementation-core-code-blocks">§4 Implementation: Core Code Blocks</a>
+<ul>
+<li><a href="#41-per-token-reverse-kl-route-a-full-vocab-conceptual-implementation">4.1　Per-token reverse KL (Route A, full-vocab conceptual implementation)</a></li>
+<li><a href="#42-full-opd-training-loop-with-student-rollout">4.2　Full OPD training loop (with student rollout)</a></li>
+<li><a href="#43-off-policy-kd-vs-opd-comparison-code-one-line-apart">4.3　Off-policy KD vs OPD comparison code (one line apart)</a></li>
+<li><a href="#44-control-variate-baseline-vopd-style-token-level-kl">4.4　Control Variate Baseline (vOPD-style token-level KL)</a></li>
+<li><a href="#45-integrating-opd-into-grpo-multi-sample-group-baseline">4.5　Integrating OPD into GRPO (multi-sample group baseline)</a></li>
+<li><a href="#46-synthetic-data--distillation-pipeline-top-level-pseudocode">4.6　Synthetic-data + distillation pipeline (top-level pseudocode)</a></li>
+</ul>
+</li>
+<li><a href="#5-opds-position-in-the-knowledge-distillation-family">§5 OPD&#x27;s Position in the Knowledge Distillation Family</a>
+<ul>
+<li><a href="#51-llm-distillation-method-lineage-from-hinton-to-opd">5.1　LLM distillation method lineage (from Hinton to OPD)</a></li>
+<li><a href="#52-one-sentence-index-of-key-papers">5.2　One-sentence index of key papers</a></li>
+<li><a href="#53-opds-position-in-reasoning-model-distillation-the-r1-distill-era">5.3　OPD&#x27;s position in Reasoning Model distillation (the R1-Distill era)</a></li>
+</ul>
+</li>
+<li><a href="#6-engineering-case-studies-opd-in-production">§6 Engineering Case Studies: OPD in Production</a>
+<ul>
+<li><a href="#61-qwen3-recipe-arxiv-250509388-32">6.1　Qwen3 Recipe (arXiv 2505.09388 §3.2)</a></li>
+<li><a href="#62-thinking-machines-blog-lu-2025-10-27">6.2　Thinking Machines Blog (Lu 2025-10-27)</a></li>
+<li><a href="#63-tinker-cookbook-implementation-details">6.3　Tinker Cookbook implementation details</a></li>
+<li><a href="#64-deepseek-v4-report-multi-teacher-opd-replaces-rl">6.4　DeepSeek-V4 report (multi-teacher OPD replaces RL)</a></li>
+<li><a href="#65-black-box-opd-no-teacher-logits-required">6.5　Black-Box OPD (no teacher logits required)</a></li>
+</ul>
+</li>
+<li><a href="#7-failure-modes-and-mitigation-strategies">§7 Failure Modes and Mitigation Strategies</a>
+<ul>
+<li><a href="#71-truncation-collapse--length-inflation">7.1　Truncation Collapse / Length Inflation</a></li>
+<li><a href="#72-mode-collapse--diversity-loss">7.2　Mode Collapse / Diversity Loss</a></li>
+<li><a href="#73-reward-hacking-teacher-game">7.3　Reward Hacking (teacher-game)</a></li>
+<li><a href="#74-prefix-teach-suffix-fade-local-teachability-collapse">7.4　Prefix Teach, Suffix Fade (local teachability collapse)</a></li>
+<li><a href="#75-teacher--student-gap-too-large">7.5　Teacher / Student Gap too large</a></li>
+<li><a href="#76-catastrophic-forgetting-loss-of-old-capabilities">7.6　Catastrophic Forgetting (loss of old capabilities)</a></li>
+</ul>
+</li>
+<li><a href="#8-complexity-and-resources">§8 Complexity and Resources</a>
+<ul>
+<li><a href="#81-per-step-training-cost-comparison">8.1　Per-step training cost comparison</a></li>
+<li><a href="#82-memory">8.2　Memory</a></li>
+<li><a href="#83-sample-efficiency">8.3　Sample Efficiency</a></li>
+</ul>
+</li>
+<li><a href="#9-comparison-and-positioning-with-related-methods">§9 Comparison and Positioning with Related Methods</a>
+<ul>
+<li><a href="#91-big-table-the-main-interview-targets-in-a-cheat-sheet">9.1　Big table (the main interview targets in a cheat sheet)</a></li>
+<li><a href="#92-decision-tree-which-method-for-which-scenario">9.2　Decision tree: which method for which scenario</a></li>
+</ul>
+</li>
+<li><a href="#10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</a>
+<ul>
+<li><a href="#l1-must-know-10-questions-post-training-engineer--llm-rl-roles">L1 must-know (10 questions, post-training engineer / LLM RL roles)</a></li>
+<li><a href="#l2-advanced-10-questions-senior-post-training--paper-reproduction">L2 advanced (10 questions, senior post-training / paper reproduction)</a></li>
+<li><a href="#l3-top-labs-5-questions-research--algorithm-lead">L3 top labs (5 questions, research / algorithm lead)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix">§A Appendix</a>
+<ul>
+<li><a href="#a1-sanity-check-verifying-your-opd-implementation-via-convergence">A.1　Sanity-check: verifying your OPD implementation via convergence</a></li>
+<li><a href="#a2-common-mistakes-and-correct-practices">A.2　Common mistakes and correct practices</a></li>
+<li><a href="#a3-core-paper-and-resource-list">A.3　Core paper and resource list</a></li>
+<li><a href="#a4-needs-verify-index">A.4　[needs-verify] index</a></li>
+<li><a href="#a5-terminology-quick-reference">A.5　Terminology quick reference</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Llm Opd Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/llm_opd_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>70c85782439f</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:03 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">8 sentences to nail LLM OPD (On-Policy Distillation)</div><p>the hottest "cheap RL" paradigm in 2025-2026 post-training. Get the interview core points in one page (see §1-§9 derivations + §10 25 frequently-asked questions).</p></div>
+<ol><li><strong>OPD = On-Policy Distillation</strong>: the student samples <strong>trajectories</strong> using its own current policy; the teacher provides <strong>per-token supervision</strong> (KL / log-prob / soft label) on the states that the student itself visits. It is <strong>not</strong> a typo for DPO, and <strong>not</strong> Online Preference Distillation — in the LLM context this term refers specifically to "on-policy distillation". Representative papers: MiniLLM (Gu 2024 ICLR, arXiv 2306.08543), GKD (Agarwal 2024 ICLR, arXiv 2306.13649), Thinking Machines blog (Lu 2025-10-27), Qwen3 Technical Report (May 2025, arXiv 2505.09388), Survey (Song &amp; Zheng 2026, arXiv 2604.00626).</li><li><strong>Core loss (writeable in one line)</strong>: sample $y \sim \pi_\theta(\cdot|x)$, compute reverse KL per token, defined as $L_{\text{OPD}}(\theta) = \mathbb{E}_{x \sim D,\, y \sim \pi_\theta}[\sum_t D_{\text{KL}}(\pi_\theta(\cdot|x, y_{<t})\,\|\,\pi_T(\cdot|x, y_{<t}))]$. Note the expectation subscript is $y \sim \pi_\theta$ (<strong>student samples on its own</strong>), and the KL direction is $\pi_\theta \| \pi_T$ (<strong>reverse / mode-seeking</strong>) — these two points are the essential distinction between OPD and vanilla KD. Full formula:  $$L_{\text{OPD}}(\theta) = \mathbb{E}_{x \sim D,\, y \sim \pi_\theta}\!\left[\sum_{t=1}^{|y|} D_{\text{KL}}\!\big(\pi_\theta(\cdot|x, y_{<t})\,\|\,\pi_T(\cdot|x, y_{<t})\big)\right]$$</li><li><p><strong>Three distillation paradigms in a nutshell</strong>:</p>
+<ul><li><strong>SFT / Hard distillation</strong>: teacher generates $\hat y$, student does cross-entropy on $\hat y$ (off-policy + hard label)</li><li><strong>Vanilla KD / Soft distillation (Hinton 2015)</strong>: teacher generates $\hat y$, student matches teacher's soft logits (off-policy + soft label, forward KL, mode-covering)</li><li><strong>OPD</strong>: <strong>student generates $y$ itself</strong>, teacher computes logits on $y$ to give a KL signal (on-policy + soft label, reverse KL, mode-seeking)</li></ul></li><li><strong>Why on-policy is crucial</strong>: off-policy distillation suffers from exposure bias — during training the teacher's prefixes are "perfect", but at inference the student encounters its own erroneous prefixes which it has <strong>never seen</strong>, so errors compound (cumulative error roughly $O(L^2)$ with sequence length $L$, see §1.3). OPD aligns the training distribution with the inference distribution, squeezing the compound error from $O(L^2)$ down to $O(L)$.</li><li><strong>OPD vs RL (the headline selling point)</strong>: the Thinking Machines blog provides an empirical rule of thumb — RL teaches $O(1)$ bits per trajectory (one outcome reward), OPD teaches $O(N)$ bits (each token gets supervised by the teacher's soft label). On Qwen3-8B-Base + Qwen3-32B-teacher math reasoning experiments, OPD <strong>matches RL's AIME'24 gain, but compute drops to roughly 1/9-1/30</strong>. The Qwen3 Tech Report independently reports OPD ≈ RL in performance but <strong>only 1/10 GPU hours</strong>.</li><li><strong>Relation to DPO / GRPO</strong>: (a) <strong>DPO</strong> uses offline preference pairs for closed-form RLHF, <strong>no teacher logits, no student rollouts</strong> — almost orthogonal to OPD; (b) <strong>GRPO</strong> uses group-relative advantage for on-policy RL, <strong>has student rollouts but reward is sparse outcome</strong>; (c) <strong>OPD = GRPO's "dense teacher KL replacing sparse outcome reward"</strong> version. The Survey (Song 2026) gives a unifying view: OPD ≈ "KL-constrained RL with $\beta \to \infty$ and token-level reward from teacher log-prob".</li><li><strong>2025-2026 industrial adoption</strong>: Qwen3 (off-policy + on-policy two-stage distillation of small models), DeepSeek-R1 distillation series (off-policy SFT primarily, but follow-ups use OPD), Gemma 2/3, MiMo-V2, Kimi distill series. Thinking Machines (Murati's team, 2025) packages OPD as "the cheap RL alternative" route.</li><li><strong>Three most-tested footguns</strong>: (a) <strong>Length inflation / truncation collapse</strong> — student rollouts grow longer over training, hitting truncation triggers gradient bias and validation plummets (Demystifying OPD 2026, arXiv 2604.08527); (b) <strong>Reverse KL mode collapse</strong> — student converges to a single mode of the teacher, generation diversity collapses; (c) <strong>Teacher / student gap too large</strong>: the student cannot sample states where the teacher has high probability, OPD signal becomes near zero ("prefix teach, suffix fade" phenomenon, arXiv 2605.13643).</li></ol>
+<h2 id="1-intuition-why-on-policy-distillation-is-needed">§1 Intuition: Why On-Policy Distillation Is Needed</h2>
+<h3 id="11-a-brief-history-of-knowledge-distillation-hinton--distilbert--minillm--opd">1.1　A Brief History of Knowledge Distillation (Hinton → DistilBERT → MiniLLM → OPD)</h3>
+<p>The core idea of distillation has not changed since 2015: <strong>train the student with the teacher's soft labels</strong>. But for LLM autoregressive generation, there is a hidden assumption that needs to be re-examined — <strong>what distribution does the prefix seen during training come from</strong>.</p>
+<table><thead><tr><th>Year</th><th>Method</th><th>Training distribution</th><th>KL direction</th><th>Applicable</th></tr></thead><tbody><tr><td>2015</td><td>Hinton soft target</td><td>teacher forward on dataset</td><td>forward KL $D(\pi_T \,\Vert\, \pi_\theta)$</td><td>classification / detection, single-step prediction</td></tr><tr><td>2019</td><td>DistilBERT (Sanh)</td><td>teacher logit on dataset</td><td>forward KL + MLM cross-entropy</td><td>encoder models, single-step prediction</td></tr><tr><td>2020</td><td>Seq-level KD (Kim &amp; Rush 2016)</td><td>teacher beam-search $\hat y$</td><td>hard token CE on $\hat y$</td><td>NMT, autoregressive but still off-policy</td></tr><tr><td>2023</td><td>MiniLLM (Gu, ICLR 2024)</td><td><strong>student rollout</strong> $y \sim \pi_\theta$</td><td><strong>reverse KL</strong> $D(\pi_\theta \,\Vert\, \pi_T)$</td><td>LLM instruction following</td></tr><tr><td>2023</td><td>GKD (Agarwal, ICLR 2024)</td><td>mix student rollout + dataset</td><td>generalized JSD (forward/reverse interpolation)</td><td>LLM seq-to-seq</td></tr><tr><td>2024-2026</td><td>Qwen3 / R1-Distill / Thinking Machines / Survey</td><td>student rollout + token-level teacher logit</td><td>primarily reverse KL</td><td>production-grade LLM post-training</td></tr></tbody></table>
+<p>The key evolution: <strong>off-policy → on-policy</strong> is the watershed step that upgrades LLM distillation from "imitating the dataset" to "imitating the decision process".</p>
+<h3 id="12-forward-kl-vs-reverse-kl-mode-covering-vs-mode-seeking">1.2　Forward KL vs Reverse KL: mode-covering vs mode-seeking</h3>
+<p>Vanilla KD (Hinton) uses forward KL:</p>
+<p>$$D_{\text{KL}}(\pi_T \,\|\, \pi_\theta) = \sum_y \pi_T(y) \log \frac{\pi_T(y)}{\pi_\theta(y)}$$</p>
+<p>The expectation is taken under $\pi_T$; <strong>only places where the teacher assigns high probability contribute to the loss</strong>. If $\pi_T(y) > 0$ but $\pi_\theta(y) = 0$, the loss explodes → the student is forced to <strong>cover every mode of the teacher</strong> (mode-covering / mass-covering), even modes that are unreachable for the student. The result is that the student spreads probability across many tokens, generating "safe but mediocre" answers.</p>
+<p>MiniLLM switches to reverse KL:</p>
+<p>$$D_{\text{KL}}(\pi_\theta \,\|\, \pi_T) = \sum_y \pi_\theta(y) \log \frac{\pi_\theta(y)}{\pi_T(y)}$$</p>
+<p>The expectation is taken under $\pi_\theta$; <strong>only places the student itself samples contribute to the loss</strong>. If $\pi_T(y) = 0$ but $\pi_\theta(y) > 0$, the loss explodes → the student is forced to <strong>avoid tokens the teacher considers impossible</strong> (mode-seeking / zero-forcing). The result is that the student converges to a single high-quality mode of the teacher and generates "sharp and coherent" answers.</p>
+<div class="callout callout-info"><div class="callout-title">Intuitive difference</div><p>Imagine the teacher is a bimodal distribution with "3 equally good answers":</p></div>
+<ul><li><strong>Forward KL</strong> makes the student learn a trimodal averaged distribution, where each mode has some probability but none is sharp enough</li><li><strong>Reverse KL</strong> makes the student lock onto one of the modes (which mode is determined by init + sampling), producing the most confident path closest to the teacher's decision</li></ul>
+<p>For LLM generation tasks this is usually a good thing — we want "fluent, confident, correct" output, not "averaged, vague, mediocre" output. This is also the key insight behind MiniLLM being the first to apply reverse KL to LLM distillation.</p>
+<h3 id="13-exposure-bias-the-structural-flaw-of-off-policy-distillation">1.3　Exposure bias: the structural flaw of off-policy distillation</h3>
+<p>Consider an autoregressive generation task with sequence length $L$. Off-policy distillation (including SFT / vanilla KD / seq-level KD) uses prefixes from the teacher or dataset during training; at inference, prefixes come from the student itself.</p>
+<p>Assume the per-step error rate (the probability that the student deviates from the teacher on some prefix) is $\epsilon$. Off-policy training only "teaches" the student on teacher prefixes, so at inference once the student takes one wrong step, <strong>subsequent steps enter a state distribution never seen during training</strong> — the student's error rate is no longer $\epsilon$, but $\epsilon' > \epsilon$ (often jumping to 0.5+ random level).</p>
+<p>Bagnell 2010 proved for imitation learning: <strong>the cumulative error of off-policy imitation is $O(L^2 \epsilon)$</strong> (compound error), whereas on-policy supervision (such as DAgger) compresses cumulative error to $O(L \epsilon)$. This is precisely OPD's theoretical motivation on LLMs — align the training state distribution with the inference state distribution.</p>
+<p>The Survey (Song &amp; Zheng 2026 arXiv 2604.00626) repeats this result in §3:</p>
+<blockquote><p>"The exposure bias of off-policy distillation grows roughly quadratically with sequence length; on-policy distillation linearizes the cumulative error."</p></blockquote>
+<p>This theoretical guarantee is the fundamental reason OPD is especially effective on <strong>long sequence + high complexity tasks</strong> like long-CoT, agent, and code.</p>
+<h3 id="14-bit-rate-perspective-dense-teacher-signal-vs-sparse-rl-reward">1.4　Bit-rate perspective: dense teacher signal vs sparse RL reward</h3>
+<p>The Thinking Machines blog (Lu 2025-10) gives a clean information-theoretic intuition:</p>
+<table><thead><tr><th>Paradigm</th><th>Supervision bits per trajectory</th></tr></thead><tbody><tr><td><strong>RL with outcome reward</strong></td><td>$O(1)$ — one scalar reward (typically $\{0, 1\}$ or [-1, 1] interval)</td></tr><tr><td><strong>OPD with per-token teacher KL</strong></td><td>$O(N \log V)$ — $N$ tokens × full distribution over vocab $V$ per token</td></tr></tbody></table>
+<p>In other words, OPD "teaches" the student a whole distribution at every token, while RL only "teaches" a single number at the end of the sequence. On tasks like math reasoning, code, and long-form QA that need dense supervision, OPD's sample efficiency is significantly higher than RL's. This also explains why Qwen3 / Thinking Machines both report OPD reaching RL performance with an order of magnitude less compute.</p>
+<h2 id="2-precise-definition-and-core-formula-of-opd">§2 Precise Definition and Core Formula of OPD</h2>
+<h3 id="21-formalization">2.1　Formalization</h3>
+<p>Given:</p>
+<ul><li><strong>prompt distribution</strong> $D$ (e.g., distribution of instructions in the dataset)</li><li><strong>teacher policy</strong> $\pi_T$ (fixed, frozen, parameter count $\gg$ student)</li><li><strong>student policy</strong> $\pi_\theta$ (trainable)</li></ul>
+<p>The OPD objective (general form, from Survey arXiv 2604.00626 §2.1):</p>
+<p>$$\boxed{\;L_{\text{OPD}}(\theta) = \mathbb{E}_{x \sim D}\,\mathbb{E}_{y \sim \pi_\theta(\cdot|x)}\!\left[\sum_{t=1}^{|y|} D_f\!\big(\pi_\theta(\cdot|x, y_{<t})\,\|\,\pi_T(\cdot|x, y_{<t})\big)\right]\;}$$</p>
+<p>where $D_f$ is some $f$-divergence, with common choices:</p>
+<table><thead><tr><th>Divergence</th><th>Formula</th><th>Source / preference</th></tr></thead><tbody><tr><td><strong>Reverse KL</strong></td><td>$D(\pi_\theta \,\Vert\, \pi_T) = \sum_v \pi_\theta(v) \log \frac{\pi_\theta(v)}{\pi_T(v)}$</td><td>MiniLLM, Thinking Machines blog, Qwen3 default</td></tr><tr><td><strong>Forward KL</strong></td><td>$D(\pi_T \,\Vert\, \pi_\theta)$ (but still sample from $\pi_\theta$)</td><td>"Sampled-token OPD", simple and stable</td></tr><tr><td><strong>JSD</strong></td><td>$\frac{1}{2}D(\pi_\theta \,\Vert\, M) + \frac{1}{2}D(\pi_T \,\Vert\, M)$, $M = \frac{1}{2}(\pi_\theta + \pi_T)$</td><td>GKD default (symmetric, bounded)</td></tr><tr><td><strong>Generalized JSD</strong></td><td>$D_\beta = \beta D(\pi_\theta \,\Vert\, M_\beta) + (1-\beta) D(\pi_T \,\Vert\, M_\beta)$, $M_\beta = \beta \pi_\theta + (1-\beta)\pi_T$</td><td>GKD's $\beta$ interpolation</td></tr><tr><td><strong>Total Variation</strong></td><td>$\frac{1}{2}\sum_v \lvert\pi_\theta(v) - \pi_T(v)\rvert$</td><td>rarely used, bounded but non-smooth</td></tr></tbody></table>
+<p><strong>Key point</strong>: regardless of which $D_f$ is chosen, <strong>the expectation subscript must contain $y \sim \pi_\theta$</strong> — the student samples on its own; this is the definition of "on-policy".</p>
+<h3 id="22-reverse-kl-expansion--token-level-loss">2.2　Reverse KL expansion + token-level loss</h3>
+<p>Expanding reverse KL on each prefix $s_t = (x, y_{<t})$:</p>
+<p>$$D_{\text{KL}}\!\big(\pi_\theta(\cdot|s_t)\,\|\,\pi_T(\cdot|s_t)\big) = \sum_{v=1}^{V} \pi_\theta(v|s_t) \left[\log \pi_\theta(v|s_t) - \log \pi_T(v|s_t)\right]$$</p>
+<p>This is the <strong>full KL</strong> ("full-distribution" form), requiring the teacher to do one forward pass per prefix to obtain logits over the entire vocab. Computational cost: $O(B \cdot L \cdot V)$ teacher forward + softmax.</p>
+<p>In practice, the <strong>"sampled-token" approximation</strong> is common — only compute on the token $v = y_t$ that the student actually sampled:</p>
+<p>$$\hat L_t = \log \pi_\theta(y_t|s_t) - \log \pi_T(y_t|s_t)$$</p>
+<p>This is a single-sample Monte-Carlo estimate of reverse KL ($\mathbb{E}_{v \sim \pi_\theta}[\log \pi_\theta(v) - \log \pi_T(v)] \approx \log \pi_\theta(y_t) - \log \pi_T(y_t)$ when $y_t \sim \pi_\theta$). This form is called <strong>per-token reverse KL</strong> and is the version adopted by the Thinking Machines blog and Tinker cookbook implementations.</p>
+<div class="callout callout-warn"><div class="callout-title">Sampled-token KL ≠ full KL</div><p>sampled-token is an unbiased estimator, but <strong>has high variance</strong>, since it only looks at one token rather than the full vocab distribution. Each form has its preference:</p></div>
+<ul><li><strong>Full KL</strong>: high information density, low variance, but requires a vocab-level forward by the teacher at every step (expensive, especially if the teacher is large)</li><li><strong>Sampled-token KL</strong>: cheap (the teacher only computes one number $\log \pi_T(y_t)$), but high variance; a control-variate baseline can reduce variance (see §4.4)</li></ul>
+<h3 id="23-two-implementation-routes-full-vocab-supervised-kl-vs-reinforce">2.3　Two implementation routes: full-vocab supervised KL vs REINFORCE</h3>
+<p>OPD's "theoretical objective" is for the student to minimize the per-state KL on its own state visitation distribution $\rho_{\pi_\theta}$:</p>
+<p>$$L_{\text{OPD}}(\theta) = \mathbb{E}_{s \sim \rho_{\pi_\theta}}\!\left[D_{\text{KL}}\!\big(\pi_\theta(\cdot|s)\,\|\,\pi_T(\cdot|s)\big)\right]$$</p>
+<p>But $\theta$ appears simultaneously in (a) the inner KL and (b) the <strong>state visitation</strong> $\rho_{\pi_\theta}$. <strong>Production implementations</strong> choose to <strong>decouple</strong> these two $\theta$-dependencies — that is what MiniLLM / GKD / Thinking Machines / Qwen3 actually do:</p>
+<p><strong>Route A: Full-vocab supervised KL + stop-grad rollouts (the textbook-clean path, simplest when teacher full logits are available)</strong></p>
+<p>Treat the rollout as data produced by a "behavior policy" (<strong>stop-grad on $\theta$</strong>), and backprop only through the inner KL:</p>
+<p>$$\boxed{\;L_{\text{OPD}}^{\text{A}}(\theta) = \mathbb{E}_{s_t \sim \text{rollout}(\pi_{\theta^-})}\!\left[\sum_t \sum_{v \in V} \pi_\theta(v|s_t) \log\frac{\pi_\theta(v|s_t)}{\pi_T(v|s_t)}\right]\;}$$</p>
+<p>Here $\pi_{\theta^-}$ denotes that $\theta$ is stop-grad during the rollout phase (same idea as PPO's old policy); the inner full-vocab sum is <strong>directly differentiable</strong>, autograd handles it, <strong>no REINFORCE needed</strong>. This is the form adopted by the §4.1 code below.</p>
+<div class="callout callout-info"><div class="callout-title">Intuition</div><p>Full-vocab KL, at every student-visited prefix $s_t$, aligns the entire distribution $\pi_\theta(\cdot|s_t)$ with $\pi_T(\cdot|s_t)$, not just the sampled token. Signal density $O(\log V)$, but every step requires one teacher logits forward (expensive).</p></div>
+<div class="callout callout-warn"><div class="callout-title">Implementation attribution</div><p>Do not equate Route A with the "Tinker / Thinking Machines blog default". Thinking Machines' open-source implementation (Tinker) actually defaults to <strong>Route B's importance-sampling variant</strong> (sampled-token logprob + negative-KL advantage, corresponding to <code>train_on_policy.py</code>'s <code>loss_fn=&quot;importance_sampling&quot;</code> + <code>incorporate_kl_penalty</code>); <strong>MiniLLM</strong> (Gu 2024) is also a sampled-token + REINFORCE-style trajectory PG (with stability tricks like single-step decomposition / length norm / teacher-mixed sampling). Route A's full-vocab autograd is <strong>the pedagogically cleanest form</strong> (one-line PyTorch backprop, zero variance), and is a clean and correct production implementation when teacher full logits are available, but it is <strong>not</strong> the production default of any specific large lab. The two are <strong>equivalent in expectation</strong>, differing in variance / engineering cost — Route A advantages: zero variance, no IS clip needed. Route B advantages: shares sampled-token interface with PPO/GRPO, saves teacher vocab memory.</p></div>
+<p><strong>Route B: Sampled-token REINFORCE / importance-sampling estimator (Tinker default / MiniLLM trajectory PG form)</strong></p>
+<p>Route B first requires <strong>clarifying two distinct gradient computations</strong> that are often conflated in the literature:</p>
+<p><strong>(B1) Fixed-state inner KL</strong> — assume prefix $s_t$ is given, do REINFORCE estimation only on the inner $D_{\text{KL}}(\pi_\theta(\cdot|s_t)\,\|\,\pi_T(\cdot|s_t))$: $$\nabla_\theta D_{\text{KL}}(s_t) = \mathbb{E}_{y_t \sim \pi_\theta(\cdot|s_t)}\!\big[\nabla_\theta \log \pi_\theta(y_t|s_t) \cdot G_t^{\text{detach}}\big],\quad G_t = \log\tfrac{\pi_\theta(y_t|s_t)}{\pi_T(y_t|s_t)}.$$ This is the form used by §4.4's vOPD estimator, <strong>unrelated to state visitation along the trajectory</strong>.</p>
+<p><strong>(B2) Trajectory objective with state visitation</strong> — to strictly retain $\rho_{\pi_\theta}$'s dependence on $\theta$, the policy gradient requires the <strong>return-to-go</strong> (sum of all future KL costs) as the score-function weight: $$\nabla_\theta\,\mathbb{E}_\tau\!\Big[\sum_t D_{\text{KL}}(s_t)\Big] = \mathbb{E}_\tau\!\Big[\sum_u \nabla_\theta \log\pi_\theta(a_u|s_u)\cdot \underbrace{\sum_{t \ge u} D_{\text{KL}}(s_t)^{\text{detach}}}_{\text{return-to-go}}\Big] + \mathbb{E}_\tau\!\Big[\sum_t \nabla_\theta D_{\text{KL}}(s_t)\Big].$$ Note the score-function weight is not the same-token $G_t$, but <strong>the sum of KLs over all subsequent steps</strong>.</p>
+<div class="callout callout-warn"><div class="callout-title">Warning</div><p><strong>Nobody really does B2 in production</strong>. MiniLLM and others all use <strong>semi-gradient</strong> (stop-grad on state visitation, only backprop through the inner KL), equivalent to Route A or B1 + stop-grad rollouts. Full B2 is essentially impossible to train stably because the return-to-go accumulates across steps, exploding variance.</p></div>
+<p><strong>Unified practical rules</strong>:</p>
+<ul><li><strong>Route A</strong> (pedagogically clear, §4.1): full-vocab KL + stop-grad rollouts, autograd directly, <strong>no REINFORCE needed</strong>. Zero variance, but requires teacher full logits.</li><li><strong>Route B1</strong> (§4.4 vOPD-style, Tinker / MiniLLM default): sampled-token REINFORCE / IS estimator + control variate. Equivalent in expectation to A, with higher variance but compatible with the sampled-token interface, saves teacher vocab memory, supports black-box teachers.</li><li>You <strong>cannot</strong> directly <code>.backward()</code> on the sampled-token $\log(\pi_\theta/\pi_T)$ — that is pathwise gradient + fixed sampled index, dropping the score-function term, and is <strong>not the reverse-KL gradient</strong> (neither MLE nor a KL descent direction)</li></ul>
+<h3 id="24-relation-to-kl-constrained-rl">2.4　Relation to KL-constrained RL</h3>
+<p>Consider RL with a reverse-KL constraint (the standard RLHF objective):</p>
+<p>$$\max_\theta\, \mathbb{E}_{y \sim \pi_\theta}\!\big[R(x, y)\big] - \beta\, \mathbb{E}_{y \sim \pi_\theta}\!\big[D_{\text{KL}}(\pi_\theta \,\|\, \pi_{\text{ref}})\big]$$</p>
+<p>OPD is the special case of this formula when $R \equiv 0$ (no external reward) and $\pi_{\text{ref}} = \pi_T$ (reference replaced with the teacher):</p>
+<p>$$\min_\theta\, \mathbb{E}_{y \sim \pi_\theta}\!\big[D_{\text{KL}}(\pi_\theta \,\|\, \pi_T)\big]$$</p>
+<p>This means <strong>OPD is RLHF with "pure KL term, teacher as reference"</strong>. From this perspective, GRPO + KL term is equivalent to OPD + GRPO-style group baseline; this is why the Survey classifies OPD as "a special case of KL-constrained RL", and it is also the formal basis for integrating OPD into GRPO in §3.</p>
+<h3 id="25-forward-kl-form-sampled-token-opd">2.5　Forward KL form ("Sampled-Token OPD")</h3>
+<p>Some works (e.g., parts of Qwen3, TRL GKD trainer) use <strong>forward KL on student samples</strong>:</p>
+<p>$$L_{\text{OPD-fwd}}(\theta) = \mathbb{E}_{y \sim \pi_\theta}\!\left[\sum_t D_{\text{KL}}\!\big(\pi_T(\cdot|s_t)\,\|\,\pi_\theta(\cdot|s_t)\big)\right]$$</p>
+<p>Note that <strong>the sample comes from $\pi_\theta$, but the KL direction is forward</strong>. Expanded to the token level:</p>
+<p>$$L_{\text{OPD-fwd}} = \mathbb{E}_{y \sim \pi_\theta}\!\left[\sum_t \sum_v \pi_T(v|s_t)\big(\log \pi_T(v|s_t) - \log \pi_\theta(v|s_t)\big)\right]$$</p>
+<p>Since $\theta$ appears only in $\log \pi_\theta$ and not in the expectation subscript (although $y \sim \pi_\theta$ still depends on $\theta$, after stop-gradient treatment the $\theta$-dependence of the forward term simplifies), training degenerates into <strong>cross-entropy on the teacher distribution at each student-visited prefix</strong> — formally, this is <strong>soft-label cross-entropy on student rollouts</strong>. This is the engineering-simplest OPD implementation (no REINFORCE / control variate needed), at the cost of losing reverse KL's mode-seeking property.</p>
+<h2 id="3-the-relationship-of-opd-with-dpo--grpo--rlhf-unified-view">§3 The Relationship of OPD with DPO / GRPO / RLHF (Unified View)</h2>
+<h3 id="31-big-picture-comparison-table">3.1　Big-picture comparison table</h3>
+<table><thead><tr><th>Dimension</th><th>SFT</th><th>Vanilla KD (Hinton)</th><th>DPO</th><th>RLHF + PPO</th><th>GRPO</th><th><strong>OPD</strong></th></tr></thead><tbody><tr><td><strong>Training data source</strong></td><td>dataset</td><td>dataset</td><td>offline preference pair</td><td>dataset prompt</td><td>dataset prompt</td><td>dataset prompt</td></tr><tr><td><strong>Who generates $y$</strong></td><td>dataset</td><td>teacher</td><td>(offline pair)</td><td>student rollout</td><td>student rollout (group)</td><td><strong>student rollout</strong></td></tr><tr><td><strong>Supervision signal</strong></td><td>hard label</td><td>teacher soft logit</td><td>binary preference</td><td>scalar RM reward</td><td>scalar RM reward (group-normalized)</td><td><strong>teacher soft logit (per-token)</strong></td></tr><tr><td><strong>Is on-policy</strong></td><td>no</td><td>no</td><td>no</td><td>yes</td><td>yes</td><td><strong>yes</strong></td></tr><tr><td><strong>Needs critic</strong></td><td>n/a</td><td>n/a</td><td>n/a</td><td>yes (value head)</td><td>no (group baseline)</td><td>no (teacher KL is closed-form value)</td></tr><tr><td><strong>Supervision bits per traj</strong></td><td>$O(L \log V)$</td><td>$O(L \log V)$</td><td>$O(1)$</td><td>$O(1)$</td><td>$O(1)$</td><td><strong>$O(L \log V)$</strong></td></tr><tr><td><strong>Needs teacher</strong></td><td>no</td><td>yes</td><td>no</td><td>no</td><td>no</td><td><strong>yes</strong></td></tr><tr><td><strong>Typical KL direction</strong></td><td>n/a (CE)</td><td>forward</td><td>n/a (closed-form)</td><td>reverse (vs $\pi_{\text{ref}}$)</td><td>reverse (vs $\pi_{\text{ref}}$)</td><td><strong>reverse (vs $\pi_T$)</strong></td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Three sentences to place OPD</div><p>one line each, memorizable:</p></div>
+<ul><li>vs <strong>SFT</strong>: OPD trains on student rollouts (SFT trains on teacher/dataset)</li><li>vs <strong>vanilla KD</strong>: OPD is on-policy + reverse KL (vanilla KD is off-policy + forward KL)</li><li>vs <strong>RL (PPO/GRPO)</strong>: OPD uses teacher log-prob as dense reward (RL uses RM as sparse reward)</li></ul>
+<h3 id="32-opd-vs-dpo">3.2　OPD vs DPO</h3>
+<p><strong>DPO</strong> (Rafailov 2023 NeurIPS, arXiv 2305.18290) is closed-form RLHF: plug the optimal solution of KL-regularized RL back into Bradley-Terry, eliminate the partition $\log Z$, and obtain a pairwise preference loss:</p>
+<p>$$L_{\text{DPO}}(\theta) = -\mathbb{E}_{(x, y_w, y_l)}\!\left[\log \sigma\!\big(\beta \log\frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)} - \beta \log\frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)}\big)\right]$$</p>
+<p>DPO is <strong>completely offline</strong>: no sampling, no teacher, no RM, no critic, only preference pairs.</p>
+<table><thead><tr><th>Dimension</th><th>DPO</th><th>OPD</th></tr></thead><tbody><tr><td>Data</td><td>offline preference pair $(y_w, y_l)$</td><td>online student rollout $y \sim \pi_\theta$</td></tr><tr><td>Teacher</td><td>none (only $\pi_{\text{ref}}$)</td><td>requires stronger teacher $\pi_T$</td></tr><tr><td>Supervision</td><td>binary preference</td><td>per-token soft logit</td></tr><tr><td>Compute</td><td>cheapest (pure forward + backprop)</td><td>moderate (student sampling + teacher forward)</td></tr><tr><td>When to use</td><td>have preference dataset, no strong teacher</td><td>have strong teacher, want to compress to small student</td></tr></tbody></table>
+<p><strong>The two can be stacked</strong>: first DPO to align human preferences, then OPD to compress to a small student with a stronger teacher. Production pipelines like Qwen3 / R1-Distill all use similar recipes.</p>
+<h3 id="33-opd-vs-grpo">3.3　OPD vs GRPO</h3>
+<p><strong>GRPO</strong> (DeepSeekMath 2024, arXiv 2402.03300) replaces PPO's critic with group-normalized advantage:</p>
+<p>$$\hat A_i = \frac{r_i - \text{mean}(\mathbf r)}{\text{std}(\mathbf r)}, \quad r_i = R(x, y_i),\; i \in [1..G]$$</p>
+<p>$$L_{\text{GRPO}}(\theta) = \mathbb{E}_x \frac{1}{G}\sum_i \frac{1}{|y_i|}\sum_t \min\!\big(\rho_t^i \hat A_i,\, \text{clip}(\rho_t^i, 1{-}\epsilon, 1{+}\epsilon) \hat A_i\big) - \beta\, D_{\text{KL}}(\pi_\theta \,\|\, \pi_{\text{ref}})$$</p>
+<p>where $\rho_t^i = \pi_\theta / \pi_{\theta_{\text{old}}}$ is the importance ratio.</p>
+<p><strong>The relation between OPD and GRPO</strong>: replace GRPO's sparse outcome reward $R(x, y_i)$ with <strong>per-token teacher KL reward</strong> $r_t^i = \log\pi_T(y_t^i|s_t^i) - \log\pi_\theta^{\text{old}}(y_t^i|s_t^i) = -\log\!\frac{\pi_\theta^{\text{old}}(y_t^i|s_t^i)}{\pi_T(y_t^i|s_t^i)}$ (note: this must be a log-ratio, not the LaTeX-prone misreading $-\log\pi_\theta/\pi_T$), and set the reference $\pi_{\text{ref}} \leftarrow \pi_T$; the GRPO loss degenerates to the policy-gradient form of OPD (see §2.3).</p>
+<div class="callout callout-info"><div class="callout-title">Integration in practice</div><p>modern production pipelines often use an <strong>OPD + GRPO hybrid</strong>:</p></div>
+<ul><li><strong>outcome reward</strong> from the verifier (math correct / test pass)</li><li><strong>dense reward</strong> from per-token teacher KL</li><li>Total reward $r_t = \alpha \cdot r_{\text{outcome}} \cdot \mathbb{1}[t = T] + (1-\alpha) \cdot r_{\text{teacher-KL}}$</li></ul>
+<p>This gives both the task-aligned signal from outcome and dense supervision from the teacher — it is the standard for small-model post-training in the Qwen3 / DeepSeek series.</p>
+<h3 id="34-opd-vs-vanilla-rl-distillation-r1-distill">3.4　OPD vs vanilla RL distillation (R1-Distill)</h3>
+<p>The DeepSeek-R1-Distill series (Qwen / Llama 1.5B-70B) uses <strong>off-policy distillation</strong>:</p>
+<ol><li>The R1 teacher generates 800K reasoning trajectories (math + code + general)</li><li>The small student does token-level cross-entropy SFT</li><li><strong>No on-policy rollout, no KL signal</strong></li></ol>
+<p>This is hard-label seq-level KD (the LLM version of Kim &amp; Rush 2016), not OPD. The success of R1-Distill is mainly due to extremely high-quality teacher trajectories (R1 was RL-tuned) + large data volume; <strong>structurally it remains off-policy</strong>.</p>
+<p>OPD and R1-Distill are <strong>complementary</strong>:</p>
+<ul><li>R1-Distill trajectory data can serve as OPD's init / SFT warm-start</li><li>Running OPD after R1-Distill can further eliminate exposure bias</li></ul>
+<p>Academically / engineeringly this combination is called "<strong>Off-policy SFT + On-policy distillation</strong>", which is the standard two-stage Qwen3 small-model recipe (see §6.1).</p>
+<h2 id="4-implementation-core-code-blocks">§4 Implementation: Core Code Blocks</h2>
+<div class="callout callout-warn"><div class="callout-title">Pedagogical illustration — for production, refer to the original papers</div><p>This section's code shows the core idea of OPD (per-token reverse KL on student rollouts). <strong>Note</strong>:</p>
+<ul><li><strong>Full-vocab reverse KL</strong> (summed over the whole vocab) is differentiable, autograd works directly; this is OPD's <strong>Route A pedagogically clean form</strong>, requiring teacher full logits to be available. Route B (sampled-token + REINFORCE / IS, <strong>the default in production implementations like Tinker, MiniLLM</strong>) is equivalent in expectation (see §2.3 callout), with the trade-off being variance vs engineering interface.</li><li>The sampled-token estimator form $\log\pi_s(y) - \log\pi_t(y)$, when $y$ is a discrete sample, requires <strong>REINFORCE-style policy gradient</strong> (with baseline / control variate) to backprop correctly; you <strong>cannot</strong> call <code>.backward()</code> directly, otherwise the gradient flows only through the $\log\pi_s$ term and loses backprop through the sample distribution choice.</li><li>The OPD + GRPO integration (§4.5) ratio should be <strong>new policy / old behavior policy</strong>, with the teacher used as reward or reference rather than the denominator of the PPO ratio. Cross-check against verl / OpenRLHF / Tinker implementations before production.</li></ul>
+<p>The code below annotates which parts are full-vocab (directly autograd-able) vs sampled estimator (REINFORCE needed); for production code we strongly recommend referring to each framework's official release.</p></div>
+<h3 id="41-per-token-reverse-kl-route-a-full-vocab-conceptual-implementation">4.1　Per-token reverse KL (Route A, full-vocab conceptual implementation)</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+
+def per_token_reverse_kl_loss(
+    student,        # student model, requires_grad
+    teacher,        # teacher model, frozen
+    input_ids,      # [B, L]  prompt + student rollout (rollout done externally, stop_grad)
+    action_mask,    # [B, L]  1 for student-generated tokens, 0 for prompt / pad
+):
+    &quot;&quot;&quot;
+    Route A — full-vocab per-token reverse KL on student rollouts (concept-clean form).
+    Requires teacher full logits to be available. Route B (Tinker / MiniLLM production default)
+    is equivalent in expectation but uses sampled-token + IS / REINFORCE estimator,
+    see §2.3 callout and §4.4.
+
+        L(θ) = E_{s_t ~ rollout(π_{θ⁻})} [ Σ_t D_KL(π_θ(·|s_t) || π_T(·|s_t)) ]
+             = E_{s_t} [ Σ_t Σ_v  π_θ(v|s_t) · ( log π_θ(v|s_t) − log π_T(v|s_t) ) ]
+
+    Rollout is done externally with stop_grad(θ) (vLLM / TGI returns input_ids);
+    this function **only** computes the differentiable full-vocab KL, autograd
+    backprops directly, **no REINFORCE needed**.
+    &quot;&quot;&quot;
+    # Student full-vocab log-probs (requires_grad on θ)
+    s_logits = student(input_ids).logits                   # [B, L, V]
+    s_log_probs = F.log_softmax(s_logits[:, :-1], dim=-1)  # [B, L-1, V]
+    s_probs = s_log_probs.exp()                            # [B, L-1, V]
+
+    # Teacher full-vocab log-probs (frozen, no grad)
+    with torch.no_grad():
+        t_logits = teacher(input_ids).logits
+        t_log_probs = F.log_softmax(t_logits[:, :-1], dim=-1)  # [B, L-1, V]
+
+    # Full-vocab reverse KL per state s_t: Σ_v π_θ(v) (log π_θ(v) − log π_T(v))
+    kl_per_token = (s_probs * (s_log_probs - t_log_probs)).sum(dim=-1)  # [B, L-1]
+
+    # Mask to student-generated positions (KL on prompt tokens is meaningless)
+    mask = action_mask[:, 1:].float()
+    loss = (kl_per_token * mask).sum() / mask.sum().clamp_min(1.0)
+
+    # Diagnostic: at sampled positions, is the student more &quot;confident&quot; than the teacher (monitor over-confidence)
+    with torch.no_grad():
+        targets = input_ids[:, 1:].unsqueeze(-1)
+        s_logp_t = s_log_probs.gather(-1, targets).squeeze(-1)
+        t_logp_t = t_log_probs.gather(-1, targets).squeeze(-1)
+        overconf_frac = ((s_logp_t &gt; t_logp_t).float() * mask).sum() / mask.sum().clamp_min(1.0)
+    return loss, {
+        &quot;full_vocab_kl&quot;: loss.item(),
+        &quot;overconf_frac&quot;: overconf_frac.item(),
+    }</code></pre>
+<p>A few production-implementation details to note:</p>
+<ul><li><strong><code>action_mask</code></strong> must only mask student rollout tokens; KL on prompt tokens is meaningless (the teacher is only conditioning)</li><li><strong>Use <code>torch.no_grad()</code> for the teacher forward</strong>; otherwise memory doubles</li><li><strong>Full-vocab (Route A) vs sampled-token (Route B)</strong>: the loss above is <strong>Route A</strong> (summed over $V$ tokens, autograd directly backprops). <strong>Route B</strong> (sampled-token + REINFORCE/IS, §4.4) is the production-default form in implementations like Tinker / MiniLLM, sharing the sampled-token interface with PPO/GRPO and supporting black-box teachers; A and B are <strong>equivalent in expectation</strong>. Regardless of which you choose, <strong>you cannot</strong> directly <code>.backward()</code> on sampled-token <code>log π_θ − log π_T</code> — that is equivalent to taking the pathwise $\nabla\log\pi_\theta(y_t)$ at a fixed sampled index, <strong>losing the score-function term</strong>, and is neither the reverse-KL gradient nor MLE. Route B must use a REINFORCE estimator (detached reward + score-function trick)</li><li><strong>Batched teacher inference</strong> is typically <strong>asynchronous</strong> in production: spin up a teacher server with vLLM, send the student rollout batch and fetch log-probs; only run student forward + backward locally. This is the standard for Tinker / vLLM-based frameworks</li><li><strong>Mixed precision</strong>: student in bf16, but compute teacher log-softmax in fp32 (avoid numerical instability)</li></ul>
+<h4 id="shared-helpers-used-throughout-42---46">Shared helpers (used throughout §4.2 - §4.6)</h4>
+<pre><code class="language-python">def per_token_logp(model, input_ids):
+    &quot;&quot;&quot;
+    Returns log π(y_{t+1}|s_t) per position. Shape [B, L-1]. Grad behavior decided by the caller
+    (want grad: call directly; want detached behavior log-prob: wrap in torch.no_grad()).
+    &quot;&quot;&quot;
+    logits = model(input_ids).logits[:, :-1]                     # [B, L-1, V]
+    log_probs = F.log_softmax(logits, dim=-1)
+    targets = input_ids[:, 1:].unsqueeze(-1)                     # [B, L-1, 1]
+    return log_probs.gather(-1, targets).squeeze(-1)             # [B, L-1]
+
+
+def teacher_kl_reward(student, teacher, input_ids, action_mask):
+    &quot;&quot;&quot;
+    The teacher-vs-behavior KL used as dense token reward in OPD-GRPO:
+        r_t = log π_T(y_t|s_t) - log π_θ_old(y_t|s_t)
+    Input action_mask shape [B, L] (same as input_ids); internally shifted to [B, L-1].
+    All under no_grad; returns scalar reward per trajectory (sum over generated tokens).
+    &quot;&quot;&quot;
+    with torch.no_grad():
+        s_old = per_token_logp(student, input_ids)               # [B, L-1]
+        t_lp  = per_token_logp(teacher, input_ids)               # [B, L-1]
+        token_mask = action_mask[:, 1:].float()                  # aligned to [B, L-1]
+        per_tok = (t_lp - s_old) * token_mask
+    return per_tok.sum(dim=-1)                                   # [B]</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Sanity check before production</div><p>the above is a <strong>pedagogical sketch</strong>: real production (verl / OpenRLHF / Tinker) splits <code>per_token_logp</code> into logits-then-gather to save memory, adds <code>attention_mask</code> to handle padding, uses a vLLM async server for the teacher rather than same-process forward. Sampler and grad-aware forward are usually separated as well (rollout phase calls <code>student.generate</code>, update phase uses grad-aware forward to compute <code>s_logp_new</code>). The code below omits these engineering details.</p></div>
+<h3 id="42-full-opd-training-loop-with-student-rollout">4.2　Full OPD training loop (with student rollout)</h3>
+<pre><code class="language-python">@torch.no_grad()
+def student_rollout(student, prompts, max_new_tokens=512, temperature=1.0):
+    &quot;&quot;&quot;Student samples trajectory on its own (the critical on-policy step)&quot;&quot;&quot;
+    out = student.generate(
+        prompts.input_ids,
+        attention_mask=prompts.attention_mask,
+        max_new_tokens=max_new_tokens,
+        do_sample=True,
+        temperature=temperature,
+        return_dict_in_generate=True,
+    )
+    full_ids = out.sequences           # [B, L_prompt + L_gen]
+    prompt_len = prompts.input_ids.shape[1]
+    action_mask = torch.zeros_like(full_ids)
+    action_mask[:, prompt_len:] = 1
+    # mask out pad
+    action_mask = action_mask * (full_ids != student.config.pad_token_id).long()
+    return full_ids, action_mask
+
+
+def opd_train_step(student, teacher, optimizer, batch, kl_coef=1.0):
+    &quot;&quot;&quot;one step of OPD: sample rollout, compute teacher KL, update student&quot;&quot;&quot;
+    # 1. student samples (on-policy)
+    input_ids, action_mask = student_rollout(student, batch.prompts)
+
+    # 2. compute per-token reverse KL with teacher
+    loss, stats = per_token_reverse_kl_loss(
+        student, teacher, input_ids, action_mask
+    )
+
+    # 3. backward
+    optimizer.zero_grad()
+    (kl_coef * loss).backward()
+    torch.nn.utils.clip_grad_norm_(student.parameters(), max_norm=1.0)
+    optimizer.step()
+    return stats</code></pre>
+<p>This is the simplest OPD training loop. Production code adds advantage / baseline / clipping in step 2 (see §4.4), and group sampling (GRPO-style, see §4.5) in step 1.</p>
+<h3 id="43-off-policy-kd-vs-opd-comparison-code-one-line-apart">4.3　Off-policy KD vs OPD comparison code (one line apart)</h3>
+<pre><code class="language-python"># ── Off-policy KD (vanilla, Hinton-style) ──
+def off_policy_kd_loss(student, teacher_outputs, dataset_y):
+    &quot;&quot;&quot;
+    teacher_outputs computed by forwarding on dataset_y
+    student also forwards on dataset_y
+    forward KL: teacher → student
+    &quot;&quot;&quot;
+    s_logits = student(dataset_y).logits
+    t_logits = teacher_outputs                 # already computed
+    return F.kl_div(
+        F.log_softmax(s_logits, dim=-1),
+        F.softmax(t_logits, dim=-1),
+        reduction=&quot;batchmean&quot;,
+    )
+
+
+# ── On-Policy Distillation (OPD) ──
+def opd_loss(student, teacher, prompts):
+    student_y, mask = student_rollout(student, prompts)         # ← key diff: student samples on its own
+    loss, _ = per_token_reverse_kl_loss(student, teacher, student_y, mask)
+    return loss</code></pre>
+<p><strong>The only key difference</strong>: OPD computes loss on its own sampled trajectory; off-policy computes it on dataset / teacher trajectory. The code differs by only one <code>student_rollout</code> call, but the overall benefit of <strong>aligning training distribution with inference distribution</strong> is enormous.</p>
+<h3 id="44-control-variate-baseline-vopd-style-token-level-kl">4.4　Control Variate Baseline (vOPD-style token-level KL)</h3>
+<div class="callout callout-warn"><div class="callout-title">Use case</div><p>this section is the standard demonstration of Route B (sampled-token REINFORCE / importance sampling). <strong>Route B is the production-default form for Tinker, MiniLLM, etc.</strong>, <strong>equivalent in expectation</strong> to Route A (§4.1, full-vocab autograd); the trade-off is variance vs engineering interface: Route A has zero variance but needs teacher full logits; Route B fits the PPO/GRPO sampled-token interface, supports black-box teachers, saves teacher vocab memory. The specific <strong>closed-form baseline</strong> variance-reduction trick can only be computed when teacher full logits are available; for a black-box teacher you must switch to a learned / EMA / per-prompt mean baseline — see the caveat at the end.</p></div>
+<blockquote><p>Note: the vOPD ("KL for a KL") control-variate idea is a recurring pattern in the OPD literature (Survey 2026 / Tinker blog etc. all have equivalent discussions). Below gives the <strong>correct detach + sign + estimator</strong> form.</p></blockquote>
+<p><strong>REINFORCE-form sampled-token estimator</strong>: for a single sampled token $y_t \sim \pi_\theta(\cdot|s_t)$, the unbiased estimate of the <em>gradient</em> of reverse KL is</p>
+<p>$$\nabla_\theta D_{\text{KL}}(\pi_\theta\,\Vert\,\pi_T)(s_t) = \mathbb{E}_{y_t \sim \pi_\theta}\!\big[\,\nabla_\theta \log \pi_\theta(y_t|s_t) \cdot \underbrace{(\log \pi_\theta(y_t|s_t) - \log \pi_T(y_t|s_t))}_{\hat r_t,\;\textbf{detached}}\,\big].$$</p>
+<p>Note $\hat r_t$ only appears as a <strong>scalar reward</strong> (must be detached); the gradient comes entirely from the outer $\nabla_\theta \log\pi_\theta$. <strong>Control variate</strong> to reduce variance:</p>
+<p>$$\hat r_t \leftarrow \hat r_t - B(s_t),\quad B(s_t) = \mathbb{E}_{y_t \sim \pi_\theta}[\hat r_t] = D_{\text{KL}}(\pi_\theta\,\Vert\,\pi_T)(s_t).$$</p>
+<p>$B(s_t)$ is the <strong>full-vocab</strong> KL at that step (with positive sign), computable in closed form from the student forward. Its detached value does not change the unbiasedness of the estimator (because $\mathbb{E}_{y_t}[\nabla \log\pi_\theta \cdot B(s_t)] = B(s_t)\cdot \mathbb{E}[\nabla\log\pi_\theta] = 0$), but significantly reduces variance.</p>
+<pre><code class="language-python">def vopd_token_kl_estimator(student, teacher, input_ids, action_mask):
+    &quot;&quot;&quot;
+    Sampled-token REINFORCE estimator of ∇_θ D_KL(π_θ || π_T) with closed-form baseline.
+
+    Returns surrogate loss L_surr, whose ∇L_surr in expectation = ∇ E[D_KL]. Note L_surr
+    itself is NOT a numerical estimate of D_KL — for diagnostics use full-vocab D_KL.
+    &quot;&quot;&quot;
+    s_logits = student(input_ids).logits[:, :-1]                    # [B, L-1, V]
+    s_log_probs = F.log_softmax(s_logits, dim=-1)
+    s_probs     = s_log_probs.exp()
+    with torch.no_grad():
+        t_logits = teacher(input_ids).logits[:, :-1]
+        t_log_probs = F.log_softmax(t_logits, dim=-1)
+
+    targets = input_ids[:, 1:].unsqueeze(-1)                        # [B, L-1, 1]
+    s_logp_t = s_log_probs.gather(-1, targets).squeeze(-1)          # grad-aware: log π_θ(y_t|s_t)
+
+    # ── reward signal (must detach: scalar weight, not part of grad path) ──
+    with torch.no_grad():
+        t_logp_t = t_log_probs.gather(-1, targets).squeeze(-1)
+        r_hat    = s_logp_t.detach() - t_logp_t                     # scalar per token
+
+        # closed-form baseline B(s_t) = D_KL(π_θ || π_T)(s_t), full vocab
+        baseline = (s_probs.detach() * (s_log_probs.detach() - t_log_probs)).sum(-1)
+        advantage = r_hat - baseline                                # both detached
+
+    # ── REINFORCE-style surrogate: ∇ = E[ ∇log π_θ(y_t|s_t) · advantage_detached ] = +∇D_KL ──
+    mask = action_mask[:, 1:].float()
+    surrogate = (s_logp_t * advantage * mask).sum() / mask.sum().clamp_min(1.0)
+    #            ↑ Sign note: advantage = (logπ_θ − logπ_T) − B is the KL cost. To minimize D_KL,
+    #            the optimizer step is θ ← θ − η·∇L_surr, and ∇L_surr = +E[∇logπ·advantage] = +∇D_KL,
+    #            so the surrogate is **positive**; treat surrogate as the loss to .backward().
+
+    # diagnostic (no grad): monitor the actual full-vocab KL
+    with torch.no_grad():
+        full_kl = (baseline * mask).sum() / mask.sum().clamp_min(1.0)
+    return surrogate, {&quot;full_vocab_kl_diag&quot;: full_kl.item()}</code></pre>
+<div class="callout callout-info"><div class="callout-title">Recurring pitfalls in the code</div><ol><li><strong><code>r_hat</code> must be detached</strong>: it is the reward signal, not part of the loss; if not detached, backward will pull both $\log\pi_T$ and the student log-prob into the gradient, completely different from the paper estimator.</li><li><strong><code>baseline</code> must be detached</strong>: the control variate cannot backprop; otherwise unbiasedness no longer holds.</li><li><strong>Sign of the surrogate</strong>: we want to <strong>minimize</strong> $D_{\text{KL}}$. The REINFORCE identity gives $\nabla D_{\text{KL}} = \mathbb{E}[\nabla\log\pi_\theta\cdot \hat r]$, so set <code>loss = +E[\log\pi_\theta\cdot(\hat r - B).\text{detach}()]</code>, then <code>loss.backward()</code> gives $+\nabla D_{\text{KL}}$, and the optimizer step <code>θ -= η·∇L</code> performs KL descent. <strong>Positive sign is correct</strong> — it is easy to get the sign wrong.</li><li><strong>Route A vs Route B choice</strong>: <code>full_kl_per_pos</code> (§4.1 Route A) has zero variance and is one-line autograd, but needs teacher full logits; this section's Route B fits the sampled-token interface (composes naturally with §4.5 PPO clipping), supports black-box teachers, saves vocab-size memory. The two are <strong>equivalent in expectation</strong>; pick by engineering constraints.</li><li><strong>Black-box teacher baseline choices</strong>: if you can only query teacher log-prob and not the full vocab, the closed-form <code>B(s_t)</code> cannot be computed; you can switch to (a) <code>running mean of r_hat</code> as baseline; (b) learn a lightweight value head; (c) per-prompt empirical mean. You lose the closed-form advantage but still keep unbiased + significant variance reduction.</li></ol></div>
+<h3 id="45-integrating-opd-into-grpo-multi-sample-group-baseline">4.5　Integrating OPD into GRPO (multi-sample group baseline)</h3>
+<p>GRPO's ratio is <strong>new student policy vs old behavior student policy</strong> (record <code>s_logp_old</code> during rollout, compute <code>s_logp_new</code> during update); the teacher enters in two independent positions: (i) <strong>reward</strong> via the token-level KL reward $r_t^{\text{kl}} = \log\pi_T(y_t|s_t) - \log\pi_\theta^{\text{old}}(y_t|s_t)$ (dense token reward form), weighted with the outcome reward to give the total reward; (ii) <strong>KL regularization</strong> via the explicit $D_{\text{KL}}(\pi_\theta\,\Vert\,\pi_T)$ constraint on the student to stay close to the teacher. <strong>The teacher never enters the denominator of the PPO ratio.</strong></p>
+<pre><code class="language-python">def opd_grpo_step(student, teacher, batch, G=8, alpha=0.5, kl_coef=0.1, clip=0.2):
+    &quot;&quot;&quot;
+    OPD + GRPO hybrid (per-prompt group baseline):
+      - sample G rollouts per prompt, record behavior-policy log-prob
+      - reward = α * outcome_reward + (1-α) * sum_t [log π_T(y_t|s_t) - log π_θ_old(y_t|s_t)]
+      - GRPO group-relative advantage (group-normalized)
+      - ratio = exp(s_logp_new - s_logp_old.detach())  ← critical
+      - KL penalty term uses student vs teacher (not the PPO ratio)
+
+    Shape conventions:
+      input_ids / action_mask:   [B, L]   (prompt + generated)
+      per_token_logp output:     [B, L-1] (predict y_{t+1} from prefix up to t)
+      token_mask = action_mask[:, 1:]: aligned with per-token logp
+    &quot;&quot;&quot;
+    ids_all, action_mask_all, s_old_all, adv_all = [], [], [], []
+
+    for prompt in batch.prompts:
+        rollouts = []
+        for _ in range(G):
+            ids, action_mask = student_rollout(student, prompt)    # [B&#x27;, L]; B&#x27;=1 for single prompt
+            with torch.no_grad():
+                s_old = per_token_logp(student, ids)               # [B&#x27;, L-1] behavior log-prob
+                t_lp  = per_token_logp(teacher, ids)               # [B&#x27;, L-1]
+            rollouts.append((ids, action_mask, s_old, t_lp))
+
+        # total reward across G rollouts in the group
+        rewards = []
+        for (ids, action_mask, s_old, t_lp) in rollouts:
+            r_outcome = math_verifier(ids)                         # scalar ∈ {0,1}
+            token_mask = action_mask[:, 1:].float()                # [B&#x27;, L-1]
+            r_kl_dense = ((t_lp - s_old) * token_mask).sum().item()
+            r_total = alpha * r_outcome + (1.0 - alpha) * r_kl_dense
+            rewards.append(r_total)
+        # Ensure same device/dtype as s_old / s_logp_new, avoid CPU/GPU mismatch
+        rewards = torch.tensor(rewards, device=s_old.device, dtype=s_old.dtype)
+        adv_per_traj = (rewards - rewards.mean()) / (rewards.std() + 1e-8)  # [G]
+
+        for i, (ids, action_mask, s_old, _t_lp) in enumerate(rollouts):
+            ids_all.append(ids); action_mask_all.append(action_mask)
+            s_old_all.append(s_old)
+            adv_all.append(adv_per_traj[i].view(1, 1).expand_as(s_old))     # broadcast to [B&#x27;, L-1]
+
+    ids         = torch.cat(ids_all, dim=0)                                  # [BG, L]
+    action_mask = torch.cat(action_mask_all, dim=0)                          # [BG, L]
+    token_mask  = action_mask[:, 1:].float()                                 # [BG, L-1]
+    s_logp_old  = torch.cat(s_old_all, dim=0).detach()                       # [BG, L-1]
+    A           = torch.cat(adv_all, dim=0).detach()                         # [BG, L-1]
+
+    # ── new student log-prob (this step has grad) ──
+    s_logp_new = per_token_logp(student, ids)                                # [BG, L-1]
+
+    # ── PPO clipped ratio: new student vs old student (NOT student vs teacher) ──
+    ratio = torch.exp(s_logp_new - s_logp_old)
+    pg = torch.min(ratio * A, torch.clamp(ratio, 1 - clip, 1 + clip) * A)
+    pg_loss = -(pg * token_mask).sum() / token_mask.sum().clamp_min(1.0)
+
+    # ── KL penalty: student vs teacher (OPD reverse KL, full-vocab closed-form) ──
+    # Pass [B, L] action_mask; §4.1 internally shifts it to [B, L-1]
+    kl_loss, _ = per_token_reverse_kl_loss(student, teacher, ids, action_mask)
+
+    return pg_loss + kl_coef * kl_loss</code></pre>
+<div class="callout callout-info"><div class="callout-title">Critical details</div><ol><li><strong>The ratio denominator is <code>s_logp_old</code> (behavior policy)</strong>, computed once during rollout and <code>.detach()</code>-ed, unrelated to the teacher. This is identical to vanilla GRPO/PPO.</li><li><strong>The teacher's two roles do not overlap</strong>: as a reward source providing <code>r_kl_dense</code> (dense token reward, fed into advantage); as a KL anchor providing the closed-form reverse-KL penalty (fed directly into the loss).</li><li><strong><code>per_token_reverse_kl_loss</code> is full-vocab closed-form</strong> (§4.1), not a sampled-token estimator, so the KL term is unbiased and has low variance.</li><li><strong>Mini-batch multi-step updates</strong>: in real GRPO, a rollout batch undergoes <code>n_epochs</code> inner updates, and the ratio is not 1 (critical, otherwise clipping has no effect).</li></ol></div>
+<p>Practical tip: <strong>alpha = 0.5 is an empirical starting point</strong>; alpha → 1 degenerates to pure GRPO (outcome only), alpha → 0 degenerates to pure OPD (KL only). Qwen3 / R1-Distill-style recipes usually stage-wise schedule: early-stage small alpha (pull student toward teacher first), late-stage large alpha (push for outcome SOTA).</p>
+<h3 id="46-synthetic-data--distillation-pipeline-top-level-pseudocode">4.6　Synthetic-data + distillation pipeline (top-level pseudocode)</h3>
+<div class="callout callout-info"><div class="callout-title">This is architecture-level pseudocode</div><p>(not runnable Python): <code>sample / sft_train / math_verifier</code> etc. are placeholders, corresponding in specific frameworks to <code>torch.utils.data.DataLoader</code> / TRL <code>SFTTrainer</code> / custom reward function. Below only shows the <strong>topology of the three-stage recipe</strong>.</p></div>
+<pre><code class="language-python">def synthetic_distillation_pipeline(
+    teacher,             # large teacher (e.g., R1-671B / Qwen3-32B)
+    student,             # small student (e.g., Qwen3-8B-Base)
+    prompt_pool,         # massive prompt pool (can be unlabeled instructions)
+    n_stage1=800_000,    # off-policy SFT data volume
+    n_stage2_steps=5_000,
+    n_stage3_steps=1_000,
+    verifiable_prompts=None,
+):
+    # ─── Stage 1: use teacher to generate synthetic trajectories, do off-policy SFT ───
+    synthetic_data = []
+    for prompt in random_sample(prompt_pool, n_stage1):           # placeholder sampler
+        with torch.no_grad():
+            y_teacher = teacher.generate(prompt, max_new_tokens=4096)
+        synthetic_data.append((prompt, y_teacher))
+    run_sft(student, synthetic_data, epochs=2)                    # cross-entropy on (prompt, y_teacher)
+
+    # ─── Stage 2: do OPD on student&#x27;s own rollouts ───
+    optimizer = torch.optim.AdamW(student.parameters(), lr=1e-5)
+    for step in range(n_stage2_steps):
+        batch = make_batch(prompt_pool, batch_size=64)
+        opd_train_step(student, teacher, optimizer, batch, kl_coef=1.0)
+
+    # ─── Stage 3 (optional): OPD + outcome reward (math/code verifier) ───
+    if verifiable_prompts is not None:
+        for step in range(n_stage3_steps):
+            batch = make_batch(verifiable_prompts, batch_size=64)
+            loss  = opd_grpo_step(student, teacher, batch, G=8, alpha=0.5)
+            optimizer.zero_grad(); loss.backward(); optimizer.step()
+
+    return student</code></pre>
+<p>This is the standard three-stage form of Qwen3 / R1-Distill / Thinking Machines-style recipes. Stage 1 provides cold start (student learns to mimic teacher's style and format), Stage 2 uses OPD to eliminate exposure bias, Stage 3 uses a verifier for task-aligned fine-tuning.</p>
+<h2 id="5-opds-position-in-the-knowledge-distillation-family">§5 OPD's Position in the Knowledge Distillation Family</h2>
+<h3 id="51-llm-distillation-method-lineage-from-hinton-to-opd">5.1　LLM distillation method lineage (from Hinton to OPD)</h3>
+<pre class="diagram"><code>
+   2015 ─────────── 2019 ─────── 2023 ────── 2024 ─────── 2025/2026
+   Hinton          DistilBERT   MiniLLM     GKD          Thinking
+   soft target     (Sanh)       (Gu)        (Agarwal)    Machines
+                                                          blog
+     │              │            │            │            │
+     ↓              ↓            ↓            ↓            ↓
+   classification   encoder-     first        generalized   &quot;cheap RL&quot;
+   forward KL      level KD     reverse KL   JSD + mix     paradigm + large-
+                                + on-policy  on/off        scale empirical
+                                              policy        results (Qwen3/
+                                                            Gemma/Kimi)</code></pre>
+<p><strong>Core evolution directions</strong>:</p>
+<ul><li><strong>off-policy → on-policy</strong> (handles exposure bias)</li><li><strong>forward KL → reverse KL / JSD</strong> (handles mode-covering)</li><li><strong>hard label → soft logit</strong> (preserves dark knowledge)</li><li><strong>single-stage → multi-stage hybrid</strong> (off-policy SFT cold start + on-policy OPD + outcome RL)</li></ul>
+<h3 id="52-one-sentence-index-of-key-papers">5.2　One-sentence index of key papers</h3>
+<table><thead><tr><th>Year</th><th>Paper</th><th>Key contribution</th></tr></thead><tbody><tr><td>2015</td><td>Hinton, Vinyals, Dean — "Distilling the Knowledge in a Neural Network" (arXiv 1503.02531)</td><td>Pioneer of soft-target KD + temperature softmax</td></tr><tr><td>2016</td><td>Kim &amp; Rush — "Sequence-Level Knowledge Distillation" (EMNLP, arXiv 1606.07947)</td><td>Pushed KD to seq-to-seq NMT, proposed seq-level / token-level KD distinction</td></tr><tr><td>2019</td><td>Sanh et al. — "DistilBERT" (NeurIPS workshop, arXiv 1910.01108)</td><td>Compressed encoder LLM to 60% size while retaining 95% performance</td></tr><tr><td>2020</td><td>Sun et al. — "MobileBERT" (ACL, arXiv 2004.02984)</td><td>Task-agnostic KD + progressive distillation</td></tr><tr><td>2023</td><td>Gu et al. — "MiniLLM" (ICLR 2024, arXiv 2306.08543)</td><td><strong>First formal application of reverse KL + on-policy to LLMs</strong>; policy gradient optimization of reverse KL</td></tr><tr><td>2023</td><td>Agarwal et al. — "GKD: On-Policy Distillation of LM" (ICLR 2024, arXiv 2306.13649)</td><td>Unifies forward/reverse KL + on/off-policy data, generalized JSD interpolation; $\lambda$ controls student data fraction</td></tr><tr><td>2024</td><td>DeepSeek-R1-Distill (DeepSeek 2025-01, arXiv 2501.12948)</td><td>Off-policy SFT distillation on 800K reasoning trajectories, 1.5B-70B family</td></tr><tr><td>2025-05</td><td>Qwen3 Tech Report (arXiv 2505.09388)</td><td>Production-grade OPD recipe: off-policy SFT cold start + on-policy distillation; saves 10× GPU hours vs RL</td></tr><tr><td>2025-10</td><td>Thinking Machines — "On-Policy Distillation" blog (Lu et al.)</td><td>Packages OPD as the "cheap RL" route; Qwen3-8B + Qwen3-32B-teacher reproduces RL gain with 9-30× FLOPs savings</td></tr><tr><td>2025-11</td><td>Black-Box OPD (arXiv 2511.10643)</td><td>No teacher logits required; on-policy distillation using only teacher samples</td></tr><tr><td>2026</td><td>Song &amp; Zheng — "A Survey of OPD for LLMs" (arXiv 2604.00626)</td><td>Formalizes OPD as $f$-divergence minimization on student rollouts; three-axis taxonomy</td></tr><tr><td>2026</td><td>"Rethinking OPD" (arXiv 2604.13016)</td><td>Phenomenology + mechanism + recipe: truncation collapse / mode-seeking failure / counterfactual regression</td></tr><tr><td>2026</td><td>"vOPD: KL for a KL" (arXiv 2605.07865)</td><td>Closed-form control-variate baseline for variance reduction</td></tr></tbody></table>
+<h3 id="53-opds-position-in-reasoning-model-distillation-the-r1-distill-era">5.3　OPD's position in Reasoning Model distillation (the R1-Distill era)</h3>
+<p>The two main lines of reasoning model distillation:</p>
+<table><thead><tr><th>Line</th><th>Representatives</th><th>Paradigm</th></tr></thead><tbody><tr><td><strong>Off-policy SFT KD</strong></td><td>DeepSeek-R1-Distill, s1 (Muennighoff 2025), OpenThinker</td><td>teacher generates trajectories → student SFT</td></tr><tr><td><strong>On-Policy Distillation (OPD)</strong></td><td>Qwen3, Gemma 2/3, MiMo-V2, Thinking Machines</td><td>student samples → teacher provides per-token KL</td></tr></tbody></table>
+<p><strong>When to use which</strong>:</p>
+<ul><li>If teacher trajectories are extremely high quality and the teacher-student capability gap is small → off-policy SFT alone is sufficient</li><li>If the student is much smaller than the teacher (&gt;5×), the task is long horizon, and the inference-time distribution is sensitive → OPD is the more stable choice</li><li>In practice, the two are typically <strong>stacked</strong>: off-policy SFT for cold start, then OPD to eliminate exposure bias</li></ul>
+<h2 id="6-engineering-case-studies-opd-in-production">§6 Engineering Case Studies: OPD in Production</h2>
+<h3 id="61-qwen3-recipe-arxiv-250509388-32">6.1　Qwen3 Recipe (arXiv 2505.09388 §3.2)</h3>
+<p>The post-training of Qwen3 small models (1.7B / 4B / 8B) uses two-stage distillation:</p>
+<pre class="diagram"><code>Qwen3-235B (teacher, dual /think + /no_think mode)
+    │
+    │ Stage 1: Off-policy distillation
+    │   - teacher generates trajectories (mix of /think and /no_think)
+    │   - student SFT on teacher trajectories (cross-entropy)
+    │   - goal: basic reasoning + mode switching
+    ↓
+Qwen3-8B-mid
+    │
+    │ Stage 2: On-policy distillation (OPD)
+    │   - student samples on its own → teacher gives per-token logits
+    │   - per-token reverse KL loss
+    │   - goal: eliminate exposure bias + push reasoning depth
+    ↓
+Qwen3-8B-final</code></pre>
+<p><strong>Reported results</strong>:</p>
+<ul><li>Saves ~10× GPU hours vs pure RL</li><li>Significant pass@64 improvement on AIME'24 / AIME'25 (showing OPD does not collapse diversity)</li><li>+3-5pp over off-policy SFT on long-CoT tasks</li></ul>
+<h3 id="62-thinking-machines-blog-lu-2025-10-27">6.2　Thinking Machines Blog (Lu 2025-10-27)</h3>
+<p>Experimental setting:</p>
+<ul><li><strong>Student</strong>: Qwen3-8B-Base</li><li><strong>Teacher</strong>: Qwen3-32B</li><li><strong>Task</strong>: math reasoning (AIME'24 as primary benchmark)</li><li><strong>Init</strong>: one SFT round with OpenThoughts data</li><li><strong>OPD</strong>: implemented with Tinker, per-token reverse KL, no outcome reward</li></ul>
+<p>Reported results (blog content):</p>
+<ul><li>Training Qwen3-8B-Base with OPD reaches almost identical AIME'24 performance to RL</li><li><strong>Total FLOPs saved by ~9-30×</strong>, depending on batch / lr settings</li><li>Emphasizes "<strong>OPD is the cheap alternative to RL</strong>", not a supplement to RL</li></ul>
+<h3 id="63-tinker-cookbook-implementation-details">6.3　Tinker Cookbook implementation details</h3>
+<p>GitHub: <code>thinking-machines-lab/tinker-cookbook/tree/main/tinker_cookbook/recipes/distillation</code></p>
+<p>Key design points:</p>
+<ul><li><strong>Environment is designed to be no-reward</strong>: the only supervision is the teacher KL</li><li><strong>Reverse KL implementation</strong>: <code>(student_logp - teacher_logp) * mask</code></li><li><strong>Advantage computation</strong>: treat KL as negative reward fed into advantage (<code>advantage = -kl_penalty_coef * reverse_kl</code>)</li><li><strong>LoRA</strong>: rank 128 + lr 1e-4</li><li><strong>Batch</strong>: groups_per_batch = 64 (GRPO-style grouping)</li></ul>
+<p>This "inject KL as reward into advantage" design exactly corresponds to the OPD-GRPO equivalence in §3.3: replace the sparse outcome reward with dense teacher KL reward.</p>
+<h3 id="64-deepseek-v4-report-multi-teacher-opd-replaces-rl">6.4　DeepSeek-V4 report (multi-teacher OPD replaces RL)</h3>
+<p>DeepSeek-V4 in the model consolidation stage <strong>completely replaces mixed RL with multi-teacher OPD</strong> — the logits of multiple teachers (specialists: math / code / reasoning / chat) are weighted-ensembled as the OPD target for the student. This is the representative case of extending the OPD paradigm to multi-teacher and specialist consolidation.</p>
+<h3 id="65-black-box-opd-no-teacher-logits-required">6.5　Black-Box OPD (no teacher logits required)</h3>
+<p><strong>arXiv 2511.10643</strong> "Black-Box On-Policy Distillation": when the teacher is a closed-source API (e.g., GPT-4 / Claude) from which you can only sample but cannot extract logits, how do you do OPD?</p>
+<p>Core idea: use <strong>teacher samples as trajectory-level reward</strong>, combined with token-level student log-prob to approximate reverse KL. This extends OPD from "requires teacher logits" to "only needs teacher API". The trade-off is losing per-token dense supervision and falling back to trajectory-level reward — essentially a hybrid between OPD and RL.</p>
+<h2 id="7-failure-modes-and-mitigation-strategies">§7 Failure Modes and Mitigation Strategies</h2>
+<h3 id="71-truncation-collapse--length-inflation">7.1　Truncation Collapse / Length Inflation</h3>
+<p><strong>Phenomenon</strong> (Demystifying OPD 2026, arXiv 2604.08527): during training, the average length of student rollouts keeps growing, eventually hitting max_length truncation; the truncated trajectories <strong>contribute most of the gradient</strong> (because they have many tokens), causing gradient bias and validation performance crash.</p>
+<p><strong>Root cause</strong>: the mode-seeking nature of reverse KL biases the student toward "keep emitting high-teacher-probability tokens", and the teacher naturally favors long output on long-CoT. This forms a <strong>positive feedback loop</strong>.</p>
+<p><strong>Mitigation</strong>:</p>
+<ul><li><strong>Length normalization</strong>: divide the loss by trajectory length (per-token average, not sum) — this is the default in Tinker / most production implementations</li><li><strong>Length penalty</strong>: add $-\lambda \cdot L$ to the reward to suppress overly long outputs</li><li><strong>Max-length much larger than sample max-length</strong>: avoid truncation entering training</li><li><strong>Early stop on val loss spike</strong>: stop immediately when val crashes</li></ul>
+<h3 id="72-mode-collapse--diversity-loss">7.2　Mode Collapse / Diversity Loss</h3>
+<p><strong>Phenomenon</strong>: reverse KL is mode-seeking, so in theory the student should lock onto one mode of the teacher; but on some tasks (e.g., open-ended generation) the student converges to a <strong>single answer template</strong>, losing diversity, with pass@N ($N > 1$) dropping.</p>
+<p><strong>Mitigation</strong>:</p>
+<ul><li><strong>Use forward KL / JSD instead of reverse KL</strong> (GKD's $\beta$ interpolation)</li><li><strong>Add entropy bonus</strong> (similar to PPO)</li><li><strong>Mixed loss</strong>: reverse KL × $\alpha$ + forward KL × $(1-\alpha)$</li><li><strong>MiniLLM's stabilization trick</strong>: mixed policy $\pi_{\text{mix}} = (1-\alpha)\pi_\theta + \alpha\pi_T$ with $\alpha = 0.2$ to prevent early mode collapse</li></ul>
+<h3 id="73-reward-hacking-teacher-game">7.3　Reward Hacking (teacher-game)</h3>
+<p><strong>Phenomenon</strong>: the student learns to hack — outputs some <strong>tokens that have high teacher probability but are semantically garbage</strong> (e.g., stopword sequences, repeated phrases), with KL loss extremely low but task performance poor.</p>
+<p><strong>Mitigation</strong>:</p>
+<ul><li><strong>Mix in outcome reward</strong> (the OPD-GRPO hybrid in §4.5)</li><li><strong>Trajectory-level filter</strong>: filter out trajectories where the teacher itself is uncertain ("teacher-improbable filter")</li><li><strong>Token diversity regularizer</strong>: penalize overly low token entropy</li></ul>
+<h3 id="74-prefix-teach-suffix-fade-local-teachability-collapse">7.4　Prefix Teach, Suffix Fade (local teachability collapse)</h3>
+<p><strong>arXiv 2605.13643</strong> reports: in late training, the teacher has almost "nothing left to teach" in the latter half of trajectories — the student's and teacher's log-probs on the suffix are already close, and the loss comes almost entirely from the prefix. This leads to poor quality of the second-half reasoning in long-CoT tasks.</p>
+<p><strong>Mitigation</strong>:</p>
+<ul><li><strong>Token-level importance weighting</strong>: weight suffix tokens more</li><li><strong>Teacher upgrade</strong>: use a stronger teacher (multi-teacher ensemble / specialists for different tasks)</li><li><strong>Curriculum</strong>: start with short trajectories, gradually increase max_length</li></ul>
+<h3 id="75-teacher--student-gap-too-large">7.5　Teacher / Student Gap too large</h3>
+<p><strong>Phenomenon</strong>: when the student is much smaller than the teacher (e.g., 1B vs 70B), the student's samples cannot reach regions of high teacher probability, and the OPD signal becomes near zero ("student visits states the teacher never thought of").</p>
+<p><strong>Mitigation</strong>:</p>
+<ul><li><strong>off-policy SFT warm start</strong>: let the student first imitate the teacher for a while to bring the state distributions closer, then run OPD</li><li><strong>Temperature scheduling</strong>: high student temperature early in training to enlarge exploration; reduce to 1.0 later</li><li><strong>Use a closer teacher</strong>: control the teacher-student gap to 4-8× (Qwen3 choosing a 32B teacher → 8B student reflects this consideration)</li></ul>
+<h3 id="76-catastrophic-forgetting-loss-of-old-capabilities">7.6　Catastrophic Forgetting (loss of old capabilities)</h3>
+<p><strong>Phenomenon</strong>: OPD is mainly trained on math / reasoning, but the student's general capabilities (chat / safety / instruction-following) degrade.</p>
+<p><strong>Mitigation</strong>:</p>
+<ul><li><strong>Replay buffer</strong>: retain some general SFT data and mix into OPD training in proportion</li><li><strong>Regularization to SFT init</strong>: add a $\beta \cdot D_{\text{KL}}(\pi_\theta \,\|\, \pi_{\text{SFT-init}})$ penalty</li><li><strong>Multi-task OPD</strong>: distill multiple domain teachers simultaneously (math + chat + code)</li></ul>
+<h2 id="8-complexity-and-resources">§8 Complexity and Resources</h2>
+<h3 id="81-per-step-training-cost-comparison">8.1　Per-step training cost comparison</h3>
+<table><thead><tr><th>Paradigm</th><th>Student forward</th><th>Student backward</th><th>Teacher forward</th><th>Sampling cost</th><th>Total wall-clock</th></tr></thead><tbody><tr><td><strong>SFT</strong></td><td>1×</td><td>1×</td><td>0</td><td>0 (dataset provides)</td><td>1×</td></tr><tr><td><strong>Off-policy KD</strong></td><td>1×</td><td>1×</td><td>1× (pre-computed cache)</td><td>0</td><td>1×-1.2×</td></tr><tr><td><strong>OPD</strong></td><td>1×</td><td>1×</td><td><strong>1× per token</strong></td><td><strong>student rollout ($O(L)$ tokens)</strong></td><td><strong>2-3×</strong> (depending on teacher size)</td></tr><tr><td><strong>RLHF + PPO</strong></td><td>1×</td><td>1×</td><td>0</td><td>student rollout + RM forward</td><td>2-4×</td></tr><tr><td><strong>GRPO</strong></td><td>$G$× (group sample)</td><td>1×</td><td>0</td><td>$G$× student rollout</td><td>$G \cdot 1.5$×</td></tr></tbody></table>
+<p>OPD's extra overhead mainly comes from: (1) student rollout (sampling is slower than forward due to KV cache accumulation); (2) teacher forward (teacher is large). But compared to RL, <strong>OPD does not need reward model training + RM forward</strong>, so the total cost is usually <strong>less than a pure RL pipeline</strong>.</p>
+<h3 id="82-memory">8.2　Memory</h3>
+<table><thead><tr><th>Component</th><th>Memory (8B student + 32B teacher example)</th></tr></thead><tbody><tr><td>Student weights + optimizer</td><td>~60 GB (Adam state + bf16 weight + bf16 grad)</td></tr><tr><td>Teacher weights (frozen, bf16)</td><td>~64 GB</td></tr><tr><td>Student activations</td><td>~10-20 GB (depending on batch / seq)</td></tr><tr><td>Teacher activations (no grad)</td><td>~5-10 GB</td></tr><tr><td>KV cache (student rollout)</td><td>~5-10 GB</td></tr><tr><td><strong>Total</strong></td><td><strong>~150-170 GB</strong> → does not fit on a single H100 (80GB); needs 2-4 GPUs</td></tr></tbody></table>
+<p><strong>Memory reduction tricks</strong>:</p>
+<ul><li>Run the teacher on a <strong>separate inference server</strong> (vLLM), so the student training machine does not store teacher weights</li><li>Teacher uses <strong>fp8 / int8 quantization</strong> (teacher only forwards, no backprop; precision loss is small)</li><li>Student uses <strong>LoRA</strong> (rank 128) + full teacher weights</li><li><strong>Async teacher inference</strong>: while the student trains batch $N$, the teacher server computes batch $N+1$</li></ul>
+<h3 id="83-sample-efficiency">8.3　Sample Efficiency</h3>
+<p>The core data point from the Thinking Machines blog:</p>
+<table><thead><tr><th>Setting</th><th>AIME'24 accuracy</th><th>Total FLOPs</th></tr></thead><tbody><tr><td>Qwen3-8B-Base + SFT only (OpenThoughts)</td><td>~40%</td><td>1× baseline</td></tr><tr><td>+ RL (GRPO)</td><td>~62%</td><td>10-30× baseline</td></tr><tr><td><strong>+ OPD (Qwen3-32B teacher)</strong></td><td><strong>~62%</strong></td><td><strong>~1× baseline</strong></td></tr><tr><td>+ RL trained to match OPD</td><td>62%</td><td>~10× baseline</td></tr></tbody></table>
+<p><strong>OPD is roughly 9-30× more sample-efficient at the same accuracy</strong> — this is the core number behind OPD's rise.</p>
+<h2 id="9-comparison-and-positioning-with-related-methods">§9 Comparison and Positioning with Related Methods</h2>
+<h3 id="91-big-table-the-main-interview-targets-in-a-cheat-sheet">9.1　Big table (the main interview targets in a cheat sheet)</h3>
+<table><thead><tr><th>Method</th><th>Supervision source</th><th>Data collection</th><th>KL direction</th><th>Critic</th><th>Use case</th></tr></thead><tbody><tr><td><strong>SFT</strong></td><td>dataset label</td><td>offline</td><td>n/a (CE)</td><td>no</td><td>warm start, instruction follow</td></tr><tr><td><strong>Hinton KD</strong></td><td>teacher logits</td><td>offline (dataset)</td><td>forward</td><td>no</td><td>single-step prediction, classification</td></tr><tr><td><strong>Kim-Rush Seq KD</strong></td><td>teacher beam search</td><td>offline</td><td>n/a (hard)</td><td>no</td><td>NMT, autoregressive</td></tr><tr><td><strong>DistilBERT</strong></td><td>teacher logits + MLM</td><td>offline</td><td>forward + CE</td><td>no</td><td>encoder model compression</td></tr><tr><td><strong>DPO</strong></td><td>offline preference pair</td><td>offline</td><td>closed-form</td><td>no</td><td>no strong teacher, have preference data</td></tr><tr><td><strong>PPO RLHF</strong></td><td>learned RM</td><td>on-policy rollout</td><td>reverse (vs ref)</td><td>yes (value head)</td><td>have RM, want strict RM-aligned</td></tr><tr><td><strong>GRPO</strong></td><td>learned RM / verifier</td><td>on-policy rollout (group)</td><td>reverse (vs ref)</td><td>no (group baseline)</td><td>math / code, save critic</td></tr><tr><td><strong>MiniLLM</strong></td><td>teacher logits</td><td>on-policy student rollout</td><td>reverse</td><td>no</td><td>LLM instruction tuning</td></tr><tr><td><strong>GKD</strong></td><td>teacher logits</td><td>mix offline + on-policy ($\lambda$)</td><td>JSD ($\beta$)</td><td>no</td><td>flexible, trade off offline/online</td></tr><tr><td><strong>OPD</strong> (general)</td><td>teacher logits per token</td><td><strong>on-policy student rollout</strong></td><td><strong>reverse (or JSD)</strong></td><td>no (baseline closed-form)</td><td>small student, long-CoT, strong teacher</td></tr><tr><td><strong>OPD + GRPO</strong></td><td>teacher logits + outcome verifier</td><td>on-policy group</td><td>reverse</td><td>no</td><td>math + dense supervision</td></tr><tr><td><strong>R1-Distill</strong></td><td>teacher trajectory</td><td>offline</td><td>n/a (CE)</td><td>no</td><td>massive synthetic SFT</td></tr></tbody></table>
+<h3 id="92-decision-tree-which-method-for-which-scenario">9.2　Decision tree: which method for which scenario</h3>
+<pre class="diagram"><code>Do you have a strong teacher model?
+├── No
+│   ├── have preference dataset → DPO
+│   ├── have verifier (math/code) → GRPO
+│   └── have RM → PPO RLHF
+└── Yes
+    ├── teacher-student gap small (&lt; 4×) → off-policy SFT KD is enough
+    ├── gap moderate (4-10×) + long CoT task → OPD (first choice)
+    ├── gap large (&gt; 10×) + complex task → off-policy SFT warm start + OPD
+    ├── also have verifier → OPD + GRPO hybrid (production standard)
+    └── teacher only API-accessible → Black-Box OPD</code></pre>
+<h2 id="10-25-frequently-asked-interview-questions">§10 25 Frequently-Asked Interview Questions</h2>
+<h3 id="l1-must-know-10-questions-post-training-engineer--llm-rl-roles">L1 must-know (10 questions, post-training engineer / LLM RL roles)</h3>
+<details>
+<summary><strong>L1-1: What is OPD? Why is it called "On-Policy"?</strong></summary>
+<p><strong>Answer</strong>: OPD = On-Policy Distillation. "On-policy" means <strong>the training data (trajectories) comes from the student's own current policy $\pi_\theta$ sampling</strong>, rather than from teacher / dataset. The teacher only provides per-token supervision (typically reverse KL) on the states the student itself visits. This contrasts with off-policy KD (teacher generates data → student imitates).</p>
+</details>
+<details>
+<summary><strong>L1-2: What are the core differences between OPD and vanilla KD (Hinton)?</strong></summary>
+<p><strong>Answer</strong>: Three points: (1) <strong>Data source</strong> — vanilla KD uses dataset / teacher-generated data, OPD uses student's own rollouts; (2) <strong>KL direction</strong> — vanilla KD uses forward KL (mode-covering), OPD primarily uses reverse KL (mode-seeking); (3) <strong>Problem solved</strong> — vanilla KD solves "compress teacher knowledge", OPD solves "compression + exposure bias" (train/test distribution mismatch in autoregressive generation).</p>
+</details>
+<details>
+<summary><strong>L1-3: Write out OPD's reverse KL loss formula.</strong></summary>
+<p><strong>Answer</strong>: $$L_{\text{OPD}}(\theta) = \mathbb{E}_{x \sim D,\, y \sim \pi_\theta(\cdot|x)}\!\left[\sum_{t=1}^{|y|} D_{\text{KL}}\!\big(\pi_\theta(\cdot|x, y_{<t})\,\|\,\pi_T(\cdot|x, y_{<t})\big)\right]$$ Key points: the expectation subscript is $y \sim \pi_\theta$ (on-policy); the KL direction is $\pi_\theta$ first (reverse / mode-seeking). Sampled-token approximation = $\log \pi_\theta(y_t) - \log \pi_T(y_t)$.</p>
+</details>
+<details>
+<summary><strong>L1-4: What is exposure bias? How does OPD solve it?</strong></summary>
+<p><strong>Answer</strong>: exposure bias = autoregressive models train with prefixes from ground-truth / teacher ("perfect prefixes"), but at inference prefixes come from the model itself (with errors) — train/inference distribution mismatch. Theoretically the cumulative error scales as $O(L^2)$ (Bagnell 2010). OPD computes loss on the student's own rollout trajectories, making training distribution = inference distribution, compressing cumulative error to $O(L)$.</p>
+</details>
+<details>
+<summary><strong>L1-5: What is the difference between reverse KL and forward KL? Why does OPD tend to use reverse?</strong></summary>
+<p><strong>Answer</strong>: forward KL $D(\pi_T \,\|\, \pi_\theta)$ takes the expectation under the teacher, <strong>forcing the student to cover all teacher modes</strong> (mode-covering), prone to blurry averaged outputs; reverse KL $D(\pi_\theta \,\|\, \pi_T)$ takes the expectation under the student, <strong>forcing the student to avoid tokens the teacher considers impossible</strong> (mode-seeking / zero-forcing), prone to sharp confident outputs. LLM generation tasks usually want "fluent + confident", so reverse KL is the first choice.</p>
+</details>
+<details>
+<summary><strong>L1-6: What does OPD need from the teacher? Can OPD be done with only a teacher API (no logits)?</strong></summary>
+<p><strong>Answer</strong>: standard OPD requires the teacher to compute <strong>logits</strong> or <strong>log-probabilities</strong> on every prefix the student visits. If the teacher is a closed-source API (e.g., GPT-4) that returns only samples but not logits, you can use "Black-Box OPD" (arXiv 2511.10643): use teacher samples as trajectory-level reward, combined with student log-prob for approximation — but you lose per-token dense supervision, falling back to trajectory-level, with performance between OPD and RL.</p>
+</details>
+<details>
+<summary><strong>L1-7: What are the core differences between OPD and RL? Why is OPD more sample efficient?</strong></summary>
+<p><strong>Answer</strong>: RL provides one $O(1)$ scalar reward per trajectory (outcome); OPD provides $O(N \log V)$ bits (the entire teacher distribution at each token). So for the same number of rollouts, OPD provides <strong>one to two orders of magnitude more supervision information</strong>. Thinking Machines reports OPD reaches RL performance on math reasoning with 1/9-1/30 of the compute.</p>
+</details>
+<details>
+<summary><strong>L1-8: Does OPD need a critic / value model?</strong></summary>
+<p><strong>Answer</strong>: <strong>No</strong>. OPD's value function has a closed form: $V(s_t) = -D_{\text{KL}}(\pi_\theta(\cdot|s_t) \,\|\, \pi_T(\cdot|s_t))$, directly readable from already-computed student and teacher logits ("KL for a KL" baseline, arXiv 2605.07865), no separate critic training needed. This is one of OPD's engineering advantages over PPO.</p>
+</details>
+<details>
+<summary><strong>L1-9: What is the relationship between OPD and DPO? Can the two be stacked?</strong></summary>
+<p><strong>Answer</strong>: DPO is offline, binary preference, closed-form RLHF; OPD is online, per-token teacher logit, policy-gradient KD. The two are <strong>almost orthogonal</strong>: DPO does not need a teacher, OPD does not need preference pairs. They can be stacked: first DPO to align human preference (learn "what is a good response"), then OPD to distill to a small student (learn "how to generate").</p>
+</details>
+<details>
+<summary><strong>L1-10: What is the most common failure mode of OPD in production? How to mitigate?</strong></summary>
+<p><strong>Answer</strong>: <strong>Length inflation / truncation collapse</strong> — student rollouts grow longer over training, and after hitting max_length, the truncated trajectories dominate the gradient, causing val to crash. Mitigate: (1) loss per-token average rather than sum; (2) length penalty; (3) max_length 2-4× larger than sample max; (4) monitor val and stop immediately on spike.</p>
+</details>
+<h3 id="l2-advanced-10-questions-senior-post-training--paper-reproduction">L2 advanced (10 questions, senior post-training / paper reproduction)</h3>
+<details>
+<summary><strong>L2-1: Derive the policy gradient form of OPD (including the two routes).</strong></summary>
+<p><strong>Answer</strong>: reverse KL under the trajectory expectation: $$L(\theta) = \mathbb{E}_{s_t \sim \rho_{\pi_\theta}}\!\big[D_{\text{KL}}(\pi_\theta(\cdot|s_t)\,\|\,\pi_T(\cdot|s_t))\big].$$</p>
+<p>$\theta$ appears simultaneously in (a) the <strong>inner KL</strong> ($\pi_\theta(\cdot|s_t)$ itself) and (b) the <strong>state visitation</strong> $\rho_{\pi_\theta}$. This results in <strong>two distinct gradient computations</strong> that are often conflated in the literature:</p>
+<p><strong>(1) REINFORCE estimate of the inner KL</strong> (fixed-state $s_t$): $$\nabla_\theta D_{\text{KL}}(s_t) = \mathbb{E}_{y_t \sim \pi_\theta(\cdot|s_t)}\!\big[\nabla\log\pi_\theta(y_t|s_t)\cdot G_t^{\text{detach}}\big],\;\; G_t = \log\tfrac{\pi_\theta(y_t|s_t)}{\pi_T(y_t|s_t)}.$$ (Derivation: $\nabla\sum_v \pi_\theta(v)\log\tfrac{\pi_\theta(v)}{\pi_T(v)} = \sum_v\nabla\pi_\theta(v)\cdot(\log\tfrac{\pi_\theta}{\pi_T}+1) = \mathbb{E}_{y}[\nabla\log\pi_\theta(y)\cdot G + \nabla\log\pi_\theta(y)]$; the second term $\mathbb{E}[\nabla\log\pi]=0$.) This is the estimator used by §4.4 vOPD.</p>
+<p><strong>(2) Full policy gradient of the trajectory objective</strong> (including state visitation): $$\nabla L = \mathbb{E}_\tau\!\Big[\underbrace{\sum_u \nabla\log\pi_\theta(a_u|s_u)\cdot {\textstyle\sum_{t\ge u}} D_{\text{KL}}(s_t)^{\text{detach}}}_{\text{return-to-go score term}} + \underbrace{\sum_t \nabla D_{\text{KL}}(s_t)}_{\text{inner grad}}\Big].$$ Note the score-function weight is <strong>the sum of KLs over all future steps</strong>, not the same-token $G_t$.</p>
+<p><strong>Practical rules in production</strong>:</p>
+<ul><li><strong>Route A (pedagogically clear)</strong>: stop-grad on $\theta$ during rollout (i.e., $\rho_{\pi_{\theta^-}}$ is fixed), only backprop through the inner full-vocab KL (autograd handles it), <strong>no REINFORCE needed</strong>. Equivalent to a "semi-gradient" approximation. Advantages: zero variance, one-line PyTorch; requires teacher full logits available.</li><li><strong>Route B (common in production)</strong>: sampled-token REINFORCE / importance-sampling estimator + control variate (§4.4); shares sampled-token interface with PPO/GRPO, saves teacher vocab memory, supports black-box teachers. Both MiniLLM (Gu 2024) and Thinking Machines Tinker's open-source implementations follow this. <strong>Nobody really does the full (2)</strong> — return-to-go accumulates across steps, variance explodes; everyone uses semi-gradient (stop-grad rollouts) approximation.</li><li>You <strong>cannot</strong> directly <code>.backward()</code> on sampled-token $\log(\pi_\theta/\pi_T)$: that is pathwise + fixed index, dropping the score-function term, and is neither the KL gradient nor MLE.</li></ul>
+<p><strong>A and B are equivalent in expectation</strong>; the difference is in variance vs engineering interface trade-off.</p>
+<blockquote><p>"OPD can wrap around PPO/GRPO" refers to §4.5 where the dense token KL is <strong>used as a reward</strong> fed into GRPO's advantage (the PPO ratio is still new student vs old student); it does <strong>not</strong> mean "the inner KL gradient form is equivalent to PPO" — this is a common conceptual confusion.</p></blockquote>
+</details>
+<details>
+<summary><strong>L2-2: What are the key differences between GKD and MiniLLM? What do $\lambda$ and $\beta$ control respectively?</strong></summary>
+<p><strong>Answer</strong>: <strong>MiniLLM</strong> (Gu 2024): pure reverse KL on student rollout + REINFORCE optimization + a few stability tricks (mixed policy $\pi_{\text{mix}} = (1-\alpha)\pi_\theta + \alpha\pi_T$, $\alpha = 0.2$ to prevent collapse; length penalty). <strong>GKD</strong> (Agarwal 2024): generalized framework with two hyperparameters: (1) $\lambda \in [0, 1]$ controlling the <strong>student-generated data fraction</strong> ($\lambda=0$ fully off-policy on dataset $\hat y$, $\lambda=1$ fully on-policy on student $y$); (2) $\beta \in [0, 1]$ controlling <strong>the generalized JSD interpolation</strong> ($\beta=0$ forward KL on dataset, $\beta=1$ reverse KL on student). GKD is a superset of MiniLLM.</p>
+</details>
+<details>
+<summary><strong>L2-3: How is OPD integrated into GRPO? Write out the mixed reward and the correct ratio.</strong></summary>
+<p><strong>Answer</strong>: two key things. <strong>(1) Mixed reward</strong> (per-trajectory scalar, fed into group-relative advantage): $$R(x,y) = \alpha\cdot R_{\text{outcome}}(x,y) + (1-\alpha)\cdot \sum_t \big(\log\pi_T(y_t|s_t) - \log\pi_\theta^{\text{old}}(y_t|s_t)\big),$$ $\alpha=0$ degenerates to pure OPD, $\alpha=1$ degenerates to pure GRPO, production $\alpha\in[0.3,0.7]$.</p>
+<p><strong>(2) Writing the ratio (most error-prone)</strong>: the GRPO/PPO ratio is $$\rho_t = \exp\big(\log\pi_\theta^{\text{new}}(y_t|s_t) - \log\pi_\theta^{\text{old}}(y_t|s_t)\big),$$ i.e., <strong>new student vs old behavior student</strong> — <strong>the teacher never enters the ratio denominator</strong>. The teacher appears in two independent positions only: (i) as a reward source (above $r_t^{\text{KL}}$); (ii) as the reference distribution in the explicit KL penalty $D_{\text{KL}}(\pi_\theta\|\pi_T)$ (this term is closed-form differentiable, §4.1 implementation).</p>
+<p>Final loss: $$\mathcal{L} = -\mathbb{E}\!\left[\sum_t \min(\rho_t A_t, \text{clip}(\rho_t,1-\epsilon,1+\epsilon)A_t)\right] + \beta\, D_{\text{KL}}(\pi_\theta\,\|\,\pi_T).$$</p>
+<p>Advantage $A$ uses GRPO's group-internal z-score; no critic needed. Code in §4.5.</p>
+</details>
+<details>
+<summary><strong>L2-4: What is vOPD's control variate? Why is it "free"?</strong></summary>
+<p><strong>Answer</strong>: vOPD ("KL for a KL", a control-variate idea frequently cited in the 2026 Survey) is applied to Route B (sampled-token REINFORCE estimator) to reduce variance. For a single sampled $y_t \sim \pi_\theta$, the token-level reward $\hat r_t = \log\pi_\theta(y_t|s_t) - \log\pi_T(y_t|s_t)$ (<strong>must be detached</strong>), and the baseline is $B(s_t) = D_{\text{KL}}(\pi_\theta\,\|\,\pi_T)(s_t)$ (also detached):</p>
+<p>$$\nabla_\theta L \approx \mathbb{E}\!\big[\nabla\log\pi_\theta(y_t|s_t)\cdot (\hat r_t - B(s_t))\big].$$</p>
+<p>$B(s_t)$ is the conditional expectation of $\hat r_t$ under $y_t \sim \pi_\theta(\cdot|s_t)$; adding it <strong>preserves unbiasedness</strong> (because $\mathbb{E}_y[\nabla\log\pi_\theta(y)\cdot B(s_t)] = B(s_t)\cdot\mathbb{E}[\nabla\log\pi_\theta] = 0$) and <strong>usually significantly reduces variance</strong>. The strict minimum-variance baseline is the score-norm-weighted $\mathbb{E}[\|g\|^2 r]/\mathbb{E}[\|g\|^2]$ (generally not equal to the conditional mean), but the conditional mean works well enough in practice. <strong>"Free"</strong> means $B(s_t)$ is the full-vocab closed-form KL computed synchronously with the student forward (same logits → softmax → sum), requiring no extra critic / inference.</p>
+<div class="callout callout-warn"><div class="callout-title">Warning</div><p>Two errors that occur over and over in implementation: (a) both <code>r_hat</code> and <code>baseline</code> must be <code>.detach()</code>, otherwise unbiasedness fails and the gradient is distorted; (b) the surrogate sign is <strong>positive</strong>: because $\nabla D_{\text{KL}} = \mathbb{E}[\nabla\log\pi_\theta\cdot\hat r]$, we set <code>loss = +E[\log\pi_\theta\cdot(\hat r - B).detach()]</code>, then <code>∇loss = +∇D_{\text{KL}}</code>, and the optimizer step <code>θ -= η∇L</code> performs KL descent. <strong>A negative sign would cause KL to increase</strong> — code in §4.4.</p></div>
+</details>
+<details>
+<summary><strong>L2-5: What are the differences between Qwen3's OPD recipe and Thinking Machines blog's implementation?</strong></summary>
+<p><strong>Answer</strong>: <strong>Qwen3</strong> uses two stages of off-policy SFT cold start + on-policy distillation, targeting end-to-end small-model building; <strong>the Thinking Machines blog</strong> emphasizes OPD as the cheap RL alternative, with the core experiment being "reproduce RL's AIME'24 gain with OPD, saving 9-30× FLOPs". On technical details: Qwen3 simultaneously distills /think and /no_think modes (dual-mode logits); Thinking Machines uses Tinker with advantage formally injecting KL as negative reward (OPD-RL perspective). Both are essentially reverse KL on student rollouts; the differences lie in multi-task / multi-mode distillation handling.</p>
+</details>
+<details>
+<summary><strong>L2-6: Trade-off between "sampled-token KL" and "full-vocab KL" in OPD?</strong></summary>
+<p><strong>Answer</strong>: (a) <strong>sampled-token (REINFORCE / importance-sampling, Route B)</strong>: reward uses $G_t = \log \pi_\theta(y_t) - \log \pi_T(y_t)$.detach() (query the teacher for one log-prob only), grad = $\nabla\log\pi_\theta(y_t)\cdot G_t$; cheap but high variance. <strong>Both MiniLLM (Gu 2024) and Thinking Machines Tinker open-source implementations are in this sampled-token PG/IS form</strong> (Tinker <code>train_on_policy.py</code> uses <code>loss_fn=&quot;importance_sampling&quot;</code> + <code>incorporate_kl_penalty</code>; MiniLLM uses single-step decomposition + length norm + teacher-mixed sampling and other tricks to stabilize variance). (b) <strong>full-vocab (Route A)</strong>: loss = $\sum_v \pi_\theta(v)(\log \pi_\theta(v) - \log \pi_T(v))$, direct autograd; zero variance but requires teacher full logits + whole-vocab memory; GKD and similar conceptual derivations often use this form as a pedagogical starting point, and it is also the simplest engineering implementation when teacher full logits are available. <strong>Both are equivalent in expectation</strong>, with the trade-off: Route A has zero variance and one-line PyTorch but needs full logits + vocab memory; Route B fits the PPO/GRPO sampled-token interface, supports black-box teacher, saves vocab memory, but needs a control variate (§4.4) to reduce variance.</p>
+</details>
+<details>
+<summary><strong>L2-7: Why does OPD work better than off-policy KD on long-CoT tasks?</strong></summary>
+<p><strong>Answer</strong>: on long-CoT, the gap between the student's own rollout state distribution and the teacher rollout state distribution is larger (error accumulation $O(L^2)$). With off-policy KD, the student sees only teacher prefixes (smooth, correct) during training; at inference it encounters its own erroneous prefixes that it has never seen — errors compound exponentially. OPD trains directly on the student's own erroneous prefixes, with the teacher supervising "how I would recover" — directly training the "error recovery ability".</p>
+</details>
+<details>
+<summary><strong>L2-8: If the student-teacher gap is huge (e.g., 1.5B vs 671B), does OPD fail? How to mitigate?</strong></summary>
+<p><strong>Answer</strong>: <strong>yes, it fails</strong> — the student's samples are very likely to fall in regions of extremely low teacher probability, so the sampled-token KL is very small but semantically wrong ("the student looks endorsed by the teacher but is actually just rambling"). Mitigate: (1) <strong>off-policy SFT warm start</strong>: first have the student SFT on teacher trajectories to bring state distributions closer, then OPD; (2) <strong>intermediate teacher</strong>: use a medium-sized teacher (e.g., 70B) as a bridge; (3) <strong>curriculum</strong>: start short, gradually lengthen; (4) <strong>temperature scheduling</strong>: high student temperature early to enlarge exploration.</p>
+</details>
+<details>
+<summary><strong>L2-9: Are OPD and R1-Distill the same kind of method?</strong></summary>
+<p><strong>Answer</strong>: <strong>No</strong>. R1-Distill is <strong>off-policy</strong> SFT distillation — the R1 teacher offline generates 800K trajectories, and the student does token-level cross-entropy on this data, <strong>without student rollouts or KL signal</strong>. OPD is on-policy + teacher KL. The two are complementary: R1-Distill can serve as cold-start init for OPD (first imitate teacher style), then OPD eliminates exposure bias.</p>
+</details>
+<details>
+<summary><strong>L2-10: How to diagnose whether OPD training is healthy? What are the key monitoring quantities?</strong></summary>
+<p><strong>Answer</strong>: monitor five things: (1) <strong>per-token reverse KL</strong> — should decrease monotonically, but not hit 0 (hitting 0 = student fully matches teacher, possibly overfitting); (2) <strong>rollout length / truncation rate</strong> — truncation rate &lt; 5%, otherwise length collapse; (3) <strong>token entropy</strong> — decreasing but should not approach 0 (mode collapse); (4) <strong>pass@1 vs pass@N (N&gt;1)</strong> — pass@1 rising while pass@64 falling = diversity collapse; (5) <strong>val accuracy on held-out</strong> — this is the ultimate signal; stop immediately on spike.</p>
+</details>
+<h3 id="l3-top-labs-5-questions-research--algorithm-lead">L3 top labs (5 questions, research / algorithm lead)</h3>
+<details>
+<summary><strong>L3-1: Unify OPD with RLHF / GRPO from a KL-constrained RL perspective.</strong></summary>
+<p><strong>Answer</strong>: KL-constrained RL objective: $$\max_\theta\, \mathbb{E}_{y \sim \pi_\theta}[R(x, y)] - \beta\, \mathbb{E}_{y \sim \pi_\theta}\!\big[D_{\text{KL}}(\pi_\theta \,\|\, \pi_{\text{ref}})\big]$$</p>
+<ul><li><strong>RLHF / PPO</strong>: $R$ = RM scalar reward, $\pi_{\text{ref}}$ = SFT init, small $\beta$</li><li><strong>GRPO</strong>: same as RLHF, but advantage uses group-normalization instead of GAE</li><li><strong>OPD</strong>: $R \equiv 0$ (no external reward), $\pi_{\text{ref}} = \pi_T$ (reference = teacher), $\beta = 1$</li><li><strong>OPD + GRPO</strong> (production standard): $R$ = outcome verifier + dense teacher KL reward, $\pi_{\text{ref}} = \pi_T$</li></ul>
+<p>The Survey (arXiv 2604.00626) collectively calls this "$f$-divergence minimization on student rollouts"; OPD is the $R \equiv 0$ special case, RLHF is the $\beta \to 0$ special case, and DPO is the closed-form $R$ + offline special case.</p>
+</details>
+<details>
+<summary><strong>L3-2: What are the known theoretical convergence results for OPD?</strong></summary>
+<p><strong>Answer</strong>: core known results (as of 2026-05): (1) <strong>Fixed point</strong>: $L_{\text{OPD}} = 0$ iff $\pi_\theta = \pi_T$ on the support of $\pi_\theta$ (reverse KL property, and alignment is only on the support the student visits). So OPD cannot make the student "surpass" the teacher — but it can let the student, within its own capacity, maximally imitate one mode of the teacher; (2) <strong>Convergence</strong>: under convex policy parametrization assumptions, policy gradient converges to a local minimum of reverse KL (Geist &amp; Pietquin 2014 style), but LLM's non-convex parametrization has no global guarantee; (3) <strong>Rethinking OPD</strong> (arXiv 2604.13016) points out that OPD can "surpass the teacher" on reasoning tasks — this seems contradictory, but the explanation is that the teacher logits contain dark knowledge (e.g., self-correction signal), and the student via on-policy training activates capabilities that even the teacher cannot reliably demonstrate. This is the key distinction between OPD and traditional imitation learning.</p>
+<p><strong>[needs-verify]</strong> The "surpasses teacher" phenomenon is reported inconsistently across different papers; the details in the Rethinking OPD original need checking.</p>
+</details>
+<details>
+<summary><strong>L3-3: How is multi-teacher OPD done? What does the DeepSeek-V4 report mean by "OPD replaces mixed RL"?</strong></summary>
+<p><strong>Answer</strong>: multi-teacher OPD weights-ensembles the logits of multiple specialist teachers at each token: $$\pi_T(v|s_t) = \sum_k w_k(s_t) \cdot \pi_{T_k}(v|s_t)$$ The weights $w_k$ can be fixed (e.g., math teacher weighted high on math tasks), context-dependent (routing-style), or learned. In DeepSeek-V4's model consolidation stage, multi-teacher OPD with math / code / chat / reasoning specialist teachers completely replaces the previous mixed RL (multi-RM weighting). The advantage is <strong>dense supervision at each token</strong>, significantly more sample efficient than the multi-RM mixed RL.</p>
+<p><strong>[needs-verify]</strong> Specific multi-teacher implementation details of DeepSeek-V4 (weight choice, whether token-level routing) need checking in the original tech report; currently public materials are mainly secondary source citations.</p>
+</details>
+<details>
+<summary><strong>L3-4: OPD's "process reward" perspective and its relation to PRM? Can the two be fused?</strong></summary>
+<p><strong>Answer</strong>: viewing the per-token teacher KL of OPD as a "process reward": every token (on sampled-token / behavior-policy rollouts) has a dense reward $r_t = \log\pi_T(y_t|s_t) - \log\pi_\theta^{\text{old}}(y_t|s_t) = -\log\!\frac{\pi_\theta^{\text{old}}(y_t|s_t)}{\pi_T(y_t|s_t)}$ (consistent with §3 / §4.5 OPD-GRPO; the "old" superscript denotes the behavior-policy log-prob recorded during rollout, avoiding the misreading $-\log\pi_\theta/\pi_T$). This is conceptually consistent with PRM (process reward model, Lightman 2023 "Let's Verify Step by Step") — both are dense rather than sparse supervision. The difference: PRM is step-level (one 0/1 per reasoning step), OPD is token-level (one KL value per token). <strong>Fusion approaches</strong>: (1) step-level reward = $\sum_{t \in \text{step}_k} r_t^{\text{OPD}} + \lambda \cdot r_k^{\text{PRM}}$; (2) use PRM as a trajectory filter (only PRM-high trajectories enter OPD training); (3) use OPD to distill a PRM (train process-level verifier with dense teacher signal). Academically this is active research in 2026.</p>
+<p><strong>[needs-verify]</strong> "OPD + PRM fusion" specific papers and experimental results are not yet complete; the schemes above are reasonable extrapolations from combining multi-source materials.</p>
+</details>
+<details>
+<summary><strong>L3-5: From an information-theoretic perspective, analyze why OPD can be 9-30× more sample efficient than RL.</strong></summary>
+<p><strong>Answer</strong>: consider trajectory $y$ of length $N$, vocab $V$. Per trajectory:</p>
+<ul><li><strong>RL outcome reward</strong>: 1 scalar, at most $\log_2 V_R$ bits ($V_R$ = reward discretization; binary reward $\log_2 2 = 1$ bit; real-valued about $\log_2 1000 \approx 10$ bits)</li><li><strong>OPD per-token teacher KL (sampled)</strong>: one $\log \pi_T(y_t)$ value per token, about $\log_2 V \approx 17$ bits (typical vocab 100K-128K); trajectory totals $N \cdot 17$ bits</li><li><strong>OPD per-token full KL</strong>: full vocab distribution per token; theoretical upper bound $\log_2 V$ bits per token (but actual information depends on teacher distribution entropy)</li></ul>
+<p>bit-rate ratio: OPD / RL ≈ $N \cdot 17 / 10 \approx N$. On long-CoT tasks ($N = 2K$-$8K$), the supervision information OPD provides is 200-1000× of RL's — this provides an information-theoretic explanation of the 9-30× sample efficiency reported by Thinking Machines (actual efficiency is bounded by student capacity / teacher quality, not reaching the information-theoretic upper bound).</p>
+<p><strong>caveat</strong>: this is an upper-bound argument — actual sample efficiency is also affected by gradient noise, teacher-student gap, optimizer, etc. OPD's advantage on simple tasks is usually under 10×; only on long-horizon complex tasks does it approach 30×.</p>
+</details>
+<h2 id="a-appendix">§A Appendix</h2>
+<h3 id="a1-sanity-check-verifying-your-opd-implementation-via-convergence">A.1　Sanity-check: verifying your OPD implementation via convergence</h3>
+<p>After implementing OPD, do these three micro-tests to confirm the loss is correct:</p>
+<pre><code class="language-python"># Test 1: student == teacher → loss should be ~0
+student.load_state_dict(teacher.state_dict())
+loss, _ = per_token_reverse_kl_loss(student, teacher, ids, mask)
+assert abs(loss.item()) &lt; 1e-4, f&quot;identical model should give zero KL, got {loss}&quot;
+
+# Test 2: student random init → loss &gt; 0
+student = init_random_model(...)
+loss, _ = per_token_reverse_kl_loss(student, teacher, ids, mask)
+assert loss.item() &gt; 0.5, f&quot;random student should give positive KL, got {loss}&quot;
+
+# Test 3: loss should decrease over training
+losses = []
+for step in range(100):
+    loss = opd_train_step(student, teacher, ...)
+    losses.append(loss)
+assert losses[-1] &lt; losses[0], &quot;OPD should reduce KL over training&quot;</code></pre>
+<h3 id="a2-common-mistakes-and-correct-practices">A.2　Common mistakes and correct practices</h3>
+<table><thead><tr><th>Wrong practice</th><th>Symptom</th><th>Correct practice</th></tr></thead><tbody><tr><td>Compute OPD loss on teacher trajectories</td><td>Degenerates to off-policy KD, losing on-policy value</td><td>Student must rollout on its own</td></tr><tr><td>KL direction inverted (forward KL written as reverse KL)</td><td>Mode-covering, mediocre outputs</td><td>Reverse KL is $\pi_\theta$ first</td></tr><tr><td>Mask includes prompt tokens in loss</td><td>KL signal on prompt tokens is meaningless</td><td><code>action_mask</code> only flags student-generated tokens</td></tr><tr><td>Use sum reduction without length normalization</td><td>Length inflation training collapses</td><td>per-token average (divide by mask.sum())</td></tr><tr><td>Teacher in train mode (dropout on)</td><td>Logits unstable, loss noisy</td><td>Teacher must be in <code>.eval()</code> + <code>torch.no_grad()</code></td></tr><tr><td>Student rollout uses greedy decode</td><td>Trajectory diversity too low; OPD cannot learn robustness</td><td>Sampling with temperature ≥ 1.0</td></tr><tr><td>Not monitoring truncation rate</td><td>Silent failure after hitting max_length</td><td>Monitor; raise max_new_tokens if &gt; 5%</td></tr></tbody></table>
+<h3 id="a3-core-paper-and-resource-list">A.3　Core paper and resource list</h3>
+<p><strong>Core OPD papers</strong>:</p>
+<ul><li>MiniLLM (Gu et al. 2023, ICLR 2024) — arXiv 2306.08543</li><li>GKD: On-Policy Distillation of Language Models (Agarwal et al. 2023, ICLR 2024) — arXiv 2306.13649</li><li>A Survey of On-Policy Distillation for LLMs (Song &amp; Zheng 2026) — arXiv 2604.00626</li><li>Rethinking On-Policy Distillation (2026) — arXiv 2604.13016</li><li>KL for a KL (vOPD, 2026) — arXiv 2605.07865</li><li>Black-Box On-Policy Distillation (2026) — arXiv 2511.10643</li><li>Decoupling KL and Trajectories (2026) — arXiv 2605.16826</li></ul>
+<p><strong>Industry tech reports</strong>:</p>
+<ul><li>Qwen3 Technical Report (Qwen Team 2025-05) — arXiv 2505.09388 (§3.2 OPD recipe)</li><li>DeepSeek-R1 (DeepSeek 2025-01) — arXiv 2501.12948 (off-policy distillation series)</li></ul>
+<p><strong>Blogs / code</strong>:</p>
+<ul><li>Thinking Machines Lab — "On-Policy Distillation" blog (Lu et al. 2025-10-27) — <code>thinkingmachines.ai/blog/on-policy-distillation/</code></li><li>Tinker Cookbook — <code>github.com/thinking-machines-lab/tinker-cookbook/tree/main/tinker_cookbook/recipes/distillation</code></li><li>TRL GKD Trainer — <code>huggingface.co/docs/trl/gkd_trainer</code></li><li>Awesome OPD list — <code>github.com/thinkwee/AwesomeOPD</code>, <code>github.com/nick7nlp/Awesome-LLM-On-Policy-Distillation</code></li></ul>
+<p><strong>Related foundations</strong>:</p>
+<ul><li>Hinton, Vinyals, Dean — "Distilling the Knowledge in a Neural Network" (2015) — arXiv 1503.02531</li><li>Sanh et al. — "DistilBERT" (2019) — arXiv 1910.01108</li><li>Kim &amp; Rush — "Sequence-Level Knowledge Distillation" (EMNLP 2016) — arXiv 1606.07947</li><li>Bagnell — "Reinforcement Learning and Imitation Learning" (theoretical foundation for exposure bias)</li><li>DeepSeekMath GRPO (2024) — arXiv 2402.03300</li><li>DPO (Rafailov et al. NeurIPS 2023) — arXiv 2305.18290</li></ul>
+<h3 id="a4-needs-verify-index">A.4　[needs-verify] index</h3>
+<p>The following items in this cheat sheet are marked <strong>[needs-verify]</strong>; we recommend cross-checking against the original papers / tech reports before and after interviews:</p>
+<ol><li><strong>L3-2 "OPD surpasses teacher"</strong>: the specific setting and magnitude reported by Rethinking OPD (arXiv 2604.13016)</li><li><strong>L3-3 DeepSeek-V4 multi-teacher OPD implementation details</strong>: weight choice strategy, whether token-level routing</li><li><strong>L3-4 "OPD + PRM fusion"</strong>: as of 2026-05 active research; no single authoritative paper that integrates the two yet</li><li><strong>§6.2 Thinking Machines numbers</strong>: "9-30× FLOPs savings" is from blog secondary sources; original blog numbers and specific settings should be checked</li><li><strong>§5.2 timeline</strong>: 2025-2026 multiple OPD-related arXiv paper IDs (such as the 2604.* series) are from 2026 Q1-Q2 submissions/preprints; some IDs may be updated to new versions or renumbered after submission</li><li><strong>OPD specific adoption details on Qwen3 / Gemma 2 / MiMo</strong>: most information comes from the Thinking Machines blog and the Qwen3 paper §3.2, but the distillation specifics of Gemma 2 / MiMo need cross-checking in their respective tech reports</li></ol>
+<h3 id="a5-terminology-quick-reference">A.5　Terminology quick reference</h3>
+<table><thead><tr><th>Chinese</th><th>English</th><th>Meaning</th></tr></thead><tbody><tr><td>在线策略蒸馏</td><td>On-Policy Distillation (OPD)</td><td>student does KL distillation on its own rollouts</td></tr><tr><td>离线蒸馏</td><td>Off-Policy Distillation</td><td>student distills on teacher / dataset data</td></tr><tr><td>暴露偏置</td><td>Exposure Bias</td><td>autoregressive train/test distribution mismatch</td></tr><tr><td>反向 KL</td><td>Reverse KL</td><td>$D(\pi_\theta \,\mid \, \pi_T)$, mode-seeking</td></tr><tr><td>正向 KL</td><td>Forward KL</td><td>$D(\pi_T \,\mid \, \pi_\theta)$, mode-covering</td></tr><tr><td>模式寻找</td><td>Mode-Seeking</td><td>lock onto one mode, sharp output</td></tr><tr><td>模式覆盖</td><td>Mode-Covering</td><td>cover all modes, averaged output</td></tr><tr><td>教师强制</td><td>Teacher Forcing</td><td>use ground-truth prefix during training</td></tr><tr><td>控制变量</td><td>Control Variate</td><td>baseline term used for variance reduction</td></tr><tr><td>截断坍塌</td><td>Truncation Collapse</td><td>rollouts grow longer over training, hitting max_length leads to collapse</td></tr><tr><td>局部可教性塌缩</td><td>Local Teachability Collapse</td><td>nothing left for teacher to teach on the trajectory's second half</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">caveat</div><p>OPD as an independent technical term for LLM post-training only became widespread in the <strong>second half of 2025</strong> (Qwen3 + Thinking Machines blog). Before that, the same method had been proposed in MiniLLM (2023) and GKD (2023). So "OPD is a new method" is strictly inaccurate — it is an old method that was renamed and industrialized at scale, benefiting from the reasoning model era's hunger for dense supervision. This historical context is often asked in L3 interviews; please distinguish between "year of method first proposed" and "year of term popularization".</p></div>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/llm_opd_tutorial_en.md</code> ·
+  SHA256 <code>70c85782439f</code> ·
+  generated at 2026-05-19 19:03 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

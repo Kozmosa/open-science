@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Generation Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/3d_generation_tutorial_en.md">
+<meta name="aris:source-sha256" content="9caec9665d59cc27afa1d1593863904b12b36b74df9446dff5440621e7923272">
+<meta name="aris:generated-at" content="2026-05-19 18:50 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-intuitive-comparison-of-the-three-representations">§1 Intuitive comparison of the three representations</a>
+</li>
+<li><a href="#2-nerf-derivation-of-volume-rendering-must-know">§2 NeRF: derivation of volume rendering (must-know)</a>
+<ul>
+<li><a href="#21-continuous-volume-rendering-equation">2.1　Continuous volume-rendering equation</a></li>
+<li><a href="#22-why-this-form--derivation-from-physics">2.2　Why this form? — derivation from physics</a></li>
+<li><a href="#23-discretization-alpha-compositing-must-derive">2.3　Discretization: $\alpha$-compositing (**must-derive**)</a></li>
+<li><a href="#24-positional-encoding-gammap-representing-high-frequency-detail">2.4　Positional encoding $\gamma(p)$: representing high-frequency detail</a></li>
+<li><a href="#25-hierarchical-sampling-coarse--fine">2.5　Hierarchical sampling: coarse → fine</a></li>
+<li><a href="#26-nerf-training-code-core-30-lines">2.6　NeRF training code (core 30 lines)</a></li>
+<li><a href="#27-mip-nerf--mip-nerf-360-anti-aliasing">2.7　Mip-NeRF / Mip-NeRF 360 (anti-aliasing)</a></li>
+<li><a href="#28-neus--volsdf-volume-rendering--sdf-key-to-mesh-extraction">2.8　NeuS / VolSDF: volume rendering + SDF (key to mesh extraction)</a></li>
+</ul>
+</li>
+<li><a href="#3-instant-ngp-5-oom-speedup-must-know">§3 Instant-NGP: 5+ OOM speedup (must-know)</a>
+<ul>
+<li><a href="#31-core-idea-multi-resolution-hash-grid">3.1　Core idea: multi-resolution hash grid</a></li>
+<li><a href="#32-hash-function">3.2　Hash function</a></li>
+<li><a href="#33-how-are-hash-collisions-disambiguated-l3-high-frequency-follow-up">3.3　How are hash collisions disambiguated? (**L3 high-frequency follow-up**)</a></li>
+<li><a href="#34-instant-ngp-training-equations">3.4　Instant-NGP training equations</a></li>
+<li><a href="#35-plenoxels--tensorf-contemporary-explicit-methods">3.5　Plenoxels / TensoRF (contemporary explicit methods)</a></li>
+</ul>
+</li>
+<li><a href="#4-3d-gaussian-splatting-explicit-differentiable-rasterization-current-workhorse">§4 3D Gaussian Splatting: explicit differentiable rasterization (**current workhorse**)</a>
+<ul>
+<li><a href="#41-scene-representation">4.1　Scene representation</a></li>
+<li><a href="#42-3d--2d-projection-jacobian-l3-must-derive">4.2　3D → 2D projection Jacobian (**L3 must-derive**)</a></li>
+<li><a href="#43-differentiable-rasterization-tile-based-front-to-back-alpha-blending">4.3　Differentiable rasterization: tile-based front-to-back alpha-blending</a></li>
+<li><a href="#44-3dgs-forward-pass-pytorch-reference-implementation">4.4　3DGS forward pass (PyTorch reference implementation)</a></li>
+<li><a href="#45-adaptive-density-control-frequent-interview-topic">4.5　Adaptive density control (**frequent interview topic**)</a></li>
+<li><a href="#46-2dgs--surfels-surface-aligned">4.6　2DGS / Surfels (surface-aligned)</a></li>
+<li><a href="#47-dynamic-4dgs">4.7　Dynamic 4DGS</a></li>
+</ul>
+</li>
+<li><a href="#5-mesh-extraction-marching-cubes--dmtet">§5 Mesh extraction: Marching Cubes / DMTet</a>
+<ul>
+<li><a href="#51-marching-cubes-classic-must-know">5.1　Marching Cubes (**classic must-know**)</a></li>
+<li><a href="#52-differentiable-dmtet--flexicubes-end-to-end-mesh-learning">5.2　Differentiable: DMTet / FlexiCubes (end-to-end mesh learning)</a></li>
+</ul>
+</li>
+<li><a href="#6-sds-loss-supervising-3d-with-2d-diffusion-dreamfusion-family">§6 SDS Loss: supervising 3D with 2D diffusion (DreamFusion family)</a>
+<ul>
+<li><a href="#61-problem-setup">6.1　Problem setup</a></li>
+<li><a href="#62-setup">6.2　Setup</a></li>
+<li><a href="#63-sds-gradient-derivation-l3-must-know">6.3　SDS gradient derivation (**L3 must-know**)</a></li>
+<li><a href="#64-why-does-dropping-the-jacobian-still-work">6.4　Why does dropping the Jacobian still work?</a></li>
+<li><a href="#65-sds-side-effects-over-saturation--mode-collapse--janus">6.5　SDS side effects: over-saturation / mode collapse / Janus</a></li>
+<li><a href="#66-sds-code-core-30-lines">6.6　SDS code (core 30 lines)</a></li>
+<li><a href="#67-vsd-variational-sds-prolificdreamer-neurips-2023-spotlight">6.7　VSD: variational SDS (**ProlificDreamer**, NeurIPS 2023 Spotlight)</a></li>
+<li><a href="#68-sds-derivative-family-mesh--3dgs--sds">6.8　SDS derivative family: mesh / 3DGS + SDS</a></li>
+</ul>
+</li>
+<li><a href="#7-single-image--few-view-3d-generation">§7 Single-image / Few-view 3D generation</a>
+<ul>
+<li><a href="#71-zero-1-to-3-paradigm-novel-view-via-diffusion">7.1　Zero-1-to-3 paradigm (novel view via diffusion)</a></li>
+<li><a href="#72-one-2-3-45--instantmesh--triposr--stable-fast-3d">7.2　One-2-3-45 / InstantMesh / TripoSR / Stable Fast 3D</a></li>
+<li><a href="#73-lrm-triplane-representation-high-frequency-interview-topic">7.3　LRM Triplane representation (**high-frequency interview topic**)</a></li>
+</ul>
+</li>
+<li><a href="#8-3d-foundation-models-the-2024-open-source-wave">§8 3D Foundation Models (the 2024 open-source wave)</a>
+<ul>
+<li><a href="#81-trellis-microsoft-2024-open-source">8.1　Trellis (Microsoft 2024, open source)</a></li>
+<li><a href="#82-hunyuan3d-1---2-tencent-2024-25-open-source">8.2　Hunyuan3D-1 / -2 (Tencent 2024-25, open source)</a></li>
+<li><a href="#83-clay-zhang-2024-siggraph">8.3　CLAY (Zhang 2024 SIGGRAPH)</a></li>
+<li><a href="#84-comparison-table">8.4　Comparison table</a></li>
+</ul>
+</li>
+<li><a href="#9-complexity--resource-comparison">§9 Complexity / resource comparison</a>
+</li>
+<li><a href="#10-comparison-with-related-methods--embodied-ai-applications">§10 Comparison with related methods &amp; Embodied AI applications</a>
+<ul>
+<li><a href="#101-key-differences-between-3d-and-2d-generation">10.1　Key differences between 3D and 2D generation</a></li>
+<li><a href="#102-embodied-ai--ar--vr-practical-routes">10.2　Embodied AI / AR / VR practical routes</a></li>
+</ul>
+</li>
+<li><a href="#11-engineering-practice--common-footguns">§11 Engineering practice &amp; common footguns</a>
+<ul>
+<li><a href="#111-colmap--sfm-preprocessing-essential-for-reconstruction">11.1　COLMAP / SfM preprocessing (essential for reconstruction)</a></li>
+<li><a href="#112-numerical-stability-general-nerf3dgs">11.2　Numerical stability (general NeRF/3DGS)</a></li>
+<li><a href="#113-multi-machine-distributed--evaluation-metrics">11.3　Multi-machine distributed &amp; evaluation metrics</a></li>
+</ul>
+</li>
+<li><a href="#12-25-frequently-asked-interview-questions">§12 25 frequently-asked interview questions</a>
+<ul>
+<li><a href="#l1-must-know-asked-at-every-3d--vision-role">L1 must-know (asked at every 3D / vision role)</a></li>
+<li><a href="#l2-advanced-research-oriented-roles">L2 advanced (research-oriented roles)</a></li>
+<li><a href="#l3-top-lab-top-conference--industry-research-roles">L3 top-lab (top-conference / industry research roles)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-full-code-skeleton--references">§A Appendix: full code skeleton + references</a>
+<ul>
+<li><a href="#a1-complete-from-scratch-code-includes">A.1　Complete from-scratch code includes</a></li>
+<li><a href="#a2-key-papers-reading-list">A.2　Key papers reading list</a></li>
+<li><a href="#a3-common-embodied-ai--ar--vr-follow-ups">A.3　Common Embodied AI / AR / VR follow-ups</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>3D Generation Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/3d_generation_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>9caec9665d59</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 18:50 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">9 sentences to nail 3D Generation</div><p>interview core for Embodied AI / AR / VR roles (see §1–§11 for derivations).</p></div>
+<ol><li><strong>Three representations</strong>: <strong>NeRF</strong> (implicit neural field + volume rendering), <strong>3DGS</strong> (explicit Gaussian point cloud + rasterization), <strong>Mesh / SDF</strong> (explicit surface / implicit distance field). Sweet spot for quality vs speed: 3DGS (Kerbl 2023 SIGGRAPH Best Paper).</li><li><strong>NeRF core equation</strong>: $C(\mathbf{r}) = \int_{t_n}^{t_f} T(t)\sigma(\mathbf{r}(t))\mathbf{c}(\mathbf{r}(t),\mathbf{d})\,dt$, where $T(t) = \exp\!\left(-\int_{t_n}^{t}\sigma(\mathbf{r}(s))\,ds\right)$ is the transmittance. Discretization yields $\alpha$-compositing: $C \approx \sum_i T_i (1-e^{-\sigma_i\delta_i})\mathbf{c}_i$.</li><li><strong>Instant-NGP</strong> (Müller 2022 SIGGRAPH): <strong>multi-resolution hash grid</strong> + tiny MLP, 5+ OOM speedup; hash collisions are automatically disambiguated by the MLP over colliding entries (suppressed jointly by the loss and multi-scale redundancy).</li><li><strong>3DGS core</strong>: scene represented as a set of 3D Gaussians $\{\mu_i, \Sigma_i, \alpha_i, c_i(\mathbf{d})\}$, <strong>differentiable rasterization</strong> projects the 3D covariance to 2D via Jacobian $J$: $\Sigma' = J W \Sigma W^\top J^\top$, then performs front-to-back alpha-blending after depth sorting.</li><li><strong>DreamFusion SDS</strong> (Poole et al. 2022 arXiv → ICLR 2023 Outstanding): supervise a 3D representation using a pretrained 2D diffusion: $\nabla_\theta \mathcal{L}_\text{SDS} = \mathbb{E}_{t,\epsilon}[w(t)(\epsilon_\phi(x_t;y,t)-\epsilon)\,\partial x/\partial \theta]$, <strong>deliberately dropping the U-Net Jacobian</strong> of $x_t$ to make training simulation-free. Price: mode-seeking → over-saturation / Janus.</li><li><strong>VSD</strong> (Wang 2023 NeurIPS, ProlificDreamer): treats the 3D parameters $\theta$ as a random variable $\mu(\theta)$ and <strong>minimizes the KL between the noised rendered image distributions</strong>: $\mathbb{E}_t\big[D_\text{KL}\big(q_\mu^t(x_t|y)\,\|\,p_\phi^t(x_t|y)\big)\big]$. The gradient form is a <strong>relative score</strong> $\nabla_\theta \approx (\epsilon_\phi(x_t;y,t) - \epsilon_\psi(x_t;y,t,\pi))\,\partial x/\partial\theta$, where $\epsilon_\psi$ is a LoRA-finetuned auxiliary score. CFG can drop from 100 to 7.5.</li><li><strong>Single-image / Few-view 3D</strong>: Zero-1-to-3 (Liu 2023 ICCV) uses viewpoint-conditioned diffusion; SyncDreamer / MVDream learn joint multi-view consistency; TripoSR / InstantMesh / Stable Fast 3D push image-to-mesh to ≤3 seconds.</li><li><strong>3D Foundation Models (2024-25 open source)</strong>: <strong>Trellis</strong> (Microsoft 2024) uses structured latent + flow matching; <strong>Hunyuan3D-2</strong> (Tencent 2025) is shape→texture two-stage; <strong>CLAY</strong> (Zhang 2024 SIGGRAPH) uses large-scale latent diffusion + 3DShape2VecSet.</li><li><strong>Embodied AI key applications</strong>: Sim2Real asset generation, NeRF/3DGS as differentiable simulators, language-conditioned 3D affordance. <strong>Common interview crossovers</strong>: NeRF SLAM, Gaussian-Splat scene editing, 3D physics consistency.</li></ol>
+<h2 id="1-intuitive-comparison-of-the-three-representations">§1 Intuitive comparison of the three representations</h2>
+<p>The first multiple-choice question in 3D generation is <strong>representation</strong> — pick the wrong one and the entire downstream pipeline is wasted.</p>
+<table><thead><tr><th></th><th>NeRF (Implicit Field)</th><th>3DGS (Explicit Point)</th><th>Mesh / SDF</th></tr></thead><tbody><tr><td><strong>Storage</strong></td><td>MLP weights $f_\theta(\mathbf{x},\mathbf{d}) \to (\sigma, \mathbf{c})$</td><td>A pile of 3D Gaussians $\{\mu_i, \Sigma_i, \alpha_i, c_i\}$</td><td>Triangle mesh / signed distance</td></tr><tr><td><strong>Rendering</strong></td><td>Ray marching + volume integration (hundreds of ms/frame on GPU)</td><td>Differentiable rasterization (a few ms/frame on GPU)</td><td>Rasterization (real-time)</td></tr><tr><td><strong>Training</strong></td><td>Hundreds of views, hours (vanilla)</td><td>Tens of views, 10-30 min</td><td>Requires mesh + texture optim</td></tr><tr><td><strong>Quality</strong></td><td>SOTA for view synthesis</td><td>On par with or better than NeRF (higher PSNR)</td><td>Limited by polygon resolution</td></tr><tr><td><strong>Editing</strong></td><td>Hard (neural field is not interpretable)</td><td>Easy (points can be moved, deleted, merged)</td><td>Easy (standard DCC pipelines)</td></tr><tr><td><strong>Mesh export</strong></td><td>Hard (needs NeuS / Poisson)</td><td>Medium (2DGS / GSDF / SuGaR)</td><td>Already a mesh</td></tr><tr><td><strong>Downstream fit</strong></td><td>Unfriendly for physical simulation</td><td>Easy to plug into PBR, IsaacSim, URDF</td><td>Standard robot / AR/VR pipeline</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Interview intuition</div><p>Embodied AI leans toward mesh / 3DGS (simulator-friendly); AR/VR depends on scene scale (mesh for small foreground objects, 3DGS for large scenes); SOTA visual reconstruction uses 3DGS. NeRF is now more of a research baseline; industrial deployment is dominated by 3DGS.</p></div>
+<h2 id="2-nerf-derivation-of-volume-rendering-must-know">§2 NeRF: derivation of volume rendering (must-know)</h2>
+<h3 id="21-continuous-volume-rendering-equation">2.1　Continuous volume-rendering equation</h3>
+<p>NeRF (Mildenhall 2020 ECCV <strong>Best Paper Honorable Mention</strong>) represents a scene as a <strong>5D neural field</strong> $f_\theta : (\mathbf{x}, \mathbf{d}) \to (\sigma, \mathbf{c})$:</p>
+<ul><li>Input: 3D position $\mathbf{x} \in \mathbb{R}^3$ + view direction $\mathbf{d} \in \mathbb{S}^2$</li><li>Output: volume density $\sigma \ge 0$ (direction-independent) + color $\mathbf{c} \in \mathbb{R}^3$ (direction-dependent, captures specular reflection)</li></ul>
+<p>For camera ray $\mathbf{r}(t) = \mathbf{o} + t\mathbf{d}$, integrate along $t \in [t_n, t_f]$ to get pixel color:</p>
+<p>$$\boxed{\;C(\mathbf{r}) = \int_{t_n}^{t_f} T(t)\,\sigma(\mathbf{r}(t))\,\mathbf{c}(\mathbf{r}(t),\mathbf{d})\,dt\;}$$</p>
+<p>where <strong>transmittance</strong> (the probability that the ray has not been blocked between $t_n$ and $t$) is</p>
+<p>$$\boxed{\;T(t) = \exp\!\left(-\int_{t_n}^{t}\sigma(\mathbf{r}(s))\,ds\right)\;}$$</p>
+<h3 id="22-why-this-form--derivation-from-physics">2.2　Why this form? — derivation from physics</h3>
+<p>Consider a light ray traveling through a participating medium. Over $[t, t+dt]$:</p>
+<ul><li>Probability of absorption / scattering out of the ray: $\sigma(\mathbf{r}(t))\,dt$</li><li>Color contribution emitted by the medium at this point: $\mathbf{c}(\mathbf{r}(t),\mathbf{d})$</li></ul>
+<p>Let $T(t)$ be the survival probability of the ray from $t_n$ to $t$. From $t \to t + dt$, the survival probability changes as</p>
+<p>$$T(t+dt) = T(t)\,(1 - \sigma\,dt) \;\Rightarrow\; \frac{dT}{dt} = -\sigma(t)\,T(t)$$</p>
+<p>This is a first-order ODE with initial value $T(t_n) = 1$, solving to</p>
+<p>$$T(t) = \exp\!\left(-\int_{t_n}^{t}\sigma(\mathbf{r}(s))\,ds\right)$$</p>
+<p>The color contribution to the pixel at each depth $t$ = <strong>survival probability × absorption probability × local color</strong>:</p>
+<p>$$dC = T(t)\,\sigma(t)\,\mathbf{c}(t)\,dt$$</p>
+<p>Integrating gives $C(\mathbf{r})$.</p>
+<h3 id="23-discretization-alpha-compositing-must-derive">2.3　Discretization: $\alpha$-compositing (<strong>must-derive</strong>)</h3>
+<p>Continuous integration is impossible in practice. Slice $[t_n, t_f]$ into $N$ segments with $\delta_i = t_{i+1} - t_i$, and assume $\sigma, \mathbf{c}$ are constants $\sigma_i, \mathbf{c}_i$ within each segment.</p>
+<p><strong>Within-segment transmittance decay</strong>: on $[t_i, t_{i+1}]$, $T$ satisfies $dT/dt = -\sigma_i T$, so</p>
+<p>$$\frac{T(t_{i+1})}{T(t_i)} = e^{-\sigma_i \delta_i}$$</p>
+<p>This gives <strong>inter-segment transmittance</strong>:</p>
+<p>$$T_i := T(t_i) = \prod_{j=1}^{i-1} e^{-\sigma_j \delta_j} = \exp\!\Big(\!-\!\sum_{j=1}^{i-1}\sigma_j\delta_j\Big)$$</p>
+<p><strong>Within-segment color contribution</strong> (integral, not a simple rectangle):</p>
+<p>$$\int_{t_i}^{t_{i+1}} T(t)\sigma_i\mathbf{c}_i\,dt = T_i\,\mathbf{c}_i \int_0^{\delta_i} \sigma_i e^{-\sigma_i s}\,ds = T_i\,\mathbf{c}_i\,(1 - e^{-\sigma_i\delta_i})$$</p>
+<p>Let $\alpha_i := 1 - e^{-\sigma_i \delta_i}$ (<strong>segment opacity</strong>). Combining yields the discrete NeRF equation:</p>
+<p>$$\boxed{\;C(\mathbf{r}) \approx \sum_{i=1}^{N} T_i\,\alpha_i\,\mathbf{c}_i,\quad T_i = \prod_{j<i}(1-\alpha_j),\quad \alpha_i = 1 - e^{-\sigma_i\delta_i}\;}$$</p>
+<p>This is exactly the graphics <strong>front-to-back alpha-compositing</strong> formula. <strong>Key point</strong>: $\alpha_i = 1 - e^{-\sigma_i\delta_i}$, not $\sigma_i\delta_i$; they are approximately equal when $\sigma_i\delta_i$ is small (first-order Taylor), but differ noticeably when large (saturating to 1 vs diverging linearly).</p>
+<div class="callout callout-good"><div class="callout-title">Physical consistency</div><p>$\sigma \ge 0$ and $\alpha = 1 - e^{-\sigma\delta} \in [0, 1)$ guarantee that composited color <strong>always lies in [0, 1]</strong>; and regardless of how the ray traverses, $\sum T_i\alpha_i \le 1$ (the remaining $T_{N+1}$ goes to background).</p></div>
+<h3 id="24-positional-encoding-gammap-representing-high-frequency-detail">2.4　Positional encoding $\gamma(p)$: representing high-frequency detail</h3>
+<p>MLPs default to a low-frequency bias (NTK analysis); fitting $f(\mathbf{x})$ directly produces blur. NeRF uses <strong>positional encoding</strong> to lift the frequency:</p>
+<p>$$\gamma(p) = \big(\sin(2^0\pi p),\cos(2^0\pi p),\sin(2^1\pi p),\cos(2^1\pi p),\dots,\sin(2^{L-1}\pi p),\cos(2^{L-1}\pi p)\big)$$</p>
+<p>Use $L=10$ for $\mathbf{x}$ (60 dims) and $L=4$ for $\mathbf{d}$ (24 dims). Tancik et al. 2020 "Fourier Features" later gave an NTK explanation: high-frequency $\sin/\cos$ slow the kernel decay, allowing the MLP to learn high frequencies.</p>
+<h3 id="25-hierarchical-sampling-coarse--fine">2.5　Hierarchical sampling: coarse → fine</h3>
+<ul><li><strong>Coarse network</strong>: uniformly sample $N_c = 64$ points, render to get weights $w_i = T_i \alpha_i$</li><li><strong>Fine network</strong>: normalize $w$ to a PDF and importance-sample $N_f = 128$ new points (<strong>importance sampling</strong>: regions near the surface have larger weights and should be densely sampled)</li><li>Composite the final color with all $N_c + N_f$ coarse + fine points</li><li>Loss: $\mathcal{L} = \|C_c - C_\text{gt}\|^2 + \|C_f - C_\text{gt}\|^2$ (supervise both networks; the coarse one provides a well-defined gradient for the sampler)</li></ul>
+<h3 id="26-nerf-training-code-core-30-lines">2.6　NeRF training code (core 30 lines)</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+def positional_encoding(x: torch.Tensor, L: int) -&gt; torch.Tensor:
+    &quot;&quot;&quot; x: [..., D]; returns [..., D*2*L]; NeRF γ(p) does not include the raw x &quot;&quot;&quot;
+    freqs = 2.0 ** torch.arange(L, device=x.device, dtype=x.dtype) * torch.pi
+    args = x.unsqueeze(-1) * freqs                # [..., D, L]
+    pe = torch.stack([torch.sin(args), torch.cos(args)], dim=-1)  # [..., D, L, 2]
+    return pe.flatten(-3)                          # [..., D*2*L]
+
+def volume_render(sigma: torch.Tensor, color: torch.Tensor, t_vals: torch.Tensor,
+                  ray_d: torch.Tensor):
+    &quot;&quot;&quot;
+    NeRF discrete α-compositing
+        sigma:   [B, N]        volume density (&gt;= 0; usually after softplus / ReLU)
+        color:   [B, N, 3]     color
+        t_vals:  [B, N]        t values of sampled points along the ray (monotonically increasing)
+        ray_d:   [B, 3]        ray direction (used to convert Δt → true distance)
+    Returns C: [B, 3], weights: [B, N], depth: [B]
+    &quot;&quot;&quot;
+    # δ_i = t_{i+1} - t_i; pad the last segment with 1e10 (absorbs the remainder out to infinity)
+    deltas = t_vals[..., 1:] - t_vals[..., :-1]
+    delta_far = torch.full_like(deltas[..., :1], 1e10)
+    deltas = torch.cat([deltas, delta_far], dim=-1)            # [B, N]
+    deltas = deltas * torch.norm(ray_d[:, None, :], dim=-1)    # convert t-spacing to real Euclidean distance
+
+    alpha = 1.0 - torch.exp(-sigma * deltas)                   # [B, N]
+    # T_i = ∏_{j&lt;i} (1 - α_j) — use cumprod, shifted by one so T_1 = 1
+    T = torch.cumprod(torch.cat([torch.ones_like(alpha[..., :1]),
+                                 1.0 - alpha + 1e-10], dim=-1), dim=-1)[..., :-1]
+    weights = T * alpha                                        # [B, N]
+    C = (weights[..., None] * color).sum(dim=-2)               # [B, 3]
+    depth = (weights * t_vals).sum(dim=-1)                     # [B]
+    return C, weights, depth</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Numerical footgun</div><p><code>1 - alpha</code> underflows to 0 when alpha approaches 1, after cumprod the entire T is zeroed; the <code>+ 1e-10</code> prevents <code>log(0)</code> during backward. The final <code>δ → 1e10</code> forces background transmittance to 0, otherwise rays through unsampled regions pick up color contamination.</p></div>
+<h3 id="27-mip-nerf--mip-nerf-360-anti-aliasing">2.7　Mip-NeRF / Mip-NeRF 360 (anti-aliasing)</h3>
+<p>Vanilla NeRF aliases badly at low resolution / when zoomed (the same pixel corresponds to cones of different scales, but NeRF treats them as rays).</p>
+<ul><li><strong>Mip-NeRF</strong> (Barron 2021 ICCV): treats the ray as a cone (view frustum), uses <strong>Integrated Positional Encoding (IPE)</strong> — closed-form Gaussian expectation of PE over the cone segment $\mathbb{E}_{\mathbf{x}\sim\mathcal{N}(\mu,\Sigma)}[\gamma(\mathbf{x})]$. For frequency $\omega = 2^k\pi$, $\mathbb{E}[\sin\omega x] = \sin(\omega\mu)\,e^{-\frac{1}{2}\omega^\top\Sigma\,\omega}$; <strong>high-frequency coefficients are automatically attenuated by the cone covariance $\Sigma$ via $e^{-\frac{1}{2}\omega^\top\Sigma\omega}$</strong>, naturally achieving multi-scale behavior.</li><li><strong>Mip-NeRF 360</strong> (Barron 2022 CVPR): for unbounded scenes, applies contraction $f(x) = (2 - 1/\|x\|)\,x/\|x\|$ for $\|x\| > 1$, squashing infinity into a ball; adds distortion / proposal MLP losses.</li></ul>
+<h3 id="28-neus--volsdf-volume-rendering--sdf-key-to-mesh-extraction">2.8　NeuS / VolSDF: volume rendering + SDF (key to mesh extraction)</h3>
+<p>NeRF is density-based; mesh extraction requires choosing a $\sigma$ threshold (unstable). <strong>NeuS</strong> (Wang 2021 NeurIPS) replaces density with <strong>SDF $d(\mathbf{x})$</strong>:</p>
+<p>$$\sigma(t) = \max\!\left(\frac{-\frac{d}{dt}\Phi_s(d(\mathbf{r}(t)))}{\Phi_s(d(\mathbf{r}(t)))},\; 0\right),\quad \Phi_s(d) = (1 + e^{-sd})^{-1}$$</p>
+<p>where $\Phi_s$ is the sigmoid and $s$ is a learnable "sharpness". Properties: the weight peaks at the surface ($d=0$); Marching Cubes can directly extract the mesh (the mesh is $\{d = 0\}$).</p>
+<p><strong>VolSDF</strong> (Yariv 2021 NeurIPS) uses Laplace CDF $\sigma = \alpha\,\Phi(-d/\beta)$, with a similar idea.</p>
+<h2 id="3-instant-ngp-5-oom-speedup-must-know">§3 Instant-NGP: 5+ OOM speedup (must-know)</h2>
+<p>Training a vanilla NeRF on one scene takes 1-2 days. <strong>Instant-NGP</strong> (Müller 2022 SIGGRAPH <strong>Best Paper</strong>) fits a simple scene in 5 seconds.</p>
+<h3 id="31-core-idea-multi-resolution-hash-grid">3.1　Core idea: multi-resolution hash grid</h3>
+<p>Replace "dense grid vs big MLP" with "<strong>sparse hash grid + tiny MLP</strong>".</p>
+<ul><li>$L$ resolution levels (e.g. $L = 16$); the $\ell$-th level has $N_\ell = \lfloor N_\min \cdot b^\ell \rfloor$ grid points, geometric progression ($b \approx 1.38$; typical paper values $N_\min = 16$, $N_\max \in [512, 2048]$ depending on scene size)</li><li>Each level uses a <strong>hash function</strong> to map grid-point coordinates into a fixed-size feature table ($T = 2^{14}$–$2^{24}$, <strong>typically $T = 2^{19} = 524288$</strong>)</li><li>Query point $\mathbf{x}$: trilinear-interpolate at the 8 corner points per level → concatenate to a $L \times F$-dim feature ($F = 2$)</li><li>Feed into a <strong>tiny MLP</strong> (2 layers, hidden 64) to output $\sigma, \mathbf{c}$</li></ul>
+<h3 id="32-hash-function">3.2　Hash function</h3>
+<p>$$\text{hash}(\mathbf{x}) = \bigg(\bigoplus_{i=1}^{d} x_i \cdot \pi_i\bigg) \bmod T$$</p>
+<p>$\pi_i$ are large primes ($\pi_1 = 1, \pi_2 = 2654435761, \pi_3 = 805459861$). $\oplus$ is XOR. This is a <strong>spatial hash</strong>, commonly used in physics-simulation BVHs.</p>
+<h3 id="33-how-are-hash-collisions-disambiguated-l3-high-frequency-follow-up">3.3　How are hash collisions disambiguated? (<strong>L3 high-frequency follow-up</strong>)</h3>
+<p>When $N_\ell^d > T$ (inevitable at fine levels), multiple grid points map to the same entry → collision. Why does it still work?</p>
+<ol><li><strong>Multi-resolution redundancy</strong>: features at coarse levels are unique ($N_\ell^d \le T$); fine levels add detail. The MLP can recover structure from coarse features, with fine levels only responsible for detail.</li><li><strong>Sparsity prevails</strong>: most of space is empty (most voxels in a NeRF scene are background), and meaningful queries concentrate near surfaces, so "valid colliding grid-point pairs" are rare.</li><li><strong>Gradients auto-disambiguate</strong>: during training only grid points near the surface have non-zero gradients (weighted by ray weights). "Colliding entries" in empty regions receive no gradient signal and do not contaminate surface entries.</li><li><strong>MLP post-processing</strong>: the tiny MLP learns a classification/regression on the $L \times F$ concatenated features; surface points with collisions can be disambiguated via <strong>non-colliding features from other levels</strong>.</li></ol>
+<div class="callout callout-info"><div class="callout-title">Interview gold answer</div><p>"Hash collisions seem to break uniqueness, but the <strong>effective region is actually sparse</strong> (a scene's thin surface occupies a tiny fraction of the voxel total), and colliding regions are mostly unsupervised background; even at colliding surface entries, the non-colliding features from other multi-resolution levels + the tiny MLP can still learn a consistent output. This is <strong>'lazy collision resolution'</strong>: rather than pay the cost of perfect hashing, use redundancy + data-driven disambiguation."</p></div>
+<h3 id="34-instant-ngp-training-equations">3.4　Instant-NGP training equations</h3>
+<p>Parameters: hash table $\theta_\text{hash} \in \mathbb{R}^{L \times T \times F}$ + MLP weights $\theta_\text{MLP}$. The loss is still photometric MSE, but the 5-seconds-vs-1-day gap comes from:</p>
+<ul><li><strong>Tiny MLP</strong>: 100× fewer parameters, ~50× faster forward</li><li><strong>Hash table</strong>: sparse activations, cache-friendly</li><li><strong>Fused CUDA kernels</strong>: tiny-cuda-nn fuses forward + backward</li><li><strong>Occupancy grid</strong>: a coarse occupancy grid skips sampling in empty regions, avoiding wasted queries</li></ul>
+<h3 id="35-plenoxels--tensorf-contemporary-explicit-methods">3.5　Plenoxels / TensoRF (contemporary explicit methods)</h3>
+<p><strong>Plenoxels</strong> (Fridovich-Keil 2022 CVPR): pure voxel grid + spherical harmonics SH coefficients + density, <strong>no MLP at all</strong>, directly gradient-descend on voxels; speed similar to Instant-NGP but heavy on VRAM. <strong>TensoRF</strong> (Chen 2022 ECCV): compresses the 4D tensor field via <strong>VM / CP decomposition</strong>, reducing parameters from $O(N^4)$ to $O(N)$ or $O(N^2)$.</p>
+<h2 id="4-3d-gaussian-splatting-explicit-differentiable-rasterization-current-workhorse">§4 3D Gaussian Splatting: explicit differentiable rasterization (<strong>current workhorse</strong>)</h2>
+<p><strong>3DGS</strong> (Kerbl 2023 SIGGRAPH <strong>Best Paper</strong>) addressed NeRF's two big pain points: slow rendering and hard editing.</p>
+<h3 id="41-scene-representation">4.1　Scene representation</h3>
+<p>Scene = a set of 3D Gaussians $\{G_i\}$, each:</p>
+<ul><li><strong>Mean</strong> $\mu_i \in \mathbb{R}^3$ (position)</li><li><strong>Covariance</strong> $\Sigma_i \in \mathbb{R}^{3\times 3}$ (shape), decomposed as $\Sigma = R S S^\top R^\top$ (rotation $R$ + diagonal scaling $S$)</li><li><strong>Opacity</strong> $\alpha_i \in [0, 1]$</li><li><strong>Color</strong> $c_i(\mathbf{d})$ via SH coefficients ($\ell = 3$, 16 coefficients per channel, 48 parameters total)</li></ul>
+<p>Why $R S S R^\top$ and not learn $\Sigma$ directly? — to ensure $\Sigma$ is positive definite. Learning $\Sigma$ as a raw matrix under gradient descent escapes the positive-semidefinite cone; the decomposition only requires $R$ to be orthogonal (parameterized via quaternion $q$) and $S$ to be positive (parameterized via $\exp(s)$), so it is satisfied automatically.</p>
+<h3 id="42-3d--2d-projection-jacobian-l3-must-derive">4.2　3D → 2D projection Jacobian (<strong>L3 must-derive</strong>)</h3>
+<p>To splat a 3D Gaussian to the screen for rasterization, the 3D covariance $\Sigma$ must be projected to a 2D covariance $\Sigma'$.</p>
+<p><strong>Step 1</strong>: World → Camera: rigid transform $W \in SE(3)$. $\Sigma_\text{cam} = W \Sigma W^\top$ (where $W$ takes the rotation part; translation does not affect covariance).</p>
+<p><strong>Step 2</strong>: Camera → Screen: perspective projection is <strong>nonlinear</strong>:</p>
+<p>$$\pi(\mathbf{x}) = \begin{pmatrix} f_x\,x/z \\ f_y\,y/z \end{pmatrix}$$</p>
+<p>The covariance of a nonlinear map is approximated via first-order Taylor. Compute the Jacobian at the mean $\mu_\text{cam} = (x, y, z)$:</p>
+<p>$$J = \frac{\partial \pi}{\partial \mathbf{x}}\bigg|_{\mu_\text{cam}} = \begin{pmatrix}\dfrac{f_x}{z} & 0 & -\dfrac{f_x\,x}{z^2}\\[2pt] 0 & \dfrac{f_y}{z} & -\dfrac{f_y\,y}{z^2}\end{pmatrix} \in \mathbb{R}^{2\times 3}$$</p>
+<p><strong>Step 3</strong>: 2D covariance (<strong>core formula</strong>):</p>
+<p>$$\boxed{\;\Sigma' = J\,W\,\Sigma\,W^\top\,J^\top \in \mathbb{R}^{2\times 2}\;}$$</p>
+<p>Derivation: if $\mathbf{x} \sim \mathcal{N}(\mu, \Sigma)$, then first-order $\pi(\mathbf{x}) \approx \pi(\mu) + J(\mathbf{x} - \mu)$, so $\text{Cov}[\pi(\mathbf{x})] \approx J\,\Sigma_\text{cam}\,J^\top = J W \Sigma W^\top J^\top$. This is the classic corollary of EWA splatting (Zwicker 2001).</p>
+<h3 id="43-differentiable-rasterization-tile-based-front-to-back-alpha-blending">4.3　Differentiable rasterization: tile-based front-to-back alpha-blending</h3>
+<p>The color at pixel $\mathbf{p}$:</p>
+<p>$$C(\mathbf{p}) = \sum_{i \in \mathcal{N}(\mathbf{p})}\,c_i\,\alpha_i\,G_i'(\mathbf{p}) \prod_{j < i}\big(1 - \alpha_j\,G_j'(\mathbf{p})\big)$$</p>
+<p>where $G_i'(\mathbf{p}) = \exp\!\big(-\tfrac{1}{2}(\mathbf{p} - \mu_i')^\top \Sigma_i'^{-1} (\mathbf{p} - \mu_i')\big)$ is the value of the 2D Gaussian at the pixel, and $\mathcal{N}(\mathbf{p})$ are the Gaussians covering $\mathbf{p}$ sorted by depth.</p>
+<p><strong>Key engineering</strong>:</p>
+<ol><li><strong>Tile partitioning</strong>: split the screen into $16\times 16$ tiles, sort Gaussians by depth within each tile, render in parallel</li><li><strong>GPU sort</strong>: radix sort, with composite key <code>(tile_id, depth)</code></li><li><strong>Front-to-back early stop</strong>: exit when accumulated $\prod(1 - \alpha G') < 10^{-4}$</li><li><strong>CUDA kernel</strong>: the authors release <code>diff-gaussian-rasterization</code>; both forward and backward are manual derivatives</li></ol>
+<h3 id="44-3dgs-forward-pass-pytorch-reference-implementation">4.4　3DGS forward pass (PyTorch reference implementation)</h3>
+<pre><code class="language-python">def quat_to_rot(q: torch.Tensor) -&gt; torch.Tensor:
+    &quot;&quot;&quot; q: [N, 4] (w, x, y, z) already normalized; returns R: [N, 3, 3] &quot;&quot;&quot;
+    w, x, y, z = q.unbind(-1)
+    R = torch.stack([
+        1 - 2*(y*y + z*z),   2*(x*y - w*z),     2*(x*z + w*y),
+        2*(x*y + w*z),       1 - 2*(x*x + z*z), 2*(y*z - w*x),
+        2*(x*z - w*y),       2*(y*z + w*x),     1 - 2*(x*x + y*y),
+    ], dim=-1).reshape(-1, 3, 3)
+    return R
+
+def gaussian_splat_forward(
+    means3D: torch.Tensor,        # [N, 3]  Gaussian centers (world)
+    scales: torch.Tensor,          # [N, 3]  log-scale (take exp for true scale)
+    quats: torch.Tensor,           # [N, 4]  quaternion (will be normalized)
+    opacities: torch.Tensor,       # [N, 1]  σ(logit) → α
+    colors: torch.Tensor,          # [N, 3]  (simplified to RGB here, no SH expansion)
+    viewmat: torch.Tensor,         # [4, 4]  world→camera
+    K: torch.Tensor,               # [3, 3]  intrinsics (fx, fy, cx, cy)
+    H: int, W: int,
+):
+    &quot;&quot;&quot; Pedagogical forward: no tile sort / CUDA, just shows the math.
+        Real production uses gsplat / diff-gaussian-rasterization. &quot;&quot;&quot;
+    N = means3D.shape[0]
+    device = means3D.device
+
+    # --- 1. World → Camera ---
+    homo = torch.cat([means3D, torch.ones(N, 1, device=device)], dim=-1)
+    mu_cam = (homo @ viewmat.T)[:, :3]                          # [N, 3]
+    z = mu_cam[:, 2].clamp(min=1e-4)                            # guard against div-by-zero
+
+    # --- 2. Covariance (3D) ---
+    q = quats / quats.norm(dim=-1, keepdim=True)
+    R = quat_to_rot(q)                                          # [N, 3, 3]
+    S = torch.diag_embed(torch.exp(scales))                     # [N, 3, 3]
+    cov3D = R @ S @ S.transpose(-1, -2) @ R.transpose(-1, -2)   # [N, 3, 3]
+
+    # Apply the World→Cam rotation part W_rot (3x3) to the covariance
+    W_rot = viewmat[:3, :3]
+    cov_cam = W_rot @ cov3D @ W_rot.T                           # [N, 3, 3]
+
+    # --- 3. Projection Jacobian J (2x3) ---
+    fx, fy = K[0, 0], K[1, 1]
+    x_c, y_c, z_c = mu_cam[:, 0], mu_cam[:, 1], z
+    J = torch.zeros(N, 2, 3, device=device)
+    J[:, 0, 0] = fx / z_c
+    J[:, 0, 2] = -fx * x_c / z_c**2
+    J[:, 1, 1] = fy / z_c
+    J[:, 1, 2] = -fy * y_c / z_c**2
+
+    # --- 4. 2D covariance Σ&#x27; = J W Σ W^T J^T ---
+    cov2D = J @ cov_cam @ J.transpose(-1, -2)                   # [N, 2, 2]
+    cov2D = cov2D + 0.3 * torch.eye(2, device=device)           # low-pass filter (anti-aliasing)
+
+    # --- 5. 2D center (pixel coordinates) ---
+    cx, cy = K[0, 2], K[1, 2]
+    mu2D = torch.stack([fx * x_c / z_c + cx, fy * y_c / z_c + cy], dim=-1)  # [N, 2]
+
+    # --- 6. Depth sort (front to back) ---
+    depth = z_c
+    order = depth.argsort()                                     # ascending z
+    mu2D, cov2D = mu2D[order], cov2D[order]
+    colors_o = colors[order]
+    alphas = torch.sigmoid(opacities[order]).squeeze(-1)        # [N]
+
+    # --- 7. Pixel loop (pedagogical full-image loop; real impl uses tile + CUDA) ---
+    yy, xx = torch.meshgrid(torch.arange(H, device=device),
+                            torch.arange(W, device=device), indexing=&#x27;ij&#x27;)
+    pix = torch.stack([xx, yy], dim=-1).float()                 # [H, W, 2]
+
+    img = torch.zeros(H, W, 3, device=device)
+    T_acc = torch.ones(H, W, device=device)
+    inv_cov = torch.linalg.inv(cov2D)                           # [N, 2, 2]
+
+    for i in range(mu2D.shape[0]):
+        diff = pix - mu2D[i]                                    # [H, W, 2]
+        # 2D Gaussian: exp(-0.5 (diff)^T Σ^-1 (diff))
+        G = torch.exp(-0.5 * (diff @ inv_cov[i] * diff).sum(-1))  # [H, W]
+        contrib = alphas[i] * G                                 # [H, W]
+        contrib = contrib.clamp(max=0.99)                       # numerical safety
+        img = img + (T_acc * contrib).unsqueeze(-1) * colors_o[i]
+        T_acc = T_acc * (1 - contrib)
+        if (T_acc &lt; 1e-4).all():                                # early stop
+            break
+
+    return img</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Pedagogical vs production gap</div><p>the above is $O(N \cdot HW)$; 30k Gaussians + an 800×800 image would already take seconds. Real <code>gsplat</code> is (a) tile-based: each tile only processes Gaussians "touching" it; (b) GPU radix sort with composite keys; (c) the whole forward / backward is manual CUDA, achieving ≤ 10ms at 1080p.</p></div>
+<h3 id="45-adaptive-density-control-frequent-interview-topic">4.5　Adaptive density control (<strong>frequent interview topic</strong>)</h3>
+<p>3DGS initializes from sparse SfM (COLMAP) point clouds, but training must "spread" more Gaussians.</p>
+<table><thead><tr><th>Trigger</th><th>Action</th><th>Intuition</th></tr></thead><tbody><tr><td><strong>Large gradient + small scale</strong></td><td><strong>clone</strong> (duplicate, offset along gradient direction)</td><td>"Under-reconstruction" — this region lacks detail</td></tr><tr><td><strong>Large gradient + large scale</strong></td><td><strong>split</strong> (split into 2 smaller Gaussians, scale ÷ 1.6)</td><td>"Over-reconstruction" — a big Gaussian covers what it shouldn't</td></tr><tr><td><strong>Opacity near 0</strong></td><td><strong>prune</strong> (delete)</td><td>This Gaussian contributes nothing, wasting VRAM</td></tr><tr><td><strong>Every 3k iter</strong></td><td>reset opacities to 0.005</td><td>Force the model to relearn opacity, prevent floaters</td></tr></tbody></table>
+<p>Heuristic conditions: <code>gradient norm &gt; τ_pos</code> (e.g. $2 \times 10^{-4}$), <code>scale &gt; τ_scale</code> (1% of scene scale).</p>
+<pre><code class="language-python">def densify_and_prune(gaussians, grad_thresh=2e-4, scale_thresh=0.01,
+                      max_screen_size=None):
+    &quot;&quot;&quot; Pedagogical densify decisions (simplified; real gsplat also has screen-size triggers).
+        Assume gaussians exposes the following 1D fields (N = current Gaussian count):
+          xyz_grad_accum: [N]  ‖accumulated xyz gradient norm‖
+          denom:          [N]  accumulation count (avoid /0)
+          scales:         [N, 3]  log-scale
+          opacities:      [N]  ∈ (0, 1) after sigmoid
+          screen_size:    [N]  last-render screen-projected size (optional)
+          grad_dir:       [N, 3]  last gradient direction (for clone offset)
+    &quot;&quot;&quot;
+    grad_norm  = gaussians.xyz_grad_accum / gaussians.denom.clamp(min=1)      # [N]
+    mean_scale = gaussians.scales.exp().max(dim=-1).values                    # [N]
+
+    # CLONE: high gradient + small scale — duplicate and offset along the gradient; keep original
+    clone_mask = (grad_norm &gt; grad_thresh) &amp; (mean_scale &lt;= scale_thresh)     # [N]
+    gaussians.clone_at(clone_mask, offset=gaussians.grad_dir[clone_mask])
+
+    # SPLIT: high gradient + large scale — split into 2 children (scale ÷ 1.6), remove original at the end
+    split_mask = (grad_norm &gt; grad_thresh) &amp; (mean_scale &gt;  scale_thresh)     # [N]
+    gaussians.split_at(split_mask, n=2, scale_div=1.6)
+
+    # PRUNE: low opacity / too large on screen / already marked by split
+    # ⚠️ Note: new Gaussians from clone are appended to the end; length has changed. The mask only applies to the original N.
+    prune_mask = (gaussians.opacities[:split_mask.shape[0]] &lt; 0.005) | split_mask
+    if max_screen_size is not None:
+        prune_mask = prune_mask | (gaussians.screen_size[:split_mask.shape[0]] &gt; max_screen_size)
+    gaussians.remove_original(prune_mask)   # delete only the originals flagged among the first N
+
+    gaussians.reset_grad_accum()
+    return gaussians</code></pre>
+<div class="callout callout-info"><div class="callout-title">Typical hyperparameters</div><p>Kerbl 2023 paper: densify every 100 iters; max Gaussian count 5e6; 30k iters total; from ~30 minutes to a few hours.</p></div>
+<h3 id="46-2dgs--surfels-surface-aligned">4.6　2DGS / Surfels (surface-aligned)</h3>
+<p>3DGS ellipsoids are not surface-aware; mesh extraction needs SuGaR / GSDF post-processing. <strong>2DGS</strong> (Huang 2024 SIGGRAPH) <strong>degenerates the 3D ellipsoid into a 2D disk</strong> (one axis = 0), directly aligning with the surface, which works better with normal/depth supervision and produces clearly higher-quality meshes.</p>
+<h3 id="47-dynamic-4dgs">4.7　Dynamic 4DGS</h3>
+<p><strong>Dynamic 3DGS</strong> (Luiten 2024 3DV) uses independent per-frame Gaussians + physics prior to link them; <strong>4DGS</strong> (Wu 2024 CVPR / Yang 2024 ICLR) writes $\mu(t), \Sigma(t)$ as functions of time (MLP or spline); <strong>SC-GS</strong> (Huang 2024) drives dense Gaussians from sparse control points (analogous to LBS).</p>
+<h2 id="5-mesh-extraction-marching-cubes--dmtet">§5 Mesh extraction: Marching Cubes / DMTet</h2>
+<p>After NeRF / 3DGS reconstruction, downstream (simulator, AR, 3D printing) often needs a mesh.</p>
+<h3 id="51-marching-cubes-classic-must-know">5.1　Marching Cubes (<strong>classic must-know</strong>)</h3>
+<p>Input: 3D scalar field $f(\mathbf{x})$ (density / SDF) + threshold $\tau$. Output: triangle mesh of the level set $\{f = \tau\}$.</p>
+<p><strong>Algorithm skeleton</strong>:</p>
+<ol><li>Voxelize space (8 corners per voxel)</li><li>For each voxel, <strong>binarize the 8 corners</strong> ($f > \tau$ as 1, else 0) → 256 possible configurations</li><li>Look up table: each configuration has predefined isosurface triangle patches + vertex positions on edges</li><li><strong>Linear interpolation</strong> for precise vertices: between edge endpoints $\mathbf{a}, \mathbf{b}$, interpolate $t = (\tau - f(\mathbf{a})) / (f(\mathbf{b}) - f(\mathbf{a}))$, vertex $= \mathbf{a} + t(\mathbf{b} - \mathbf{a})$</li><li>Merge all voxel triangles → full mesh</li></ol>
+<pre><code class="language-python">def marching_cubes_sketch(density: torch.Tensor, threshold: float):
+    &quot;&quot;&quot; Real implementations use mcubes / scikit-image / pytorch3d; this shows the idea &quot;&quot;&quot;
+    from skimage.measure import marching_cubes
+    # density: [Nx, Ny, Nz]; detach() cuts the autograd graph, cpu().numpy() moves to host
+    verts, faces, normals, _ = marching_cubes(
+        density.detach().cpu().numpy(),
+        level=threshold,
+        spacing=(1.0, 1.0, 1.0),
+        gradient_direction=&#x27;descent&#x27;,  # normal direction; descent = surface faces low density
+    )
+    return verts, faces, normals</code></pre>
+<div class="callout callout-warn"><div class="callout-title">NeRF mesh-extraction footgun</div><p>vanilla NeRF has no notion of "surface"; the threshold $\tau$ is hard to pick when extracting mesh, and floaters get extracted too. <strong>Use NeuS / VolSDF for stable mesh extraction</strong> (the 0 level set of the SDF is well defined).</p></div>
+<h3 id="52-differentiable-dmtet--flexicubes-end-to-end-mesh-learning">5.2　Differentiable: DMTet / FlexiCubes (end-to-end mesh learning)</h3>
+<p>Marching Cubes is not differentiable (the lookup table is discrete).</p>
+<ul><li><strong>DMTet</strong> (Shen 2021 NeurIPS / Munkberg 2022 CVPR): uses a <strong>deformable tetrahedral grid</strong>, each tetrahedron has 4 vertex SDFs + position offsets that are differentiable. <strong>Marching Tetrahedra</strong> replaces MC; topology is determined by SDF signs and geometry by vertex positions, <strong>fully differentiable</strong>.</li><li><strong>FlexiCubes</strong> (Shen 2023 SIGGRAPH): generalizes dual marching cubes by introducing extra learnable parameters (dual vertex offsets / interpolation weights) to fix quality artifacts.</li></ul>
+<p><strong>Typical use</strong>: Magic3D and Fantasia3D after DreamFusion use DMTet to learn meshes + textures under SDS supervision.</p>
+<h2 id="6-sds-loss-supervising-3d-with-2d-diffusion-dreamfusion-family">§6 SDS Loss: supervising 3D with 2D diffusion (DreamFusion family)</h2>
+<h3 id="61-problem-setup">6.1　Problem setup</h3>
+<p>We want to generate 3D assets but <strong>have no 3D training data</strong> — 3D data is scarce (ShapeNet ~50k objects, Objaverse-XL 10M but uneven quality). <strong>Pretrained 2D diffusion</strong> (Stable Diffusion, Imagen) is abundant. Can we use 2D diffusion as a teacher to supervise 3D?</p>
+<p><strong>DreamFusion</strong> (Poole et al. 2022 arXiv → <strong>ICLR 2023 Outstanding Paper</strong>) proposed <strong>Score Distillation Sampling (SDS)</strong>.</p>
+<h3 id="62-setup">6.2　Setup</h3>
+<ul><li>3D representation $\theta$ (NeRF parameters / DMTet vertices / 3DGS point cloud)</li><li>Differentiable renderer $g(\theta, \pi) \to x$, where $x$ is an image ($\pi$ is the camera viewpoint)</li><li>Pretrained 2D diffusion $\epsilon_\phi(x_t; y, t)$ ($y$ is the text prompt)</li></ul>
+<p><strong>Goal</strong>: make $g(\theta, \pi)$ look like a "photo of $y$", i.e. $g(\theta, \pi)$ lies on the data manifold learned by the diffusion model.</p>
+<h3 id="63-sds-gradient-derivation-l3-must-know">6.3　SDS gradient derivation (<strong>L3 must-know</strong>)</h3>
+<p>Intuition: backprop the diffusion training loss into $\theta$. <strong>Naive idea</strong>: treat the rendered image $x = g(\theta, \pi)$ as a training sample and minimize</p>
+<p>$$\mathcal{L}_\text{diff}(\theta) = \mathbb{E}_{t, \epsilon}\Big[w(t)\big\|\epsilon_\phi(x_t; y, t) - \epsilon\big\|^2\Big],\quad x_t = \alpha_t x + \sigma_t \epsilon$$</p>
+<p>Take the gradient w.r.t. $\theta$ (chain rule):</p>
+<p>$$\nabla_\theta \mathcal{L}_\text{diff} = \mathbb{E}\Big[w(t)\,2\big(\epsilon_\phi(x_t; y, t) - \epsilon\big)\,\underbrace{\frac{\partial \epsilon_\phi(x_t;y,t)}{\partial x_t}}_{\text{U-Net Jacobian}}\,\alpha_t\,\underbrace{\frac{\partial x}{\partial \theta}}_{\text{renderer Jacobian}}\Big]$$</p>
+<p><strong>Problem</strong>: the U-Net Jacobian $\partial \epsilon_\phi / \partial x_t$ is expensive to compute and numerically poor (the diffusion model is large and not trained for second-order stability).</p>
+<p><strong>SDS trick: drop the U-Net Jacobian entirely</strong>, giving</p>
+<p>$$\boxed{\;\nabla_\theta \mathcal{L}_\text{SDS} \;=\; \mathbb{E}_{t, \epsilon}\Big[w(t)\,\big(\epsilon_\phi(x_t; y, t) - \epsilon\big)\,\frac{\partial x}{\partial \theta}\Big]\;}$$</p>
+<p>(The original DreamFusion paper writes it as $\partial L/\partial \theta$; $\alpha_t$ and the constant 2 are absorbed into $w(t)$.)</p>
+<h3 id="64-why-does-dropping-the-jacobian-still-work">6.4　Why does dropping the Jacobian still work?</h3>
+<p><strong>First explanation (original DreamFusion, score view)</strong>: $\epsilon_\phi(x_t; y, t)/\sigma_t \approx -\nabla_{x_t}\log p_\phi(x_t|y)$ (score). The SDS gradient = <code>(predicted score - noise) × renderer Jacobian</code>, i.e. it pushes the rendered image toward high-probability regions.</p>
+<p><strong>Second explanation (mode-seeking)</strong>: SDS is equivalent to a mode-seeking form of $\mathbb{E}_t[D_\text{KL}(q(x_t|\theta) \,\|\, p_\phi(x_t|y))]$: drive toward high-probability regions of $p_\phi(\cdot|y)$.</p>
+<h3 id="65-sds-side-effects-over-saturation--mode-collapse--janus">6.5　SDS side effects: over-saturation / mode collapse / Janus</h3>
+<ul><li><strong>Over-saturation</strong>: oversaturated colors, excessive contrast ("plastic-y look")</li><li><strong>Over-smoothing</strong>: blurred details</li><li><strong>Mode collapse</strong>: objects converge to "canonical" single forms</li><li><strong>Janus problem</strong>: 3D objects grow a "front face" in every view (faces on the back of heads; animals with heads on both sides)</li></ul>
+<p><strong>Root cause</strong>: SDS is equivalent to a mode-seeking KL, and <strong>only large CFG (DreamFusion default 100) can escape the mean-mode</strong>. CFG=100 sharpens the distribution to the extreme → over-saturation.</p>
+<div class="callout callout-warn"><div class="callout-title">Interview high score point</div><p>the SDS formula "drops the Jacobian" to save compute, but <strong>at the cost</strong> of implicitly becoming a mode-seeking KL that needs huge CFG to escape mean-seeking blur; huge CFG in turn causes over-saturation. This is an <strong>information-theoretic trade-off</strong>: simulation-free + computationally cheap = mode-seeking artifact.</p></div>
+<h3 id="66-sds-code-core-30-lines">6.6　SDS code (core 30 lines)</h3>
+<pre><code class="language-python">def sds_loss(
+    renderer,                 # θ → x (B, 3, H, W)
+    theta,                    # 3D parameters (NeRF / 3DGS / DMTet)
+    prompt_emb,               # text embedding (cond) [B, L, D]
+    uncond_emb,               # text embedding (uncond / null) [B, L, D]
+    unet,                     # frozen 2D diffusion U-Net (e.g. SD); returns noise pred Tensor
+    alpha_cumprod: torch.Tensor,  # [T_max] precomputed bar-alpha schedule
+    cfg_scale: float = 100.0,
+    t_range: tuple = (0.02, 0.98),
+):
+    &quot;&quot;&quot; Score Distillation Sampling loss (DreamFusion).
+        Convention: unet(x_t, t, encoder_hidden_states=emb) -&gt; [B, 3, H, W] noise pred.
+        If using diffusers UNet2DConditionModel, wrap to take .sample.
+        Returns a grad surrogate, can be backward&#x27;d directly. &quot;&quot;&quot;
+    x = renderer(theta)                                  # [B, 3, H, W]
+    B = x.shape[0]
+    device, dtype = x.device, x.dtype
+    T_max = alpha_cumprod.shape[0]                       # usually 1000
+
+    # 1. Sample t and noise, forward add noise
+    t = torch.randint(int(t_range[0] * T_max), int(t_range[1] * T_max),
+                      (B,), device=device)
+    noise = torch.randn_like(x)
+    abar = alpha_cumprod.to(device=device, dtype=dtype)[t].view(B, 1, 1, 1)
+    x_t = abar.sqrt() * x + (1 - abar).sqrt() * noise
+
+    # 2. U-Net predicts noise (cond / uncond), CFG combination; key: no autograd through diffusion
+    with torch.no_grad():
+        eps_uncond = unet(x_t, t, encoder_hidden_states=uncond_emb)
+        eps_cond   = unet(x_t, t, encoder_hidden_states=prompt_emb)
+        eps_pred = eps_uncond + cfg_scale * (eps_cond - eps_uncond)
+
+    # 3. SDS gradient: w(t)(ε_pred - ε) · ∂x/∂θ; w(t) = σ_t² is a common choice
+    grad = ((1 - abar) * (eps_pred - noise)).detach()
+    # backward of (grad · x) gives grad · ∂x/∂θ
+    return (grad * x).sum() / B</code></pre>
+<div class="callout callout-info"><div class="callout-title">Training loop</div><p>each iter, randomly sample viewpoint $\pi$, render $x$, compute SDS loss, backprop to $\theta$. For NeRF representations, train 10k-100k steps (hours on GPU); for 3DGS representations (GaussianDreamer / DreamGaussian), minutes to one hour.</p></div>
+<h3 id="67-vsd-variational-sds-prolificdreamer-neurips-2023-spotlight">6.7　VSD: variational SDS (<strong>ProlificDreamer</strong>, NeurIPS 2023 Spotlight)</h3>
+<p><strong>VSD</strong> (Wang 2023 NeurIPS) views SDS as a special case of "point estimation for a single $\theta$" and generalizes to <strong>variational inference over a distribution $\mu(\theta)$ on $\theta$</strong>.</p>
+<h4 id="setup">Setup</h4>
+<ul><li>Treat the 3D parameters $\theta$ as a latent random variable with distribution $\mu(\theta)$</li><li>Goal: align the rendered-image <strong>distribution</strong> with the diffusion-learned prior <strong>distribution</strong> (not mode alignment)</li></ul>
+<h4 id="objective-and-gradient">Objective and gradient</h4>
+<p>ProlificDreamer writes the objective as a KL:</p>
+<p>$$\min_{\mu}\; D_\text{KL}\!\Big(q_\mu^t(x_t|y)\;\Big\|\;p_\phi^t(x_t|y)\Big),\quad t\sim\mathcal{U}[0,1]$$</p>
+<p>where $q_\mu^t$ is the distribution induced by "rendering from $\theta\sim\mu$ + adding noise to time $t$". The <strong>variational gradient</strong> (Wang et al. 2023, Theorem 2, abbreviated) gives the update direction in $\theta$ as a <strong>relative score</strong>:</p>
+<p>$$\boxed{\;\nabla_\theta \mathcal{L}_\text{VSD} \;=\; \mathbb{E}_{t,\epsilon}\Big[\,w(t)\,\big(\epsilon_\phi(x_t;y,t) \;-\; \epsilon_\psi(x_t;y,t,\pi)\big)\,\frac{\partial x}{\partial \theta}\,\Big]\;}$$</p>
+<p>Compared to SDS: replace the raw noise $\epsilon$ with an <strong>auxiliary score</strong> $\epsilon_\psi$. $\epsilon_\psi$ is a <strong>LoRA-finetuned</strong> score network that online-minimizes a score-matching loss to track the score of the current $q_\mu^t$; it plays the role of a "variance-reduction baseline" (isomorphic to a value baseline in RL actor-critic). <strong>Note</strong>: the above is the gradient form, not a squared-loss form; the paper does not have an implementable form "write a scalar loss $\|\epsilon_\phi-\epsilon_\psi\|^2$ and then differentiate" — $\epsilon_\psi$ depends on $\mu$, which would drop the key term of the KL.</p>
+<h4 id="intuition-for-why-over-saturation-is-mitigated">Intuition for why over-saturation is mitigated</h4>
+<ul><li>SDS: pushes the rendered $x$ toward modes of the prior $p_\phi(\cdot|y)$ (mean-mode → needs CFG=100 → over-saturation)</li><li>VSD: the auxiliary score tracks the score of the current rendered distribution; the update direction = from "where I am now" to "where the prior is" (<strong>relative gradient</strong>), without needing huge CFG. CFG can drop to 7.5 (the standard diffusion default), avoiding extreme sharpening</li><li>Empirically: VSD has more natural colors and more complex geometry, and can maintain multiple modes simultaneously (ProlificDreamer reports 50k-step training yielding photorealistic Buddha statues, etc.)</li></ul>
+<div class="callout callout-good"><div class="callout-title">Key insight VSD vs SDS</div><p>SDS is "<strong>single-point + mode-seeking</strong>"; VSD is "<strong>particle / variational + relative score</strong>". The latter is essentially adding a <strong>learnable baseline</strong> ($\epsilon_\psi$) to SDS to reduce variance, conceptually analogous to the value baseline in RL actor-critic.</p></div>
+<h3 id="68-sds-derivative-family-mesh--3dgs--sds">6.8　SDS derivative family: mesh / 3DGS + SDS</h3>
+<table><thead><tr><th>Method</th><th>Representation / Stages</th><th>Key point</th></tr></thead><tbody><tr><td><strong>DreamFusion</strong></td><td>NeRF + SDS @ low-res</td><td>Original, hard to extract mesh</td></tr><tr><td><strong>Magic3D</strong> (Lin 2023 CVPR)</td><td>Instant-NGP @ 64px → DMTet + SDS @ 512px</td><td><strong>Two-stage</strong>: coarse structure → high-resolution end-to-end mesh</td></tr><tr><td><strong>Fantasia3D</strong> (Chen 2023 ICCV)</td><td>DMTet geometry + PBR material</td><td>normal-as-input + physical material BRDF</td></tr><tr><td><strong>DreamGaussian</strong> (Tang 2024 ICLR)</td><td>3DGS + SDS, ~2 min / object</td><td>GPU speed advantage; mesh export + UV-Net texturing</td></tr><tr><td><strong>GaussianDreamer</strong> (Yi 2024 CVPR)</td><td>Point-E / Shap-E init → 3DGS + SDS</td><td>Alleviates from-scratch geometric chaos</td></tr></tbody></table>
+<h2 id="7-single-image--few-view-3d-generation">§7 Single-image / Few-view 3D generation</h2>
+<p>A more practical setting: <strong>given one image, generate 3D</strong>.</p>
+<h3 id="71-zero-1-to-3-paradigm-novel-view-via-diffusion">7.1　Zero-1-to-3 paradigm (novel view via diffusion)</h3>
+<p><strong>Zero-1-to-3</strong> (Liu 2023 ICCV): finetune Stable Diffusion on Objaverse so it accepts (input view, target camera) → output novel view.</p>
+<ul><li>Input: single image $x$ + relative camera pose $\Delta R, \Delta T$</li><li>Diffusion conditioning: image embedding (CLIP) + camera embedding (sinusoidal)</li><li>Output: the image from the $\Delta R, \Delta T$ viewpoint</li></ul>
+<p><strong>Usage</strong>: given one input view, sample 16-32 novel views, then reconstruct via NeRF / 3DGS.</p>
+<p><strong>Derivatives</strong>:</p>
+<ul><li><strong>Zero-1-to-3++</strong> (Shi 2023): fixed generation of 6 anchor views (north-pole view + 4 eye-level views + a top view), reducing randomness</li><li><strong>SyncDreamer</strong> (Liu 2024 ICLR): <strong>joint</strong> prediction of multiple views in latent space (cross-attention lets views see each other), ensuring 3D consistency</li><li><strong>MVDream</strong> (Shi 2024 ICLR): text-to-multi-view, generates 4 views simultaneously; followed by SDS refinement</li></ul>
+<h3 id="72-one-2-3-45--instantmesh--triposr--stable-fast-3d">7.2　One-2-3-45 / InstantMesh / TripoSR / Stable Fast 3D</h3>
+<table><thead><tr><th>Method</th><th>Input</th><th>Output</th><th>Speed</th><th>Key</th></tr></thead><tbody><tr><td><strong>One-2-3-45</strong> (Liu 2023 NeurIPS)</td><td>Single image</td><td>mesh</td><td>45 s</td><td>Zero-1-to-3 → SparseNeuS</td></tr><tr><td><strong>One-2-3-45++</strong> (Liu 2024)</td><td>Single image</td><td>mesh</td><td>60 s</td><td>Multi-view + SDF</td></tr><tr><td><strong>TripoSR</strong> (Tochilkin 2024, Stability+Tripo)</td><td>Single image</td><td>NeRF/mesh</td><td>0.5-2 s</td><td>LRM-style (Large Reconstruction Model) transformer</td></tr><tr><td><strong>InstantMesh</strong> (Xu 2024)</td><td>Single image</td><td>mesh</td><td>3 s</td><td>Zero-1-to-3++ multi-view → sparse-view recon transformer</td></tr><tr><td><strong>Stable Fast 3D</strong> (SF3D, Stability 2024)</td><td>Single image</td><td>textured mesh</td><td>~0.5 s</td><td>TripoSR successor; adds illumination disentangle + UV unwrap</td></tr></tbody></table>
+<p><strong>LRM (Hong et al. 2023 arXiv → ICLR 2024) setting</strong>: treat the image as tokens + Plucker ray embedding, transformer outputs a NeRF triplane. This is the parent model of TripoSR / InstantMesh.</p>
+<h3 id="73-lrm-triplane-representation-high-frequency-interview-topic">7.3　LRM Triplane representation (<strong>high-frequency interview topic</strong>)</h3>
+<ul><li><strong>Triplane</strong> (Chan 2022 EG3D): 3 axis-aligned 2D planes (XY, YZ, XZ), total $3 \times C \times N \times N$ dim</li><li>Query 3D point $(x, y, z)$: bilinearly interpolate on each plane → concat → small MLP → $(\sigma, \mathbf{c})$</li><li>Advantages: less VRAM than a voxel grid ($O(N^2)$ vs $O(N^3)$), denser than a hash grid making it suitable as transformer output</li><li>LRM / TripoSR / InstantMesh all let the transformer directly regress triplane tokens</li></ul>
+<h2 id="8-3d-foundation-models-the-2024-open-source-wave">§8 3D Foundation Models (the 2024 open-source wave)</h2>
+<h3 id="81-trellis-microsoft-2024-open-source">8.1　Trellis (Microsoft 2024, open source)</h3>
+<p><strong>Trellis</strong> (Xiang 2024 arXiv) is the first attempt at "Stable Diffusion for 3D" in the open-source space.</p>
+<ul><li><strong>Structured Latent (SLAT)</strong>: encode the 3D asset onto a sparse latent grid over voxels — preserving spatial structure (suitable for sparse conv / sparse attention) while being compact (only active voxels store latents)</li><li><strong>3D VAE</strong>: mesh + texture (derived from signed distance field) → SLAT</li><li><strong>Flow matching prior</strong>: rectified flow on SLAT, conditioned on text/image</li><li><strong>Multiple decoders</strong>: decode SLAT into NeRF / 3DGS / mesh representations (same latent, choice of output format)</li><li><strong>Training data</strong>: a subset of Objaverse-XL + internal high-quality set</li><li><strong>Effects</strong>: text-to-3D / image-to-3D, seconds to tens of seconds, quality surpassing the SDS family</li></ul>
+<h3 id="82-hunyuan3d-1---2-tencent-2024-25-open-source">8.2　Hunyuan3D-1 / -2 (Tencent 2024-25, open source)</h3>
+<p><strong>Hunyuan3D</strong> follows the <strong>shape-then-texture</strong> two-stage route.</p>
+<ul><li><p><strong>Hunyuan3D-1</strong> (Yang 2024 arXiv):</p>
+<ul><li>Stage 1: text/image → multi-view image (Zero-1-to-3 family)</li><li>Stage 2: multi-view → 3D mesh (LRM-like reconstructor)</li><li>Outputs textured mesh in seconds to tens of seconds</li></ul></li><li><p><strong>Hunyuan3D-2</strong> (Tencent 2025, arXiv 2501.12202):</p>
+<ul><li><strong>Hunyuan3D-DiT</strong>: geometry-only DiT generating mesh on SDF latents</li><li><strong>Hunyuan3D-Paint</strong>: multi-view PBR texture diffusion, UV-space refinement</li><li>High-quality PBR texture (production-ready for game / VR assets)</li></ul></li><li><strong>Open source</strong>: complete weights + inference code on HuggingFace</li></ul>
+<h3 id="83-clay-zhang-2024-siggraph">8.3　CLAY (Zhang 2024 SIGGRAPH)</h3>
+<ul><li><strong>3DShape2VecSet</strong> latent diffusion: represent the mesh as a vector set + cross-attention DiT</li><li>Large-scale training (Objaverse-XL + internal curated set)</li><li>Output SDF → marching cubes → mesh</li><li>Adds a PBR texture stage (similar to Hunyuan3D-2)</li></ul>
+<p><strong>Rodin</strong> (Microsoft 2023, commercial): early production-grade text-to-3D-avatar system, diffusion on triplane, focused on characters / avatars.</p>
+<h3 id="84-comparison-table">8.4　Comparison table</h3>
+<table><thead><tr><th>Method</th><th>Representation</th><th>Prior</th><th>Training scale</th><th>Open source</th></tr></thead><tbody><tr><td><strong>Trellis</strong></td><td>Structured Latent (SLAT) + multi decoders</td><td>Rectified Flow</td><td>Objaverse-XL subset</td><td>✅</td></tr><tr><td><strong>Hunyuan3D-2</strong></td><td>SDF latent (Shape DiT) + UV texture diff</td><td>Diffusion</td><td>Internal large-scale set</td><td>✅</td></tr><tr><td><strong>CLAY</strong></td><td>3DShape2VecSet</td><td>Diffusion</td><td>Objaverse-XL + internal</td><td>Partial</td></tr><tr><td><strong>Rodin</strong></td><td>Triplane</td><td>Diffusion</td><td>Commercial internal</td><td>❌</td></tr><tr><td><strong>TripoSR / SF3D</strong></td><td>NeRF/mesh feedforward</td><td>No prior, pure regression</td><td>Objaverse-class</td><td>✅</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Architecture-choice intuition</div><p>large scenes / general objects use <strong>Trellis-style SLAT</strong> (preserves spatial structure); high-quality single meshes use <strong>CLAY-style vector set</strong> (compact, global attention); fast inference uses <strong>LRM/TripoSR feedforward</strong> (no diffusion, direct regression).</p></div>
+<h2 id="9-complexity--resource-comparison">§9 Complexity / resource comparison</h2>
+<table><thead><tr><th>Method</th><th>Training</th><th>Inference (one frame)</th><th>VRAM (training)</th><th>VRAM (model)</th></tr></thead><tbody><tr><td>NeRF vanilla</td><td>1-2 days</td><td>several seconds</td><td>8 GB</td><td>&lt;10 MB MLP</td></tr><tr><td>Instant-NGP</td><td>5 seconds - 5 min</td><td>30 fps+</td><td>4-12 GB</td><td>100-500 MB hash</td></tr><tr><td>3DGS</td><td>10-30 min</td><td>100 fps+</td><td>6-24 GB</td><td>100 MB - 1 GB Gaussians</td></tr><tr><td>2DGS</td><td>Close to 3DGS</td><td>Close to 3DGS</td><td>Similar</td><td>Similar</td></tr><tr><td>DreamFusion (NeRF+SDS)</td><td>2 hr / object</td><td>—</td><td>12 GB</td><td>NeRF itself</td></tr><tr><td>DreamGaussian (3DGS+SDS)</td><td>2 min / object</td><td>—</td><td>8-16 GB</td><td>—</td></tr><tr><td>ProlificDreamer (VSD)</td><td>3-6 hr / object</td><td>—</td><td>24 GB</td><td>—</td></tr><tr><td>TripoSR feedforward</td><td>50 GPU-days training</td><td>0.5 s (A100)</td><td>6 GB inference</td><td>1.5 GB</td></tr><tr><td>Trellis</td><td>100+ GPU-days training</td><td>several seconds</td><td>16 GB inference</td><td>a few GB</td></tr><tr><td>Hunyuan3D-2</td><td>Training on large cluster</td><td>tens of seconds</td><td>24+ GB inference</td><td>combination of multiple models</td></tr></tbody></table>
+<h2 id="10-comparison-with-related-methods--embodied-ai-applications">§10 Comparison with related methods &amp; Embodied AI applications</h2>
+<h3 id="101-key-differences-between-3d-and-2d-generation">10.1　Key differences between 3D and 2D generation</h3>
+<table><thead><tr><th>Dimension</th><th>2D generation (Stable Diffusion)</th><th>3D generation</th></tr></thead><tbody><tr><td><strong>Data scale</strong></td><td>LAION-5B 5B images</td><td>Objaverse-XL 10M objects (500× smaller)</td></tr><tr><td><strong>Data format</strong></td><td>Image (uniform RGB)</td><td>mesh / SDF / point cloud / NeRF / 3DGS (<strong>fragmented</strong>)</td></tr><tr><td><strong>Training prior</strong></td><td>Train diffusion directly</td><td>Distill from 2D diffusion (SDS / Zero-1-to-3) <strong>or</strong> 3D-native diffusion (Trellis / CLAY)</td></tr><tr><td><strong>Evaluation</strong></td><td>FID, CLIP score</td><td>Chamfer / IoU / PSNR (recon) + perceptual + user study</td></tr><tr><td><strong>Downstream</strong></td><td>Output image directly</td><td>Output asset → rendering / simulation / editing</td></tr></tbody></table>
+<h3 id="102-embodied-ai--ar--vr-practical-routes">10.2　Embodied AI / AR / VR practical routes</h3>
+<table><thead><tr><th>Task</th><th>Recommended representation</th><th>Key toolchain / constraints</th></tr></thead><tbody><tr><td><strong>Sim2Real assets</strong></td><td>mesh (PBR)</td><td>Trellis / Hunyuan3D-2 → IsaacSim / MuJoCo</td></tr><tr><td><strong>Large indoor scenes</strong></td><td>3DGS</td><td>COLMAP → 3DGS (chunk-wise with VastGS / CityGS)</td></tr><tr><td><strong>NeRF/3DGS as simulator</strong></td><td>NeRF / 3DGS + physics</td><td>DreamGaussian-Sim / Splatting Physics</td></tr><tr><td><strong>3D affordance / manipulation</strong></td><td>point cloud / 3DGS feature</td><td>OpenScene / LERF / RVT / 3D Diffuser Actor</td></tr><tr><td><strong>AR object scanning</strong></td><td>3DGS (realistic lighting + real-time)</td><td>mobile compute (PostShot / Luma), pruning / quantization</td></tr><tr><td><strong>VR large scenes</strong></td><td>3DGS (large-scale)</td><td>60 fps stereo + 6DoF</td></tr><tr><td><strong>Avatar</strong></td><td>mesh + LBS or 3DGS avatar</td><td>real-time expressions / hair</td></tr><tr><td><strong>Object insertion</strong></td><td>mesh + PBR</td><td>consistent environment lighting (IBL)</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">Embodied AI interview follow-up example</div><p>"Biggest challenge in making NeRF a physics simulator?" Key points: NeRF is radiance, no mass / friction → physics priors must be added manually; mesh extraction has floaters → collision detection is hard; differentiable but slow backward; <strong>industry mostly uses 3DGS / mesh rather than vanilla NeRF</strong>.</p></div>
+<h2 id="11-engineering-practice--common-footguns">§11 Engineering practice &amp; common footguns</h2>
+<h3 id="111-colmap--sfm-preprocessing-essential-for-reconstruction">11.1　COLMAP / SfM preprocessing (essential for reconstruction)</h3>
+<p>Input multi-view → output intrinsics $K$ + extrinsics $\{R_i, t_i\}$ + sparse point cloud; standard pipeline SIFT → matching → incremental SfM → bundle adjustment. <strong>Common pitfalls</strong>: SfM fails on texture-less / specular objects; dynamic objects pollute extrinsics.</p>
+<h3 id="112-numerical-stability-general-nerf3dgs">11.2　Numerical stability (general NeRF/3DGS)</h3>
+<table><thead><tr><th>Issue</th><th>Symptom</th><th>Fix</th></tr></thead><tbody><tr><td>Sigma blowup</td><td>Floaters fill the space</td><td>Use softplus or truncated $\sigma$; occupancy grid skip</td></tr><tr><td>Alpha saturation</td><td>1-α underflow → T all 0</td><td><code>(1-α).clamp(min=1e-10)</code> or log-space cumprod</td></tr><tr><td>Gaussian degeneration</td><td>Extremely small scale / extreme anisotropy</td><td>Clamp scale lower bound; regularize anisotropy</td></tr><tr><td>Densify explosion</td><td>Gaussian count skyrockets to memory limit</td><td>Add max gaussian count; periodic prune; reset opacity</td></tr><tr><td>SDS Janus</td><td>Faces / heads in multiple views</td><td>Add view-conditioning ("front view" / "back view"); MVDream</td></tr><tr><td>SDS over-saturation</td><td>Saturated colors</td><td>Lower CFG; switch to VSD; or negative prompt</td></tr></tbody></table>
+<h3 id="113-multi-machine-distributed--evaluation-metrics">11.3　Multi-machine distributed &amp; evaluation metrics</h3>
+<p><strong>Distributed</strong>: NeRF / Instant-NGP / 3DGS are single-GPU standard; large 3DGS scenes use chunk-wise (VastGaussian, CityGaussian); SDS/VSD runs 2 SD forwards per iter, 8×A100 gives significant speedup; Trellis / Hunyuan3D training is large-scale multi-node DDP.</p>
+<table><thead><tr><th>Evaluation metric</th><th>Use</th><th>Algorithm</th></tr></thead><tbody><tr><td><strong>PSNR / SSIM / LPIPS</strong></td><td>View synthesis (reconstruction)</td><td>Compare with real views</td></tr><tr><td><strong>Chamfer Distance</strong></td><td>Mesh geometry</td><td>Average nearest-neighbor distance between two point clouds</td></tr><tr><td><strong>F-Score (3D)</strong></td><td>Mesh / point</td><td>Precision + recall under threshold</td></tr><tr><td><strong>CLIP Score / CLIP-R-Prec</strong></td><td>Text-to-3D alignment</td><td>Render → CLIP similarity / distinguish distractor prompts</td></tr><tr><td><strong>User study</strong></td><td>Final quality</td><td>MTurk / lab-internal</td></tr></tbody></table>
+<h2 id="12-25-frequently-asked-interview-questions">§12 25 frequently-asked interview questions</h2>
+<p>Sorted into 3 tiers by difficulty (L1 must-know / L2 advanced / L3 top labs). Each question links to answer points + footguns.</p>
+<h3 id="l1-must-know-asked-at-every-3d--vision-role">L1 must-know (asked at every 3D / vision role)</h3>
+<details>
+
+<summary>Q1. NeRF volume-rendering equation?</summary>
+<ul><li>$C(\mathbf{r}) = \int T(t)\sigma(\mathbf{r}(t))\mathbf{c}(\mathbf{r}(t),\mathbf{d})dt$</li><li>$T(t) = \exp(-\int_{t_n}^t\sigma\,ds)$ is the transmittance</li><li>Discretization → $\alpha$-compositing: $C \approx \sum T_i\alpha_i \mathbf{c}_i$, $\alpha_i = 1 - e^{-\sigma_i\delta_i}$</li></ul>
+<p>Writing only $\sum \alpha_i \mathbf{c}_i$ misses $T_i$; or writing $\alpha_i$ as $\sigma_i\delta_i$ (first-order approximation, strictly wrong).</p>
+</details>
+<details>
+
+<summary>Q2. Why does NeRF need positional encoding?</summary>
+<ul><li>MLPs default to a low-frequency bias (NTK analysis)</li><li>$\gamma(p) = (\sin 2^k\pi p, \cos 2^k\pi p)_{k=0}^{L-1}$ provides a high-frequency basis</li><li>Learning $(x,y,z) \to (\sigma,\mathbf{c})$ directly produces blur; adding PE recovers high-frequency detail</li></ul>
+<p>Thinking PE just "adds position to the MLP" (actually it adds the spatial frequency spectrum); or flipping the frequency levels for $\mathbf{x}$ vs $\mathbf{d}$ ($L=10$ vs $L=4$).</p>
+</details>
+<details>
+
+<summary>Q3. What is NeRF's hierarchical sampling?</summary>
+<ul><li>Two networks: coarse + fine</li><li>Coarse samples 64 points uniformly, renders to get weights $w_i = T_i\alpha_i$</li><li>Normalize $w$ to a PDF, importance-sample 128 fine points (dense sampling near the surface)</li><li>Loss supervises both networks</li></ul>
+<p>Saying "just sample more densely once" misses the importance-sampling core.</p>
+</details>
+<details>
+
+<summary>Q4. Why is Instant-NGP 5+ OOM faster than NeRF?</summary>
+<ul><li><strong>Hash grid replaces dense grid</strong>: fixed-size $T$ hash table, cache-friendly</li><li><strong>Tiny MLP</strong> (2 layers hidden 64) replaces large MLP (NeRF 8 layers 256)</li><li><strong>Multi-resolution cascade</strong> + <strong>occupancy grid</strong> skips empty-region sampling</li><li><strong>CUDA fused kernels</strong> (tiny-cuda-nn)</li></ul>
+<p>Only saying "uses a hash" misses the combined contribution of multi-resolution + tiny-MLP + occupancy skip.</p>
+</details>
+<details>
+
+<summary>Q5. How is a "Gaussian" in 3DGS defined?</summary>
+<ul><li>Each Gaussian $G_i = (\mu_i, \Sigma_i, \alpha_i, c_i(\mathbf{d}))$</li><li>$\mu \in \mathbb{R}^3$ position, $\Sigma \in \mathbb{R}^{3\times 3}$ covariance</li><li>$\Sigma = R S S^\top R^\top$ decomposition ($R$ via quaternion, $S$ via diagonal + $\exp$), ensures positive semi-definite</li><li>$c(\mathbf{d})$ via SH coefficients ($\ell = 3$, 48 parameters)</li></ul>
+<p>Just saying "Gaussian distribution" misses the covariance-parameterization trick + SH color.</p>
+</details>
+<details>
+
+<summary>Q6. How is 3DGS rendered?</summary>
+<ul><li>Project 3D Gaussians to 2D ($\Sigma' = JW\Sigma W^\top J^\top$)</li><li>Sort by depth</li><li>Front-to-back alpha-blending (same origin as NeRF $\alpha$-compositing)</li><li>Actually tile-based + CUDA radix sort</li></ul>
+<p>Just saying "rasterization" without mentioning the projection Jacobian / sorting / alpha-blend.</p>
+</details>
+<details>
+
+<summary>Q7. How is 3DGS densification done?</summary>
+<ul><li>High gradient + small scale → <strong>clone</strong> (under-reconstruction)</li><li>High gradient + large scale → <strong>split</strong> (over-reconstruction)</li><li>Low opacity or excessive screen-size → <strong>prune</strong></li><li>Periodic opacity reset to prevent floaters</li></ul>
+<p>Flipping clone and split; or forgetting the reset step.</p>
+</details>
+<details>
+
+<summary>Q8. NeRF vs 3DGS comparison?</summary>
+<ul><li><strong>NeRF</strong>: implicit (MLP), slow rendering (ray march), hard editing</li><li><strong>3DGS</strong>: explicit (point cloud), fast rendering (rasterize), easy editing</li><li><strong>Quality</strong>: 3DGS PSNR is usually ≥ NeRF; NeRF is better on volumetric effects (smoke / translucency)</li><li><strong>Industry trend</strong>: 3DGS dominant, NeRF research-only</li></ul>
+<p>Treating them as incomparable different things — actually both are volumetric scene reps; 3DGS is the explicit version of NeRF.</p>
+</details>
+<details>
+
+<summary>Q9. What is Marching Cubes?</summary>
+<ul><li>Input: 3D scalar field + threshold; output: triangle mesh</li><li>Each voxel binarizes the 8 corners (above/below threshold) → 256 lookup table</li><li>Linear interpolation on edges defines vertex positions</li><li>Not differentiable (discrete lookup)</li></ul>
+<p>Saying "find a contour" — MC is 3D; contours belong to 2D Marching Squares.</p>
+</details>
+<details>
+
+<summary>Q10. What is SDS roughly?</summary>
+<ul><li>Supervise a 3D representation using pretrained 2D diffusion (Stable Diffusion)</li><li>Render $x = g(\theta, \pi)$, add noise to $x_t$, ask diffusion "is this a photo of $y$?"</li><li>gradient $\propto (\epsilon_\phi(x_t; y) - \epsilon)\cdot \partial x/\partial \theta$</li><li>Proposed by DreamFusion (Poole et al. 2022 arXiv → ICLR 2023 Outstanding Paper)</li></ul>
+<p>Just saying "use SD to train NeRF" misses the special form of the SDS gradient (drop the U-Net Jacobian).</p>
+</details>
+<h3 id="l2-advanced-research-oriented-roles">L2 advanced (research-oriented roles)</h3>
+<details>
+
+<summary>Q11. Derive NeRF's continuous integration → discrete $\alpha$-compositing.</summary>
+<ul><li>$T$ satisfies $dT/dt = -\sigma T$; on a segment with constant $\sigma$ → $T(t_{i+1})/T(t_i) = e^{-\sigma_i\delta_i}$</li><li>Within-segment color contribution $\int_0^{\delta_i} T_i e^{-\sigma_i s}\sigma_i \mathbf{c}_i\,ds = T_i\mathbf{c}_i(1 - e^{-\sigma_i\delta_i})$</li><li>Let $\alpha_i = 1 - e^{-\sigma_i\delta_i}$, then $C \approx \sum T_i\alpha_i \mathbf{c}_i$, $T_i = \prod_{j<i}(1 - \alpha_j)$</li></ul>
+<p>Writing $\alpha_i$ as $\sigma_i\delta_i$ instead of $1 - e^{-\sigma_i\delta_i}$; or skipping the ODE solution.</p>
+</details>
+<details>
+
+<summary>Q12. Derive the 3D→2D projection Jacobian for 3DGS.</summary>
+<ul><li>Perspective projection $\pi(\mathbf{x}) = (f_x x/z, f_y y/z)$ is nonlinear</li><li>First-order Taylor: $\pi(\mathbf{x}) \approx \pi(\mu) + J(\mathbf{x}-\mu)$</li><li>$J = \partial\pi/\partial\mathbf{x}|_\mu = \begin{pmatrix} f_x/z & 0 & -f_x x/z^2 \\ 0 & f_y/z & -f_y y/z^2 \end{pmatrix}$</li><li>$\Sigma' = JW\Sigma W^\top J^\top$ ($W$ is the world→cam rotation)</li></ul>
+<p>Plugging into the "covariance projection" formula without deriving; or forgetting the $W$ step (World→Cam rotation).</p>
+</details>
+<details>
+
+<summary>Q13. How are Instant-NGP hash collisions disambiguated?</summary>
+<ul><li><strong>Multi-resolution redundancy</strong>: coarse level $N_\ell^d \le T$ has no collision; only fine levels collide; the MLP can infer from coarse + fine jointly</li><li><strong>Sparse activation</strong>: effective supervision concentrates near surfaces; colliding entries in empty regions get no gradient</li><li><strong>MLP post-processing</strong>: learns nonlinear fusion over the $L\times F$ concatenated features, can disambiguate</li><li>No explicit collision resolution; relies on "lazy resolution by sparsity + redundancy"</li></ul>
+<p>Thinking there is hash chaining or similar traditional disambiguation — actually it's data-driven implicit disambiguation.</p>
+</details>
+<details>
+
+<summary>Q14. Which Jacobian does SDS gradient drop? Why?</summary>
+<ul><li>Naive diffusion training grad: $(\epsilon_\phi - \epsilon)\cdot \partial \epsilon_\phi/\partial x_t \cdot \alpha_t \cdot \partial x/\partial \theta$</li><li>SDS drops the $\partial \epsilon_\phi/\partial x_t$ <strong>U-Net Jacobian</strong></li><li>Intuition: (1) expensive; (2) U-Net is not trained for second-order stability → noisy Jacobian</li><li>Cost: SDS becomes mode-seeking KL, requires huge CFG (100) to escape the mean-mode → over-saturation</li></ul>
+<p>Saying only "for simplification" without the consequences. Or not realizing that mode-seeking is determined by the KL direction.</p>
+</details>
+<details>
+
+<summary>Q15. How does VSD alleviate SDS over-saturation?</summary>
+<ul><li>SDS: pulls toward the modes of prior $p_\phi$; needs CFG=100 → over-saturation</li><li><strong>VSD</strong>: treats the 3D parameters $\theta$ as a random variable $\mu(\theta)$, minimizes KL(rendered dist || prior)</li><li>Introduces an <strong>auxiliary score</strong> $\epsilon_\psi$ (LoRA-finetuned SD) tracking the score of the current $\mu$</li><li>gradient = $(\epsilon_\phi - \epsilon_\psi)\cdot \partial x/\partial \theta$ — <strong>relative score</strong>, no huge CFG required</li><li>Analogous to RL actor-critic using a value baseline to reduce variance</li></ul>
+<p>Saying VSD "uses variational inference" but not explaining $\epsilon_\psi$ replacing raw noise.</p>
+</details>
+<details>
+
+<summary>Q16. Differences between Zero-1-to-3 / SyncDreamer / MVDream?</summary>
+<ul><li><strong>Zero-1-to-3</strong> (Liu 2023 ICCV): input view + camera $\Delta R, \Delta T$ → single novel view; sampled independently each time</li><li><strong>Zero-1-to-3++</strong> (Shi 2023): fixed 6 anchor views, multiple in one shot (reduces randomness)</li><li><strong>SyncDreamer</strong> (Liu 2024 ICLR): <strong>joint</strong> prediction of multi-view in latent space, cross-attention so views see each other → better consistency</li><li><strong>MVDream</strong> (Shi 2024 ICLR): text-to-multi-view (no input image needed), 4 views generated together + SDS refinement</li></ul>
+<p>Saying only "they're all novel views" misses the independent vs joint vs text-only main thread.</p>
+</details>
+<details>
+
+<summary>Q17. How does Mip-NeRF anti-alias?</summary>
+<ul><li>Vanilla NeRF treats pixels as rays; at different resolutions the same pixel corresponds to different scales → aliasing</li><li><strong>Mip-NeRF</strong> treats pixels as cones (view frustums), approximating cone segments as anisotropic Gaussians</li><li><strong>IPE (Integrated Positional Encoding)</strong>: $\mathbb{E}_{\mathbf{x}\sim\mathcal{N}(\mu,\Sigma)}[\gamma(\mathbf{x})]$ has a closed-form solution</li><li>High-frequency coefficients are attenuated by $\Sigma$ → automatic multi-scale smoothing</li></ul>
+<p>Just saying "uses cones" without explaining IPE's high-frequency attenuation.</p>
+</details>
+<details>
+
+<summary>Q18. Difference between NeuS and vanilla NeRF for mesh extraction?</summary>
+<ul><li>Vanilla NeRF: density has no explicit surface; extracting mesh requires picking a $\sigma$ threshold (unstable)</li><li><strong>NeuS</strong> (Wang 2021 NeurIPS): replaces density with <strong>SDF $d(\mathbf{x})$</strong>, defines $\sigma$ via the sigmoid derivative</li><li>Surface = $\{d = 0\}$, <strong>well-defined</strong></li><li>Marching Cubes runs directly on the SDF, quality is much better</li></ul>
+<p>Saying "use SDF" without explaining how NeuS plugs SDF into NeRF volume rendering.</p>
+</details>
+<details>
+
+<summary>Q19. Core of the LRM family (TripoSR / InstantMesh)?</summary>
+<ul><li><strong>Triplane</strong> representation: 3 axis-aligned 2D planes, $O(N^2)$ VRAM</li><li>Transformer maps image tokens + Plucker ray embeddings → regress triplane tokens</li><li>Inference is feedforward (no SDS / no iterative optimization), <strong>0.5-3 seconds</strong> to a 3D output</li><li>TripoSR (Stability+Tripo 2024) / InstantMesh (Xu 2024) / SF3D (2024) all belong to this family</li></ul>
+<p>Treating them as the SDS family — wrong, LRM is fully feedforward; it is not distillation.</p>
+</details>
+<details>
+
+<summary>Q20. How is mesh extracted from 3DGS?</summary>
+<ul><li>Vanilla 3DGS is unfriendly (ellipsoids are not surfaces)</li><li><strong>SuGaR</strong> (Guédon 2024 CVPR): surface-alignment loss + Poisson reconstruction</li><li><strong>2DGS</strong> (Huang 2024 SIGGRAPH): degenerate ellipsoids to 2D disks, align surface → MC mesh extraction is more stable</li><li><strong>GSDF</strong> (Yu 2024): jointly train an SDF head with 3DGS</li></ul>
+<p>Saying "just run MC" — 3DGS has no density field, MC doesn't work directly; surface alignment is required first.</p>
+</details>
+<h3 id="l3-top-lab-top-conference--industry-research-roles">L3 top-lab (top-conference / industry research roles)</h3>
+<details>
+
+<summary>Q21. Manually derive NeRF's discrete $\alpha$-compositing.</summary>
+<ul><li>ODE $dT/dt = -\sigma(t) T(t)$, initial value $T(t_n) = 1$ → $T(t) = \exp(-\int_{t_n}^t \sigma\,ds)$</li><li>On segment $[t_i, t_{i+1}]$ $\sigma$ is constant $= \sigma_i$, so $T(t_{i+1}) = T(t_i)e^{-\sigma_i\delta_i}$</li><li>Inter-segment accumulation $T_i = T(t_i) = \prod_{j<i} e^{-\sigma_j\delta_j} = \prod_{j<i}(1 - \alpha_j)$, where $\alpha_j = 1 - e^{-\sigma_j\delta_j}$</li><li>Within-segment color contribution $\int_{t_i}^{t_{i+1}} T(t)\sigma_i\mathbf{c}_i\,dt = \mathbf{c}_i T_i \int_0^{\delta_i}\sigma_i e^{-\sigma_i s}ds = T_i\mathbf{c}_i(1 - e^{-\sigma_i\delta_i}) = T_i\alpha_i\mathbf{c}_i$</li><li>Compositing: $C \approx \sum_i T_i\alpha_i \mathbf{c}_i$</li><li><strong>Key</strong>: $\alpha_i = 1 - e^{-\sigma_i\delta_i}$ exactly, vs $\alpha_i \approx \sigma_i\delta_i$ first-order approximation (consistent when $\sigma\delta \ll 1$)</li></ul>
+<p>Skipping the ODE derivation and going straight to the conclusion; or using $\sigma_i\delta_i$ to substitute for $\alpha_i$ when $\sigma\delta$ is large, which is wrong.</p>
+</details>
+<details>
+
+<summary>Q22. How are Instant-NGP hash collisions automatically disambiguated by the MLP?</summary>
+<ul><li><strong>When collisions happen</strong>: at fine levels, grid-point count $N_\ell^d > T$ (hash table size), multiple grid points map to the same entry</li><li><strong>Sparse activation</strong>: most scene voxels are background, <strong>only voxels near the surface have non-zero supervised gradients</strong> — two colliding "background entries" never receive signals and don't pollute each other</li><li><strong>Multi-resolution redundancy</strong>: at coarse levels $N_\ell^d \le T$ guarantees uniqueness; fine levels add detail. Even if a fine level collides, the non-colliding features at coarse levels already uniquely identify the point</li><li><strong>MLP post-processing</strong>: the tiny MLP learns nonlinear fusion over the $L\times F$ concatenated features; on colliding entries, it can use <strong>non-colliding features from other levels to disambiguate</strong></li><li><strong>Auto-regulated gradients</strong>: during training high gradients naturally concentrate at surface entries; if colliding entries are simultaneously on the surface (rare), the loss pushes them to a compromise position (averaging multiple samples)</li><li><strong>Physical intuition</strong>: rather than pay the cost of perfect hashing, allow collisions and use data-driven implicit disambiguation ("lazy collision resolution")</li></ul>
+<p>Saying "hash collisions are solved by the MLP" without explaining which mechanisms (sparsity + multi-scale + MLP nonlinearity) act together.</p>
+</details>
+<details>
+
+<summary>Q23. Derive the 3DGS 3D→2D covariance projection Jacobian.</summary>
+<ul><li>World → Camera: rigid transform $\mathbf{x}_\text{cam} = W\mathbf{x} + t$; covariance is only affected by rotation, $\Sigma_\text{cam} = W\Sigma W^\top$</li><li>Camera → Screen: perspective projection $\pi(x, y, z) = (f_x x/z, f_y y/z)$ is nonlinear</li><li>First-order Taylor at the mean $\mu_\text{cam}$: $\pi(\mathbf{x}) \approx \pi(\mu_\text{cam}) + J(\mathbf{x} - \mu_\text{cam})$, $J = \partial\pi/\partial\mathbf{x}|_{\mu_\text{cam}}$</li><li>$J = \begin{pmatrix} f_x/z & 0 & -f_x x/z^2 \\ 0 & f_y/z & -f_y y/z^2 \end{pmatrix} \in \mathbb{R}^{2\times 3}$</li><li>$\text{Cov}[\pi(\mathbf{x})] = J\Sigma_\text{cam} J^\top = JW\Sigma W^\top J^\top \in \mathbb{R}^{2\times 2}$</li><li>This is the classic corollary of EWA splatting (Zwicker 2001); 3DGS adopts it directly</li><li>Real implementations also add a $0.3 I$ low-pass filter (anti-aliasing)</li></ul>
+<p>Unable to do the first-order Taylor linearization of the nonlinear projection; or missing the World→Cam step.</p>
+</details>
+<details>
+
+<summary>Q24. Which Jacobian does SDS gradient drop? Why does it still "work"?</summary>
+<ul><li><p><strong>Naive diffusion training gradient</strong>:</p>
+<p>$\nabla_\theta \mathcal{L}_\text{diff} = \mathbb{E}[w(t)\cdot 2(\epsilon_\phi - \epsilon)\cdot \underbrace{\partial \epsilon_\phi/\partial x_t}_{\text{U-Net Jacobian}}\cdot \alpha_t \cdot \partial x/\partial\theta]$</p></li><li><p><strong>SDS</strong> drops the U-Net Jacobian $\partial \epsilon_\phi/\partial x_t$:</p>
+<p>$\nabla_\theta \mathcal{L}_\text{SDS} = \mathbb{E}[w(t)(\epsilon_\phi - \epsilon)\cdot \partial x/\partial\theta]$</p></li><li><p><strong>Why dropping it is reasonable</strong>:</p>
+<ul><li>The U-Net Jacobian is expensive (H×W×3 input → H×W×3 output second-order)</li><li>U-Net is not trained for second-order stability, the Jacobian is numerically poor</li><li>$(\epsilon_\phi - \epsilon)$ itself is already a proxy for the score ($\epsilon_\phi/\sigma_t \approx -\nabla_{x_t}\log p_\phi$); dropping the Jacobian amounts to using a first-order score signal</li></ul></li><li><strong>Cost</strong>: SDS mathematically becomes a mode-seeking KL (toward modes of the prior), needing large CFG (100) to escape mean-blur</li><li><strong>Symptoms</strong>: over-saturation (saturated colors) + Janus (same face in multiple views) + over-smoothing (blurry details)</li></ul>
+<p>Saying only "drop the Jacobian for simplicity" without explaining the mode-seeking consequence + why large CFG is needed.</p>
+</details>
+<details>
+
+<summary>Q25. Why can VSD avoid over-saturation under small CFG?</summary>
+<ul><li><strong>SDS view</strong>: $\theta$ is a point estimate; the gradient pulls toward modes of $p_\phi(\cdot|y)$; large CFG sharpens the modes further → over-saturation</li><li><strong>VSD view</strong>: $\theta$ is a random variable $\mu(\theta)$; <strong>minimizes the KL between noised rendered-image distributions</strong>: $\mathbb{E}_t[D_\text{KL}(q_\mu^t(x_t|y) \,\|\, p_\phi^t(x_t|y))]$ (not a direct KL against a 3D prior in the $\theta$ domain)</li><li>Introduces an <strong>auxiliary score</strong> $\epsilon_\psi$ (LoRA-finetuned Stable Diffusion) tracking the score of the current rendered distribution</li><li><p><strong>VSD gradient</strong>:</p>
+<p>$\nabla_\theta \mathcal{L}_\text{VSD} = \mathbb{E}[w(t)(\epsilon_\phi - \epsilon_\psi)\cdot \partial x/\partial \theta]$</p>
+<p>i.e. <strong>relative score</strong> (target prior score $-$ current rendered score)</p></li><li><strong>Geometric intuition</strong>: points from "where I am now" to "where the prior is" — a local "gradient direction" rather than a global mode; no large CFG sharpening needed</li><li><strong>RL analogy</strong>: actor-critic uses a value baseline for variance reduction; VSD uses $\epsilon_\psi$ as a baseline to reduce SDS noise</li><li><strong>Effects (ProlificDreamer)</strong>: CFG can drop to 7.5, natural colors; finer geometry; can maintain multiple modes (diversity)</li></ul>
+<p>Saying only "VSD introduces variational inference" without explaining the role of $\epsilon_\psi$ + the relative-gradient view.</p>
+</details>
+<h2 id="a-appendix-full-code-skeleton--references">§A Appendix: full code skeleton + references</h2>
+<h3 id="a1-complete-from-scratch-code-includes">A.1　Complete from-scratch code includes</h3>
+<p><code>volume_render()</code> (NeRF α-compositing with numerical stability) · <code>positional_encoding()</code> (γ(p) Fourier features) · <code>gaussian_splat_forward()</code> (3DGS pedagogical forward + projection Jacobian) · <code>densify_and_prune()</code> (3DGS densification heuristics) · <code>sds_loss()</code> (SDS gradient surrogate) · <code>marching_cubes_sketch()</code> (mesh extraction interface using scikit-image).</p>
+<h3 id="a2-key-papers-reading-list">A.2　Key papers reading list</h3>
+<ul><li><strong>NeRF family</strong>: Mildenhall 2020 ECCV (HM); Müller <strong>Instant-NGP</strong> SIGGRAPH 2022 Best; Barron <strong>Mip-NeRF</strong> / <strong>360</strong> ICCV 2021 / CVPR 2022; Wang <strong>NeuS</strong> + Yariv <strong>VolSDF</strong> NeurIPS 2021; Fridovich-Keil <strong>Plenoxels</strong> CVPR 2022; Chen <strong>TensoRF</strong> ECCV 2022.</li><li><strong>3DGS family</strong>: Kerbl <strong>3D Gaussian Splatting</strong> SIGGRAPH 2023 Best; Huang <strong>2D Gaussian Splatting</strong> SIGGRAPH 2024; Luiten <strong>Dynamic 3DGS</strong> 3DV 2024; Wu <strong>4DGS</strong> CVPR 2024; Guédon <strong>SuGaR</strong> CVPR 2024.</li><li><strong>Mesh / SDF</strong>: Shen <strong>DMTet</strong> NeurIPS 2021 / <strong>FlexiCubes</strong> SIGGRAPH 2023.</li><li><strong>SDS family</strong>: Poole <strong>DreamFusion</strong> arXiv 2022.09 → ICLR 2023 Outstanding; Wang <strong>ProlificDreamer (VSD)</strong> NeurIPS 2023 Spotlight; Lin <strong>Magic3D</strong> CVPR 2023; Chen <strong>Fantasia3D</strong> ICCV 2023; Tang <strong>DreamGaussian</strong> ICLR 2024; Yi <strong>GaussianDreamer</strong> CVPR 2024.</li><li><strong>Single-image 3D</strong>: Liu <strong>Zero-1-to-3</strong> ICCV 2023 / <strong>One-2-3-45</strong> NeurIPS 2023 / <strong>SyncDreamer</strong> ICLR 2024; Shi <strong>Zero-1-to-3++</strong> arXiv 2023 / <strong>MVDream</strong> ICLR 2024; Hong <strong>LRM</strong> arXiv 2023.11 → ICLR 2024; Tochilkin <strong>TripoSR</strong> arXiv 2024; Xu <strong>InstantMesh</strong> arXiv 2024; Boss <strong>Stable Fast 3D</strong> arXiv 2024.</li><li><strong>3D Foundation Models</strong>: Xiang <strong>Trellis</strong> arXiv 2024 (Microsoft); Tencent <strong>Hunyuan3D-2</strong> arXiv 2501.12202 (2025); Zhang <strong>CLAY</strong> SIGGRAPH 2024.</li></ul>
+<h3 id="a3-common-embodied-ai--ar--vr-follow-ups">A.3　Common Embodied AI / AR / VR follow-ups</h3>
+<p>3DGS connected to a physics engine → first extract mesh via 2DGS / SuGaR → IsaacSim / MuJoCo; dynamic NeRF → 4DGS / D-NeRF / K-Planes; real-time AR 3DGS → mobile-friendly (PostShot, Luma) + pruning / quantization; insufficient 3D data → Objaverse-XL (Trellis), 2D distillation (DreamFusion family), or multi-view heuristics (MVDream).</p>
+<hr />
+<p><strong>3D Generation Quick Reference</strong> · Main references: Mildenhall 2020 (NeRF), Müller 2022 (Instant-NGP), Kerbl 2023 (3DGS), Poole 2022/ICLR 2023 (DreamFusion), Wang 2023 (VSD), Xiang 2024 (Trellis), Tencent 2025 (Hunyuan3D-2). Covers: NeRF volume-rendering derivation, Instant-NGP hash grid, 3DGS projection Jacobian, SDS / VSD gradient derivation, single-image 3D, 3D foundation models. Essential for Embodied AI / AR / VR.</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/3d_generation_tutorial_en.md</code> ·
+  SHA256 <code>9caec9665d59</code> ·
+  generated at 2026-05-19 18:50 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Generation Systems 面试 Cheat Sheet</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/image_generation_systems_tutorial.md">
+<meta name="aris:source-sha256" content="76785ba96660960ae6f5caf7e252e7da39ef38867ad61c2750d98f248e53d625">
+<meta name="aris:generated-at" content="2026-05-19 08:36 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-直觉与全景">§1 直觉与全景</a>
+</li>
+<li><a href="#2-ldm-核心vae-compression--latent-diffusion">§2 LDM 核心：VAE Compression + Latent Diffusion</a>
+<ul>
+<li><a href="#21-ldm-损失rombach-et-al-2022-cvpr">2.1　LDM 损失（Rombach et al. 2022 CVPR）</a></li>
+<li><a href="#22-为什么-f8-是-sweet-spot">2.2　为什么 $f=8$ 是 sweet spot</a></li>
+<li><a href="#23-vae-的小-kl细节">2.3　VAE 的&quot;小 KL&quot;细节</a></li>
+</ul>
+</li>
+<li><a href="#3-sd-1x--sdxl--sd3--flux-主线">§3 SD 1.x → SDXL → SD3 → FLUX 主线</a>
+<ul>
+<li><a href="#31-sd-1x--2xstability-ai-2022">3.1　SD 1.x / 2.x（Stability AI 2022）</a></li>
+<li><a href="#32-sdxlpodell-et-al-2024-iclr">3.2　SDXL（Podell et al. 2024 ICLR）</a></li>
+<li><a href="#33-sd3esser-et-al-2024-icml">3.3　SD3（Esser et al. 2024 ICML）</a></li>
+<li><a href="#34-flux1black-forest-labs-2024">3.4　FLUX.1（Black Forest Labs 2024）</a></li>
+<li><a href="#35-并列开源线">3.5　并列开源线</a></li>
+</ul>
+</li>
+<li><a href="#4-dit-架构与-adaln-zero必考">§4 DiT 架构与 AdaLN-Zero（必考）</a>
+<ul>
+<li><a href="#41-dit-blockpeebles--xie-2023-iccv">4.1　DiT block（Peebles &amp; Xie 2023 ICCV）</a></li>
+<li><a href="#42-adaln-zero-推导为何-gate-初始化为-0">4.2　AdaLN-Zero 推导（&quot;为何 gate 初始化为 0&quot;）</a></li>
+<li><a href="#43-时间嵌入">4.3　时间嵌入</a></li>
+</ul>
+</li>
+<li><a href="#5-sd-推理循环--cfg核心代码">§5 SD 推理循环 + CFG（核心代码）</a>
+<ul>
+<li><a href="#51-cfg-公式">5.1　CFG 公式</a></li>
+<li><a href="#52-sd-inference-loop核心-40-行">5.2　SD inference loop（核心 40 行）</a></li>
+</ul>
+</li>
+<li><a href="#6-controlnet-与-ip-adapter条件扩展">§6 ControlNet 与 IP-Adapter：条件扩展</a>
+<ul>
+<li><a href="#61-controlnet-架构zhang-et-al-2023-iccv">6.1　ControlNet 架构（Zhang et al. 2023 ICCV）</a></li>
+<li><a href="#62-零卷积梯度推导l3-必问">6.2　零卷积梯度推导（L3 必问）</a></li>
+<li><a href="#63-hint-encoding--zero-conv核心-50-行">6.3　Hint encoding + zero-conv（核心 50 行）</a></li>
+<li><a href="#64-t2i-adaptermou-et-al-2024对比">6.4　T2I-Adapter（Mou et al. 2024）对比</a></li>
+<li><a href="#65-ip-adapterye-et-al-2023">6.5　IP-Adapter（Ye et al. 2023）</a></li>
+<li><a href="#66-decoupled-cross-attention核心-45-行">6.6　Decoupled Cross-Attention（核心 45 行）</a></li>
+<li><a href="#67-instantid--pulid--photomaker">6.7　InstantID / PuLID / PhotoMaker</a></li>
+</ul>
+</li>
+<li><a href="#7-个性化微调dreambooth--textual-inversion--lora--custom-diffusion">§7 个性化微调：DreamBooth / Textual Inversion / LoRA / Custom Diffusion</a>
+<ul>
+<li><a href="#71-textual-inversiongal-et-al-2023-iclr">7.1　Textual Inversion（Gal et al. 2023 ICLR）</a></li>
+<li><a href="#72-dreamboothruiz-et-al-2023-cvpr">7.2　DreamBooth（Ruiz et al. 2023 CVPR）</a></li>
+<li><a href="#73-lorahu-et-al-2022-iclr">7.3　LoRA（Hu et al. 2022 ICLR）</a></li>
+<li><a href="#74-lora-inject-到-nnlinear核心-40-行">7.4　LoRA inject 到 nn.Linear（核心 40 行）</a></li>
+<li><a href="#75-dreambooth--lora--lora-dreambooth">7.5　DreamBooth + LoRA = LoRA-DreamBooth</a></li>
+<li><a href="#76-dreambooth-训练-step核心-35-行">7.6　DreamBooth 训练 step（核心 35 行）</a></li>
+<li><a href="#77-hyperdreambooth--custom-diffusion-对比">7.7　HyperDreamBooth / Custom Diffusion 对比</a></li>
+</ul>
+</li>
+<li><a href="#8-图像编辑sdedit--instructpix2pix--prompt-to-prompt">§8 图像编辑：SDEdit / InstructPix2Pix / Prompt-to-Prompt</a>
+<ul>
+<li><a href="#81-sdeditmeng-et-al-2022-iclr">8.1　SDEdit（Meng et al. 2022 ICLR）</a></li>
+<li><a href="#82-sdedit-核心代码">8.2　SDEdit 核心代码</a></li>
+<li><a href="#83-instructpix2pixbrooks-et-al-2023-cvpr">8.3　InstructPix2Pix（Brooks et al. 2023 CVPR）</a></li>
+<li><a href="#84-prompt-to-prompthertz-et-al-2023-iclr">8.4　Prompt-to-Prompt（Hertz et al. 2023 ICLR）</a></li>
+</ul>
+</li>
+<li><a href="#9-蒸馏少步采样">§9 蒸馏：少步采样</a>
+<ul>
+<li><a href="#91-lcm--lcm-loraluo-et-al-2023">9.1　LCM / LCM-LoRA（Luo et al. 2023）</a></li>
+<li><a href="#92-sdxl-turboaddsauer-et-al-2024-eccv-sd3-turboladdsauer-et-al-2024">9.2　SDXL-Turbo：ADD（Sauer et al. 2024 ECCV）/ SD3-Turbo：LADD（Sauer et al. 2024）</a></li>
+<li><a href="#93-dmd--dmd2--hyper-sd-简表">9.3　DMD / DMD2 / Hyper-SD 简表</a></li>
+</ul>
+</li>
+<li><a href="#10-评测fid--clip-score--imagereward--hpsv2--pickscore">§10 评测：FID / CLIP-Score / ImageReward / HPSv2 / PickScore</a>
+</li>
+<li><a href="#11-复杂度--资源">§11 复杂度 / 资源</a>
+<ul>
+<li><a href="#111-训练侧数量级估计">11.1　训练侧（数量级估计）</a></li>
+<li><a href="#112-推理侧粗估依赖实现">11.2　推理侧（粗估，依赖实现）</a></li>
+<li><a href="#113-memory-footprint-cheat-sheet">11.3　Memory footprint cheat sheet</a></li>
+</ul>
+</li>
+<li><a href="#12-与相关方法对比">§12 与相关方法对比</a>
+<ul>
+<li><a href="#121-扩散族-vs-其他生成模型">12.1　扩散族 vs 其他生成模型</a></li>
+<li><a href="#122-扩散-internal-route">12.2　扩散 internal route</a></li>
+</ul>
+</li>
+<li><a href="#13-25-高频面试题codex-55-xhigh-顶级-lab-面试官视角">§13 25 高频面试题（codex 5.5 xhigh 顶级 lab 面试官视角）</a>
+<ul>
+<li><a href="#l1必会题任何视觉--multimodal-工程岗都会问">L1必会题（任何视觉 / multimodal 工程岗都会问）</a></li>
+<li><a href="#l2进阶题research--production-岗位">L2进阶题（research / production 岗位）</a></li>
+<li><a href="#l3顶级-lab--深入题research-lead-视角">L3顶级 lab / 深入题（research lead 视角）</a></li>
+</ul>
+</li>
+<li><a href="#a-附录参考与-reference-list">§A 附录：参考与 reference list</a>
+<ul>
+<li><a href="#主要论文按时间">主要论文（按时间）</a></li>
+<li><a href="#一句话总结">一句话总结</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Interview Prep · Image Generation Systems</div>
+  <h1>Image Generation Systems 面试 Cheat Sheet</h1>
+  <p class="subtitle">LDM / SD / SDXL / SD3 / FLUX / ControlNet / LoRA + 25 高频题（L1 必会 · L2 进阶 · L3 顶级 lab）</p>
+  <p class="byline">By <strong>Ruofeng Yang (杨若峰), Shanghai Jiao Tong University</strong></p>
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/image_generation_systems_tutorial.md</code></span>
+    <span><strong>SHA256:</strong> <code>76785ba96660</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 08:36 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">8 句话搞定 Image Generation 系统</div><p>一页拿下 production text-to-image 栈核心（详见 §1–§10 推导）。</p></div>
+<ol><li><strong>LDM 关键</strong>：VAE encode 把 $H\times W\times 3$ 压成 $h\times w\times c$（SD 1.x: $8\times$ 下采样、$c=4$），扩散在 latent 上做，<strong>计算节省 $8^2=64\times$</strong>，最后再 VAE decode 出像素（Rombach et al. 2022 CVPR）。</li><li><strong>SD 1.x → SDXL → SD3 → FLUX 主线</strong>：1.x 用 CLIP-L 文本编码 + U-Net；SDXL 双编码器（OpenCLIP-G + CLIP-L）+ 2.6B U-Net + size/crop conditioning + Refiner（Podell et al. 2024 ICLR）；SD3 换 <strong>MM-DiT</strong> + Rectified Flow（Esser et al. 2024 ICML）；FLUX.1 12B MM-DiT 加 parallel attention（Black Forest Labs 2024）。</li><li><strong>CFG（必考）</strong>：训练时按概率 $p_\text{drop}\approx 0.1$ 把条件 $c$ 替换成 $\emptyset$；推理时输出 $\hat\epsilon_\text{cfg} = \hat\epsilon_\emptyset + s\,(\hat\epsilon_c - \hat\epsilon_\emptyset)$，$s \in [1.5, 12]$（Ho &amp; Salimans 2022）。</li><li><strong>ControlNet 零卷积</strong>（Zhang et al. 2023 ICCV）：把 U-Net encoder 整段 <strong>trainable copy</strong>，每个连接到主干的卷积 $W=0,b=0$ 初始化——前向恒等、<strong>梯度非零</strong>（$\partial L/\partial W = \delta \cdot x \neq 0$），训练时从干净恒等映射出发逐步注入条件信号，从而保护预训练能力。</li><li><strong>IP-Adapter</strong>（Ye et al. 2023）：<strong>Decoupled Cross-Attention</strong>——为图像条件<strong>新增一组</strong> $W_K', W_V'$，与原文本 cross-attn 并行，输出相加：$\text{out} = \text{Attn}(Q, K_\text{txt}, V_\text{txt}) + \lambda\,\text{Attn}(Q, K_\text{img}, V_\text{img})$。仅训新增 K/V + projector，~22M 参数。</li><li><strong>LoRA</strong>（Hu et al. 2022 ICLR）：$\Delta W = B A,\ B \in \mathbb{R}^{d\times r},\ A \in \mathbb{R}^{r\times k},\ r \ll \min(d,k)$；只训 $A, B$，原 $W$ 冻结。SD 上典型 $r \in \{4,8,16,32\}$，比全量小 50–200×；推理可 merge $W' = W + \alpha B A$。</li><li><strong>DreamBooth</strong>（Ruiz et al. 2023 CVPR）：rare-token（如 <code>sks dog</code>）+ <strong>prior preservation loss</strong> $L = \|\epsilon - \hat\epsilon(x_t, t, \text{"a sks dog"})\|^2 + \lambda \|\epsilon' - \hat\epsilon(x_t', t, \text{"a dog"})\|^2$，第二项防 language drift / 过拟合。</li><li><strong>DiT vs MM-DiT</strong>：DiT 用 <strong>AdaLN-Zero</strong>（条件 $\to$ MLP $\to$ scale/shift/gate，最后一层 $W_\text{gate}=0$ 实现恒等启动，Peebles &amp; Xie 2023 ICCV）；MM-DiT 把 text token 和 image token <strong>拼成一个序列做联合 self-attention</strong>（每个模态独立 QKV 投影，但 attention 是全局的），信息流双向（Esser et al. 2024）。</li></ol>
+<h2 id="1-直觉与全景">§1 直觉与全景</h2>
+<p>为什么需要 LDM？<strong>Pixel-space 扩散太贵</strong>：SD 时代 1024² 图像 = 3M 像素，U-Net 每个 timestep 都要全分辨率前向，单卡只能训 64×64 这种 toy 尺寸。LDM 的思路是先用预训练 <strong>VQ-VAE / KL-VAE</strong> 把图压到 latent（SD 1.x: $512\times 512\times 3 \to 64\times 64\times 4$，$64\times$ token 数减少），扩散只在 latent 上做，最后再 VAE decode 回像素，把"语义 / 结构 / 纹理"三件事解耦：</p>
+<pre><code>    pixels x        latent z (perceptually similar)        latent z_T (noise)
+   [H,W,3]    →     [h,w,c]     →     diffuse     →     [h,w,c]
+                       ▲                                    │
+                       │  VAE decoder                       │  reverse SDE / ODE
+                       │                                    ▼
+                    pixels x̂          ←      latent z_0      ←    [h,w,c]</code></pre>
+<p>整个 production 栈分成 5 个<strong>正交可替换</strong>的模块：</p>
+<table><thead><tr><th>模块</th><th>作用</th><th>SD 1.x</th><th>SDXL</th><th>SD3 / FLUX</th></tr></thead><tbody><tr><td><strong>VAE</strong></td><td>pixel ↔ latent</td><td>KL-VAE ($f=8$, $c=4$)</td><td>KL-VAE ($f=8$, $c=4$)</td><td>$f=8$, $c=16$（更宽 latent）</td></tr><tr><td><strong>Text encoder</strong></td><td>text → token embedding</td><td>CLIP-L</td><td>OpenCLIP-G + CLIP-L</td><td>CLIP-L + OpenCLIP-G + <strong>T5-XXL</strong>（SD3）/ T5-XXL + CLIP-L（FLUX）</td></tr><tr><td><strong>Denoiser</strong></td><td>$\epsilon$ / $v$ / $u$ 预测</td><td>U-Net 860M</td><td>U-Net 2.6B</td><td>MM-DiT 2B / 8B / 12B</td></tr><tr><td><strong>Objective</strong></td><td>训练目标</td><td>$\epsilon$-pred (DDPM)</td><td>$\epsilon$-pred</td><td><strong>Rectified Flow</strong> (v-pred 一族)</td></tr><tr><td><strong>Sampler</strong></td><td>reverse 过程</td><td>DDIM / PLMS / DPM++</td><td>DDIM / DPM++</td><td>Euler / Heun (RF ODE)</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Conditioning 三态</div><p>面试时主动 disambiguate 你说的"条件"是哪一种。</p></div>
+<ul><li><strong>Semantic conditioning（文本）</strong>：text encoder embedding → cross-attention K/V，主要驱动"画什么"</li><li><strong>Structural conditioning（边缘 / 深度 / 姿态）</strong>：ControlNet / T2I-Adapter，驱动"按什么结构画"</li><li><strong>Identity / style conditioning（人脸 / 风格）</strong>：IP-Adapter / InstantID / PuLID / DreamBooth / LoRA，驱动"画成谁的样子 / 谁的画风"</li></ul>
+<h2 id="2-ldm-核心vae-compression--latent-diffusion">§2 LDM 核心：VAE Compression + Latent Diffusion</h2>
+<h3 id="21-ldm-损失rombach-et-al-2022-cvpr">2.1　LDM 损失（Rombach et al. 2022 CVPR）</h3>
+<p>预训练 KL-VAE 给一个 encoder $\mathcal{E}: \mathbb{R}^{H\times W\times 3} \to \mathbb{R}^{h\times w\times c}$ 和 decoder $\mathcal{D}$，满足 $\mathcal{D}(\mathcal{E}(x)) \approx x$（感知重建），$h = H/f$，下采样倍率 $f \in \{4, 8, 16\}$，SD 一族用 $f=8$。</p>
+<p>在 latent 空间训 diffusion，目标与像素 DDPM 一致：</p>
+<p>$$\boxed{\;\mathcal{L}_\text{LDM} = \mathbb{E}_{z_0, \epsilon, t, c}\left[\,\big\|\epsilon - \epsilon_\theta\!\left(z_t,\, t,\, \tau_\theta(c)\right)\big\|^2\,\right]\;}$$</p>
+<p>其中 $z_0 = \mathcal{E}(x)$，$z_t = \sqrt{\bar\alpha_t}\, z_0 + \sqrt{1-\bar\alpha_t}\,\epsilon$，$\tau_\theta(c)$ 是 text encoder 输出。</p>
+<h3 id="22-为什么-f8-是-sweet-spot">2.2　为什么 $f=8$ 是 sweet spot</h3>
+<p>Rombach 2022 Table 8 ablation：</p>
+<table><thead><tr><th>下采样 $f$</th><th>计算节省</th><th>重建质量（FID↓）</th><th>生成质量（FID↓）</th></tr></thead><tbody><tr><td>$f=4$</td><td>$16\times$</td><td>最好（latent 接近 pixel）</td><td>一般（扩散仍然太贵）</td></tr><tr><td>$f=8$</td><td>$64\times$</td><td>略损（PSNR 微降）</td><td><strong>最佳</strong></td></tr><tr><td>$f=16$</td><td>$256\times$</td><td>显著降（VAE 重建变差）</td><td>重建瓶颈拖垮生成</td></tr><tr><td>$f=32$</td><td>$1024\times$</td><td>VAE 几乎无法重建细节</td><td>生成质量大幅下降</td></tr></tbody></table>
+<p><strong>关键洞察</strong>：VAE 重建质量是上限——latent diffusion 无论多强都画不出 VAE 解不出来的图。所以 $f$ 不是越大越好，要在"压缩率"和"重建上限"之间找平衡。</p>
+<h3 id="23-vae-的小-kl细节">2.3　VAE 的"小 KL"细节</h3>
+<p>SD VAE 是 <strong>KL-VAE，不是 VQ-VAE</strong>——latent 是<strong>连续高斯</strong>，KL 项极小（$\sim 10^{-6}$ 量级），近似一个 AE 加微弱正则。Rombach 2022 Appendix 解释：太强 KL 会让 latent 退化成纯高斯，丢掉结构信息。</p>
+<div class="callout callout-warn"><div class="callout-title">SD VAE scaling factor</div><p>直接用 $\mathcal{E}(x)$ 训扩散，raw latent 标准差远离 1（SD 1.x raw std 约 5.5）。SD 的做法是 latent 乘标量 <code>0.18215</code>（"scaling factor"，约等于 $1/5.5$）让 std 接近 1。SDXL/SD3 重新校准了这个常数（SDXL <code>0.13025</code>；SD3 <code>scaling_factor=1.5305</code> + <code>shift_factor=0.0609</code>，diffusers 的 SD3 pipeline 是 <code>z = (z_raw - shift) * scaling</code>）。<strong>不一致就会 over/under noising</strong>——pipeline 代码里这是经典 bug 源。</p></div>
+<h2 id="3-sd-1x--sdxl--sd3--flux-主线">§3 SD 1.x → SDXL → SD3 → FLUX 主线</h2>
+<h3 id="31-sd-1x--2xstability-ai-2022">3.1　SD 1.x / 2.x（Stability AI 2022）</h3>
+<ul><li><strong>U-Net 860M 参数</strong>：cross-attention 装在 latent 分辨率 64 / 32 / 16 三档下采样 + 对应上采样块 + middle block（SD v1 config <code>attention_resolutions = [4, 2, 1]</code>，DS=1/2/4 即 64/32/16；最深的 DS=8 也即 8×8 下采样和上采样块只有 ResBlock 不带 transformer，但 middle block 8×8 有 transformer），文本通过 CLIP-L (<code>openai/clip-vit-large-patch14</code>，768-d) 提供 77 token embedding</li><li><strong>Objective</strong>：$\epsilon$-prediction（DDPM Ho et al. 2020 NeurIPS）</li><li><strong>训练分辨率</strong>：512²，1B+ LAION 图像</li><li>2.x 换 OpenCLIP-H/14（更强但 license cleaner），并在 768² 上 fine-tune</li></ul>
+<h3 id="32-sdxlpodell-et-al-2024-iclr">3.2　SDXL（Podell et al. 2024 ICLR）</h3>
+<p>三个关键升级：</p>
+<table><thead><tr><th>改动</th><th>细节</th></tr></thead><tbody><tr><td><strong>2.6B U-Net</strong></td><td>更宽更深；3× 1.x 参数</td></tr><tr><td><strong>双文本编码器</strong></td><td>OpenCLIP-G (1280-d) + CLIP-L (768-d)；concat 后做 cross-attn</td></tr><tr><td><strong>Size &amp; crop conditioning</strong></td><td>训练时 $(h_\text{orig}, w_\text{orig})$ 与 $(h_\text{crop}, w_\text{crop})$ Fourier-embed 后<strong>加到 timestep embedding 上</strong>，让模型显式知道"这张图原本多大、被裁了哪里"，避免低分辨率 / 裁剪伪影泄漏到推理</td></tr><tr><td><strong>Refiner</strong></td><td>一个独立 latent diffusion 模型，专做最后 ~20% noise level（$t < 0.2$），仅细节精修；可选</td></tr><tr><td><strong>训练分辨率</strong></td><td>1024²（最终），bucketing 不同 aspect ratio</td></tr></tbody></table>
+<div class="callout callout-good"><div class="callout-title">Size conditioning 训练效果</div><p>SDXL Table 1：没有 size conditioning 时，模型见到 512² LAION 图，会把"低分辨率感"当成数据先验，1024² 推理时模糊；加入 size conditioning 后，推理时填 <code>(1024, 1024)</code> 就能告诉模型"我要 1024 质量"，<strong>显著降低模糊 / 块状伪影</strong>。Crop conditioning 同理修复 LAION center-crop 偏置。</p></div>
+<h3 id="33-sd3esser-et-al-2024-icml">3.3　SD3（Esser et al. 2024 ICML）</h3>
+<p>核心改动两个：</p>
+<p><strong>1）训练目标换成 Rectified Flow（RF）</strong></p>
+<p>$$x_t = (1-t)\, x_0 + t\, x_1,\quad u_t = x_1 - x_0$$</p>
+<p>其中 $x_0 \sim \mathcal{N}(0, I)$ 噪声端，$x_1$ 数据端。模型学 $v_\theta(x_t, t, c) \approx x_1 - x_0$。Loss 用 logit-normal $t$ sampling（中间 $t$ 概率更高）+ RF 加权。<strong>注意 timestep convention 与 DDPM 相反</strong>：SD3 论文用 $t=0$ 噪声、$t=1$ 数据，但有些代码库（diffusers）会改回 SD 旧 convention，<strong>面试要主动 disambiguate</strong>。</p>
+<p><strong>2）Denoiser 换成 MM-DiT（Multimodal Diffusion Transformer）</strong></p>
+<p>文本和图像 token <strong>拼成一个序列</strong>做联合 self-attention，每个模态有<strong>独立</strong>的 QKV 投影 + AdaLN-Zero MLP 参数，但 attention 矩阵是全局的（双向）。这意味着：</p>
+<pre class="diagram"><code>[txt tokens, img tokens]  ──╮
+       │                     ├─ joint self-attention  ──→  双向信息流
+       │                     │                            (txt sees img, img sees txt)
+       │                     │
+   独立 QKV (txt, img)       │
+   独立 LN/MLP gate (txt, img)</code></pre>
+<p>对比 SD 1.x/SDXL 的 <strong>cross-attention</strong>：image queries 单向读 text K/V，<strong>text 不会被更新</strong>。MM-DiT 让 text 也被 image 更新（"图像 → 文本"流向打开），实验上文本对齐显著提升。</p>
+<h3 id="34-flux1black-forest-labs-2024">3.4　FLUX.1（Black Forest Labs 2024）</h3>
+<p>12B 参数 MM-DiT v2，主要差异：</p>
+<table><thead><tr><th>维度</th><th>FLUX.1</th></tr></thead><tbody><tr><td>参数量</td><td>dev: 12B，schnell: 同 12B 但蒸馏过</td></tr><tr><td>架构</td><td>MM-DiT + <strong>parallel attention block</strong>（attn 和 MLP 并行而非串行，类似 PaLM / GPT-J）</td></tr><tr><td>文本编码</td><td>T5-XXL (4096-d) + CLIP-L</td></tr><tr><td>训练目标</td><td>Rectified Flow（与 SD3 同族）</td></tr><tr><td>采样</td><td>dev：~28-50 步；schnell：1-4 步（adversarial diffusion distillation）</td></tr><tr><td>Position encoding</td><td>RoPE 2D（对图像 token），文本 token 用绝对位置</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Parallel attention</div><p>Standard transformer block: <code>y = x + Attn(LN(x)); y = y + MLP(LN(y))</code>。Parallel block: <code>y = x + Attn(LN(x)) + MLP(LN(x))</code>，两支并行算、加在一起。<strong>收益</strong>是 GPU 上 attn 和 MLP 可以重叠 launch / overlap，且权重融合更简洁；轻微的表达力损失通常被规模补回。</p></div>
+<h3 id="35-并列开源线">3.5　并列开源线</h3>
+<ul><li><strong>PixArt-α / Σ</strong>（Chen et al. 2024）：DiT-XL/2 + T5 文本，强调"训练成本只有 SDXL 的 12%"，small but capable。</li><li><strong>Hunyuan-DiT</strong>（Tencent 2024 arXiv 2405.08748）：中文友好双语 DiT，1.5B 参数，CLIP + mT5 双编码。</li><li><strong>DiT</strong>（Peebles &amp; Xie 2023 ICCV）：把扩散去噪从 U-Net 换成 ViT-style transformer，类 token + AdaLN-Zero conditioning，scale 律比 U-Net 平滑——这是 SD3/FLUX 的祖先。</li><li><strong>U-ViT</strong>（Bao et al. 2023）：U-Net 风骨架但纯 transformer block + long skip connection，是早期 transformer-based diffusion 探索。</li><li><strong>Imagen</strong>（Saharia et al. 2022 NeurIPS）：Google <strong>pixel-space</strong>（不是 latent）级联扩散——$64\times 64$ base + $256\times 256$ super-res + $1024\times 1024$ super-res；文本用大 T5-XXL，结果显示<strong>文本编码器规模 &gt; U-Net 规模</strong>对文本对齐影响更大。</li></ul>
+<h2 id="4-dit-架构与-adaln-zero必考">§4 DiT 架构与 AdaLN-Zero（必考）</h2>
+<h3 id="41-dit-blockpeebles--xie-2023-iccv">4.1　DiT block（Peebles &amp; Xie 2023 ICCV）</h3>
+<p>DiT 把 ViT block 改成扩散友好：每个 block 由 condition $c = \text{embed}(t) + \text{embed}(\text{class})$ 控制。</p>
+<pre class="diagram"><code>Input tokens x_l (shape [B, N, D]),  condition c (shape [B, D])
+                │
+        ┌───────┴────────┐
+        │                │
+   MLP(c) → (α₁, β₁, γ₁) │  scale / shift / gate parameters
+        │                │
+        ▼                │
+   LayerNorm(x_l)        │
+        │                │
+   scale·γ₁ + shift·β₁   │  ← AdaLN: normalize then conditioned affine
+        │                │
+   Multi-Head Attention  │
+        │                │
+   × α₁ (gate, 0-init)   │  ← gate × residual; α₁ starts at 0
+        │                │
+   +  x_l                │  residual
+        │                │
+        ▼                │
+   ┌────────────┐        │
+   │ second half│        │
+   │ (LN + MLP) │       同样 (α₂, β₂, γ₂) ← MLP(c)
+   └────────────┘
+        │
+        ▼
+   Output x_{l+1}</code></pre>
+<h3 id="42-adaln-zero-推导为何-gate-初始化为-0">4.2　AdaLN-Zero 推导（"为何 gate 初始化为 0"）</h3>
+<p>DiT 实际形式（Peebles &amp; Xie 2023, Eqn. (5)–(6)）：condition $c$ 经一个 MLP 一次性产出 $(\beta_1, \gamma_1, \alpha_1, \beta_2, \gamma_2, \alpha_2)$，归一化层用 <strong>(1 + gamma)</strong> 而不是 <code>gamma</code> 直乘：</p>
+<p>$$\text{AdaLN}(x, c) = \big(1 + \gamma(c)\big) \odot \text{LN}(x) + \beta(c)$$</p>
+<p><strong>AdaLN-Zero</strong> 让产出 $(\beta, \gamma, \alpha)$ 的 MLP 最后一层 weight + bias <strong>初始化为 0</strong>：</p>
+<p>$$\text{Block}(x, c) = x + \alpha(c) \cdot f\!\left(\big(1 + \gamma(c)\big) \odot \text{LN}(x) + \beta(c)\right)$$</p>
+<p>训练 step 0：MLP 全 0 → $\gamma = 0, \beta = 0, \alpha = 0$ → AdaLN 退化为 $\text{LN}(x)$、gate $\alpha = 0$ → 整个 block 输出 $= x$（恒等）。<strong>注意是 <code>1 + gamma</code>，所以 gamma=0 时归一化路径不会被乘 0 抹掉，只是恒等于 LN(x)</strong>。</p>
+<div class="callout callout-good"><div class="callout-title">关键性质</div><p>$\alpha = 0$ 时 block 是恒等，但 <strong>梯度非零</strong>。链式法则：</p></div>
+<p>$$\frac{\partial L}{\partial \alpha} = \frac{\partial L}{\partial \text{out}} \cdot f\!\left((1+\gamma)\odot\text{LN}(x) + \beta\right)$$</p>
+<p>step 0 时 $\gamma = \beta = 0$，$f((1+0)\cdot\text{LN}(x) + 0) = f(\text{LN}(x))$ <strong>非零</strong>（LN(x) 一般非零，attention/MLP 也不会把任意输入映成 0）；因此 $\partial L/\partial \alpha \neq 0$，再链式回 $W^{\text{last}}_\text{MLP}$ 即得到非零梯度——$\alpha$ 从 0 开始长大，block 逐步从恒等映射 fork 出非平凡变换，训练稳定不发散。</p>
+<p>注意 $\gamma, \beta$ 自身在 step 0 梯度为 0（因为它们的下游被 $\alpha = 0$ 截断：$\partial L/\partial \gamma = (\partial L/\partial \alpha\cdot$ ...) 这条路径要经过 $\alpha$，而 $\alpha = 0$ 时 $\partial \text{Block}/\partial \gamma$ 包含 $\alpha\cdot f'(\cdot)$ 因子等于 0）。但 $\alpha$ 一旦长出来，下一步 $\gamma, \beta$ 立刻拿到非零梯度——所以"first $\alpha$ 长大，再 $\gamma, \beta$ 跟进"是 AdaLN-Zero 的两阶段动力学。</p>
+<p>对比朴素初始化（标准随机 $\alpha \neq 0$）：早期 block 输出已经有大方差，叠 24-32 层后激活炸掉、训练发散。AdaLN-Zero 是 DiT scale 上去的关键设计。</p>
+<h3 id="43-时间嵌入">4.3　时间嵌入</h3>
+<p>$$\text{TimeEmbed}(t) = \text{MLP}\!\left(\text{SinusoidalEmb}(t)\right),\quad \text{SinusoidalEmb}(t)_{2i} = \sin\!\left(t / 10000^{2i/D}\right)$$</p>
+<p>奇偶位置分别用 sin / cos，类似 Transformer 位置编码。$t$ 在 SD 中是离散 timestep $\in \{0, 1, ..., T-1\}$，在 RF / FM 中是连续 $\in [0, 1]$。</p>
+<h2 id="5-sd-推理循环--cfg核心代码">§5 SD 推理循环 + CFG（核心代码）</h2>
+<h3 id="51-cfg-公式">5.1　CFG 公式</h3>
+<p>训练时以概率 $p_\text{drop} \approx 0.1$ 把 $c$ 替换成 null（空 text embedding 或 zero embedding），让同一个网络既学条件也学非条件。推理：</p>
+<p>$$\boxed{\;\hat\epsilon_\text{cfg}(z_t, t, c) = \hat\epsilon_\theta(z_t, t, \emptyset) + s\cdot\left[\hat\epsilon_\theta(z_t, t, c) - \hat\epsilon_\theta(z_t, t, \emptyset)\right]\;}$$</p>
+<p>$s$ 是 guidance scale；SD 1.x 一般 $s \in [5, 12]$；SDXL $s \approx 5$-$7$；FLUX dev $\approx 3.5$（更小，因为 RF 模型 CFG 敏感）。</p>
+<p><strong>v-prediction / RF 下</strong>形式相同，把 $\hat\epsilon$ 换成 $\hat v$ 即可。</p>
+<h3 id="52-sd-inference-loop核心-40-行">5.2　SD inference loop（核心 40 行）</h3>
+<pre><code class="language-python">import torch
+
+@torch.no_grad()
+def sd_sample(unet, vae, text_encoder, tokenizer, scheduler,
+              prompt, neg_prompt=&quot;&quot;, num_steps=30, cfg_scale=7.0,
+              height=512, width=512, device=&quot;cuda&quot;, dtype=torch.float16):
+    # 1) text 编码：把 prompt 和 negative prompt 都 forward 一次
+    ids_pos = tokenizer(prompt, padding=&quot;max_length&quot;, max_length=77,
+                        truncation=True, return_tensors=&quot;pt&quot;).input_ids.to(device)
+    ids_neg = tokenizer(neg_prompt, padding=&quot;max_length&quot;, max_length=77,
+                        truncation=True, return_tensors=&quot;pt&quot;).input_ids.to(device)
+    emb_pos = text_encoder(ids_pos)[0]                  # [1, 77, D_text]
+    emb_neg = text_encoder(ids_neg)[0]
+    emb = torch.cat([emb_neg, emb_pos], dim=0)          # [2, 77, D_text]  (uncond, cond)
+
+    # 2) latent 初始化：纯噪声 [1, 4, h/8, w/8]
+    lat_shape = (1, 4, height // 8, width // 8)
+    z = torch.randn(lat_shape, device=device, dtype=dtype) * scheduler.init_noise_sigma
+
+    # 3) scheduler 设定 timestep
+    scheduler.set_timesteps(num_steps, device=device)
+
+    # 4) 主循环
+    for t in scheduler.timesteps:
+        # 拼 batch：两份 latent 分别配 (uncond, cond) 一次性 forward,
+        # 比顺序两次 forward 省一次 kernel launch + 利用 cuDNN batch 友好
+        z_in = torch.cat([z, z], dim=0)                  # [2, 4, h, w]
+        z_in = scheduler.scale_model_input(z_in, t)      # 某些 sampler 要 sigma scaling
+
+        eps = unet(z_in, t, encoder_hidden_states=emb).sample   # [2, 4, h, w]
+        eps_neg, eps_pos = eps.chunk(2, dim=0)
+
+        # 5) CFG combine
+        eps_cfg = eps_neg + cfg_scale * (eps_pos - eps_neg)
+
+        # 6) scheduler step：根据 eps 推回 z_{t-1}
+        z = scheduler.step(eps_cfg, t, z).prev_sample
+
+    # 7) VAE decode + denormalize 回像素 [0, 1]
+    z = z / 0.18215                                       # SD 1.x scaling factor
+    x = vae.decode(z).sample                              # [1, 3, H, W] in [-1, 1]
+    x = ((x.clamp(-1, 1) + 1) / 2)                        # → [0, 1]
+    return x</code></pre>
+<div class="callout callout-warn"><div class="callout-title">CFG 双 forward 不要忘合并</div><p>新手常写两次 unet forward，吞 2× 时间；正确做法是 <code>torch.cat([z, z])</code> + <code>torch.cat([emb_neg, emb_pos])</code> 一次性 forward。<strong>进一步</strong>：CFG-distilled / Guidance-distilled 模型（如 SDXL-Turbo、FLUX schnell）甚至不需要双 forward。</p></div>
+<div class="callout callout-warn"><div class="callout-title">scaling factor 务必对齐</div><p>SD 1.x: <code>0.18215</code>，SDXL: <code>0.13025</code>，SD3: scalar <code>scaling_factor=1.5305</code> + <code>shift_factor=0.0609</code>（diffusers 的 SD3 pipeline 里 <code>z = (z_raw - shift) * scaling</code>）。错了图就出错色 / 高频伪影。</p></div>
+<h2 id="6-controlnet-与-ip-adapter条件扩展">§6 ControlNet 与 IP-Adapter：条件扩展</h2>
+<h3 id="61-controlnet-架构zhang-et-al-2023-iccv">6.1　ControlNet 架构（Zhang et al. 2023 ICCV）</h3>
+<p><strong>问题</strong>：要把 edge / depth / pose 等结构条件灌进预训练 SD，从头训成本太高，全量 fine-tune 又会破坏 text-to-image 能力。</p>
+<p><strong>方案</strong>：</p>
+<pre class="diagram"><code>    Input latent z_t  ──┬───────────────────►  原 SD U-Net Encoder (frozen)
+                        │                              │
+                        │    Condition image c_img     │
+                        │           │                  │
+                        │           ▼                  │
+                        │    Hint Encoder (conv stack) │
+                        │           │                  │
+                        │           ▼                  │
+                        └────► Trainable Copy ←────────┤  encoder 部分 deep copy,
+                                    │                  │  开始训练
+                                    │                  │
+                              Zero Conv (W=0, b=0)     │
+                                    │                  │
+                                    ▼                  │
+                              add to skip connection ──┘  ─────►  Decoder (frozen)</code></pre>
+<ul><li><strong>Trainable copy</strong>：完整复制 SD U-Net <strong>encoder + middle block</strong>，作为副本，初始权重 = 原 SD encoder weights</li><li><strong>Zero-conv</strong>：每个连接到主干 skip 路径的 $1\times 1$ 卷积，weight 与 bias <strong>全初始化为 0</strong></li><li><strong>Hint encoder</strong>：4 层 conv 把 condition image (1 或 3 channel) 投到 latent shape</li><li><strong>训练时</strong>：原 SD encoder/decoder 冻结，只训 trainable copy + zero-conv + hint encoder</li></ul>
+<h3 id="62-零卷积梯度推导l3-必问">6.2　零卷积梯度推导（L3 必问）</h3>
+<p>零卷积 layer：$y = W \star x + b$，$W = 0, b = 0$，则 $y = 0$；加到主干 skip 上等于"什么都不加"，前向恒等。</p>
+<p><strong>反向传播时分两条路径</strong>：</p>
+<p><strong>(a) zero-conv 自身权重</strong>：</p>
+<p>$$\frac{\partial L}{\partial W_{ij}} = \frac{\partial L}{\partial y_i} \cdot x_j$$</p>
+<p>$x_j$（zero-conv 的输入，来自 trainable copy 输出）非零、$\partial L / \partial y_i$ 非零，<strong>梯度非零</strong>——所以 $W$ 会从 0 开始更新。</p>
+<p><strong>(b) trainable copy 的参数 $\theta_c$</strong>：要经过 $x \to y$ 这条路径，链式法则的关键因子是 $\partial y / \partial x = W$。step 0 时 $W = 0$，<strong>所以第一步 trainable copy 自身的梯度也是 0</strong>。</p>
+<p><strong>收敛过程因此是两阶段</strong>：</p>
+<ol><li>Step 0：$W = 0$ → ControlNet 完全不影响主干 → 输出 = 原 SD 输出 → <strong>不可能比 baseline 差</strong></li><li>Step 1：zero-conv 自己 break 零（路径 (a)）→ $W \neq 0$ → 路径 (b) 解锁</li><li>Step 2+：trainable copy 开始接收梯度并学习</li><li>训练结束：$W$ 与 trainable copy 共同达到合适幅度，结构条件被纳入</li></ol>
+<div class="callout callout-good"><div class="callout-title">为什么这么巧妙</div><p>普通随机初始化 trainable copy 会让"未训练好的副本"提前污染主干信号，导致训练初期 SD 能力被破坏（catastrophic forgetting）。零卷积保证了一个 <strong>clean warm start</strong>——梯度信号在 zero-conv 自身那条路径上立即可传（破零只需 1 步），随后 trainable copy 跟进，<strong>先解耦再纳入</strong>。</p></div>
+<h3 id="63-hint-encoding--zero-conv核心-50-行">6.3　Hint encoding + zero-conv（核心 50 行）</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+def zero_module(m: nn.Module) -&gt; nn.Module:
+    &quot;&quot;&quot; 把模块所有参数清零（用于 ControlNet zero-conv 与 IP-Adapter projector） &quot;&quot;&quot;
+    for p in m.parameters():
+        nn.init.zeros_(p)
+    return m
+
+class HintEncoder(nn.Module):
+    &quot;&quot;&quot; 把 condition image (e.g. canny edge, depth) 编码到 latent 分辨率 &quot;&quot;&quot;
+    def __init__(self, in_ch=3, out_ch=320):  # 320 = SD U-Net first hidden dim
+        super().__init__()
+        # 渐进下采样到 1/8（与 VAE 同倍率）；最后一层是 zero-conv
+        self.net = nn.Sequential(
+            nn.Conv2d(in_ch, 16, 3, padding=1),       nn.SiLU(),
+            nn.Conv2d(16, 16, 3, padding=1),          nn.SiLU(),
+            nn.Conv2d(16, 32, 3, padding=1, stride=2), nn.SiLU(),   # /2
+            nn.Conv2d(32, 32, 3, padding=1),          nn.SiLU(),
+            nn.Conv2d(32, 96, 3, padding=1, stride=2), nn.SiLU(),   # /4
+            nn.Conv2d(96, 96, 3, padding=1),          nn.SiLU(),
+            nn.Conv2d(96, 256, 3, padding=1, stride=2), nn.SiLU(),  # /8
+            zero_module(nn.Conv2d(256, out_ch, 3, padding=1)),
+        )
+
+    def forward(self, hint):     # hint: [B, 3, H, W]
+        return self.net(hint)    # [B, out_ch, H/8, W/8]
+
+class ControlNetBlock(nn.Module):
+    &quot;&quot;&quot; Trainable copy 输出 → zero-conv → 加到主干 skip 上 &quot;&quot;&quot;
+    def __init__(self, ch):
+        super().__init__()
+        # 这是连接到主干 skip 的&quot;输出 zero-conv&quot;
+        self.zero_conv = zero_module(nn.Conv2d(ch, ch, 1))   # 1×1, init 0
+
+    def forward(self, x_copy, x_main_skip):
+        # x_copy: trainable copy 当前层输出
+        # x_main_skip: 原 SD U-Net 对应层的 skip activation
+        return x_main_skip + self.zero_conv(x_copy)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">常见误解</div><p>零卷积不是 dropout，不是 LoRA，不是 BatchNorm。它是<strong>初始化策略</strong>：weight=0 让"前向恒等 + 梯度非零"二者兼得。</p></div>
+<h3 id="64-t2i-adaptermou-et-al-2024对比">6.4　T2I-Adapter（Mou et al. 2024）对比</h3>
+<p>ControlNet 的 trainable copy 太重（参数量 ≈ 半个 SD），T2I-Adapter 的思路是<strong>纯 adapter</strong>：</p>
+<table><thead><tr><th>维度</th><th>ControlNet</th><th>T2I-Adapter</th></tr></thead><tbody><tr><td>主干干预</td><td>复制整个 encoder</td><td>4 个轻量 conv block 直接喂 skip</td></tr><tr><td>参数量</td><td>~360M（SD 1.5）</td><td>~77M</td></tr><tr><td>质量</td><td>较高（结构跟随强）</td><td>略弱（但够用）</td></tr><tr><td>推理速度</td><td>慢（双 encoder）</td><td>几乎免费</td></tr></tbody></table>
+<h3 id="65-ip-adapterye-et-al-2023">6.5　IP-Adapter（Ye et al. 2023）</h3>
+<p><strong>IP-Adapter 用 reference image 做 conditioning，跨身份 / 风格保持</strong>。核心是 <strong>Decoupled Cross-Attention</strong>：</p>
+<pre class="diagram"><code>    image  ──► CLIP image encoder ──► [N_img, D_clip]
+                                            │
+                                            ▼
+                                    Projector (Linear, ~22M params)
+                                            │
+                                            ▼
+                                    image embeddings [N_img, D_text]
+                                            │
+                                            │  与 text embedding 并行使用
+                                            │
+    text   ──► text encoder ──► [N_txt, D_text]
+                │                                                          ▲
+                │                                                          │
+                ▼                                                          │
+   ┌───────────────────────────────────────────────────────────────┐
+   │   每个 U-Net cross-attention 层:                                │
+   │                                                                │
+   │   Q = z W_Q                                                    │
+   │                                                                │
+   │   原文本路径:    K_txt = c_txt W_K^txt,   V_txt = c_txt W_V^txt   │
+   │   新图像路径:    K_img = c_img W_K^img,   V_img = c_img W_V^img   │
+   │                                                                │
+   │   out = Attn(Q, K_txt, V_txt) + λ · Attn(Q, K_img, V_img)      │
+   │                                                                │
+   │   只训练 W_K^img, W_V^img, projector                            │
+   └───────────────────────────────────────────────────────────────┘</code></pre>
+<p>参数量约 22M（projector ~10M + 每层新增 K/V 投影合计 ~12M），是 SD 全量的 ~1%。</p>
+<h3 id="66-decoupled-cross-attention核心-45-行">6.6　Decoupled Cross-Attention（核心 45 行）</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class DecoupledCrossAttention(nn.Module):
+    &quot;&quot;&quot; 文本 + 图像并行 cross-attention，输出相加 &quot;&quot;&quot;
+    def __init__(self, d_model, num_heads, d_text, d_image, lam=1.0):
+        super().__init__()
+        self.h = num_heads
+        self.d = d_model
+        self.d_head = d_model // num_heads
+        self.lam = lam
+
+        # 文本路径：与原 SD 一致，加载预训练权重后**冻结**
+        self.W_Q     = nn.Linear(d_model, d_model, bias=False)   # query 来自 latent
+        self.W_K_txt = nn.Linear(d_text,  d_model, bias=False)
+        self.W_V_txt = nn.Linear(d_text,  d_model, bias=False)
+        self.W_O     = nn.Linear(d_model, d_model, bias=False)
+        for p in (*self.W_Q.parameters(),
+                  *self.W_K_txt.parameters(),
+                  *self.W_V_txt.parameters(),
+                  *self.W_O.parameters()):
+            p.requires_grad_(False)        # ← IP-Adapter 只训新增 K/V
+
+        # 图像路径：新增 K/V，仅这两个 + projector 是 trainable 的
+        self.W_K_img = nn.Linear(d_image, d_model, bias=False)
+        self.W_V_img = nn.Linear(d_image, d_model, bias=False)
+
+    def _split_heads(self, x):     # [B, L, D] → [B, H, L, d_head]
+        B, L, _ = x.shape
+        return x.view(B, L, self.h, self.d_head).transpose(1, 2)
+
+    def _attn(self, Q, K, V):       # 标准 scaled dot-product
+        return F.scaled_dot_product_attention(Q, K, V)   # [B, H, L_q, d_head]
+
+    def forward(self, z, c_text, c_image):
+        # z: [B, L_z, D]   c_text: [B, L_t, d_text]   c_image: [B, L_i, d_image]
+        Q     = self._split_heads(self.W_Q(z))
+        K_txt = self._split_heads(self.W_K_txt(c_text))
+        V_txt = self._split_heads(self.W_V_txt(c_text))
+        K_img = self._split_heads(self.W_K_img(c_image))
+        V_img = self._split_heads(self.W_V_img(c_image))
+
+        out_txt = self._attn(Q, K_txt, V_txt)
+        out_img = self._attn(Q, K_img, V_img)
+        out = out_txt + self.lam * out_img            # ← 解耦相加
+
+        # [B, H, L_q, d_head] → [B, L_q, D]
+        B, _, L_q, _ = out.shape
+        out = out.transpose(1, 2).contiguous().view(B, L_q, self.d)
+        return self.W_O(out)</code></pre>
+<div class="callout callout-info"><div class="callout-title">为何 decoupled 比 concat 好</div><p>一种 naive 思路是把 image embedding <strong>concat</strong> 到 text embedding（变长序列做单 cross-attn）。但 IP-Adapter 论文 Table 4 显示，concat 会让文本对齐显著下降（CLIP-Score 掉点）——因为 Q 对 K_txt 和 K_img 用了<strong>同一组 softmax</strong>，长度上 image token 多就抢走 text 注意力。Decoupled 用<strong>两个独立 softmax 然后线性相加</strong>，两路信号互不挤压，是更优的工程方案。</p></div>
+<h3 id="67-instantid--pulid--photomaker">6.7　InstantID / PuLID / PhotoMaker</h3>
+<p><strong>目标</strong>都是单参考图 → 保 ID 文生图，主流路线：</p>
+<table><thead><tr><th>方法</th><th>核心机制</th></tr></thead><tbody><tr><td><strong>InstantID</strong> (Wang, Bai et al. 2024)</td><td>IP-Adapter 风格 + 加 face landmark ControlNet，<strong>face embedding 解耦于 ID embedding</strong></td></tr><tr><td><strong>PuLID</strong> (Guo, Wu et al. 2024 NeurIPS)</td><td>双分支 + contrastive alignment，避免 ID 信号污染 prompt 跟随性</td></tr><tr><td><strong>PhotoMaker</strong> (Li, Cao et al. 2024 CVPR)</td><td>"ID embedding stacker"：多张同一人脸的 CLIP embedding 平均后 + class embedding 拼接，注入到 cross-attn</td></tr></tbody></table>
+<p>共同思路：<strong>ID-relevant 信号</strong> 用专门 adapter，<strong>ID-irrelevant 信号</strong>（pose / 表情 / 光照）让 prompt 控制，避免身份直接 paste。</p>
+<h2 id="7-个性化微调dreambooth--textual-inversion--lora--custom-diffusion">§7 个性化微调：DreamBooth / Textual Inversion / LoRA / Custom Diffusion</h2>
+<h3 id="71-textual-inversiongal-et-al-2023-iclr">7.1　Textual Inversion（Gal et al. 2023 ICLR）</h3>
+<p><strong>只训一个 token embedding，不动模型</strong>：</p>
+<ol><li>引入新 token <code>S*</code>（如 <code>&lt;my-cat&gt;</code>），其 embedding $e_{S^*} \in \mathbb{R}^{d_\text{text}}$ 是<strong>唯一可训参数</strong></li><li>训练目标：</li></ol>
+<p>$$e_{S^*}^* = \arg\min_{e} \mathbb{E}_{z, \epsilon, t}\left[\|\epsilon - \epsilon_\theta(z_t, t, c(\text{"a photo of } S^*\text{"}; e))\|^2\right]$$</p>
+<ol><li>~3-5K steps 收敛，<strong>embedding 总参数 768-1024 维，文件 &lt; 10KB</strong></li></ol>
+<p><strong>优点</strong>：极轻，无 catastrophic forgetting；<strong>缺点</strong>：表达力有限（一个 embedding 装不下复杂概念）。</p>
+<h3 id="72-dreamboothruiz-et-al-2023-cvpr">7.2　DreamBooth（Ruiz et al. 2023 CVPR）</h3>
+<p>核心配方两条：</p>
+<p><strong>1）Rare token + class word</strong>：用罕见 token（如 <code>sks</code>、<code>zwx</code>）+ 类别词（<code>dog</code>、<code>person</code>），prompt 形如 <code>&quot;a photo of sks dog&quot;</code>。罕见 token 在预训练时 embedding 是"语义死角"，不会被原有概念干扰。</p>
+<p><strong>2）Prior Preservation Loss</strong>：</p>
+<p>$$\boxed{\;\mathcal{L} = \mathbb{E}\!\left[\|\epsilon - \hat\epsilon_\theta(z_t, t, c_\text{sks})\|^2\right] + \lambda\,\mathbb{E}\!\left[\|\epsilon' - \hat\epsilon_\theta(z_t', t, c_\text{class})\|^2\right]\;}$$</p>
+<p>第二项是"class-prior preservation"——用模型<strong>自身生成的</strong> class images（如 200 张 <code>&quot;a photo of dog&quot;</code>）做 anchor，告诉模型"sks dog 是特殊的，但普通 dog 还得画对"。$\lambda$ 一般 1.0。</p>
+<div class="callout callout-warn"><div class="callout-title">没有 prior preservation 的失败模式</div><p>(i) <strong>Language drift</strong>：模型把 "dog" 的概念整体偏移到 sks 的特定形态；(ii) <strong>Concept bleed</strong>：所有 <code>dog</code> prompt 都画成 sks dog；(iii) <strong>Overfitting</strong>：~5 张训练图被记死，不同 prompt 生成结果几乎一致。<strong>生产实践</strong>：DreamBooth 一定要配合 prior preservation 或 LoRA-DreamBooth（更稳）。</p></div>
+<h3 id="73-lorahu-et-al-2022-iclr">7.3　LoRA（Hu et al. 2022 ICLR）</h3>
+<p><strong>核心数学</strong>：对 weight $W \in \mathbb{R}^{d \times k}$ 不直接 fine-tune，而是学<strong>低秩增量</strong>：</p>
+<p>$$\boxed{\;W' = W + \Delta W,\quad \Delta W = B A,\quad B \in \mathbb{R}^{d \times r},\ A \in \mathbb{R}^{r \times k},\ r \ll \min(d, k)\;}$$</p>
+<p>通常 $A$ 用 $\mathcal{N}(0, \sigma^2)$ 初始化，$B$ 初始化为 0 → $\Delta W = 0$（保留预训练）→ 训练时只更新 $A, B$。推理时 $W' = W + \alpha B A$（$\alpha$ scaling factor）。</p>
+<p><strong>参数节省</strong>：原 $W$ 有 $d \cdot k$ 参数；LoRA 有 $r(d + k)$ 参数。SD U-Net cross-attn 一个 $W_K$ 是 $D \times d_\text{text}$（如 $1280 \times 2048 = 2.6M$）；$r = 8$ 时 LoRA 是 $8(1280 + 2048) = 26K$，<strong>100× 少</strong>。</p>
+<h3 id="74-lora-inject-到-nnlinear核心-40-行">7.4　LoRA inject 到 nn.Linear（核心 40 行）</h3>
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class LoRALinear(nn.Module):
+    &quot;&quot;&quot; Wrap nn.Linear with low-rank delta. Original weight is frozen. &quot;&quot;&quot;
+    def __init__(self, base: nn.Linear, rank=8, alpha=8.0, dropout=0.0):
+        super().__init__()
+        self.base = base                          # 冻结原 Linear
+        for p in self.base.parameters():
+            p.requires_grad_(False)
+
+        d_in, d_out = base.in_features, base.out_features
+        self.rank, self.alpha = rank, alpha
+        self.scale = alpha / rank                 # 推理时统一 scaling
+
+        # ΔW = B A,  A: [r, d_in],  B: [d_out, r]
+        self.A = nn.Parameter(torch.empty(rank, d_in))
+        self.B = nn.Parameter(torch.zeros(d_out, rank))   # B = 0  → ΔW = 0
+        nn.init.kaiming_uniform_(self.A, a=5**0.5)        # 类似 nn.Linear 默认
+
+        self.drop = nn.Dropout(dropout) if dropout &gt; 0 else nn.Identity()
+
+    def forward(self, x):
+        # 原路径：用 frozen base
+        out = self.base(x)
+        # LoRA 增量：x @ A^T @ B^T  (顺序很重要——避免 [d_out, d_in] 大矩阵)
+        out = out + self.drop(x) @ self.A.t() @ self.B.t() * self.scale
+        return out
+
+def inject_lora(model, target_module_names=(&quot;to_q&quot;, &quot;to_k&quot;, &quot;to_v&quot;),
+                rank=8, alpha=8.0):
+    &quot;&quot;&quot; 把 SD U-Net 内 cross-attn / self-attn 的 to_q/to_k/to_v Linear 替换为 LoRALinear；
+        to_out 在 Diffusers 里是 nn.Sequential([Linear, Dropout])，要用 to_out.0 单独处理 &quot;&quot;&quot;
+    replaced = 0
+    for name, mod in model.named_modules():
+        for child_name, child in list(mod.named_children()):
+            # 1) to_q / to_k / to_v：单层 Linear，直接替换
+            if (child_name in target_module_names
+                    and isinstance(child, nn.Linear)):
+                setattr(mod, child_name, LoRALinear(child, rank=rank, alpha=alpha))
+                replaced += 1
+            # 2) to_out：Diffusers Attention 的 to_out 是 nn.Sequential(Linear, Dropout)
+            #    SDXL LoRA 习惯只 wrap 第 0 个（Linear）
+            if child_name == &quot;to_out&quot; and isinstance(child, nn.Sequential):
+                lin = child[0]
+                if isinstance(lin, nn.Linear):
+                    child[0] = LoRALinear(lin, rank=rank, alpha=alpha)
+                    replaced += 1
+    return replaced</code></pre>
+<div class="callout callout-info"><div class="callout-title">LoRA 放在 attention QKV vs MLP</div><p>经验上 SD 类模型 LoRA <strong>放 attention 的 Q/K/V/O 比 MLP 收益高</strong>（attention 是文本-图像跨模态交互瓶颈，调权重直接改 conditioning 行为）。LLM 则相反，MLP 含更多知识 → MoE LoRA 也常放 FFN。SDXL LoRA 默认覆盖：<code>to_q</code>, <code>to_k</code>, <code>to_v</code>, <code>to_out.0</code> + 部分 conv（如 ResBlock 内的 <code>conv1</code>, <code>conv2</code>）。</p></div>
+<h3 id="75-dreambooth--lora--lora-dreambooth">7.5　DreamBooth + LoRA = LoRA-DreamBooth</h3>
+<p>实战中<strong>很少用纯 DreamBooth</strong>（全量训太重），主流是 LoRA-DreamBooth：只对 attention 的 Q/K/V/O 注入 LoRA，配 prior preservation。文件 ~50-200MB，单卡 30 分钟，复现性远好于纯 DreamBooth。</p>
+<h3 id="76-dreambooth-训练-step核心-35-行">7.6　DreamBooth 训练 step（核心 35 行）</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def dreambooth_train_step(unet, vae, text_encoder, scheduler,
+                          x_instance, c_instance,    # 训练图像 + &quot;a sks dog&quot; embedding
+                          x_class, c_class,          # 自生 class 图像 + &quot;a dog&quot; embedding
+                          lam_prior=1.0, dtype=torch.float16, device=&quot;cuda&quot;):
+    &quot;&quot;&quot; 一个 DreamBooth + prior preservation 训练 step &quot;&quot;&quot;
+    bs = x_instance.shape[0]
+
+    # 1) 把 instance &amp; class 拼成 2× batch 一次 forward
+    x = torch.cat([x_instance, x_class], dim=0)
+    c = torch.cat([c_instance, c_class], dim=0)        # text embeddings
+
+    # 2) encode 到 latent + scale
+    with torch.no_grad():
+        z = vae.encode(x).latent_dist.sample() * 0.18215    # [2bs, 4, h, w]
+
+    # 3) 随机采 timestep + 噪声
+    t = torch.randint(0, scheduler.num_train_timesteps, (z.shape[0],), device=device)
+    eps = torch.randn_like(z)
+    z_t = scheduler.add_noise(z, eps, t)
+
+    # 4) 预测 ε
+    eps_pred = unet(z_t, t, encoder_hidden_states=c).sample
+
+    # 5) 分两组算 loss：instance / class 各一份
+    eps_pred_inst, eps_pred_cls = eps_pred.chunk(2, dim=0)
+    eps_inst, eps_cls = eps.chunk(2, dim=0)
+
+    loss_inst = F.mse_loss(eps_pred_inst.float(), eps_inst.float(),
+                           reduction=&quot;mean&quot;)
+    loss_cls  = F.mse_loss(eps_pred_cls.float(),  eps_cls.float(),
+                           reduction=&quot;mean&quot;)
+    loss = loss_inst + lam_prior * loss_cls
+
+    return loss</code></pre>
+<h3 id="77-hyperdreambooth--custom-diffusion-对比">7.7　HyperDreamBooth / Custom Diffusion 对比</h3>
+<ul><li><strong>HyperDreamBooth</strong> (Ruiz et al. 2024)：用 hypernetwork 直接预测每张参考图的 LoRA 权重，<strong>inference-time 个性化</strong>（~5 秒，对比 DreamBooth ~10 分钟训练）。</li><li><strong>Custom Diffusion</strong> (Kumari et al. 2023)：只更新 cross-attention 的 $W_K, W_V$（不动 $W_Q$），加 regularization image 防过拟合。本质是更窄的 LoRA-DreamBooth。</li></ul>
+<table><thead><tr><th>方法</th><th>训参数</th><th>推理代价</th><th>表达力</th><th>文件大小</th></tr></thead><tbody><tr><td>Textual Inversion</td><td>embedding（1 个 token）</td><td>0</td><td>弱</td><td>&lt; 10 KB</td></tr><tr><td>DreamBooth (full)</td><td>整个 U-Net</td><td>0</td><td>强</td><td>~5 GB</td></tr><tr><td>LoRA-DreamBooth</td><td>LoRA on Q/K/V/O</td><td>merge 后 0</td><td>较强</td><td>50-200 MB</td></tr><tr><td>Custom Diffusion</td><td>只 W_K, W_V</td><td>0</td><td>中</td><td>~70 MB</td></tr><tr><td>HyperDreamBooth</td><td>一个 hypernet 输出 LoRA</td><td>多一次 hypernet 前向</td><td>中</td><td>~120 MB 主网</td></tr></tbody></table>
+<h2 id="8-图像编辑sdedit--instructpix2pix--prompt-to-prompt">§8 图像编辑：SDEdit / InstructPix2Pix / Prompt-to-Prompt</h2>
+<h3 id="81-sdeditmeng-et-al-2022-iclr">8.1　SDEdit（Meng et al. 2022 ICLR）</h3>
+<p><strong>思路</strong>：图像编辑 = "把输入图加部分噪声 → 用 prompt 引导 reverse 回去"。</p>
+<pre class="diagram"><code>   输入图 x (e.g. 草图)
+         │
+         │   noise_strength = 0.6 (例)
+         ▼
+   z_0 = VAE_enc(x)
+         │
+   z_τ = √(ᾱ_τ) z_0 + √(1 - ᾱ_τ) ε,   τ = noise_strength × T
+         │
+         ▼
+   reverse SDE / ODE from t=τ to t=0    (受 prompt c 引导)
+         │
+         ▼
+   z_0&#x27; →  VAE_dec → 编辑后图 x&#x27;</code></pre>
+<p><strong>关键参数 strength $\in [0, 1]$</strong>：</p>
+<ul><li>$\text{strength} \to 0$：noise 极少，输出 $\approx$ 输入（不编辑）</li><li>$\text{strength} \to 1$：完全噪声化，输出 = 纯文生图（输入信号丢失）</li><li>常用 $0.3$–$0.8$ 范围找 balance</li></ul>
+<h3 id="82-sdedit-核心代码">8.2　SDEdit 核心代码</h3>
+<pre><code class="language-python">import torch
+
+@torch.no_grad()
+def sdedit_sample(unet, vae, text_encoder, tokenizer, scheduler,
+                  init_image, prompt, neg_prompt=&quot;&quot;,
+                  strength=0.7, num_steps=30, cfg_scale=7.0,
+                  device=&quot;cuda&quot;, dtype=torch.float16):
+    assert 0.0 &lt; strength &lt;= 1.0, &quot;strength=0 == 不编辑（直接返回输入）；strength&gt;1 不合法&quot;
+
+    # 1) text 编码（与 §5 一致）
+    ids_pos = tokenizer(prompt, padding=&quot;max_length&quot;, max_length=77,
+                        truncation=True, return_tensors=&quot;pt&quot;).input_ids.to(device)
+    ids_neg = tokenizer(neg_prompt, padding=&quot;max_length&quot;, max_length=77,
+                        truncation=True, return_tensors=&quot;pt&quot;).input_ids.to(device)
+    emb = torch.cat([text_encoder(ids_neg)[0],
+                     text_encoder(ids_pos)[0]], dim=0)
+
+    # 2) 把输入图 encode 到 latent
+    z0 = vae.encode(init_image).latent_dist.sample() * 0.18215   # [1, 4, h, w]
+
+    # 3) 设 timestep 子集，只走后 strength 段
+    scheduler.set_timesteps(num_steps, device=device)
+    import math
+    # 用 ceil + max(1, .) 保证 strength&gt;0 时至少有 1 步要跑
+    n_edit = max(1, math.ceil(num_steps * strength))
+    t_start = num_steps - n_edit               # 0 ≤ t_start &lt; num_steps
+    timesteps = scheduler.timesteps[t_start:]  # 至少有 1 个 timestep
+
+    # 4) 给 z_0 加 timesteps[0] 那一档噪声
+    eps = torch.randn_like(z0)
+    z = scheduler.add_noise(z0, eps, timesteps[:1])
+
+    # 5) 主循环（与 §5 完全一致）
+    for t in timesteps:
+        z_in = torch.cat([z, z], dim=0)
+        z_in = scheduler.scale_model_input(z_in, t)
+        eps_pred = unet(z_in, t, encoder_hidden_states=emb).sample
+        eps_neg, eps_pos = eps_pred.chunk(2, dim=0)
+        eps_cfg = eps_neg + cfg_scale * (eps_pos - eps_neg)
+        z = scheduler.step(eps_cfg, t, z).prev_sample
+
+    # 6) decode
+    z = z / 0.18215
+    return ((vae.decode(z).sample.clamp(-1, 1) + 1) / 2)</code></pre>
+<h3 id="83-instructpix2pixbrooks-et-al-2023-cvpr">8.3　InstructPix2Pix（Brooks et al. 2023 CVPR）</h3>
+<p><strong>做指令式编辑</strong>："add a hat to the dog"。训练数据用 GPT-3 + Prompt-to-Prompt 合成（pair-wise (源图, 指令, 目标图)），fine-tune SD 1.x。架构：</p>
+<ul><li>U-Net 输入 channel 数 4 → 8（原 latent 4 + 源图 latent 4）</li><li>两种 CFG scale：text guidance $s_T$ 和 image guidance $s_I$，独立调</li></ul>
+<p>$$\hat\epsilon = \hat\epsilon(\emptyset, \emptyset) + s_I [\hat\epsilon(c_I, \emptyset) - \hat\epsilon(\emptyset, \emptyset)] + s_T [\hat\epsilon(c_I, c_T) - \hat\epsilon(c_I, \emptyset)]$$</p>
+<h3 id="84-prompt-to-prompthertz-et-al-2023-iclr">8.4　Prompt-to-Prompt（Hertz et al. 2023 ICLR）</h3>
+<p><strong>Training-free 编辑</strong>：通过<strong>操纵 cross-attention map</strong> 实现"换词不换结构"。</p>
+<ul><li>跑原 prompt P 得到每层每步的 cross-attn map $M_t$（shape $[H_q, L_t]$，对每个图像 token 给出每个文本 token 的权重）</li><li>跑新 prompt P\*（只改一个词，如 <code>cat</code> → <code>dog</code>）但<strong>强制把对应文本 token 的 attention map 替换为原 P 的对应位置</strong></li><li>因此结构（哪些图像 patch 关注哪些文本位置）保留，只有内容（softmax 之后被指向的 value）更新</li></ul>
+<p>适合 "swap one word"、"add adjective"、"reweight emphasis" 三类编辑。</p>
+<h2 id="9-蒸馏少步采样">§9 蒸馏：少步采样</h2>
+<h3 id="91-lcm--lcm-loraluo-et-al-2023">9.1　LCM / LCM-LoRA（Luo et al. 2023）</h3>
+<p><strong>Latent Consistency Model</strong>：把 latent diffusion 蒸馏成 <strong>Consistency Model</strong>（Song et al. 2023），让单步预测 $f_\theta(z_t, t)$ 直接给出 $z_0$，从 50 步压到 4-8 步。</p>
+<p><strong>LCM-LoRA</strong>：把上述蒸馏写成 <strong>LoRA</strong>，base SDXL/SDXL-1.0 + 一个 ~200MB LCM-LoRA = 4 步出图。零样本切换，<strong>可与个性化 LoRA 叠加</strong>。</p>
+<h3 id="92-sdxl-turboaddsauer-et-al-2024-eccv-sd3-turboladdsauer-et-al-2024">9.2　SDXL-Turbo：ADD（Sauer et al. 2024 ECCV）/ SD3-Turbo：LADD（Sauer et al. 2024）</h3>
+<p><strong>SDXL-Turbo = ADD (Adversarial Diffusion Distillation, arXiv 2311.17042 / ECCV 2024)</strong>；<strong>SD3-Turbo = LADD (Latent Adversarial Diffusion Distillation, arXiv 2403.12015)</strong> —— 两套独立方法，ADD 在 pixel 空间用 vision encoder 做判别器，LADD 改到 latent 空间训判别器，规模化到 SD3 大模型。</p>
+<p><strong>Adversarial Diffusion Distillation (ADD)</strong>：</p>
+<ul><li><strong>Teacher</strong>：原 SDXL（多步扩散模型）</li><li><strong>Student</strong>：与 teacher 同架构，目标 1-4 步出图</li><li><p><strong>三个 loss</strong>：</p>
+<ol><li>Distillation loss：student 输出与 teacher 多步采样结果 MSE / LPIPS</li><li>Adversarial loss：DINOv2-based discriminator 判 student 输出真假</li><li>Score loss：score distillation 类似 SDS 形式</li></ol></li></ul>
+<p>ADD 是少步蒸馏 SOTA 路线之一；FLUX schnell 也基于类似思想（"timestep distillation" + adversarial）。</p>
+<h3 id="93-dmd--dmd2--hyper-sd-简表">9.3　DMD / DMD2 / Hyper-SD 简表</h3>
+<table><thead><tr><th>方法</th><th>核心</th></tr></thead><tbody><tr><td>DMD (Yin et al. 2024)</td><td>用 KL divergence 间接对齐 student 与 teacher 分布，1 步生成</td></tr><tr><td>DMD2 (Yin et al. 2024)</td><td>DMD + 一些训练稳定性技巧</td></tr><tr><td>Hyper-SD (Ren et al. 2024)</td><td>trajectory-segmented consistency distillation</td></tr><tr><td>Lightning SDXL</td><td>4-8 步 SDXL 蒸馏，开源版本流行</td></tr></tbody></table>
+<h2 id="10-评测fid--clip-score--imagereward--hpsv2--pickscore">§10 评测：FID / CLIP-Score / ImageReward / HPSv2 / PickScore</h2>
+<table><thead><tr><th>指标</th><th>计算</th><th>评什么</th></tr></thead><tbody><tr><td><strong>FID</strong> (Heusel et al. 2017 NeurIPS)</td><td>Inception-V3 pool3 特征的 Fréchet distance（real vs gen）</td><td>整体分布相似度（多样性 + 真实度）</td></tr><tr><td><strong>CLIP-Score</strong></td><td>CLIP 算 (text, image) cosine similarity，平均</td><td>文本对齐</td></tr><tr><td><strong>ImageReward</strong> (Xu et al. 2023 NeurIPS)</td><td>拿人类偏好数据训的 reward model（ViT + CLIP backbone）</td><td>人类整体偏好（含审美 / 文本对齐 / 真实度）</td></tr><tr><td><strong>HPSv2</strong> (Wu et al. 2023)</td><td>Human Preference Score V2，类似 ImageReward 但更多数据</td><td>人类偏好（更细分类别）</td></tr><tr><td><strong>PickScore</strong> (Kirstain et al. 2023 NeurIPS)</td><td>Pick-a-Pic 数据集训练，CLIP-based</td><td>用户偏好</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">FID 局限</div><p>(i) 对 mode collapse 不敏感（生成方差小 FID 反而可能涨）；(ii) Inception-V3 是 ImageNet 训的，对人脸 / 艺术 / 非自然图偏置严重；(iii) <strong>生成数应至少 10K</strong>，&lt;5K 时方差极大，paper 间不可比；(iv) FID-30K vs FID-10K 不能直接比。<strong>面试要主动指出 FID 不是 final word</strong>，必须配合 human preference 指标（IR / HPSv2 / PickScore）。</p></div>
+<h2 id="11-复杂度--资源">§11 复杂度 / 资源</h2>
+<div class="callout callout-warn"><div class="callout-title">本节数字为粗估</div><p>训练 A100 小时、推理秒数、显存峰值都来自社区拼图与个别公开报告。准确度依赖 batch size / sequence 实现 / 优化器 / 显存策略；面试时主动声明"这是数量级估计、非官方数字"。</p></div>
+<h3 id="111-训练侧数量级估计">11.1　训练侧（数量级估计）</h3>
+<table><thead><tr><th>模型</th><th>参数</th><th>训练数据</th><th>训练算力（数量级估计）</th></tr></thead><tbody><tr><td>SD 1.5</td><td>860M U-Net + 84M VAE + 123M CLIP-L</td><td>LAION-5B → LAION-aesthetics 2B</td><td>~150K A100 hr 级</td></tr><tr><td>SDXL</td><td>2.6B U-Net + Refiner</td><td>内部 + LAION</td><td>~250-300K A100 hr 级</td></tr><tr><td>SD3</td><td>2B / 8B MM-DiT（最大 8B）</td><td>内部 ~1B</td><td>未公开（≫ SDXL）</td></tr><tr><td>FLUX.1</td><td>12B MM-DiT</td><td>内部</td><td>未公开（极大）</td></tr></tbody></table>
+<h3 id="112-推理侧粗估依赖实现">11.2　推理侧（粗估，依赖实现）</h3>
+<p><strong>SD 1.5 512×512（原生分辨率，latent 64×64×4）</strong>：</p>
+<ul><li>单步 U-Net FLOPs：~0.5T</li><li>单步 cross-attn QKV：(L_z=4096) × (L_t=77) → 0.3M score 矩阵 × 多层</li><li>单步显存：~2-3 GB（FP16，无 cross-attn KV cache）</li><li>30 步 ≈ 1.5-2 秒 / 张（A100，FP16）</li></ul>
+<p>（SD 1.5 在 1024² 上运行会比 512² 大约慢 4×；社区不建议非原生分辨率直接推理，常配合 SDXL 或 super-res。）</p>
+<p><strong>SDXL 1024×1024</strong>：</p>
+<ul><li>单步 U-Net FLOPs：~1.2T</li><li>30 步 ≈ 4-5 秒 / 张（A100，FP16）</li></ul>
+<p><strong>FLUX.1-dev 1024×1024</strong>：</p>
+<ul><li>MM-DiT FLOPs ≈ 2.5T / step</li><li>28 步 ≈ 12-15 秒（A100）；H100 ~5-7 秒</li></ul>
+<h3 id="113-memory-footprint-cheat-sheet">11.3　Memory footprint cheat sheet</h3>
+<table><thead><tr><th>组件</th><th>估算</th></tr></thead><tbody><tr><td>Latent ($1024^2 / f=8$)</td><td>$128 \times 128 \times 4 \times 2$ bytes (FP16) ≈ 130 KB</td></tr><tr><td>U-Net activations (SDXL, batch 1)</td><td>~7 GB（FP16，需 gradient checkpointing 才能训）</td></tr><tr><td>Cross-attn scores (peak)</td><td>$16384 \times 77 \times 2 \times \text{heads} \approx$ 几 MB / 层</td></tr><tr><td>KV cache for text</td><td>文本固定 77 token，CFG 双 batch → 154 token 等价；可全 batch 缓存</td></tr></tbody></table>
+<h2 id="12-与相关方法对比">§12 与相关方法对比</h2>
+<h3 id="121-扩散族-vs-其他生成模型">12.1　扩散族 vs 其他生成模型</h3>
+<table><thead><tr><th>类</th><th>速度</th><th>质量</th><th>训练稳定性</th></tr></thead><tbody><tr><td><strong>Diffusion / Flow</strong></td><td>慢（多步）</td><td>高</td><td>高（MSE 回归）</td></tr><tr><td>GAN (StyleGAN, BigGAN)</td><td>快（1 步）</td><td>高（特定 domain）</td><td>低（mode collapse）</td></tr><tr><td>VAE</td><td>快</td><td>低（模糊）</td><td>高</td></tr><tr><td>Autoregressive (DALL-E, Parti)</td><td>中（token by token）</td><td>中（DALL-E 1）/ 高（Parti）</td><td>高</td></tr><tr><td>Hybrid (Muse)</td><td>中（少步并行 token）</td><td>中-高</td><td>中</td></tr></tbody></table>
+<h3 id="122-扩散-internal-route">12.2　扩散 internal route</h3>
+<table><thead><tr><th>路线</th><th>表征</th><th>训练目标</th><th>代表</th></tr></thead><tbody><tr><td>Pixel-space DDPM</td><td>pixel</td><td>$\epsilon$-pred</td><td>Imagen, GLIDE</td></tr><tr><td>Latent diffusion</td><td>VAE latent</td><td>$\epsilon$-pred / $v$-pred</td><td>SD 1.x/2.x, SDXL</td></tr><tr><td>Latent rectified flow</td><td>VAE latent</td><td>$u_t = x_1 - x_0$</td><td>SD3, FLUX</td></tr><tr><td>Score-based EDM</td><td>pixel / latent</td><td>preconditioned $\epsilon$</td><td>EDM, EDM2</td></tr></tbody></table>
+<h2 id="13-25-高频面试题codex-55-xhigh-顶级-lab-面试官视角">§13 25 高频面试题（codex 5.5 xhigh 顶级 lab 面试官视角）</h2>
+<p>每题点开看答案要点 + 易踩坑。</p>
+<h3 id="l1必会题任何视觉--multimodal-工程岗都会问">L1必会题（任何视觉 / multimodal 工程岗都会问）</h3>
+<details>
+
+<summary>Q1.LDM 相比 pixel-space diffusion 为何更省算？</summary>
+<ul><li>VAE 把 $H\times W$ 下采样 $f=8$ 倍：$(H/8)\times(W/8)$ token</li><li>token 数下降 $f^2 = 64$ 倍，FLOPs 也相应下降</li><li>同等算力可上更高分辨率（512² → 1024²）</li></ul>
+<p>只说"压缩"，不给倍率推导；忘了 VAE 重建质量是上限。</p>
+</details>
+<details>
+
+<summary>Q2.SD 1.x 的 latent shape 是多少？</summary>
+<ul><li>输入 $512\times 512\times 3$，VAE encode 后 $64\times 64\times 4$</li><li>$f = 8$ 下采样，$c = 4$ channel</li><li><strong>VAE encode 之后</strong> 把 latent <strong>乘</strong> scaling factor <code>0.18215</code>（SD 1.x），让方差靠近 1 再喂扩散；<strong>VAE decode 之前</strong>再 <strong>除回</strong>。训练 / 推理两端方向一致——encode 后乘、decode 前除</li></ul>
+<p>scaling factor 给错（SDXL 是 0.13025，SD3 用 scalar <code>scaling_factor=1.5305</code> + <code>shift_factor=0.0609</code>）；或者把方向搞反（如果只在推理时做，训练时不做，latent 方差就完全错位）。</p>
+</details>
+<details>
+
+<summary>Q3.CFG 公式是什么？训练时怎么造 uncond 分支？</summary>
+<ul><li>推理：$\hat\epsilon_\text{cfg} = \hat\epsilon_\emptyset + s(\hat\epsilon_c - \hat\epsilon_\emptyset)$，$s \in [1.5, 12]$</li><li>训练：以概率 $p_\text{drop} \approx 0.1$ 把 condition 替换为 null embedding</li><li>同一模型既学条件分支也学无条件分支</li></ul>
+<p>把 $s$ 当作 temperature 乱调；忘了训练时的 dropout 步骤。</p>
+</details>
+<details>
+
+<summary>Q4.cross-attention 在 SD U-Net 中怎么用？</summary>
+<ul><li>Image latent token 做 Q</li><li>Text token embedding 做 K, V</li><li>出现在 U-Net <strong>装了 transformer block 的那几级</strong>（SD 1.5 config <code>attention_resolutions=[4,2,1]</code>：DS=1/2/4，即 latent 64/32/16 三档下采样 + 对应上采样 + middle block 8×8（512² 输入下 f=8 VAE → latent 64²，DS=8 即为 8×8 middle）；SD/SDXL 通常在最深 DS=8（如 512²/8/8 = 8×8，或 1024²/8/8 = 16×16）的中间 block 用纯 ResBlock + self-attention，<strong>不做 cross-attn</strong>）</li><li>每个 transformer block 内顺序：self-attention → cross-attention → FFN</li></ul>
+<p>说反 Q 和 K/V 的来源；以为 8×8 下采样 / 上采样块也有 cross-attn（其实只有 middle 才有）；或反过来以为只在 bottleneck 一处。</p>
+</details>
+<details>
+
+<summary>Q5.SDXL 相比 SD 1.5 的主要改动？</summary>
+<ul><li>U-Net 860M → 2.6B</li><li>CLIP-L → OpenCLIP-G + CLIP-L 双编码器</li><li>Size + crop conditioning：训练分辨率信号显式注入</li><li>Refiner（可选）做最后 ~20% 噪声段精修</li><li>训练分辨率 512² → 1024²，bucketing 多 aspect ratio</li></ul>
+<p>只说"参数变大"，漏 size conditioning / 双编码器。</p>
+</details>
+<details>
+
+<summary>Q6.ControlNet 零卷积的作用是什么？</summary>
+<ul><li>在 trainable copy 连接到主干的 1×1 conv 上，weight 与 bias 全初始化为 0</li><li>前向：$y = 0 \cdot x + 0 = 0$，加到主干 = 不影响（恒等启动）</li><li>反向：$\partial L / \partial W = \partial L / \partial y \cdot x \neq 0$，仍可更新</li><li>既保护预训练 SD 能力，又能学到条件信号</li></ul>
+<p>误以为零卷积"训不出来"；或者以为它和 BN / dropout 类似。</p>
+</details>
+<details>
+
+<summary>Q7.LoRA 公式是什么？参数节省比例多少？</summary>
+<ul><li>$W' = W + B A$，$A \in \mathbb{R}^{r \times k}$，$B \in \mathbb{R}^{d \times r}$，$r \ll \min(d, k)$</li><li>原 $W$ 冻结，只训 $A, B$</li><li>参数从 $dk$ 降到 $r(d+k)$，比例 $\approx r/\min(d,k)$，SD 上 $r=8$ 时 ~100× 少</li></ul>
+<p>把 $A, B$ 的形状写反；忘了 $W$ 是冻结的。</p>
+</details>
+<details>
+
+<summary>Q8.DreamBooth 的 prior preservation loss 解决什么？</summary>
+<ul><li>防止 language drift：模型把 class concept 整体替换为 sks 个性化形态</li><li>防 concept bleed：所有 <code>dog</code> prompt 都画成 sks</li><li>用模型自生 class 图像做 anchor，$L = L_\text{instance} + \lambda L_\text{class}$</li></ul>
+<p>只记得 sks 罕见 token，漏掉 prior loss；以为 prior loss 是 regularization on parameters。</p>
+</details>
+<details>
+
+<summary>Q9.IP-Adapter 与直接把图像 token concat 到 text 上有何区别？</summary>
+<ul><li>IP-Adapter 用 <strong>decoupled cross-attn</strong>：新增一组 $W_K', W_V'$ 与原文本并行，输出<strong>线性相加</strong></li><li>Concat 会让 Q 对 (text, image) 共享一个 softmax，长度上 image 多就挤压文本对齐</li><li>Decoupled 两路独立 softmax，互不干扰</li></ul>
+<p>只说"加了 image embedding"，不解释 softmax 互斥问题。</p>
+</details>
+<details>
+
+<summary>Q10.FID 评测有哪些局限？</summary>
+<ul><li>Inception-V3 是 ImageNet 训练，特征偏置（人脸 / 艺术风格不准）</li><li>对 mode collapse 不敏感（小方差可能 FID 反低）</li><li>生成数 &lt;10K 时方差大，跨 paper 不可比</li><li>不评单图质量，只评分布；需配合 CLIP-Score / ImageReward / HPSv2</li></ul>
+<p>把 FID 当万能金标；FID-10K vs FID-30K 直接对比。</p>
+</details>
+<h3 id="l2进阶题research--production-岗位">L2进阶题（research / production 岗位）</h3>
+<details>
+
+<summary>Q11.SDXL 的 size conditioning 是怎么训练 / 推理的？</summary>
+<ul><li>训练时记录每张图原始 $(h_\text{orig}, w_\text{orig})$ 与 crop 起点 $(h_\text{crop}, w_\text{crop})$</li><li>这 4 个标量 Fourier-embed 后过 MLP，<strong>加到 timestep embedding 上</strong>送入 U-Net</li><li>推理时填 $(1024, 1024)$ 与 $(0, 0)$ 告诉模型"我要 1024 全图质量"，避免低分辨率 / 裁剪伪影泄露到生成</li><li>也可故意填小 size / 非零 crop 控制风格</li></ul>
+<p>只说"加了分辨率信号"，不讲注入位置（时间 embedding）与 Fourier-embed 细节。</p>
+</details>
+<details>
+
+<summary>Q12.MM-DiT 与 SDXL cross-attn 的信息流差别？</summary>
+<ul><li>SDXL: cross-attn 中 image latent 做 Q，text 做 K/V，<strong>单向</strong>（text 不更新）</li><li>MM-DiT: text token 与 image token <strong>拼成一个序列做联合 self-attn</strong>，独立 QKV 投影但全局 attention 矩阵，<strong>双向</strong>（text 也被 image 更新）</li><li>实证：MM-DiT 显著提升复杂 prompt 的文本对齐（SD3 论文 Table 1）</li></ul>
+<p>说反方向；以为 MM-DiT 只是"更大的 cross-attn"。</p>
+</details>
+<details>
+
+<summary>Q13.AdaLN-Zero 中 gate 为何初始化为 0？训练初期梯度怎么传？</summary>
+<ul><li>$\text{Block}(x, c) = x + \alpha(c) \cdot f\big((1+\gamma(c)) \odot \text{LN}(x) + \beta(c)\big)$（DiT 用 <strong>1+γ</strong>，不是 γ 直乘）</li><li>$\alpha = 0$ 时 block 输出 = $x$（恒等），保证深层稳定 warm start</li><li>梯度通过 $\partial L / \partial \alpha = \partial L / \partial \text{out} \cdot f((1+0)\text{LN}(x)+0) \neq 0$，$\alpha$ 从 0 慢慢长大</li><li>注意 $\gamma, \beta$ 自身在 step 0 梯度为 0（被 $\alpha = 0$ 截断），$\alpha$ 长大后才跟进，是两阶段动力学</li><li>等价于"learnable identity shortcut"，DiT scale 上去的关键</li></ul>
+<p>写错 AdaLN 形式为 $\gamma\odot\text{LN}(x)+\beta$（漏掉 1+γ 的偏置）；以为 $\alpha = 0$ 训不动；把 AdaLN-Zero 当作普通 dropout。</p>
+</details>
+<details>
+
+<summary>Q14.LoRA 放 attention QKV 与放 MLP 谁更好？为什么？</summary>
+<ul><li>SD 类视觉生成：<strong>attention QKV</strong> 收益更大（跨模态条件信号瓶颈在 cross-attn）</li><li>LLM：MLP 含更多 task knowledge → 放 MLP / FFN 收益更高</li><li>SDXL LoRA 默认覆盖 <code>to_q, to_k, to_v, to_out.0</code> + 部分 conv</li><li>这是 SD vs LLM 的 fine-tune 经验性差异，与"哪部分参数承担条件交互"相关</li></ul>
+<p>把 SD 与 LLM 的 LoRA 配置混用；以为"哪都行"。</p>
+</details>
+<details>
+
+<summary>Q15.Rectified Flow 与 DDPM 在训练目标 / 采样上的差别？</summary>
+<ul><li><strong>DDPM</strong> ε-pred：$\mathcal{L} = \|\epsilon - \hat\epsilon_\theta(x_t, t)\|^2$，$x_t = \sqrt{\bar\alpha_t} x_0 + \sqrt{1-\bar\alpha_t}\epsilon$</li><li><strong>RF</strong>：$x_t = (1-t)x_0 + tx_1$（$x_0$ 噪声，$x_1$ 数据），$\mathcal{L} = \|u_t - v_\theta(x_t, t)\|^2$，$u_t = x_1 - x_0$ 是常数</li><li><strong>采样</strong>：DDPM 多用 DDIM / DPM++（基于 SDE / ODE 推导的高阶 solver），RF 直接 Euler / Heun</li><li>RF 路径直，少步采样质量好（SD3 / FLUX 选 RF 的关键原因）</li></ul>
+<p>把 RF 当作"另一个噪声 schedule"；忘了 RF target 是 $x_1 - x_0$ 不是 $\epsilon$。</p>
+</details>
+<details>
+
+<summary>Q16.SD VAE 的 scaling factor 是什么？为什么需要？</summary>
+<ul><li>VAE encode 输出的 raw latent 标准差远离 1（SD 1.x raw std 约 5.5）</li><li>直接用会让扩散噪声 schedule 失配（$x_t$ 信号 / 噪声比错）</li><li>SD 1.x 乘标量 <code>0.18215</code>，让 latent 方差 ≈ 1；SDXL 用 <code>0.13025</code>；SD3 用 scalar <code>scaling_factor=1.5305</code> + 标量 <code>shift_factor=0.0609</code>（不是 per-channel mean/std）</li><li>VAE encode 后 × scaling（SD3 还要先减 shift），VAE decode 前 ÷ scaling（SD3 再加回 shift），必须严格对齐</li></ul>
+<p>值给错；以为 SD3 用 per-channel 数组（其实是 scalar+shift）；忘了 encode 与 decode 两端都要做。</p>
+</details>
+<details>
+
+<summary>Q17.SDEdit 的 strength 参数怎么影响输出？</summary>
+<ul><li>strength $\in [0, 1]$ 决定加噪到哪个 timestep $\tau = \text{strength} \cdot T$</li><li>strength → 0：几乎无噪声，输出 ≈ 输入（不编辑）</li><li>strength → 1：完全噪声化，输出 = 纯文生图（输入完全丢失）</li><li>常用 0.3-0.8，找"保留结构 + 跟 prompt"的 sweet spot</li></ul>
+<p>把 strength 当 CFG scale 乱解释；忘了 0 是"不编辑"。</p>
+</details>
+<details>
+
+<summary>Q18.Prompt-to-Prompt 为什么能保结构？</summary>
+<ul><li>跑原 prompt 时存每层每步的 cross-attn map $M_t$（image patch → text token 权重）</li><li>跑新 prompt 时，对<strong>未变化的 token</strong>强制使用原 $M_t$</li><li>结构（哪些 patch 关注哪些位置）保留，内容（softmax 后聚合的 value）跟着新 prompt</li><li>适合 single-word swap / 词权重 reweight，不适合大幅 prompt 重写</li></ul>
+<p>以为 P2P 改的是 latent；不知道它操纵 attention map。</p>
+</details>
+<details>
+
+<summary>Q19.LCM / Consistency Model 与 ADD 蒸馏的区别？</summary>
+<ul><li><strong>LCM</strong> (Luo 2023)：训练 student 直接预测 $z_0$，目标是 ODE trajectory 的"自一致"（consistency loss）</li><li><strong>ADD</strong> (Sauer et al. 2024 ECCV，preprint arXiv 2311.17042 / 2023)：蒸馏 + adversarial（DINOv2 discriminator）+ score loss 三件套</li><li>LCM-LoRA 是 LoRA 形式，可零成本接入任意 base；ADD 是全量蒸馏，效果略强但需重训</li><li>都把 NFE 从 25-50 压到 1-4</li></ul>
+<p>把 LCM 当 GAN；以为 ADD 只有 adversarial 一项 loss。</p>
+</details>
+<details>
+
+<summary>Q20.SDXL Refiner 是必须的吗？什么时候用？</summary>
+<ul><li>不必须；Refiner 是独立 latent diffusion 模型专做最后 ~20% noise level</li><li>主要修细节（皮肤 / 头发 / 纹理）</li><li>在 base U-Net 跑到 $t < 0.2$ 时切到 Refiner 继续</li><li>实际中 SDXL Refiner 涨幅小、增加时间成本，社区常<strong>不用</strong></li></ul>
+<p>以为 Refiner 是必选；说它"训练时一起用"（实际是两阶段独立训）。</p>
+</details>
+<h3 id="l3顶级-lab--深入题research-lead-视角">L3顶级 lab / 深入题（research lead 视角）</h3>
+<details>
+
+<summary>Q21.详细推导 ControlNet 零卷积"前向 0、梯度非零"为何成立？</summary>
+<p>零卷积层 $y = W \star x + b$，$W \in \mathbb{R}^{c_\text{out} \times c_\text{in} \times 1 \times 1}$，初始化 $W = 0, b = 0$，输入 $x$ 来自 trainable copy 输出（非零）：</p>
+<ul><li><strong>前向</strong>：$y = 0 \star x + 0 = 0$。加到主干 skip 上后等价于"没加"，所以 step 0 输出 = baseline SD 输出。</li><li><strong>反向（zero-conv 自身权重）</strong>：$\partial L / \partial W_{ij} = \partial L / \partial y_i \cdot x_j$。$x_j$ 来自 trainable copy（一开始就是预训练 SD encoder weights，对任何非零输入都给非零激活），$\partial L / \partial y_i$ 来自下游 loss，<strong>乘积非零</strong>，$W$ 即可更新——这是 zero-conv 自己能"破零"的关键。</li><li><p><strong>反向（trainable copy 的参数）—— 微妙之处</strong>：trainable copy 的参数 $\theta_c$ 必须通过 $x \to y$ 这条路径接受梯度。链式法则给出 $\partial L / \partial \theta_c = (\partial L / \partial y) \cdot (\partial y / \partial x) \cdot (\partial x / \partial \theta_c)$。<strong>注意 $\partial y / \partial x = W$</strong>——step 0 时 $W = 0$，所以<strong>第一步 trainable copy 的参数梯度确实为 0</strong>！但只要 $W$ 在第 1 步更新出非零值（如上一条所述），第 2 步 $\partial y / \partial x = W \neq 0$，trainable copy 也开始学。</p>
+<p>这就是 ControlNet "warm start 但仍可学"的两阶段机制：<strong>先 zero-conv 自己 break 零</strong>（第 1 步），<strong>再带动 trainable copy 学习</strong>（第 2 步开始）。</p></li></ul>
+<p>这是 ControlNet 比朴素 "freeze + adapter" 强的关键工程巧思——既零干扰启动，又能整个分支逐步学起来。<strong>类似思想出现在</strong>：AdaLN-Zero（DiT，$\alpha = 0$ 也只是第一步阻断、不阻断 $\alpha$ 自身的梯度）、LoRA 的 $B = 0$ 初始化（$B = 0$ 时 $\partial L / \partial A$ 会含 $B$ 因子也为 0，但 $\partial L / \partial B$ 含 $A \neq 0$ 因子，所以 $B$ 先动起来）。</p>
+<p>不会写出 chain rule，或者把"前向 0"误以为"梯度全部为 0"（忽略 $\partial y / \partial W = x$ 这条路径），或者反过来错说"trainable copy 第一步就有梯度"（实际要等 zero-conv 破零之后）。</p>
+</details>
+<details>
+
+<summary>Q22.SDXL 的 size / crop conditioning，训练数据有什么真实分布特性，conditioning 又怎么补救？</summary>
+<p>LAION 数据集训练时遇到 3 个分布问题：</p>
+<ol><li><strong>分辨率多样</strong>：从 256² 到 4K，多数 &lt; 1024²。Naive 训练会被 "low-res 占多数" 拖向模糊偏置。</li><li><strong>center crop 偏置</strong>：很多 pipeline 把图 center-crop 到正方形，丢掉边缘信息。模型学到"主体在中心"先验，生成时常裁掉头脚 / 边缘。</li><li><strong>aspect ratio 偏单一</strong>：直接 resize 到 $1024^2$ 浪费横竖图信息，bucket 不同 ratio 才解决（SDXL 用 ~30 个 bucket）。</li></ol>
+<p>SDXL conditioning 的修复：</p>
+<ul><li>把 $(h_\text{orig}, w_\text{orig})$ 做 sinusoidal Fourier embed → MLP → 加到 timestep embedding。模型可以"知道"原始分辨率，<strong>推理时填 $(1024, 1024)$ 就触发"按 1024 质量生成"模式</strong>。</li><li>把 $(h_\text{crop}, w_\text{crop})$ 同样 embed 后注入。推理填 $(0, 0)$ 等于"我从原图左上角开始裁"。<strong>故意填非零 crop 可控制生成视角</strong>（如让主体偏右下角）。</li><li>训练时 size/crop 信号准确反映该样本，推理时把它们当 control knob。</li></ul>
+<p>Ablation 结论（Podell 2024 ICLR Table 1）：去掉 size conditioning 后 FID 显著升高，特别在大分辨率 prompt 上模糊感强。</p>
+<p>只说"加了 size 标签"，不解释 LAION 分布问题；忘了 Fourier embed + timestep injection 的具体位置。</p>
+</details>
+<details>
+
+<summary>Q23.MM-DiT vs SDXL cross-attn 的信息流差异及对文本对齐的影响？</summary>
+<p><strong>SDXL cross-attention 一层的信息流</strong>：</p>
+<pre class="diagram"><code>image latent Q  ─►───┐
+                     │   softmax(QK^T/√d) V
+                     │
+text K/V (frozen)  ──┘──► attended_out → 加到 image latent residual</code></pre>
+<ul><li>text token 的表示<strong>不被更新</strong>，每层 cross-attn 后 text 仍是输入 embedding（只是被多次"读"）</li><li>信息流单向：text → image，image <strong>看不进</strong> text 的 "context" 更新</li><li>复杂 prompt（如"a red cube to the LEFT of a blue cube, with a small green ball between them"）下，模型对<strong>位置 / 关系</strong>的理解只能从静态 text embedding 里抽</li></ul>
+<p><strong>MM-DiT 一层信息流</strong>：</p>
+<pre class="diagram"><code>                 [txt | img] 拼成一个序列
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+  独立 QKV (txt)   独立 QKV (img)
+        │              │              │
+        └──────────────┼──────────────┘
+                       ▼
+              joint self-attention
+                  (全局 attn matrix)
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+   text 输出更新    image 输出更新</code></pre>
+<ul><li><strong>每个 token (text or image) 既是 Q 也是 K/V</strong>，且 attention matrix 是全局的（$L_\text{txt} + L_\text{img}$ token 互相看）</li><li><strong>text 也被 image 更新</strong>：当前层 text 表示融合了 image 的信号，下一层 text 已经是"上下文感知"的 conditioning</li><li>复杂 prompt 的空间关系 / 多对象绑定显著改善（SD3 论文 Figure 5 显示 SD3 在 GenEval 各项 ~10-20% 提升）</li></ul>
+<p>代价：参数和算力增加（每 token 都做完整 MHA）。</p>
+<p>把 MM-DiT 简单当"更大的 cross-attn"；不区分单向 vs 双向信息流；不能说出对 multi-object prompt 的具体提升。</p>
+</details>
+<details>
+
+<summary>Q24.LoRA 在 SD attention 上放 Q/K/V 哪个更关键？理论上怎么解释？</summary>
+<p>经验上 SD attention LoRA 配置主要覆盖 $W_Q, W_K, W_V, W_O$ 四件套（<strong>全套</strong>通常最稳）。如果只能选一个，社区经验上：</p>
+<ul><li><strong>$W_V$ 影响内容</strong>：cross-attn 中 $V$ 直接进入残差，调 $W_V$ 等于调"text token 传给 image latent 的具体内容"。<strong>风格 LoRA</strong> 倾向于动 $W_V$。</li><li><strong>$W_K$ 影响选择</strong>：调 $W_K$ 改变"哪些 text token 被 Q 选中"。<strong>身份 / 概念 LoRA</strong> 常重 $W_K$（让特定 token 被精准选中）。</li><li><strong>$W_Q$ 影响 image 端</strong>：image latent 的检索方式，对 image latent 自身分布敏感。</li><li><strong>$W_O$ 影响混合</strong>：concat heads 后的线性变换；改 $W_O$ 等于调"多头如何被融合"。</li></ul>
+<p>理论上：$\Delta(QK^T) = \Delta Q \cdot K + Q \cdot \Delta K + \Delta Q \cdot \Delta K$。前两项一阶项分别由 LoRA-Q 和 LoRA-K 贡献——所以 K 和 Q 影响 <strong>attention map</strong>；而 V 和 O 影响 <strong>map 之后的 value pathway</strong>。修 attention map 改"语义对齐"，修 value pathway 改"风格 / 内容"。这是社区"风格 LoRA 多动 V/O，身份 LoRA 多动 Q/K"经验的一种解释。</p>
+<p><strong>对比 LLM</strong>：LLM 推理时 Q 来自当前 token，K/V 来自 cache；调 Q 直接改"当前 query 的检索方式"，但 K/V 受 cache 影响——这是 LoRA 在 LLM 上更倾向 MLP / FFN 的部分原因（cross-attn 不是 LLM 主交互通道）。</p>
+<p>只说"全套加 LoRA"；不区分 V / K / Q 的语义影响；不能解释为什么 SD 偏 attn、LLM 偏 MLP。</p>
+</details>
+<details>
+
+<summary>Q25.从生产部署视角，把 SDXL + LCM-LoRA + ControlNet + IP-Adapter 同时启用，怎么管理 sampler / CFG / 内存？</summary>
+<p><strong>Sampler 选择</strong>：</p>
+<ul><li>加了 LCM-LoRA 必须用 <strong>LCM scheduler</strong>（4-8 步），不再适合 DPM++ / DDIM 的多步配置</li><li>4 步典型配置：scheduler <code>LCMScheduler</code>, num_steps=4, CFG <strong>较低</strong>（LCM 已做 distilled guidance，再叠普通 CFG 会过度饱和——LCM-Distill 模型常用 $s = 1.0$，即关 CFG；或显式用 W-CFG）</li></ul>
+<p><strong>CFG 与 ControlNet / IP-Adapter 的叠加</strong>：</p>
+<ul><li>CFG 是 text 的"差分放大"</li><li>ControlNet 的 condition embedding 加在 U-Net side branch，<strong>不参与</strong> CFG 双 forward 内部数学（两份 batch 各自带相同 ControlNet input）</li><li>IP-Adapter 的图像条件<strong>应当</strong>和 text 一起做 CFG drop（训练时图像条件也有 drop_rate），推理时 unconditional batch 的 IP 条件也置空</li></ul>
+<p><strong>内存 estimation</strong>（FP16，1024²，batch 1）：</p>
+<ul><li>SDXL U-Net forward activations: ~6-7 GB（gradient checkpointing 训练才能省）</li><li>ControlNet (full): + ~3-4 GB</li><li>IP-Adapter: +~0.2 GB（小）</li><li>LoRA merged: 0（merge 后无额外开销）</li><li>VAE decode peak: ~1.5 GB</li><li><strong>总计 1024² 推理峰值 ~12-14 GB</strong>，A10 (24GB) 单卡可，T4 (16GB) 紧但可 with attention slicing</li></ul>
+<p><strong>优化措施</strong>：</p>
+<ol><li><strong>LoRA merge</strong>：把 LCM-LoRA 与 style LoRA 都 merge 进 base，避免每 forward 多算 $\Delta W$</li><li><strong>xformers / FlashAttention</strong>：把 cross-attn 与 self-attn 都 fused，节省 ~30% 时间和 ~20% 显存</li><li><strong>ControlNet quantize / pruning</strong>：production 时常 quantize ControlNet 到 INT8，~1.5GB</li><li><strong>Schedule 上 sequential ControlNet 调用</strong>：multiple ControlNets 不要并行算（OOM），sequential 调用聚合</li><li><strong>Cache text embedding</strong>：同 prompt 多张图时只算一次 text encoder</li></ol>
+<p><strong>坑</strong>：</p>
+<ul><li>LCM-LoRA + ControlNet 经常出现"结构跟随减弱"——LCM 蒸馏路径里没见过 ControlNet 信号，需要 fine-tune ControlNet 在 LCM 路径上重训（或用 <code>ControlNet-LCM</code> 社区版本）</li><li>IP-Adapter "Plus" 版本（ViT-G + image patches）会更吃显存，普通 ID 场景 ViT-L 版本即可</li></ul>
+<p>只会列工具名；不能算显存；不知道 LCM + ControlNet 的兼容性坑；不能区分 CFG 与 ControlNet / IP-Adapter 注入位置。</p>
+</details>
+<h2 id="a-附录参考与-reference-list">§A 附录：参考与 reference list</h2>
+<h3 id="主要论文按时间">主要论文（按时间）</h3>
+<ul><li>DDPM — Ho, Jain, Abbeel 2020 NeurIPS</li><li>LDM / Stable Diffusion — Rombach, Blattmann et al. 2022 CVPR</li><li>Classifier-Free Guidance — Ho &amp; Salimans 2022 (workshop / arXiv)</li><li>DiT — Peebles &amp; Xie 2023 ICCV</li><li>U-ViT — Bao, Nie et al. 2023 CVPR</li><li>LoRA — Hu, Shen et al. 2022 ICLR</li><li>DreamBooth — Ruiz, Li et al. 2023 CVPR</li><li>Textual Inversion — Gal, Alaluf et al. 2023 ICLR</li><li>Custom Diffusion — Kumari, Zhang et al. 2023 CVPR</li><li>HyperDreamBooth — Ruiz, Li et al. 2024 CVPR</li><li>ControlNet — Zhang, Rao, Agrawala 2023 ICCV</li><li>T2I-Adapter — Mou, Wang et al. 2024 AAAI</li><li>IP-Adapter — Ye, Zhang et al. 2023 (arXiv 2308.06721)</li><li>InstantID — Wang, Bai et al. 2024 (arXiv 2401.07519)</li><li>PuLID — Guo, Wu et al. 2024 NeurIPS</li><li>PhotoMaker — Li, Cao et al. 2024 CVPR</li><li>SDEdit — Meng, He et al. 2022 ICLR</li><li>InstructPix2Pix — Brooks, Holynski, Efros 2023 CVPR</li><li>Prompt-to-Prompt — Hertz, Mokady et al. 2023 ICLR</li><li>SDXL — Podell, English et al. 2024 ICLR</li><li>SD3 — Esser, Kulal et al. 2024 ICML</li><li>FLUX.1 — Black Forest Labs 2024 (technical report)</li><li>PixArt-α / Σ — Chen, Yu et al. 2024 ICLR / ECCV</li><li>Hunyuan-DiT — Zhimin Li, Jianwei Zhang et al. 2024 (arXiv 2405.08748)</li><li>Imagen — Saharia, Chan et al. 2022 NeurIPS</li><li>ADD / SDXL-Turbo — Sauer, Lorenz et al. 2024 ECCV (arXiv 2311.17042)</li><li>LCM — Luo, Tan et al. 2023 (arXiv 2310.04378)</li><li>LCM-LoRA — Luo, Tan et al. 2023 (arXiv 2311.05556)</li><li>DMD — Yin, Gharbi et al. 2024 CVPR</li><li>ImageReward — Xu, Liu et al. 2023 NeurIPS</li><li>HPSv2 — Wu, Hao et al. 2023 (arXiv 2306.09341)</li><li>PickScore / Pick-a-Pic — Kirstain, Polyak et al. 2023 NeurIPS</li><li>FID — Heusel, Ramsauer et al. 2017 NeurIPS</li></ul>
+<h3 id="一句话总结">一句话总结</h3>
+<p>本 cheat sheet 覆盖从 latent diffusion 数学（VAE + DDPM/RF + CFG）到主流架构演进（SD 1.x → SDXL → SD3 → FLUX）、conditioning 体系（ControlNet / T2I-Adapter / IP-Adapter / InstantID）、个性化微调（DreamBooth / Textual Inversion / LoRA / Custom Diffusion）、编辑（SDEdit / InstructPix2Pix / Prompt-to-Prompt）、蒸馏（LCM / ADD / DMD）与评测（FID / CLIP-Score / ImageReward / HPSv2）。25 题按 L1/L2/L3 分布，L3 题强调 production lab 视角（零卷积 chain rule 推导、size conditioning 训练效果、MM-DiT 信息流、LoRA Q/K/V 选择、SDXL + LCM-LoRA + ControlNet + IP-Adapter 同栈部署 trade-off）。</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/image_generation_systems_tutorial.md</code> ·
+  SHA256 <code>76785ba96660</code> ·
+  generated at 2026-05-19 08:36 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

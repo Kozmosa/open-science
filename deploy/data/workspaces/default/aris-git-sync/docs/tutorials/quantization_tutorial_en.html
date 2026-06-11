@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantization Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/quantization_tutorial_en.md">
+<meta name="aris:source-sha256" content="a4b453729283fdc4cc0fdb167b8620e68d87510a092dd1861915ed5965818231">
+<meta name="aris:generated-at" content="2026-05-19 19:19 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</a>
+</li>
+<li><a href="#1-intuition-why-llms-need-quantization-and-why-its-so-hard">§1 Intuition: why LLMs need quantization, and why it&#x27;s so hard</a>
+<ul>
+<li><a href="#11-the-essence-of-quantization">1.1 The essence of quantization</a></li>
+<li><a href="#12-why-is-llm-quantization-harder-than-cnn">1.2 Why is LLM quantization harder than CNN?</a></li>
+<li><a href="#13-three-mainstream-approaches">1.3 Three mainstream approaches</a></li>
+</ul>
+</li>
+<li><a href="#2-quantization-math-foundations">§2 Quantization Math Foundations</a>
+<ul>
+<li><a href="#21-affine-quantization-uniform--linear-quantization">2.1 Affine quantization (uniform / linear quantization)</a></li>
+<li><a href="#22-quantization-error-and-snr">2.2 Quantization error and SNR</a></li>
+<li><a href="#23-granularity">2.3 Granularity</a></li>
+<li><a href="#24-rounding-modes">2.4 Rounding modes</a></li>
+<li><a href="#25-concise-runnable-code-asymmetric-int8-per-channel-qdq">2.5 Concise runnable code: asymmetric INT8 per-channel q/dq</a></li>
+</ul>
+</li>
+<li><a href="#3-the-outlier-problem-in-llms">§3 The Outlier Problem in LLMs</a>
+<ul>
+<li><a href="#31-empirical-observation-dettmers-2022-llmint8">3.1 Empirical observation (Dettmers 2022, LLM.int8())</a></li>
+<li><a href="#32-llmint8--the-first-deployable-8-bit-llm">3.2 LLM.int8() — the first deployable 8-bit LLM</a></li>
+<li><a href="#33-different-outlier-morphologies-the-targets-of-gptq--awq--smoothquant">3.3 Different outlier morphologies (the targets of GPTQ / AWQ / SmoothQuant)</a></li>
+</ul>
+</li>
+<li><a href="#4-gptq-optimal-weight-quantization-based-on-obs-must-derive">§4 GPTQ: Optimal Weight Quantization Based on OBS (must derive)</a>
+<ul>
+<li><a href="#41-problem-setup">4.1 Problem setup</a></li>
+<li><a href="#42-second-order-taylor-expansion">4.2 Second-order Taylor expansion</a></li>
+<li><a href="#43-obs-optimal-delta-after-fixing-one-coordinate-to-a-target-value">4.3 OBS: optimal $\delta$ after fixing one coordinate to a target value</a></li>
+<li><a href="#44-engineering-acceleration-cholesky-solves-h-1-submatrix">4.4 Engineering acceleration: Cholesky solves $H^{-1}$ submatrix</a></li>
+<li><a href="#45-gptq-style-pseudocode-must-know">4.5 GPTQ-style pseudocode (must-know)</a></li>
+<li><a href="#46-gptq-vs-early-round-to-nearest-rtn">4.6 GPTQ vs early round-to-nearest (RTN)</a></li>
+</ul>
+</li>
+<li><a href="#5-awq-activation-aware-weight-quantization">§5 AWQ: Activation-Aware Weight Quantization</a>
+<ul>
+<li><a href="#51-identification-of-salient-channels">5.1 Identification of salient channels</a></li>
+<li><a href="#52-per-channel-scale-equivalent-transform-math-equivalence--quantization-error-equivalence">5.2 Per-channel scale equivalent transform (math equivalence ≠ quantization error equivalence)</a></li>
+<li><a href="#53-difference-from-gptq">5.3 Difference from GPTQ</a></li>
+<li><a href="#54-awq-style-per-channel-scale-search-code">5.4 AWQ-style per-channel scale search code</a></li>
+</ul>
+</li>
+<li><a href="#6-smoothquant-migrating-activation-outliers-to-weights-w8a8">§6 SmoothQuant: Migrating Activation Outliers to Weights (W8A8)</a>
+<ul>
+<li><a href="#61-core-math">6.1 Core math</a></li>
+<li><a href="#62-migration-strength-alpha-key-hyperparameter">6.2 Migration strength $\alpha$ (key hyperparameter)</a></li>
+<li><a href="#63-equivalent-transform-doesnt-break-gemm-must-know">6.3 Equivalent transform doesn&#x27;t break GEMM (must know)</a></li>
+<li><a href="#64-smoothquant-pseudocode">6.4 SmoothQuant pseudocode</a></li>
+<li><a href="#65-smoothquant-applicability">6.5 SmoothQuant applicability</a></li>
+</ul>
+</li>
+<li><a href="#7-rotation-methods-quip--quarot--spinquant">§7 Rotation Methods: QuIP / QuaRot / SpinQuant</a>
+<ul>
+<li><a href="#71-quip-chee-et-al-2023-neurips">7.1 QuIP (Chee et al. 2023, NeurIPS)</a></li>
+<li><a href="#72-quarot-ashkboos-et-al-2024-neurips">7.2 QuaRot (Ashkboos et al. 2024 NeurIPS)</a></li>
+<li><a href="#73-spinquant-liu-et-al-2024--iclr-2025-meta">7.3 SpinQuant (Liu et al. 2024 → ICLR 2025, Meta)</a></li>
+</ul>
+</li>
+<li><a href="#8-low-precision-floats-fp8--mx--nvfp4">§8 Low-Precision Floats: FP8 / MX / NVFP4</a>
+<ul>
+<li><a href="#81-ieee-754-style-float-encoding">8.1 IEEE 754-style float encoding</a></li>
+<li><a href="#82-fp8-e4m3-bit-level-encoding-code">8.2 FP8 E4M3 bit-level encoding code</a></li>
+<li><a href="#83-mx-format-ocp--microsoft-2024">8.3 MX format (OCP / Microsoft 2024)</a></li>
+<li><a href="#84-nvfp4-blackwell-2025-nvidia">8.4 NVFP4 (Blackwell 2025 NVIDIA)</a></li>
+<li><a href="#85-using-fp8-in-large-model-training-transformer-engine">8.5 Using FP8 in large model training (Transformer Engine)</a></li>
+</ul>
+</li>
+<li><a href="#9-kv-cache-quantization">§9 KV Cache Quantization</a>
+<ul>
+<li><a href="#91-key-observations-of-kivi--kvquant">9.1 Key observations of KIVI / KVQuant</a></li>
+<li><a href="#92-kivi-liu-et-al-2024-icml">9.2 KIVI (Liu et al. 2024 ICML)</a></li>
+<li><a href="#93-kvquant-hooper-et-al-2024-neurips">9.3 KVQuant (Hooper et al. 2024, NeurIPS)</a></li>
+<li><a href="#94-qserve--qoq-lin-et-al-2024-mlsys-2025">9.4 QServe / QoQ (Lin et al. 2024 MLSys 2025)</a></li>
+<li><a href="#95-kv-cache-quant-code-illustration-per-channel-k-per-token-v">9.5 KV cache quant code illustration (per-channel K, per-token V)</a></li>
+</ul>
+</li>
+<li><a href="#10-qat-and-training-time-quantization">§10 QAT and Training-Time Quantization</a>
+<ul>
+<li><a href="#101-ste-straight-through-estimator">10.1 STE (Straight-Through Estimator)</a></li>
+<li><a href="#102-llm-qat-liu-et-al-2023">10.2 LLM-QAT (Liu et al. 2023)</a></li>
+<li><a href="#103-fp8-training-transformer-engine">10.3 FP8 Training (Transformer Engine)</a></li>
+<li><a href="#104-bitnet-b158--b2">10.4 BitNet b1.58 / b2</a></li>
+</ul>
+</li>
+<li><a href="#11-frameworks-and-ecosystem-comparison">§11 Frameworks and Ecosystem Comparison</a>
+</li>
+<li><a href="#12-25-frequently-asked-interview-questions">§12 25 Frequently-Asked Interview Questions</a>
+<ul>
+<li><a href="#l1-must-know-any-ml-engineer-position-will-ask">L1 Must-Know (any ML engineer position will ask)</a></li>
+<li><a href="#l2-advanced-research-oriented-positions">L2 Advanced (research-oriented positions)</a></li>
+<li><a href="#l3-advanced-variants-top-labs--systems-direction">L3 Advanced variants (top labs / systems direction)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix-complete-engineering-reference">§A Appendix: Complete Engineering Reference</a>
+<ul>
+<li><a href="#a1-major-paper-reference-list">A.1 Major paper reference list</a></li>
+<li><a href="#a2-at-a-glance-which-quantization-scheme-to-pick">A.2 At-a-glance: which quantization scheme to pick</a></li>
+<li><a href="#a3-quantization-quick-reference-card">A.3 Quantization quick-reference card</a></li>
+<li><a href="#a4-sanity-check-checklist">A.4 Sanity check checklist</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Quantization Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/quantization_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>a4b453729283</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 19:19 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr-cheat-sheet">§0 TL;DR Cheat Sheet</h2>
+<div class="callout callout-info"><div class="callout-title">LLM Quantization in 8 sentences</div><p>one page covering interview essentials (see §2–§11 for derivations).</p></div>
+<ol><li><strong>Affine quantization formula</strong>: $q = \mathrm{round}(x / s) + z$, dequantize $\hat{x} = s\,(q - z)$. Symmetric quantization $z = 0$; asymmetric quantization $z$ aligns the zero-point to an integer.</li><li><strong>Three granularity levels</strong> (smaller scale-sharing range → higher precision, larger overhead): per-tensor → per-channel → per-group (every $g$ elements in a row/column share a scale, $g = 32 / 64 / 128$ are the mainstream choices).</li><li><strong>LLM quantization pain points</strong>: activations have <strong>systematic per-channel outliers</strong> (a few channels have magnitudes $50\text{-}100\times$ larger than average); uniform quantization inevitably collapses. Weight distribution is relatively flat; weight-only quantization (GPTQ / AWQ) is inherently easier than weight+activation.</li><li><strong>GPTQ (Frantar 2023 ICLR)</strong>: OBS-derived optimal weight update formula $\delta_{\mathbf{w}} = -\dfrac{w_q - \mathrm{quant}(w_q)}{[H^{-1}]_{qq}}\,[H^{-1}]_{q,:}$, columnwise quantization + Cholesky acceleration + 128-column blocks; 4-bit weight nearly lossless.</li><li><strong>AWQ (Lin 2024 MLSys)</strong>: observes "1% salient weights drive most loss"; selects salient channels by activation magnitude; <strong>per-channel scale $s_c$ under $w \to w\cdot s_c$ / $x \to x/s_c$ is mathematically equivalent but reduces quantization error</strong>; grid search $s_c = \mathrm{mean}(|x_c|)^\alpha$.</li><li><strong>SmoothQuant (Xiao 2023 ICML)</strong>: <strong>migrates activation outliers to weights</strong>—$Y = (X \mathrm{diag}(s)^{-1})(\mathrm{diag}(s)\,W)$, mathematically equivalent but $X / s$ is much smoother, enabling W8A8.</li><li><strong>Low-precision float families</strong>: FP8 (E4M3/E5M2, Hopper), MX (OCP MXFP8/MXFP6/MXFP4, 32-elem block + E8M0 shared exp), NVFP4 (Blackwell B100/B200, FP4 E2M1 + per-16-elem FP8 E4M3 scale + per-tensor FP32 scale). Blackwell tensor cores natively support FP4 matmul.</li><li><strong>KV cache quant</strong>: K uses <strong>per-channel</strong> (K's outliers are stable along the channel dim), V uses <strong>per-token</strong> (V outliers vary along the token dim)—the basic design of KIVI / KVQuant. QServe further co-designs the entire W4A8KV4 quantization at the SM89/SM90 kernel level.</li></ol>
+<h2 id="1-intuition-why-llms-need-quantization-and-why-its-so-hard">§1 Intuition: why LLMs need quantization, and why it's so hard</h2>
+<h3 id="11-the-essence-of-quantization">1.1 The essence of quantization</h3>
+<p>Maps high-precision floats (FP16 / BF16) to low-bitwidth integers (INT8 / INT4) or low-precision floats (FP8 / FP4), trading off:</p>
+<ul><li><strong>Memory</strong>: FP16 → INT4 directly $4\times$ compression (70B model from 140 GB → 35 GB, fits on a single card for inference).</li><li><strong>Memory bandwidth</strong>: the decode phase is memory-bound (reading all weights once per token); halving bitwidth halves latency.</li><li><strong>Compute</strong>: INT8 / FP8 / FP4 tensor core throughput is $2\text{-}8\times$ higher than FP16 (more dramatic on Hopper / Blackwell).</li></ul>
+<p>Cost: <strong>precision loss</strong>. For LLMs, loss mainly comes from two sources—activation outliers and weight boundary effects.</p>
+<h3 id="12-why-is-llm-quantization-harder-than-cnn">1.2 Why is LLM quantization harder than CNN?</h3>
+<p>CNN-era INT8 PTQ (NVIDIA TensorRT 2017 stack) was almost free: CNN activation distributions are approximately Gaussian; per-tensor calibration suffices. Applying the same method to OPT-66B / LLaMA-70B drops 5-10 PPL points. Reasons:</p>
+<ul><li><strong>Outlier scaling phenomenon</strong> (Dettmers 2022, LLM.int8()): for models ≥ 6.7B, a few channels (about 0.1%-1%) have activation magnitudes significantly higher than other channels ($50\text{-}100\times$), and <strong>these channels are stably the same set across different tokens / samples</strong>.</li><li><strong>Outliers steal the scale</strong>: per-tensor scale is determined by max. A few outliers push the scale way up, so most "normal" channels after quantization fall into a narrow integer range (only ±10 / ±127 under INT8), dramatically reducing effective bit width.</li><li><strong>Per-channel weight easy, per-channel activation hard</strong>: the activation's channel dim (hidden dim, $D$) is the matrix multiplication's inner-product dim (K dim); per-channel scale along the K dim means it can't directly fuse into GEMM; weight's output-channel dim (N dim) is naturally per-channel feasible (no inner products between output dims).</li></ul>
+<h3 id="13-three-mainstream-approaches">1.3 Three mainstream approaches</h3>
+<table><thead><tr><th>Approach</th><th>What is quantized</th><th>Representative methods</th><th>Key trick</th></tr></thead><tbody><tr><td><strong>Weight-only PTQ</strong></td><td>W4/W8, A stays FP16</td><td>GPTQ, AWQ, QuIP, GGUF Q4_K</td><td>weights are easy to quantize; use calibration data to find optimal quantization error compensation</td></tr><tr><td><strong>Weight + Activation PTQ</strong></td><td>W8A8</td><td>SmoothQuant, ZeroQuant, FP8</td><td>must handle activation outliers (migration / rotation)</td></tr><tr><td><strong>Weight + Act + KV (low bit)</strong></td><td>W4A8KV4 / W4A4</td><td>QuaRot, QServe, SpinQuant</td><td>Hadamard / learned rotation flattens outliers in all directions</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">decode vs prefill difference</div><p>Decode is memory-bound (KV cache + weight reads dominate); low-bit weight + KV directly reduces latency. Prefill is compute-bound (attention $L^2$ + large-batch GEMM); W4A4 / FP8 only matter here; pure weight-only quantization saves almost no time on prefill (and may even slow down due to dequant overhead).</p></div>
+<h2 id="2-quantization-math-foundations">§2 Quantization Math Foundations</h2>
+<h3 id="21-affine-quantization-uniform--linear-quantization">2.1 Affine quantization (uniform / linear quantization)</h3>
+<p>Maps real $x \in [\alpha, \beta]$ to integer $q \in [Q_\min, Q_\max]$ (e.g., INT8: $[-128, 127]$, INT4: $[-8, 7]$).</p>
+<p>$$\boxed{\;q = \mathrm{clamp}\!\left(\mathrm{round}(x / s) + z,\; Q_\min,\; Q_\max\right),\quad \hat{x} = s\,(q - z)\;}$$</p>
+<ul><li><strong>Scale</strong> $s = (\beta - \alpha) / (Q_\max - Q_\min)$, <strong>zero-point</strong> $z = \mathrm{round}(Q_\min - \alpha/s)$.</li><li><strong>Symmetric quantization</strong>: $\alpha = -\beta$, forces $z = 0$, dequantization simplifies to $\hat{x} = s\cdot q$. Advantage: no zero-point addition in GEMM; disadvantage: wastes 1 bit of expressive range when distribution is asymmetric.</li><li><strong>Asymmetric quantization</strong>: keeps $z$, can precisely cover any $[\alpha, \beta]$. Cost: when GEMM expands $W\cdot X$, there are 4 extra terms (cross-zero-point terms); production typically uses "subtract zero-point first, then GEMM" to zero out cross terms.</li></ul>
+<h3 id="22-quantization-error-and-snr">2.2 Quantization error and SNR</h3>
+<p>Rounding error $\epsilon = x - \hat{x}$ is approximately uniform over $[-s/2, s/2]$, variance $\mathbb{E}[\epsilon^2] = s^2/12$. Signal $\mathrm{Var}(x) = \sigma^2$; quantization SNR:</p>
+<p>$$\mathrm{SNR} = 10 \log_{10} \frac{\sigma^2}{s^2/12} = 10 \log_{10}(12) + 20 \log_{10}\frac{\sigma}{s}$$</p>
+<p>When INT8 is applied to $\mathcal{N}(0, 1)$ with $\beta = 3\sigma$ truncation, each bit reduction lowers SNR by ~6 dB (each bit increase doubles the quant step → SNR decreases by $20\log_{10} 2 \approx 6$ dB). But for LLMs the actual measure is PPL / task metrics, far more complex than SNR.</p>
+<h3 id="23-granularity">2.3 Granularity</h3>
+<table><thead><tr><th>Granularity</th><th>Scale-sharing range</th><th>Memory overhead</th><th>Precision</th></tr></thead><tbody><tr><td><strong>per-tensor</strong></td><td>one $s$ for the whole tensor</td><td>$O(1)$</td><td>worst (one outlier breaks everything)</td></tr><tr><td><strong>per-channel</strong></td><td>weight along output channel (row) / activation along hidden (column)</td><td>$O(N)$</td><td>medium</td></tr><tr><td><strong>per-group</strong></td><td>every $g$ elements share an $s$ (typically grouped along input/K dim)</td><td>$O(NK/g)$</td><td>high ($g = 32 / 64 / 128$)</td></tr><tr><td><strong>per-token (act only)</strong></td><td>one $s$ per token (one row) of activation</td><td>$O(L)$</td><td>high, but computed each step</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Per-group is the industry standard for W4 quantization</div><p>GPTQ / AWQ / GGUF Q4_K default to group_size = 128: on the input dim, every 128 weights share a scale (+ zero-point). Storage overhead: W4 + group128 (INT4 quant + FP16 scale per 128 weights) ≈ $4 + 16/128 = 4.125$ bits/weight; group32 ≈ $4 + 16/32 = 4.5$ bits/weight, with higher precision.</p></div>
+<h3 id="24-rounding-modes">2.4 Rounding modes</h3>
+<ul><li><strong>Round-to-nearest, ties to even</strong> (RNE): IEEE 754 default, unbiased. LLM quantization typically defaults to this.</li><li><strong>Stochastic rounding</strong>: $\mathrm{round}(x/s + u)$, $u \sim \mathcal{U}[-0.5, 0.5)$. Unbiased in expectation, suitable for QAT backprop.</li><li><strong>AdaRound</strong> (Nagel 2020 ICML): treats the rounding decision as a $\{0, 1\}$ binary optimization variable; learned per-layer via a proxy loss ("should we round up or down?"); significantly improves PTQ over RTN.</li></ul>
+<h3 id="25-concise-runnable-code-asymmetric-int8-per-channel-qdq">2.5 Concise runnable code: asymmetric INT8 per-channel q/dq</h3>
+<pre><code class="language-python">import torch
+
+def quantize_per_channel_asym(x: torch.Tensor, n_bits: int = 8, channel_dim: int = 0):
+    &quot;&quot;&quot;
+    Asymmetric per-channel quantization.
+
+    Args:
+        x: float tensor, e.g. weight [out_features, in_features]
+        n_bits: target bit width (e.g. 8 -&gt; INT8)
+        channel_dim: which dim to share scale on (typically 0 for weight rows)
+
+    Returns:
+        q_int: int quantized tensor (still stored as int32 here for simplicity)
+        scale: [N] float scale per channel
+        zero_point: [N] int zero-point per channel
+    &quot;&quot;&quot;
+    q_min = -(1 &lt;&lt; (n_bits - 1))           # -128 for INT8
+    q_max = (1 &lt;&lt; (n_bits - 1)) - 1        # 127  for INT8
+
+    # Reduce over all dims except channel_dim
+    reduce_dims = [d for d in range(x.dim()) if d != channel_dim]
+    x_min = x.amin(dim=reduce_dims, keepdim=True)
+    x_max = x.amax(dim=reduce_dims, keepdim=True)
+
+    # Avoid degenerate (zero range) channels
+    eps = 1e-8
+    scale = (x_max - x_min).clamp(min=eps) / (q_max - q_min)
+    zero_point = (q_min - x_min / scale).round().clamp(q_min, q_max)
+
+    q = (x / scale + zero_point).round().clamp(q_min, q_max).to(torch.int32)
+    return q, scale, zero_point.to(torch.int32)
+
+
+def dequantize_per_channel(q_int: torch.Tensor, scale: torch.Tensor, zero_point: torch.Tensor):
+    &quot;&quot;&quot; x_hat = scale * (q - zero_point)   (per channel) &quot;&quot;&quot;
+    return scale * (q_int.to(scale.dtype) - zero_point.to(scale.dtype))
+
+
+# Sanity check
+if __name__ == &quot;__main__&quot;:
+    W = torch.randn(64, 1024) * 0.1
+    W[3, :] *= 10.0   # one outlier channel
+    q, s, z = quantize_per_channel_asym(W, n_bits=8, channel_dim=0)
+    W_hat = dequantize_per_channel(q, s, z)
+    err = (W - W_hat).abs().max().item()
+    print(f&quot;max abs err = {err:.4e} (should be ≤ max_scale/2)&quot;)</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Early PyTorch&#x27;s `round` is banker&#x27;s rounding (RNE), inconsistent with CUDA / TensorRT</div><p>when deploying across backends, must use the same rounding, otherwise the same quantized weight produces 0.5 ULP difference between the two ends.</p></div>
+<h2 id="3-the-outlier-problem-in-llms">§3 The Outlier Problem in LLMs</h2>
+<h3 id="31-empirical-observation-dettmers-2022-llmint8">3.1 Empirical observation (Dettmers 2022, LLM.int8())</h3>
+<p>Once model scale exceeds 6.7B, in each layer's attention input / FFN input activation, <strong>a few hidden channels' magnitudes are $50\text{-}100\times$ those of other channels</strong>, and:</p>
+<ul><li><strong>Stability</strong>: the same channel is an outlier in all tokens and all samples (not random).</li><li><strong>Concentration</strong>: about 0.1%-1% of channels contribute almost all the maximums.</li><li><strong>Consequence</strong>: nearly all PPL loss from per-tensor INT8 comes from these channels; per-channel weight + per-tensor activation INT8 works for &lt; 6.7B models but collapses on OPT-13B / 66B.</li></ul>
+<h3 id="32-llmint8--the-first-deployable-8-bit-llm">3.2 LLM.int8() — the first deployable 8-bit LLM</h3>
+<p>Dettmers 2022 (NeurIPS) core idea: <strong>Mixed-precision decomposition</strong>. At each layer, split the activation into two paths:</p>
+<ul><li><strong>Outlier path</strong>: pick outlier channels (threshold $\alpha = 6.0$, i.e., channel-max $> 6$); keep the corresponding weight columns and activation columns <strong>in FP16</strong> for matmul.</li><li><strong>Normal path</strong>: the remaining 99% of channels use INT8 vector-wise (per-row activation × per-column weight) matmul.</li><li><strong>Combine</strong>: sum results of both paths.</li></ul>
+<p>Mathematically equivalent to splitting the matrix:</p>
+<p>$$Y = X W = \underbrace{X_O W_O}_{\text{FP16, outlier cols}} + \underbrace{X_N W_N}_{\text{INT8, rest}}$$</p>
+<p>Result: OPT-175B INT8 inference is nearly lossless in PPL, but the outlier path's FP16 GEMM is a throughput bottleneck (~10-15% latency), and the outlier mask must be detected every forward step. This motivated subsequent work (SmoothQuant / AWQ) to switch to "kill the outliers instead of bypassing them".</p>
+<h3 id="33-different-outlier-morphologies-the-targets-of-gptq--awq--smoothquant">3.3 Different outlier morphologies (the targets of GPTQ / AWQ / SmoothQuant)</h3>
+<table><thead><tr><th>Outlier type</th><th>Stable along which dim</th><th>Solution</th></tr></thead><tbody><tr><td><strong>Activation channel outlier</strong> (hidden dim)</td><td>input channel (K dim)</td><td>SmoothQuant (migrate to weight), AWQ (per-channel scale protection)</td></tr><tr><td><strong>Token outlier</strong> (a few tokens have large rows)</td><td>sequence dim (L dim)</td><td>per-token activation quant (zeroquant / SmoothQuant default)</td></tr><tr><td><strong>Weight outlier</strong> (a few weights are large)</td><td>output dim (N dim)</td><td>per-channel weight quant absorbs it</td></tr><tr><td><strong>KV cache K-channel outlier</strong></td><td>K's head_dim</td><td>per-channel K quant (KIVI / KVQuant)</td></tr></tbody></table>
+<h2 id="4-gptq-optimal-weight-quantization-based-on-obs-must-derive">§4 GPTQ: Optimal Weight Quantization Based on OBS (must derive)</h2>
+<p>GPTQ (Frantar, Ashkboos, Hoefler, Alistarh, ICLR 2023) is the industry standard for weight-only PTQ. Its mathematical foundation is <strong>Optimal Brain Surgeon (OBS)</strong> (Hassibi &amp; Stork, NeurIPS 1992), generalizing "how to minimize loss increment after removing/modifying a weight" to "how to update remaining weights to compensate after quantizing one weight".</p>
+<h3 id="41-problem-setup">4.1 Problem setup</h3>
+<p>For a single linear layer output $Y = X W$, $X \in \mathbb{R}^{B\times K}$ from calibration set, $W \in \mathbb{R}^{K \times N}$. Quantization goal: find $\hat{W}$ (each element is INT4 / INT3) minimizing:</p>
+<p>$$\min_{\hat{W}} \|X W - X \hat{W}\|_F^2$$</p>
+<p>This is a layer-wise reconstruction objective w.r.t. $\hat{W}$. Notes:</p>
+<ul><li>This is <strong>layer-wise</strong>, not end-to-end loss (PTQ assumption: good layer-wise reconstruction → small end-to-end loss increment; basically holds for linear / weakly-nonlinear architectures).</li><li>Since GEMM is independent along the $N$ dim (each column $w_j$ has its own minimization problem), splitting $W$ column-wise is common. The following derivation is for <strong>one column</strong> $w \in \mathbb{R}^K$.</li></ul>
+<h3 id="42-second-order-taylor-expansion">4.2 Second-order Taylor expansion</h3>
+<p>Let $L(w) = \frac{1}{2}\|Xw - Xw^*\|^2$ ($w^*$ is the FP16 original weight, $w$ is to be optimized). Expand at $w = w^*$:</p>
+<p>$$L(w^* + \delta) = \underbrace{L(w^*)}_{= 0} + \nabla L(w^*)^\top \delta + \frac{1}{2}\delta^\top H \delta + O(\|\delta\|^3)$$</p>
+<p>Since $L$ has global minimum at $w^*$, $\nabla L(w^*) = 0$. Hessian:</p>
+<p>$$H = X^\top X \in \mathbb{R}^{K\times K}$$</p>
+<p>Note $H$ is independent of $w^*$ (computed once from calibration data, reused across columns) and independent of column index $j$ (every column shares the same $H$). So:</p>
+<p>$$L(w^* + \delta) \approx \frac{1}{2}\delta^\top H \delta$$</p>
+<h3 id="43-obs-optimal-delta-after-fixing-one-coordinate-to-a-target-value">4.3 OBS: optimal $\delta$ after fixing one coordinate to a target value</h3>
+<p>OBS key question: <strong>forcibly setting the $q$-th component $w_q$ of $w$ to a target value $w_q^{\mathrm{target}}$</strong> (in our case $w_q^{\mathrm{target}} = \mathrm{Quant}(w_q)$); how should other coordinates adjust to minimize $\delta^\top H \delta / 2$?</p>
+<p>Constraint $e_q^\top \delta = w_q^{\mathrm{target}} - w_q^* := c_q$ (where $e_q$ is the $q$-th standard basis). Use Lagrangian:</p>
+<p>$$\mathcal{L}(\delta, \lambda) = \frac{1}{2}\delta^\top H \delta - \lambda (e_q^\top \delta - c_q)$$</p>
+<p>Differentiate: $\nabla_\delta \mathcal{L} = H\delta - \lambda e_q = 0 \Rightarrow \delta = \lambda H^{-1} e_q$.</p>
+<p>Plug into constraint $e_q^\top \delta = c_q$:</p>
+<p>$$\lambda \cdot e_q^\top H^{-1} e_q = c_q \;\Rightarrow\; \lambda = \frac{c_q}{[H^{-1}]_{qq}}$$</p>
+<p>So:</p>
+<p>$$\boxed{\;\delta^* = \frac{w_q^{\mathrm{target}} - w_q^*}{[H^{-1}]_{qq}}\; H^{-1} e_q\;}$$</p>
+<p>i.e., the $j$-th component of $\delta^*$ = $\dfrac{c_q}{[H^{-1}]_{qq}} \cdot [H^{-1}]_{jq}$. <strong>All other coordinates' optimal compensation comes from $H^{-1}$'s $q$-th column</strong>.</p>
+<p>Minimum loss increment:</p>
+<p>$$\Delta L^* = \frac{1}{2}\delta^{*\top} H \delta^* = \frac{1}{2}\cdot \frac{c_q^2}{[H^{-1}]_{qq}}$$</p>
+<div class="callout callout-good"><div class="callout-title">GPTQ&#x27;s optimal weight update (must know)</div><p>after quantizing the $q$-th column, all remaining unquantized columns $j > q$ are updated once by:</p></div>
+<p>$$w_j \leftarrow w_j - \frac{w_q - \mathrm{Quant}(w_q)}{[H^{-1}]_{qq}}\,[H^{-1}]_{jq}$$ then quantize column $q+1$. This is the mathematical formula for GPTQ "iterative columnwise quantization".</p>
+<h3 id="44-engineering-acceleration-cholesky-solves-h-1-submatrix">4.4 Engineering acceleration: Cholesky solves $H^{-1}$ submatrix</h3>
+<p>Directly computing $H^{-1}$'s column per $q$ costs $O(K^2)$; GPTQ uses Cholesky decomposition $H^{-1} = U^\top U$ ($U$ upper triangular, equivalently $H^{-1} = L L^\top$ if taking lower triangular $L = U^\top$); when sweeping to column $q$, only the $U$ submatrix is needed, and updates can be vectorized.</p>
+<p>GPTQ's actual implementation blocks the $K$ columns into <strong>block size = 128</strong>; within each block, quantize and update columnwise; between blocks, sync update once (Cholesky decomposition based). Overall complexity: $O(K^3 + K \cdot K^2)$ per layer; on a 7B model with a single A100, ~30 minutes to fully quantize.</p>
+<h3 id="45-gptq-style-pseudocode-must-know">4.5 GPTQ-style pseudocode (must-know)</h3>
+<pre><code class="language-python">import torch
+
+@torch.no_grad()
+def gptq_quantize_layer(
+    W: torch.Tensor,             # [N, K]  weight (one linear layer)
+    X: torch.Tensor,             # [B, K]  calibration input to this layer
+    n_bits: int = 4,
+    group_size: int = 128,
+    damp_percent: float = 0.01,
+):
+    &quot;&quot;&quot;
+    Block-wise GPTQ for ONE linear weight matrix.
+
+    Hessian H = X^T X is shared across rows of W.
+    We quantize columns of W one-by-one (so we walk along K).
+    After quantizing column q, propagate the residual error
+    along H^-1 to all yet-unquantized columns j &gt; q.
+    &quot;&quot;&quot;
+    N, K = W.shape
+    device = W.device
+    H = X.t() @ X                                              # [K, K]
+    # Damping: avoid singular H. Replace zero diag with mean diag * damp_percent.
+    mean_diag = torch.mean(torch.diag(H))
+    diag = torch.arange(K, device=device)
+    H[diag, diag] += damp_percent * mean_diag
+
+    # Cholesky on H^-1: GPTQ uses upper-triangular inverse Cholesky factor.
+    Hinv = torch.linalg.cholesky(torch.linalg.inv(H), upper=True)
+
+    Q = torch.zeros_like(W)                                    # quantized W
+    W = W.clone()                                              # we will mutate
+
+    q_min = -(1 &lt;&lt; (n_bits - 1))
+    q_max = (1 &lt;&lt; (n_bits - 1)) - 1
+
+    for q in range(K):
+        # Per-group scale: when entering a new group, recompute scale on W[:, q:q+group]
+        if q % group_size == 0:
+            end = min(q + group_size, K)
+            w_grp = W[:, q:end]
+            s = w_grp.abs().amax(dim=1, keepdim=True) / q_max
+            s = s.clamp(min=1e-8)                              # [N, 1]
+
+        w = W[:, q:q+1]                                        # [N, 1]   current column
+        # Quantize this column (symmetric, per-row scale `s`)
+        q_int = (w / s).round().clamp(q_min, q_max)
+        w_q = q_int * s                                        # [N, 1]   dequantized
+        Q[:, q:q+1] = w_q
+
+        # OBS-derived weight update on all columns to the right
+        err = (w - w_q) / Hinv[q, q]                           # [N, 1]
+        W[:, q+1:] -= err @ Hinv[q:q+1, q+1:]                  # [N, K-q-1]
+
+    return Q</code></pre>
+<div class="callout callout-warn"><div class="callout-title">GPTQ engineering pitfalls</div><p>(1) Calibration data amount: typical 128 samples × 2048 tokens; too few makes Hessian ill-conditioned; (2) Damp cannot be skipped, $H$ often has zero diag (some input channels are constantly 0 on the calib set); (3) Activation reorder (<code>act_order=True</code>, quantize in descending order of $\mathrm{diag}(H)$) significantly improves W3 / W2 precision but adds dequant indexing overhead at inference; AutoGPTQ defaults to off.</p></div>
+<h3 id="46-gptq-vs-early-round-to-nearest-rtn">4.6 GPTQ vs early round-to-nearest (RTN)</h3>
+<table><thead><tr><th></th><th>RTN</th><th>GPTQ</th></tr></thead><tbody><tr><td>Error compensation</td><td>None (each weight rounds independently)</td><td>Yes (OBS formula propagates error backward)</td></tr><tr><td>Calibration</td><td>Not needed</td><td>Needed (128-512 samples)</td></tr><tr><td>4-bit on LLaMA-7B</td><td>PPL +1.5</td><td>PPL +0.1</td></tr><tr><td>3-bit on LLaMA-7B</td><td>PPL +14 (collapse)</td><td>PPL +0.7</td></tr><tr><td>Time</td><td>Seconds</td><td>Single card 30-60 min (7B)</td></tr></tbody></table>
+<h2 id="5-awq-activation-aware-weight-quantization">§5 AWQ: Activation-Aware Weight Quantization</h2>
+<p>AWQ (Lin, Tang, Tang, Yang, Chen, Wang, Xiao, Dang, Gan, Han, MLSys 2024) core insight: <strong>1% "salient" weights determine nearly all the quantization loss</strong>—these salient weights have large input activation magnitudes. So <strong>don't quantize all weights independently</strong>; first scale up salient channels (before quantization), equivalently scale down the corresponding input, and final quantization error decreases.</p>
+<h3 id="51-identification-of-salient-channels">5.1 Identification of salient channels</h3>
+<p>Not based on weight magnitudes themselves, but on <strong>magnitudes of corresponding activation channels</strong>:</p>
+<p>$$\text{salience}(c) = \mathrm{mean}_{x \sim \mathrm{calib}}\,|x_c|$$</p>
+<p>Sort channels by salience; top 1% are "salient channels"; corresponding weight columns $w_{\cdot, c}$ are "salient weights".</p>
+<h3 id="52-per-channel-scale-equivalent-transform-math-equivalence--quantization-error-equivalence">5.2 Per-channel scale equivalent transform (math equivalence ≠ quantization error equivalence)</h3>
+<p>Consider $Y = X W$, $X \in \mathbb{R}^{B\times K}$, $W \in \mathbb{R}^{K\times N}$. For each input channel $c$, introduce positive scale $s_c > 0$:</p>
+<p>$$Y = (X / S) (S \cdot W) = \tilde{X} \tilde{W}$$</p>
+<p>where $S = \mathrm{diag}(s_1, \ldots, s_K)$, $\tilde{X}_{:, c} = X_{:, c} / s_c$, $\tilde{W}_{c, :} = s_c \cdot W_{c, :}$. <strong>Exactly equal under FP16</strong>. But after quantization:</p>
+<ul><li>$\tilde{W} = S W$: salient rows $w_{c, :}$ are multiplied by $s_c$ (grow); single-channel quantization is finer (per-channel scale is smaller).</li><li>$\tilde{X} = X / S$: activation is not quantized (weight-only PTQ doesn't touch activation); but if downstream has activation quant, its error also drops.</li></ul>
+<p><strong>Question</strong>: how to pick $s_c$? Too large makes salient rows stand out and steals the scale; too small can't protect. AWQ gives a grid search:</p>
+<p>$$s_c = \mathrm{mean}(|x_c|)^\alpha,\quad \alpha \in \{0.0, 0.1, \ldots, 1.0\}$$</p>
+<p>Independently grid search $\alpha$ per layer, minimizing layer-wise MSE $\|Y_{\mathrm{fp}} - Y_{\mathrm{quant}}\|^2$. $\alpha = 0$ reduces to RTN (no scale); $\alpha = 1$ directly uses mean act as scale; typical optimum $\alpha \in [0.4, 0.7]$.</p>
+<h3 id="53-difference-from-gptq">5.3 Difference from GPTQ</h3>
+<table><thead><tr><th>Item</th><th>GPTQ</th><th>AWQ</th></tr></thead><tbody><tr><td>Data dependency</td><td>Hessian $X^\top X$ (needs calibration)</td><td>$\text{mean}(\lvert x \rvert)$ per channel (also needs calibration)</td></tr><tr><td>Optimization target</td><td>Optimal error compensation for all weights</td><td>Scale for salient channels</td></tr><tr><td>Quantization flow</td><td>iterative, columnwise + OBS update</td><td>one-shot scaling + RTN</td></tr><tr><td>Time</td><td>30-60 min (7B)</td><td>5-15 min (7B)</td></tr><tr><td>Inference dequant</td><td>May need act reordering</td><td>No extra overhead (scale can be absorbed into LayerNorm / W)</td></tr><tr><td>Compatibility with W reordering</td><td>Weak</td><td>Strong (scale is elementwise, doesn't break GEMM structure)</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">AWQ&#x27;s engineering friendliness</div><p>Per-channel $s_c$ can be <strong>pre-merged into upstream LayerNorm / RMSNorm weights</strong>: in $\mathrm{LN}(x) \cdot \gamma$, $\gamma \leftarrow \gamma / s$, downstream $w \leftarrow s \cdot w$; at runtime, <strong>no extra elementwise operations</strong>. This is one reason AWQ is easier to deploy than SmoothQuant (SmoothQuant can also be merged, but if LN is followed by cat / residual, it can't).</p></div>
+<h3 id="54-awq-style-per-channel-scale-search-code">5.4 AWQ-style per-channel scale search code</h3>
+<pre><code class="language-python">import torch
+
+@torch.no_grad()
+def awq_search_scale(
+    W: torch.Tensor,             # [N, K]   FP16 weight
+    X: torch.Tensor,             # [B, K]   calibration activations (post-LayerNorm)
+    n_bits: int = 4,
+    group_size: int = 128,
+    n_grid: int = 20,
+):
+    &quot;&quot;&quot;
+    Search per-channel scale s in [0, 1] that minimizes layer-wise MSE
+    of dequantized W·X relative to FP16 W·X.
+
+    s_c = mean(|x_c|) ** alpha,   alpha in {0, 1/n_grid, ..., 1}
+    &quot;&quot;&quot;
+    device = W.device
+    x_mean = X.abs().mean(dim=0).clamp(min=1e-5)              # [K]
+
+    # Y_fp is the FP16 reference output (compute once)
+    Y_fp = X @ W.t()                                          # [B, N]
+
+    q_min = -(1 &lt;&lt; (n_bits - 1))
+    q_max = (1 &lt;&lt; (n_bits - 1)) - 1
+
+    best_alpha, best_err = None, float(&quot;inf&quot;)
+    for i in range(n_grid + 1):
+        alpha = i / n_grid
+        s = x_mean.pow(alpha)
+        # Normalize s so that geometric mean is 1: keeps scale of W stable.
+        s = s / s.mean()
+        s = s.clamp(min=1e-4)
+
+        # Apply: W&#x27; = W · diag(s),  X&#x27; = X / s
+        Wp = W * s.unsqueeze(0)                               # [N, K]
+        # Group-wise symmetric quantize Wp along K dim
+        Wq = _group_quant_dequant(Wp, n_bits, group_size, dim=-1, q_min=q_min, q_max=q_max)
+        # Equivalent activation rescaling: divide each input channel by s
+        Xp = X / s.unsqueeze(0)
+        Y_q = Xp @ Wq.t()
+
+        err = (Y_fp - Y_q).pow(2).mean().item()
+        if err &lt; best_err:
+            best_err, best_alpha, best_s = err, alpha, s
+
+    return best_alpha, best_s, best_err
+
+
+def _group_quant_dequant(W, n_bits, g, dim, q_min, q_max):
+    &quot;&quot;&quot; Symmetric per-group quant-dequant along last dim (assumed K). Assumes K % g == 0. &quot;&quot;&quot;
+    N, K = W.shape
+    assert K % g == 0, f&quot;K={K} must be divisible by group_size={g}; pad W or pick g | K.&quot;
+    Wg = W.view(N, K // g, g)                                # [N, K/g, g]
+    s = Wg.abs().amax(dim=-1, keepdim=True) / q_max
+    s = s.clamp(min=1e-8)
+    Wq = (Wg / s).round().clamp(q_min, q_max) * s
+    return Wq.view(N, K)</code></pre>
+<h2 id="6-smoothquant-migrating-activation-outliers-to-weights-w8a8">§6 SmoothQuant: Migrating Activation Outliers to Weights (W8A8)</h2>
+<p>SmoothQuant (Xiao, Lin, Seznec, Wu, Demouth, Han, ICML 2023) solves the core pain point of quantizing weights + activations together (W8A8): activation outliers cause per-tensor INT8 to collapse.</p>
+<h3 id="61-core-math">6.1 Core math</h3>
+<p>For $Y = X W$, introduce a <strong>diagonal smoothing matrix</strong> $S = \mathrm{diag}(s_1, \ldots, s_K)$, $s_c > 0$:</p>
+<p>$$Y = (X S^{-1})(S W) = \hat{X} \hat{W}$$</p>
+<ul><li>$\hat{X}_{:,c} = X_{:,c} / s_c$: activation's outlier channels are flattened.</li><li>$\hat{W}_{c,:} = s_c \cdot W_{c,:}$: weight's corresponding rows are amplified (absorbing outlier magnitudes).</li></ul>
+<p>Mathematically <strong>exactly equivalent</strong> (elementwise equal under FP16); but after quantization:</p>
+<ul><li>$\hat{X}$'s max drops significantly; per-tensor INT8 effective bit width improves.</li><li>$\hat{W}$, because weights are <strong>inherently flat-distributed</strong> and <strong>can be per-channel quantized</strong> (along output dim, orthogonal to $S$'s K dim), a few rows being amplified is harmless.</li></ul>
+<h3 id="62-migration-strength-alpha-key-hyperparameter">6.2 Migration strength $\alpha$ (key hyperparameter)</h3>
+<p>Optimal $s_c$ should balance "how much activation is smoothed" and "how much weight is amplified":</p>
+<p>$$\boxed{\;s_c = \dfrac{\max(|X_{:, c}|)^\alpha}{\max(|W_{c, :}|)^{1 - \alpha}}\;}$$</p>
+<ul><li>$\alpha = 0$: $s_c = 1/\max|W_c|$. $\hat X = X \cdot \max|W_c|$ (activation amplified, quantization harder), $\hat W = W / \max|W_c|$ (weight normalized, quantization easier). <strong>Burden entirely on activation</strong>.</li><li>$\alpha = 1$: $s_c = \max|X_c|$. $\hat X = X / \max|X_c|$ (activation flattened, quantization easier), $\hat W = W \cdot \max|X_c|$ (weight amplified, quantization harder). <strong>Burden entirely on weight</strong>.</li><li>$\alpha = 0.5$ (default): $s_c = \sqrt{\max|X_c| / \max|W_c|}$, split half and half.</li></ul>
+<p>SmoothQuant paper scans $\alpha \in [0.3, 0.7]$ on OPT / BLOOM; typically 0.5 works.</p>
+<h3 id="63-equivalent-transform-doesnt-break-gemm-must-know">6.3 Equivalent transform doesn't break GEMM (must know)</h3>
+<div class="callout callout-good"><div class="callout-title">Why SmoothQuant migration doesn&#x27;t break GEMM</div><p>equivalent transform $Y = X W = (XS^{-1})(SW)$, <strong>$S$ is diagonal (per-channel scale), doing elementwise rescale on columns of $X$ / rows of $W$</strong>:</p></div>
+<ul><li>Mathematical equivalence: diagonal matrices act as channelwise multiplication, independent of GEMM's inner product order; final output $Y$ is elementwise equal under FP16.</li><li>Engineering: $S^{-1}$ can be fused into <strong>upstream LayerNorm weight</strong> ($\gamma \leftarrow \gamma / s$), $S$ fused into <strong>current weight</strong> ($W \leftarrow SW$, offline one-time); at inference, <strong>no elementwise overhead</strong>.</li><li>Key to not breaking: $S$ is diagonal; rescale is independent per channel along the K dim. If $S$ were dense / rotation matrix, explicit matmul would be needed; QuaRot / SpinQuant below take that direction, at greater cost.</li></ul>
+<h3 id="64-smoothquant-pseudocode">6.4 SmoothQuant pseudocode</h3>
+<pre><code class="language-python">import torch
+
+@torch.no_grad()
+def compute_smooth_scale(
+    X: torch.Tensor,             # [B*L, K]  per-token flattened activations (calibration)
+    W: torch.Tensor,             # [N, K]    weight
+    alpha: float = 0.5,
+):
+    &quot;&quot;&quot;
+    SmoothQuant migration scale (per input channel c):
+        s_c = max(|x_c|)^alpha / max(|w_c|)^(1-alpha)
+    &quot;&quot;&quot;
+    x_max = X.abs().amax(dim=0)                             # [K]   per channel
+    w_max = W.abs().amax(dim=0)                             # [K]   per input ch of W
+    s = (x_max.pow(alpha) / w_max.pow(1 - alpha)).clamp(min=1e-5)
+    return s                                                # [K]
+
+
+@torch.no_grad()
+def apply_smoothing(W: torch.Tensor, s: torch.Tensor, prev_ln_weight: torch.Tensor):
+    &quot;&quot;&quot;
+    Fuse smoothing into upstream LayerNorm weight and current layer W:
+        gamma_new = gamma / s   (so output of LN becomes x / s)
+        W_new     = W * s       (broadcasts over output dim of W)
+    After this, FP16 forward is identical, but X and W are reshaped
+    such that simple per-tensor / per-channel quant works well.
+    &quot;&quot;&quot;
+    prev_ln_weight.div_(s)                                  # in-place modify γ
+    W.mul_(s.unsqueeze(0))                                  # [N, K] broadcasts s along K dim
+    return W</code></pre>
+<h3 id="65-smoothquant-applicability">6.5 SmoothQuant applicability</h3>
+<ul><li>✅ Decoder-only LLMs (OPT, BLOOM, LLaMA family): W8A8 nearly lossless (PPL +0.1).</li><li>✅ FFN and attention input projection (K, V, Q): smoothing can merge with upstream LN.</li><li>⚠️ Out projection and down projection: upstream is not LN (is residual / attention output); smoothing requires explicit elementwise op; SmoothQuant defaults to skipping these two layers (keeping FP16 input).</li><li>⚠️ INT4 activation: W4A4 alone needs SmoothQuant + QuaRot / SpinQuant rotation.</li></ul>
+<h2 id="7-rotation-methods-quip--quarot--spinquant">§7 Rotation Methods: QuIP / QuaRot / SpinQuant</h2>
+<p>SmoothQuant uses <strong>diagonal</strong> (per-channel) scale to suppress outliers; but outliers still exist in some channel subspaces. <strong>Rotation methods</strong> use a random / learned <strong>orthogonal matrix</strong> $R$ to "scatter" outliers along the hidden dim, making the distribution closer to Gaussian.</p>
+<h3 id="71-quip-chee-et-al-2023-neurips">7.1 QuIP (Chee et al. 2023, NeurIPS)</h3>
+<p>Core: use a random <strong>incoherence-inducing matrix</strong> $U$ (e.g., random Hadamard or Householder) to rotate weights, making quantization friendlier.</p>
+<ul><li><strong>Hadamard transform</strong>: $H \in \mathbb{R}^{d \times d}$, $H_{ij} \in \{+1, -1\} / \sqrt{d}$, orthogonal matrix.</li><li>Key property: after random sign flip, Hadamard transform provably reduces weight incoherence (ratio of max column $\ell_2$ norm to Frobenius norm) to $O(\sqrt{\log d / d})$ level.</li><li>$W' = U W V^\top$, FP16 equivalent ($U, V$ orthogonal); quantizing $W'$ has smaller loss than $W$ (because incoherent).</li></ul>
+<p>Cost: at inference, need to keep $U, V$ matmul (one dense rotation). Hadamard transform has a fast algorithm ($O(d \log d)$), but still slower than SmoothQuant's diagonal fuse.</p>
+<h3 id="72-quarot-ashkboos-et-al-2024-neurips">7.2 QuaRot (Ashkboos et al. 2024 NeurIPS)</h3>
+<p>Extends Hadamard to the full LLM stack: <strong>weight + activation + KV cache all INT4</strong>. Core:</p>
+<ul><li>Before each residual stream enters a transformer block, <strong>multiply by a Hadamard $H$</strong>.</li><li>Hadamard is orthogonal, can "pass through" RMSNorm (RMSNorm is elementwise; $\mathrm{RMSNorm}(Hx) \cdot \gamma = H \cdot \mathrm{RMSNorm}(x) \cdot (H \gamma)$ doesn't strictly hold, but QuaRot uses "online Hadamard" to bypass).</li><li>After rotation, activation has a more Gaussian distribution; <strong>outliers scattered across all dims</strong>; INT4 activation quantization error drops significantly.</li></ul>
+<p>Result: LLaMA-2 70B under W4A4KV4 has PPL increment ~ +0.5 (vs SmoothQuant's +5). Cost: 1-2 Hadamard matmuls per block (fast Hadamard transform is cheap on H100).</p>
+<h3 id="73-spinquant-liu-et-al-2024--iclr-2025-meta">7.3 SpinQuant (Liu et al. 2024 → ICLR 2025, Meta)</h3>
+<p>Replaces QuaRot's random Hadamard with <strong>learned rotation matrices</strong> $R_1, R_2, R_3, R_4$ acting on residual stream / attention input / FFN input / KV cache. Objective: layer-wise output MSE.</p>
+<ul><li>$R_i \in SO(d)$ (special orthogonal group), optimized via Cayley parameterization or stochastic gradient on Stiefel manifold.</li><li>~0.5 PPL improvement over QuaRot, but training time increases (~1 GPU hour per model to learn R).</li></ul>
+<div class="callout callout-info"><div class="callout-title">Rotation methods vs SmoothQuant</div><p>Smoothing solves "channel-dim outliers"; rotation solves "channel-subspace outliers". Rotation is more general but engineering cost is higher (dense matmul can't fuse into LN, needs online compute or explicit kernel). For LLaMA-3 / Qwen-2 deployment, W4A8KV4 mainstream is still SmoothQuant + GPTQ; W4A4 needs QuaRot / SpinQuant level rotation.</p></div>
+<h2 id="8-low-precision-floats-fp8--mx--nvfp4">§8 Low-Precision Floats: FP8 / MX / NVFP4</h2>
+<p>Low-precision floats aren't new (FP16 / BF16 are widespread); what's new is <strong>FP8 (E4M3 / E5M2)</strong> with native tensor core support on Hopper, and <strong>MX / NVFP4</strong> as block-scaled floats on Blackwell.</p>
+<h3 id="81-ieee-754-style-float-encoding">8.1 IEEE 754-style float encoding</h3>
+<p>A float $x = (-1)^s \cdot (1 + m) \cdot 2^{e - \text{bias}}$ (normal) or $x = (-1)^s \cdot m \cdot 2^{1 - \text{bias}}$ (subnormal).</p>
+<table><thead><tr><th>Format</th><th>Sign</th><th>Exp bits</th><th>Mantissa bits</th><th>Bias</th><th>Max</th><th>Min normal</th></tr></thead><tbody><tr><td>FP32</td><td>1</td><td>8</td><td>23</td><td>127</td><td>$\sim 3.4\times 10^{38}$</td><td>$\sim 1.2\times 10^{-38}$</td></tr><tr><td>FP16</td><td>1</td><td>5</td><td>10</td><td>15</td><td>65504</td><td>$\sim 6.1\times 10^{-5}$</td></tr><tr><td>BF16</td><td>1</td><td>8</td><td>7</td><td>127</td><td>$\sim 3.4\times 10^{38}$</td><td>$\sim 1.2\times 10^{-38}$</td></tr><tr><td><strong>FP8 E4M3</strong></td><td>1</td><td>4</td><td>3</td><td>7</td><td>448 (no Inf)</td><td>$\sim 1.5\times 10^{-2}$</td></tr><tr><td><strong>FP8 E5M2</strong></td><td>1</td><td>5</td><td>2</td><td>15</td><td>57344</td><td>$\sim 6.1\times 10^{-5}$</td></tr><tr><td><strong>FP4 E2M1</strong></td><td>1</td><td>2</td><td>1</td><td>1</td><td>6</td><td>1</td></tr></tbody></table>
+<div class="callout callout-good"><div class="callout-title">E4M3 vs E5M2 forward/backward choice</div><p>NVIDIA Transformer Engine default:</p></div>
+<ul><li><strong>Forward (activation, weight)</strong>: use <strong>E4M3</strong>—smaller dynamic range but higher resolution (mantissa 3 bits). Activation after layer-wise scale falls within $[-448, 448]$; mantissa precision matters more.</li><li><strong>Backward (gradient)</strong>: use <strong>E5M2</strong>—larger dynamic range but lower resolution (mantissa 2 bits, similar to FP16). Gradient magnitudes span multiple orders; need large dynamic range.</li></ul>
+<p>Note E4M3 has no Inf, only NaN (max normal is 448); E5M2 has Inf and NaN (similar to FP16). This is intentional hardware design distinction.</p>
+<h3 id="82-fp8-e4m3-bit-level-encoding-code">8.2 FP8 E4M3 bit-level encoding code</h3>
+<pre><code class="language-python">def fp8_e4m3_encode(x: float) -&gt; int:
+    &quot;&quot;&quot;
+    Encode a float into FP8 E4M3 8-bit pattern (returned as int 0..255).
+    Format: 1 sign | 4 exponent | 3 mantissa, bias = 7, no Inf, NaN = S.1111.111
+    Subnormals: exp = 0, value = (-1)^s * (mantissa/8) * 2^(1-7) = (-1)^s * (m/8) * 2^-6
+    Max normal: S.1111.110 -&gt; 448.0
+    &quot;&quot;&quot;
+    import math
+    if math.isnan(x):
+        return 0b0_1111_111
+    sign = 0 if x &gt;= 0 else 1
+    ax = abs(x)
+    if ax == 0:
+        return sign &lt;&lt; 7
+    if ax &gt;= 448.0:
+        return (sign &lt;&lt; 7) | 0b1111_110                    # saturate to max normal
+
+    # Decompose ax = m * 2^e with m in [1, 2)
+    e = int(math.floor(math.log2(ax)))
+    m = ax / (2 ** e)                                       # m in [1, 2)
+
+    # Adjust to FP8 E4M3 representation
+    biased_e = e + 7                                        # bias = 7
+
+    if biased_e &lt;= 0:
+        # Subnormal: shift mantissa right by (1 - biased_e), set exp = 0
+        shift = 1 - biased_e
+        m_int = int(round((m * 2 ** -shift) * 8))           # 3-bit mantissa
+        exp_bits = 0
+    else:
+        m_int = int(round((m - 1.0) * 8))                   # 3-bit mantissa
+        if m_int == 8:                                      # mantissa overflow
+            m_int = 0
+            biased_e += 1
+        if biased_e &gt;= 15:                                  # exceeds max exp
+            return (sign &lt;&lt; 7) | 0b1111_110                 # saturate
+        exp_bits = biased_e
+
+    return (sign &lt;&lt; 7) | (exp_bits &lt;&lt; 3) | m_int
+
+
+def fp8_e4m3_decode(b: int) -&gt; float:
+    &quot;&quot;&quot; Decode an 8-bit FP8 E4M3 pattern (int 0..255) back to a Python float. &quot;&quot;&quot;
+    sign = -1.0 if (b &gt;&gt; 7) &amp; 1 else 1.0
+    exp_bits = (b &gt;&gt; 3) &amp; 0b1111
+    m_bits = b &amp; 0b111
+
+    if exp_bits == 0b1111 and m_bits == 0b111:
+        return float(&quot;nan&quot;)
+    if exp_bits == 0:                                        # subnormal
+        return sign * (m_bits / 8.0) * (2 ** -6)
+    return sign * (1.0 + m_bits / 8.0) * (2 ** (exp_bits - 7))
+
+
+# Sanity check: round-trip 448 (max normal)
+assert abs(fp8_e4m3_decode(fp8_e4m3_encode(448.0)) - 448.0) &lt; 1e-6</code></pre>
+<h3 id="83-mx-format-ocp--microsoft-2024">8.3 MX format (OCP / Microsoft 2024)</h3>
+<p>OCP (Open Compute Project) MX (Microscaling) spec: groups 32 elements into a block sharing an <strong>8-bit shared scale</strong> (E8M0 format, i.e., power-of-two scale); each element within the block is encoded as FP4/FP6/FP8.</p>
+<table><thead><tr><th>MX format</th><th>Element type</th><th>Block size</th><th>Shared scale</th><th>Total bits/element</th></tr></thead><tbody><tr><td>MXFP8</td><td>FP8 (E5M2 or E4M3)</td><td>32</td><td>E8M0</td><td>$8 + 8/32 = 8.25$</td></tr><tr><td>MXFP6</td><td>FP6 (E3M2 or E2M3)</td><td>32</td><td>E8M0</td><td>$6 + 8/32 = 6.25$</td></tr><tr><td>MXFP4</td><td>FP4 (E2M1)</td><td>32</td><td>E8M0</td><td>$4 + 8/32 = 4.25$</td></tr><tr><td>MXINT8</td><td>INT8</td><td>32</td><td>E8M0</td><td>$8.25$</td></tr></tbody></table>
+<p>E8M0 is a 1-byte pure-exponent (no mantissa, no sign) power-of-two scale: $s = 2^{e - 127}$, $e \in [0, 255]$. Dequant with this scale is a bit shift (cheapest hardware op).</p>
+<h3 id="84-nvfp4-blackwell-2025-nvidia">8.4 NVFP4 (Blackwell 2025 NVIDIA)</h3>
+<p>NVFP4 is NVIDIA's FP4 format on Blackwell (B100 / B200 / GB200); differences from OCP MXFP4:</p>
+<ul><li><strong>Element</strong>: FP4 E2M1 (same as MX).</li><li><strong>Block size</strong>: <strong>16</strong> (not 32), finer granularity.</li><li><strong>Per-block scale</strong>: <strong>FP8 E4M3</strong> (instead of E8M0), preserving mantissa; scale itself has higher precision.</li><li><strong>Per-tensor scale</strong>: an additional global FP32 scale (block scale is FP8, limited to $\pm 448$; per-tensor scale extends dynamic range).</li></ul>
+<p>Total bits/element: $4 + 8/16 + \text{negligible per-tensor} \approx 4.5$ bits. Blackwell tensor cores natively support NVFP4 × NVFP4 matmul; throughput on B200 is claimed to be $\sim 8\times$ FP16.</p>
+<div class="callout callout-warn"><div class="callout-title">NVFP4 ≠ MXFP4</div><p>Industry often confuses "FP4". NVFP4 (block=16, FP8 E4M3 scale, +FP32 tensor scale) is NVIDIA Blackwell proprietary; OCP MXFP4 (block=32, E8M0 scale) is an open spec, partly supported by AMD MI350 / Intel Gaudi 3. The two have different numerical precision and hardware paths.</p></div>
+<h3 id="85-using-fp8-in-large-model-training-transformer-engine">8.5 Using FP8 in large model training (Transformer Engine)</h3>
+<p>NVIDIA Transformer Engine (TE) standard practice for FP8 training of LLMs on Hopper / Blackwell:</p>
+<ul><li><strong>Maintain two amax histories per GEMM</strong> (forward / backward), update scale every 8-16 steps.</li><li><strong>Delayed scaling</strong>: use previous window's amax for scale, avoiding blocking the current step.</li><li><strong>Hybrid precision</strong>: linear weights and grad accumulators stay in FP32 / BF16; only GEMM inputs cast to FP8. Optimizer state (Adam $m, v$) stays in FP32.</li><li><strong>Loss scaling</strong>: similar to FP16, but since E5M2 dynamic range is close to FP16, loss scale can be small or omitted.</li></ul>
+<p>LLaMA-3 / DeepSeek-V3 series FP8 training on Hopper has ~1.5-2$\times$ throughput improvement over BF16.</p>
+<h2 id="9-kv-cache-quantization">§9 KV Cache Quantization</h2>
+<p>In LLM inference decode phase, per-sample KV cache memory = $L_\text{ctx} \cdot 2 \cdot n_\text{layers} \cdot H_\text{kv} \cdot d_\text{head} \cdot \text{bytes}$. LLaMA-2-70B (80 layers, GQA $H_\text{kv}=8$, $d_\text{head}=128$, FP16, $L_\text{ctx}=4096$):</p>
+<p>$$4096 \times 2 \times 80 \times 8 \times 128 \times 2\text{B} = 1.34\text{ GB / sample}$$</p>
+<p>Batch 64 → 86 GB (one A100 80GB can't fit; KV quantization required).</p>
+<h3 id="91-key-observations-of-kivi--kvquant">9.1 Key observations of KIVI / KVQuant</h3>
+<p>Empirically:</p>
+<ul><li><strong>K cache</strong> outliers <strong>stably appear</strong> along the <strong>head_dim</strong> (channel) dimension (related to RoPE encoding phases; some freq bands have large magnitudes).</li><li><strong>V cache</strong> outliers appear along the <strong>token</strong> dimension (sequence), and each token is independent.</li></ul>
+<p>So optimal granularity:</p>
+<ul><li><strong>K</strong>: <strong>per-channel</strong> quant (one scale per head_dim).</li><li><strong>V</strong>: <strong>per-token</strong> quant (one scale per sequence position).</li></ul>
+<h3 id="92-kivi-liu-et-al-2024-icml">9.2 KIVI (Liu et al. 2024 ICML)</h3>
+<p>KIVI = "K per-channel + V per-token" + INT2 quant, paired with sliding window outlier residual. Pipeline:</p>
+<ol><li>When K cache updates, compute scale along the head_dim dimension (<strong>per-channel</strong>), quantize to INT2/INT4.</li><li>When V cache updates, compute scale along the token dimension (<strong>per-token</strong>), quantize to INT2/INT4.</li><li>Keep the most recent $W$ tokens in FP16 (sliding window), to prevent quant noise from dominating recent attention.</li></ol>
+<p>LLaMA-2-7B INT2 KV: PPL increment ~ 0.5; KV cache itself FP16→INT2 has theoretical $8\times$ compression, minus scale / outlier residual overhead, KIVI paper reports peak memory (incl. weight + activation) reduced by ~$2.35\text{-}2.6\times$; batch size can be scaled up ~$4\times$.</p>
+<h3 id="93-kvquant-hooper-et-al-2024-neurips">9.3 KVQuant (Hooper et al. 2024, NeurIPS)</h3>
+<p>Further analysis:</p>
+<ul><li>Per-channel K isn't enough; <strong>Pre-RoPE quant</strong> is more stable than post-RoPE (RoPE introduces phase mixing, disrupting channel dim structure).</li><li>V uses per-token + non-uniform quant (density-aware).</li></ul>
+<p>Result: LLaMA-2-70B INT4 KV PPL increment ~ 0.04.</p>
+<h3 id="94-qserve--qoq-lin-et-al-2024-mlsys-2025">9.4 QServe / QoQ (Lin et al. 2024 MLSys 2025)</h3>
+<p>QServe introduces <strong>W4A8KV4</strong> full-stack quantization + custom GPU kernels. Key engineering points:</p>
+<ul><li><strong>W4A8 GEMM</strong>: weight INT4, activation INT8. Dequant path: each weight expanded to INT8 in register via lookup table, then INT8×INT8 matmul, no FP16 dequant overhead.</li><li><strong>KV4 attention</strong>: K and V both INT4, mixed-precision dot product with INT8 query.</li><li><strong>QoQ (quattuor-octo-quattuor)</strong>: 4+8+4 naming, 4-bit weight, 8-bit activation, 4-bit KV.</li></ul>
+<p>QServe achieves 1.2-3.5$\times$ throughput improvement over vanilla TensorRT-LLM FP16 on A100 / H100; end-to-end LLaMA-3-70B-Instruct decoding reaches 1000+ tokens/s/H100.</p>
+<h3 id="95-kv-cache-quant-code-illustration-per-channel-k-per-token-v">9.5 KV cache quant code illustration (per-channel K, per-token V)</h3>
+<pre><code class="language-python">import torch
+
+@torch.no_grad()
+def quantize_kv_cache(
+    K: torch.Tensor,             # [B, H_kv, L, d_head]
+    V: torch.Tensor,             # [B, H_kv, L, d_head]
+    n_bits: int = 4,
+):
+    &quot;&quot;&quot;
+    K: per-channel (head_dim) symmetric quant
+    V: per-token   (sequence) symmetric quant
+
+    Returns int8-stored tensors plus scales.
+    For real deployment, pack two INT4 values into one INT8 byte.
+    &quot;&quot;&quot;
+    q_min = -(1 &lt;&lt; (n_bits - 1))
+    q_max = (1 &lt;&lt; (n_bits - 1)) - 1
+
+    # ---- K: per-channel along the last dim (d_head). Same scale across L, H_kv per-batch. ----
+    # Common choice: per (batch, head, channel) scale, reduce over L only.
+    s_K = K.abs().amax(dim=2, keepdim=True) / q_max         # [B, H_kv, 1, d_head]
+    s_K = s_K.clamp(min=1e-8)
+    K_q = (K / s_K).round().clamp(q_min, q_max).to(torch.int8)
+
+    # ---- V: per-token, scale per (batch, head, token) reducing over d_head ----
+    s_V = V.abs().amax(dim=-1, keepdim=True) / q_max        # [B, H_kv, L, 1]
+    s_V = s_V.clamp(min=1e-8)
+    V_q = (V / s_V).round().clamp(q_min, q_max).to(torch.int8)
+
+    return K_q, s_K, V_q, s_V
+
+
+def dequantize_kv(K_q, s_K, V_q, s_V, dtype=torch.float16):
+    K = K_q.to(dtype) * s_K.to(dtype)
+    V = V_q.to(dtype) * s_V.to(dtype)
+    return K, V</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Pre-RoPE or post-RoPE quantization?</div><p>Academic consensus: <strong>quantize K pre-RoPE</strong> (KVQuant's claim). Reason: RoPE is rotation in frequency bands; it "scatters" channel-dim outliers to other dims, breaking per-channel scale stability. Pre-RoPE, each head_dim's outliers are fixed channels; post-RoPE they vary per token. But pre-RoPE quantization needs in-kernel dequant + then RoPE in the attention kernel, hard to fuse engineering-wise; compromise: post-RoPE but with finer group_size (e.g., 32).</p></div>
+<h2 id="10-qat-and-training-time-quantization">§10 QAT and Training-Time Quantization</h2>
+<p>PTQ (Post-Training Quantization) doesn't touch weights; QAT (Quantization-Aware Training) simulates quantization during training or finetuning so the model adapts.</p>
+<h3 id="101-ste-straight-through-estimator">10.1 STE (Straight-Through Estimator)</h3>
+<p>Round / clamp are mathematically non-differentiable (round's derivative is 0 almost everywhere); backprop has no signal. <strong>STE</strong> approximates the quant-dequant function $\mathrm{QDQ}(x) = s\,(\mathrm{clamp}(\mathrm{round}(x/s), Q_\min, Q_\max))$ (symmetric quant example) with gradient:</p>
+<p>$$\frac{\partial \mathrm{QDQ}(x)}{\partial x} \;\overset{\text{STE}}{:=}\; \mathbf{1}\!\left[\,s\,Q_\min \le x \le s\,Q_\max\,\right]$$</p>
+<p>i.e., "use quantized value forward, pass-through gradient in clipping range backward (saturated regions have zero gradient)". This is the basis for LSQ / DoReFa / PACT and other QAT methods.</p>
+<h3 id="102-llm-qat-liu-et-al-2023">10.2 LLM-QAT (Liu et al. 2023)</h3>
+<ul><li>Use <strong>self-distilled data</strong> (teacher is the FP16 model itself, generating sequences) for QAT, avoiding extra training data.</li><li>Simulate INT4 weight quant in each forward step; backward uses STE.</li><li>Suitable for W4A8 / W4A4 finetune; PPL approaches FP16 after a few thousand steps.</li></ul>
+<p>Cost: QAT is 100-1000$\times$ slower than PTQ. In production, PTQ (GPTQ + AWQ) is already good enough; QAT is mainly for &lt; 4-bit (W2A4 / W1.58 ternary, etc.).</p>
+<h3 id="103-fp8-training-transformer-engine">10.3 FP8 Training (Transformer Engine)</h3>
+<p>See §8.5. FP8 training is a special case of QAT: training uses FP8 GEMM throughout, scale updated periodically via amax history, loss / opt state stay FP32.</p>
+<h3 id="104-bitnet-b158--b2">10.4 BitNet b1.58 / b2</h3>
+<p>Recently (Ma et al. 2024) Microsoft released <strong>BitNet b1.58</strong>: weights are ternary $\{-1, 0, +1\}$ ($\log_2 3 \approx 1.58$ bits), activations INT8. Requires from-scratch QAT training (can't be PTQ-converted); 3B scale matches FP16 LLaMA. This is currently the lowest-bit production-ready LLM quantization scheme.</p>
+<h2 id="11-frameworks-and-ecosystem-comparison">§11 Frameworks and Ecosystem Comparison</h2>
+<table><thead><tr><th>Framework</th><th>Supported methods</th><th>Inference backend</th><th>Typical use</th></tr></thead><tbody><tr><td><strong>bitsandbytes</strong></td><td>LLM.int8(), NF4, FP4</td><td>PyTorch + Triton</td><td>HuggingFace transformers integration; essential for QLoRA finetune</td></tr><tr><td><strong>AutoGPTQ</strong></td><td>GPTQ (W4, W3, W2)</td><td>ExLlama / Marlin kernels</td><td>4-bit inference ~2× FP16 throughput</td></tr><tr><td><strong>AutoAWQ</strong></td><td>AWQ (W4)</td><td>GEMM kernel</td><td>Slightly faster than GPTQ with comparable precision</td></tr><tr><td><strong>llama.cpp / GGUF</strong></td><td>Q4_K, Q5_K, Q6_K, Q8_0, Q3_K, IQ2_XXS...</td><td>CPU + GPU + Metal + ROCm</td><td>First choice for edge inference</td></tr><tr><td><strong>TensorRT-LLM</strong></td><td>INT8 SmoothQuant, FP8, W4A8, NVFP4</td><td>NVIDIA fused kernel</td><td>First choice for production serving (Hopper / Blackwell)</td></tr><tr><td><strong>vLLM</strong></td><td>GPTQ, AWQ, FP8, INT8 SmoothQuant</td><td>PagedAttention + custom kernel</td><td>First choice for multi-user serving</td></tr><tr><td><strong>SGLang</strong></td><td>GPTQ, AWQ, FP8, W4A8 KV</td><td>radix-tree + custom kernel</td><td>latency-sensitive serving</td></tr><tr><td><strong>Transformer Engine</strong></td><td>FP8 training + inference</td><td>H100 / B100 cuBLAS</td><td>First choice for FP8 training</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Marlin kernel</div><p>Frantar 2024's W4A16 GEMM kernel, designed for Ampere / Ada / Hopper; 4-bit weight + FP16 activation is 1.5-2$\times$ faster than FP16 cuBLAS for batch 1-32. vLLM / SGLang default W4 path.</p></div>
+<h2 id="12-25-frequently-asked-interview-questions">§12 25 Frequently-Asked Interview Questions</h2>
+<p>Curated by codex (gpt-5.5 xhigh) from a top-lab interviewer's perspective, divided into 3 tiers by difficulty. Click each for answer points + common pitfalls.</p>
+<h3 id="l1-must-know-any-ml-engineer-position-will-ask">L1 Must-Know (any ML engineer position will ask)</h3>
+<details>
+
+<summary>Q1. The quant / dequant formula for affine quantization?</summary>
+<ul><li>Quant: $q = \mathrm{clamp}(\mathrm{round}(x/s) + z,\; Q_\min,\; Q_\max)$</li><li>Dequant: $\hat{x} = s\,(q - z)$</li><li>Symmetric quant $z = 0$, dequant simplifies to $\hat{x} = s\cdot q$</li></ul>
+<p>Reverse round and clamp order, or forget zero-point subtraction.</p>
+</details>
+<details>
+
+<summary>Q2. Trade-off between symmetric vs asymmetric quantization?</summary>
+<ul><li>Symmetric: $z = 0$, GEMM implementation simple (no cross-zero terms), but wastes 1 bit when distribution is skewed</li><li>Asymmetric: precisely covers any $[\alpha, \beta]$, GEMM needs to fuse out zero-point terms</li><li>LLM weights are approximately zero-mean → symmetric is fine; activations can be skewed (e.g., ReLU output is non-negative) → asymmetric is better</li></ul>
+<p>Say "asymmetric is always more precise so always better"; forgets the engineering cost of GEMM cross terms.</p>
+</details>
+<details>
+
+<summary>Q3. Differences among per-tensor / per-channel / per-group?</summary>
+<ul><li>per-tensor: one scale for the whole matrix, overhead $O(1)$, worst precision</li><li>per-channel: weight has one scale per row along output dim (or activation along hidden dim)</li><li>per-group: one scale per $g$ weights, $g = 32 / 64 / 128$, highest precision</li><li>Storage impact: W4 + group128 ≈ 4.125 bits/weight; group32 ≈ 4.5 bits/weight</li></ul>
+<p>Confuse "per-channel along which dim"—weight is safe along output channel (GEMM K dim independent); activation along hidden (K dim) can't fuse directly into GEMM.</p>
+</details>
+<details>
+
+<summary>Q4. Why is LLM quantization harder than CNN?</summary>
+<ul><li>LLMs ≥ 6.7B show systematic activation outliers (0.1%-1% channels $50\text{-}100\times$ magnitude)</li><li>Outliers stable across different tokens / samples (not noise, but structure)</li><li>per-tensor INT8 OK for small models, drops 5-10 PPL points on large models</li><li>This is the pain point that LLM.int8() / SmoothQuant / AWQ all attack</li></ul>
+<p>Say "LLM quantization is same as CNN" or "just larger scale".</p>
+</details>
+<details>
+
+<summary>Q5. Differences among INT8 / INT4 / FP8?</summary>
+<ul><li>INT8: 8-bit integer $[-128, 127]$, with scale to represent reals</li><li>INT4: 4-bit integer $[-8, 7]$, must use group quant + fine calibration</li><li>FP8 E4M3: 1S/4E/3M, dynamic range $\pm 448$, used for forward</li><li>FP8 E5M2: 1S/5E/2M, dynamic range similar to FP16, used for backward</li></ul>
+<p>Treat FP8 as INT8; forget E4M3 has no Inf, only NaN.</p>
+</details>
+<details>
+
+<summary>Q6. What is GPTQ? How is it better than RTN?</summary>
+<ul><li>GPTQ (Frantar 2023) = efficient OBQ version on LLMs, OBS-based layer-wise PTQ</li><li>Uses Hessian $H = X^\top X$ information; after quantizing column $q$, <strong>updates remaining columns</strong> to compensate</li><li>W4 LLaMA-7B: RTN PPL +1.5; GPTQ +0.1</li><li>Time cost: single card 30-60 min/7B</li></ul>
+<p>Only say "GPTQ is 4-bit quantization"; doesn't mention OBS error propagation.</p>
+</details>
+<details>
+
+<summary>Q7. Core idea of AWQ?</summary>
+<ul><li>1% salient weights (channels with large input activation) determine most of the quantization loss</li><li>Introduce per-input-channel scale $s_c$, do equivalent transform $W \to s W$, $X \to X/s$</li><li>Grid search $\alpha \in [0, 1]$, $s_c = \mathrm{mean}(|x_c|)^\alpha$</li><li>Faster than GPTQ; works well with Marlin / W4A16 kernel</li></ul>
+<p>Only say "AWQ is faster than GPTQ"; doesn't mention activation-aware scale equivalent transform math.</p>
+</details>
+<details>
+
+<summary>Q8. What does SmoothQuant solve? Why can't W8A8 be quantized directly?</summary>
+<ul><li>Direct W8A8 collapses partly because activation per-tensor scale is dominated by outliers</li><li>SmoothQuant: $Y = (X/S)(SW)$, $S$ diagonal matrix, <strong>equivalent transform</strong></li><li>$X/S$ is smoothed; $SW$ is still per-channel quantizable</li><li>$s_c = \max|X_c|^\alpha / \max|W_c|^{1-\alpha}$, $\alpha = 0.5$ default</li></ul>
+<p>Only say "SmoothQuant is W8A8"; doesn't explain outlier migration math.</p>
+</details>
+<details>
+
+<summary>Q9. How much memory does KV cache take? How to compute?</summary>
+<ul><li>Formula: $L_\text{ctx} \cdot 2 \cdot n_\text{layers} \cdot H_\text{kv} \cdot d_\text{head} \cdot \text{bytes}$</li><li>LLaMA-2-70B FP16 4K ctx: $4096 \times 2 \times 80 \times 8 \times 128 \times 2 \approx 1.34$ GB / sample</li><li>Batch 64 → 86 GB; needs KV4 / KV8 to fit</li><li>MQA / GQA makes $H_\text{kv} \ll H$ (70B uses GQA G=8; otherwise vanilla MHA would be 10 GB / sample)</li></ul>
+<p>Only say "KV cache is large"; can't compute concrete numbers.</p>
+</details>
+<details>
+
+<summary>Q10. Difference between bitsandbytes' NF4 and INT4?</summary>
+<ul><li>INT4: uniform quantization, 16 evenly-spaced levels</li><li>NF4 (Normal Float 4): non-uniform, 16 levels chosen by standard normal quantiles</li><li>NF4 assumes weight $\sim \mathcal{N}(0, \sigma^2)$ after normalizing to $[-1, 1]$, expected to be better than INT4</li><li>QLoRA (Dettmers 2023) uses NF4 + double quantization</li></ul>
+<p>Say NF4 is "non-integer so slower"—wrong. It's lookup-table-based dequant, speed comparable to INT4.</p>
+</details>
+<h3 id="l2-advanced-research-oriented-positions">L2 Advanced (research-oriented positions)</h3>
+<details>
+
+<summary>Q11. How is GPTQ's optimal weight update formula derived from OBS?</summary>
+<ul><li>Second-order Taylor: $L(w^* + \delta) \approx \frac{1}{2}\delta^\top H \delta$ ($H = X^\top X$)</li><li>Constraint $e_q^\top \delta = c_q := \mathrm{Quant}(w_q^*) - w_q^*$ (note sign: $c_q$ is quantized minus original)</li><li>Lagrangian + KKT gives $\delta^* = \lambda H^{-1} e_q$, $\lambda = c_q / [H^{-1}]_{qq}$</li><li>So remaining columns update $w_j \mathrel{+}= (c_q / [H^{-1}]_{qq}) \cdot [H^{-1}]_{jq}$ (equivalent to §4.3's $-(w_q-\mathrm{Quant}(w_q))/[H^{-1}]_{qq}\cdot[H^{-1}]_{jq}$ form)</li></ul>
+<p>Memorize formula without derivation; or treat $H$ as Hessian of weights (wrong, it's input Hessian); or forget to propagate error to remaining columns after quantizing column $q$.</p>
+</details>
+<details>
+
+<summary>Q12. Why doesn't SmoothQuant migration break GEMM? Prove mathematically.</summary>
+<ul><li>$S = \mathrm{diag}(s_1, \ldots, s_K)$ diagonal matrix</li><li>$Y = X W = X S^{-1} \cdot S W = \hat{X} \hat{W}$ — matrix multiplication associativity + absorbing diagonal matrix</li><li>Equivalent: $\hat{X}_{:, c} = X_{:, c} / s_c$, $\hat{W}_{c, :} = s_c W_{c, :}$ (channelwise rescale, doesn't change K dim inner-product structure)</li><li>Engineering: $S^{-1}$ fused into upstream LN weight; $SW$ offline merged once; runtime zero overhead</li></ul>
+<p>Only say "diagonal matrix can be fused"; doesn't write out algebraic equivalence of $X S^{-1} \cdot S W$.</p>
+</details>
+<details>
+
+<summary>Q13. How to choose FP8 E4M3 vs E5M2 for forward / backward? Why?</summary>
+<ul><li><strong>Forward (W, A)</strong>: E4M3 — 4E/3M, dynamic range $\pm 448$ covers layer-scaled weight/activation; <strong>mantissa has 1 more bit, higher precision</strong></li><li><strong>Backward (gradient)</strong>: E5M2 — 5E/2M, same dynamic range as FP16; <strong>gradient magnitudes span $10^{-8}$ to $10^4$ need large dynamic range</strong></li><li>E4M3 has no Inf only NaN (max normal = 448); E5M2 has Inf + NaN</li><li>NVIDIA Transformer Engine defaults to this assignment</li></ul>
+<p>Reverse them (use E4M3 for FP backward) → overflow (gradients often &gt; 448).</p>
+</details>
+<details>
+
+<summary>Q14. Which is faster: AWQ vs GPTQ? How different is precision?</summary>
+<ul><li>Quantization time: AWQ faster (one grid search $\alpha$, 5-15 min/7B); GPTQ slower (Hessian + Cholesky iteration, 30-60 min/7B)</li><li>Precision: virtually tied on W4 (LLaMA-7B both &lt; +0.2 PPL)</li><li>Inference: AWQ's scale can merge into LN weight, runtime zero overhead; GPTQ with act_order=True has reorder index overhead</li><li>Engineering: AWQ pairs well with Marlin W4A16 kernel; vLLM default W4 path uses AWQ</li></ul>
+<p>Say "GPTQ is always more accurate"—wrong, tied on W4; say "AWQ doesn't need calibration"—wrong, needs mean(|x|) per channel.</p>
+</details>
+<details>
+
+<summary>Q15. INT8 quantization GEMM has cross zero-point terms; how to eliminate?</summary>
+<ul><li>$\hat{x}_a = s_a (q_a - z_a)$, $\hat{x}_b = s_b (q_b - z_b)$</li><li>$\hat{x}_a \hat{x}_b = s_a s_b (q_a q_b - z_a q_b - z_b q_a + z_a z_b)$</li><li>4 terms after expansion; usually pre-set <strong>weight symmetric quant $z_W = 0$</strong> to eliminate two terms</li><li>Remaining $- z_a \cdot q_b$ term can be <strong>pre-computed with one reduce sum</strong> (per-batch only), subtracted once at inference</li></ul>
+<p>Only say "symmetric quantization"; doesn't explain how to handle activation asymmetric cross terms.</p>
+</details>
+<details>
+
+<summary>Q16. PTQ vs QAT? When to use QAT?</summary>
+<ul><li>PTQ: post-training calibration + closed-form quantization (GPTQ, AWQ, SmoothQuant)</li><li>QAT: simulated quantization during training or finetuning (STE backward)</li><li>LLM industry status: W8 / W4 PTQ already sufficient (&lt; 0.2 PPL loss), QAT not needed</li><li>W2 / 1.58-bit BitNet must be from-scratch QAT; finetune W4A4 often also does QAT</li></ul>
+<p>Say "QAT is always more accurate so always use it"—cost is 100-1000$\times$ PTQ, unnecessary for W8/W4.</p>
+</details>
+<details>
+
+<summary>Q17. Why use different granularities for K and V in KV cache quantization?</summary>
+<ul><li>K outliers stable along <strong>head_dim</strong> dim (specific channels are large), so K uses <strong>per-channel quant</strong></li><li>V outliers vary along <strong>token</strong> dim (each token has its own magnitude), so V uses <strong>per-token quant</strong></li><li>KIVI / KVQuant both have this design</li><li>Pre-RoPE quant of K is more stable (post-RoPE scatters channel outliers to different freq bands)</li></ul>
+<p>Say "K and V treated same per-tensor"—this is exactly why early KV cache quantization collapsed.</p>
+</details>
+<details>
+
+<summary>Q18. NVFP4 vs MXFP4?</summary>
+<ul><li>Both are FP4 E2M1 element type (1S/2E/1M)</li><li><strong>MXFP4</strong> (OCP): block size <strong>32</strong>, shared scale <strong>E8M0</strong> (8-bit pure exponent, i.e., $2^{e-127}$)</li><li><strong>NVFP4</strong> (NVIDIA Blackwell): block size <strong>16</strong>, shared scale <strong>FP8 E4M3</strong> (with mantissa), <strong>additional per-tensor FP32 scale</strong></li><li>NVFP4 has finer granularity, higher scale precision, but storage overhead is also larger ($4 + 8/16 \approx 4.5$ bits)</li><li>Blackwell tensor cores natively support NVFP4; MXFP4 needs AMD MI350 / Intel Gaudi 3</li></ul>
+<p>Conflate them or say "FP4 is just INT4 with sign"—wrong.</p>
+</details>
+<details>
+
+<summary>Q19. How does LLM.int8() mixed-precision decomposition work?</summary>
+<ul><li>Each layer splits activation into two paths: outlier path (channel-max &gt; 6, kept in FP16) + normal path (rest, INT8 vector-wise quant)</li><li>Math: $Y = X_O W_O + X_N W_N$, two paths independent GEMM then sum</li><li>Outlier mask detected each forward step (can't be pre-baked)</li><li>First deployable OPT-175B INT8 inference scheme, PPL almost lossless</li><li>Drawback: FP16 outlier path is throughput bottleneck (~10-15% latency); subsequent SmoothQuant / AWQ take "kill outliers" route</li></ul>
+<p>Say "LLM.int8() is pure INT8"—wrong, it's mixed-precision.</p>
+</details>
+<details>
+
+<summary>Q20. How is STE (Straight-Through Estimator) used? Why does it work?</summary>
+<ul><li>Round function has derivative 0 or undefined almost everywhere; backward has no signal</li><li>STE: $\partial \mathrm{Round}(x) / \partial x := 1$ (within clamp range), 0 outside</li><li>Intuition: forward uses quantized value (discrete); backward treats as identity (pass gradient through)</li><li>Biased estimator but works in practice; LSQ (Esser 2020) further learns scale; PACT learns clamp threshold</li><li>Doesn't work when: quantization too aggressive (W2 from scratch); gradient direction deviates significantly from true gradient; needs BinaryConnect-type specialized methods</li></ul>
+<p>Say STE is an unbiased estimator—wrong, biased but useful.</p>
+</details>
+<h3 id="l3-advanced-variants-top-labs--systems-direction">L3 Advanced variants (top labs / systems direction)</h3>
+<details>
+
+<summary>Q21. Why can QuaRot / SpinQuant's Hadamard rotation eliminate outliers?</summary>
+<ul><li>Any orthogonal matrix $R$ transforms vector $x$ to $Rx$; $\|Rx\|_2 = \|x\|_2$ unchanged, but $\max|x|$ can drop significantly</li><li>Hadamard $H \in \{+1, -1\}^{d\times d} / \sqrt{d}$: each channel becomes a $\pm$-equally-weighted average of all channels, <strong>concentrated outliers scattered across all dimensions</strong></li><li>Math: if $x$ has $k \ll d$ outliers, $\ell_\infty$ norm of $Hx$ is approximately $\sqrt{k/d} \cdot \max|x|$ (incoherence property)</li><li>QuaRot passes through RMSNorm (uses online Hadamard to bypass the issue that $\gamma$ doesn't go through $H$); SpinQuant learns $R$ instead of random</li><li>W4A4 LLaMA-2-70B: QuaRot PPL +0.5, significantly better than SmoothQuant's +5</li></ul>
+<p>Say "rotation is just PCA dimension reduction"—wrong, orthogonal transform preserves norm, no reduction.</p>
+</details>
+<details>
+
+<summary>Q22. Why does QServe / QoQ (W4A8KV4) need custom kernels?</summary>
+<ul><li>W4 weight + A8 activation GEMM has no direct path in stock cuBLAS / cuDNN</li><li>QServe kernel: each W4 weight dequant to INT8 in register (lookup table), then INT8×INT8 matmul</li><li>Key optimization: dequant + Tensor Core MMA fused in same warp instruction, <strong>avoiding FP16 intermediate buffer</strong></li><li>KV4 attention: K, V both INT4, mixed-precision dot with INT8 query, needs dequant path inside attention kernel</li><li>End-to-end: LLaMA-3-70B H100 decoding 1000+ tokens/s/GPU, 1.2-3.5$\times$ faster than FP16 TensorRT-LLM</li></ul>
+<p>Only say "W4A8 is faster than FP16"; doesn't explain why kernel-level co-design is needed (stock GEMM doesn't support W4 input).</p>
+</details>
+<details>
+
+<summary>Q23. What are amax history / delayed scaling in FP8 training?</summary>
+<ul><li>Each GEMM's input / output maintains an amax history (max abs of recent N steps, typical N = 16)</li><li>Scale computed from history max ($s = \max\text{history} / 448$ for E4M3), ensuring next window doesn't overflow</li><li>"Delayed": use <strong>previous</strong> window's amax to compute <strong>current</strong> window's scale, avoiding blocking forward waiting for amax to be computed</li><li>Cast at GEMM entry: FP32 → FP8 with scale; GEMM output accumulates FP32 then casts out</li><li>LLaMA-3 / DeepSeek-V3 FP8 training ~1.5-2$\times$ throughput over BF16</li></ul>
+<p>Treat delayed scaling as same as loss scaling—loss scaling is for backward path anti-underflow; delayed scaling is for per-GEMM forward/backward amax usage.</p>
+</details>
+<details>
+
+<summary>Q24. Why is NVFP4's per-tensor + per-block FP8 scale two-layer structure necessary?</summary>
+<ul><li>FP4 E2M1 max normal = 6, extremely narrow dynamic range</li><li>Single-layer per-block FP8 scale (E4M3, max 448): within a single block can represent $\pm 6 \times 448 \approx \pm 2700$; but across blocks, still limited by FP8 scale's own range</li><li>LLM activation amax often &gt; 2700 (outlier channels appear at $10^4$ level); per-block FP8 scale isn't enough</li><li><strong>Additional per-tensor FP32 scale</strong>: pulls the whole tensor into FP8 scale's reasonable dynamic range; equivalent to coarse global tuning + fine block-wise tuning</li><li>Analogy: FP32 uses mantissa+exp for big range; NVFP4 uses FP4 mantissa + FP8 block exp + FP32 tensor exp, three-layer hierarchy</li></ul>
+<p>Only say "NVFP4 = FP4 + scale"—wrong, it's FP4 + per-block FP8 + per-tensor FP32 three layers.</p>
+</details>
+<details>
+
+<summary>Q25. Design a W4 quantization scheme for an unknown LLM; how would you proceed?</summary>
+<ul><li><strong>Step 1</strong>: Run layer-wise activation profiling; check if ≥ 6.7B has systematic outliers; if so, weight-only must pair with AWQ scale or GPTQ Hessian</li><li><p><strong>Step 2</strong>: Pick PTQ method:</p>
+<ul><li>Simple deployment: AWQ (W4) + Marlin kernel, best precision-engineering trade-off</li><li>Maximum precision: GPTQ (W4) + act_order, +0.5-1% throughput cost but &lt; 0.1 PPL</li><li>W4A8 / W4A4: must add SmoothQuant / QuaRot</li></ul></li><li><p><strong>Step 3</strong>: Calibration data choice:</p>
+<ul><li>General LLM: 128 samples × 2048 tokens from C4 / WikiText</li><li>Task-specific: use in-domain data; PPL difference is significant (math task on math data is 2-3 PPL better than web data)</li></ul></li><li><p><strong>Step 4</strong>: Pick group_size:</p>
+<ul><li>W4 group128 default (4.125 bits/weight, good precision)</li><li>W3 / W2 must use group32 or smaller</li></ul></li><li><strong>Step 5</strong>: Validation: run PPL + downstream task (MMLU / GSM8K); PPL diff &lt; 0.2 + task drop &lt; 1% counts as PASS</li></ul>
+<p>Only say "use GPTQ 4-bit"—doesn't explain how to choose calibration / group_size / kernel backend.</p>
+</details>
+<h2 id="a-appendix-complete-engineering-reference">§A Appendix: Complete Engineering Reference</h2>
+<h3 id="a1-major-paper-reference-list">A.1 Major paper reference list</h3>
+<table><thead><tr><th>Method</th><th>Paper</th><th>Key contribution</th></tr></thead><tbody><tr><td>LLM.int8()</td><td>Dettmers et al., NeurIPS 2022</td><td>Mixed-precision INT8 decomposition for outlier</td></tr><tr><td>GPTQ</td><td>Frantar et al., ICLR 2023</td><td>OBS-based W4 PTQ for LLM</td></tr><tr><td>SmoothQuant</td><td>Xiao et al., ICML 2023</td><td>Migrate activation outlier to weight (W8A8)</td></tr><tr><td>AWQ</td><td>Lin et al., MLSys 2024</td><td>Activation-aware per-channel scale (W4)</td></tr><tr><td>QuIP</td><td>Chee et al., NeurIPS 2023</td><td>Random Hadamard for weight incoherence</td></tr><tr><td>QuaRot</td><td>Ashkboos et al., NeurIPS 2024</td><td>Full Hadamard rotation, W4A4KV4</td></tr><tr><td>SpinQuant</td><td>Liu et al., ICLR 2025 (Meta)</td><td>Learned rotations $R_1$-$R_4$</td></tr><tr><td>OmniQuant</td><td>Shao et al., ICLR 2024</td><td>Learnable equivalent transforms</td></tr><tr><td>KIVI</td><td>Liu et al., ICML 2024</td><td>per-channel K + per-token V, INT2 KV</td></tr><tr><td>KVQuant</td><td>Hooper et al., NeurIPS 2024</td><td>Pre-RoPE quant K, non-uniform V</td></tr><tr><td>QServe / QoQ</td><td>Lin et al., MLSys 2025</td><td>W4A8KV4 GPU kernel co-design</td></tr><tr><td>LLM-QAT</td><td>Liu et al., 2023</td><td>Self-distillation QAT for W4</td></tr><tr><td>BitNet b1.58</td><td>Ma et al., 2024</td><td>Ternary weight LLM from scratch</td></tr><tr><td>FP8 Training</td><td>Micikevicius et al., 2022</td><td>E4M3 forward / E5M2 backward</td></tr><tr><td>MX formats</td><td>OCP / Microsoft, 2024</td><td>Block-scaled FP4/6/8 with E8M0</td></tr><tr><td>NVFP4</td><td>NVIDIA Blackwell, 2025</td><td>FP4 E2M1 + FP8 E4M3 block + FP32 tensor scale</td></tr></tbody></table>
+<h3 id="a2-at-a-glance-which-quantization-scheme-to-pick">A.2 At-a-glance: which quantization scheme to pick</h3>
+<pre class="diagram"><code>
+  ┌─────────────────────────┐
+  │ Can accept PPL +0.5?    │
+  └────────┬────────────────┘
+           │
+     ┌─────┴─────┐
+     │ Yes        │  No
+     ↓           ↓
+ [W4 weight-only]   [INT8 / FP8 W+A quant]
+ GPTQ / AWQ          SmoothQuant W8A8
+ + Marlin kernel     + per-channel W
+ typical PPL: +0.1   PPL: +0.05
+
+  ┌─────────────────────────┐
+  │ Doing INT4 activation?  │
+  └────────┬────────────────┘
+           │
+     ┌─────┴─────┐
+     │ Yes        │  No
+     ↓           ↓
+ [W4A4]            [W4A8KV4 / QoQ]
+ QuaRot / SpinQuant  AWQ + KV4
+ + Hadamard rotation use QServe kernel
+ PPL +0.5 (70B)      PPL +0.2</code></pre>
+<h3 id="a3-quantization-quick-reference-card">A.3 Quantization quick-reference card</h3>
+<table><thead><tr><th>Task</th><th>Recommendation</th><th>Framework</th></tr></thead><tbody><tr><td>Single-card LLaMA-2-70B inference</td><td>AWQ W4 + Marlin (vLLM / SGLang)</td><td>AutoAWQ</td></tr><tr><td>Multi-card LLaMA-3-405B inference</td><td>SmoothQuant + GPTQ W4A8 + KV8</td><td>TensorRT-LLM</td></tr><tr><td>Edge (Apple Silicon / CPU)</td><td>GGUF Q4_K_M / Q5_K_S</td><td>llama.cpp</td></tr><tr><td>Training fp8 LLM</td><td>TE FP8 (E4M3/E5M2) + amax history</td><td>Transformer Engine</td></tr><tr><td>QLoRA finetune</td><td>NF4 + double quant + LoRA</td><td>bitsandbytes + peft</td></tr><tr><td>Max throughput H100/B200 serving</td><td>QoQ W4A8KV4 / NVFP4</td><td>QServe / TensorRT-LLM</td></tr><tr><td>Edge &lt; 100 MB model</td><td>BitNet b1.58 (1.58-bit) from scratch</td><td>custom / bitnet.cpp</td></tr></tbody></table>
+<h3 id="a4-sanity-check-checklist">A.4 Sanity check checklist</h3>
+<p>Before deploying any quantized model, must run:</p>
+<ul><li>[ ] <strong>PPL on calibration domain</strong>: pre-quant vs post-quant diff &lt; 0.2 = OK</li><li>[ ] <strong>PPL on out-of-domain</strong> (important!): diff &lt; 0.5 = OK; &gt; 1 means re-choose calibration data</li><li>[ ] <strong>MMLU / GSM8K and other downstream tasks</strong>: drop &lt; 1% = OK</li><li>[ ] <strong>Long context PPL</strong> (best test of KV cache quant): 4K / 8K / 32K three-tier comparison</li><li>[ ] <strong>Subjective generation quality</strong>: blind eval 50 prompt outputs by humans; should not be significantly worse than FP16</li><li>[ ] <strong>Throughput / TTFT (Time To First Token)</strong>: measured vs theoretical numbers diff &gt; 30% means kernel not fully optimized</li><li>[ ] <strong>Peak memory</strong>: measured vs nominal $\text{bits} \cdot \text{params} / 8 + \text{KV cache} + \text{activations}$</li></ul>
+<p><strong>Quantization Quick Reference</strong> · Main references: Dettmers 2022 (LLM.int8()), Frantar 2023 (GPTQ), Xiao 2023 (SmoothQuant), Lin 2024 (AWQ), Ashkboos 2024 (QuaRot), Lin 2025 (QServe). Last updated: 2026-05.</p>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/quantization_tutorial_en.md</code> ·
+  SHA256 <code>a4b453729283</code> ·
+  generated at 2026-05-19 19:19 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>

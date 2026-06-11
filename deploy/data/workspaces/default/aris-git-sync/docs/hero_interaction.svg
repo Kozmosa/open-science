@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 295" font-family="monospace">
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4a9eda"/>
+    </marker>
+    <marker id="ar-o" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#da8a4a"/>
+    </marker>
+    <marker id="ar-g" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4aaa4a"/>
+    </marker>
+  </defs>
+
+  <rect width="850" height="295" fill="#fafbfc" rx="12"/>
+
+  <!-- ====== Dashed connection lines (behind everything) ====== -->
+  <line x1="72" y1="25" x2="72" y2="240" stroke="#4a9eda" stroke-width="1" stroke-dasharray="3,3" opacity="0.15"/>
+  <line x1="813" y1="25" x2="813" y2="240" stroke="#74AA63" stroke-width="1" stroke-dasharray="3,3" opacity="0.15"/>
+
+  <!-- ====== CC Pixel Character (left side, center x~72, y~137) ====== -->
+  <g transform="translate(38,67)">
+    <rect x="20" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="27" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="34" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="41" y="42" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="13" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="20" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="27" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="34" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="41" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="48" y="49" width="7" height="7" fill="#8B5E3C"/>
+    <rect x="13" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="20" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="27" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="34" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="41" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="48" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="13" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="20" y="63" width="7" height="7" fill="#333"/>
+    <rect x="27" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="34" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="41" y="63" width="7" height="7" fill="#333"/>
+    <rect x="48" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="13" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="20" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="27" y="70" width="7" height="7" fill="#E8967A"/>
+    <rect x="34" y="70" width="7" height="7" fill="#E8967A"/>
+    <rect x="41" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="48" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="6" y="77" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="13" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="20" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="27" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="34" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="41" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="48" y="77" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="55" y="77" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="13" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="20" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="27" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="34" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="41" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="48" y="84" width="7" height="7" fill="#4A9EDA"/>
+    <rect x="16" y="91" width="7" height="7" fill="#444"/>
+    <rect x="23" y="91" width="7" height="7" fill="#444"/>
+    <rect x="37" y="91" width="7" height="7" fill="#444"/>
+    <rect x="44" y="91" width="7" height="7" fill="#444"/>
+  </g>
+  <text x="72" y="178" text-anchor="middle" fill="#4A9EDA" font-size="9px" font-weight="bold">Claude Code</text>
+  <text x="72" y="188" text-anchor="middle" fill="#4A9EDA" font-size="9px" font-weight="bold">(Executor)</text>
+
+  <!-- ====== GPT Pixel Character (right side, center x~813, y~137) ====== -->
+  <g transform="translate(149,67)">
+    <rect x="650" y="42" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="657" y="42" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="664" y="42" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="671" y="42" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="643" y="49" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="650" y="49" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="657" y="49" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="664" y="49" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="671" y="49" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="678" y="49" width="7" height="7" fill="#2C2C2C"/>
+    <rect x="643" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="650" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="657" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="664" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="671" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="678" y="56" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="643" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="650" y="63" width="7" height="7" fill="#333"/>
+    <rect x="657" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="664" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="671" y="63" width="7" height="7" fill="#333"/>
+    <rect x="678" y="63" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="648" y="62" width="13" height="2" fill="#555"/>
+    <rect x="668" y="62" width="13" height="2" fill="#555"/>
+    <rect x="661" y="63" width="7" height="1" fill="#555"/>
+    <rect x="643" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="650" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="657" y="70" width="7" height="7" fill="#D4956A"/>
+    <rect x="664" y="70" width="7" height="7" fill="#D4956A"/>
+    <rect x="671" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="678" y="70" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="636" y="77" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="643" y="77" width="7" height="7" fill="#74AA63"/>
+    <rect x="650" y="77" width="7" height="7" fill="#74AA63"/>
+    <rect x="657" y="77" width="7" height="7" fill="#74AA63"/>
+    <rect x="664" y="77" width="7" height="7" fill="#74AA63"/>
+    <rect x="671" y="77" width="7" height="7" fill="#74AA63"/>
+    <rect x="678" y="77" width="7" height="7" fill="#74AA63"/>
+    <rect x="685" y="77" width="7" height="7" fill="#FFDAB9"/>
+    <rect x="643" y="84" width="7" height="7" fill="#74AA63"/>
+    <rect x="650" y="84" width="7" height="7" fill="#74AA63"/>
+    <rect x="657" y="84" width="7" height="7" fill="#74AA63"/>
+    <rect x="664" y="84" width="7" height="7" fill="#74AA63"/>
+    <rect x="671" y="84" width="7" height="7" fill="#74AA63"/>
+    <rect x="678" y="84" width="7" height="7" fill="#74AA63"/>
+    <rect x="646" y="91" width="7" height="7" fill="#444"/>
+    <rect x="653" y="91" width="7" height="7" fill="#444"/>
+    <rect x="667" y="91" width="7" height="7" fill="#444"/>
+    <rect x="674" y="91" width="7" height="7" fill="#444"/>
+  </g>
+  <text x="813" y="178" text-anchor="middle" fill="#74AA63" font-size="9px" font-weight="bold">GPT-5.4 xhigh</text>
+  <text x="813" y="188" text-anchor="middle" fill="#74AA63" font-size="9px" font-weight="bold">(Reviewer)</text>
+
+  <!-- ====== Row 1 (y=42): CC → GPT ====== -->
+  <rect x="110" y="29" width="280" height="26" fill="#e8f4fd" stroke="#4a9eda" stroke-width="1.5" rx="8"/>
+  <polygon points="108,41 99,47 108,46" fill="#e8f4fd" stroke="#4a9eda" stroke-width="1.5"/>
+  <rect x="107" y="40" width="3" height="7" fill="#e8f4fd"/>
+  <text x="123" y="46" font-size="13px">📄 Here's my paper...</text>
+  <line x1="392" y1="42" x2="465" y2="42" stroke="#4a9eda" stroke-width="2" marker-end="url(#ar)"/>
+
+  <!-- ====== Row 2 (y=80): GPT → CC (orange) ====== -->
+  <line x1="488" y1="80" x2="420" y2="80" stroke="#da8a4a" stroke-width="2" marker-end="url(#ar-o)"/>
+  <rect x="490" y="67" width="280" height="26" fill="#fdf2e8" stroke="#da8a4a" stroke-width="1.5" rx="8"/>
+  <polygon points="772,79 781,85 772,84" fill="#fdf2e8" stroke="#da8a4a" stroke-width="1.5"/>
+  <rect x="770" y="78" width="3" height="7" fill="#fdf2e8"/>
+  <text x="503" y="84" font-size="13px">❌ Score 5/10. Fix X, Y, Z</text>
+
+  <!-- ====== Row 3 (y=118): CC → GPT ====== -->
+  <rect x="110" y="105" width="280" height="26" fill="#e8f4fd" stroke="#4a9eda" stroke-width="1.5" rx="8"/>
+  <polygon points="108,117 99,123 108,122" fill="#e8f4fd" stroke="#4a9eda" stroke-width="1.5"/>
+  <rect x="107" y="116" width="3" height="7" fill="#e8f4fd"/>
+  <text x="123" y="122" font-size="13px">🔧 Fixed! Ran 20 experiments</text>
+  <line x1="392" y1="118" x2="465" y2="118" stroke="#4a9eda" stroke-width="2" marker-end="url(#ar)"/>
+
+  <!-- ====== Row 4 (y=156): GPT → CC (orange) ====== -->
+  <line x1="488" y1="156" x2="420" y2="156" stroke="#da8a4a" stroke-width="2" marker-end="url(#ar-o)"/>
+  <rect x="490" y="143" width="280" height="26" fill="#fdf2e8" stroke="#da8a4a" stroke-width="1.5" rx="8"/>
+  <polygon points="772,155 781,161 772,160" fill="#fdf2e8" stroke="#da8a4a" stroke-width="1.5"/>
+  <rect x="770" y="154" width="3" height="7" fill="#fdf2e8"/>
+  <text x="503" y="160" font-size="13px">🤔 Score 6.5/10. Better, but...</text>
+
+  <!-- ====== Row 5 (y=194): CC → GPT ====== -->
+  <rect x="110" y="181" width="280" height="26" fill="#e8f4fd" stroke="#4a9eda" stroke-width="1.5" rx="8"/>
+  <polygon points="108,193 99,199 108,198" fill="#e8f4fd" stroke="#4a9eda" stroke-width="1.5"/>
+  <rect x="107" y="192" width="3" height="7" fill="#e8f4fd"/>
+  <text x="123" y="198" font-size="13px">📝 Rewrote narrative, re-review?</text>
+  <line x1="392" y1="194" x2="465" y2="194" stroke="#4a9eda" stroke-width="2" marker-end="url(#ar)"/>
+
+  <!-- ====== Row 6 (y=232): GPT → CC (green, accepted!) ====== -->
+  <line x1="488" y1="232" x2="420" y2="232" stroke="#4aaa4a" stroke-width="2" marker-end="url(#ar-g)"/>
+  <rect x="490" y="219" width="280" height="26" fill="#e8fde8" stroke="#4aaa4a" stroke-width="1.5" rx="8"/>
+  <polygon points="772,231 781,237 772,236" fill="#e8fde8" stroke="#4aaa4a" stroke-width="1.5"/>
+  <rect x="770" y="230" width="3" height="7" fill="#e8fde8"/>
+  <text x="503" y="236" font-size="13px" fill="#2a7a2a">✅ Score 7.5/10. Ready! 🎉</text>
+
+  <!-- ====== Bottom: sleep + moon + tagline ====== -->
+  <text x="425" y="262" text-anchor="middle" font-size="13px" fill="#ccc">💤 z z z 🌙</text>
+  <text x="425" y="280" text-anchor="middle" font-size="11px" fill="#bbb" font-style="italic">All autonomous, all while you sleep</text>
+</svg>

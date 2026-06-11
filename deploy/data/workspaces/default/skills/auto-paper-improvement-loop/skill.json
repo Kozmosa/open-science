@@ -1,0 +1,13 @@
+{
+  "skill_id": "auto-paper-improvement-loop",
+  "label": "auto-paper-improvement-loop",
+  "description": "Autonomously improve a generated paper via GPT-5.5 xhigh review → implement fixes → recompile, for 2 rounds. Use when user says \"改论文\", \"improve paper\", \"论文润色循环\", \"auto improve\", or wants to iteratively polish a generated paper.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

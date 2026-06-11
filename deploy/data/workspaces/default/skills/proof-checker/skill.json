@@ -1,0 +1,13 @@
+{
+  "skill_id": "proof-checker",
+  "label": "proof-checker",
+  "description": "Rigorous mathematical proof verification and fixing workflow. Reads a LaTeX proof, identifies gaps via cross-model review (external reviewer backend, xhigh reasoning), fixes each gap with full derivations, re-reviews, and generates an audit report. Use when user says \"检查证明\", \"verify proof\", \"proof check\", \"审证明\", \"check this proof\", or wants rigorous mathematical verification of a theory paper.",
+  "version": "0.0.0",
+  "author": "ARIS",
+  "inject_mode": "disabled",
+  "dependencies": [],
+  "settings_fragment": {},
+  "mcp_servers": [],
+  "hooks": [],
+  "allowed_agents": []
+}

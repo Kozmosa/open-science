@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diffusion Post Training Tutorial En</title>
+
+<meta name="generator" content="ARIS render-html (academic, v1)">
+<meta name="aris:source-path" content="docs/tutorials/diffusion_post_training_tutorial_en.md">
+<meta name="aris:source-sha256" content="6143ed98abc28b9f37f4b33126bbd73399f59e75b12a5c4dcc82769593d96ceb">
+<meta name="aris:generated-at" content="2026-05-19 18:54 UTC">
+
+<!-- MathJax 3 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+
+<style>
+:root {
+  --bg: #fdfcf7;
+  --bg-soft: #f4f1ea;
+  --bg-code: #f8f5ec;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #6b6b6b;
+  --primary: #1a4a8c;
+  --primary-soft: #2d6cb8;
+  --accent: #b8390e;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --info-bg: #dbeafe;
+  --good-bg: #d1fae5;
+  --good: #065f46;
+  --bad-bg: #fee2e2;
+  --bad: #991b1b;
+  --border: #d6d0c0;
+  --border-soft: #e8e3d5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Source Serif Pro", "Source Serif 4", "Crimson Pro", "Georgia", "Songti SC", "STSong", serif;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 48px;
+  padding: 40px 32px;
+}
+
+nav.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+  padding-right: 16px;
+}
+nav.toc h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+nav.toc ol li { margin: 5px 0; counter-increment: toc; }
+nav.toc ol li::before { content: counter(toc) ". "; color: var(--ink-muted); margin-right: 4px; }
+nav.toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+}
+nav.toc a:hover { color: var(--primary); border-bottom-color: var(--primary); }
+nav.toc ul { list-style: none; padding-left: 14px; margin: 3px 0; font-size: 12px; }
+nav.toc ul li::before { content: "→ "; color: var(--border); }
+
+main { min-width: 0; }
+
+header.hero {
+  border-bottom: 3px double var(--primary);
+  padding-bottom: 24px;
+  margin-bottom: 32px;
+}
+header.hero .eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+header.hero h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+header.hero .subtitle {
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-style: italic;
+}
+header.hero .byline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 20px;
+}
+header.hero .byline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+header.hero .meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+}
+header.hero .meta span strong { color: var(--ink-soft); }
+header.hero .meta code {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+}
+
+h2 {
+  font-size: 24px;
+  margin: 44px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+  font-weight: 700;
+}
+h2 .num { color: var(--primary); font-weight: 600; margin-right: 8px; }
+h3 { font-size: 19px; margin: 28px 0 10px; color: var(--primary); font-weight: 600; }
+h4 { font-size: 16px; margin: 20px 0 8px; color: var(--ink); font-weight: 600; }
+
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+ul li, ol li { margin: 4px 0; }
+ul li::marker { color: var(--primary); }
+
+strong { color: var(--accent); font-weight: 600; }
+em { color: var(--ink-soft); }
+
+a { color: var(--primary); }
+a:hover { color: var(--accent); }
+
+code:not(.hljs) {
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
+}
+
+pre {
+  background: #fafaf6;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  padding: 0;
+  overflow-x: auto;
+  border-radius: 4px;
+  margin: 14px 0;
+}
+pre code, pre code.hljs {
+  background: transparent !important;
+  display: block;
+  padding: 14px 18px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  color: var(--ink);
+}
+pre.diagram {
+  background: #f9f6ed;
+  border-left: 4px solid var(--accent);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+  font-size: 15px;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.callout-info { background: var(--info-bg); border-left-color: var(--primary); }
+.callout-info .callout-title { color: var(--primary); }
+.callout-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.callout-warn .callout-title { color: var(--warn); }
+.callout-good { background: var(--good-bg); border-left-color: var(--good); }
+.callout-good .callout-title { color: var(--good); }
+.callout-bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.callout-bad .callout-title { color: var(--bad); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+thead { background: var(--primary); color: white; }
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+th { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+details.qa, details {
+  background: white;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸ ";
+  margin-right: 4px;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom: 1px solid var(--border-soft); }
+details > :not(summary) { padding: 10px 14px; }
+details p:first-of-type { margin-top: 8px; }
+
+mjx-container[display="true"] { margin: 12px 0 !important; }
+
+footer.aris-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+footer.aris-footer a { color: var(--ink-muted); border-bottom: 1px dotted var(--border); }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 20px 16px; }
+  nav.toc {
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 0;
+    padding-bottom: 14px;
+  }
+  header.hero h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { grid-template-columns: 1fr; padding: 0; }
+  body { background: white; }
+  header.hero { border-bottom-color: var(--ink); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+<li><a href="#0-tldr">§0 TL;DR</a>
+</li>
+<li><a href="#1-intuition-why-diffusion-post-training-is-hard">§1 Intuition: why diffusion post-training is hard</a>
+<ul>
+<li><a href="#11-single-step-vs-multi-step-generation-the-essential-difference">1.1 Single-step vs multi-step generation: the essential difference</a></li>
+<li><a href="#12-the-three-main-lines">1.2 The three main lines</a></li>
+<li><a href="#13-one-line-intuitions">1.3 One-line intuitions</a></li>
+<li><a href="#14-convention-used-throughout">1.4 Convention (used throughout)</a></li>
+</ul>
+</li>
+<li><a href="#2-rl-for-diffusion-ddpo-and-dpok">§2 RL for Diffusion: DDPO and DPOK</a>
+<ul>
+<li><a href="#21-treating-denoising-as-an-mdp-ddpo-viewpoint">2.1 Treating denoising as an MDP (DDPO viewpoint)</a></li>
+<li><a href="#22-ddpo-sf-score-function-algorithm">2.2 DDPO-SF (Score Function) algorithm</a></li>
+<li><a href="#23-ddpo-is-importance-sampling-ppo-style">2.3 DDPO-IS (Importance Sampling, PPO-style)</a></li>
+<li><a href="#24-ddpos-two-reward-experiments">2.4 DDPO&#x27;s two reward experiments</a></li>
+<li><a href="#25-dpok-kl-regularized-rl-for-diffusion">2.5 DPOK: KL-regularized RL for diffusion</a></li>
+<li><a href="#26-ddpo-failure-modes-and-mitigations">2.6 DDPO failure modes and mitigations</a></li>
+</ul>
+</li>
+<li><a href="#3-direct-reward-fine-tuning-draft--alignprop--refl">§3 Direct Reward Fine-Tuning: DRaFT / AlignProp / ReFL</a>
+<ul>
+<li><a href="#31-core-idea-treat-reward-as-a-differentiable-loss">3.1 Core idea: treat reward as a differentiable loss</a></li>
+<li><a href="#32-draft-clark-et-al-2024-iclr-arxiv-230917400">3.2 DRaFT (Clark et al. 2024 ICLR, arXiv 2309.17400)</a></li>
+<li><a href="#33-alignprop-prabhudesai-et-al-arxiv-231003739-2023-10-iclr-2024-venue-the-arxiv-version-was-later-supersededwithdrawn">3.3 AlignProp (Prabhudesai et al. arXiv 2310.03739, 2023-10; ICLR 2024 venue; the arXiv version was later superseded/withdrawn)</a></li>
+<li><a href="#34-refl-xu-et-al-2023-neurips-arxiv-230405977">3.4 ReFL (Xu et al. 2023 NeurIPS, arXiv 2304.05977)</a></li>
+<li><a href="#35-three-way-comparison">3.5 Three-way comparison</a></li>
+<li><a href="#36-reward-hacking-in-direct-reward-backprop">3.6 Reward hacking in direct reward backprop</a></li>
+</ul>
+</li>
+<li><a href="#4-preference-optimization-the-diffusion-dpo-family">§4 Preference Optimization: the Diffusion-DPO family</a>
+<ul>
+<li><a href="#41-diffusion-dpo-wallace-et-al-2024-cvpr-arxiv-231112908">4.1 Diffusion-DPO (Wallace et al. 2024 CVPR, arXiv 2311.12908)</a></li>
+<li><a href="#42-d3po-yang-et-al-2024-cvpr-arxiv-231113231">4.2 D3PO (Yang et al. 2024 CVPR, arXiv 2311.13231)</a></li>
+<li><a href="#43-spo-liang-et-al-2024-arxiv-240604314">4.3 SPO (Liang et al. 2024, arXiv 2406.04314)</a></li>
+<li><a href="#44-diffusion-kto-li-et-al-2024-neurips-arxiv-240404465">4.4 Diffusion-KTO (Li et al. 2024 NeurIPS, arXiv 2404.04465)</a></li>
+<li><a href="#45-mapo-hong-et-al-2024-arxiv-240606424">4.5 MaPO (Hong et al. 2024, arXiv 2406.06424)</a></li>
+<li><a href="#46-dpo-family-overview">4.6 DPO family overview</a></li>
+</ul>
+</li>
+<li><a href="#5-flow-grpo-rl-for-flow-matching">§5 Flow-GRPO: RL for Flow Matching</a>
+<ul>
+<li><a href="#51-why-flow-matching-also-needs-post-training">5.1 Why Flow Matching also needs post-training</a></li>
+<li><a href="#52-flow-grpos-two-core-tricks">5.2 Flow-GRPO&#x27;s two core tricks</a></li>
+<li><a href="#53-flow-grpo-advantage-computation">5.3 Flow-GRPO advantage computation</a></li>
+<li><a href="#54-flow-grpo-loss">5.4 Flow-GRPO loss</a></li>
+<li><a href="#55-geometric-meaning-of-advantage-on-the-vector-field">5.5 Geometric meaning of advantage on the vector field</a></li>
+<li><a href="#56-flow-grpo-empirical-results">5.6 Flow-GRPO empirical results</a></li>
+</ul>
+</li>
+<li><a href="#6-code-patterns-readable-pseudo-code">§6 Code Patterns (readable pseudo-code)</a>
+<ul>
+<li><a href="#61-ddpo-reinforce-style-update">6.1 DDPO REINFORCE-style update</a></li>
+<li><a href="#62-diffusion-dpo-loss">6.2 Diffusion-DPO loss</a></li>
+<li><a href="#63-alignprop--draft-backprop-with-checkpointing">6.3 AlignProp / DRaFT backprop with checkpointing</a></li>
+<li><a href="#64-spo-step-aware-preference-loss">6.4 SPO step-aware preference loss</a></li>
+<li><a href="#65-flow-grpo-group-relative-advantage">6.5 Flow-GRPO group-relative advantage</a></li>
+<li><a href="#66-combined-reward-signal">6.6 Combined reward signal</a></li>
+</ul>
+</li>
+<li><a href="#7-reward-design--failure-modes">§7 Reward Design &amp; failure modes</a>
+<ul>
+<li><a href="#71-reward-model-choices">7.1 Reward model choices</a></li>
+<li><a href="#72-reward-hacking-gallery-diffusion-specific">7.2 Reward hacking gallery (diffusion-specific)</a></li>
+<li><a href="#73-step-level-vs-trajectory-level-reward">7.3 Step-level vs trajectory-level reward</a></li>
+<li><a href="#74-core-mechanisms-to-mitigate-reward-hacking">7.4 Core mechanisms to mitigate reward hacking</a></li>
+</ul>
+</li>
+<li><a href="#8-production-landscape-what-sd3--flux-actually-use">§8 Production landscape: what SD3 / FLUX actually use</a>
+<ul>
+<li><a href="#81-what-the-public-papers--reports-actually-say">8.1 What the public papers / reports actually say</a></li>
+<li><a href="#82-did-sd3--flux-use-post-training">8.2 Did SD3 / FLUX use post-training?</a></li>
+<li><a href="#83-an-industrial-grade-pipeline-hypothesis">8.3 An industrial-grade pipeline hypothesis</a></li>
+</ul>
+</li>
+<li><a href="#9-vs-llm-rlhf-comparison">§9 vs LLM RLHF comparison</a>
+<ul>
+<li><a href="#91-the-full-table">9.1 The full table</a></li>
+<li><a href="#92-shared-lessons">9.2 Shared lessons</a></li>
+<li><a href="#93-diffusion-specific-differences">9.3 Diffusion-specific differences</a></li>
+</ul>
+</li>
+<li><a href="#10-25-frequently-asked-interview-questions">§10 25 frequently-asked interview questions</a>
+<ul>
+<li><a href="#l1-must-know-10-questions">L1 must-know (10 questions)</a></li>
+<li><a href="#l2-advanced-10-questions">L2 advanced (10 questions)</a></li>
+<li><a href="#l3-top-lab-questions-5-questions">L3 top-lab questions (5 questions)</a></li>
+</ul>
+</li>
+<li><a href="#a-appendix">§A Appendix</a>
+<ul>
+<li><a href="#a1-key-papers-with-arxiv-ids">A.1 Key papers (with arXiv IDs)</a></li>
+<li><a href="#a2-common-reward-model-resources">A.2 Common reward model resources</a></li>
+<li><a href="#a3-open-source-training-code">A.3 Open-source training code</a></li>
+<li><a href="#a4-engineering-footgun-checklist">A.4 Engineering footgun checklist</a></li>
+<li><a href="#a5-mapping-back-to-0-tldr">A.5 Mapping back to §0 TL;DR</a></li>
+</ul>
+</li>
+</ol>
+</nav>
+
+<main>
+<header class="hero">
+  
+  <h1>Diffusion Post Training Tutorial En</h1>
+  
+  
+  <div class="meta">
+    <span><strong>Source:</strong> <code>docs/tutorials/diffusion_post_training_tutorial_en.md</code></span>
+    <span><strong>SHA256:</strong> <code>6143ed98abc2</code></span>
+    <span><strong>Rendered:</strong> 2026-05-19 18:54 UTC</span>
+    
+  </div>
+</header>
+
+<h2 id="0-tldr">§0 TL;DR</h2>
+<div class="callout callout-info"><div class="callout-title">Diffusion Post-Training in 9 sentences</div><p>one page covering the RL/DPO/Flow-RL family (see §1–§10 for derivations).</p></div>
+<ol><li><strong>Why it's hard</strong>: diffusion generation runs $T$ steps (typically 20–50), with reward given only once at the terminal state $x_0$ — so <strong>sparse terminal reward + long denoising trajectory + credit assignment</strong> combine, giving one extra "trajectory integration" dimension beyond LLM RLHF.</li><li><strong>Three main lines</strong>: (i) RL on denoising MDP (DDPO / DPOK — treat $T$-step denoising as an MDP); (ii) Direct reward backprop (DRaFT / AlignProp / ReFL — treat reward as a differentiable loss and backprop through the $T$-step sampler); (iii) Preference optimization (Diffusion-DPO / D3PO / SPO / Diffusion-KTO / MaPO — port the LLM DPO family to diffusion).</li><li><strong>DDPO (Black et al. 2024 ICLR, arXiv 2305.13301)</strong>: view denoising as a $T$-step MDP, state $= (x_t, t, c)$, action $= x_{t-1}$, per-trajectory reward $R(x_0, c)$; use REINFORCE or PPO-clip to update $\log p_\theta(x_{t-1} \mid x_t, c)$.</li><li><strong>AlignProp (Prabhudesai et al. 2024 ICLR, arXiv 2310.03739)</strong> &amp; <strong>DRaFT (Clark et al. 2024 ICLR, arXiv 2309.17400)</strong>: when reward $R$ is differentiable in $x_0$, directly <strong>backprop</strong> $R(x_0)$ through the $T$-step sampler into $\theta$. <strong>The key engineering problem</strong>: memory is $\mathcal{O}(T)$; DRaFT-K / AlignProp only backprop the final $K$ steps (typically $K \in \{1, 5\}$), and combined with gradient checkpointing the memory drops to $\mathcal{O}(K)$.</li><li><strong>Diffusion-DPO (Wallace et al. 2024 CVPR, arXiv 2311.12908)</strong>: replace the LLM DPO's $\log\pi/\pi_\text{ref}$ with diffusion's <strong>per-step ELBO surrogate</strong> — specifically, use $-\|\epsilon - \epsilon_\theta(x_t, t)\|^2$ as one lower-bound term of $\log p_\theta(x_0)$, and assemble it into a DPO contrastive loss over the pair $(y_w, y_l)$.</li><li><strong>D3PO (Yang et al. 2024 CVPR, arXiv 2311.13231)</strong>: <strong>completely RM-free</strong> — directly plug human thumbs up/down feedback on generated images into the KL-regularized optimal solution's implicit reward; the derivation parallels DPO but operates on the diffusion <strong>per-step Markov chain</strong>.</li><li><strong>SPO (Liang et al. 2024, arXiv 2406.04314)</strong>: observes that different denoising steps have different preferences (high-noise steps learn composition, low-noise steps learn detail), and extends DPO to be <strong>step-aware</strong> — for each $t$, independently sample an in-step pair $(x_{t-1}^w, x_{t-1}^l)$, and weight the loss along the step dimension.</li><li><strong>Flow-GRPO (Liu et al. 2025, arXiv 2505.05470)</strong>: the first work bringing GRPO to Flow Matching. Two key tricks: an <strong>ODE→SDE equivalent conversion</strong> that turns the deterministic flow into an explorable stochastic process; and <strong>denoising reduction</strong> — fewer steps for training, full steps for inference. RL-tuned SD3.5-M raised GenEval from 63% to 95%.</li><li><strong>Reward hacking is the real boss</strong>: over-saturated colors, monotonous composition, style convergence, high PickScore but ugly to humans — mitigations include reward ensembles (HPSv2 + PickScore + ImageReward + CLIP-Score), KL anchor (Diffusion-DPO's $\beta$), and early stopping on reward plateau. SD3 / FLUX <strong>barely disclose post-training details</strong>, but the community consensus is that SD3.5 Turbo and FLUX.1 dev use a DPO + distillation hybrid.</li></ol>
+<div class="callout callout-good"><div class="callout-title">vs LLM RLHF in one sentence</div><p>LLM RLHF cares about "token-level credit assignment + KL anchor"; diffusion post-training cares about "denoising-step credit assignment + memory blow-up (backprop) or sample blow-up (RL)". Same problem in essence — sparse reward + long trajectory — only the physical meaning of "trajectory" changes.</p></div>
+<h2 id="1-intuition-why-diffusion-post-training-is-hard">§1 Intuition: why diffusion post-training is hard</h2>
+<h3 id="11-single-step-vs-multi-step-generation-the-essential-difference">1.1 Single-step vs multi-step generation: the essential difference</h3>
+<p>LLM rewards are generally also sequence-level, but tokens are discrete, trajectory length $L \sim 10^3$, vocabulary moderate. The diffusion "trajectory" is $T$ steps of denoising, each operating on a continuous high-dimensional tensor $x_t \in \mathbb{R}^{C \times H \times W}$ (SDXL latent is $4\times128\times128 = 65536$ dimensions), with $T$ typically 20–50.</p>
+<table><thead><tr><th>Dimension</th><th>LLM RLHF</th><th>Diffusion Post-Training</th></tr></thead><tbody><tr><td>Trajectory length</td><td>$L$ (response token count)</td><td>$T$ (denoising step count, typically 20–50)</td></tr><tr><td>Single-step action</td><td>discrete token</td><td>continuous vector in $\mathbb{R}^d$ ($d \sim 10^4$–$10^5$)</td></tr><tr><td>Reward frequency</td><td>usually only at the terminal</td><td>usually only at terminal $x_0$</td></tr><tr><td>Exploration</td><td>sampling temperature / top-p</td><td>DDIM is deterministic; "noise injection" needed to explore (DDPO uses stochastic DDPM; Flow-GRPO uses ODE→SDE)</td></tr><tr><td>Reward source</td><td>trained RM (BT) / rule</td><td>trained image RM (ImageReward / HPSv2 / PickScore) / rule (object count / OCR)</td></tr><tr><td>Memory bottleneck</td><td>4 copies (policy + ref + RM + V)</td><td>1 copy UNet/DiT, but <strong>direct backprop</strong> must store $T$-step activations</td></tr></tbody></table>
+<h3 id="12-the-three-main-lines">1.2 The three main lines</h3>
+<ul><li><strong>Line A (RL on denoising MDP)</strong>: treat diffusion as an RL environment, <strong>not requiring reward to be differentiable</strong>. Representatives: DDPO, DPOK, Flow-GRPO.</li><li><strong>Line B (Direct reward backprop)</strong>: when reward is differentiable in $x_0$, <strong>directly gradient-descend</strong>, akin to treating the reward as a new loss. Representatives: DRaFT, AlignProp, ReFL.</li><li><strong>Line C (Preference optimization, DPO-style)</strong>: port the LLM DPO family to diffusion, <strong>no longer requiring on-policy sampling</strong>. Representatives: Diffusion-DPO, D3PO, SPO, Diffusion-KTO, MaPO.</li></ul>
+<pre class="diagram"><code>                              preference / reward signal
+                                    │
+            ┌───────────────────────┼───────────────────────┐
+            │                       │                       │
+       reward non-diff           reward diff             preference pairs (offline)
+            │                       │                       │
+        Line A: RL              Line B: backprop         Line C: DPO family
+        DDPO, DPOK,             DRaFT, AlignProp,        Diffusion-DPO,
+        Flow-GRPO               ReFL                     D3PO, SPO, KTO, MaPO
+            │                       │                       │
+        most general            memory-friendly (K-step)   off-policy fast
+        but sampling expensive  but requires diff reward   needs preference data</code></pre>
+<h3 id="13-one-line-intuitions">1.3 One-line intuitions</h3>
+<div class="callout callout-info"><div class="callout-title">Core intuitions</div></div>
+<ul><li>Line A treats $T$ denoising steps as an RL trajectory: each step is a stochastic policy output.</li><li>Line B treats reward as a differentiable loss: backprop through $T$ steps, but $O(T)$ memory crushes you.</li><li>Line C bypasses reward entirely: uses the implicit reward of preference pairs $= \beta \log(p_\theta/p_\text{ref})$.</li></ul>
+<h3 id="14-convention-used-throughout">1.4 Convention (used throughout)</h3>
+<table><thead><tr><th>Symbol</th><th>Meaning</th></tr></thead><tbody><tr><td>$x_0$</td><td>clean image (latent or pixel)</td></tr><tr><td>$x_t,\; t = 0, \dots, T$</td><td>noised sample; $x_T \approx \mathcal{N}(0, I)$</td></tr><tr><td>$\epsilon_\theta(x_t, t, c)$</td><td>noise predicted by UNet/DiT (DDPM parameterization)</td></tr><tr><td>$v_\theta(t, x, c)$</td><td>Flow Matching vector field</td></tr><tr><td>$c$</td><td>condition (text embedding / class)</td></tr><tr><td>$p_\theta(x_{t-1} \mid x_t, c)$</td><td>reverse process single-step conditional distribution</td></tr><tr><td>$R(x_0, c)$</td><td>terminal reward (scalar, from RM or rule)</td></tr><tr><td>$\pi_\text{ref}$ / $p_\text{ref}$</td><td>reference model (usually the SFT-trained base)</td></tr><tr><td>$\beta$</td><td>KL/temperature hyperparameter (same meaning as in LLM DPO)</td></tr></tbody></table>
+<h2 id="2-rl-for-diffusion-ddpo-and-dpok">§2 RL for Diffusion: DDPO and DPOK</h2>
+<h3 id="21-treating-denoising-as-an-mdp-ddpo-viewpoint">2.1 Treating denoising as an MDP (DDPO viewpoint)</h3>
+<p>Black et al. 2024 ICLR <em>Training Diffusion Models with Reinforcement Learning</em> (arXiv 2305.13301) key observation: the DDPM/DDIM reverse process is itself a <strong>finite-horizon MDP</strong>.</p>
+<p>Definitions:</p>
+<ul><li><strong>State</strong>: $s_t = (x_t, t, c)$, with time reversed $t = T, T-1, \dots, 1$</li><li><strong>Action</strong>: $a_t = x_{t-1}$ (sampled from $p_\theta(\cdot \mid x_t, c)$)</li><li><strong>Transition</strong>: deterministic — $s_{t-1} = (x_{t-1}, t-1, c)$</li><li><strong>Reward</strong>: $r_t = 0$ for $t > 1$, $r_1 = R(x_0, c)$ (terminal-only)</li><li><strong>Policy</strong>: $\pi_\theta(a_t \mid s_t) = p_\theta(x_{t-1} \mid x_t, c)$</li></ul>
+<p>Policy gradient theorem:</p>
+<p>$$\nabla_\theta J(\theta) = \mathbb{E}_{\tau \sim p_\theta}\!\left[\sum_{t=1}^{T} \nabla_\theta \log p_\theta(x_{t-1} \mid x_t, c)\, R(x_0, c)\right]$$</p>
+<p><strong>Key</strong>: $\log p_\theta(x_{t-1} \mid x_t, c)$ is Gaussian in DDPM, so the log-prob is analytical and the gradient can be computed directly.</p>
+<h3 id="22-ddpo-sf-score-function-algorithm">2.2 DDPO-SF (Score Function) algorithm</h3>
+<p>The simplest variant (DDPO-SF, score function estimator):</p>
+<ol><li><strong>Sampling phase</strong> — starting from prompt $c$, run $T$ DDPM reverse steps to get a trajectory $\tau = (x_T, x_{T-1}, \dots, x_0)$; compute $R(x_0, c)$.</li><li><strong>Update phase</strong> — REINFORCE-style gradient estimator:</li></ol>
+<p>$$\hat{g} = \frac{1}{N}\sum_{n=1}^{N} \sum_{t=1}^{T} \nabla_\theta \log p_\theta(x_{t-1}^{(n)} \mid x_t^{(n)}, c)\, (R^{(n)} - b)$$</p>
+<p>where $b$ is a baseline (typically the batch-mean reward).</p>
+<h3 id="23-ddpo-is-importance-sampling-ppo-style">2.3 DDPO-IS (Importance Sampling, PPO-style)</h3>
+<p>The practical recommended DDPO variant uses <strong>PPO-clip</strong> with per-step importance ratios:</p>
+<p>$$\rho_t = \frac{p_\theta(x_{t-1} \mid x_t, c)}{p_{\theta_\text{old}}(x_{t-1} \mid x_t, c)}, \qquad L^\text{CLIP}_t = \min\!\big(\rho_t R, \text{clip}(\rho_t, 1-\epsilon, 1+\epsilon) R\big)$$</p>
+<div class="callout callout-warn"><div class="callout-title">Per-step ratio, not trajectory ratio</div><p>diffusion PPO uses <strong>per-step</strong> importance ratios, not the product over $T$ steps. The full-trajectory ratio is the product of $T$ ratios — variance explodes; clipping per-step independently is the only way to stay stable.</p></div>
+<h3 id="24-ddpos-two-reward-experiments">2.4 DDPO's two reward experiments</h3>
+<p>Black et al. run DDPO + SD-1.5 on four rewards:</p>
+<table><thead><tr><th>Reward type</th><th>Example</th><th>Signal nature</th></tr></thead><tbody><tr><td>Compressibility</td><td>JPEG file size</td><td>rule-based scalar</td></tr><tr><td>Aesthetic</td><td>LAION aesthetic predictor</td><td>trained MLP</td></tr><tr><td>Prompt-image alignment</td><td>CLIP-Score / LLaVA judge</td><td>VLM-based</td></tr><tr><td>Object presence</td><td>DETR / OWL-ViT count</td><td>rule-based</td></tr></tbody></table>
+<p>Across all four rewards, DDPO yields large gains over reward-weighted regression (RWR baseline), and can shift styles (e.g. emoji → oil painting) — proof that RL is genuinely exploring, not just mode-seeking.</p>
+<h3 id="25-dpok-kl-regularized-rl-for-diffusion">2.5 DPOK: KL-regularized RL for diffusion</h3>
+<p>Fan et al. <strong>2023 NeurIPS</strong> <em>DPOK: Reinforcement Learning for Fine-tuning Text-to-Image Diffusion Models</em> (arXiv 2305.16381) is contemporaneous with DDPO; the difference is an <strong>explicit KL anchor</strong>:</p>
+<p>$$\boxed{\;\max_\theta\; \mathbb{E}_{\tau \sim p_\theta}\!\left[R(x_0, c)\right] - \beta\, \mathbb{E}_c\!\left[\text{KL}\!\big(p_\theta(\cdot \mid c) \,\big\Vert\, p_\text{ref}(\cdot \mid c)\big)\right]\;}$$</p>
+<p>The KL term expanded to per-step:</p>
+<p>$$\text{KL}(p_\theta \Vert p_\text{ref}) = \sum_{t=1}^{T} \mathbb{E}\!\left[\text{KL}\!\big(p_\theta(x_{t-1} \mid x_t, c) \,\Vert\, p_\text{ref}(x_{t-1} \mid x_t, c)\big)\right]$$</p>
+<p>Since the DDPM $p_\theta(x_{t-1} \mid x_t, c)$ is Gaussian, <strong>the KL between two Gaussians has a closed form</strong>, so per-step KL is directly computable. DPOK uses policy gradient + this KL penalty, the diffusion analog of RLHF's "$\beta \log(\pi/\pi_\text{ref})$ added to reward".</p>
+<div class="callout callout-info"><div class="callout-title">DPOK vs DDPO</div></div>
+<ul><li>DDPO: pure RL (REINFORCE or PPO-clip), KL is implicit (via ratio clipping).</li><li>DPOK: explicit KL term, matching LLM RLHF's "KL added to reward".</li><li>Empirically, DPOK is more stable on reward-prompt alignment (ImageReward); DDPO is more aggressive on rule-based rewards like compressibility.</li></ul>
+<h3 id="26-ddpo-failure-modes-and-mitigations">2.6 DDPO failure modes and mitigations</h3>
+<table><thead><tr><th>Symptom</th><th>Cause</th><th>Mitigation</th></tr></thead><tbody><tr><td>Reward up but FID crashes</td><td>over-optimization on RM blind spots</td><td>KL penalty / LoRA fine-tune (prevent base drift)</td></tr><tr><td>Same prompt converges to one composition</td><td>mode collapse, policy finds RM high-score mode</td><td>reward ensemble / early stop</td></tr><tr><td>High reward but ugly to humans</td><td>RM scale not aligned with humans</td><td>weighted multi-RM + human eval calibration</td></tr><tr><td>Training unstable</td><td>per-step ratio accumulates over $T$ steps</td><td>per-step PPO-clip $\epsilon = 0.1$ is more stable than the LLM $0.2$</td></tr></tbody></table>
+<h2 id="3-direct-reward-fine-tuning-draft--alignprop--refl">§3 Direct Reward Fine-Tuning: DRaFT / AlignProp / ReFL</h2>
+<h3 id="31-core-idea-treat-reward-as-a-differentiable-loss">3.1 Core idea: treat reward as a differentiable loss</h3>
+<p>If the reward $R(x_0, c)$ is <strong>differentiable</strong> in $x_0$ (true for typical CNN/ViT RMs) and the diffusion sampler is differentiable, then we can <strong>directly backprop to $\theta$</strong>:</p>
+<p>$$\theta \leftarrow \theta + \eta\, \nabla_\theta R\!\big(x_0(\theta), c\big), \quad x_0(\theta) = \text{Sample}_\theta^T(c)$$</p>
+<p>where $\text{Sample}_\theta^T(c)$ denotes running $T$ reverse steps from $x_T \sim \mathcal{N}(0,I)$ to obtain $x_0$. This treats the entire reverse trajectory as one <strong>giant differentiable computation graph</strong> and optimizes reward end-to-end.</p>
+<div class="callout callout-good"><div class="callout-title">Advantage</div><p>no sampling variance; the gradient signal has far lower variance than REINFORCE-style RL.</p></div>
+<div class="callout callout-bad"><div class="callout-title">Cost</div><p>must store $T$ steps of activations; vanilla implementation uses $\mathcal{O}(T \cdot M_\text{UNet})$ memory, which for SDXL UNet is ≈ hundreds of GB, <strong>completely untrainable</strong>.</p></div>
+<h3 id="32-draft-clark-et-al-2024-iclr-arxiv-230917400">3.2 DRaFT (Clark et al. 2024 ICLR, arXiv 2309.17400)</h3>
+<p><em>Directly Fine-Tuning Diffusion Models on Differentiable Rewards</em>. Two core tricks:</p>
+<p><strong>Trick 1: DRaFT-K, only backprop the last $K$ steps.</strong></p>
+<p>The full chain rule (denoise step $\epsilon_\theta(x_t,t)$ both influences the next step $x_{t-1}$ and <strong>directly</strong> depends on $\theta$):</p>
+<p>$$\nabla_\theta R(x_0) = \frac{\partial R}{\partial x_0} \cdot \sum_{t=1}^{K}\left(\prod_{s=1}^{t-1} \frac{\partial x_{s-1}}{\partial x_s}\right) \cdot \frac{\partial x_{t-1}}{\partial \theta}\bigg|_{\text{direct}}$$</p>
+<p>where $\partial x_{t-1}/\partial\theta|_\text{direct}$ is the partial derivative of step-$t$ on $\theta$ via $\epsilon_\theta(x_t,t)$ directly (not through the indirect $x_t \to x_t$ path), and $\prod_s$ is the Jacobian product propagation during backward. The first $T-K$ steps run under <code>torch.no_grad()</code>; only the last $K$ steps retain the graph. K=1 (DRaFT-1) already gives a very strong signal — the last step has the largest direct effect on $x_0$. Autograd automatically sums the $\partial/\partial\theta|_\text{direct}$ across all $K$ steps, so the code only needs <code>loss.backward()</code>.</p>
+<p><strong>Trick 2: LoRA fine-tune + high learning rate.</strong></p>
+<p>Only train a LoRA adapter (~1% parameters), with the base UNet frozen. Combined with gradient checkpointing, memory fits within 24 GB on a single GPU.</p>
+<p>Pseudo-code:</p>
+<pre><code class="language-python"># DRaFT-K one-step training
+x_t = torch.randn(B, C, H, W).to(device)  # x_T
+with torch.no_grad():
+    for t in range(T-1, K, -1):           # first T-K steps without grad
+        x_t = ddim_step(unet_lora, x_t, t, cond)
+for t in range(K, 0, -1):                  # last K steps with grad
+    x_t = ddim_step(unet_lora, x_t, t, cond)
+x_0 = x_t
+reward = image_rm(x_0, prompt)             # ImageReward / HPSv2
+loss = -reward.mean()                       # note negative sign — we maximize reward
+loss.backward()                             # memory O(K)
+optimizer.step()</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Is DRaFT-1 equivalent to REINFORCE?</div><p>No. DRaFT-1 is a <strong>true reparameterized gradient</strong> (pathwise estimator); REINFORCE is a score-function estimator. The former has very low variance but requires reward to be differentiable; the latter is general but high variance. $\nabla \log p$ vs $\partial x / \partial \theta$ are two different gradient estimator classes.</p></div>
+<h3 id="33-alignprop-prabhudesai-et-al-arxiv-231003739-2023-10-iclr-2024-venue-the-arxiv-version-was-later-supersededwithdrawn">3.3 AlignProp (Prabhudesai et al. arXiv 2310.03739, 2023-10; ICLR 2024 venue; the arXiv version was later superseded/withdrawn)</h3>
+<p><em>Aligning Text-to-Image Diffusion Models with Reward Backpropagation</em> — almost parallel to DRaFT (both appeared on arXiv in late 2023), with the same core idea: <strong>reward backprop through denoising</strong>. Differences:</p>
+<table><thead><tr><th>Dimension</th><th>DRaFT</th><th>AlignProp</th></tr></thead><tbody><tr><td>Truncation</td><td>DRaFT-K, last $K$ steps retain grad</td><td>randomly selected $K$ steps retain grad (randomized truncated BPTT)</td></tr><tr><td>Memory optimization</td><td>gradient checkpointing</td><td>gradient checkpointing + LoRA</td></tr><tr><td>Recommended reward</td><td>HPSv1, PickScore, Aesthetic</td><td>ImageReward, HPSv2, PickScore</td></tr><tr><td>Mode collapse mitigation</td><td>simple KL anchor</td><td>LoRA scale annealing + early stop</td></tr></tbody></table>
+<p>AlignProp's key contribution is theorizing "why reward backprop works" — proving that under fixed-point assumptions, the truncated BPTT gradient is a biased but low-variance estimator of the true gradient.</p>
+<h3 id="34-refl-xu-et-al-2023-neurips-arxiv-230405977">3.4 ReFL (Xu et al. 2023 NeurIPS, arXiv 2304.05977)</h3>
+<p><em>ImageReward: Learning and Evaluating Human Preferences for Text-to-Image Generation</em>. This is the <strong>original ImageReward paper</strong>, which also proposes the ReFL (Reward Feedback Learning) algorithm.</p>
+<p>ReFL is close to DRaFT in spirit but predates it. It treats reward directly as a loss and <strong>supervises only at one randomly selected intermediate step</strong>, an early implementation of the DRaFT idea:</p>
+<p>$$\mathcal{L}_\text{ReFL} = \mathcal{L}_\text{simple} - \lambda \cdot \mathbb{E}_{t' \sim [t_\text{min}, t_\text{max}]}\!\big[R\big(\hat{x}_0(x_{t'}, t')\big)\big]$$</p>
+<p>where $\hat{x}_0(x_{t'}, t') = (x_{t'} - \sqrt{1-\bar\alpha_{t'}}\epsilon_\theta(x_{t'}, t'))/\sqrt{\bar\alpha_{t'}}$ is the $x_0$ estimate from a single-step $\epsilon$-prediction (one-step Tweedie unfolding).</p>
+<p><strong>Key difference</strong>: ReFL is "single-step backprop + $L_\text{simple}$ trained jointly", while DRaFT/AlignProp is "multi-step backprop + pure reward loss". ReFL is more stable but reward gains are smaller, because it only sees the one-step $x_0$ estimate rather than the true sampling trajectory.</p>
+<h3 id="35-three-way-comparison">3.5 Three-way comparison</h3>
+<table><thead><tr><th>Algorithm</th><th>Backprop strategy</th><th>Memory</th><th>Reward gain</th><th>Stability</th></tr></thead><tbody><tr><td><strong>ReFL</strong> (Xu 2023)</td><td>single-step $\hat{x}_0$ + $L_\text{simple}$ hybrid</td><td>$\mathcal{O}(1)$</td><td>small</td><td>high</td></tr><tr><td><strong>DRaFT-K</strong> (Clark 2024)</td><td>last $K$ steps BPTT</td><td>$\mathcal{O}(K)$</td><td>large</td><td>medium (large $K$ prone to over-optimization)</td></tr><tr><td><strong>AlignProp</strong> (Prabhudesai 2024)</td><td>random $K$ steps BPTT</td><td>$\mathcal{O}(K)$</td><td>large</td><td>medium</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">Memory back-of-the-envelope</div><p>SDXL UNet ~2.6B parameters, one forward in fp16 needs ~6–8 GB activations; $K = 5$ ~ 30–40 GB; $K = T = 50$ &gt; 300 GB, <strong>only feasible with multi-machine sharding</strong>. This is why $K=1$ is the most common in practice — negligible precision loss, engineering-friendly.</p></div>
+<h3 id="36-reward-hacking-in-direct-reward-backprop">3.6 Reward hacking in direct reward backprop</h3>
+<p>Direct backprop is more prone to hacking than RL because the gradient signal is "too precise":</p>
+<table><thead><tr><th>Symptom</th><th>Example</th></tr></thead><tbody><tr><td><strong>Over-saturation</strong></td><td>HPSv2 prefers high contrast → trained images become hyper-saturated</td></tr><tr><td><strong>Style monotonicity</strong></td><td>ImageReward training data is biased → all prompts produce the same style</td></tr><tr><td><strong>Trypophobia patterns</strong></td><td>some RMs prefer "dense textures", and the model learns trypophobic patterns</td></tr><tr><td><strong>Mode collapse</strong></td><td>multiple samples from the same prompt are nearly identical</td></tr></tbody></table>
+<p><strong>Mitigations</strong>: reward ensemble (mean or min of HPSv2 + PickScore + ImageReward), KL anchor, early stop, small LoRA scale.</p>
+<h2 id="4-preference-optimization-the-diffusion-dpo-family">§4 Preference Optimization: the Diffusion-DPO family</h2>
+<h3 id="41-diffusion-dpo-wallace-et-al-2024-cvpr-arxiv-231112908">4.1 Diffusion-DPO (Wallace et al. 2024 CVPR, arXiv 2311.12908)</h3>
+<p><em>Diffusion Model Alignment Using Direct Preference Optimization</em>. The key challenge in porting LLM DPO to diffusion: <strong>diffusion's $\log p_\theta(x_0 \mid c)$ has no closed form</strong> — must use an ELBO substitute.</p>
+<h4 id="411-derivation-key-steps">4.1.1 Derivation (key steps)</h4>
+<p>The LLM DPO core is the KL-regularized RL optimal solution:</p>
+<p>$$\pi^*(y \mid x) \propto \pi_\text{ref}(y \mid x) \exp\!\big(r(x, y) / \beta\big)$$</p>
+<p>Solving for $r = \beta \log(\pi^*/\pi_\text{ref}) + \beta \log Z$ and substituting into Bradley-Terry, the $\log Z$ cancels.</p>
+<p>For diffusion, replace "sample $y$" with "sample trajectory $(x_T, \dots, x_0)$"; the optimal form is the same, but $\log p$ is the full-trajectory likelihood:</p>
+<p>$$\log p_\theta(x_{0:T} \mid c) = \log p(x_T) + \sum_{t=1}^{T} \log p_\theta(x_{t-1} \mid x_t, c)$$</p>
+<p>This trajectory log-likelihood <strong>is analytical</strong> (each term is a Gaussian log-prob). <strong>However</strong>: if every update step requires a full trajectory run, the compute cost explodes.</p>
+<p><strong>Wallace et al.'s trick: use an ELBO surrogate.</strong></p>
+<p>DDPM's $L_\text{simple}$ is one of the (negative) ELBO terms of $\log p_\theta(x_0)$; specifically:</p>
+<p>$$-\log p_\theta(x_0 \mid c) \le L_\text{simple}(x_0, c, \theta) = \mathbb{E}_{t, \epsilon}\!\left[\|\epsilon - \epsilon_\theta(x_t, t, c)\|^2\right] + \text{const}$$</p>
+<p>Use $-L_\text{simple}$ as a <strong>single-sample estimate</strong> of $\log p_\theta(x_0 \mid c)$ (Jensen's inequality strictly gives a lower bound, but numerically it is usable as a DPO implicit-reward proxy) and substitute into the DPO framework:</p>
+<p>$$\boxed{\;\mathcal{L}_\text{Diff-DPO}(\theta) = -\mathbb{E}_{(x_0^w, x_0^l, c, t, \epsilon)}\log\sigma\!\left(-\beta T\!\left[\|\epsilon^w - \epsilon_\theta(x_t^w, t, c)\|^2 - \|\epsilon^w - \epsilon_\text{ref}(x_t^w, t, c)\|^2 - \|\epsilon^l - \epsilon_\theta(x_t^l, t, c)\|^2 + \|\epsilon^l - \epsilon_\text{ref}(x_t^l, t, c)\|^2\right]\right)\;}$$</p>
+<div class="callout callout-info"><div class="callout-title">Intuitive reading</div><p>the inside of the sigmoid is "for $y_w$, policy denoises better than ref" minus "for $y_l$, policy denoises better than ref". If the policy is more accurate on $y_w$ and less accurate on $y_l$, the difference is positive and the loss decreases.</p></div>
+<h4 id="412-implementation-details">4.1.2 Implementation details</h4>
+<ul><li>$(x_0^w, x_0^l)$ come from a human-preference pair conditioned on a single prompt $c$ (Pick-a-Pic is the main dataset).</li><li>Each training step <strong>randomly samples $t \in \{1, \dots, T\}$ and $\epsilon \sim \mathcal{N}(0,I)$</strong>, constructing $x_t^w = \sqrt{\bar\alpha_t} x_0^w + \sqrt{1-\bar\alpha_t}\epsilon$ (the same $\epsilon$ is used for both $y_w$ and $y_l$ — paired noise).</li><li>$\pi_\text{ref}$ is a frozen base UNet (usually the original SDXL checkpoint).</li></ul>
+<div class="callout callout-warn"><div class="callout-title">Crucial: shared noise</div><p>the paper emphasizes that $x_t^w$ and $x_t^l$ must use <strong>the same $\epsilon$</strong> (paired noise); otherwise $\beta$ becomes incomparable and loss variance explodes. This is the most common Diffusion-DPO footgun.</p></div>
+<h4 id="413-results-on-sdxl">4.1.3 Results (on SDXL)</h4>
+<ul><li>Consistently better than SDXL base on PickScore / HPSv2.</li><li>Training cost is ~1.5–2× SFT (must run UNet twice: policy + ref).</li><li>Simpler than DDPO: fully offline, no sampling needed.</li></ul>
+<h3 id="42-d3po-yang-et-al-2024-cvpr-arxiv-231113231">4.2 D3PO (Yang et al. 2024 CVPR, arXiv 2311.13231)</h3>
+<p><em>Using Human Feedback to Fine-tune Diffusion Models without Any Reward Model</em>. Posted to arXiv around the same time as Diffusion-DPO (2023-11); the difference is in <strong>derivation path</strong>:</p>
+<ul><li><strong>Diffusion-DPO</strong>: KL-regularized RL → ELBO surrogate → DPO loss.</li><li><strong>D3PO</strong>: directly port the LLM DPO derivation <strong>step-by-step onto the diffusion Markov chain</strong> — each denoising step is treated as an MDP step, using the same "solve for implicit reward + plug into BT" framework.</li></ul>
+<p>The final D3PO loss form is nearly the same as Diffusion-DPO's:</p>
+<p>$$\mathcal{L}_\text{D3PO}(\theta) = -\mathbb{E}_{(\tau^w, \tau^l)} \log\sigma\!\left(\beta \sum_{t=1}^{T}\!\left[\log\frac{p_\theta(x_{t-1}^w \mid x_t^w, c)}{p_\text{ref}(x_{t-1}^w \mid x_t^w, c)} - \log\frac{p_\theta(x_{t-1}^l \mid x_t^l, c)}{p_\text{ref}(x_{t-1}^l \mid x_t^l, c)}\right]\right)$$</p>
+<p>What's needed is a <strong>full trajectory pair</strong> $(\tau^w, \tau^l)$; if the preference pair only has the final image $(x_0^w, x_0^l)$, reconstruct the trajectory using $q(x_{1:T} \mid x_0)$ (with DDPM's forward q-sample).</p>
+<div class="callout callout-info"><div class="callout-title">Diffusion-DPO vs D3PO in practice</div><p>the two are mathematically equivalent (under the ELBO surrogate, D3PO's trajectory log-ratio reduces to Diffusion-DPO's single-step $\epsilon$-distance difference). <strong>In practice</strong>:</p></div>
+<ul><li>Diffusion-DPO uses single-$t$ estimation (cheaper), D3PO sums over the full trajectory (more accurate but expensive).</li><li>Diffusion-DPO is stable on Pick-a-Pic; D3PO is stable on collected thumbs up/down data.</li><li>Industrial deployments mostly use Diffusion-DPO (simpler compute).</li></ul>
+<h3 id="43-spo-liang-et-al-2024-arxiv-240604314">4.3 SPO (Liang et al. 2024, arXiv 2406.04314)</h3>
+<p><em>Step-aware Preference Optimization: Aligning Preference with Denoising Performance at Each Step</em>. <strong>Key observation</strong>: different denoising steps are <strong>responsible for different aspects of the image</strong>:</p>
+<ul><li>High-noise steps ($t \approx T$): determine global structure (composition, object placement).</li><li>Low-noise steps ($t \approx 0$): determine local detail (texture, edges).</li></ul>
+<p>Diffusion-DPO's "single-$t$ sampling" treats all steps equally — but human preferences have different "importance" across steps.</p>
+<h4 id="431-the-two-spo-modifications">4.3.1 The two SPO modifications</h4>
+<p><strong>Modification 1: In-step preference</strong> — for the same $x_t$, <strong>independently sample two $x_{t-1}^w, x_{t-1}^l$</strong>, and use a step-wise reward model to judge "which $x_{t-1}$ is better at step $t$".</p>
+<p><strong>Modification 2: Step-aware weighting</strong> — the SPO loss is weighted along the step dimension:</p>
+<p>$$\mathcal{L}_\text{SPO}(\theta) = -\mathbb{E}_{t \sim w(t),\; x_t}\!\left[\log\sigma\!\left(\beta\!\log\frac{p_\theta(x_{t-1}^w \mid x_t, c)}{p_\text{ref}(x_{t-1}^w \mid x_t, c)} - \beta\!\log\frac{p_\theta(x_{t-1}^l \mid x_t, c)}{p_\text{ref}(x_{t-1}^l \mid x_t, c)}\right)\right]$$</p>
+<p>where $w(t)$ is the step sampling distribution (typically uniform or biased toward middle $t$).</p>
+<h4 id="432-the-in-step-reward-model">4.3.2 The in-step reward model</h4>
+<p>To obtain the in-step preference $(x_{t-1}^w, x_{t-1}^l)$, SPO trains a <strong>step-wise reward model</strong> $R(x_{t-1}, x_t, c, t)$ that judges "given $x_t$, is $x_{t-1}$ a good transition at step $t$?" It does not directly score pixel quality of $x_{t-1}$ but rather estimates <strong>whether this transition at step $t$</strong> leads to a high-quality $x_0$.</p>
+<div class="callout callout-good"><div class="callout-title">The key SPO win</div><p>given the same preference data, SPO's effective signal is $\times T$ (each prompt yields a pair at every one of $T$ steps). Empirically SPO outperforms Diffusion-DPO on PickScore / HPSv2 by 1–3 points.</p></div>
+<h3 id="44-diffusion-kto-li-et-al-2024-neurips-arxiv-240404465">4.4 Diffusion-KTO (Li et al. 2024 NeurIPS, arXiv 2404.04465)</h3>
+<p><em>Aligning Diffusion Models by Optimizing Human Utility</em>. The diffusion version of LLM KTO (Ethayarajh 2024, arXiv 2402.01306).</p>
+<p><strong>LLM KTO core idea</strong>: replace the BT preference model with Kahneman-Tversky prospect theory, requiring only <strong>per-sample binary feedback</strong> (thumbs up/down), <strong>no pairs needed</strong>:</p>
+<p>$$L_\text{KTO} = \mathbb{E}_{x, y}\!\left[\lambda_y v\!\big(\beta \log\frac{\pi_\theta(y|x)}{\pi_\text{ref}(y|x)} - z_0(x)\big)\right]$$</p>
+<p>where $v(\cdot)$ is the prospect-theoretic value function (thumbs up uses $1 - \sigma(\cdot)$, thumbs down uses $\sigma(\cdot)$), and $z_0$ is the reference utility.</p>
+<p>Diffusion-KTO replaces $\log(\pi_\theta/\pi_\text{ref})$ with the Diffusion-DPO $\epsilon$-distance ELBO surrogate:</p>
+<p>$$L_\text{Diff-KTO} = \mathbb{E}_{x_0, c, \text{label}}\!\left[\lambda_\text{label}\, v\!\left(\beta T \left[\|\epsilon - \epsilon_\text{ref}\|^2 - \|\epsilon - \epsilon_\theta\|^2\right] - z_0(c)\right)\right]$$</p>
+<div class="callout callout-info"><div class="callout-title">Practical value of Diffusion-KTO</div><p>in industrial settings, binary feedback (like/dislike) vastly outnumbers paired comparisons; KTO lets you use that data directly.</p></div>
+<h3 id="45-mapo-hong-et-al-2024-arxiv-240606424">4.5 MaPO (Hong et al. 2024, arXiv 2406.06424)</h3>
+<p><em>Margin-aware Preference Optimization for Aligning Diffusion Models without Reference</em>. <strong>Core idea</strong>: <strong>drop the reference model entirely</strong> — similar in spirit to LLM SimPO.</p>
+<p>MaPO loss simultaneously optimizes two things:</p>
+<ol><li><strong>Likelihood margin</strong>: $\log p_\theta(x_0^w) - \log p_\theta(x_0^l)$ (estimated via the ELBO surrogate $\|\epsilon - \epsilon_\theta\|^2$).</li><li><strong>Likelihood of preferred</strong>: $\log p_\theta(x_0^w)$ itself must be high (to prevent "both sides dropping").</li></ol>
+<p>$$\mathcal{L}_\text{MaPO}(\theta) = -\mathbb{E}\!\left[\log\sigma\!\big(\beta(\hat{\ell}_w - \hat{\ell}_l) - \gamma\big) + \alpha \hat{\ell}_w\right]$$</p>
+<p>where $\hat{\ell} = -\|\epsilon - \epsilon_\theta(x_t, t, c)\|^2$ is the likelihood surrogate, $\gamma$ is the margin, and $\alpha$ is the likelihood-term weight.</p>
+<p><strong>Advantages</strong>:</p>
+<ul><li><strong>No reference UNet needed</strong>: saves half the memory (from $2 \times M$ to $M$).</li><li><strong>Solves reference mismatch</strong>: when fine-tuning to a new style (where the reference is far from the target distribution), Diffusion-DPO training collapses, but MaPO is stable.</li><li><strong>15% faster training</strong> (paper-reported, validated across 5 domains).</li></ul>
+<h3 id="46-dpo-family-overview">4.6 DPO family overview</h3>
+<table><thead><tr><th>Method</th><th>Needs ref?</th><th>Preference type</th><th>Memory</th><th>When to use</th></tr></thead><tbody><tr><td><strong>Diffusion-DPO</strong> (Wallace 2024)</td><td>✅</td><td>paired</td><td>2×</td><td>general alignment</td></tr><tr><td><strong>D3PO</strong> (Yang 2024)</td><td>✅</td><td>paired or thumbs</td><td>2×</td><td>when no RM available</td></tr><tr><td><strong>SPO</strong> (Liang 2024)</td><td>✅ + step-RM</td><td>per-step paired</td><td>2× + small step-RM</td><td>extracting maximum step-level signal</td></tr><tr><td><strong>Diffusion-KTO</strong> (Li 2024)</td><td>✅</td><td>unpaired binary</td><td>2×</td><td>large volume of thumbs data</td></tr><tr><td><strong>MaPO</strong> (Hong 2024)</td><td>❌</td><td>paired</td><td>1×</td><td>style fine-tune / memory-constrained</td></tr></tbody></table>
+<h2 id="5-flow-grpo-rl-for-flow-matching">§5 Flow-GRPO: RL for Flow Matching</h2>
+<h3 id="51-why-flow-matching-also-needs-post-training">5.1 Why Flow Matching also needs post-training</h3>
+<p>SD3 / FLUX / Lumina all moved to Flow Matching (Rectified Flow); post-training needs are the same:</p>
+<ul><li>Improve composition benchmarks like GenEval / DPG (color, count, spatial relations).</li><li>Improve OCR / text rendering accuracy.</li><li>Improve prompt-image alignment (VLM judge).</li></ul>
+<p>But Flow Matching is a <strong>deterministic ODE</strong> ($\dot x_t = v_\theta(t, x, c)$) — the stochastic transition assumed by DDPO/DPOK does not exist. Directly plugging it into the RL framework fails.</p>
+<h3 id="52-flow-grpos-two-core-tricks">5.2 Flow-GRPO's two core tricks</h3>
+<p>Liu et al. 2025 <em>Flow-GRPO: Training Flow Matching Models via Online RL</em> (arXiv 2505.05470) solves two fundamental Flow + RL problems:</p>
+<h4 id="trick-1-ode--sde-equivalent-conversion">Trick 1: ODE → SDE equivalent conversion</h4>
+<p>For the Rectified Flow ODE $\dot x_t = v_\theta(t, x_t, c)$, construct an <strong>equivalent SDE</strong>:</p>
+<p>$$dx_t = \big[v_\theta(t, x_t, c) + \tfrac{1}{2}\sigma(t)^2 \nabla_x \log p_t(x_t)\big]\,dt + \sigma(t)\,dW_t$$</p>
+<p><strong>Key property</strong> (Song et al. 2021 score SDE framework): this SDE has <strong>exactly the same marginal</strong> $p_t$ as the original ODE. The difference is that the SDE provides <strong>stochastic exploration</strong> (the $dW_t$ noise), allowing RL to sample different trajectories.</p>
+<p>For Flow Matching, $\nabla_x \log p_t = -\epsilon/\sigma_t$ (under a Gaussian path), and the score can be derived from $v_\theta$. Setting $\sigma(t)$ as a schedule (typically $\sigma(t) = \sqrt{1-t}$) gives the SDE sampler used by Flow-GRPO during training.</p>
+<div class="callout callout-info"><div class="callout-title">Physical meaning</div><p>adding $\sigma\,dW$ lets the particle "jitter" out multiple trajectories while keeping the marginal unchanged, so $G$ samples from the same prompt actually differ → group statistics for GRPO are well-defined.</p></div>
+<h4 id="trick-2-denoising-reduction">Trick 2: Denoising reduction</h4>
+<p>GRPO needs a group of $G$ trajectories per sample, typically $G = 16$–$32$. Flow Matching inference normally uses 25–50 steps, so <strong>a single training sample needs $\approx 25G$ forwards</strong> — too expensive.</p>
+<p>Flow-GRPO uses <strong>fewer steps during training</strong> (e.g. 10 steps); inference still uses 25–50 steps. The SDE is more uniform on the schedule, so the "exploration quality" of few-step training is enough:</p>
+<p>$$\text{Training}: T_\text{train} = 10, \quad \text{Inference}: T_\text{infer} = 28$$</p>
+<p>Empirically, no quality drop on GenEval / OCR / Aesthetic.</p>
+<h3 id="53-flow-grpo-advantage-computation">5.3 Flow-GRPO advantage computation</h3>
+<p>Completely parallel to GRPO for LLM — for the same prompt $c$, sample $G$ final images $\{x_0^{(1)}, \dots, x_0^{(G)}\}$, score each with reward $r_i$, and normalize within the group:</p>
+<p>$$\hat{A}_i = \frac{r_i - \text{mean}_{j}(r_j)}{\text{std}_j(r_j) + \epsilon}$$</p>
+<p>All steps within a trajectory share the same $\hat{A}_i$ (same as per-token sharing in LLM GRPO).</p>
+<h3 id="54-flow-grpo-loss">5.4 Flow-GRPO loss</h3>
+<p>Let the SDE Euler step transition log-prob be $\log p_\theta(x_{t-1} \mid x_t, c)$ (Gaussian), with importance ratio $\rho_{i,t} = p_\theta / p_{\theta_\text{old}}$. PPO-clip:</p>
+<p>$$L^\text{Flow-GRPO} = \mathbb{E}\!\left[\frac{1}{G}\sum_i\!\frac{1}{T_\text{train}}\!\sum_t \min\!\big(\rho_{i,t}\hat{A}_i, \text{clip}(\rho_{i,t}, 1-\epsilon, 1+\epsilon)\hat{A}_i\big) - \beta\, \text{KL}_{i,t}(p_\theta \Vert p_\text{ref})\right]$$</p>
+<p>KL still uses the K3 estimator (same as GRPO for LLM).</p>
+<h3 id="55-geometric-meaning-of-advantage-on-the-vector-field">5.5 Geometric meaning of advantage on the vector field</h3>
+<div class="callout callout-good"><div class="callout-title">L3 understanding</div></div>
+<ul><li>LLM GRPO's advantage reweights in the token logit space;</li><li>Flow-GRPO's advantage directly reweights the <strong>direction correction</strong> of $v_\theta$ — specifically, when $\hat A_i > 0$, push $v_\theta(t, x_t, c)$ toward the direction $(x_{t-1}^{(i)} - x_t^{(i)})/dt$ that trajectory $\tau_i$ actually took.</li><li>This is a "directional gradient" on the $v_\theta$ space, equivalent to importance-weighted $\epsilon$-prediction reweighting under a Gaussian path.</li></ul>
+<h3 id="56-flow-grpo-empirical-results">5.6 Flow-GRPO empirical results</h3>
+<p>The paper reports for SD3.5-M:</p>
+<table><thead><tr><th>Benchmark</th><th>SD3.5-M base</th><th>Flow-GRPO</th></tr></thead><tbody><tr><td>GenEval overall</td><td>63%</td><td><strong>95%</strong></td></tr><tr><td>Visual text rendering</td><td>59%</td><td><strong>92%</strong></td></tr><tr><td>Aesthetic (Schuhmann)</td><td>5.8</td><td>6.1</td></tr></tbody></table>
+<div class="callout callout-warn"><div class="callout-title">GenEval 95% looks too perfect</div><p>the paper does claim this number, but note that GenEval measures rule-verifiable object count / color / spatial-relation tasks, which are inherently RL-friendly (highly regularized rewards). On more subjective benchmarks like PartiPrompt / DPG, gains are 5–10 points, which is more realistic.</p></div>
+<h2 id="6-code-patterns-readable-pseudo-code">§6 Code Patterns (readable pseudo-code)</h2>
+<h3 id="61-ddpo-reinforce-style-update">6.1 DDPO REINFORCE-style update</h3>
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def ddpo_step(unet, ref_unet, scheduler, prompts, reward_fn,
+              T=20, B=4, lr=1e-5, beta=0.0):
+    &quot;&quot;&quot;
+    DDPO-SF one-step training (REINFORCE + optional KL anchor).
+    prompts: list of B text prompts
+    reward_fn: callable (x0_batch, prompts) -&gt; [B] scalar
+    &quot;&quot;&quot;
+    # ── 1. Rollout: sample G=B trajectories ──
+    x = torch.randn(B, 4, 64, 64, device=device)
+    traj_log_probs = []
+    with torch.set_grad_enabled(False):                   # rollout needs no grad
+        x_t = x
+        for t in reversed(range(T)):
+            # predict noise + sample x_{t-1}
+            eps_pred = unet(x_t, t, prompts)
+            mean, std = scheduler.step_mean_std(x_t, eps_pred, t)
+            x_tm1 = mean + std * torch.randn_like(mean)   # stochastic transition
+            traj_log_probs.append((mean.detach(), std.detach(), x_tm1.detach()))
+            x_t = x_tm1
+        x_0 = x_t
+
+    # ── 2. Reward ──
+    R = reward_fn(x_0, prompts)                            # [B]
+    A = (R - R.mean()) / (R.std() + 1e-8)                  # batch baseline
+
+    # ── 3. Policy gradient: re-forward to get log p_θ ──
+    x_t = x.detach()
+    loss_pg = 0.0
+    for t, (mean_old, std_old, x_tm1) in zip(reversed(range(T)), traj_log_probs):
+        eps_pred = unet(x_t, t, prompts)                   # grad needed
+        mean, std = scheduler.step_mean_std(x_t, eps_pred, t)
+        # Gaussian log-prob
+        log_p = -0.5 * (((x_tm1 - mean) / std) ** 2).sum([1, 2, 3])
+        log_p -= std.log().sum([1, 2, 3])
+        loss_pg = loss_pg - (log_p * A).mean()             # REINFORCE
+        if beta &gt; 0:
+            ref_eps = ref_unet(x_t, t, prompts).detach()
+            mean_ref, std_ref = scheduler.step_mean_std(x_t, ref_eps, t)
+            # Gaussian-Gaussian KL closed form
+            kl = ((mean - mean_ref) ** 2 / (2 * std_ref ** 2)
+                  + (std / std_ref) ** 2 / 2
+                  - 0.5 - (std / std_ref).log()).sum([1, 2, 3])
+            loss_pg = loss_pg + beta * kl.mean()
+        x_t = x_tm1.detach()
+    return loss_pg</code></pre>
+<div class="callout callout-warn"><div class="callout-title">DDPO implementation footguns</div></div>
+<ul><li>Use <code>set_grad_enabled(False)</code> during rollout, then enable grad in the policy-gradient pass — avoids $O(T)$ memory.</li><li>DDPM stochastic transition is critical: DDIM is deterministic with no $dW$ dimension to optimize, so <strong>DDPO must use DDPM or DDIM-eta=1</strong>.</li><li>The batch baseline $A = (R - \bar R)/\sigma_R$ is much more stable than no baseline.</li><li>Train LoRA rather than full fine-tune, otherwise the base drifts quickly.</li></ul>
+<h3 id="62-diffusion-dpo-loss">6.2 Diffusion-DPO loss</h3>
+<pre><code class="language-python">def diffusion_dpo_loss(unet, ref_unet, scheduler,
+                       x0_w, x0_l, prompt_embeds, beta=2000.0):
+    &quot;&quot;&quot;
+    Diffusion-DPO (Wallace 2024) one-step training.
+    x0_w, x0_l: [B, 4, H, W]  preferred / dispreferred latents
+    beta: paper uses 2000~5000 (note: this is the combined β·T coefficient, larger than LLM DPO)
+    &quot;&quot;&quot;
+    B = x0_w.shape[0]
+    t = torch.randint(0, scheduler.num_train_timesteps, (B,), device=x0_w.device)
+    noise = torch.randn_like(x0_w)                          # paired noise!
+
+    xt_w = scheduler.add_noise(x0_w, noise, t)
+    xt_l = scheduler.add_noise(x0_l, noise, t)
+
+    # ── policy ε-prediction ──
+    eps_w = unet(xt_w, t, prompt_embeds)
+    eps_l = unet(xt_l, t, prompt_embeds)
+
+    # ── reference ε-prediction (frozen) ──
+    with torch.no_grad():
+        ref_eps_w = ref_unet(xt_w, t, prompt_embeds)
+        ref_eps_l = ref_unet(xt_l, t, prompt_embeds)
+
+    # ── ELBO surrogate: -‖ε - ε_θ‖² is a proxy for log p_θ ──
+    err_w_pol = ((noise - eps_w) ** 2).mean([1, 2, 3])      # [B]
+    err_w_ref = ((noise - ref_eps_w) ** 2).mean([1, 2, 3])
+    err_l_pol = ((noise - eps_l) ** 2).mean([1, 2, 3])
+    err_l_ref = ((noise - ref_eps_l) ** 2).mean([1, 2, 3])
+
+    # DPO log-ratio: smaller err = better likelihood
+    #   log(π_θ/π_ref)(y_w) ≈ -(err_w_pol - err_w_ref)
+    diff_w = -(err_w_pol - err_w_ref)
+    diff_l = -(err_l_pol - err_l_ref)
+
+    inner = beta * (diff_w - diff_l)
+    loss = -F.logsigmoid(inner).mean()
+
+    with torch.no_grad():
+        margin = inner.mean()
+        accuracy = (inner &gt; 0).float().mean()
+    return loss, {&quot;margin&quot;: margin.item(), &quot;acc&quot;: accuracy.item()}</code></pre>
+<div class="callout callout-warn"><div class="callout-title">β magnitude note</div><p>Diffusion-DPO's $\beta$ is several orders of magnitude larger than LLM DPO's, because it absorbs the $T$-fold accumulation ($\beta T$ is the true "temperature"). Paper uses $\beta \in [2000, 5000]$; LLM DPO uses $\beta \in [0.05, 0.5]$.</p></div>
+<h3 id="63-alignprop--draft-backprop-with-checkpointing">6.3 AlignProp / DRaFT backprop with checkpointing</h3>
+<pre><code class="language-python">def alignprop_step(unet_lora, scheduler, prompts, reward_fn,
+                   T=50, K=1, B=4, lr=1e-5):
+    &quot;&quot;&quot;
+    DRaFT-K / AlignProp one-step training.
+    K: last K steps retain gradient
+    Memory O(K); K=1 is single-forward magnitude on SDXL
+    &quot;&quot;&quot;
+    x = torch.randn(B, 4, 64, 64, device=device)
+
+    # ── First T - K steps without grad ──
+    with torch.no_grad():
+        for t in reversed(range(K, T)):
+            eps = unet_lora(x, t, prompts)
+            x = scheduler.step_ddim(x, eps, t)             # deterministic DDIM
+
+    # ── Last K steps with grad ──
+    for t in reversed(range(K)):
+        eps = unet_lora(x, t, prompts)                     # gradient ON
+        x = scheduler.step_ddim(x, eps, t)
+
+    x_0 = x
+    # ── Backprop ──
+    reward = reward_fn(x_0, prompts)                       # [B]
+    loss = -reward.mean()                                  # max reward = min -reward
+    return loss
+
+# Memory analysis:
+#   K=1:  ~24 GB on SDXL (single forward + grad)
+#   K=5:  ~60 GB
+#   K=10: ~120 GB (needs multi-GPU)
+#   K=T=50: ~600 GB (completely infeasible)</code></pre>
+<div class="callout callout-info"><div class="callout-title">Is K=1 enough?</div><p>Yes. Intuition: the last step $x_1 \to x_0$ has the largest effect on $x_0$ (the variance of the previous 49 steps is compressed), so the 1-step backprop signal already dominates. Clark 2024 empirically confirms $K=1$ and $K=5$ have negligible difference.</p></div>
+<h3 id="64-spo-step-aware-preference-loss">6.4 SPO step-aware preference loss</h3>
+<pre><code class="language-python">def spo_loss(unet, ref_unet, scheduler, step_rm,
+             x_t, t, prompt_embeds, beta=500.0):
+    &quot;&quot;&quot;
+    SPO (Liang 2024) in-step preference.
+    Given x_t and t, independently sample two x_{t-1}, let step_rm judge winner.
+    &quot;&quot;&quot;
+    # ── 1. Use policy to sample two x_{t-1} candidates (must no_grad,
+    #      otherwise DPO log-prob backprop would flow back into the sampler) ──
+    with torch.no_grad():
+        eps_sample = unet(x_t, t, prompt_embeds)
+        mean_s, std_s = scheduler.step_mean_std(x_t, eps_sample, t)
+        noise_a, noise_b = torch.randn_like(mean_s), torch.randn_like(mean_s)
+        x_a = mean_s + std_s * noise_a
+        x_b = mean_s + std_s * noise_b
+
+    # ── 2. step-wise reward model judges winner ──
+    with torch.no_grad():
+        r_a = step_rm(x_a, x_t, t, prompt_embeds)          # [B]
+        r_b = step_rm(x_b, x_t, t, prompt_embeds)
+        winner = (r_a &gt; r_b).long()                        # [B], 1 if a wins
+    x_w = torch.where(winner.bool()[:, None, None, None], x_a, x_b).detach()
+    x_l = torch.where(winner.bool()[:, None, None, None], x_b, x_a).detach()
+
+    # ── 3. compute log p_θ / log p_ref for x_w, x_l (grad-aware forward) ──
+    eps = unet(x_t, t, prompt_embeds)
+    mean, std = scheduler.step_mean_std(x_t, eps, t)
+    log_p_w = -0.5 * ((x_w - mean) / std).pow(2).sum([1, 2, 3])
+    log_p_l = -0.5 * ((x_l - mean) / std).pow(2).sum([1, 2, 3])
+    with torch.no_grad():
+        ref_eps = ref_unet(x_t, t, prompt_embeds)
+        ref_mean, ref_std = scheduler.step_mean_std(x_t, ref_eps, t)
+        log_pref_w = -0.5 * ((x_w - ref_mean) / ref_std).pow(2).sum([1, 2, 3])
+        log_pref_l = -0.5 * ((x_l - ref_mean) / ref_std).pow(2).sum([1, 2, 3])
+
+    inner = beta * ((log_p_w - log_pref_w) - (log_p_l - log_pref_l))
+    return -F.logsigmoid(inner).mean()</code></pre>
+<h3 id="65-flow-grpo-group-relative-advantage">6.5 Flow-GRPO group-relative advantage</h3>
+<pre><code class="language-python">def flow_grpo_step(flow_net, ref_flow, prompts, reward_fn,
+                   G=16, T_train=10, sigma_fn=lambda t: (1 - t) ** 0.5,
+                   eps_clip=0.2, beta=0.04):
+    &quot;&quot;&quot;
+    Flow-GRPO one-step training.
+    G: sample G trajectories per prompt.
+    T_train: SDE step count for training (inference uses 28-50).
+    &quot;&quot;&quot;
+    P = len(prompts)
+    # Repeat each prompt G times
+    prompts_rep = sum([[p] * G for p in prompts], [])      # [P*G]
+
+    # ── 1. SDE rollout: ODE→SDE equivalent conversion ──
+    x_t = torch.randn(P * G, 4, 64, 64, device=device)
+    log_probs_old = []                                     # for PPO importance ratio
+    trajectory = [x_t.clone()]
+    with torch.no_grad():
+        for i in range(T_train):
+            t_now = 1.0 - i / T_train
+            t_next = 1.0 - (i + 1) / T_train
+            dt = t_next - t_now
+            sigma = sigma_fn(t_now)
+            v = flow_net(x_t, t_now, prompts_rep)
+            # SDE Euler: drift = v + 0.5 σ² ∇log p (PF-ODE → SDE conversion, Song 2021)
+            # !!! IMPORTANT: the following drift is a simplified pedagogical placeholder.
+            #     Production implementations follow Flow-GRPO paper Eq.(6) and derive score
+            #     correctly from score = (data_pred - x_t)/σ_t² with the specific
+            #     Rectified Flow / EDM schedule. Refer to paper + official repo for deployment;
+            #     the -v/σ here is only illustrative.
+            drift = v + 0.5 * sigma ** 2 * (-v / (sigma + 1e-6))  # placeholder, see paper Eq.(6)
+            noise = torch.randn_like(x_t)
+            x_next = x_t + drift * dt + sigma * noise * abs(dt) ** 0.5
+            # Gaussian log-prob (transition)
+            mean = x_t + drift * dt
+            std = sigma * abs(dt) ** 0.5
+            log_p = -0.5 * ((x_next - mean) / std).pow(2).sum([1, 2, 3])
+            log_probs_old.append(log_p)
+            x_t = x_next
+            trajectory.append(x_t.clone())
+        x_0 = x_t
+
+    # ── 2. Group-relative advantage ──
+    R = reward_fn(x_0, prompts_rep)                        # [P*G]
+    R = R.view(P, G)
+    mean_R = R.mean(dim=1, keepdim=True)
+    std_R = R.std(dim=1, keepdim=True) + 1e-8
+    A = ((R - mean_R) / std_R).view(P * G)                 # [P*G]
+
+    # ── 3. PPO-clip loss with KL ──
+    loss = 0.0
+    x_t = trajectory[0]
+    for i in range(T_train):
+        t_now = 1.0 - i / T_train
+        v = flow_net(x_t, t_now, prompts_rep)              # grad ON
+        sigma = sigma_fn(t_now)
+        drift = v + 0.5 * sigma ** 2 * (-v / (sigma + 1e-6))
+        dt = -1.0 / T_train
+        mean = x_t + drift * dt
+        std = sigma * abs(dt) ** 0.5
+        log_p_new = -0.5 * ((trajectory[i+1] - mean) / std).pow(2).sum([1, 2, 3])
+        ratio = (log_p_new - log_probs_old[i]).exp()
+        surr1 = ratio * A
+        surr2 = ratio.clamp(1 - eps_clip, 1 + eps_clip) * A
+        loss = loss - torch.min(surr1, surr2).mean()
+
+        # K3 KL estimator
+        with torch.no_grad():
+            v_ref = ref_flow(x_t, t_now, prompts_rep)
+            drift_ref = v_ref + 0.5 * sigma ** 2 * (-v_ref / (sigma + 1e-6))
+            mean_ref = x_t + drift_ref * dt
+            log_p_ref = -0.5 * ((trajectory[i+1] - mean_ref) / std).pow(2).sum([1,2,3])
+        delta = log_p_ref - log_p_new
+        kl_k3 = (delta.exp() - delta - 1)
+        loss = loss + beta * kl_k3.mean()
+
+        x_t = trajectory[i + 1].detach()
+    return loss</code></pre>
+<h3 id="66-combined-reward-signal">6.6 Combined reward signal</h3>
+<pre><code class="language-python">def combined_reward(images, prompts, weights=None):
+    &quot;&quot;&quot;
+    Weighted multi-reward combination — mitigates single-RM hacking.
+    &quot;&quot;&quot;
+    weights = weights or {&quot;image_reward&quot;: 0.4, &quot;hps_v2&quot;: 0.3,
+                          &quot;pickscore&quot;: 0.2, &quot;clip_score&quot;: 0.1}
+    rewards = {}
+    rewards[&quot;image_reward&quot;] = image_reward_model(images, prompts)        # [-1, 4]
+    rewards[&quot;hps_v2&quot;] = hps_v2(images, prompts)                          # [0, 1]
+    rewards[&quot;pickscore&quot;] = pickscore(images, prompts)                    # logits
+    rewards[&quot;clip_score&quot;] = clip_cosine(images, prompts)                 # [-1, 1]
+
+    # ── z-score each individually (different rewards have very different scales) ──
+    normed = {k: (v - v.mean()) / (v.std() + 1e-8) for k, v in rewards.items()}
+
+    # ── weighted + length / safety penalty ──
+    R = sum(weights[k] * normed[k] for k in weights)
+
+    # NSFW penalty (rule-based)
+    nsfw_score = nsfw_detector(images)                                   # [0, 1]
+    R = R - 5.0 * nsfw_score
+
+    return R</code></pre>
+<div class="callout callout-warn"><div class="callout-title">Multi-reward practical experience</div></div>
+<ul><li><strong>Z-score each reward separately</strong>: the scales differ enormously (HPSv2 ~0.25, ImageReward ~1.5, CLIP-Score ~0.3); not normalizing means ImageReward dominates.</li><li><strong>Min is more stable than mean</strong>: <code>R = min(normed.values())</code> forces all RMs to agree on "good", drastically lowering hacking risk (classic reward-ensemble strategy).</li><li><strong>Keep rule-based safety overrides</strong>: NSFW / political / copyright rewards must not be optimized away by RL.</li></ul>
+<h2 id="7-reward-design--failure-modes">§7 Reward Design &amp; failure modes</h2>
+<h3 id="71-reward-model-choices">7.1 Reward model choices</h3>
+<table><thead><tr><th>RM</th><th>Source</th><th>Data</th><th>Scale</th><th>Preference characteristics</th></tr></thead><tbody><tr><td><strong>CLIP-Score</strong></td><td>OpenAI/LAION</td><td>4B image-text pairs</td><td>$[-1, 1]$ cosine</td><td>weak text-image alignment signal; prefers literal caption matching</td></tr><tr><td><strong>ImageReward</strong> (Xu 2023 NeurIPS)</td><td>137K human pairs</td><td>real prompts</td><td>$[-1, 4]$</td><td>aesthetic + alignment combined; prefers high contrast</td></tr><tr><td><strong>HPSv2</strong> (Wu 2023 arXiv 2306.09341)</td><td>798K human pairs</td><td>DiffusionDB-style</td><td>$[0, 1]$</td><td>comprehensive human preference; prefers saturated colors</td></tr><tr><td><strong>PickScore</strong> (Kirstain 2023 NeurIPS)</td><td>Pick-a-Pic 1M pairs</td><td>real users</td><td>logits</td><td>comprehensive; biased toward trained-on-SDXL style</td></tr><tr><td><strong>PiCaR</strong> (rule)</td><td>OpenAI</td><td>counting/OCR</td><td>binary</td><td>rule-based, hack-proof</td></tr></tbody></table>
+<h3 id="72-reward-hacking-gallery-diffusion-specific">7.2 Reward hacking gallery (diffusion-specific)</h3>
+<table><thead><tr><th>Symptom</th><th>Visual feature</th><th>Cause</th></tr></thead><tbody><tr><td><strong>Over-saturation</strong></td><td>color saturation &gt; 100%</td><td>HPSv2 / aesthetic prefers vivid</td></tr><tr><td><strong>Center bias</strong></td><td>subject always centered</td><td>RM training data is centered-subject heavy</td></tr><tr><td><strong>Monotone composition</strong></td><td>different prompts use the same composition</td><td>mode collapse to RM high-score mode</td></tr><tr><td><strong>Tryphobia-like patterns</strong></td><td>dense dot / hole textures</td><td>some RMs prefer "texture richness"</td></tr><tr><td><strong>Watermark hallucination</strong></td><td>fake watermarks appear in corners</td><td>RM training data contains watermarks → learned "watermark = real photo"</td></tr><tr><td><strong>Cartoon shift</strong></td><td>photo-realistic prompts output anime</td><td>RM annotators prefer anime</td></tr><tr><td><strong>Lighting overcooked</strong></td><td>HDR post-processing exaggerated</td><td>aesthetic predictor prefers heavy post-processing</td></tr></tbody></table>
+<h3 id="73-step-level-vs-trajectory-level-reward">7.3 Step-level vs trajectory-level reward</h3>
+<table><thead><tr><th>Dimension</th><th>Trajectory-level</th><th>Step-level</th></tr></thead><tbody><tr><td>Signal location</td><td>only at $x_0$</td><td>at every $t$</td></tr><tr><td>Data acquisition</td><td>easy (one image)</td><td>hard (need step-wise RM or rollout)</td></tr><tr><td>Learning efficiency</td><td>low (sparse)</td><td>high (dense)</td></tr><tr><td>Representative</td><td>DDPO, Diffusion-DPO</td><td>SPO (Liang 2024)</td></tr><tr><td>Engineering difficulty</td><td>low</td><td>high (either train a step-RM or PRM-shepherd-style rollout)</td></tr></tbody></table>
+<div class="callout callout-info"><div class="callout-title">How to train a step-RM</div><p>SPO uses a binary RM "given $x_t$ at step $t$, is $x_{t-1}$ a good transition?". Training data: run multiple trajectories from the base UNet, and assign per-step rewards by backing out from final-$x_0$ rewards (similar to Math-Shepherd's rollout-based PRM).</p></div>
+<h3 id="74-core-mechanisms-to-mitigate-reward-hacking">7.4 Core mechanisms to mitigate reward hacking</h3>
+<ol><li><strong>Reward ensemble</strong>: take min or mean across multiple RMs (HPSv2 + PickScore + ImageReward is the mainstream combo).</li><li><strong>KL anchor</strong>: DPO's $\beta$, DPOK's explicit KL, Flow-GRPO's K3 KL term.</li><li><strong>LoRA scale</strong>: full fine-tune drifts fast; LoRA scale caps reward-hacking ceiling.</li><li><strong>Early stop on reward plateau</strong>: reward up + FID up = hacking signal.</li><li><strong>Composite reward</strong>: rule-based (object count, OCR) + neural RM (aesthetic, alignment) weighted.</li><li><strong>Adversarial RM</strong>: include hacking samples as negatives when training RM.</li></ol>
+<h2 id="8-production-landscape-what-sd3--flux-actually-use">§8 Production landscape: what SD3 / FLUX actually use</h2>
+<h3 id="81-what-the-public-papers--reports-actually-say">8.1 What the public papers / reports actually say</h3>
+<table><thead><tr><th>Model</th><th>Post-training?</th><th>Disclosed content</th></tr></thead><tbody><tr><td><strong>SD 1.5</strong></td><td>partial community DPO / DDPO LoRA</td><td>base is pure LDM; many community fine-tunes</td></tr><tr><td><strong>SDXL</strong></td><td>Stability AI did not explicitly describe post-training</td><td>base + refiner; Pick-a-Pic + Diffusion-DPO community LoRAs are popular</td></tr><tr><td><strong>SDXL Turbo / ADD</strong></td><td>distillation-focused</td><td>Adversarial Diffusion Distillation (2311.17042); essentially 1-step distill, not RL post-training</td></tr><tr><td><strong>SD3</strong> (Stable Diffusion 3, Esser et al. 2024 ICML)</td><td>base uses Rectified Flow + MM-DiT</td><td>paper does not disclose post-training; community suspects internal DPO</td></tr><tr><td><strong>SD3.5 / SD3.5 Turbo</strong></td><td>distill is present; post-training not disclosed</td><td>speculated DPO + distill hybrid</td></tr><tr><td><strong>FLUX.1 dev / pro</strong> (Black Forest Labs 2024)</td><td>undisclosed</td><td>community speculates DPO + distill; pro API is closed-source</td></tr><tr><td><strong>DALL-E 3</strong> (OpenAI 2023)</td><td>"recaptioning + RLHF"</td><td>publicly emphasizes prompt-faithful RLHF</td></tr><tr><td><strong>Imagen 3</strong> (Google 2024)</td><td>undisclosed</td><td>internal alignment pipeline</td></tr><tr><td><strong>DeepFloyd IF</strong></td><td>no post-training</td><td>academic base model</td></tr></tbody></table>
+<h3 id="82-did-sd3--flux-use-post-training">8.2 Did SD3 / FLUX use post-training?</h3>
+<div class="callout callout-warn"><div class="callout-title">Honest answer</div><p>public papers / tech reports <strong>do not explicitly say</strong> RL / DPO post-training was used. But there is indirect evidence:</p></div>
+<ul><li>SD3 paper (arXiv 2403.03206) "Improving Rectified Flow Transformers" section discusses sampling + reflow, with no mention of reward fine-tuning.</li><li>FLUX has no paper at all; the community infers distillation from the model card (FLUX schnell is a 4-step distilled version).</li><li>Stability AI mentioned in the SD3.5-Large release that it was "fine-tuned with improved aesthetics", which could be SFT rather than RL.</li><li>DALL-E 3 paper (OpenAI 2023) explicitly says caption-faithful RLHF was used.</li></ul>
+<p><strong>Industry consensus</strong> (from HuggingFace community + Reddit r/StableDiffusion): closed-source large models (FLUX pro, DALL-E 3, Midjourney v6+) have reward-based fine-tuning but the specifics are undisclosed; open-source bases (SD3.5 base, FLUX dev base) have public training pipelines without RL, but Stability AI's internal dev branches may have it.</p>
+<h3 id="83-an-industrial-grade-pipeline-hypothesis">8.3 An industrial-grade pipeline hypothesis</h3>
+<pre class="diagram"><code>                    ┌─────────────────┐
+                    │  LDM Pretrain   │  several 100M / B images, $L_simple$
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  SFT on Curated │  high-quality prompt-image pairs
+                    │     dataset     │  (Aesthetic &gt; 6.0, no watermark)
+                    └────────┬────────┘
+                             │
+            ┌────────────────┼────────────────┐
+            │                                  │
+   ┌────────▼────────┐              ┌─────────▼────────┐
+   │ Diffusion-DPO   │              │  DRaFT / AlignProp│
+   │ on Pick-a-Pic    │              │   on multi-RM    │
+   └────────┬────────┘              └─────────┬────────┘
+            │                                  │
+            └────────────────┬─────────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │   Distillation  │  4-step / 1-step turbo
+                    │   (ADD / LCM)   │
+                    └────────┬────────┘
+                             │
+                       Production</code></pre>
+<div class="callout callout-info"><div class="callout-title">Conclusion</div><p>post-training most likely happens between "SFT → distill"; in terms of method, industry leans Diffusion-DPO (offline, stable, no sampling needed); DDPO/DPOK have large academic impact but limited production deployment.</p></div>
+<h2 id="9-vs-llm-rlhf-comparison">§9 vs LLM RLHF comparison</h2>
+<h3 id="91-the-full-table">9.1 The full table</h3>
+<table><thead><tr><th>Dimension</th><th>LLM RLHF (RLHF + DPO + GRPO)</th><th>Diffusion Post-Training</th></tr></thead><tbody><tr><td><strong>Trajectory</strong></td><td>$L$ tokens</td><td>$T$ denoising steps</td></tr><tr><td><strong>Action space</strong></td><td>discrete vocab</td><td>continuous $\mathbb{R}^d$</td></tr><tr><td><strong>Reward source</strong></td><td>trained BT-RM / rule (math, code)</td><td>trained image RM (HPSv2/PickScore/ImageReward) / rule (count, OCR)</td></tr><tr><td><strong>Reward sparsity</strong></td><td>terminal only (end of response)</td><td>terminal only ($x_0$)</td></tr><tr><td><strong>On-policy cost</strong></td><td>$L$ forwards</td><td>$T$ forwards + image RM forward</td></tr><tr><td><strong>Offline methods</strong></td><td>DPO / IPO / KTO / SimPO / ORPO</td><td>Diffusion-DPO / D3PO / SPO / KTO / MaPO</td></tr><tr><td><strong>On-policy methods</strong></td><td>PPO / GRPO / RLOO</td><td>DDPO / DPOK / Flow-GRPO</td></tr><tr><td><strong>Direct reward backprop</strong></td><td>❌ (tokens not differentiable)</td><td>✅ (DRaFT / AlignProp / ReFL)</td></tr><tr><td><strong>Memory bottleneck</strong></td><td>4 copies (policy + ref + RM + V)</td><td>1 copy (DPO) / $O(K)$ (DRaFT-K) / $O(T)$ (vanilla backprop)</td></tr><tr><td><strong>Typical $\beta$</strong></td><td>$0.05 \sim 0.5$</td><td>$2000 \sim 5000$ (absorbs $T$-fold coefficient)</td></tr><tr><td><strong>Typical trajectory length</strong></td><td>$L \sim 10^3$ tokens</td><td>$T \sim 20$–$50$ steps</td></tr><tr><td><strong>Mode collapse severity</strong></td><td>medium (vocab is large)</td><td><strong>high</strong> (continuous space easily falls into local modes)</td></tr><tr><td><strong>Reward hacking difficulty</strong></td><td>medium (depends on RM quality)</td><td><strong>high</strong> (visual RMs are easier to hack than BT-RMs)</td></tr></tbody></table>
+<h3 id="92-shared-lessons">9.2 Shared lessons</h3>
+<ol><li><strong>KL anchor is mandatory</strong>: pure RL without ref policy always reward-hacks (LLMs produce vacuous fluff, diffusion produces over-saturated monotonous compositions).</li><li><strong>DPO family &gt;&gt; on-policy RL (engineering-wise)</strong>: no sampling, no value model, offline — true for both LLM and diffusion.</li><li><strong>Reward ensemble counters hacking</strong>: min-of-K RMs is the common mitigation across domains.</li><li><strong>Group-based advantage</strong>: LLM's GRPO/RLOO and diffusion's Flow-GRPO both bypass the value model via group statistics.</li></ol>
+<h3 id="93-diffusion-specific-differences">9.3 Diffusion-specific differences</h3>
+<ul><li><strong>Diffusion has a "backprop" option</strong>: reward differentiability makes DRaFT/AlignProp viable — LLMs cannot do this because sampling is discrete.</li><li><strong>Diffusion has "step-aware" preference</strong>: denoising steps have explicit semantics (high-noise: composition, low-noise: detail); SPO exploits this — LLM tokens lack such natural stratification.</li><li><strong>Diffusion's $\beta$ scale is 1000× larger</strong>: because the ELBO surrogate absorbs the $T$-fold trajectory term.</li></ul>
+<h2 id="10-25-frequently-asked-interview-questions">§10 25 frequently-asked interview questions</h2>
+<p>Three difficulty tiers: L1 = multimodal/diffusion-role basics; L2 = research/alignment-focused; L3 = top-lab hardcore.</p>
+<h3 id="l1-must-know-10-questions">L1 must-know (10 questions)</h3>
+<details>
+<summary>Q1. Why does a diffusion model need post-training? Isn't SFT enough?</summary>
+<ul><li>SFT can only imitate positive examples ("what good looks like"), and cannot learn the <strong>contrastive signal</strong> (A is better than B).</li><li>Post-training provides contrastive signals via reward / preference, lifting alignment, aesthetic, prompt-faithfulness all at once.</li><li>Empirically Diffusion-DPO yields +5-10 points on PickScore, far exceeding continued SFT.</li></ul>
+<p>Saying only "improves image quality" is shallow; must articulate the "contrastive vs imitative signal" distinction.</p>
+</details>
+<details>
+<summary>Q2. What MDP does DDPO treat diffusion as? State/action/reward definitions?</summary>
+<ul><li><strong>State</strong>: $s_t = (x_t, t, c)$</li><li><strong>Action</strong>: $a_t = x_{t-1}$ (sampled from $p_\theta(\cdot \mid x_t, c)$)</li><li><strong>Transition</strong>: deterministic $s_{t-1} = (x_{t-1}, t-1, c)$</li><li><strong>Reward</strong>: $r_t = 0$ for $t > 1$, $r_1 = R(x_0, c)$ (terminal-only)</li></ul>
+<p>Saying "per-step reward" (wrong, only at the terminal); or not knowing the transition is deterministic (noise is built into the action).</p>
+</details>
+<details>
+<summary>Q3. What does Diffusion-DPO substitute for $\log \pi_\theta(y|x)$?</summary>
+<ul><li>Uses an ELBO surrogate: $-\|\epsilon - \epsilon_\theta(x_t, t, c)\|^2$ (DDPM's $L_\text{simple}$) as a proxy for $\log p_\theta(x_0)$.</li><li>This is a (negative) lower-bound term of $\log p_\theta$ — directionally correct.</li><li>Requires paired noise $\epsilon$ ($y_w$ and $y_l$ share the same $\epsilon$) for stability.</li></ul>
+<p>Saying the closed-form $\log p(x_0)$ is used (wrong, diffusion has no closed form); or forgetting paired noise.</p>
+</details>
+<details>
+<summary>Q4. AlignProp and DRaFT core idea? Why is memory $\mathcal{O}(K)$?</summary>
+<ul><li><strong>Core</strong>: reward $R(x_0)$ is differentiable → directly backprop to $\theta$, skipping RL.</li><li>The $T$-step sampler is a differentiable computation graph; <strong>vanilla backprop must store $T$-step activations</strong> → $\mathcal{O}(T)$.</li><li><strong>DRaFT-K / AlignProp</strong>: the first $T-K$ steps use <code>no_grad</code>, only the last $K$ steps retain gradient — memory compressed to $\mathcal{O}(K)$.</li><li>Typically $K=1$ already gives a strong signal.</li></ul>
+<p>Saying K=1 equals REINFORCE (wrong, K=1 is reparameterized gradient with far lower variance than REINFORCE).</p>
+</details>
+<details>
+<summary>Q5. Why is Diffusion-DPO's $\beta$ 1000× larger than LLM DPO's?</summary>
+<ul><li>LLM DPO: $\beta \in [0.05, 0.5]$</li><li>Diffusion-DPO: $\beta \in [2000, 5000]$</li><li>Reason: the diffusion "trajectory log-likelihood" is the sum of $T$ Gaussian log-probs; the single-step $\epsilon$-distance difference absorbs the $T$-fold coefficient. <strong>The effective temperature</strong> is $\beta T$.</li><li>Some implementations explicitly factor out $T$, in which case $\beta$ looks the same order as LLM.</li></ul>
+<p>Saying "diffusion has more noise so β is larger" (wrong, it's the cumulative effect of trajectory length).</p>
+</details>
+<details>
+<summary>Q6. Difference between ImageReward / HPSv2 / PickScore?</summary>
+<table><thead><tr><th></th><th>ImageReward</th><th>HPSv2</th><th>PickScore</th></tr></thead><tbody><tr><td>Data scale</td><td>137K pairs</td><td>798K pairs</td><td>1M pairs (Pick-a-Pic)</td></tr><tr><td>Backbone</td><td>BLIP fine-tuned</td><td>CLIP fine-tuned</td><td>CLIP fine-tuned</td></tr><tr><td>Scale</td><td>$[-1, 4]$</td><td>$[0, 1]$</td><td>logits</td></tr><tr><td>Preference</td><td>aesthetic + alignment</td><td>high contrast + alignment</td><td>SDXL style</td></tr></tbody></table>
+<p>Industrial best practice: <strong>use an ensemble</strong> (at least two).</p>
+<p>Saying they're all the same (wrong, scales and preferences differ substantially).</p>
+</details>
+<details>
+<summary>Q7. Does DDPO sample with DDPM or DDIM? Why?</summary>
+<ul><li><strong>DDPM</strong> (or DDIM-eta=1) — stochastic transition needed.</li><li>DDIM-eta=0 is deterministic with no noise term, so <strong>no action to optimize</strong> → policy gradient is zero.</li><li>Analogy: LLM RL must use sampling (temperature &gt; 0), cannot use greedy.</li></ul>
+<p>Saying DDIM is fine (wrong, eta &gt; 0 is needed); or not knowing stochasticity is a prerequisite for RL.</p>
+</details>
+<details>
+<summary>Q8. Typical reward-hacking symptoms in diffusion?</summary>
+<ul><li><strong>Over-saturation</strong> (color saturation explodes) — HPSv2/aesthetic prefers vivid.</li><li><strong>Center bias</strong> (subject always centered) — RM training data is centered.</li><li><strong>Monotone composition</strong> (same composition across prompts) — mode collapse.</li><li><strong>Watermark hallucination</strong> (fake watermarks in corners) — RM training data contains watermarks.</li><li><strong>Cartoon shift</strong> (photo-realistic prompts produce anime) — RM annotator bias.</li></ul>
+<p>Saying just "over-optimization" is non-specific; you must name at least 3 specific visual symptoms.</p>
+</details>
+<details>
+<summary>Q9. Why is Flow-GRPO's ODE→SDE conversion necessary?</summary>
+<ul><li>The Flow Matching ODE $\dot x = v_\theta$ is <strong>deterministic</strong> — given $x_T$, $x_0$ is uniquely determined.</li><li>RL needs a stochastic policy to explore; the ODE has no sampling dimension.</li><li>ODE→SDE adds the $\sigma\, dW$ noise term; <strong>the marginal $p_t$ is unchanged</strong> (Anderson 1982), but each sample path is different → enables exploration.</li></ul>
+<p>Not knowing the marginal is preserved (wrong, may think SDE changes the distribution).</p>
+</details>
+<details>
+<summary>Q10. How are $y_w$ and $y_l$ noises handled in Diffusion-DPO training?</summary>
+<ul><li><strong>Paired noise</strong>: $x_t^w$ and $x_t^l$ use <strong>the same</strong> $\epsilon$ (i.e. $x_t^w = \sqrt{\bar\alpha_t}x_0^w + \sqrt{1-\bar\alpha_t}\epsilon$, with $x_t^l$ similarly using the same $\epsilon$).</li><li>Without pairing, the $\beta$ scale becomes incomparable, loss variance rises sharply, and training is unstable.</li><li>This is the most overlooked implementation detail of Diffusion-DPO.</li></ul>
+<p>Not knowing about paired noise (wrong); or thinking $\epsilon$ refers to $\epsilon_\theta$'s prediction (wrong — here $\epsilon$ is the q-sample noise).</p>
+</details>
+<h3 id="l2-advanced-10-questions">L2 advanced (10 questions)</h3>
+<details>
+<summary>Q11. Derive Diffusion-DPO loss (starting from the KL-regularized optimal solution).</summary>
+<ol><li>KL-regularized objective: $\max_p \mathbb{E}[R] - \beta\, \text{KL}(p \Vert p_\text{ref})$, optimal $p^* \propto p_\text{ref} \exp(R/\beta)$.</li><li>Solve for implicit reward: $R(x_0, c) = \beta \log(p^*/p_\text{ref}) + \beta \log Z(c)$.</li><li>Plug into BT: $P(y_w \succ y_l) = \sigma(R_w - R_l)$; $\log Z$ cancels in the difference.</li><li>Replace $p^* \to p_\theta$; substitute the ELBO surrogate for $\log p_\theta$: $-L_\text{simple} = -\|\epsilon - \epsilon_\theta\|^2$ (at $x_t = q\text{-sample}(x_0, t, \epsilon)$).</li><li>Expectation over $t \sim U(1, T)$; the loss becomes $-\log\sigma(\beta T [\Delta_w - \Delta_l])$, $\Delta_y = \|\epsilon - \epsilon_\text{ref}\|^2 - \|\epsilon - \epsilon_\theta\|^2$.</li></ol>
+<p>Reciting the final formula but unable to explain why $\log Z$ cancels; or not knowing the source of the ELBO surrogate.</p>
+</details>
+<details>
+<summary>Q12. How does AlignProp's $K$-step backprop trade memory against performance?</summary>
+<ul><li>Memory: $\mathcal{O}(K \cdot M_\text{UNet})$. SDXL single forward ~ 8 GB activation; $K=1 \to 24$ GB (incl. weights + grad); $K=5 \to 60$ GB; $K=10 \to 120$ GB.</li><li>Performance: $K=1$ empirically reaches 95% of $K=5$; $K \ge 5$ shows no significant gain on most rewards.</li><li><strong>Intuition</strong>: the last step $x_1 \to x_0$ has the largest effect on the terminal; the variance from the first 49 steps is compressed.</li><li>Industrial standard is $K=1$ (24 GB, single-GPU trainable).</li></ul>
+<p>Saying "the larger K the better" (wrong, performance curve saturates); or not knowing the memory magnitude.</p>
+</details>
+<details>
+<summary>Q13. Difference between REINFORCE and PPO in DDPO? Which is preferred in production?</summary>
+<ul><li><strong>DDPO-SF (REINFORCE)</strong>: $\hat g = \sum_t \nabla \log p_\theta \cdot (R - b)$, simple but high variance.</li><li><strong>DDPO-IS (PPO-clip)</strong>: importance ratio $\rho_t = p_\theta/p_{\theta_\text{old}}$, multiple updates per batch, clip $\rho_t$.</li><li><strong>Per-step ratio</strong>, not trajectory ratio (avoids variance blow-up from multiplying $T$ ratios).</li><li>Production prefers PPO: more stable, better sample efficiency.</li></ul>
+<p>Saying "trajectory-level ratio" (wrong, per-step); or not knowing both are DDPO variants.</p>
+</details>
+<details>
+<summary>Q14. How does SPO obtain the in-step preference pair? Why is a step-RM needed?</summary>
+<ul><li><strong>In-step</strong>: given $x_t$, independently sample two $x_{t-1}^a, x_{t-1}^b$ (use the policy's stochastic transition $p_\theta(\cdot \mid x_t)$ twice).</li><li>Use a <strong>step-wise reward model</strong> $R_\text{step}(x_{t-1}, x_t, c, t)$ to choose the winner.</li><li>step-RM training data: roll out many trajectories from the base UNet; the per-step reward is back-derived from the terminal reward (similar to Math-Shepherd's rollout-based PRM).</li><li>Could use a terminal RM instead, but then rolling out to $x_0$ for scoring is $T$× more expensive.</li></ul>
+<p>Not knowing how to obtain the in-step pair (wrong, must sample twice); or not knowing step-RM is SPO-specific.</p>
+</details>
+<details>
+<summary>Q15. Substantive difference between Diffusion-DPO and D3PO?</summary>
+<ul><li><strong>Derivation path</strong>: Diffusion-DPO uses the ELBO surrogate (single-step $\epsilon$-distance); D3PO uses the full trajectory log-ratio.</li><li><strong>Mathematical equivalence</strong>: under the ELBO lower bound and expectation over $t$, D3PO's trajectory form reduces to Diffusion-DPO's single-step form.</li><li><p><strong>Practical differences</strong>:</p>
+<ul><li>Diffusion-DPO computes UNet forward once per step (policy + ref), cheap.</li><li>D3PO strictly requires forward over the full trajectory $T$ times.</li></ul></li><li>Production mostly uses Diffusion-DPO (cheap + stable).</li></ul>
+<p>Saying "completely different" (wrong, they are theoretically equivalent); or not knowing D3PO is also a DPO-family method.</p>
+</details>
+<details>
+<summary>Q16. What is Flow-GRPO's denoising reduction? Why doesn't it degrade?</summary>
+<ul><li>During training, the SDE uses few steps ($T_\text{train} = 10$); inference still uses full steps ($T_\text{infer} = 28$–$50$).</li><li><p><strong>Empirically little degradation, because</strong> (note: this is empirical observation + approximation, not strict equivalence):</p>
+<ul><li>The SDE's <strong>continuous marginal</strong> $p_t$ is independent of step count; but <strong>the discrete sampler's actual distribution</strong> depends on step count — fewer steps yields a higher-discretization-error approximation. Strictly, "same marginal" only holds in the continuous limit.</li><li>RL learns the direction correction of $v_\theta$; the <strong>direction signal</strong> is loosely coupled to step count (this is empirical observation).</li><li>No degradation on rule-based rewards like GenEval/OCR; slight but acceptable degradation on more subjective rewards.</li></ul></li><li><strong>Saves sampling cost</strong>: each prompt needs $G \cdot T_\text{train}$ forwards → 1/3 the cost.</li></ul>
+<p>Not knowing the marginal is invariant (wrong); or thinking train/inference step counts must match.</p>
+</details>
+<details>
+<summary>Q17. How does MaPO remove the reference model? What does the loss look like?</summary>
+<ul><li>Does not use $\log(p_\theta/p_\text{ref})$; uses an <strong>absolute likelihood margin</strong> directly:</li></ul>
+<p>$$\mathcal{L}_\text{MaPO} = -\log\sigma\!\big(\beta(\hat\ell_w - \hat\ell_l) - \gamma\big) + \alpha \hat\ell_w$$</p>
+<ul><li>$\hat\ell = -\|\epsilon - \epsilon_\theta\|^2$ is the likelihood surrogate.</li><li>$\gamma$ is the margin (similar to SimPO); the $\alpha\hat\ell_w$ term prevents "both sides dropping".</li><li>Saves half the memory (no ref UNet), trains 15% faster, and solves the reference-mismatch problem (stable when fine-tuning to a stylistically distant target).</li></ul>
+<p>Saying just "remove the ref" (wrong — need the likelihood term to prevent degeneration); not knowing about reference mismatch.</p>
+</details>
+<details>
+<summary>Q18. Why is reward-ensemble min better than mean?</summary>
+<ul><li>mean: can still be hacked when one high-scoring RM dominates.</li><li>min: requires all RMs to agree on "good" before the reward is high → hacking must simultaneously fool all RMs, exponentially harder.</li><li>Equivalent to conservative aggregation (Coste 2024 ICLR for LLM); same idea applies to diffusion.</li><li>Cost: reward becomes conservative, gains are smaller.</li><li>Industry often uses <code>R = mean - k * std</code> (includes an uncertainty penalty) as a compromise.</li></ul>
+<p>Saying only "prevents hacking" without explaining why min; or not knowing this is also an LLM ensemble strategy.</p>
+</details>
+<details>
+<summary>Q19. What unique advantage does Diffusion-KTO have over Diffusion-DPO?</summary>
+<ul><li>Only needs <strong>per-image binary feedback</strong> (thumbs up/down), <strong>no paired comparison required</strong>.</li><li>Industrial scenarios collect far more user reactions (likes/dislikes) than paired comparisons → KTO makes this data usable.</li><li>The prospect-theoretic value function $v(\cdot)$ is asymmetric over positive vs negative feedback (loss aversion).</li><li>No "which is better" annotation cost.</li></ul>
+<p>Not knowing KTO is unpaired (wrong — that's the whole point of KTO); or not knowing the prospect-theory origin.</p>
+</details>
+<details>
+<summary>Q20. Why is diffusion's KL anchor trajectory-level rather than token-level?</summary>
+<ul><li>LLM's KL is per-token: $\sum_t \log(\pi_\theta(y_t)/\pi_\text{ref}(y_t))$.</li><li>Diffusion's KL is per-step (per-denoising-step), not per-pixel: $\sum_t \text{KL}(p_\theta(\cdot \mid x_t) \Vert p_\text{ref}(\cdot \mid x_t))$.</li><li>Two-Gaussian KL has a closed form: $\text{KL} = \frac{1}{2}\big[(\mu_\theta - \mu_\text{ref})^2/\sigma^2 + (\sigma_\theta/\sigma_\text{ref})^2 - 1 - 2\log(\sigma_\theta/\sigma_\text{ref})\big]$.</li><li>Pixels are not independent (convolution/attention), so the KL is per-image-level rather than per-pixel.</li></ul>
+<p>Saying "per-pixel KL" (wrong, per-step); not knowing the closed-form Gaussian KL.</p>
+</details>
+<h3 id="l3-top-lab-questions-5-questions">L3 top-lab questions (5 questions)</h3>
+<details>
+<summary>Q21. Derive Diffusion-DPO loss from the reverse ELBO, and explain why the ELBO surrogate works.</summary>
+<ol><li>DDPM ELBO: $\log p_\theta(x_0) \ge -\sum_{t=2}^T \text{KL}(q(x_{t-1}|x_t,x_0) \Vert p_\theta(x_{t-1}|x_t)) + \log p_\theta(x_0|x_1) - \text{KL}(q(x_T|x_0) \Vert p(x_T))$</li><li>Simplify (Ho 2020): $-\log p_\theta(x_0) \le L_\text{simple} + C$, $L_\text{simple} = \mathbb{E}_{t,\epsilon}\|\epsilon - \epsilon_\theta(x_t,t)\|^2$.</li><li>KL-regularized optimum $p^* \propto p_\text{ref}\exp(R/\beta)$; solve for $R = \beta\log(p^*/p_\text{ref}) + \beta\log Z$.</li><li>Plug into BT; $\log Z$ cancels.</li><li>Use the ELBO surrogate for $\log p$: $\log p_\theta(x_0) \approx -L_\text{simple}$ (<strong>note</strong>: this is the negation of the upper bound, used as a single-sample estimate — strictly, it is one term of the lower bound, not $\log p$ itself, but it works numerically as a DPO implicit-reward proxy).</li><li>Take expectation over $t$ to obtain the final loss.</li></ol>
+<p><strong>Deeper reason the ELBO surrogate works</strong>: DPO's implicit reward is $\beta\log(p_\theta/p_\text{ref})$ — it only depends on <strong>relative</strong> likelihood. The ELBO surrogate's constant term ($C$) cancels between $p_\theta$ and $p_\text{ref}$ (both use the same architecture); only the $-\|\epsilon - \epsilon_\theta\|^2$ difference remains. So even though ELBO isn't a tight bound for $\log p$, <strong>the difference is cancellable</strong>.</p>
+<p>Only able to write the final formula but cannot trace the derivation chain; or not knowing constant cancellation is the key.</p>
+</details>
+<details>
+<summary>Q22. Is AlignProp's $\mathcal{O}(K)$ memory truly unavoidable for $K$-step backprop?</summary>
+<p><strong>In theory</strong> yes, but expensive in practice:</p>
+<ol><li><p><strong>Gradient checkpointing</strong>: trade activation storage for recompute. Each forward step does not store activations; on backward, redo forward to compute gradient.</p>
+<ul><li>Memory: from $\mathcal{O}(K \cdot M)$ down to $\mathcal{O}(\sqrt{K} \cdot M)$ + $\mathcal{O}(K \cdot \text{state})$.</li><li>Cost: backward is 2-3× slower.</li></ul></li><li><p><strong>Reversible ResNet</strong>: if the UNet has a reversible architecture (i-RevNet style), backward can derive input from output without storing activations.</p>
+<ul><li>But Stable Diffusion / SDXL UNet is not reversible.</li></ul></li><li><p><strong>Implicit gradient</strong>: use the implicit function theorem under a fixed-point assumption.</p>
+<ul><li>Requires the sampler to converge to a fixed point, which diffusion does not satisfy.</li></ul></li><li><strong>Truncated backprop with control variates</strong>: DRaFT-K is already in this direction; theoretically, adding control variates can further reduce variance but not memory.</li></ol>
+<p><strong>Practical answer</strong>: $K=1$ + gradient checkpointing + LoRA is the engineering optimum. The fundamental reason $\mathcal{O}(K)$ is unavoidable is that the sampler is not reversible computation.</p>
+<p>Only saying gradient checkpointing is incomplete; not knowing about the reversibility assumption.</p>
+</details>
+<details>
+<summary>Q23. Geometric meaning of advantage on the vector field $v_\theta$ in Flow-GRPO?</summary>
+<p>GRPO's advantage acts on the vector field space as follows:</p>
+<ol><li><strong>Group statistics</strong>: for the same prompt $c$, sample $G$ SDE trajectories; each yields a different $x_0^{(i)}$; the reward $r_i$ gives the entire trajectory a single advantage $\hat A_i = (r_i - \bar r)/\sigma_r$.</li><li><strong>Gradient along trajectory</strong>: $\nabla_\theta L = \sum_t \nabla_\theta \log p_\theta(x_{t-1}^{(i)} \mid x_t^{(i)}) \cdot \hat A_i$. Under a Gaussian transition, $\log p \propto -(x_{t-1} - \mu_\theta)^2/(2\sigma^2)$, so $\nabla_\theta \log p \propto (x_{t-1} - \mu_\theta)\nabla_\theta \mu_\theta / \sigma^2$.</li><li><strong>Physical meaning of $\mu_\theta$</strong>: under the Flow Matching SDE, $\mu_\theta = x_t + (v_\theta + \frac{1}{2}\sigma^2 s_\theta) dt$; $\nabla_\theta \mu_\theta \approx dt \cdot \nabla_\theta v_\theta$ (ignoring the score term).</li><li><strong>Geometric meaning</strong>: when $\hat A_i > 0$, push $v_\theta(t, x_t^{(i)})$ toward the direction $(x_{t-1}^{(i)} - x_t^{(i)})/dt$ (the direction the trajectory actually took); when advantage $< 0$, push the opposite way.</li><li><strong>vs ODE perspective</strong>: equivalent to "group-relative direction reweighting" in vector field space — good trajectories make $v_\theta$ point along their direction at that $(t, x_t)$, bad ones the opposite.</li></ol>
+<p>This is "reward-weighted importance sampling" in vector field space: each SDE trajectory is one "proposal direction" for $v_\theta$, and the advantage decides whether to follow it.</p>
+<p>Failing to articulate any geometry is 0 points; saying "reweighting" without specifying the space is half credit.</p>
+</details>
+<details>
+<summary>Q24. Did SD3 / FLUX really use RL post-training? How can you tell?</summary>
+<p><strong>Honest answer</strong>: public papers / tech reports <strong>do not explicitly say</strong> RL / DPO was used. But there are clues:</p>
+<ol><li><strong>SD3 paper (arXiv 2403.03206)</strong>: discusses Rectified Flow + MM-DiT + reflow only; no reward fine-tuning mentioned.</li><li><strong>FLUX</strong>: no paper at all; the model card just says "trained on a large image-text dataset".</li><li><strong>DALL-E 3 (OpenAI 2023)</strong>: explicitly says caption-faithful RLHF (rewrite caption + RM) is used.</li><li><strong>Industry consensus</strong>: closed-source large models (FLUX pro, DALL-E 3, Midjourney v6+) almost certainly have reward-based fine-tuning, but the method is undisclosed.</li></ol>
+<p><strong>How to test (black-box)</strong>:</p>
+<ul><li>Generate 100 images for the same prompt; low FID-100 / multi-mode diversity → likely RL/DPO (mode collapse signal).</li><li>GenEval high but portrait style monolithic → reward over-optimization signal.</li><li>Excessive response to "vibrant"/"colorful" prompts → traces of HPSv2/aesthetic RM.</li></ul>
+<p><strong>Conclusion</strong>: FLUX likely has internal DPO + distill hybrid; SD3.5 likely has SFT + possibly DPO. But <strong>no public evidence</strong> — the key to this question is to answer "undisclosed but with indirect evidence", and avoid making up technical details.</p>
+<p>Saying directly "SD3 uses Diffusion-DPO" is wrong (paper says no such thing); the answer should be "undisclosed but community-inferred with evidence list".</p>
+</details>
+<details>
+<summary>Q25. If you were to design a diffusion post-training pipeline from scratch, how would you choose?</summary>
+<p><strong>Depends on constraints</strong>. A generic recommendation:</p>
+<p><strong>Phase 1: preference data collection</strong></p>
+<ul><li>Collect paired preference (Pick-a-Pic style): expensive but DPO-ready.</li><li>Collect binary feedback (thumbs up/down): cheap, use Diffusion-KTO.</li><li>Collect rule-based ground truth (GenEval-style prompts + automated verifier): cheap, use Flow-GRPO.</li></ul>
+<p><strong>Phase 2: algorithm choice</strong></p>
+<ul><li><strong>Default Diffusion-DPO</strong>: offline, stable, cheap, mature community code (HuggingFace <code>diffusers</code> supports it directly).</li><li><strong>If the base is Flow Matching (SD3/FLUX)</strong>: use Flow-GRPO, with rule-based rewards prioritized.</li><li><strong>If fine-tuning to a new style / memory constrained</strong>: use MaPO (no ref, saves half the memory).</li><li><strong>If reward is differentiable and you want to extract maximum signal</strong>: DRaFT-1 + LoRA, paired with HPSv2 + PickScore ensemble.</li><li><strong>NOT preferred: DDPO</strong>: on-policy sampling is too expensive, engineering complexity is high, no clear advantage over DPO.</li></ul>
+<p><strong>Phase 3: reward design</strong></p>
+<ul><li><strong>Multi-RM ensemble</strong> (min or mean - k·std): HPSv2 + PickScore + ImageReward.</li><li><strong>Add rule-based safety</strong>: NSFW detector hard penalty.</li><li><strong>Add rule-based alignment</strong>: GenEval automated verifier (object count, OCR).</li><li><strong>Z-score each RM separately</strong>.</li></ul>
+<p><strong>Phase 4: monitoring and early stop</strong></p>
+<ul><li>Compute reward + FID-100k every N steps; reward up + FID up = hacking signal.</li><li>KL budget monitoring: stop if $\text{KL}(p_\theta \Vert p_\text{ref}) > K_\text{target}$.</li><li>Human blind A/B (base vs RL) every 1000 steps.</li></ul>
+<p><strong>Phase 5: distillation handoff</strong></p>
+<ul><li>After post-training, do ADD / LCM distillation to 4-step / 1-step.</li><li>Note: distillation can eliminate some RL gains; consider distill-aware post-training.</li></ul>
+<p>Just answering "use Diffusion-DPO" is shallow; the answer should articulate "phase decomposition + multi-reward + monitoring + distill handoff".</p>
+</details>
+<h2 id="a-appendix">§A Appendix</h2>
+<h3 id="a1-key-papers-with-arxiv-ids">A.1 Key papers (with arXiv IDs)</h3>
+<table><thead><tr><th>Paper</th><th>One-line summary</th><th>arXiv</th><th>Venue</th></tr></thead><tbody><tr><td><strong>DDPO</strong></td><td>treat diffusion as an MDP, train with REINFORCE/PPO</td><td><a href="https://arxiv.org/abs/2305.13301">2305.13301</a></td><td>ICLR 2024</td></tr><tr><td><strong>DPOK</strong></td><td>KL-regularized RL for diffusion</td><td><a href="https://arxiv.org/abs/2305.16381">2305.16381</a></td><td>NeurIPS 2023</td></tr><tr><td><strong>DRaFT</strong></td><td>direct reward backprop, last $K$ steps</td><td><a href="https://arxiv.org/abs/2309.17400">2309.17400</a></td><td>ICLR 2024</td></tr><tr><td><strong>AlignProp</strong></td><td>reward backprop with randomized truncation</td><td><a href="https://arxiv.org/abs/2310.03739">2310.03739</a></td><td>ICLR 2024</td></tr><tr><td><strong>ImageReward / ReFL</strong></td><td>137K human pair RM + single-step reward fine-tune</td><td><a href="https://arxiv.org/abs/2304.05977">2304.05977</a></td><td>NeurIPS 2023</td></tr><tr><td><strong>HPSv2</strong></td><td>798K human pair RM</td><td><a href="https://arxiv.org/abs/2306.09341">2306.09341</a></td><td>arXiv 2023</td></tr><tr><td><strong>PickScore (Pick-a-Pic)</strong></td><td>1M user pairs, CLIP RM</td><td><a href="https://arxiv.org/abs/2305.01569">2305.01569</a></td><td>NeurIPS 2023</td></tr><tr><td><strong>Diffusion-DPO</strong></td><td>ELBO surrogate + DPO loss</td><td><a href="https://arxiv.org/abs/2311.12908">2311.12908</a></td><td>CVPR 2024</td></tr><tr><td><strong>D3PO</strong></td><td>trajectory-level DPO for diffusion</td><td><a href="https://arxiv.org/abs/2311.13231">2311.13231</a></td><td>CVPR 2024</td></tr><tr><td><strong>SPO</strong></td><td>step-aware preference + step-RM</td><td><a href="https://arxiv.org/abs/2406.04314">2406.04314</a></td><td>arXiv 2024</td></tr><tr><td><strong>Diffusion-KTO</strong></td><td>unpaired binary feedback (KTO for diffusion)</td><td><a href="https://arxiv.org/abs/2404.04465">2404.04465</a></td><td>NeurIPS 2024</td></tr><tr><td><strong>MaPO</strong></td><td>margin-aware, no ref</td><td><a href="https://arxiv.org/abs/2406.06424">2406.06424</a></td><td>arXiv 2024</td></tr><tr><td><strong>Flow-GRPO</strong></td><td>GRPO for Flow Matching via ODE→SDE</td><td><a href="https://arxiv.org/abs/2505.05470">2505.05470</a></td><td>arXiv 2025</td></tr><tr><td><strong>SD3 (Rectified Flow + MM-DiT)</strong></td><td>base model</td><td><a href="https://arxiv.org/abs/2403.03206">2403.03206</a></td><td>ICML 2024</td></tr><tr><td><strong>Constitutional AI (origin of RLAIF)</strong></td><td>AI feedback replaces human</td><td><a href="https://arxiv.org/abs/2212.08073">2212.08073</a></td><td>arXiv 2022</td></tr><tr><td><strong>KTO (LLM)</strong></td><td>prospect theory alignment</td><td><a href="https://arxiv.org/abs/2402.01306">2402.01306</a></td><td>arXiv 2024</td></tr></tbody></table>
+<h3 id="a2-common-reward-model-resources">A.2 Common reward model resources</h3>
+<ul><li><strong>ImageReward</strong>: https://github.com/THUDM/ImageReward</li><li><strong>HPSv2</strong>: https://github.com/tgxs002/HPSv2</li><li><strong>PickScore</strong>: https://github.com/yuvalkirstain/PickScore</li><li><strong>CLIP</strong>: OpenAI / OpenCLIP, multiple backbones available</li></ul>
+<h3 id="a3-open-source-training-code">A.3 Open-source training code</h3>
+<ul><li><strong>TRL (HuggingFace)</strong>: <code>diffusers</code> + <code>DPO Trainer</code> for Diffusion-DPO (most mature)</li><li><strong>DDPO original repo</strong>: https://github.com/kvablack/ddpo-pytorch</li><li><strong>AlignProp</strong>: https://github.com/mihirp1998/AlignProp</li><li><strong>DRaFT (Google research)</strong>: https://github.com/clarkjkr/draft (Clark et al. 2024 ICLR)</li><li><strong>MaPO</strong>: https://github.com/mapo-t2i/mapo</li><li><strong>Flow-GRPO</strong>: see paper arXiv 2505.05470 for the official implementation</li></ul>
+<h3 id="a4-engineering-footgun-checklist">A.4 Engineering footgun checklist</h3>
+<table><thead><tr><th>Footgun</th><th>Fix</th></tr></thead><tbody><tr><td>Diffusion-DPO without paired noise</td><td>$\epsilon$ for $x_t^w$ and $x_t^l$ must be shared</td></tr><tr><td>DDPO with DDIM-eta=0</td><td>must use eta&gt;0 or DDPM, otherwise gradient is zero</td></tr><tr><td>AlignProp memory explosion</td><td>$K=1$ + gradient checkpoint + LoRA</td></tr><tr><td>Reward scales not normalized</td><td>z-score each RM separately</td></tr><tr><td>FID crashes after RL</td><td>add KL anchor or reward ensemble</td></tr><tr><td>$\beta$ won't move</td><td>Diffusion-DPO uses $\beta \in [2000, 5000]$, not the LLM 0.1</td></tr><tr><td>Flow-GRPO trains slowly</td><td>use denoising reduction ($T_\text{train} < T_\text{infer}$)</td></tr><tr><td>MaPO blows up</td><td>the $\alpha\hat\ell_w$ term must be large enough to prevent likelihood collapse</td></tr><tr><td>Step-RM won't train</td><td>use rollout-based auto-labeling (Math-Shepherd-style)</td></tr><tr><td>Reward hacking undetected</td><td>simultaneously monitor reward + FID + human blind A/B</td></tr></tbody></table>
+<h3 id="a5-mapping-back-to-0-tldr">A.5 Mapping back to §0 TL;DR</h3>
+<table><thead><tr><th>TL;DR point</th><th>See section</th></tr></thead><tbody><tr><td>1. Why it's hard</td><td>§1</td></tr><tr><td>2. Three main lines</td><td>§1.2</td></tr><tr><td>3. DDPO</td><td>§2.1–2.4</td></tr><tr><td>4. DRaFT / AlignProp</td><td>§3.2–3.3</td></tr><tr><td>5. Diffusion-DPO</td><td>§4.1</td></tr><tr><td>6. D3PO</td><td>§4.2</td></tr><tr><td>7. SPO</td><td>§4.3</td></tr><tr><td>8. Flow-GRPO</td><td>§5</td></tr><tr><td>9. Reward hacking</td><td>§3.6 + §7</td></tr></tbody></table>
+<div class="callout callout-good"><div class="callout-title">Learning checkpoint</div></div>
+<ul><li>Can verbally describe the Diffusion-DPO loss form + paired-noise detail</li><li>Can explain why AlignProp's $K=1$ is enough + memory $\mathcal{O}(K)$</li><li>Can write DDPO's state/action/reward + per-step ratio</li><li>Can explain why Flow-GRPO's ODE→SDE conversion is necessary + denoising reduction</li><li>Know the honest answer about whether SD3/FLUX used RL (publicly undisclosed)</li></ul>
+
+<footer class="aris-footer">
+  Generated by <a href="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/render-html/SKILL.md">ARIS <code>/render-html</code></a> ·
+  source path <code>docs/tutorials/diffusion_post_training_tutorial_en.md</code> ·
+  SHA256 <code>6143ed98abc2</code> ·
+  generated at 2026-05-19 18:54 UTC.
+  This is a generated view — edit the source Markdown, then re-render.
+</footer>
+</main>
+
+</div>
+</body>
+</html>
