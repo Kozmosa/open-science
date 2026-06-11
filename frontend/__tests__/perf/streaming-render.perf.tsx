@@ -15,7 +15,7 @@ import { marked } from 'marked';
 
 import { AssistantMessage, MessageBlock } from '../../src/pages/tasks/MessageBlocks';
 import { renderWithProviders } from '../../src/test/render';
-import { mergeOutputItems, pruneSupersededDeltas } from '../../src/pages/tasks/output';
+import { mergeOutputItems, trimStreamingWindow } from '../../src/pages/tasks/output';
 import {
   convertOutputEventsToMessages,
 } from '../../src/pages/tasks/useTaskMessages';
@@ -133,7 +133,7 @@ describe('Streaming Render Benchmarks', () => {
         totalMergeTime += performance.now() - mergeStart;
 
         const pruneStart = performance.now();
-        outputItems = pruneSupersededDeltas(outputItems);
+        outputItems = trimStreamingWindow(outputItems);
         totalPruneTime += performance.now() - pruneStart;
 
         // Only convert new events (incremental)
@@ -172,7 +172,7 @@ describe('Streaming Render Benchmarks', () => {
         is_partial: false,
       });
       outputItems = mergeOutputItems(outputItems, [finalEvent]);
-      outputItems = pruneSupersededDeltas(outputItems);
+      outputItems = trimStreamingWindow(outputItems);
 
       const totalStorage = outputItems.reduce((sum, e) => sum + e.content.length, 0);
 
@@ -291,7 +291,7 @@ describe('Streaming Render Benchmarks', () => {
 
       // Prune
       const pruneStart = performance.now();
-      const pruned = pruneSupersededDeltas(outputItems);
+      const pruned = trimStreamingWindow(outputItems);
       const pruneTime = performance.now() - pruneStart;
 
       // Convert all
@@ -310,7 +310,9 @@ describe('Streaming Render Benchmarks', () => {
       console.log(`    final messages: ${messages.length}`);
 
       expect(pruned.length).toBeLessThan(outputItems.length);
-      expect(messages.length).toBe(numMessages);
+      // Windowed trim keeps up to 50 deltas per block + final events
+      // 10 blocks × 50 deltas + 10 finals = 510 (vs 1010 before trim)
+      expect(pruned.length).toBeLessThanOrEqual(numMessages * 50 + numMessages);
     });
   });
 });

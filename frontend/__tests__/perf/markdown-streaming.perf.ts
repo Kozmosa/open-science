@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { marked } from 'marked';
 
-import { mergeOutputItems, getNextOutputSeq, pruneSupersededDeltas } from '../../src/pages/tasks/output';
+import { mergeOutputItems, getNextOutputSeq, trimStreamingWindow } from '../../src/pages/tasks/output';
 import {
   convertOutputEventsToMessages,
 } from '../../src/pages/tasks/useTaskMessages';
@@ -135,7 +135,7 @@ describe('Markdown Streaming Performance Benchmarks', () => {
       it(`accumulated mode ${size} chars — prunes quadratic events`, () => {
         const events = generateStreamingEvents(generateFormulaMarkdown(size), 'accumulated');
         const start = performance.now();
-        const pruned = pruneSupersededDeltas(events);
+        const pruned = trimStreamingWindow(events);
         const elapsed = performance.now() - start;
 
         const beforeBytes = events.reduce((sum, e) => sum + e.content.length, 0);
@@ -154,7 +154,7 @@ describe('Markdown Streaming Performance Benchmarks', () => {
       it(`delta mode ${size} chars — prunes after final event`, () => {
         const events = generateStreamingEvents(generateFormulaMarkdown(size), 'delta');
         const start = performance.now();
-        const pruned = pruneSupersededDeltas(events);
+        const pruned = trimStreamingWindow(events);
         const elapsed = performance.now() - start;
 
         const beforeBytes = events.reduce((sum, e) => sum + e.content.length, 0);

@@ -5,6 +5,7 @@ import json
 import shlex
 import sqlite3
 from collections.abc import Callable
+import threading
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -160,6 +161,12 @@ class AgenticResearcherService:
         self._engines: dict[HarnessEngineType, HarnessEngine] = {}
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._initialized = False
+        # Streaming delta buffer: thinking/text deltas are held in memory and
+        # only the final (is_partial=False) event is persisted.  This avoids
+        # writing dozens of tiny delta rows per streaming block to SQLite.
+        self._stream_buffers: dict[str, list[TaskOutputEvent]] = {}
+        self._seq_cache: dict[str, int] = {}
+        self._stream_lock = threading.Lock()
 
     def initialize(self) -> None:
         if self._initialized:
@@ -456,6 +463,10 @@ class AgenticResearcherService:
     def get_output(
         self, task_id: str, after_seq: int = 0, limit: int = 200
     ) -> list[TaskOutputEvent]:
+        # Snapshot in-memory streaming deltas (thread-safe)
+        with self._stream_lock:
+            pending = [e for e in self._stream_buffers.get(task_id, []) if e.seq > after_seq]
+
         with closing(self._connect()) as conn:
             rows = conn.execute(
                 """
@@ -466,7 +477,7 @@ class AgenticResearcherService:
                 """,
                 (task_id, after_seq, limit),
             ).fetchall()
-        return [
+        db_events = [
             TaskOutputEvent(
                 task_id=row["task_id"],
                 seq=row["seq"],
@@ -476,20 +487,34 @@ class AgenticResearcherService:
             )
             for row in rows
         ]
+        # Merge pending deltas with persisted events, ordered by seq
+        if not pending:
+            return db_events
+        merged = sorted(pending + db_events, key=lambda e: e.seq)
+        return merged[:limit]
 
     async def append_output(self, task_id: str, kind: str, content: str) -> TaskOutputEvent:
         return await asyncio.to_thread(self._append_output_sync, task_id, kind, content)
 
+    def _next_seq(self, task_id: str) -> int:
+        """Return the next output seq, backed by an in-memory counter."""
+        with self._stream_lock:
+            if task_id not in self._seq_cache:
+                with closing(self._connect()) as conn:
+                    row = conn.execute(
+                        "SELECT latest_output_seq FROM tasks WHERE task_id = ?",
+                        (task_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise TaskNotFoundError(f"Task not found: {task_id}")
+                    self._seq_cache[task_id] = int(row["latest_output_seq"])
+            self._seq_cache[task_id] += 1
+            return self._seq_cache[task_id]
+
     def _append_output_sync(self, task_id: str, kind: str, content: str) -> TaskOutputEvent:
         now = self._now()
+        seq = self._next_seq(task_id)
         with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT latest_output_seq FROM tasks WHERE task_id = ?",
-                (task_id,),
-            ).fetchone()
-            if row is None:
-                raise TaskNotFoundError(f"Task not found: {task_id}")
-            seq = int(row["latest_output_seq"]) + 1
             conn.execute(
                 """
                 INSERT INTO task_outputs (task_id, seq, kind, content, created_at)
@@ -802,7 +827,28 @@ class AgenticResearcherService:
     async def _handle_engine_event(self, task_id: str, event: EngineEvent) -> None:
         kind = "lifecycle" if event.event_type in {"status", "system"} else event.event_type
         content = self._event_content(event)
-        await self.append_output(task_id, kind, content)
+
+        # Streaming deltas (is_delta=True) are buffered in memory only.
+        # The final event (is_partial=False) carries the full accumulated
+        # text and is persisted to SQLite.  This avoids writing dozens of
+        # tiny delta rows per thinking/text block.
+        payload = event.payload
+        if (
+            isinstance(payload, dict)
+            and payload.get("is_delta")
+            and event.event_type in {"thinking", "message"}
+        ):
+            self._buffer_streaming_delta(task_id, kind, content)
+        else:
+            await self.append_output(task_id, kind, content)
+            # Clear the in-memory buffer once the final event is persisted
+            if (
+                isinstance(payload, dict)
+                and payload.get("is_partial") is False
+                and event.event_type in {"thinking", "message"}
+            ):
+                self._clear_stream_buffer(task_id, payload.get("block_id"))
+
         if event.token_usage:
             await self._record_token_usage(
                 task_id, event.token_usage, replace=event.event_type != "token"
@@ -854,6 +900,51 @@ class AgenticResearcherService:
                         completed=True,
                         exit_code=0,
                     )
+
+    def _buffer_streaming_delta(self, task_id: str, kind: str, content: str) -> None:
+        """Buffer a streaming delta event in memory (no SQLite write)."""
+        seq = self._next_seq(task_id)
+        evt = TaskOutputEvent(
+            task_id=task_id,
+            seq=seq,
+            kind=kind,
+            content=content,
+            created_at=datetime.now(timezone.utc),
+        )
+        with self._stream_lock:
+            self._stream_buffers.setdefault(task_id, []).append(evt)
+
+    def _clear_stream_buffer(self, task_id: str, block_id: str | None) -> None:
+        """Remove buffered deltas for a completed streaming block."""
+        with self._stream_lock:
+            buf = self._stream_buffers.get(task_id)
+            if buf is None:
+                return
+            if block_id is None:
+                # No block_id — clear all pending for this task
+                self._stream_buffers.pop(task_id, None)
+                return
+            # Remove only deltas matching this block_id (parse JSON, don't substring-match)
+            remaining = [
+                e for e in buf
+                if not self._event_matches_block_id(e, block_id)
+            ]
+            if remaining:
+                self._stream_buffers[task_id] = remaining
+            else:
+                self._stream_buffers.pop(task_id, None)
+
+    @staticmethod
+    def _event_matches_block_id(event: TaskOutputEvent, block_id: str) -> bool:
+        """Check whether a buffered delta event belongs to the given block_id."""
+        try:
+            payload = json.loads(event.content)
+            return (
+                isinstance(payload, dict)
+                and payload.get("block_id") == block_id
+            )
+        except (json.JSONDecodeError, AttributeError):
+            return False
 
     @staticmethod
     def _extract_nested_error(payload: dict[str, Any]) -> str | None:
@@ -973,6 +1064,10 @@ class AgenticResearcherService:
                 params,
             )
             conn.commit()
+        # Flush any remaining streaming deltas when task reaches a terminal state
+        if completed:
+            with self._stream_lock:
+                self._stream_buffers.pop(task_id, None)
 
     def _row_to_task(self, row: sqlite3.Row) -> Task:
         return Task(
