@@ -57,7 +57,7 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
 
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login(payload: LoginRequest, request: Request) -> AuthTokenResponse:
+async def login(payload: LoginRequest, request: Request) -> Response:
     service = _get_service(request)
     client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     if not client_ip and request.client:
@@ -76,27 +76,63 @@ async def login(payload: LoginRequest, request: Request) -> AuthTokenResponse:
     service.record_login_attempt(
         username=payload.username, ip_address=client_ip or "unknown", success=True
     )
-    return AuthTokenResponse.model_validate(result)
+    body = AuthTokenResponse.model_validate(result)
+    response = Response(
+        content=body.model_dump_json(),
+        media_type="application/json",
+        status_code=200,
+    )
+    # Set session cookie so nginx auth_request on /monitoring/ can authenticate.
+    # HttpOnly for XSS protection; SameSite=Lax for CSRF; Secure in production.
+    is_secure = request.url.scheme == "https"
+    response.set_cookie(
+        key="ainrf_access_token",
+        value=result["access_token"],
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        max_age=3600,  # 1 hour, matches typical JWT expiry
+        path="/",
+    )
+    return response
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)
-async def refresh(payload: RefreshRequest, request: Request) -> AccessTokenResponse:
+async def refresh(payload: RefreshRequest, request: Request) -> Response:
     service = _get_service(request)
     try:
         result = service.refresh(payload.refresh_token)
     except Exception as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
-    return AccessTokenResponse.model_validate(result)
+    body = AccessTokenResponse.model_validate(result)
+    response = Response(
+        content=body.model_dump_json(),
+        media_type="application/json",
+        status_code=200,
+    )
+    is_secure = request.url.scheme == "https"
+    response.set_cookie(
+        key="ainrf_access_token",
+        value=result["access_token"],
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        max_age=3600,
+        path="/",
+    )
+    return response
 
 
 @router.post("/logout", status_code=204)
-async def logout(payload: RefreshRequest, request: Request):
+async def logout(payload: RefreshRequest, request: Request) -> Response:
     service = _get_service(request)
     try:
         service.logout(payload.refresh_token)
     except Exception:
         pass
-    return None
+    response = Response(status_code=204)
+    response.delete_cookie(key="ainrf_access_token", path="/")
+    return response
 
 
 @router.get("/me", response_model=UserInfoResponse)

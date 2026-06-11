@@ -169,6 +169,20 @@ def build_jwt_auth_middleware(
             request.state.auth_scheme = "bearer"
             return await call_next(request)
 
+        # Fallback: session cookie (needed for nginx auth_request /monitoring/ path)
+        cookie_token = request.cookies.get("ainrf_access_token")
+        if cookie_token:
+            try:
+                user = auth_service.get_user_by_token(cookie_token)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+            request.state.current_user = user
+            request.state.auth_scheme = "cookie"
+            return await call_next(request)
+
         # Fallback: API key in query string (needed for native EventSource/SSE)
         # API keys are granted restricted non-admin role for security
         api_key = request.query_params.get("api_key")
