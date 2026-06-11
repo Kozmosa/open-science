@@ -202,6 +202,7 @@ def create_app(
         environment_service=environment_service,
         tmux_adapter=TmuxAdapter(api_config.state_root),
         default_shell=api_config.terminal_command[0] if api_config.terminal_command else None,
+        auth_service=auth_service,
     )
     app.state.terminal_attachment_broker = TerminalAttachmentBroker()
     file_browser_kwargs: dict = dict(

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 
 from dataclasses import replace
 from secrets import token_urlsafe
@@ -73,6 +74,7 @@ class TerminalAttachmentBroker:
             window_id=target.window_id,
             window_name=target.window_name,
             owner_user_id=target.owner_user_id,
+            tenant_user=target.tenant_user,
             task_id=target.task_id,
             binding_status=target.binding_status,
         )
@@ -100,11 +102,13 @@ class TerminalAttachmentBroker:
         self, attachment_id: str, token: str
     ) -> tuple[TerminalAttachment, TerminalBridgeRuntime]:
         attachment = self._validate_attachment(attachment_id, token)
-        if attachment_id in self._runtimes:
-            raise TerminalAttachmentConflictError("terminal attachment is already connected")
+        bridge_kwargs: dict[str, Any] = {}
+        if attachment.tenant_user is not None:
+            bridge_kwargs["run_as_user"] = attachment.tenant_user
         runtime = start_terminal_bridge(
             attachment.attach_command,
             attachment.spawn_working_directory,
+            **bridge_kwargs,
         )
         self._runtimes[attachment_id] = runtime
         return attachment, runtime

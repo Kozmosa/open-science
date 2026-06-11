@@ -68,6 +68,8 @@ def _close_master_fd(master_fd: int | None) -> None:
 def start_terminal_bridge(
     shell_command: tuple[str, ...],
     spawn_working_directory: Path,
+    *,
+    run_as_user: str | None = None,
 ) -> TerminalBridgeRuntime:
     spawn_working_directory.mkdir(parents=True, exist_ok=True)
     normalized_working_directory = spawn_working_directory.resolve(strict=True)
@@ -76,9 +78,12 @@ def start_terminal_bridge(
     child_env["TERM"] = "xterm-256color"
     child_env.setdefault("COLUMNS", "80")
     child_env.setdefault("LINES", "24")
+    effective_command: list[str] = list(shell_command)
+    if run_as_user is not None:
+        effective_command = ["sudo", "-u", run_as_user, *effective_command]
     try:
         process = subprocess.Popen(
-            list(shell_command),
+            effective_command,
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,

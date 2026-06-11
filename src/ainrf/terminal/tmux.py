@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import shlex
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from hashlib import blake2s
@@ -47,6 +48,15 @@ class TmuxWindowInfo:
 class TmuxAdapter:
     def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
+        self._tl = threading.local()
+
+    @property
+    def run_as_user(self) -> str | None:
+        return getattr(self._tl, "run_as_user", None)
+
+    @run_as_user.setter
+    def run_as_user(self, value: str | None) -> None:
+        self._tl.run_as_user = value
 
     @staticmethod
     def session_name_for(user_id: str, environment_id: str, *, kind: str = "personal") -> str:
@@ -514,9 +524,13 @@ class TmuxAdapter:
         return "duplicate session" in output.lower() and session_target in output
 
     def _run_local_command(self, command: tuple[str, ...]) -> _CommandResult:
+        tenant = self.run_as_user
+        effective = command
+        if tenant is not None:
+            effective = ("sudo", "-u", tenant, *command)
         try:
             completed = subprocess.run(
-                list(command),
+                list(effective),
                 cwd=self._state_root,
                 check=False,
                 capture_output=True,

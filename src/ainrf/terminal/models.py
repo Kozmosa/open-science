@@ -91,6 +91,7 @@ class TerminalAttachmentTarget:
     window_id: str | None = None
     window_name: str | None = None
     owner_user_id: str | None = None
+    tenant_user: str | None = None
     task_id: str | None = None
     binding_status: str | None = None
 
@@ -116,9 +117,9 @@ class TerminalAttachment:
     window_id: str | None = None
     window_name: str | None = None
     owner_user_id: str | None = None
+    tenant_user: str | None = None
     task_id: str | None = None
     binding_status: str | None = None
-
 
 def utc_now() -> datetime:
     return datetime.now(UTC)

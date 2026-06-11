@@ -43,20 +43,26 @@ ENV UV_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple
 ENV PIP_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple
 
 WORKDIR /build
-COPY pyproject.toml ./
-COPY README.md ./
+# Layer 1: install dependencies only (cached when pyproject.toml unchanged)
+COPY pyproject.toml README.md ./
+RUN mkdir -p src/ainrf && \
+    UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
+# Layer 2: overlay real source (invalidates only when Python code changes)
 COPY src/ainrf/ src/ainrf/
 RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
 
 # ── Stage 3: Agent tools ─────────────────────────────────────────
-# Installs Claude Code CLI and Codex CLI via npm.
+# Pin versions via build-arg so Docker layer cache is stable.
+# Override at build time: --build-arg CLAUDE_CODE_VERSION=2.1.170
 
 FROM docker.1ms.run/node:24-slim AS agent-tools
+ARG CLAUDE_CODE_VERSION=2.1.170
+ARG CODEX_VERSION=0.139.0
 RUN --mount=type=cache,target=/root/.npm \
     npm config set registry https://registry.npmmirror.com && \
-    npm install -g @anthropic-ai/claude-code@latest
+    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 RUN --mount=type=cache,target=/root/.npm \
-    npm install -g @openai/codex@latest && \
+    npm install -g @openai/codex@${CODEX_VERSION} && \
     if [ -d /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 ]; then \
       cp -r /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64 \
              /usr/local/lib/node_modules/@openai/codex-linux-x64; \

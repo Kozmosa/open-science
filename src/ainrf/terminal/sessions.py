@@ -10,6 +10,7 @@ from getpass import getuser
 from pathlib import Path
 from uuid import uuid4
 
+from ainrf.auth.service import AuthService
 from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
 from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.terminal.models import (
@@ -65,17 +66,44 @@ class SessionManager:
         tmux_adapter: TmuxAdapter,
         default_shell: str | None,
         user_id: str | None = None,
+        auth_service: AuthService | None = None,
     ) -> None:
         self._state_root = state_root
+        self._environment_service = environment_service
         self._runtime_root = state_root / "runtime"
         self._db_path = self._runtime_root / "terminal_state.sqlite3"
-        self._environment_service = environment_service
         self._tmux_adapter = tmux_adapter
         self._default_shell = default_shell
         self._legacy_user_id = user_id or current_daemon_user()
+        self._auth_service = auth_service
         self._initialized = False
         self._session_lifecycle_locks: dict[_SessionLifecycleKey, _SessionLifecycleLockState] = {}
         self._session_lifecycle_lock_guard = threading.Lock()
+
+    def _resolve_tenant_user(self, app_user_id: str) -> str | None:
+        """Resolve app_user_id to a Linux tenant username."""
+        if self._auth_service is None:
+            return None
+        try:
+            user = self._auth_service.get_user(app_user_id)
+        except Exception:
+            return None
+        from ainrf.auth.service import _is_container_environment, tenant_linux_username
+
+        if not _is_container_environment():
+            return None
+        return tenant_linux_username(user.username)
+
+    @contextmanager
+    def _as_tenant(self, app_user_id: str) -> Iterator[None]:
+        """Context manager: set tmux adapter run_as_user for the duration."""
+        tenant = self._resolve_tenant_user(app_user_id)
+        prev = self._tmux_adapter.run_as_user
+        try:
+            self._tmux_adapter.run_as_user = tenant
+            yield
+        finally:
+            self._tmux_adapter.run_as_user = prev
 
     @property
     def db_path(self) -> Path:
@@ -92,6 +120,20 @@ class SessionManager:
     @property
     def tmux_adapter(self) -> TmuxAdapter:
         return self._tmux_adapter
+
+    @contextmanager
+    def _as_tenant(self, app_user_id: str) -> Iterator[None]:
+        """Context manager: set tmux adapter run_as_user for the duration."""
+        tenant = self._resolve_tenant_user(app_user_id)
+        adapter = self._tmux_adapter
+        prev = getattr(adapter, "run_as_user", None)
+        try:
+            if hasattr(adapter, "run_as_user"):
+                adapter.run_as_user = tenant
+            yield
+        finally:
+            if hasattr(adapter, "run_as_user"):
+                adapter.run_as_user = prev
 
     def initialize(self) -> None:
         if self._initialized:
@@ -213,7 +255,7 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        with self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
+        with self._as_tenant(app_user_id), self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
             binding = self._upsert_binding(app_user_id, environment, working_directory)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
             try:
@@ -269,6 +311,7 @@ class SessionManager:
                     running_pair.personal_session_name,
                 ),
                 spawn_working_directory=self._state_root,
+                tenant_user=self._resolve_tenant_user(app_user_id),
             )
             return record, target
 
@@ -284,7 +327,7 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        with self._session_lifecycle_guard(app_user_id, environment.id, kind="agent"):
+        with self._as_tenant(app_user_id), self._session_lifecycle_guard(app_user_id, environment.id, kind="agent"):
             binding = self._upsert_binding(app_user_id, environment, working_directory)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
             agent_session_name = pair.agent_session_name or self.agent_session_name_for(
@@ -336,7 +379,7 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        with self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
+        with self._as_tenant(app_user_id), self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
             binding = self._upsert_binding(app_user_id, environment, working_directory)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
             try:
@@ -392,6 +435,7 @@ class SessionManager:
                     reset_pair.personal_session_name,
                 ),
                 spawn_working_directory=self._state_root,
+                tenant_user=self._resolve_tenant_user(app_user_id),
             )
             return record, target
 
