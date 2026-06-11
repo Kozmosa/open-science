@@ -20,6 +20,7 @@ from ainrf.harness_engine.base import EngineEmit
 
 pytestmark = [pytest.mark.unit]
 
+
 class FakeEngine(HarnessEngine):
     def __init__(self) -> None:
         self.pending_prompts: list[str] = []
@@ -237,3 +238,90 @@ async def test_send_prompt_to_succeeded_task_schedules_followup(tmp_path: Path) 
         '{"role": "assistant", "content": "ran: Follow up"}',
         '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
     ]
+
+
+def test_resolve_skill_load_dir_returns_none_when_no_skills(tmp_path: Path) -> None:
+    svc = AgenticResearcherService(state_root=tmp_path)
+    svc.initialize()
+    researcher = vanilla(engine=HarnessEngineType.CLAUDE_CODE)
+    task = svc.create_task(
+        project_id="p",
+        workspace_id="ws",
+        environment_id="env",
+        researcher=researcher,
+        prompt="test",
+        owner_user_id="u",
+    )
+    assert svc._resolve_skill_load_dir(task) is None
+
+
+def test_resolve_skill_load_dir_returns_none_when_load_dir_missing(tmp_path: Path) -> None:
+    svc = AgenticResearcherService(state_root=tmp_path)
+    svc.initialize()
+    researcher = vanilla(engine=HarnessEngineType.CLAUDE_CODE, user_skills=["research-lit"])
+    task = svc.create_task(
+        project_id="p",
+        workspace_id="ws",
+        environment_id="env",
+        researcher=researcher,
+        prompt="test",
+        owner_user_id="u",
+    )
+    # No skill load directory exists yet
+    assert svc._resolve_skill_load_dir(task) is None
+
+
+def test_resolve_skill_load_dir_finds_installed_skills(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_resolve_skill_load_dir returns the load dir when skills exist."""
+    # Pretend HOME is tmp_path so RuntimePathConfig.default_workspace_dir lands there
+    monkeypatch.setenv("HOME", str(tmp_path))
+    workspace_dir = tmp_path / ".ainrf_workspaces" / "default"
+    load_dir = workspace_dir / "skills"
+    skill_dir = load_dir / "research-lit"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# research-lit\n")
+
+    svc = AgenticResearcherService(state_root=tmp_path)
+    svc.initialize()
+    researcher = vanilla(engine=HarnessEngineType.CLAUDE_CODE, user_skills=["research-lit"])
+    task = svc.create_task(
+        project_id="p",
+        workspace_id="ws",
+        environment_id="env",
+        researcher=researcher,
+        prompt="test",
+        owner_user_id="u",
+    )
+    result = svc._resolve_skill_load_dir(task)
+    assert result is not None
+    assert "skills" in result
+    assert (Path(result) / "research-lit").is_dir()
+
+
+def test_build_execution_context_includes_skill_load_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_build_execution_context populates skill_load_dir when skills are available."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    workspace_dir = tmp_path / ".ainrf_workspaces" / "default"
+    load_dir = workspace_dir / "skills"
+    skill_dir = load_dir / "arxiv"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# arxiv\n")
+
+    svc = AgenticResearcherService(state_root=tmp_path)
+    svc.initialize()
+    researcher = vanilla(engine=HarnessEngineType.CLAUDE_CODE, user_skills=["arxiv"])
+    task = svc.create_task(
+        project_id="p",
+        workspace_id="ws",
+        environment_id="env",
+        researcher=researcher,
+        prompt="test",
+        owner_user_id="u",
+    )
+    ctx = svc._build_execution_context(task)
+    assert ctx.skill_load_dir is not None
+    assert ctx.skills == ["arxiv"]

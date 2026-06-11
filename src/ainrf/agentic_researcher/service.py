@@ -224,16 +224,15 @@ class AgenticResearcherService:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_environment ON tasks(environment_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_environment ON tasks(environment_id)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)")
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_tasks_project_status"
-                " ON tasks(project_id, status)"
+                "CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status)"
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_outputs_kind ON task_outputs(kind)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_outputs_kind ON task_outputs(kind)")
             conn.commit()
         self._initialized = True
         self._migrate_legacy_task_harness_indexes()
@@ -261,8 +260,14 @@ class AgenticResearcherService:
         ]
         # Conditional indexes — only if column exists (schema varies by deployment)
         _CONDITIONAL: list[tuple[str, str]] = [
-            ("task_harness_tasks", "CREATE INDEX IF NOT EXISTS idx_th_tasks_session ON task_harness_tasks(session_id)"),
-            ("task_harness_tasks", "CREATE INDEX IF NOT EXISTS idx_th_tasks_owner ON task_harness_tasks(owner_user_id)"),
+            (
+                "task_harness_tasks",
+                "CREATE INDEX IF NOT EXISTS idx_th_tasks_session ON task_harness_tasks(session_id)",
+            ),
+            (
+                "task_harness_tasks",
+                "CREATE INDEX IF NOT EXISTS idx_th_tasks_owner ON task_harness_tasks(owner_user_id)",
+            ),
         ]
         try:
             with closing(sqlite3.connect(str(legacy_db))) as conn:
@@ -742,6 +747,36 @@ class AgenticResearcherService:
             title=f"Retry: {old.title}",
         )
 
+    def _resolve_skill_load_dir(self, task: Task) -> str | None:
+        """Resolve the skill load directory for the task's configured skills.
+
+        Looks up the default workspace's ``skills/`` subdirectory where the
+        skill-registry sync service installs ARIS (or other) skill directories.
+        Returns ``None`` when no skills are requested or the load directory
+        does not exist.
+        """
+        if not task.user_skills:
+            return None
+
+        # The registry sync service installs skills into
+        #   <default_workspace_dir>/skills/
+        # which resolves to ~/.ainrf_workspaces/default/skills/.
+        # Derive it from state_root to avoid importing runtime paths.
+        from ainrf.runtime.paths import RuntimePathConfig
+
+        config = RuntimePathConfig(startup_cwd=self._state_root)
+        load_dir = config.default_workspace_dir / "skills"
+        if not load_dir.is_dir():
+            return None
+
+        # Verify at least one requested skill exists in the load directory.
+        requested = set(task.user_skills)
+        available = {p.name for p in load_dir.iterdir() if p.is_dir()}
+        if not requested & available:
+            return None
+
+        return str(load_dir)
+
     def _build_execution_context(self, task: Task) -> ExecutionContext:
         working_directory = self._resolve_working_directory(task)
         mcp_servers = resolve_mcp_servers_for_task(
@@ -749,6 +784,7 @@ class AgenticResearcherService:
             user_mcp_servers=task.user_mcp_servers,
         )
         tenant_user = self._resolve_tenant_user(task.owner_user_id)
+        skill_load_dir = self._resolve_skill_load_dir(task)
         return ExecutionContext(
             task_id=task.task_id,
             working_directory=str(working_directory),
@@ -761,6 +797,7 @@ class AgenticResearcherService:
                 self._runtime_root / "session-states" / task.task_id / "checkpoint.json"
             ),
             tenant_user=tenant_user,
+            skill_load_dir=skill_load_dir,
         )
 
     def get_runtime_summary(self, task: Task) -> dict[str, object]:

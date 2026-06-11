@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -20,6 +21,8 @@ from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, 
 
 
 pytestmark = [pytest.mark.engine]
+
+
 def test_get_engine_claude_code() -> None:
     engine = get_engine("claude-code")
     assert isinstance(engine, ClaudeCodeEngine)
@@ -295,3 +298,86 @@ async def test_codex_app_server_start_fails_when_process_exits_before_response()
     ):
         with pytest.raises(RuntimeError, match="terminated before completing the request"):
             await engine.start(context, emit)
+
+
+def test_prepare_workspace_skills_symlinks(tmp_path: Path) -> None:
+    """_prepare_workspace_skills creates symlinks in .claude/skills/ for each
+    requested skill that exists in the load directory."""
+    # Set up a load directory with two skills
+    load_dir = tmp_path / "load" / "skills"
+    for name in ("research-lit", "arxiv"):
+        skill_dir = load_dir / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(f"# {name}\n")
+
+    workdir = tmp_path / "workspace"
+    workdir.mkdir()
+
+    cleanup = ClaudeCodeEngine._prepare_workspace_skills(
+        working_directory=str(workdir),
+        skill_load_dir=str(load_dir),
+        requested_skills=["research-lit", "arxiv", "missing-skill"],
+    )
+
+    # Two skills symlinked, one skipped (missing)
+    assert len(cleanup) == 2
+    claude_skills = workdir / ".claude" / "skills"
+    assert (claude_skills / "research-lit").is_symlink()
+    assert (claude_skills / "arxiv").is_symlink()
+    assert not (claude_skills / "missing-skill").exists()
+
+    # Symlinks point to the correct targets
+    assert (claude_skills / "research-lit" / "SKILL.md").read_text() == "# research-lit\n"
+    assert (claude_skills / "arxiv" / "SKILL.md").read_text() == "# arxiv\n"
+
+
+def test_prepare_workspace_skills_preserves_user_owned_dirs(tmp_path: Path) -> None:
+    """_prepare_workspace_skills does not overwrite a real (non-symlink) directory."""
+    load_dir = tmp_path / "load" / "skills"
+    skill_dir = load_dir / "research-lit"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# from registry\n")
+
+    workdir = tmp_path / "workspace"
+    workdir.mkdir()
+    claude_skills = workdir / ".claude" / "skills"
+    user_skill = claude_skills / "research-lit"
+    user_skill.mkdir(parents=True)
+    (user_skill / "SKILL.md").write_text("# user owned\n")
+
+    cleanup = ClaudeCodeEngine._prepare_workspace_skills(
+        working_directory=str(workdir),
+        skill_load_dir=str(load_dir),
+        requested_skills=["research-lit"],
+    )
+
+    # No symlink created — user-owned dir preserved
+    assert len(cleanup) == 0
+    assert (claude_skills / "research-lit" / "SKILL.md").read_text() == "# user owned\n"
+
+
+def test_prepare_workspace_skills_replaces_stale_symlink(tmp_path: Path) -> None:
+    """_prepare_workspace_skills replaces a symlink pointing to a different target."""
+    old_target = tmp_path / "old" / "skills" / "research-lit"
+    old_target.mkdir(parents=True)
+    (old_target / "SKILL.md").write_text("# old\n")
+
+    new_load_dir = tmp_path / "new" / "skills"
+    new_skill = new_load_dir / "research-lit"
+    new_skill.mkdir(parents=True)
+    (new_skill / "SKILL.md").write_text("# new\n")
+
+    workdir = tmp_path / "workspace"
+    workdir.mkdir()
+    claude_skills = workdir / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    (claude_skills / "research-lit").symlink_to(str(old_target))
+
+    cleanup = ClaudeCodeEngine._prepare_workspace_skills(
+        working_directory=str(workdir),
+        skill_load_dir=str(new_load_dir),
+        requested_skills=["research-lit"],
+    )
+
+    assert len(cleanup) == 1
+    assert (claude_skills / "research-lit" / "SKILL.md").read_text() == "# new\n"

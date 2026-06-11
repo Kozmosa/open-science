@@ -49,6 +49,7 @@ class ExecutionContext:
     codex_home_path: str | None = None
     session_state_path: str | None = None
     tenant_user: str | None = None
+    skill_load_dir: str | None = None
 
 
     @property

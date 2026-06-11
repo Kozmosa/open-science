@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import tempfile
 import time
@@ -16,6 +17,8 @@ from ainrf.harness_engine.base import (
     HarnessEngineNotSupportedError,
     HarnessEngineType,
 )
+
+logger = logging.getLogger(__name__)
 
 _SESSION_META_DIR = Path.home() / ".claude" / "usage-data" / "session-meta"
 _POLL_TIMEOUT_SEC = 30
@@ -67,6 +70,17 @@ class ClaudeCodeEngine(HarnessEngine):
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         started_at = time.time()
+
+        # Prepare .claude/skills/ symlinks from the registry load directory
+        # so that Claude Code discovers slash-command skills at startup.
+        skill_cleanup_dirs: list[Path] = []
+        if context.skill_load_dir and context.skills:
+            skill_cleanup_dirs = self._prepare_workspace_skills(
+                context.working_directory,
+                context.skill_load_dir,
+                context.skills,
+            )
+
         command = [
             "claude",
             "-p",
@@ -82,7 +96,10 @@ class ClaudeCodeEngine(HarnessEngine):
         if context.mcp_servers:
             mcp_json = json.dumps({"mcpServers": context.mcp_servers})
             mcp_config_file = tempfile.NamedTemporaryFile(
-                mode="wb", suffix=".json", prefix="ainrf-mcp-", delete=False,
+                mode="wb",
+                suffix=".json",
+                prefix="ainrf-mcp-",
+                delete=False,
             )
             mcp_config_file.write(mcp_json.encode())
             mcp_config_file.close()
@@ -184,6 +201,13 @@ class ClaudeCodeEngine(HarnessEngine):
             )
         finally:
             self._processes.pop(context.task_id, None)
+            # Clean up skill symlinks created for this task
+            for skill_dir in skill_cleanup_dirs:
+                try:
+                    if skill_dir.is_symlink():
+                        skill_dir.unlink()
+                except OSError:
+                    pass
             if mcp_config_file is not None:
                 try:
                     os.unlink(mcp_config_file.name)
@@ -196,6 +220,59 @@ class ClaudeCodeEngine(HarnessEngine):
                 except asyncio.TimeoutError:
                     process.kill()
                     await process.wait()
+
+    @staticmethod
+    def _prepare_workspace_skills(
+        working_directory: str,
+        skill_load_dir: str,
+        requested_skills: list[str],
+    ) -> list[Path]:
+        """Symlink requested skill directories into ``<workdir>/.claude/skills/``.
+
+        Claude Code discovers slash-command skills by scanning
+        ``.claude/skills/<name>/SKILL.md`` in the project directory.  This
+        method creates one symlink per requested skill that exists in the
+        registry load directory, allowing the engine to inject the ARIS
+        skill set into any workspace without copying files.
+
+        Returns a list of symlink paths created (for cleanup).
+        """
+        workdir = Path(working_directory)
+        claude_skills_dir = workdir / ".claude" / "skills"
+        load_dir = Path(skill_load_dir)
+        cleanup: list[Path] = []
+
+        for skill_id in requested_skills:
+            source = load_dir / skill_id
+            if not source.is_dir():
+                logger.debug("skill %s not found in load dir %s, skipping", skill_id, load_dir)
+                continue
+
+            dest = claude_skills_dir / skill_id
+            # Skip if a non-symlink (user-owned) directory already exists.
+            if dest.exists() and not dest.is_symlink():
+                logger.debug("skill %s already exists as real dir, skipping", skill_id)
+                continue
+            # Remove stale symlink pointing to a different target.
+            if dest.is_symlink():
+                try:
+                    current_target = dest.resolve()
+                    if current_target == source.resolve():
+                        # Already linked correctly — nothing to do.
+                        continue
+                    dest.unlink()
+                except OSError:
+                    continue
+
+            claude_skills_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                os.symlink(str(source), str(dest))
+                cleanup.append(dest)
+                logger.debug("linked skill %s -> %s", dest, source)
+            except OSError as exc:
+                logger.warning("failed to symlink skill %s: %s", skill_id, exc)
+
+        return cleanup
 
     async def cancel(self, task_id: str) -> None:
         process = self._processes.get(task_id)
