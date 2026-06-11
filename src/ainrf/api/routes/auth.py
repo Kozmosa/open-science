@@ -111,20 +111,22 @@ async def me(request: Request) -> UserInfoResponse:
 async def check(request: Request) -> Response:
     """Auth check for nginx auth_request (Grafana reverse proxy).
 
-    Returns 200 with X-Remote-User / X-Remote-User-Role headers when
-    the caller has a valid JWT. Returns 401 otherwise. No body.
+
+    Only AINRF admins are allowed. Returns 200 with identity headers
+    for admins, 401 for unauthenticated, 403 for non-admin users.
     """
     user = getattr(request.state, "current_user", None)
     if user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     return Response(
         status_code=200,
         headers={
             "X-Remote-User": user["id"],
-            "X-Remote-User-Role": user.get("role", "viewer"),
+            "X-Remote-User-Role": "admin",
         },
     )
-
 
 @router.post("/change-password", status_code=204)
 async def change_password(payload: ChangePasswordRequest, request: Request):
