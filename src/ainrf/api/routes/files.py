@@ -57,12 +57,15 @@ def _check_workspace_access(request: Request, workspace_id: str | None) -> str |
 
 
 def _resolve_tenant_user(request: Request) -> str | None:
-    """Resolve the current user to a tenant Linux username (container-only)."""
+    """Resolve the current user to a tenant Linux username (container-only).
+
+    Returns None if the Linux user has not been provisioned yet.
+    """
     user = get_current_user(request)
     auth_service = getattr(request.app.state, "auth_service", None)
     if auth_service is None:
         return None
-    from ainrf.auth.service import _is_container_environment, tenant_linux_username
+    from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
 
     if not _is_container_environment():
         return None
@@ -70,7 +73,10 @@ def _resolve_tenant_user(request: Request) -> str | None:
         user_record = auth_service.get_user(user["id"])
     except Exception:
         return None
-    return tenant_linux_username(user_record.username)
+    linux_user = tenant_linux_username(user_record.username)
+    if not _linux_user_exists(linux_user):
+        return None
+    return linux_user
 
 
 def _translate_file_browser_error(exc: Exception) -> HTTPException:

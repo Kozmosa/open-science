@@ -81,18 +81,24 @@ class SessionManager:
         self._session_lifecycle_lock_guard = threading.Lock()
 
     def _resolve_tenant_user(self, app_user_id: str) -> str | None:
-        """Resolve app_user_id to a Linux tenant username."""
+        """Resolve app_user_id to a Linux tenant username.
+
+        Returns None if the Linux user has not been provisioned yet.
+        """
         if self._auth_service is None:
             return None
         try:
             user = self._auth_service.get_user(app_user_id)
         except Exception:
             return None
-        from ainrf.auth.service import _is_container_environment, tenant_linux_username
+        from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
 
         if not _is_container_environment():
             return None
-        return tenant_linux_username(user.username)
+        linux_user = tenant_linux_username(user.username)
+        if not _linux_user_exists(linux_user):
+            return None
+        return linux_user
 
     @contextmanager
     def _as_tenant(self, app_user_id: str) -> Iterator[None]:

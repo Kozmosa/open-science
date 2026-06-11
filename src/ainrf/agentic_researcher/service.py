@@ -839,8 +839,9 @@ class AgenticResearcherService:
     def _resolve_tenant_user(self, owner_user_id: str) -> str | None:
         """Resolve owner_user_id to the Linux tenant username ``ainrf_<name>``.
 
-        Returns ``None`` when the auth service is unavailable or the user has
-        no corresponding Linux account (e.g. local dev / tests).
+        Returns ``None`` when the auth service is unavailable, the user has
+        no corresponding Linux account (e.g. local dev / tests), or the
+        Linux user has not been provisioned yet.
         """
         if self._auth_service is None:
             return None
@@ -848,11 +849,14 @@ class AgenticResearcherService:
             user = self._auth_service.get_user(owner_user_id)
         except Exception:
             return None
-        from ainrf.auth.service import _is_container_environment, tenant_linux_username
+        from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
 
         if not _is_container_environment():
             return None
-        return tenant_linux_username(user.username)
+        linux_user = tenant_linux_username(user.username)
+        if not _linux_user_exists(linux_user):
+            return None
+        return linux_user
 
     def _get_engine(self, engine_type: HarnessEngineType) -> HarnessEngine:
         engine = self._engines.get(engine_type)
