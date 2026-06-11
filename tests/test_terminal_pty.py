@@ -85,16 +85,20 @@ def test_start_terminal_bridge_launches_process(
         captured["kwargs"] = kwargs
         return PopenProcess()
 
-    monkeypatch.setattr("ainrf.terminal.pty.os.openpty", lambda: (11, 12))
+    # Use high FD numbers that won't collide with real OS file descriptors
+    # (e.g. pytest's own log-file handler).  Low numbers like 11/12 can match
+    # real FDs, causing os.close() in the finally block to kill pytest's stream.
+    monkeypatch.setattr("ainrf.terminal.pty.os.openpty", lambda: (999, 998))
+    monkeypatch.setattr("ainrf.terminal.pty.os.close", lambda fd: None)
+    monkeypatch.setattr("ainrf.terminal.pty.os.set_blocking", lambda fd, flag: None)
     monkeypatch.setattr("ainrf.terminal.pty.subprocess.Popen", fake_popen)
 
     runtime = start_terminal_bridge(("/bin/sh",), tmp_path)
-
     assert captured["args"] == (["/bin/sh"],)
     kwargs = captured["kwargs"]
-    assert kwargs["stdin"] == 12
-    assert kwargs["stdout"] == 12
-    assert kwargs["stderr"] == 12
+    assert kwargs["stdin"] == 998
+    assert kwargs["stdout"] == 998
+    assert kwargs["stderr"] == 998
     assert kwargs["cwd"] == tmp_path.resolve()
     assert kwargs["start_new_session"] is True
     assert kwargs["text"] is False
@@ -104,7 +108,7 @@ def test_start_terminal_bridge_launches_process(
     assert kwargs["env"]["COLUMNS"] == "80"
     assert kwargs["env"]["LINES"] == "24"
     assert runtime.process.pid == 4321
-    assert runtime.master_fd == 11
+    assert runtime.master_fd == 999
 
 
 def test_stop_terminal_bridge_terminates_running_process(monkeypatch: pytest.MonkeyPatch) -> None:

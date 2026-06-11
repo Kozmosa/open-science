@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import codecs
 import errno
+import fcntl
 import os
-import signal
 import struct
+import shlex
+import signal
 import subprocess
 import termios
 from dataclasses import dataclass
@@ -71,17 +73,33 @@ def start_terminal_bridge(
     *,
     run_as_user: str | None = None,
 ) -> TerminalBridgeRuntime:
-    spawn_working_directory.mkdir(parents=True, exist_ok=True)
-    normalized_working_directory = spawn_working_directory.resolve(strict=True)
+    if run_as_user is not None:
+        # Running via sudo — the parent process (ainrf) cannot chdir into
+        # the tenant's home directory.  Wrap the command so the sudo'd child
+        # cd's to the target directory first, then exec's the real shell.
+        normalized_working_directory = None
+        child_env = os.environ.copy()
+        spawn_dir = shlex.quote(str(spawn_working_directory))
+        inner_cmd = " ".join(shlex.quote(a) for a in shell_command)
+        effective_command = [
+            "sudo", "-u", run_as_user, "-H",
+            "bash", "-c", f"cd {spawn_dir} && exec {inner_cmd}",
+        ]
+    else:
+        if not spawn_working_directory.exists():
+            spawn_working_directory.mkdir(parents=True, exist_ok=True)
+        normalized_working_directory = spawn_working_directory.resolve(strict=True)
+        child_env = os.environ.copy()
+        effective_command = list(shell_command)
     master_fd, slave_fd = os.openpty()
-    child_env = os.environ.copy()
     child_env["TERM"] = "xterm-256color"
     child_env.setdefault("COLUMNS", "80")
     child_env.setdefault("LINES", "24")
-    effective_command: list[str] = list(shell_command)
-    if run_as_user is not None:
-        effective_command = ["sudo", "-u", run_as_user, *effective_command]
     try:
+        def _set_controlling_tty() -> None:
+            """Make stdin the controlling terminal (runs in child after setsid)."""
+            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
         process = subprocess.Popen(
             effective_command,
             stdin=slave_fd,
@@ -90,6 +108,7 @@ def start_terminal_bridge(
             cwd=normalized_working_directory,
             env=child_env,
             start_new_session=True,
+            preexec_fn=_set_controlling_tty,
             text=False,
             close_fds=True,
         )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pwd
 import sqlite3
 import threading
 from collections.abc import Iterator
@@ -36,6 +37,13 @@ def current_daemon_user() -> str:
     except Exception:
         return "root"
     return resolved or "root"
+def _tenant_home_directory(username: str) -> Path | None:
+    """Resolve the Linux home directory for a tenant user."""
+    try:
+        return Path(pwd.getpwnam(username).pw_dir)
+    except KeyError:
+        return None
+
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -99,6 +107,19 @@ class SessionManager:
         if not _linux_user_exists(linux_user):
             return None
         return linux_user
+
+    def _resolve_spawn_directory(self, app_user_id: str) -> Path:
+        """Resolve the working directory for spawning a terminal bridge.
+
+        When a tenant user exists, use their home directory.
+        Otherwise fall back to the state root.
+        """
+        tenant_user = self._resolve_tenant_user(app_user_id)
+        if tenant_user is not None:
+            home = _tenant_home_directory(tenant_user)
+            if home is not None:
+                return home
+        return self._state_root
 
     @contextmanager
     def _as_tenant(self, app_user_id: str) -> Iterator[None]:
@@ -316,7 +337,7 @@ class SessionManager:
                     environment,
                     running_pair.personal_session_name,
                 ),
-                spawn_working_directory=self._state_root,
+                spawn_working_directory=self._resolve_spawn_directory(app_user_id),
                 tenant_user=self._resolve_tenant_user(app_user_id),
             )
             return record, target
@@ -440,7 +461,7 @@ class SessionManager:
                     environment,
                     reset_pair.personal_session_name,
                 ),
-                spawn_working_directory=self._state_root,
+                spawn_working_directory=self._resolve_spawn_directory(app_user_id),
                 tenant_user=self._resolve_tenant_user(app_user_id),
             )
             return record, target
@@ -553,7 +574,8 @@ class SessionManager:
                 personal_status = TerminalSessionStatus.IDLE
                 personal_started_at = pair.personal_started_at
                 personal_closed_at = verify_time
-                detail = "Personal tmux session is not running"
+                # No detail needed — IDLE status already communicates that
+                # the session doesn't exist; attach will create a new one.
 
         agent_status = pair.agent_status
         if pair.agent_session_name:
@@ -572,12 +594,11 @@ class SessionManager:
                     agent_status = TerminalSessionStatus.RUNNING
                 else:
                     agent_status = TerminalSessionStatus.IDLE
-                    if detail is None:
-                        detail = "Agent tmux session is not running"
 
-        if personal_status is TerminalSessionStatus.RUNNING and (
-            pair.agent_session_name is None or agent_status is TerminalSessionStatus.RUNNING
-        ):
+        # Personal session running means the terminal is usable; a missing
+        # agent session is normal outside of task execution, so never let it
+        # override the detail when personal is healthy.
+        if personal_status is TerminalSessionStatus.RUNNING:
             detail = None
 
         return self._store_pair(
