@@ -82,6 +82,7 @@ class SkillRegistryStatus:
     has_update: bool = False
     is_dirty: bool = False
     sync_in_progress: bool = False
+    bundled_skill_fingerprint: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -94,4 +95,5 @@ class SkillRegistryStatus:
             "has_update": self.has_update,
             "is_dirty": self.is_dirty,
             "sync_in_progress": self.sync_in_progress,
+            "bundled_skill_fingerprint": self.bundled_skill_fingerprint,
         }

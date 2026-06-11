@@ -97,6 +97,16 @@ COPY --from=backend-build /usr/local/bin/ainrf /usr/local/bin/ainrf
 # Copy frontend build output
 COPY --from=frontend-build /build/frontend/dist /opt/ainrf/frontend/dist
 
+# ── Stage 3.5: ARIS skill registry ──────────────────────────────────
+# Download the ARIS repo as a zip archive via codeload.github.com
+# (separate from github.com, reachable where github.com is not)
+# instead of git clone, which requires full github.com access.
+# The entrypoint syncs skills into the workspace on startup.
+ARG ARIS_REPO_OWNER=wanshuiyin
+ARG ARIS_REPO_NAME=Auto-claude-code-research-in-sleep
+ARG ARIS_REPO_REF=main
+RUN python3 -c "import urllib.request, zipfile, os, shutil; url='https://codeload.github.com/${ARIS_REPO_OWNER}/${ARIS_REPO_NAME}/zip/refs/heads/${ARIS_REPO_REF}'; urllib.request.urlretrieve(url,'/tmp/aris.zip'); os.makedirs('/tmp/aris-extract',exist_ok=True); zipfile.ZipFile('/tmp/aris.zip').extractall('/tmp/aris-extract'); shutil.move(os.path.join('/tmp/aris-extract','${ARIS_REPO_NAME}-${ARIS_REPO_REF}'),'/opt/ainrf/aris-repo'); shutil.rmtree('/tmp/aris-extract',ignore_errors=True); os.unlink('/tmp/aris.zip')"
+
 # Agent tool config templates (entrypoint substitutes env vars)
 COPY deploy/config/ /opt/ainrf/config/
 COPY deploy/config/entrypoint.py /opt/ainrf/bin/entrypoint.py

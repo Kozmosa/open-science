@@ -35,8 +35,13 @@ def _get_default_workspace_dir(request: Request) -> Path:
 @router.get("", response_model=SkillRegistryListResponse)
 async def list_registries(request: Request) -> SkillRegistryListResponse:
     """List all configured skill registries with their installation status."""
+    from pathlib import Path as _Path
+
     workspace_dir = _get_default_workspace_dir(request)
     load_dir = workspace_dir / "skills"
+    bundled_source = (
+        _Path("/opt/ainrf/aris-repo") if _Path("/opt/ainrf/aris-repo").is_dir() else None
+    )
 
     items: list[SkillRegistryItemResponse] = []
     for config in DEFAULT_REGISTRIES:
@@ -45,7 +50,7 @@ async def list_registries(request: Request) -> SkillRegistryListResponse:
             workspace_dir=workspace_dir,
             load_dir=load_dir,
         )
-        status = service.check_update()
+        status = service.check_update(bundled_source=bundled_source)
         items.append(
             SkillRegistryItemResponse(
                 registry_id=config.registry_id,
@@ -56,6 +61,7 @@ async def list_registries(request: Request) -> SkillRegistryListResponse:
                 has_update=status.has_update,
                 is_dirty=status.is_dirty,
                 last_sync_at=status.last_sync_at.isoformat() if status.last_sync_at else None,
+                bundled_skill_fingerprint=status.bundled_skill_fingerprint,
             )
         )
 
@@ -65,17 +71,22 @@ async def list_registries(request: Request) -> SkillRegistryListResponse:
 @router.get("/{registry_id}/status", response_model=SkillRegistryStatusResponse)
 async def get_registry_status(request: Request, registry_id: str) -> SkillRegistryStatusResponse:
     """Get detailed status of a specific skill registry."""
+    from pathlib import Path as _Path
+
     config = next((r for r in DEFAULT_REGISTRIES if r.registry_id == registry_id), None)
     if config is None:
         raise HTTPException(status_code=404, detail=f"Registry '{registry_id}' not found")
 
     workspace_dir = _get_default_workspace_dir(request)
+    bundled_source = (
+        _Path("/opt/ainrf/aris-repo") if _Path("/opt/ainrf/aris-repo").is_dir() else None
+    )
     service = SkillRegistrySyncService(
         registry=config,
         workspace_dir=workspace_dir,
         load_dir=workspace_dir / "skills",
     )
-    status = service.check_update()
+    status = service.check_update(bundled_source=bundled_source)
 
     return SkillRegistryStatusResponse(
         registry_id=status.registry_id,
@@ -87,6 +98,7 @@ async def get_registry_status(request: Request, registry_id: str) -> SkillRegist
         has_update=status.has_update,
         is_dirty=status.is_dirty,
         sync_in_progress=status.sync_in_progress,
+        bundled_skill_fingerprint=status.bundled_skill_fingerprint,
     )
 
 

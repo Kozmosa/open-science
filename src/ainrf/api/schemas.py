@@ -828,6 +828,7 @@ class SkillRegistryItemResponse(BaseModel):
     has_update: bool = False
     is_dirty: bool = False
     last_sync_at: str | None = None
+    bundled_skill_fingerprint: str | None = None
 
 
 class SkillRegistryListResponse(BaseModel):
@@ -848,6 +849,7 @@ class SkillRegistryStatusResponse(BaseModel):
     has_update: bool
     is_dirty: bool
     sync_in_progress: bool
+    bundled_skill_fingerprint: str | None = None
 
 
 class SkillRegistryUpdateRequest(BaseModel):
@@ -955,7 +957,12 @@ class LoginRequest(BaseModel):
 
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    username: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$", description="ASCII letters, digits, dots, underscores, hyphens only")
+    username: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9._-]+$",
+        description="ASCII letters, digits, dots, underscores, hyphens only",
+    )
     display_name: str = Field(min_length=1, max_length=128)
     password: str = Field(min_length=4)
 

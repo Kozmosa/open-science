@@ -70,6 +70,7 @@ def _start_sshd() -> None:
     so the container must use an alternate port.
     """
     import subprocess
+
     try:
         subprocess.Popen(
             ["/usr/sbin/sshd", "-p", "2222"],
@@ -83,10 +84,61 @@ def _start_sshd() -> None:
         print(f"[entrypoint] sshd failed to start: {exc}", flush=True)
 
 
+def _sync_aris_skills() -> None:
+    """Sync ARIS skills from the bundled repo into the default workspace.
+
+    On first startup, copies the bundled ARIS repo into the git-sync
+    directory and syncs all skills to the load directory.
+    On subsequent startups, compares the bundled repo's skill set with
+    the installed manifest and re-syncs when the Docker image has been
+    rebuilt with a newer ARIS version.
+
+    Runs *before* privilege drop so it can write to the shared workspace.
+    """
+    from ainrf.skills.registry_models import DEFAULT_REGISTRIES
+    from ainrf.skills.registry_sync import SkillRegistrySyncService
+
+    aris_config = next((r for r in DEFAULT_REGISTRIES if r.registry_id == "aris"), None)
+    if aris_config is None:
+        return
+
+    aris_source = Path("/opt/ainrf/aris-repo")
+    if not (aris_source / "skills").is_dir():
+        print("[entrypoint] ARIS skill source not found, skipping skill sync")
+        return
+
+    workspace_dir = HOME / ".ainrf_workspaces" / "default"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    load_dir = workspace_dir / "skills"
+
+    service = SkillRegistrySyncService(
+        registry=aris_config,
+        workspace_dir=workspace_dir,
+        load_dir=load_dir,
+    )
+
+    if not service.needs_resync(aris_source):
+        print("[entrypoint] ARIS skills up to date")
+        return
+
+    try:
+        added, removed = service.resync_from_source(aris_source)
+        n_total = len(service._read_manifest().get("skills", []))
+        parts: list[str] = [f"{n_total} skills"]
+        if added:
+            parts.append(f"{len(added)} added")
+        if removed:
+            parts.append(f"{len(removed)} removed")
+        print(f"[entrypoint] ARIS skills synced ({', '.join(parts)})")
+    except RuntimeError as exc:
+        print(f"[entrypoint] ARIS skill sync failed: {exc}")
+
+
 def main() -> None:
     _start_sshd()
     _generate_claude_settings()
     _generate_codex_config()
+    _sync_aris_skills()
 
     # Drop privileges to ainrf user (UID 1000) before exec-ing the server
     _uid = 1000
@@ -95,9 +147,14 @@ def main() -> None:
         # Ensure volume directories are owned by ainrf (Docker named volumes
         # may be owned by root on first mount)
         import subprocess
+
         for d in ("/opt/ainrf/state", "/opt/ainrf/.ainrf_workspaces"):
-            subprocess.run(["chown", "-R", f"{_uid}:{_gid}", d], check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["chown", "-R", f"{_uid}:{_gid}", d],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         os.setgid(_gid)
         os.setuid(_uid)
         os.environ["HOME"] = "/opt/ainrf"
@@ -107,10 +164,16 @@ def main() -> None:
     cmd = sys.argv[1:]
     if not cmd:
         cmd = [
-            "python", "-m", "ainrf", "serve",
-            "--host", os.environ.get("AINRF_HOST", "0.0.0.0"),
-            "--port", os.environ.get("AINRF_PORT", "8000"),
-            "--state-root", "/opt/ainrf/state",
+            "python",
+            "-m",
+            "ainrf",
+            "serve",
+            "--host",
+            os.environ.get("AINRF_HOST", "0.0.0.0"),
+            "--port",
+            os.environ.get("AINRF_PORT", "8000"),
+            "--state-root",
+            "/opt/ainrf/state",
         ]
 
     print(f"[entrypoint] Exec: {' '.join(cmd)}")

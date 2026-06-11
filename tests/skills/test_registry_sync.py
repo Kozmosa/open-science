@@ -328,3 +328,109 @@ class TestSkillRegistrySyncService:
 
         with pytest.raises(RuntimeError, match="is not a directory"):
             service._sync_all()
+
+    def test_source_skill_fingerprint(self, service: SkillRegistrySyncService, tmp_path: Path):
+        source = tmp_path / "source"
+        (source / "skills" / "alpha").mkdir(parents=True)
+        (source / "skills" / "alpha" / "SKILL.md").write_text("# Alpha")
+        (source / "skills" / "beta").mkdir(parents=True)
+        (source / "skills" / "beta" / "SKILL.md").write_text("# Beta")
+
+        fp = service.source_skill_fingerprint(source)
+        assert fp == "alpha,beta"
+
+    def test_source_skill_fingerprint_empty(self, service: SkillRegistrySyncService, tmp_path: Path):
+        source = tmp_path / "empty-source"
+        source.mkdir()
+        fp = service.source_skill_fingerprint(source)
+        assert fp == ""
+
+    def test_needs_resync_true_when_not_installed(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        source = tmp_path / "source"
+        (source / "skills" / "x").mkdir(parents=True)
+        (source / "skills" / "x" / "SKILL.md").write_text("# X")
+
+        assert service.needs_resync(source) is True
+
+    def test_needs_resync_false_when_skills_match(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        # Install skills first
+        load_dir = tmp_path / "skills"
+        load_dir.mkdir(parents=True)
+        (load_dir / "x").mkdir()
+        (load_dir / "x" / "SKILL.md").write_text("# X")
+        manifest = {"registry_id": "test-registry", "skills": ["x"], "synced_at": "..."}
+        (load_dir / ".ainrf-registry-manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        (load_dir / ".ainrf-registry").write_text("test-registry", encoding="utf-8")
+
+        source = tmp_path / "source"
+        (source / "skills" / "x").mkdir(parents=True)
+        (source / "skills" / "x" / "SKILL.md").write_text("# X")
+
+        assert service.needs_resync(source) is False
+
+    def test_needs_resync_true_when_skills_differ(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        # Install only "x"
+        load_dir = tmp_path / "skills"
+        load_dir.mkdir(parents=True)
+        (load_dir / "x").mkdir()
+        manifest = {"registry_id": "test-registry", "skills": ["x"], "synced_at": "..."}
+        (load_dir / ".ainrf-registry-manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        (load_dir / ".ainrf-registry").write_text("test-registry", encoding="utf-8")
+
+        # Source has "x" and "y"
+        source = tmp_path / "source"
+        (source / "skills" / "x").mkdir(parents=True)
+        (source / "skills" / "x" / "SKILL.md").write_text("# X")
+        (source / "skills" / "y").mkdir(parents=True)
+        (source / "skills" / "y" / "SKILL.md").write_text("# Y")
+
+        assert service.needs_resync(source) is True
+
+    def test_resync_from_source(self, service: SkillRegistrySyncService, tmp_path: Path):
+        source = tmp_path / "source"
+        (source / "skills" / "new-skill").mkdir(parents=True)
+        (source / "skills" / "new-skill" / "SKILL.md").write_text(
+            "---\nname: new-skill\ndescription: A new skill\n---\n# New Skill"
+        )
+
+        added, removed = service.resync_from_source(source)
+        assert added == ["new-skill"]
+        assert removed == []
+        assert (tmp_path / "skills" / "new-skill" / "SKILL.md").exists()
+        assert (tmp_path / "skills" / "new-skill" / "skill.json").exists()
+
+    def test_resync_from_source_handles_existing_git_sync(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        # Pre-existing stale git-sync dir
+        service.git_workspace.mkdir(parents=True)
+        (service.git_workspace / "stale.txt").write_text("old")
+
+        source = tmp_path / "source"
+        (source / "skills" / "fresh").mkdir(parents=True)
+        (source / "skills" / "fresh" / "SKILL.md").write_text("# Fresh")
+
+        added, removed = service.resync_from_source(source)
+        assert "fresh" in added
+        # Stale git-sync replaced
+        assert not (service.git_workspace / "stale.txt").exists()
+
+    def test_build_status_includes_bundled_fingerprint(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        source = tmp_path / "bundled"
+        (source / "skills" / "a").mkdir(parents=True)
+        (source / "skills" / "a" / "SKILL.md").write_text("# A")
+
+        status = service._build_status(bundled_source=source)
+        assert status.bundled_skill_fingerprint == "a"

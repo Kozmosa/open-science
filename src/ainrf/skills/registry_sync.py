@@ -83,16 +83,22 @@ class SkillRegistrySyncService:
         added, removed = self._sync_all()
         return self._build_status(), added, removed
 
-    def check_update(self) -> SkillRegistryStatus:
-        """Check if remote has newer commits. Does not modify anything."""
+    def check_update(self, bundled_source: Path | None = None) -> SkillRegistryStatus:
+        """Check if remote has newer commits. Does not modify anything.
+
+        Args:
+            bundled_source: Optional bundled repo path (Docker).  When
+                provided, the returned status includes the source's skill
+                fingerprint.
+        """
         if not self.git_workspace.exists():
-            return self._build_status()
+            return self._build_status(bundled_source=bundled_source)
 
         remote_commit = self._git_ls_remote()
         local_commit = self._git_rev_parse()
         is_dirty = self._git_is_dirty()
 
-        status = self._build_status()
+        status = self._build_status(bundled_source=bundled_source)
         status.remote_commit = remote_commit
         status.local_commit = local_commit
         status.has_update = remote_commit is not None and remote_commit != local_commit
@@ -185,6 +191,64 @@ class SkillRegistrySyncService:
         added = current_set - old_skills
         return (sorted(added), sorted(removed))
 
+    def source_skill_fingerprint(self, source_dir: Path | None = None) -> str:
+        """Compute a fingerprint of available skills in a source directory.
+
+        The fingerprint is the sorted, comma-joined list of skill directory
+        names that contain a ``SKILL.md``.  Used to detect when a bundled
+        repo has changed across Docker image rebuilds.
+
+        Args:
+            source_dir: Directory to scan.  Defaults to the git workspace.
+        """
+        root = source_dir or self.git_workspace
+        source_skills = root / self.registry.source_skills_path
+        if not source_skills.is_dir():
+            return ""
+        names = sorted(Path(rel).name for rel in self._find_skill_dirs(source_skills))
+        return ",".join(names)
+
+    def needs_resync(self, source_dir: Path) -> bool:
+        """Check whether installed skills differ from a source directory.
+
+        Compares the installed manifest's skill list against the skills
+        available in *source_dir*.  Returns ``True`` when:
+        - the registry is not installed, or
+        - the installed skill set differs from the source skill set.
+        """
+        if not self.is_installed():
+            return True
+        manifest = self._read_manifest()
+        installed = set(manifest.get("skills", []))
+        source_fingerprint = self.source_skill_fingerprint(source_dir)
+        source_set = set(source_fingerprint.split(",")) if source_fingerprint else set()
+        return installed != source_set
+
+    def resync_from_source(self, source_dir: Path) -> tuple[list[str], list[str]]:
+        """Re-sync skills from an arbitrary source directory.
+
+        Unlike ``install()`` and ``update()``, this does not require a git
+        workspace.  It copies *source_dir* into the expected git-sync
+        location and runs ``_sync_all()``.  Used by the Docker entrypoint
+        to update skills when the bundled ARIS repo changes across image
+        rebuilds.
+
+        Returns:
+            Tuple of (added_skill_names, removed_skill_names).
+        """
+        import shutil
+
+        git_sync_dir = self.git_workspace
+        if git_sync_dir.exists():
+            shutil.rmtree(git_sync_dir)
+        shutil.copytree(
+            source_dir,
+            git_sync_dir,
+            symlinks=True,
+            ignore=shutil.ignore_patterns(".git"),
+        )
+        return self._sync_all()
+
     def _find_skill_dirs(self, root: Path) -> list[str]:
         """Recursively find all subdirectories under root that contain SKILL.md.
 
@@ -228,8 +292,14 @@ class SkillRegistrySyncService:
             pass
         return {}
 
-    def _build_status(self) -> SkillRegistryStatus:
-        """Build current status from filesystem."""
+    def _build_status(self, bundled_source: Path | None = None) -> SkillRegistryStatus:
+        """Build current status from filesystem.
+
+        Args:
+            bundled_source: Optional path to a bundled repo (e.g. in Docker).
+                When provided, includes the source's skill fingerprint in the
+                status so the API can report whether a re-sync is needed.
+        """
         manifest = self._read_manifest()
         # Only trust the manifest if it belongs to this registry
         if manifest.get("registry_id") == self.registry.registry_id:
@@ -246,11 +316,16 @@ class SkillRegistrySyncService:
             except OSError:
                 pass
 
+        bundled_fp: str | None = None
+        if bundled_source is not None and bundled_source.is_dir():
+            bundled_fp = self.source_skill_fingerprint(bundled_source)
+
         return SkillRegistryStatus(
             registry_id=self.registry.registry_id,
             installed=self.is_installed(),
             installed_count=installed_count,
             last_sync_at=last_sync_at,
+            bundled_skill_fingerprint=bundled_fp,
         )
 
     def _git_run(self, args: list[str], timeout: float = 30) -> subprocess.CompletedProcess[str]:

@@ -406,6 +406,44 @@ step "Installing frontend dependencies (npm ci) ..."
 (cd "$REPO_ROOT/frontend" && npm ci)
 info "Frontend dependencies installed."
 
+# ── ARIS Skill Registry ────────────────────────────────────────────
+
+ARIS_REPO_URL="https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep.git"
+ARIS_REPO_REF="main"
+ARIS_STATE_DIR="${HOME}/.ainrf_workspaces/default"
+ARIS_LOAD_DIR="${ARIS_STATE_DIR}/skills"
+
+if [[ -d "$ARIS_LOAD_DIR" && -f "${ARIS_LOAD_DIR}/.ainrf-registry" ]]; then
+  info "ARIS skills already installed, skipping."
+else
+  step "Installing ARIS skill registry ..."
+  ARIS_GIT_DIR="${ARIS_STATE_DIR}/aris-git-sync"
+  rm -rf "$ARIS_GIT_DIR"
+  if git clone --depth 1 --branch "$ARIS_REPO_REF" "$ARIS_REPO_URL" "$ARIS_GIT_DIR" 2>&1; then
+    # Use the Python registry sync to copy and generate skill.json files
+    UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}" uv run python -c "
+import sys
+sys.path.insert(0, '$REPO_ROOT/src')
+from pathlib import Path
+from ainrf.skills.registry_models import DEFAULT_REGISTRIES
+from ainrf.skills.registry_sync import SkillRegistrySyncService
+
+cfg = next(r for r in DEFAULT_REGISTRIES if r.registry_id == 'aris')
+svc = SkillRegistrySyncService(
+    registry=cfg,
+    workspace_dir=Path('$ARIS_STATE_DIR'),
+    load_dir=Path('$ARIS_LOAD_DIR'),
+)
+added, removed = svc._sync_all()
+print(f'  {len(added)} skills installed, {len(removed)} removed')
+"
+    info "ARIS skills installed."
+  else
+    warn "Failed to clone ARIS repo — skill registry not available."
+    warn "You can install it later via the WebUI or API."
+  fi
+fi
+
 # ── Service Startup ──────────────────────────────────────────────────
 
 if [[ "$NO_START" == true ]]; then
