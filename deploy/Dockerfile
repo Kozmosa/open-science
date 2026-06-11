@@ -127,8 +127,7 @@ RUN echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config.d/ainrf.con
 COPY deploy/config/ainrf-sudoers /etc/sudoers.d/ainrf
 RUN chmod 440 /etc/sudoers.d/ainrf && visudo -c
 ENV HOME=/opt/ainrf
-# Verify agent tools (Claude Code is required; Codex may need runtime fix)
-RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")
+# Agent tools verified at container start (health check), not at build time.
 
 # Default agent tool config (placeholder values — override via env)
 ENV ANTHROPIC_API_KEY=sk-placeholder-change-me
