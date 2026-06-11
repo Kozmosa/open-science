@@ -384,6 +384,61 @@ async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
     )
 
 
+_STREAMING_KINDS = frozenset({"message", "thinking"})
+
+
+def _filter_superseded_deltas(items: list[TaskOutputEvent]) -> list[TaskOutputEvent]:
+    """Remove streaming delta events that have been superseded by a final event.
+
+    For events with a ``block_id``:
+    * If a final event (``is_partial=False``) exists, all earlier events for that
+      block are dropped — the final event contains the complete text.
+    * If the block is still streaming, all deltas are kept (they are small).
+    * Events without a ``block_id`` are always preserved.
+    """
+    if not any(item.kind in _STREAMING_KINDS for item in items):
+        return items
+
+    # First pass: find block_ids that have a final event
+    block_has_final: set[str] = set()
+    for item in items:
+        if item.kind not in _STREAMING_KINDS:
+            continue
+        try:
+            payload = json.loads(item.content)
+            if (
+                isinstance(payload, dict)
+                and payload.get("is_partial") is False
+                and isinstance(payload.get("block_id"), str)
+            ):
+                block_has_final.add(payload["block_id"])
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    if not block_has_final:
+        return items
+
+    # Second pass: drop superseded events
+    result: list[TaskOutputEvent] = []
+    for item in items:
+        if item.kind in _STREAMING_KINDS:
+            try:
+                payload = json.loads(item.content)
+                bid = payload.get("block_id") if isinstance(payload, dict) else None
+                if (
+                    isinstance(bid, str)
+                    and bid in block_has_final
+                    and payload.get("is_partial") is True
+                ):
+                    # Superseded partial event — skip
+                    continue
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        result.append(item)
+
+    return result
+
+
 @router.get("/{task_id}/output")
 async def get_task_output(
     request: Request,
@@ -401,7 +456,7 @@ async def get_task_output(
 
     check_resource_ownership(user, task.owner_user_id)
 
-    items = service.get_output(task_id, after_seq=after_seq)
+    items = _filter_superseded_deltas(service.get_output(task_id, after_seq=after_seq))
     if limit > 0:
         has_more = len(items) > limit
         visible = items[:limit]
@@ -456,7 +511,7 @@ async def stream_task_output(
         while True:
             if await request.is_disconnected():
                 break
-            items = service.get_output(task_id, after_seq=cursor)
+            items = _filter_superseded_deltas(service.get_output(task_id, after_seq=cursor))
             for item in items:
                 cursor = item.seq
                 payload = TaskOutputItemResponse(

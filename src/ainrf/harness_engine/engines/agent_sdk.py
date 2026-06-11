@@ -414,27 +414,31 @@ class AgentSdkEngine(HarnessEngine):
             delta_type = delta.get("type")
 
             if delta_type == "thinking_delta" and session.stream_block_type == "thinking":
-                session.stream_block_accumulated += delta.get("thinking", "")
+                delta_text = delta.get("thinking", "")
+                session.stream_block_accumulated += delta_text
                 events.append(
                     EngineEvent(
                         event_type="thinking",
                         payload={
-                            "content": session.stream_block_accumulated,
+                            "content": delta_text,
                             "block_id": f"thinking-{session.stream_block_index}",
                             "is_partial": True,
+                            "is_delta": True,
                         },
                     )
                 )
             elif delta_type == "text_delta" and session.stream_block_type == "text":
-                session.stream_block_accumulated += delta.get("text", "")
+                delta_text = delta.get("text", "")
+                session.stream_block_accumulated += delta_text
                 events.append(
                     EngineEvent(
                         event_type="message",
                         payload={
                             "role": "assistant",
-                            "content": session.stream_block_accumulated,
+                            "content": delta_text,
                             "block_id": f"text-{session.stream_block_index}",
                             "is_partial": True,
+                            "is_delta": True,
                         },
                     )
                 )

@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useLocale, useT } from '../../i18n';
 import type { MessageItem } from '../../types';
 
@@ -44,17 +44,17 @@ function messageTypeLabel(type: string, t: ReturnType<typeof useT>): string {
 
 const PROSE_STYLES = 'prose-sm [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-[var(--bg-tertiary)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_pre]:my-1 [&_pre]:rounded-lg [&_pre]:bg-[var(--bg-tertiary)] [&_pre]:p-2 [&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--text-tertiary)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--text-secondary)] [&_a]:text-[var(--apple-blue)] [&_a]:underline [&_strong]:font-semibold [&_em]:italic [&_hr]:my-2 [&_hr]:border-[var(--border)] [&_table]:my-1 [&_table]:w-full [&_th]:border [&_th]:border-[var(--border)] [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-2 [&_td]:py-1';
 
-function SafeMarkdown({ content, className }: { content: string; className?: string }) {
-  const html = marked.parse(content, { async: false }) as string;
+const SafeMarkdown = memo(function SafeMarkdown({ content, className }: { content: string; className?: string }) {
+  const html = useMemo(() => marked.parse(content, { async: false }) as string, [content]);
   return (
     <div
       className={`break-words font-sans text-sm [&_p]:whitespace-pre-wrap ${PROSE_STYLES} ${className ?? ''}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
-}
+});
 
-export function SystemEventBlock({ message }: { message: MessageItem }) {
+export const SystemEventBlock = memo(function SystemEventBlock({ message }: { message: MessageItem }) {
   const locale = useLocale();
   const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
   return (
@@ -65,9 +65,9 @@ export function SystemEventBlock({ message }: { message: MessageItem }) {
       </div>
     </div>
   );
-}
+});
 
-export function UserMessage({ message }: { message: MessageItem }) {
+export const UserMessage = memo(function UserMessage({ message }: { message: MessageItem }) {
   const locale = useLocale();
   const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
   return (
@@ -78,9 +78,9 @@ export function UserMessage({ message }: { message: MessageItem }) {
       </div>
     </div>
   );
-}
+});
 
-export function AssistantMessage({ message }: { message: MessageItem }) {
+export const AssistantMessage = memo(function AssistantMessage({ message }: { message: MessageItem }) {
   const locale = useLocale();
   const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
   return (
@@ -91,9 +91,9 @@ export function AssistantMessage({ message }: { message: MessageItem }) {
       </div>
     </div>
   );
-}
+});
 
-export function ThinkingBlock({ message }: { message: MessageItem }) {
+export const ThinkingBlock = memo(function ThinkingBlock({ message }: { message: MessageItem }) {
   const isStreaming = message.metadata.isStreaming ?? false;
   const [isOpen, setIsOpen] = useState(isStreaming || message.metadata.isFolded !== true);
   const t = useT();
@@ -116,9 +116,9 @@ export function ThinkingBlock({ message }: { message: MessageItem }) {
       )}
     </div>
   );
-}
+});
 
-export function ToolCallBlock({ message }: { message: MessageItem }) {
+export const ToolCallBlock = memo(function ToolCallBlock({ message }: { message: MessageItem }) {
   const [isOpen, setIsOpen] = useState(message.metadata.isFolded !== true);
   const t = useT();
   const content = typeof message.content === 'object' ? message.content : {};
@@ -140,9 +140,9 @@ export function ToolCallBlock({ message }: { message: MessageItem }) {
       )}
     </div>
   );
-}
+});
 
-export function ToolResultBlock({ message }: { message: MessageItem }) {
+export const ToolResultBlock = memo(function ToolResultBlock({ message }: { message: MessageItem }) {
   const [isOpen, setIsOpen] = useState(message.metadata.isFolded !== true);
   const t = useT();
   const content = typeof message.content === 'object' ? message.content : String(message.content ?? '');
@@ -167,7 +167,7 @@ export function ToolResultBlock({ message }: { message: MessageItem }) {
       )}
     </div>
   );
-}
+});
 
 interface CollapsedGroupItem {
   id: string;
@@ -212,7 +212,7 @@ export function CollapsedGroupBlock({ item, onToggle }: { item: CollapsedGroupIt
   );
 }
 
-export function MessageBlock({ message }: { message: MessageItem }) {
+export const MessageBlock = memo(function MessageBlock({ message }: { message: MessageItem }) {
   switch (message.type) {
     case 'system_event':
       return <SystemEventBlock message={message} />;
@@ -229,4 +229,4 @@ export function MessageBlock({ message }: { message: MessageItem }) {
     default:
       return <AssistantMessage message={message} />;
   }
-}
+});

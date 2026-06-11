@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getTaskMessages } from '../../api';
 import type { MessageItem, TaskOutputEvent } from '../../types';
 
-function parseOutputPayload(content: string): Record<string, unknown> {
+export function parseOutputPayload(content: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(content);
     const payload = typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : { content };
@@ -17,7 +17,7 @@ function parseOutputPayload(content: string): Record<string, unknown> {
   }
 }
 
-function convertOutputEventToMessage(event: TaskOutputEvent, initialPrompt?: string | null): MessageItem | null {
+export function convertOutputEventToMessage(event: TaskOutputEvent, initialPrompt?: string | null): MessageItem | null {
   const payload = parseOutputPayload(event.content);
 
   const base = {
@@ -29,16 +29,18 @@ function convertOutputEventToMessage(event: TaskOutputEvent, initialPrompt?: str
     case 'message': {
       const content = (payload.content as string) || '';
       const blockId = payload.block_id as string | undefined;
+      const isDelta = payload.is_delta as boolean | undefined;
       return {
         ...base,
         type: payload.role === 'user' || content === initialPrompt ? 'user' : 'assistant',
         content,
-        ...(blockId ? { metadata: { ...base.metadata, blockId } } : {}),
+        ...(blockId ? { metadata: { ...base.metadata, blockId, isDelta } } : {}),
       };
     }
     case 'thinking': {
       const blockId = payload.block_id as string | undefined;
       const isPartial = payload.is_partial as boolean | undefined;
+      const isDelta = payload.is_delta as boolean | undefined;
       return {
         ...base,
         type: 'thinking',
@@ -47,7 +49,7 @@ function convertOutputEventToMessage(event: TaskOutputEvent, initialPrompt?: str
           ...base.metadata,
           isFolded: isPartial ? false : true,
           isStreaming: isPartial ?? false,
-          ...(blockId ? { blockId } : {}),
+          ...(blockId ? { blockId, isDelta } : {}),
         },
       };
     }
@@ -89,7 +91,7 @@ function convertOutputEventToMessage(event: TaskOutputEvent, initialPrompt?: str
   }
 }
 
-function convertOutputEventsToMessages(
+export function convertOutputEventsToMessages(
   events: TaskOutputEvent[],
   initialPrompt?: string | null
 ): MessageItem[] {
@@ -151,13 +153,20 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
   });
 
   const [streamMessages, setStreamMessages] = useState<MessageItem[]>([]);
+  const lastProcessedSeqRef = useRef<number>(0);
 
   useEffect(() => {
     setStreamMessages([]);
+    lastProcessedSeqRef.current = 0;
   }, [taskId]);
 
   useEffect(() => {
-    const newMessages = convertOutputEventsToMessages(outputItems, initialPrompt);
+    // Only convert events we haven't processed yet
+    const newEvents = outputItems.filter((e) => e.seq > lastProcessedSeqRef.current);
+    if (newEvents.length === 0) return;
+
+    const newMessages = convertOutputEventsToMessages(newEvents, initialPrompt);
+    lastProcessedSeqRef.current = newEvents[newEvents.length - 1].seq;
 
     setStreamMessages((prev) => {
       // Build a map of existing messages by blockId for quick lookup
@@ -173,10 +182,16 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
         if (bid) {
           const existingIdx = byBlockId.get(bid);
           if (existingIdx !== undefined) {
-            // Update existing message with same blockId (streaming delta)
+            const isDelta = msg.metadata.isDelta === true;
+            const prevContent = typeof result[existingIdx].content === 'string'
+              ? result[existingIdx].content as string
+              : '';
+            const newContent = isDelta
+              ? prevContent + (typeof msg.content === 'string' ? msg.content : '')
+              : msg.content;
             result[existingIdx] = {
               ...result[existingIdx],
-              content: msg.content,
+              content: newContent,
               metadata: { ...result[existingIdx].metadata, ...msg.metadata },
             };
             continue;

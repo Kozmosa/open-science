@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { buildTaskStreamUrl, getTaskOutput } from '../../api';
 import { useT } from '../../i18n';
 import type { TaskOutputEvent } from '../../types';
-import { getNextOutputSeq, mergeOutputItems } from './output';
+import { getNextOutputSeq, mergeOutputItems, pruneSupersededDeltas } from './output';
 
 const PAGE_SIZE = 10;
 const CACHE_PREFIX = 'ainrf-task-output-';
@@ -70,14 +70,25 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
   const refillPromiseRef = useRef<Promise<void> | null>(null);
   const loadMoreSeqRef = useRef<number>(0);
 
+  const writeCacheTimerRef = useRef<number | null>(null);
+
   const appendOutput = useCallback(
     (items: TaskOutputEvent[], taskId: string) => {
       const taskItems = items.filter((item) => item.task_id === taskId);
       if (taskItems.length === 0) return;
       setOutputItems((current) => {
         const merged = mergeOutputItems(current, taskItems);
-        writeCache(taskId, merged);
-        return merged;
+        const pruned = pruneSupersededDeltas(merged);
+        // Debounced cache write: schedule a write in 300ms, cancelling any pending one
+        if (writeCacheTimerRef.current !== null) {
+          window.clearTimeout(writeCacheTimerRef.current);
+        }
+        const itemsToCache = pruned;
+        writeCacheTimerRef.current = window.setTimeout(() => {
+          writeCacheTimerRef.current = null;
+          writeCache(taskId, itemsToCache);
+        }, 300);
+        return pruned;
       });
       nextSeqRef.current = Math.max(
         nextSeqRef.current,
@@ -126,6 +137,11 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
 
     closeCurrentStream();
     refillPromiseRef.current = null;
+    // Flush any pending debounced cache write from previous task
+    if (writeCacheTimerRef.current !== null) {
+      window.clearTimeout(writeCacheTimerRef.current);
+      writeCacheTimerRef.current = null;
+    }
     setOutputItems([]);
     setOutputError(null);
     setHasMore(false);
@@ -192,8 +208,9 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
         // 1. Try sessionStorage cache first
         const cached = readCache(taskId);
         if (cached && cached.length > 0) {
-          setOutputItems(cached);
-          const maxCachedSeq = getNextOutputSeq(cached, 0);
+          const prunedCache = pruneSupersededDeltas(cached);
+          setOutputItems(prunedCache);
+          const maxCachedSeq = getNextOutputSeq(prunedCache, 0);
           nextSeqRef.current = maxCachedSeq;
           loadMoreSeqRef.current = maxCachedSeq;
           // Fetch only new items after the cache
@@ -208,11 +225,12 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
           const page = await getTaskOutput(taskId, 0, PAGE_SIZE);
           if (!active) return;
           if (page.items.length > 0) {
-            setOutputItems(page.items);
-            writeCache(taskId, page.items);
-            nextSeqRef.current = getNextOutputSeq(page.items, 0);
+            const pruned = pruneSupersededDeltas(page.items);
+            setOutputItems(pruned);
+            writeCache(taskId, pruned);
+            nextSeqRef.current = getNextOutputSeq(pruned, 0);
             // loadMoreSeq starts at 0 + items loaded = next batch boundary
-            loadMoreSeqRef.current = page.items[page.items.length - 1].seq;
+            loadMoreSeqRef.current = pruned[pruned.length - 1].seq;
           }
           setHasMore(page.has_more);
         }
@@ -227,6 +245,11 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
     return () => {
       active = false;
       closeCurrentStream();
+      // Flush pending cache write on unmount
+      if (writeCacheTimerRef.current !== null) {
+        window.clearTimeout(writeCacheTimerRef.current);
+        writeCacheTimerRef.current = null;
+      }
     };
   }, [queryClient, taskId, t, appendOutput]);
 

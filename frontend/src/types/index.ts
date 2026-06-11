@@ -684,6 +684,7 @@ export interface MessageItem {
     engineType?: string;
     blockId?: string;
     isStreaming?: boolean;
+    isDelta?: boolean;
   };
 }
 
