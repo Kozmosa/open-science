@@ -23,6 +23,12 @@ _SENSITIVE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("~/.ssh/*", re.compile(r"(?:^|/)\.ssh/")),
     ("/root/*", re.compile(r"/root/")),
     ("/proc/*", re.compile(r"/proc/")),
+    # ARIS runtime data — traces, meta, config generated per workspace.
+    # Access is audited to detect cross-tenant data leakage.
+    (".aris/", re.compile(r"(?:^|/)\.aris/")),
+    # ARIS registry skill load directory — contains generated skill.json
+    # files managed by the registry sync service.
+    ("skills/.ainrf-registry", re.compile(r"/skills/\.ainrf-registry")),
 ]
 
 SENSITIVE_PATTERNS: list[re.Pattern[str]] = [pattern for _, pattern in _SENSITIVE_PATTERNS]

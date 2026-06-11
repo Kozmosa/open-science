@@ -7,8 +7,8 @@ import structlog
 from ainrf.security.audit import audit_event
 from ainrf.security.sensitive_paths import check_path_access, is_sensitive_path
 import pytest
-pytestmark = [pytest.mark.middleware]
 
+pytestmark = [pytest.mark.middleware]
 
 
 class TestAuditEvent:
@@ -101,3 +101,29 @@ class TestCheckPathAccess:
         with structlog.testing.capture_logs() as logs:
             check_path_access("/etc/shadow", environment_id="env-prod")
         assert logs[0]["environment_id"] == "env-prod"
+
+    def test_aris_data_directory(self) -> None:
+        ok, name = is_sensitive_path("/workspace/project/.aris/traces")
+        assert ok is True
+        assert name == ".aris/"
+
+    def test_aris_data_at_root(self) -> None:
+        ok, name = is_sensitive_path(".aris/meta/config.json")
+        assert ok is True
+
+    def test_aris_registry_marker(self) -> None:
+        ok, name = is_sensitive_path("/home/user/.ainrf_workspaces/default/skills/.ainrf-registry")
+        assert ok is True
+
+    def test_aris_skill_dir_not_sensitive(self) -> None:
+        ok, name = is_sensitive_path(
+            "/workspace/.ainrf_workspaces/default/skills/research-lit/SKILL.md"
+        )
+        assert ok is False
+
+    def test_aris_audit_on_access(self) -> None:
+        with structlog.testing.capture_logs() as logs:
+            check_path_access("/project/.aris/traces/review.json", user_id="bob")
+        assert len(logs) == 1
+        assert logs[0]["event"] == "files.sensitive_path_access"
+        assert logs[0]["path"] == "review.json"

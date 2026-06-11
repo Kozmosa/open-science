@@ -325,3 +325,53 @@ def test_build_execution_context_includes_skill_load_dir(
     ctx = svc._build_execution_context(task)
     assert ctx.skill_load_dir is not None
     assert ctx.skills == ["arxiv"]
+
+
+def test_build_execution_context_adds_codex_mcp_when_skills_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codex MCP is automatically added when ARIS skills are loaded."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    workspace_dir = tmp_path / ".ainrf_workspaces" / "default"
+    load_dir = workspace_dir / "skills"
+    skill_dir = load_dir / "research-lit"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# research-lit\n")
+
+    svc = AgenticResearcherService(state_root=tmp_path)
+    svc.initialize()
+    researcher = vanilla(engine=HarnessEngineType.CLAUDE_CODE, user_skills=["research-lit"])
+    task = svc.create_task(
+        project_id="p",
+        workspace_id="ws",
+        environment_id="env",
+        researcher=researcher,
+        prompt="test",
+        owner_user_id="u",
+    )
+    ctx = svc._build_execution_context(task)
+    assert ctx.mcp_servers is not None
+    assert "codex" in ctx.mcp_servers
+    assert ctx.mcp_servers["codex"]["command"] == "codex"
+    assert ctx.mcp_servers["codex"]["args"] == ["mcp-server"]
+
+
+def test_build_execution_context_no_codex_mcp_without_skills(
+    tmp_path: Path,
+) -> None:
+    """Codex MCP is NOT added when no ARIS skills are loaded."""
+    svc = AgenticResearcherService(state_root=tmp_path)
+    svc.initialize()
+    researcher = vanilla(engine=HarnessEngineType.CLAUDE_CODE)
+    task = svc.create_task(
+        project_id="p",
+        workspace_id="ws",
+        environment_id="env",
+        researcher=researcher,
+        prompt="test",
+        owner_user_id="u",
+    )
+    ctx = svc._build_execution_context(task)
+    # No skills loaded → no codex MCP (mcp_servers may be None or empty)
+    if ctx.mcp_servers:
+        assert "codex" not in ctx.mcp_servers

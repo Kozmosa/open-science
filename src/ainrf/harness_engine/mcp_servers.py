@@ -64,8 +64,7 @@ def _kindly_web_search_config() -> McpServerConfig:
         "command": _uvx_command(),
         "args": [
             "--from",
-            "git+https://github.com/Shelpuk-AI-Technology-Consulting/"
-            "kindly-web-search-mcp-server",
+            "git+https://github.com/Shelpuk-AI-Technology-Consulting/kindly-web-search-mcp-server",
             "kindly-web-search-mcp-server",
             "start-mcp-server",
         ],
@@ -187,14 +186,12 @@ class SearchSettings:
         valid_ids = set(_BACKENDS.keys())
         if self.active_backend not in valid_ids:
             raise ValueError(
-                f"Unknown search backend: {self.active_backend!r}. "
-                f"Available: {sorted(valid_ids)}"
+                f"Unknown search backend: {self.active_backend!r}. Available: {sorted(valid_ids)}"
             )
         for name in self.auto_start_mcp_servers:
             if name not in valid_ids:
                 raise ValueError(
-                    f"Unknown MCP server in auto_start: {name!r}. "
-                    f"Available: {sorted(valid_ids)}"
+                    f"Unknown MCP server in auto_start: {name!r}. Available: {sorted(valid_ids)}"
                 )
 
 
@@ -277,10 +274,18 @@ def list_backends() -> list[SearchBackend]:
 
 def available_mcp_servers() -> dict[str, str]:
     """Return name → description for all MCP-capable backends."""
+    return {bid: b.description for bid, b in _BACKENDS.items() if b.requires_mcp}
+
+
+def _codex_mcp_config() -> McpServerConfig:
+    """Codex MCP server — cross-model review for ARIS research skills.
+
+    Runs ``codex mcp-server`` which exposes a Codex-powered API that ARIS
+    research skills use for external model review (cross-model validation).
+    """
     return {
-        bid: b.description
-        for bid, b in _BACKENDS.items()
-        if b.requires_mcp
+        "command": "codex",
+        "args": ["mcp-server"],
     }
 
 
@@ -288,4 +293,5 @@ def available_mcp_servers() -> dict[str, str]:
 _MCP_FACTORIES: dict[str, Any] = {
     "kindly-web-search": _kindly_web_search_config,
     "cc-web-mcp": _cc_web_mcp_config,
+    "codex": _codex_mcp_config,
 }

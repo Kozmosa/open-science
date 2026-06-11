@@ -34,7 +34,12 @@
       "Bash(useradd *)",
       "Bash(userdel *)",
       "Bash(groupadd *)",
-      "Bash(passwd *)"
+      "Bash(passwd *)",
+      "Bash(rm -rf /)",
+      "Bash(mkfs *)",
+      "Bash(mount *)",
+      "Bash(umount *)",
+      "Bash(dd *)"
     ]
   },
   "skipDangerousModePermissionPrompt": true

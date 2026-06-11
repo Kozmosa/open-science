@@ -785,6 +785,14 @@ class AgenticResearcherService:
         )
         tenant_user = self._resolve_tenant_user(task.owner_user_id)
         skill_load_dir = self._resolve_skill_load_dir(task)
+
+        # When ARIS skills are loaded, automatically add the Codex MCP server
+        # so that research review skills can perform cross-model validation.
+        if skill_load_dir is not None:
+            from ainrf.harness_engine.mcp_servers import _codex_mcp_config
+
+            mcp_servers.setdefault("codex", _codex_mcp_config())
+
         return ExecutionContext(
             task_id=task.task_id,
             working_directory=str(working_directory),
@@ -849,7 +857,11 @@ class AgenticResearcherService:
             user = self._auth_service.get_user(owner_user_id)
         except Exception:
             return None
-        from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
+        from ainrf.auth.service import (
+            _is_container_environment,
+            _linux_user_exists,
+            tenant_linux_username,
+        )
 
         if not _is_container_environment():
             return None
@@ -966,10 +978,7 @@ class AgenticResearcherService:
                 self._stream_buffers.pop(task_id, None)
                 return
             # Remove only deltas matching this block_id (parse JSON, don't substring-match)
-            remaining = [
-                e for e in buf
-                if not self._event_matches_block_id(e, block_id)
-            ]
+            remaining = [e for e in buf if not self._event_matches_block_id(e, block_id)]
             if remaining:
                 self._stream_buffers[task_id] = remaining
             else:
@@ -980,10 +989,7 @@ class AgenticResearcherService:
         """Check whether a buffered delta event belongs to the given block_id."""
         try:
             payload = json.loads(event.content)
-            return (
-                isinstance(payload, dict)
-                and payload.get("block_id") == block_id
-            )
+            return isinstance(payload, dict) and payload.get("block_id") == block_id
         except (json.JSONDecodeError, AttributeError):
             return False
 
