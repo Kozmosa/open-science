@@ -118,6 +118,8 @@ RUN mkdir -p /run/sshd /root/.ssh && \
     chown ainrf:ainrf /home/ainrf/.ssh /home/ainrf/.ssh/authorized_keys && \
     chown -R ainrf:ainrf /opt/ainrf/.ssh
 RUN echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config.d/ainrf.conf
+COPY deploy/config/ainrf-sudoers /etc/sudoers.d/ainrf
+RUN chmod 440 /etc/sudoers.d/ainrf && visudo -c
 ENV HOME=/opt/ainrf
 # Verify agent tools (Claude Code is required; Codex may need runtime fix)
 RUN claude --version && (codex --version || echo "WARNING: codex platform binary not available at build time")

@@ -220,6 +220,7 @@ def create_app(
     agentic_researcher_service = AgenticResearcherService(
         state_root=api_config.state_root,
         workspace_service=app.state.workspace_service,
+        auth_service=auth_service,
     )
     agentic_researcher_service.initialize()
     app.state.agentic_researcher_service = agentic_researcher_service

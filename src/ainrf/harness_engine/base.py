@@ -48,6 +48,8 @@ class ExecutionContext:
     codex_approval_policy: str | None = None
     codex_home_path: str | None = None
     session_state_path: str | None = None
+    tenant_user: str | None = None
+
 
     @property
     def prompt(self) -> str:

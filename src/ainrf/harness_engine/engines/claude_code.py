@@ -74,6 +74,8 @@ class ClaudeCodeEngine(HarnessEngine):
             "--permission-mode",
             "bypassPermissions",
         ]
+        if context.tenant_user:
+            command = ["sudo", "-u", context.tenant_user, *command]
         # If MCP servers are configured, write a temporary config file and
         # pass it via --mcp-config so Claude Code spawns the servers.
         mcp_config_file: tempfile._TemporaryFileWrapper[bytes] | None = None

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from ainrf.auth.service import AuthService
 from ainrf.agentic_researcher.models import (
     AgenticResearcher,
     AgenticResearcherType,
@@ -148,12 +149,14 @@ class AgenticResearcherService:
         *,
         workspace_service: WorkspaceRegistryService | None = None,
         engine_factory: Callable[[str], HarnessEngine] = get_engine,
+        auth_service: AuthService | None = None,
     ) -> None:
         self._state_root = state_root
         self._runtime_root = state_root / "runtime"
         self._db_path = self._runtime_root / "agentic_researcher.sqlite3"
         self._workspace_service = workspace_service
         self._engine_factory = engine_factory
+        self._auth_service = auth_service
         self._engines: dict[HarnessEngineType, HarnessEngine] = {}
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._initialized = False
@@ -658,6 +661,7 @@ class AgenticResearcherService:
             self._state_root,
             user_mcp_servers=task.user_mcp_servers,
         )
+        tenant_user = self._resolve_tenant_user(task.owner_user_id)
         return ExecutionContext(
             task_id=task.task_id,
             working_directory=str(working_directory),
@@ -669,6 +673,7 @@ class AgenticResearcherService:
             session_state_path=str(
                 self._runtime_root / "session-states" / task.task_id / "checkpoint.json"
             ),
+            tenant_user=tenant_user,
         )
 
     def get_runtime_summary(self, task: Task) -> dict[str, object]:
@@ -706,6 +711,24 @@ class AgenticResearcherService:
         fallback = self._state_root / "workspace" / task.workspace_id
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
+
+    def _resolve_tenant_user(self, owner_user_id: str) -> str | None:
+        """Resolve owner_user_id to the Linux tenant username ``ainrf_<name>``.
+
+        Returns ``None`` when the auth service is unavailable or the user has
+        no corresponding Linux account (e.g. local dev / tests).
+        """
+        if self._auth_service is None:
+            return None
+        try:
+            user = self._auth_service.get_user(owner_user_id)
+        except Exception:
+            return None
+        from ainrf.auth.service import _is_container_environment, tenant_linux_username
+
+        if not _is_container_environment():
+            return None
+        return tenant_linux_username(user.username)
 
     def _get_engine(self, engine_type: HarnessEngineType) -> HarnessEngine:
         engine = self._engines.get(engine_type)

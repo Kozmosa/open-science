@@ -168,6 +168,8 @@ class CodexAppServerEngine(HarnessEngine):
         command = shlex.split(command_text)
         if not command:
             raise RuntimeError("Codex App Server command is empty")
+        if context.tenant_user:
+            command = ["sudo", "-u", context.tenant_user, *command]
         env = os.environ.copy()
         if context.codex_base_url:
             env["OPENAI_BASE_URL"] = context.codex_base_url

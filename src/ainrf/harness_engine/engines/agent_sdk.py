@@ -195,6 +195,7 @@ class AgentSdkEngine(HarnessEngine):
             include_partial_messages=True,
             can_use_tool=self._can_use_tool,
             sandbox=self._build_sandbox_settings(),
+            user=context.tenant_user,
         )
 
         async with self._run_lock:

@@ -1,0 +1,4 @@
+# Allow the ainrf backend user to run any command as any ainrf_tenants group member
+# without a password.  This is required for Phase 2 multi-tenant task execution:
+# the backend spawns agent processes (claude, codex) as the task owner's Linux user.
+ainrf ALL=(%ainrf_tenants) NOPASSWD: ALL
