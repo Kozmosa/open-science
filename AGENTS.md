@@ -180,6 +180,20 @@ Before submitting changes to Python code, run both runtime and static checks:
 - Selective runs: `pytest -m api`, `pytest -m unit`, `pytest -m 'not slow'`.
 - Frontend test command: `cd frontend && npm run test:run`.
 
+### Agent E2E Testing
+
+AINRF uses a coding-agent-driven E2E testing approach. A coding agent (Claude Code, Codex, etc.) uses Playwright MCP to drive a browser against a production-like Docker container, executing the test scenarios defined in `testing/e2e/CHECKLIST.md`.
+
+- **Test environment**: `testing/e2e/` — isolated Docker Compose with ephemeral tmpfs volumes, seeded test users, no TLS.
+- **Start**: `testing/e2e/run.sh up` — builds image, starts containers, seeds users, prints credentials.
+- **Stop**: `testing/e2e/run.sh down` — removes all containers and volumes.
+- **Prerequisites**: `testing/e2e/check-prereqs.sh` — verifies Docker, Node.js, Playwright MCP, curl.
+- **Agent prompt**: `testing/e2e/AGENT_PROMPT.md` — system prompt for the test agent.
+- **MCP config**: `testing/e2e/config/mcp-servers.json` — Playwright MCP server configuration.
+- **Results**: Agent writes reports to `testing/e2e/results/` (gitignored).
+
+Ports: frontend on 8198, backend on 8199 (configurable via `AIWebPort`/`AITestPort`).
+
 ## Commit & Pull Request Guidelines
 
 Follow the existing commit style: short, imperative, and scoped when useful, e.g. `docs: revise framework...` or `chore: update gitignore`. Keep commits focused.

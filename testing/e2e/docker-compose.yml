@@ -1,0 +1,81 @@
+# ══════════════════════════════════════════════════════════════════
+# AINRF E2E Test Environment — Docker Compose
+# ══════════════════════════════════════════════════════════════════
+#
+# Isolated, ephemeral environment for agent-driven E2E testing.
+# All data lives in tmpfs; nothing persists after `down`.
+#
+# Usage:
+#   testing/e2e/run.sh up        # build + start, wait for healthy
+#   testing/e2e/run.sh status    # print URLs and admin password
+#   testing/e2e/run.sh logs      # tail all logs
+#   testing/e2e/run.sh down      # destroy everything
+#
+# The agent accesses the app at http://localhost:AITestPort (default 8199).
+#
+# ══════════════════════════════════════════════════════════════════
+
+services:
+  ainrf:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    container_name: ainrf-e2e
+    environment:
+      AINRF_PRODUCTION: "1"
+      AINRF_HOST: "0.0.0.0"
+      AINRF_PORT: "8000"
+      AINRF_JWT_SECRET: "e2e-test-jwt-secret-do-not-use-in-production-32ch"
+      AINRF_API_KEY_HASHES: "e2e-dummy-api-key-hash"
+      AINRF_PUBLIC_REGISTRATION_ENABLED: "true"
+      AINRF_LOGIN_MAX_FAILURES: "100"
+      AINRF_LOGIN_LOCKOUT_HOURS: "0"
+      AINRF_METRICS_ENABLED: "true"
+      # Seed mode: entrypoint creates test users on first boot
+      AINRF_E2E_SEED: "1"
+      # Agent tool keys — dummy for E2E; real keys only in CI secrets
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-sk-e2e-dummy}"
+      ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
+      ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
+      CODEX_API_KEY: "${CODEX_API_KEY:-sk-e2e-dummy}"
+      CODEX_BASE_URL: "${CODEX_BASE_URL:-https://api.openai.com/v1}"
+      CODEX_MODEL: "${CODEX_MODEL:-gpt-5.5}"
+    tmpfs:
+      - /opt/ainrf/state
+      - /opt/ainrf/.ainrf_workspaces
+      - /home/ainrf_tenants
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      retries: 30
+      start_period: 10s
+    ports:
+      - "127.0.0.1:${AITestPort:-8199}:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
+
+  nginx:
+    image: docker.1ms.run/nginx:1.27-alpine
+    container_name: ainrf-e2e-nginx
+    volumes:
+      - ./config/nginx-e2e.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../frontend/dist:/usr/share/nginx/html:ro
+    ports:
+      - "127.0.0.1:${AIWebPort:-8198}:80"
+    depends_on:
+      ainrf:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "1"

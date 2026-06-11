@@ -1,0 +1,10 @@
+# E2E test results and artifacts
+results/*.md
+results/*.json
+results/*.png
+results/*.html
+!results/.gitkeep
+
+# Generated credentials (never commit)
+credentials.json
+e2e-credentials.json
