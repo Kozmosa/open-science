@@ -28,6 +28,8 @@ _EXEMPT_PATH_PREFIXES = (
     "/favicon",
     "/vite.svg",
     "/logo",
+    # Prometheus metrics endpoint (machine-to-machine, no browser auth)
+    "/metrics",
 )
 
 # Known API route prefixes. Paths NOT matching these are SPA routes

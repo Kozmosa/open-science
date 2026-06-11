@@ -92,6 +92,7 @@ services:
       - "--storage.tsdb.retention.time=30d"
       - "--storage.tsdb.retention.size=2GB"
       - "--web.enable-remote-write-receiver"
+      - "--web.listen-address=127.0.0.1:9091"
     depends_on:
       ainrf:
         condition: service_healthy
@@ -113,7 +114,7 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/ainrf/ainrf-overview.json
     volumes:
-      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/provisioning-host:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
