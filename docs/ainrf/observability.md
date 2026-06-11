@@ -1,133 +1,133 @@
 ---
-title: Observability
+title: 可观测性
 ---
 
-# Observability
+# 可观测性
 
-## Audit Logging Architecture
+## 审计日志架构
 
-AINRF produces structured JSON audit events via `structlog`. Every event includes:
+AINRF 通过 `structlog` 输出结构化 JSON 审计事件。每个事件包含：
 
-- `event` — event name (e.g., `auth.login.success`)
-- `severity` — `info`, `warning`, `high`, or `critical`
+- `event` — 事件名（如 `auth.login.success`）
+- `severity` — `info`、`warning`、`high` 或 `critical`
 - `timestamp` — ISO 8601 UTC
-- `component` — always `audit`
-- `request_id` — UUID linking all events in one request
-- Additional context fields (user_id, client_ip, etc.)
+- `component` — 固定为 `audit`
+- `request_id` — 关联同一次请求所有事件的 UUID
+- 附加上下文字段（user_id、client_ip 等）
 
-All sensitive values (tokens, passwords, API keys) are automatically redacted.
+所有敏感值（token、密码、API key）自动脱敏。
 
-## Audit Event Catalog
+## 审计事件目录
 
-### Authentication Events
+### 认证事件
 
-| Event | Severity | Fields |
+| 事件 | 级别 | 字段 |
 |---|---|---|
 | `auth.login.success` | info | user_id, client_ip |
 | `auth.login.failed` | warning | user_id, client_ip, reason |
 | `auth.register.submitted` | info | user_id |
 | `auth.refresh.failed` | warning | reason |
 
-### Terminal Events
+### 终端事件
 
-| Event | Severity | Fields |
+| 事件 | 级别 | 字段 |
 |---|---|---|
 | `terminal.session.created` | info | session_id, environment_id, user_id |
 | `terminal.session.reset` | info | session_id |
 | `terminal.websocket.opened` | info | session_id |
 | `terminal.websocket.closed` | info | session_id |
 
-### Code-Server Events
+### Code-Server 事件
 
-| Event | Severity | Fields |
+| 事件 | 级别 | 字段 |
 |---|---|---|
 | `code.session.created` | info | user_id, environment_id |
 | `code.session.stopped` | info | user_id |
 | `code.proxy.request` | info | — |
 
-### File Events
+### 文件事件
 
-| Event | Severity | Fields |
+| 事件 | 级别 | 字段 |
 |---|---|---|
 | `files.read` | info | path (basename), user_id |
 | `files.upload` | info | filename, user_id |
 | `files.sensitive_path_access` | high | path (basename), pattern, user_id |
 
-### Environment Events
+### 环境事件
 
-| Event | Severity | Fields |
+| 事件 | 级别 | 字段 |
 |---|---|---|
 | `environment.created` | info | environment_id, user_id |
 | `environment.updated` | info | environment_id, user_id |
 | `environment.ssh_field_changed` | warning | environment_id, user_id |
 | `environment.code_server_install_requested` | info | environment_id |
 
-### Task Events
+### 任务事件
 
-| Event | Severity | Fields |
+| 事件 | 级别 | 字段 |
 |---|---|---|
 | `task.created` | info | task_id, user_id |
 | `task.deleted` | info | task_id, user_id |
 | `task.permanent_deleted` | warning | task_id, user_id |
 
-## Prometheus Metrics Reference
+## Prometheus 指标参考
 
-Enable with `AINRF_METRICS_ENABLED=true`. Endpoint: `GET /metrics`
+通过 `AINRF_METRICS_ENABLED=true` 启用，端点：`GET /metrics`
 
-### Counters
+### 计数器（Counters）
 
-| Metric | Labels | Description |
+| 指标 | 标签 | 说明 |
 |---|---|---|
-| `ainrf_http_requests_total` | method, path, status | Total HTTP requests |
-| `ainrf_auth_login_success_total` | — | Successful logins |
-| `ainrf_auth_login_failed_total` | reason | Failed logins by reason |
-| `ainrf_terminal_exec_total` | environment_id | Terminal exec commands |
-| `ainrf_terminal_exec_denied_total` | — | Denied terminal exec |
-| `ainrf_code_session_created_total` | — | Code-server sessions |
-| `ainrf_files_sensitive_path_access_total` | pattern | Sensitive file access |
-| `ainrf_environment_update_total` | — | Environment updates |
+| `ainrf_http_requests_total` | method, path, status | HTTP 请求总数 |
+| `ainrf_auth_login_success_total` | — | 登录成功次数 |
+| `ainrf_auth_login_failed_total` | reason | 按原因分类的登录失败次数 |
+| `ainrf_terminal_exec_total` | environment_id | 终端命令执行次数 |
+| `ainrf_terminal_exec_denied_total` | — | 被拒绝的终端命令次数 |
+| `ainrf_code_session_created_total` | — | Code-Server 会话创建次数 |
+| `ainrf_files_sensitive_path_access_total` | pattern | 敏感路径访问次数 |
+| `ainrf_environment_update_total` | — | 环境更新次数 |
 
-### Histograms
+### 直方图（Histograms）
 
-| Metric | Description |
+| 指标 | 说明 |
 |---|---|
-| `ainrf_http_request_duration_seconds` | Request latency distribution |
+| `ainrf_http_request_duration_seconds` | 请求延迟分布 |
 
-### Gauges
+### 仪表盘（Gauges）
 
-| Metric | Description |
+| 指标 | 说明 |
 |---|---|
-| `ainrf_terminal_ws_active` | Active terminal WebSocket connections |
+| `ainrf_terminal_ws_active` | 当前活跃的终端 WebSocket 连接数 |
 
-## Log File Format
+## 日志文件格式
 
-Logs are written to `<state_root>/logs/backend-YYYYMMDD.log`, one JSON object per line:
+日志写入 `<state_root>/logs/backend-YYYYMMDD.log`，每行一个 JSON 对象：
 
 ```json
 {"event":"auth.login.success","severity":"info","component":"audit","user_id":"alice","client_ip":"10.0.0.1","request_id":"a1b2c3d4-...","timestamp":"2026-06-04T12:00:00Z"}
 ```
 
-## Request ID Correlation
+## 请求 ID 关联
 
-Every HTTP request receives a UUID4 `request_id` via the `X-Request-ID` response header. This ID is bound to `structlog` context variables, so all log lines within that request (including audit events) carry the same `request_id`. WebSocket connections inherit the request_id from their upgrade request.
+每个 HTTP 请求通过 `X-Request-ID` 响应头获得一个 UUID4 `request_id`。该 ID 绑定到 `structlog` 上下文变量，因此同一次请求内的所有日志行（包括审计事件）都携带相同的 `request_id`。WebSocket 连接从其升级请求继承 `request_id`。
 
-## Example Prometheus Queries
+## PromQL 查询示例
 
 ```promql
-# Login failure rate (per second, 5-min window)
+# 登录失败速率（每秒，5 分钟窗口）
 rate(ainrf_auth_login_failed_total[5m])
 
-# 99th percentile request latency
+# 99 分位请求延迟
 histogram_quantile(0.99, rate(ainrf_http_request_duration_seconds_bucket[5m]))
 
-# Active terminal sessions
+# 活跃终端会话数
 ainrf_terminal_ws_active
 
-# Sensitive file access by pattern
+# 按模式的敏感文件访问
 sum by (pattern) (rate(ainrf_files_sensitive_path_access_total[1h]))
 ```
 
-## Monitoring Stack (Prometheus + Grafana)
+## 监控栈（Prometheus + Grafana）
 
 AINRF 的 Docker 部署自带完整的监控栈：
 
@@ -153,13 +153,13 @@ AINRF 的 Docker 部署自带完整的监控栈：
 三种 Docker Compose 文件均已内置 Prometheus + Grafana，无需额外配置：
 
 ```bash
-# Base (nginx + TLS)
+# 基础版（nginx + TLS）
 cd deploy && docker compose up -d --build
 
-# CPU-only (host network)
+# CPU-only（host 网络）
 cd deploy && docker compose -f docker-compose.cpu.yml up -d --build
 
-# GPU
+# GPU 版
 cd deploy && docker compose -f docker-compose.gpu.yml up -d --build
 ```
 
@@ -167,9 +167,9 @@ cd deploy && docker compose -f docker-compose.gpu.yml up -d --build
 
 | 部署方式 | Grafana 访问地址 | 默认账号 |
 |---------|-----------------|---------|
-| Base (nginx) | `https://<host>/monitoring/` | `admin` / `ainrf-grafana` |
-| CPU (host network) | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
-| GPU | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
+| 基础版（nginx） | `https://<host>/monitoring/` | `admin` / `ainrf-grafana` |
+| CPU-only（host 网络） | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
+| GPU 版 | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
 
 > [!warning]
 > 默认密码 `ainrf-grafana` 仅用于初次登录。生产环境请在 `.env` 中设置 `GRAFANA_ADMIN_PASSWORD` 为强密码。
@@ -180,16 +180,16 @@ Dashboard JSON 位于 `deploy/config/grafana/dashboards/ainrf/ainrf-overview.jso
 
 | 面板 | 类型 | 指标 | 说明 |
 |------|------|------|------|
-| HTTP Request Rate | 时序图 | `ainrf_http_requests_total` | 按 method/path/status 的请求速率 |
-| HTTP Error Rate | Stat | 5xx/total | 5xx 错误占比，阈值 1%/5% |
-| P95 Latency | Stat | `ainrf_http_request_duration_seconds` | 95 分位延迟，阈值 1s/5s |
-| Request Duration Histogram | 时序图 | p50/p90/p99 | 延迟分布趋势 |
-| Login Success / Failure | 时序图 | `ainrf_auth_login_*_total` | 登录成功/失败趋势 |
-| Terminal Exec Commands | 时序图 | `ainrf_terminal_exec_*` | 允许/拒绝的终端命令 |
-| Active WebSocket Sessions | Stat | `ainrf_terminal_ws_active` | 当前活跃 WS 连接数 |
-| Sensitive File Access | 柱状图 | `ainrf_files_sensitive_path_access_total` | 敏感路径访问事件 |
-| Environment Updates | 时序图 | `ainrf_environment_update_total` | 环境检测/更新操作 |
-| Code Sessions Created | Stat | `ainrf_code_session_created_total` | 最近 1 小时代码会话数 |
+| HTTP 请求速率 | 时序图 | `ainrf_http_requests_total` | 按 method/path/status 的请求速率 |
+| HTTP 错误率 | Stat | 5xx/total | 5xx 错误占比，阈值 1%/5% |
+| P95 延迟 | Stat | `ainrf_http_request_duration_seconds` | 95 分位延迟，阈值 1s/5s |
+| 请求延迟分布 | 时序图 | p50/p90/p99 | 延迟分布趋势 |
+| 登录成功/失败 | 时序图 | `ainrf_auth_login_*_total` | 登录成功/失败趋势 |
+| 终端命令执行 | 时序图 | `ainrf_terminal_exec_*` | 允许/拒绝的终端命令 |
+| 活跃 WebSocket 会话 | Stat | `ainrf_terminal_ws_active` | 当前活跃 WS 连接数 |
+| 敏感文件访问 | 柱状图 | `ainrf_files_sensitive_path_access_total` | 敏感路径访问事件 |
+| 环境更新 | 时序图 | `ainrf_environment_update_total` | 环境检测/更新操作 |
+| 代码会话创建 | Stat | `ainrf_code_session_created_total` | 最近 1 小时代码会话数 |
 
 Dashboard 默认刷新间隔 30 秒，时间范围最近 1 小时。
 
@@ -212,7 +212,7 @@ deploy/config/
             └── ainrf-overview.json  # 主 Dashboard
 ```
 
-## Alert Rules
+## 告警规则
 
 告警规则模板在 `deploy/examples/prometheus-rules.example.yml`，已自动挂载到 Prometheus 容器。
 
