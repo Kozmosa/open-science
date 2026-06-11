@@ -306,12 +306,53 @@ bash deploy/k8s/deploy.sh --destroy
 
 ### Prometheus 指标
 
-设置 `AINRF_METRICS_ENABLED=true` 后，指标暴露在 `/metrics`（需认证）。
+设置 `AINRF_METRICS_ENABLED=true` 后，指标暴露在 `/metrics`。
 
-示例告警规则见 `deploy/examples/prometheus-rules.example.yml`。
+### Docker 部署监控栈
+
+Docker Compose 部署自带 Prometheus + Grafana 监控栈，无需额外安装。
+
+| 服务 | 说明 |
+|------|------|
+| `prometheus` | 每 15 秒抓取 AINRF `/metrics`，30 天数据保留，2GB 上限 |
+| `grafana` | 自动配置 Prometheus 数据源，预置 AINRF Overview Dashboard |
+
+#### 访问方式
+
+| 部署方式 | Grafana 地址 | 说明 |
+|---------|-------------|------|
+| `docker-compose.yml` (nginx) | `https://<host>/monitoring/` | nginx 反代 |
+| `docker-compose.cpu.yml` (host) | `http://<host>:3000/` | 直接访问 |
+| `docker-compose.gpu.yml` | `http://<host>:3000/` | 直接访问 |
+
+默认账号：`admin` / `ainrf-grafana`（可通过 `.env` 中 `GRAFANA_ADMIN_PASSWORD` 修改）。
+
+#### 预置 Dashboard
+
+Grafana 启动时自动加载 `deploy/config/grafana/dashboards/ainrf/ainrf-overview.json`，包含 10 个面板：
+
+- HTTP 请求速率 / 错误率 / 延迟分布
+- 登录成功/失败趋势
+- 终端命令执行 / 拒绝统计
+- 活跃 WebSocket 会话数
+- 敏感文件访问事件
+- 环境更新操作
+- 代码会话数
+
+#### 告警规则
+
+Prometheus 自动加载 `deploy/examples/prometheus-rules.example.yml` 中的告警规则：
+
+- 登录失败率过高 → 疑似暴力破解（warning）
+- 敏感路径频繁访问 → 疑似越权（high）
+- 5xx 错误率过高 → 后端异常（critical）
+- 命令拒绝率过高 → 策略违规（warning）
 
 > [!tip]
-> 完整指标和审计事件参考 [[observability]]。
+> 预置告警仅定义条件，未配置通知渠道。需在 Grafana Alerting 或 Alertmanager 中添加 Webhook/邮件等通知方式。
+
+> [!tip]
+> 完整指标参考、Dashboard 面板说明和告警配置详见 [[observability]]。
 
 ## 常用运维命令
 

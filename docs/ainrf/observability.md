@@ -127,21 +127,130 @@ ainrf_terminal_ws_active
 sum by (pattern) (rate(ainrf_files_sensitive_path_access_total[1h]))
 ```
 
-## Grafana Dashboard Panels
+## Monitoring Stack (Prometheus + Grafana)
 
-Recommended panels:
+AINRF 的 Docker 部署自带完整的监控栈：
 
-1. **Login Activity** — Stacked graph of `ainrf_auth_login_success_total` vs `ainrf_auth_login_failed_total`
-2. **Request Latency** — Heatmap of `ainrf_http_request_duration_seconds`
-3. **Terminal Sessions** — Stat panel of `ainrf_terminal_ws_active`
-4. **Security Events** — Table of `ainrf_files_sensitive_path_access_total` by pattern
-5. **Environment Changes** — Counter of `ainrf_environment_update_total`
+| 组件 | 镜像 | 说明 |
+|------|------|------|
+| Prometheus | `prom/prometheus:v3.3.1` | 抓取 `/metrics`，30 天数据保留 |
+| Grafana | `grafana/grafana:11.6.1` | 自动配置数据源和预置 Dashboard |
 
-## Alert Recommendations
+### 部署架构
 
-See `deploy/examples/prometheus-rules.example.yml` for starting-point alert rules. Key alerts:
+```
+┌──────────────┐    scrape     ┌──────────────┐    query    ┌──────────────┐
+│   AINRF      │ ◄──────────── │  Prometheus  │ ◄─────────  │   Grafana    │
+│  :8192/metrics│   15s interval│   :9090      │             │   :3000      │
+└──────────────┘               └──────────────┘             └──────────────┘
+```
 
-- High login failure rate → possible brute-force
-- Sensitive file access → investigate user intent
-- Terminal exec denials → policy violations
-- High error rate → backend issues
+- **Bridge 网络**（`docker-compose.yml`、`docker-compose.gpu.yml`）：Prometheus 抓取 `ainrf:8000/metrics`，Grafana 通过 nginx `/monitoring/` 反代访问
+- **Host 网络**（`docker-compose.cpu.yml`）：所有组件共享宿主机网络，Prometheus 抓取 `localhost:8192/metrics`，Grafana 直接访问 `http://<宿主机IP>:3000/`
+
+### 启用方式
+
+三种 Docker Compose 文件均已内置 Prometheus + Grafana，无需额外配置：
+
+```bash
+# Base (nginx + TLS)
+cd deploy && docker compose up -d --build
+
+# CPU-only (host network)
+cd deploy && docker compose -f docker-compose.cpu.yml up -d --build
+
+# GPU
+cd deploy && docker compose -f docker-compose.gpu.yml up -d --build
+```
+
+启动后：
+
+| 部署方式 | Grafana 访问地址 | 默认账号 |
+|---------|-----------------|---------|
+| Base (nginx) | `https://<host>/monitoring/` | `admin` / `ainrf-grafana` |
+| CPU (host network) | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
+| GPU | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
+
+> [!warning]
+> 默认密码 `ainrf-grafana` 仅用于初次登录。生产环境请在 `.env` 中设置 `GRAFANA_ADMIN_PASSWORD` 为强密码。
+
+### 预置 Dashboard
+
+Dashboard JSON 位于 `deploy/config/grafana/dashboards/ainrf/ainrf-overview.json`，Grafana 启动时自动加载。面板：
+
+| 面板 | 类型 | 指标 | 说明 |
+|------|------|------|------|
+| HTTP Request Rate | 时序图 | `ainrf_http_requests_total` | 按 method/path/status 的请求速率 |
+| HTTP Error Rate | Stat | 5xx/total | 5xx 错误占比，阈值 1%/5% |
+| P95 Latency | Stat | `ainrf_http_request_duration_seconds` | 95 分位延迟，阈值 1s/5s |
+| Request Duration Histogram | 时序图 | p50/p90/p99 | 延迟分布趋势 |
+| Login Success / Failure | 时序图 | `ainrf_auth_login_*_total` | 登录成功/失败趋势 |
+| Terminal Exec Commands | 时序图 | `ainrf_terminal_exec_*` | 允许/拒绝的终端命令 |
+| Active WebSocket Sessions | Stat | `ainrf_terminal_ws_active` | 当前活跃 WS 连接数 |
+| Sensitive File Access | 柱状图 | `ainrf_files_sensitive_path_access_total` | 敏感路径访问事件 |
+| Environment Updates | 时序图 | `ainrf_environment_update_total` | 环境检测/更新操作 |
+| Code Sessions Created | Stat | `ainrf_code_session_created_total` | 最近 1 小时代码会话数 |
+
+Dashboard 默认刷新间隔 30 秒，时间范围最近 1 小时。
+
+### 配置文件结构
+
+```
+deploy/config/
+├── prometheus.yml              # Bridge 网络抓取配置
+├── prometheus-host.yml         # Host 网络抓取配置
+├── prometheus-rules.yml        # 告警规则（→ symlink 到 examples/）
+└── grafana/
+    ├── provisioning/
+    │   ├── datasources/
+    │   │   ├── prometheus.yml      # Bridge 网络数据源
+    │   │   └── prometheus-host.yml # Host 网络数据源
+    │   └── dashboards/
+    │       └── ainrf.yml           # Dashboard 自动加载
+    └── dashboards/
+        └── ainrf/
+            └── ainrf-overview.json  # 主 Dashboard
+```
+
+## Alert Rules
+
+告警规则模板在 `deploy/examples/prometheus-rules.example.yml`，已自动挂载到 Prometheus 容器。
+
+### 预置告警
+
+| 告警名 | 条件 | 级别 | 说明 |
+|--------|------|------|------|
+| `AINRFHighLoginFailureRate` | 登录失败 > 2/s 持续 1min | warning | 疑似暴力破解 |
+| `AINRFAccountLockouts` | 账户锁定 > 0.1/s 持续 2min | info | 用户被频繁锁定 |
+| `AINRFTerminalExecDenials` | 命令拒绝 > 1/s 持续 1min | warning | 策略违规 |
+| `AINRFSensitiveFileAccess` | 敏感路径访问 > 0.5/s 持续 1min | high | 疑似越权访问 |
+| `AINRFHighRequestRate` | 总请求 > 100/s 持续 2min | warning | 流量异常 |
+| `AINRFHighErrorRate` | 5xx 占比 > 10% 持续 2min | critical | 后端异常 |
+
+### 启用告警通知
+
+预置规则仅定义了告警条件，未配置通知渠道。在 Grafana 中添加通知：
+
+1. 进入 Grafana → Alerting → Contact points
+2. 添加通知渠道（Webhook / 邮件 / 钉钉 / 飞书等）
+3. 在 Notification policies 中绑定告警标签到对应渠道
+
+或直接在 Prometheus 侧配置 `alertmanager`：
+
+```yaml
+# alertmanager.yml
+route:
+  receiver: "ainrf-team"
+receivers:
+  - name: "ainrf-team"
+    webhook_configs:
+      - url: "https://your-webhook-url"
+```
+
+### 自定义告警
+
+编辑 `deploy/examples/prometheus-rules.example.yml`，按需调整阈值和新增规则。修改后重启 Prometheus：
+
+```bash
+docker compose restart prometheus
+```
