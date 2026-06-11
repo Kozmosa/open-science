@@ -537,6 +537,11 @@ class TmuxAdapter:
                 text=True,
             )
         except FileNotFoundError as exc:
+            # If sudo -u was prepended and sudo is missing, say so explicitly
+            if tenant is not None and str(exc).find("sudo") >= 0:
+                raise TmuxCommandError(
+                    "sudo is required for tenant isolation but is not installed"
+                ) from exc
             raise TmuxCommandError("tmux is not installed on the daemon host") from exc
 
         return _CommandResult(
