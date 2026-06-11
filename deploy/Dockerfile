@@ -37,7 +37,7 @@ RUN npm run build
 # ── Stage 2: Backend build ────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS backend-build
 
-COPY --from=ghcr.1ms.run/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.1ms.run/astral-sh/uv:0.11.20 /uv /usr/local/bin/uv
 
 ENV UV_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple
 ENV PIP_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple
@@ -80,7 +80,7 @@ RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debi
     rm -rf /var/lib/apt/lists/*
 
 # uv from official image (needed for runtime Python dev commands)
-COPY --from=ghcr.1ms.run/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.1ms.run/astral-sh/uv:0.11.20 /uv /usr/local/bin/uv
 
 # Node.js runtime + Claude Code CLI + Codex CLI from agent-tools stage
 COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node
