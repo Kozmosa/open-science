@@ -172,69 +172,13 @@ class AgenticResearcherService:
         if self._initialized:
             return
         self._runtime_root.mkdir(parents=True, exist_ok=True)
-        with closing(self._connect()) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS tasks (
-                    task_id TEXT PRIMARY KEY,
-                    project_id TEXT NOT NULL,
-                    workspace_id TEXT NOT NULL,
-                    environment_id TEXT NOT NULL,
-                    researcher_type TEXT NOT NULL,
-                    harness_engine TEXT NOT NULL,
-                    user_skills TEXT,
-                    user_mcp_servers TEXT,
-                    status TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    prompt TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    started_at TEXT,
-                    completed_at TEXT,
-                    latest_output_seq INTEGER NOT NULL DEFAULT 0,
-                    owner_user_id TEXT NOT NULL,
-                    exit_code INTEGER,
-                    error_summary TEXT,
-                    token_usage_json TEXT
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS task_outputs (
-                    task_id TEXT NOT NULL,
-                    seq INTEGER NOT NULL,
-                    kind TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    PRIMARY KEY (task_id, seq)
-                )
-            """)
-            self._ensure_column(
-                conn,
-                "tasks",
-                "latest_output_seq",
-                "ALTER TABLE tasks ADD COLUMN latest_output_seq INTEGER NOT NULL DEFAULT 0",
-            )
-            self._ensure_column(
-                conn,
-                "tasks",
-                "token_usage_json",
-                "ALTER TABLE tasks ADD COLUMN token_usage_json TEXT",
-            )
-            self._migrate_legacy_task_statuses(conn)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_user_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id)")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_tasks_environment ON tasks(environment_id)"
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status)"
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_outputs_kind ON task_outputs(kind)")
-            conn.commit()
+        from ainrf.db.migration import run_pending
+
+        with self._connect() as conn:
+            run_pending(conn, "agentic_researcher")
         self._initialized = True
+        # NOT migrated — operates on a separate legacy task_harness.sqlite3;
+        # one-time index patch for the deprecated module, not worth formalizing.
         self._migrate_legacy_task_harness_indexes()
 
     def _migrate_legacy_task_harness_indexes(self) -> None:
@@ -294,31 +238,11 @@ class AgenticResearcherService:
             pass  # Non-critical; don't block startup for legacy DB issues
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, isolation_level="IMMEDIATE")
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _ensure_column(
-        self,
-        conn: sqlite3.Connection,
-        table_name: str,
-        column_name: str,
-        ddl: str,
-    ) -> None:
-        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})")}
-        if column_name not in columns:
-            conn.execute(ddl)
-
-    def _migrate_legacy_task_statuses(self, conn: sqlite3.Connection) -> None:
-        legacy_statuses = {
-            "pending": TaskStatus.QUEUED.value,
-            "canceled": TaskStatus.CANCELLED.value,
-        }
-        for legacy, current in legacy_statuses.items():
-            conn.execute(
-                "UPDATE tasks SET status = ? WHERE status = ?",
-                (current, legacy),
-            )
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()

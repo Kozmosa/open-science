@@ -166,44 +166,10 @@ class SessionManager:
         if self._initialized:
             return
         self._runtime_root.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS user_environment_bindings (
-                    binding_id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    environment_id TEXT NOT NULL,
-                    remote_login_user TEXT NOT NULL,
-                    default_shell TEXT,
-                    default_workdir TEXT,
-                    mux_kind TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(user_id, environment_id)
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS user_session_pairs (
-                    binding_id TEXT PRIMARY KEY,
-                    personal_session_name TEXT NOT NULL,
-                    agent_session_name TEXT,
-                    personal_status TEXT NOT NULL,
-                    agent_status TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    personal_started_at TEXT,
-                    personal_closed_at TEXT,
-                    last_verified_at TEXT,
-                    last_personal_attach_at TEXT,
-                    last_agent_attach_at TEXT,
-                    detail TEXT NOT NULL DEFAULT '',
-                    FOREIGN KEY(binding_id) REFERENCES user_environment_bindings(binding_id)
-                )
-                """
-            )
-            connection.commit()
+        from ainrf.db.migration import run_pending
+
+        with self._connect() as conn:
+            run_pending(conn, "terminal")
         self._initialized = True
 
     def session_name_for(self, app_user_id: str, environment_id: str | None = None) -> str:
@@ -991,6 +957,7 @@ class SessionManager:
         self._tmux_adapter.resize_window(session_name=session_name, cols=cols, rows=rows)
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db_path)
+        connection = sqlite3.connect(self._db_path, isolation_level="IMMEDIATE")
+        connection.execute("PRAGMA journal_mode=WAL")
         connection.row_factory = sqlite3.Row
         return connection

@@ -138,12 +138,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     + "=" * 60
                     + "\n"
                 )
-            # Fix existing admin users with wrong role (migration from bug)
-            with auth_service._connect() as conn:
-                conn.execute(
-                    "UPDATE users SET role = 'admin' WHERE username = 'admin' AND role != 'admin'"
-                )
-                conn.commit()
+            # Admin role fix is handled by auth migration_003_admin_role_fix
         except Exception:
             pass
         yield

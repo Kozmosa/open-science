@@ -515,6 +515,10 @@ def test_agentic_researcher_initialization_migrates_legacy_pending_status(
     )
     with closing(sqlite3.connect(service._db_path)) as conn:
         conn.execute("UPDATE tasks SET status = 'pending' WHERE task_id = ?", (task.task_id,))
+        # Revert schema version so migration_004_legacy_status_rename will re-run
+        conn.execute(
+            "UPDATE _schema_version SET version = 3 WHERE database = 'agentic_researcher'"
+        )
         conn.commit()
 
     restarted = AgenticResearcherService(
