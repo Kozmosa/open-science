@@ -21,6 +21,7 @@ from ainrf.onboarding import (
 from ainrf.server import run_server, run_server_daemon, stop_server_daemon
 from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
+from ainrf.backup.service import BackupService
 
 
 app = typer.Typer(
@@ -31,6 +32,9 @@ app = typer.Typer(
 
 container_app = typer.Typer(help="Manage reusable container profiles.")
 app.add_typer(container_app, name="container")
+
+backup_app = typer.Typer(help="Backup and restore AINRF data.")
+app.add_typer(backup_app, name="backup")
 
 _TOKEN_FILE = Path.home() / ".ainrf" / "token"
 
@@ -229,7 +233,107 @@ def login(
     print(f"Logged in as {user['username']} ({user['role']}). Token saved.")
 
 
+@backup_app.command("create")
+def backup_create(
+    output: Annotated[
+        Path | None,
+        typer.Option(help="Output path (file or directory). Default: ./ainrf-backup-<ts>.tar.gz"),
+    ] = None,
+    state_root: Annotated[
+        Path,
+        typer.Option(help="State root to back up."),
+    ] = default_state_root(),
+    include_workspaces: Annotated[
+        bool,
+        typer.Option(help="Include workspace files (can be large)."),
+    ] = False,
+    workspace_root: Annotated[
+        Path | None,
+        typer.Option(help="Workspace root (default: ~/.ainrf_workspaces)."),
+    ] = None,
+    include_tenants: Annotated[
+        bool,
+        typer.Option(help="Include tenant home directories (can be large)."),
+    ] = False,
+    tenant_root: Annotated[
+        Path | None,
+        typer.Option(help="Tenant home root (default: /home/ainrf_tenants)."),
+    ] = None,
+) -> None:
+    """Create a backup archive of AINRF databases and config."""
+    svc = BackupService(state_root)
+    ws = workspace_root or (Path.home() / ".ainrf_workspaces") if include_workspaces else None
+    tr = tenant_root or Path("/home/ainrf_tenants") if include_tenants else None
+    path = svc.create_backup(
+        output,
+        include_workspaces=include_workspaces,
+        include_tenants=include_tenants,
+        workspace_root=ws,
+        tenant_root=tr,
+    )
+    typer.echo(f"Backup created: {path}")
+
+
+@backup_app.command("restore")
+def backup_restore(
+    archive: Annotated[
+        Path,
+        typer.Argument(help="Backup archive to restore."),
+    ],
+    state_root: Annotated[
+        Path,
+        typer.Option(help="Target state root."),
+    ] = default_state_root(),
+    workspace_root: Annotated[
+        Path | None,
+        typer.Option(help="Target workspace root (required if archive includes workspaces)."),
+    ] = None,
+    tenant_root: Annotated[
+        Path | None,
+        typer.Option(help="Target tenant root (required if archive includes tenants)."),
+    ] = None,
+    skip_pre_backup: Annotated[
+        bool,
+        typer.Option(help="Skip the automatic pre-restore safety backup."),
+    ] = False,
+) -> None:
+    """Restore AINRF state from a backup archive.
+
+    A pre-restore safety backup is created automatically.  Stop the server
+    before restoring to avoid database corruption.
+    """
+    svc = BackupService(state_root)
+    svc.restore_backup(
+        archive,
+        target_state_root=state_root,
+        target_workspace_root=workspace_root,
+        target_tenant_root=tenant_root,
+        skip_pre_backup=skip_pre_backup,
+    )
+    typer.echo("Restore complete.")
+
+
+@backup_app.command("verify")
+def backup_verify(
+    archive: Annotated[
+        Path,
+        typer.Argument(help="Backup archive to verify."),
+    ],
+) -> None:
+    """Verify integrity of a backup archive."""
+    svc = BackupService(Path("/dummy"))  # state_root unused for verify
+    manifest = svc.verify_backup(archive)
+    typer.echo(f"Archive valid (version {manifest.version}, created {manifest.created_at})")
+    typer.echo(f"  Databases: {len(manifest.databases)}")
+    typer.echo(f"  Config files: {len(manifest.config_files)}")
+    if manifest.includes_workspaces:
+        typer.echo("  Includes: workspaces")
+    if manifest.includes_tenants:
+        typer.echo("  Includes: tenants")
+
+
 def main() -> None:
+
     app()
 
 

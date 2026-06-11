@@ -28,3 +28,18 @@ spec:
     requests:
       storage: 20Gi
   # storageClassName: standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ainrf-tenants
+  namespace: ainrf
+  labels:
+    app.kubernetes.io/name: ainrf
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: standard

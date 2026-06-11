@@ -91,6 +91,8 @@ spec:
               mountPath: /opt/ainrf/state
             - name: workspaces
               mountPath: /opt/ainrf/.ainrf_workspaces
+            - name: tenants
+              mountPath: /home/ainrf_tenants
           readinessProbe:
             httpGet:
               path: /health
@@ -112,3 +114,6 @@ spec:
         - name: workspaces
           persistentVolumeClaim:
             claimName: ainrf-workspaces
+        - name: tenants
+          persistentVolumeClaim:
+            claimName: ainrf-tenants

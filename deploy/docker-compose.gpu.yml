@@ -55,9 +55,10 @@ services:
       CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
     volumes:
-      - ./data/state:/opt/ainrf/state
-      - ./data/workspaces:/opt/ainrf/.ainrf_workspaces
-      - ./data/tenants:/home/ainrf_tenants
+      - ainrf-state:/opt/ainrf/state
+      - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - ainrf-tenants:/home/ainrf_tenants
+      - frontend-dist:/opt/ainrf/frontend/dist
     cap_add:
       - SYS_ADMIN
     # ── GPU 全透传 ────────────────────────────────────────
@@ -139,7 +140,7 @@ services:
       - "8192:8192"
     volumes:
       - ./config/nginx-bridge.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../frontend/dist:/usr/share/nginx/html:ro
+      - frontend-dist:/usr/share/nginx/html:ro
     depends_on:
       ainrf:
         condition: service_healthy
@@ -152,5 +153,9 @@ services:
         max-file: "3"
 
 volumes:
+  ainrf-state:
+  ainrf-workspaces:
+  ainrf-tenants:
+  frontend-dist:
   prometheus-data:
   grafana-data:

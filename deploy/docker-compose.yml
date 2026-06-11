@@ -11,16 +11,18 @@
 # Architecture:
 #   nginx (TLS + static files + reverse proxy)
 #     → ainrf (FastAPI backend, port 8000, not exposed)
-#
-# Bind mounts:
-#   ./data/workspaces → /opt/ainrf/.ainrf_workspaces  (user workspaces)
+# Named volumes (all persistent data):
+#   ainrf-state       → /opt/ainrf/state            (databases, config, logs)
+#   ainrf-workspaces  → /opt/ainrf/.ainrf_workspaces (user workspaces)
+#   ainrf-tenants     → /home/ainrf_tenants          (tenant home dirs)
+#   frontend-dist     → shared frontend static files
 #
 # Agent tool config:
 #   ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL — Claude agent
 #   CODEX_API_KEY, CODEX_BASE_URL, CODEX_MODEL — Codex/OpenAI agent
 #   Set in .env or environment; defaults are provided where possible.
 #
-# All persistent data lives in the ainrf-state named volume.
+# All persistent data lives in named volumes — never in the container filesystem.
 # ══════════════════════════════════════════════════════════════════
 
 services:
@@ -30,6 +32,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
+    container_name: ainrf
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
@@ -51,8 +54,8 @@ services:
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
     volumes:
       - ainrf-state:/opt/ainrf/state
-      - ./data/workspaces:/opt/ainrf/.ainrf_workspaces
-      - ./data/tenants:/home/ainrf_tenants
+      - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - ainrf-tenants:/home/ainrf_tenants
       - frontend-dist:/opt/ainrf/frontend/dist
     cap_add:
       - SYS_ADMIN
@@ -78,6 +81,7 @@ services:
   nginx:
     image: docker.1ms.run/nginx:1.27-alpine
     restart: unless-stopped
+    container_name: ainrf-nginx
     ports:
       - "${HTTP_PORT:-80}:80"
     volumes:
@@ -102,6 +106,7 @@ services:
   prometheus:
     image: docker.1ms.run/prom/prometheus:v3.3.1
     restart: unless-stopped
+    container_name: ainrf-prometheus
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./examples/prometheus-rules.example.yml:/etc/prometheus/rules/ainrf.yml:ro
@@ -124,6 +129,7 @@ services:
   grafana:
     image: docker.1ms.run/grafana/grafana:11.6.1
     restart: unless-stopped
+    container_name: ainrf-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-ainrf-grafana}
@@ -149,6 +155,8 @@ services:
 
 volumes:
   ainrf-state:
+  ainrf-workspaces:
+  ainrf-tenants:
   frontend-dist:
   prometheus-data:
   grafana-data:
