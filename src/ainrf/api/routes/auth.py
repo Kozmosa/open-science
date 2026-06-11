@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from ainrf.api.config import ApiConfig
 from ainrf.api.schemas import (
@@ -105,6 +105,25 @@ async def me(request: Request) -> UserInfoResponse:
     if user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return UserInfoResponse.model_validate(user)
+
+
+@router.get("/check")
+async def check(request: Request) -> Response:
+    """Auth check for nginx auth_request (Grafana reverse proxy).
+
+    Returns 200 with X-Remote-User / X-Remote-User-Role headers when
+    the caller has a valid JWT. Returns 401 otherwise. No body.
+    """
+    user = getattr(request.state, "current_user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return Response(
+        status_code=200,
+        headers={
+            "X-Remote-User": user["id"],
+            "X-Remote-User-Role": user.get("role", "viewer"),
+        },
+    )
 
 
 @router.post("/change-password", status_code=204)

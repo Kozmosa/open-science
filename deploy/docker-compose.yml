@@ -131,7 +131,9 @@ services:
       GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/monitoring/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/ainrf/ainrf-overview.json
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER: "X-WEBAUTH-USER"
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
