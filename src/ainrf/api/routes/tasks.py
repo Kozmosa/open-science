@@ -374,6 +374,7 @@ async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
 
     try:
         new_task = service.retry_task(task_id)
+        service.schedule_task(new_task.task_id)
     except TaskOperationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
