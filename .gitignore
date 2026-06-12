@@ -45,3 +45,10 @@ session-*.md
 
 # paper scratch
 paper-test/.cache/perf-report/
+
+# local backup archives
+ainrf-backup-*.tar.gz
+pre-restore-*.tar.gz
+
+# local runtime tenant state
+deploy/data/tenants/
