@@ -4,6 +4,7 @@ import {
   getCodexDefaults,
   getEnvironments,
   getSearchSettings,
+  getSkillRegistries,
   getSkills,
   getWorkspaces,
 } from '../../src/api';
@@ -35,6 +36,13 @@ vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
   ),
 }));
 
+vi.mock('../../src/buildInfo', () => ({
+  deploymentBuildInfo: {
+    shortCommit: 'abc123',
+    committedAt: '20260612-2004',
+  },
+}));
+
 vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getEnvironments: vi.fn(),
   getSkillRegistries: vi.fn(),
@@ -63,6 +71,7 @@ const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
+const mockGetSkillRegistries = vi.mocked(getSkillRegistries);
 const environment: EnvironmentRecord = {
   id: 'env-1',
   alias: 'gpu-lab',
@@ -96,6 +105,8 @@ beforeEach(() => {
   mockGetCodexDefaults.mockReset();
   mockGetSkills.mockReset();
   mockGetWorkspaces.mockReset();
+  mockGetSkillRegistries.mockReset();
+  mockGetSkillRegistries.mockResolvedValue({ items: [] });
   vi.mocked(getSearchSettings).mockReset();
   vi.mocked(getSearchSettings).mockResolvedValue({
     active_backend: 'cc-web-mcp',
@@ -146,6 +157,14 @@ describe('SettingsPage', () => {
     expect(selector.compareDocumentPosition(projectHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
+  });
+
+  it('renders the deployment version card with commit metadata', async () => {
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Deployment Version' })).toBeInTheDocument();
+    expect(screen.getByTestId('deployment-version-commit')).toHaveTextContent('abc123');
+    expect(screen.getByTestId('deployment-version-committed-at')).toHaveTextContent('20260612-2004');
   });
 
   it('hydrates codex profile defaults from local codex settings API', async () => {

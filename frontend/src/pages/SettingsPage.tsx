@@ -16,6 +16,7 @@ import { PageShell, SectionStack } from '../components/layout';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry, getSearchSettings, updateSearchSettings } from '../api';
 import { changePassword } from '../api/endpoints';
+import { deploymentBuildInfo } from '../buildInfo';
 import { useT } from '../i18n';
 import {
   clampEditorFontSize,
@@ -1442,6 +1443,42 @@ function AccountSection({ onPasswordClick }: { onPasswordClick: () => void }) {
   );
 }
 
+function DeploymentVersionSection() {
+  const t = useT();
+  const commitValue = deploymentBuildInfo.shortCommit ?? t('pages.settings.version.unavailable');
+  const committedAtValue = deploymentBuildInfo.committedAt ?? t('pages.settings.version.unavailable');
+
+  return (
+    <SectionCard
+      header={
+        <SectionHeader
+          title={t('pages.settings.version.title')}
+          description={t('pages.settings.version.description')}
+        />
+      }
+    >
+      <div className="grid gap-3 rounded-lg bg-[var(--bg-secondary)] p-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">
+            {t('pages.settings.version.commitLabel')}
+          </p>
+          <p className="mt-2 font-mono text-sm font-medium text-[var(--text)]" data-testid="deployment-version-commit">
+            {commitValue}
+          </p>
+        </div>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">
+            {t('pages.settings.version.committedAtLabel')}
+          </p>
+          <p className="mt-2 font-mono text-sm font-medium text-[var(--text)]" data-testid="deployment-version-committed-at">
+            {committedAtValue}
+          </p>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
 function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
   const { logout } = useAuth();
@@ -1673,6 +1710,7 @@ function SettingsPage() {
 
           <SkillRepositorySection availableSkills={availableSkills} />
           <AccountSection onPasswordClick={() => setShowPasswordModal(true)} />
+          <DeploymentVersionSection />
           <ChangePasswordModal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} />
           <SearchBackendSection />
 

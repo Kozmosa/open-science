@@ -565,6 +565,13 @@ export const messages = {
           saving: 'Saving…',
           saved: 'Saved',
         },
+        version: {
+          title: 'Deployment Version',
+          description: 'Shows the Git commit currently baked into this frontend deployment.',
+          commitLabel: 'Commit',
+          committedAtLabel: 'Committed at',
+          unavailable: 'Unavailable',
+        },
         account: {
           title: 'Account & Security',
           description: 'Manage your account credentials.',
@@ -1584,6 +1591,13 @@ export const messages = {
           ccWebMcp: 'CC-Web-MCP',
           saving: '保存中…',
           saved: '已保存',
+        },
+        version: {
+          title: '部署版本',
+          description: '显示当前前端部署内置的 Git 提交信息。',
+          commitLabel: '提交',
+          committedAtLabel: '提交时间',
+          unavailable: '不可用',
         },
         account: {
           title: '账号与安全',
