@@ -1,0 +1,109 @@
+---
+title: 项目管理
+description: ReactFlow Canvas DAG 可视化、任务节点、手动/自动连线与 dagre 布局。
+---
+
+AINRF 以项目（Project）为任务组织单元，提供 ReactFlow 画布、任务节点、手动/自动连线和 dagre 布局。
+
+## 项目侧边栏
+
+左侧边栏显示项目列表，支持：
+
+- 项目选择与切换
+- 按名称搜索过滤
+- 创建新项目
+- 显示项目描述和更新时间
+
+**API 端点：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/projects` | 列出所有项目 |
+| POST | `/projects` | 创建项目 |
+| GET | `/projects/{project_id}` | 读取项目详情 |
+| PATCH | `/projects/{project_id}` | 更新项目名称/描述/默认环境/默认工作区 |
+| DELETE | `/projects/{project_id}` | 删除项目 |
+
+每个项目关联一组环境引用（`environment-refs`），指定项目可用的计算环境。
+
+## ReactFlow 画布
+
+项目详情页以 ReactFlow（`@xyflow/react`）画布展示任务拓扑图：
+
+- **Background**：网格背景
+- **Controls**：缩放与适配控件
+- **MiniMap**：缩略图导航
+
+### 节点（TaskNode）
+
+任务节点使用 `TaskNode` 自定义组件，呈现为圆角卡片：
+
+- 左侧状态圆点（queued / starting / running / succeeded / failed / cancelled）
+- 任务标题
+- 环境别名与创建时间
+- 左侧 **target Handle**（输入连接点）
+- 右侧 **source Handle**（输出连接点）
+
+### 边（TaskEdge）
+
+连接线默认类型为 `smoothstep`，带箭头标记。手动拖拽创建的边使用蓝色描边动画样式。
+
+### 手动连线
+
+1. 从源任务的右侧 source Handle 拖拽
+2. 连线到目标任务的左侧 target Handle
+3. 松开后调用 `createTaskEdge` API 持久化到后端
+
+```typescript
+// 前端自动创建的边数据
+{
+  id: "edge_{source}_{target}",
+  source: source_task_id,
+  target: target_task_id,
+  type: "smoothstep",
+  animated: true,
+}
+```
+
+### 自动连线
+
+当项目任务没有人工连边时，画布按 `created_at` 时间从旧到新自动线性连接所有任务，自动边也会异步持久化到后端。
+
+## 布局
+
+### Dagre 自动布局
+
+首次渲染或点击 "Reset Layout" 时，使用 dagre 算法自动排布节点位置。
+
+### localStorage 持久化
+
+用户手动拖拽节点后，位置信息保存到 `localStorage`，键为 `ainrf:project-layout:{projectId}`。刷新页面后优先恢复已保存的位置。
+
+## 工具栏
+
+画布顶部工具栏包含：
+
+- **New Task**：打开任务创建表单
+- **Reset Layout**：清除已保存的布局，触发 dagre 重新排布
+
+### 空态
+
+项目无任务时，画布区域显示空态提示文字，引导用户创建第一个任务。
+
+## 任务创建
+
+TaskCreateForm 表单配置项：
+
+| 字段 | 说明 |
+|------|------|
+| 环境 | 选择该项目关联的计算环境 |
+| 工作区 | 选择或输入工作目录 |
+| 技能 | 选择要执行的 AINRF 技能 |
+| 任务配置 | JSON 格式的技能参数 |
+| 引擎类型 | 任务引擎（Python 运行时等） |
+
+## 相关文档
+
+- [终端管理](/terminal/) — 任务代理终端与会话管理
+- [工作区](/workspace/) — 工作区与目录管理
+- [会话追踪](/sessions/) — 会话与 Attempt 链

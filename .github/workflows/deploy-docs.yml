@@ -4,8 +4,7 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'docs/ainrf/**'
-      - 'mkdocs-ainrf.yml'
+      - 'docs-site/**'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
@@ -24,22 +23,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs-site/package.json
 
       - name: Install dependencies
-        run: |
-          pip install mkdocs-material pymdown-extensions mkdocs-mermaid2-plugin mkdocs-roamlinks-plugin
+        working-directory: docs-site
+        run: npm ci
 
-      - name: Build MkDocs (ainrf only)
-        run: mkdocs build -f mkdocs-ainrf.yml
+      - name: Build Astro docs
+        working-directory: docs-site
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./site
+          path: ./docs-site/dist
 
   deploy:
     needs: build

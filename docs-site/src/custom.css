@@ -1,0 +1,35 @@
+/* AINRF Docs — Custom Starlight Theme Overrides */
+
+:root {
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #6366f1;
+  --sl-color-accent-low: #818cf8;
+  --sl-color-bg: #ffffff;
+  --sl-color-bg-sidebar: #f8fafc;
+  --sl-color-text: #1e293b;
+  --sl-color-text-muted: #64748b;
+}
+
+[data-theme='dark'] {
+  --sl-color-accent: #818cf8;
+  --sl-color-accent-high: #6366f1;
+  --sl-color-accent-low: #4f46e5;
+  --sl-color-bg: #0f172a;
+  --sl-color-bg-sidebar: #1e293b;
+  --sl-color-text: #e2e8f0;
+  --sl-color-text-muted: #94a3b8;
+}
+
+/* Make the hero section on the splash page more spacious */
+.hero {
+  padding: 3rem 2rem;
+}
+
+/* Better table styling */
+main table {
+  font-size: 0.9rem;
+}
+
+main th {
+  background: var(--sl-color-bg-sidebar);
+}

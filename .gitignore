@@ -27,6 +27,8 @@ test/Mode1/*.h5
 
 
 /node_modules/
+/docs-site/dist/
+/docs-site/.astro/
 
 # ref-repos
 /ref-repos/*/

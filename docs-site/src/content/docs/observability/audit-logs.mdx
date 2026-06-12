@@ -1,0 +1,84 @@
+---
+title: 审计日志
+description: AINRF 审计日志架构、事件目录与日志查询方法。
+---
+
+AINRF 通过 `structlog` 输出结构化 JSON 审计事件。每个事件包含 `event`（事件名）、`severity`（级别）、`timestamp`、`component`（固定为 `audit`）和 `request_id` 等字段。所有敏感值（token、密码、API key）自动脱敏。
+
+## 认证事件
+
+| 事件 | 级别 | 字段 |
+|------|------|------|
+| `auth.login.success` | info | user_id, client_ip |
+| `auth.login.failed` | warning | user_id, client_ip, reason |
+| `auth.register.submitted` | info | user_id |
+| `auth.refresh.failed` | warning | reason |
+
+## 终端事件
+
+| 事件 | 级别 | 字段 |
+|------|------|------|
+| `terminal.session.created` | info | session_id, environment_id, user_id |
+| `terminal.session.reset` | info | session_id |
+| `terminal.websocket.opened` | info | session_id |
+| `terminal.websocket.closed` | info | session_id |
+
+## Code-Server 事件
+
+| 事件 | 级别 | 字段 |
+|------|------|------|
+| `code.session.created` | info | user_id, environment_id |
+| `code.session.stopped` | info | user_id |
+| `code.proxy.request` | info | — |
+
+## 文件事件
+
+| 事件 | 级别 | 字段 |
+|------|------|------|
+| `files.read` | info | path (basename), user_id |
+| `files.upload` | info | filename, user_id |
+| `files.sensitive_path_access` | high | path (basename), pattern, user_id |
+
+## 环境事件
+
+| 事件 | 级别 | 字段 |
+|------|------|------|
+| `environment.created` | info | environment_id, user_id |
+| `environment.updated` | info | environment_id, user_id |
+| `environment.ssh_field_changed` | warning | environment_id, user_id |
+| `environment.code_server_install_requested` | info | environment_id |
+
+## 任务事件
+
+| 事件 | 级别 | 字段 |
+|------|------|------|
+| `task.created` | info | task_id, user_id |
+| `task.deleted` | info | task_id, user_id |
+| `task.permanent_deleted` | warning | task_id, user_id |
+
+## 日志查询示例
+
+```bash
+# 所有认证事件
+grep '"component":"audit"' logs/backend-*.log | grep '"event":"auth.'
+
+# 敏感文件访问
+grep '"event":"files.sensitive_path_access"' logs/backend-*.log
+
+# 终端会话
+grep '"event":"terminal.' logs/backend-*.log
+
+# SSH 配置变更
+grep '"event":"environment.ssh_field_changed"' logs/backend-*.log
+
+# 所有 high/critical 级别事件
+grep '"severity":"high\|"severity":"critical"' logs/backend-*.log
+```
+
+通过 `request_id` 字段关联同一次 HTTP 请求或 WebSocket 会话内的所有事件。
+
+## 相关文档
+
+- [可观测性概览](/observability/) — 架构概览与请求 ID 关联
+- [Prometheus 指标](/observability/metrics/) — 指标参考
+- [安全事件响应](/security/checklist/) — 安全事件排查流程
