@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shlex
+import subprocess
 import sqlite3
 from collections.abc import Callable
 import threading
@@ -702,12 +703,12 @@ class AgenticResearcherService:
         return str(load_dir)
 
     def _build_execution_context(self, task: Task) -> ExecutionContext:
-        working_directory = self._resolve_working_directory(task)
+        tenant_user = self._resolve_tenant_user(task.owner_user_id)
+        working_directory = self._resolve_working_directory(task, tenant_user=tenant_user)
         mcp_servers = resolve_mcp_servers_for_task(
             self._state_root,
             user_mcp_servers=task.user_mcp_servers,
         )
-        tenant_user = self._resolve_tenant_user(task.owner_user_id)
         skill_load_dir = self._resolve_skill_load_dir(task)
 
         # When ARIS skills are loaded, automatically add the Codex MCP server
@@ -754,7 +755,9 @@ class AgenticResearcherService:
             return shlex.split(command_text)
         return ["claude-agent-sdk", "query"]
 
-    def _resolve_working_directory(self, task: Task) -> Path:
+    def _resolve_working_directory(
+        self, task: Task, tenant_user: str | None = None,
+    ) -> Path:
         if self._workspace_service is not None:
             try:
                 workspace = self._workspace_service.get_workspace(task.workspace_id)
@@ -762,11 +765,27 @@ class AgenticResearcherService:
                 workspace = None
             if workspace is not None and workspace.default_workdir:
                 path = Path(workspace.default_workdir).expanduser().resolve()
-                path.mkdir(parents=True, exist_ok=True)
+                self._ensure_dir(path, tenant_user)
                 return path
         fallback = self._state_root / "workspace" / task.workspace_id
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
+
+    @staticmethod
+    def _ensure_dir(path: Path, tenant_user: str | None) -> None:
+        """Create *path* (with parents).  When *tenant_user* is set the
+        directory is created via ``sudo -u <tenant> mkdir -p`` so the
+        resulting directory is owned by the tenant user instead of ainrf.
+        """
+        if path.exists():
+            return
+        if tenant_user:
+            subprocess.run(
+                ["sudo", "-u", tenant_user, "mkdir", "-p", str(path)],
+                check=False, capture_output=True,
+            )
+        else:
+            path.mkdir(parents=True, exist_ok=True)
 
     def _resolve_tenant_user(self, owner_user_id: str) -> str | None:
         """Resolve owner_user_id to the Linux tenant username ``ainrf_<name>``.

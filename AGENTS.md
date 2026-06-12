@@ -108,12 +108,13 @@ AINRF uses Linux user isolation for multi-tenancy. Understanding the permission 
 
 | Path | Operation | Status |
 |------|-----------|--------|
-| `claude_code.py:107` | MCP config temp file → chmod 0644 | Fixed |
-| `claude_code.py:269` | `_prepare_workspace_skills` creates `.claude/skills/` in tenant workspace | **RISK: EPERM** — ainrf cannot mkdir in tenant-owned workspace. Currently guarded by `exist_ok=True` and OSError catch, but symlink creation will fail silently |
-| `service.py:765` | `_resolve_working_directory` mkdir in workspace | **RISK: EPERM** — mitigated by entrypoint pre-creating `workspaces/default/`, but non-default labels would fail |
-| `auth/service.py:526-528` | `provision_tenant_user` mkdir + chown | OK — runs during registration, useradd --create-home handles it |
-| `files.py:268` | Upload → chown to tenant | Fixed — explicit chown after upload |
-| `agent_sdk.py` | No `user=` param (removed) | Fixed — avoids CAP_SETUID requirement |
+| `claude_code.py` | MCP config temp file → chmod 0644 | Fixed |
+| `claude_code.py` | `_prepare_workspace_skills` creates dirs/symlinks via `sudo -u <tenant>` | Fixed |
+| `service.py` | `_resolve_working_directory` uses `sudo -u <tenant> mkdir -p` for tenant workspaces | Fixed |
+| `workspaces/service.py` | `ensure_tenant_workspace` uses `sudo -u <tenant> mkdir -p` | Fixed |
+| `auth/service.py` | `provision_tenant_user` mkdir + chown | OK — runs during registration |
+| `files.py` | Upload → chown to tenant | Fixed |
+| `agent_sdk.py` | No `user=` param (removed) | Fixed |
 
 **Guidelines for new code:**
 - Never assume `ainrf` can write to `/home/ainrf_tenants/<username>/` paths

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import tempfile
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,7 @@ class ClaudeCodeEngine(HarnessEngine):
                 context.working_directory,
                 context.skill_load_dir,
                 context.skills,
+                tenant_user=context.tenant_user,
             )
 
         command = [
@@ -228,6 +230,7 @@ class ClaudeCodeEngine(HarnessEngine):
         working_directory: str,
         skill_load_dir: str,
         requested_skills: list[str],
+        tenant_user: str | None = None,
     ) -> list[Path]:
         """Symlink requested skill directories into ``<workdir>/.claude/skills/``.
 
@@ -237,12 +240,46 @@ class ClaudeCodeEngine(HarnessEngine):
         registry load directory, allowing the engine to inject the ARIS
         skill set into any workspace without copying files.
 
+        When *tenant_user* is provided the mkdir and symlink operations are
+        performed via ``sudo -u <tenant_user>`` so that the resulting
+        directories and symlinks are owned by the tenant user (ainrf cannot
+        write to tenant-owned workspace paths).
+
         Returns a list of symlink paths created (for cleanup).
         """
         workdir = Path(working_directory)
         claude_skills_dir = workdir / ".claude" / "skills"
         load_dir = Path(skill_load_dir)
         cleanup: list[Path] = []
+
+        def _mkdir(p: Path) -> None:
+            if p.exists():
+                return
+            if tenant_user:
+                subprocess.run(
+                    ["sudo", "-u", tenant_user, "mkdir", "-p", str(p)],
+                    check=False, capture_output=True,
+                )
+            else:
+                p.mkdir(parents=True, exist_ok=True)
+
+        def _symlink(src: Path, dst: Path) -> None:
+            if tenant_user:
+                subprocess.run(
+                    ["sudo", "-u", tenant_user, "ln", "-sfn", str(src), str(dst)],
+                    check=False, capture_output=True,
+                )
+            else:
+                os.symlink(str(src), str(dst))
+
+        def _unlink(p: Path) -> None:
+            if tenant_user:
+                subprocess.run(
+                    ["sudo", "-u", tenant_user, "rm", "-f", str(p)],
+                    check=False, capture_output=True,
+                )
+            else:
+                p.unlink(missing_ok=True)
 
         for skill_id in requested_skills:
             source = load_dir / skill_id
@@ -260,17 +297,17 @@ class ClaudeCodeEngine(HarnessEngine):
                 try:
                     current_target = dest.resolve()
                     if current_target == source.resolve():
-                        # Already linked correctly — nothing to do.
                         continue
-                    dest.unlink()
+                    _unlink(dest)
                 except OSError:
                     continue
 
-            claude_skills_dir.mkdir(parents=True, exist_ok=True)
+            _mkdir(claude_skills_dir)
             try:
-                os.symlink(str(source), str(dest))
-                cleanup.append(dest)
-                logger.debug("linked skill %s -> %s", dest, source)
+                _symlink(source, dest)
+                if dest.exists() or dest.is_symlink():
+                    cleanup.append(dest)
+                    logger.debug("linked skill %s -> %s", dest, source)
             except OSError as exc:
                 logger.warning("failed to symlink skill %s: %s", skill_id, exc)
 

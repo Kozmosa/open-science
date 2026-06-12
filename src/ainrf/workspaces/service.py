@@ -8,6 +8,7 @@ from pathlib import Path
 from threading import Lock
 
 from ainrf.environments.models import utc_now
+from ainrf.runtime.paths import RuntimePathConfig
 from ainrf.workspaces.models import WorkspaceRecord
 
 
@@ -185,11 +186,17 @@ class WorkspaceRegistryService:
         ]
         if existing:
             return existing[0]
-        from ainrf.runtime.paths import RuntimePathConfig
-
         rpc = RuntimePathConfig(startup_cwd=Path.cwd())
         default_workdir = rpc.tenant_workspace_dir(username, label)
-        default_workdir.mkdir(parents=True, exist_ok=True)
+        # Create workspace dir via sudo -u <tenant> so the directory is
+        # owned by the tenant user (ainrf cannot write to tenant homes).
+        linux_user = f"ainrf_{username}"
+        if not default_workdir.exists():
+            import subprocess
+            subprocess.run(
+                ["sudo", "-u", linux_user, "mkdir", "-p", str(default_workdir)],
+                check=False, capture_output=True,
+            )
         return self.create_workspace(
             label=label,
             description=f"Default workspace for tenant {username}",
