@@ -24,6 +24,10 @@ from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig, ContainerHealth
 pytestmark = [pytest.mark.integration]
 
+async def _noop_async(self: object, **kwargs: object) -> None:
+    """No-op for mocking SSHExecutor connect/close."""
+
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -271,15 +275,21 @@ async def test_health_degraded_returns_200(tmp_path: Path) -> None:
 
     import ainrf.api.routes.health as health_module
 
-    original = health_module.SSHExecutor.ping
+    _orig_ping = health_module.SSHExecutor.ping
+    _orig_connect = health_module.SSHExecutor.connect
+    _orig_close = health_module.SSHExecutor.close
     health_module.SSHExecutor.ping = fake_ping  # type: ignore[assignment]
+    health_module.SSHExecutor.connect = _noop_async  # type: ignore[assignment]
+    health_module.SSHExecutor.close = _noop_async  # type: ignore[assignment]
     try:
         async with client:
             resp = await client.get("/health")
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
             assert resp.json()["status"] == "degraded"
     finally:
-        health_module.SSHExecutor.ping = original
+        health_module.SSHExecutor.ping = _orig_ping
+        health_module.SSHExecutor.connect = _orig_connect
+        health_module.SSHExecutor.close = _orig_close
 
 
 # ---------------------------------------------------------------------------

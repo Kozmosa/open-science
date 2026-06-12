@@ -12,6 +12,10 @@ from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
 
+async def _noop_async(self: object, **kwargs: object) -> None:
+    """No-op for mocking SSHExecutor connect/close."""
+
+
 @pytest.mark.anyio
 async def test_health_reports_container_probe_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -25,6 +29,8 @@ async def test_health_reports_container_probe_success(
         )
 
     monkeypatch.setattr("ainrf.api.routes.health.SSHExecutor.ping", fake_ping)
+    monkeypatch.setattr("ainrf.api.routes.health.SSHExecutor.connect", _noop_async)
+    monkeypatch.setattr("ainrf.api.routes.health.SSHExecutor.close", _noop_async)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -57,6 +63,8 @@ async def test_health_reports_degraded_container_probe(
         )
 
     monkeypatch.setattr("ainrf.api.routes.health.SSHExecutor.ping", fake_ping)
+    monkeypatch.setattr("ainrf.api.routes.health.SSHExecutor.connect", _noop_async)
+    monkeypatch.setattr("ainrf.api.routes.health.SSHExecutor.close", _noop_async)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),

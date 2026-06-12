@@ -32,25 +32,24 @@ async def health_check(request: Request) -> JSONResponse | HealthResponse:
             runtime_readiness=runtime_readiness,
         )
 
-    executor = SSHExecutor(container_config)
-    health = await executor.ping(timeout=2)
-    response = HealthResponse(
-        status=ApiStatus.OK if health.ssh_ok else ApiStatus.DEGRADED,
-        container_health={
-            "ssh_ok": health.ssh_ok,
-            "claude_ok": health.claude_ok,
-            "project_dir_writable": health.project_dir_writable,
-            "claude_version": health.claude_version,
-            "gpu_models": health.gpu_models,
-            "cuda_version": health.cuda_version,
-            "disk_free_bytes": health.disk_free_bytes,
-            "warnings": health.warnings,
-        },
-        detail=None if health.ssh_ok else "Container connectivity degraded",
-        state_root=str(public_payload["state_root"]),
-        startup_cwd=str(public_payload["startup_cwd"]),
-        default_workspace_dir=str(public_payload["default_workspace_dir"]),
-        container_configured=bool(public_payload["container_configured"]),
-        runtime_readiness=runtime_readiness,
-    )
-    return response
+    async with SSHExecutor(container_config) as executor:
+        health = await executor.ping(timeout=2)
+        return HealthResponse(
+            status=ApiStatus.OK if health.ssh_ok else ApiStatus.DEGRADED,
+            container_health={
+                "ssh_ok": health.ssh_ok,
+                "claude_ok": health.claude_ok,
+                "project_dir_writable": health.project_dir_writable,
+                "claude_version": health.claude_version,
+                "gpu_models": health.gpu_models,
+                "cuda_version": health.cuda_version,
+                "disk_free_bytes": health.disk_free_bytes,
+                "warnings": health.warnings,
+            },
+            detail=None if health.ssh_ok else "Container connectivity degraded",
+            state_root=str(public_payload["state_root"]),
+            startup_cwd=str(public_payload["startup_cwd"]),
+            default_workspace_dir=str(public_payload["default_workspace_dir"]),
+            container_configured=bool(public_payload["container_configured"]),
+            runtime_readiness=runtime_readiness,
+        )
