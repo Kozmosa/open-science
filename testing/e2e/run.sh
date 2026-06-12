@@ -29,10 +29,7 @@ EOF
 }
 
 cmd_up() {
-    echo "==> Building AINRF E2E image..."
-    $COMPOSE build --quiet 2>/dev/null || $COMPOSE build
-
-    echo "==> Starting containers..."
+    echo "==> Starting containers (using local ainrf:latest image)..."
     $COMPOSE up -d
 
     echo "==> Waiting for backend to become healthy..."

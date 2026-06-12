@@ -17,9 +17,7 @@
 
 services:
   ainrf:
-    build:
-      context: ../..
-      dockerfile: deploy/Dockerfile
+    image: ainrf:latest
     container_name: ainrf-e2e
     environment:
       AINRF_PRODUCTION: "1"

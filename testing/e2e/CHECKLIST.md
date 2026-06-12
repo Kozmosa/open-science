@@ -29,7 +29,7 @@ executes against a running AINRF E2E container using Playwright MCP.
 ### S-04: API authentication
 - `POST /api/auth/login` with admin credentials → 200, `access_token` present
 - `GET /api/auth/me` with token → 200, username matches
-- `POST /api/auth/logout` → 200
+- `POST /api/auth/logout` with `{"refresh_token": "..."}` body → 204
 
 ## Core Feature Tests
 
@@ -37,8 +37,8 @@ executes against a running AINRF E2E container using Playwright MCP.
 1. `POST /api/projects` → create project "E2E Test Project"
 2. `GET /api/projects` → verify new project in list
 3. `GET /api/projects/{id}` → verify fields match
-4. `PUT /api/projects/{id}` → update title
-5. `DELETE /api/projects/{id}` → 200
+4. `PATCH /api/projects/{id}` with `{"name": "..."}` → 200
+5. `DELETE /api/projects/{id}` → 204
 6. `GET /api/projects/{id}` → 404
 
 ### F-02: Workspace management
