@@ -116,7 +116,7 @@ export const AssistantMessage = memo(function AssistantMessage({ message }: { me
 
 export const ThinkingBlock = memo(function ThinkingBlock({ message }: { message: MessageItem }) {
   const isStreaming = message.metadata.isStreaming ?? false;
-  const [isOpen, setIsOpen] = useState(isStreaming || message.metadata.isFolded !== true);
+  const [isOpen, setIsOpen] = useState(message.metadata.isFolded !== true);
   const t = useT();
   const content = typeof message.content === 'string' ? message.content : '';
   return (

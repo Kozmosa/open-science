@@ -55,7 +55,7 @@ export function convertOutputEventToMessage(event: TaskOutputEvent, initialPromp
         content: (payload.content as string) || '',
         metadata: {
           ...base.metadata,
-          isFolded: isPartial ? false : true,
+          isFolded: true,
           isStreaming: isPartial ?? false,
           ...(blockId ? { blockId, isDelta } : {}),
         },
@@ -137,6 +137,38 @@ function suppressUserEchoes(messages: MessageItem[]): MessageItem[] {
     result.push(message);
   }
   return result;
+}
+
+function joinThinkingContent(left: string, right: string): string {
+  if (!left) return right;
+  if (!right) return left;
+  return `${left}\n\n${right}`;
+}
+
+export function mergeAdjacentThinkingMessages(messages: MessageItem[]): MessageItem[] {
+  const merged: MessageItem[] = [];
+  for (const message of messages) {
+    const previous = merged[merged.length - 1];
+    if (previous?.type === 'thinking' && message.type === 'thinking') {
+      const previousContent = typeof previous.content === 'string' ? previous.content : '';
+      const currentContent = typeof message.content === 'string' ? message.content : '';
+      merged[merged.length - 1] = {
+        ...previous,
+        content: joinThinkingContent(previousContent, currentContent),
+        metadata: {
+          ...previous.metadata,
+          timestamp: message.metadata.timestamp,
+          sequence: message.metadata.sequence,
+          isFolded: true,
+          isStreaming: message.metadata.isStreaming ?? previous.metadata.isStreaming ?? false,
+          blockId: previous.metadata.blockId ?? message.metadata.blockId,
+        },
+      };
+      continue;
+    }
+    merged.push(message);
+  }
+  return merged;
 }
 
 async function fetchAllMessages(taskId: string): Promise<MessageItem[]> {
@@ -237,7 +269,7 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
     const sortedMessages = [...dedupedHistory, ...streamMessages].sort(
       (a, b) => a.metadata.sequence - b.metadata.sequence
     );
-    return suppressUserEchoes(sortedMessages);
+    return mergeAdjacentThinkingMessages(suppressUserEchoes(sortedMessages));
   }, [history, streamMessages]);
 
   return { messages: allMessages };

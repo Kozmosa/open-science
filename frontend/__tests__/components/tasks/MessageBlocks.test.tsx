@@ -1,6 +1,6 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { AssistantMessage, MessageBlock } from '../../../src/pages/tasks/MessageBlocks';
+import { AssistantMessage, MessageBlock, ThinkingBlock } from '../../../src/pages/tasks/MessageBlocks';
 import { renderWithProviders } from '../../../src/test/render';
 import type { MessageItem } from '../../../src/types';
 
@@ -47,5 +47,33 @@ describe('MessageBlocks workspace file links', () => {
 
     const link = screen.getByRole('link', { name: 'guide' });
     expect(link).toHaveAttribute('href', '/workspace-browser?workspace_id=workspace-default&path=docs%2Fliterature%2Fguide.md');
+  });
+});
+
+describe('ThinkingBlock streaming behavior', () => {
+  it('starts collapsed while streaming and only renders content after expand', () => {
+    renderWithProviders(
+      <ThinkingBlock
+        message={{
+          id: 'thinking-stream',
+          type: 'thinking',
+          content: 'streamed reasoning',
+          metadata: {
+            sequence: 3,
+            timestamp: '2026-01-01T00:00:00Z',
+            isFolded: true,
+            isStreaming: true,
+          },
+        }}
+      />
+    );
+
+    const toggle = screen.getByRole('button', { name: /thinking/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('streamed reasoning')).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByText('streamed reasoning')).toBeInTheDocument();
   });
 });

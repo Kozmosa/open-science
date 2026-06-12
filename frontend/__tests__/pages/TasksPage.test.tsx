@@ -25,7 +25,7 @@ import {
   getTasks,
   getWorkspaces,
 } from '../../src/api';
-import { convertOutputEventToMessage } from '../../src/pages/tasks/useTaskMessages';
+import { convertOutputEventToMessage, mergeAdjacentThinkingMessages } from '../../src/pages/tasks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '../../src/pages/tasks/output';
 
 class MockEventSource {
@@ -332,6 +332,43 @@ describe('task output helpers', () => {
     );
 
     expect(message).toBeNull();
+  });
+
+  it('keeps streaming thinking blocks folded by default', () => {
+    const message = convertOutputEventToMessage(
+      createOutputEvent(3, {
+        kind: 'thinking',
+        content:
+          '{"content":"working","block_id":"thinking-1","is_partial":true,"is_delta":true}',
+      })
+    );
+
+    expect(message).not.toBeNull();
+    expect(message?.type).toBe('thinking');
+    expect(message?.metadata.isFolded).toBe(true);
+    expect(message?.metadata.isStreaming).toBe(true);
+  });
+
+  it('merges adjacent thinking messages into a single display block', () => {
+    const merged = mergeAdjacentThinkingMessages([
+      {
+        id: 'thinking-1',
+        type: 'thinking',
+        content: 'first pass',
+        metadata: { sequence: 1, timestamp: '2026-01-01T00:00:00Z', isFolded: true },
+      },
+      {
+        id: 'thinking-2',
+        type: 'thinking',
+        content: 'second pass',
+        metadata: { sequence: 2, timestamp: '2026-01-01T00:00:01Z', isFolded: true, isStreaming: true },
+      },
+    ]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.content).toBe('first pass\n\nsecond pass');
+    expect(merged[0]?.metadata.sequence).toBe(2);
+    expect(merged[0]?.metadata.isStreaming).toBe(true);
   });
 });
 
