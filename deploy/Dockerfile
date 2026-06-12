@@ -76,7 +76,7 @@ RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debi
     sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list 2>/dev/null; \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        sudo openssh-server bubblewrap procps tmux git && \
+        sudo openssh-server bubblewrap socat procps tmux git && \
     rm -rf /var/lib/apt/lists/*
 
 # uv from official image (needed for runtime Python dev commands)
