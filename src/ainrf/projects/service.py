@@ -119,6 +119,36 @@ class ProjectRegistryService:
             self._persist()
             return project
 
+    def get_or_create_user_default(
+        self,
+        *,
+        username: str,
+        owner_user_id: str,
+    ) -> ProjectRecord:
+        self.initialize()
+        project_id = f"{username}_default"
+        existing = self._projects.get(project_id)
+        if existing is not None:
+            return existing
+        with self._lock:
+            existing = self._projects.get(project_id)
+            if existing is not None:
+                return existing
+            now = utc_now()
+            project = ProjectRecord(
+                project_id=project_id,
+                name=f"{username}'s Project",
+                description=f"Default project for user {username}",
+                default_workspace_id=None,
+                default_environment_id=None,
+                created_at=now,
+                updated_at=now,
+                owner_user_id=owner_user_id,
+            )
+            self._projects[project_id] = project
+            self._persist()
+            return project
+
     def update_project(
         self,
         project_id: str,
@@ -206,6 +236,20 @@ class ProjectRegistryService:
                 raise TaskEdgeNotFoundError(edge_id)
             del self._task_edges[edge_id]
             self._persist_task_edges()
+
+    def delete_task_edges_for_task(self, task_id: str) -> int:
+        self.initialize()
+        with self._lock:
+            before = len(self._task_edges)
+            self._task_edges = {
+                edge_id: edge
+                for edge_id, edge in self._task_edges.items()
+                if edge.source_task_id != task_id and edge.target_task_id != task_id
+            }
+            removed = before - len(self._task_edges)
+            if removed:
+                self._persist_task_edges()
+            return removed
 
     def _build_seed_project(self) -> ProjectRecord:
         now = utc_now()

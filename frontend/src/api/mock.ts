@@ -742,7 +742,7 @@ export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
   const resolvedWorkdir = workspace.default_workdir ?? environment.default_workdir ?? MOCK_STATE_ROOT;
   const task: TaskRecord = {
     task_id: taskId,
-    project_id: payload.project_id ?? DEFAULT_PROJECT_ID,
+    project_id: payload.project_id?.trim() ? payload.project_id : DEFAULT_PROJECT_ID,
     workspace_id: workspace.workspace_id,
     environment_id: environment.id,
     title,
@@ -871,6 +871,26 @@ export function mockCancelTask(taskId: string): TaskSummary {
       error_summary: 'Task cancelled by user',
     },
   };
+  return cloneTaskSummary(mockTasks[taskId]);
+}
+
+export function mockUpdateTaskProject(taskId: string, projectId: string): TaskSummary {
+  const task = mockGetTask(taskId);
+  const timestamp = nowIso();
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: {
+      ...task,
+      project_id: projectId,
+      updated_at: timestamp,
+    },
+  };
+  // Edges are project-scoped; drop any that referenced the moved task.
+  for (const pid in mockEdges) {
+    mockEdges[pid] = mockEdges[pid].filter(
+      (e) => e.source_task_id !== taskId && e.target_task_id !== taskId
+    );
+  }
   return cloneTaskSummary(mockTasks[taskId]);
 }
 

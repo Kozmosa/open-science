@@ -115,34 +115,41 @@ async def test_openapi_registers_projects_terminal_task_harness_and_code_routes(
 @pytest.mark.anyio
 async def test_project_task_edges_are_persisted_and_idempotent(tmp_path: Path) -> None:
     async with make_auth_client(tmp_path) as client:
-        empty_response = await client.get("/projects/default/task-edges")
+        project_response = await client.post(
+            "/projects",
+            json={"name": "Edge Project", "description": "for edges"},
+        )
+        assert project_response.status_code == 201
+        project_id = project_response.json()["project_id"]
+
+        empty_response = await client.get(f"/projects/{project_id}/task-edges")
         assert empty_response.status_code == 200
         assert empty_response.json() == {"items": []}
 
         create_response = await client.post(
-            "/projects/default/task-edges",
+            f"/projects/{project_id}/task-edges",
             json={"source_task_id": "task-a", "target_task_id": "task-b"},
         )
         assert create_response.status_code == 201
         edge = create_response.json()
-        assert edge["project_id"] == "default"
+        assert edge["project_id"] == project_id
         assert edge["source_task_id"] == "task-a"
         assert edge["target_task_id"] == "task-b"
 
         duplicate_response = await client.post(
-            "/projects/default/task-edges",
+            f"/projects/{project_id}/task-edges",
             json={"source_task_id": "task-a", "target_task_id": "task-b"},
         )
         assert duplicate_response.status_code == 201
         assert duplicate_response.json()["edge_id"] == edge["edge_id"]
 
-        list_response = await client.get("/projects/default/task-edges")
+        list_response = await client.get(f"/projects/{project_id}/task-edges")
         assert list_response.status_code == 200
         assert list_response.json()["items"] == [edge]
 
         delete_response = await client.delete(f"/task-edges/{edge['edge_id']}")
         assert delete_response.status_code == 204
-        assert (await client.get("/projects/default/task-edges")).json() == {"items": []}
+        assert (await client.get(f"/projects/{project_id}/task-edges")).json() == {"items": []}
 
 
 @pytest.mark.anyio

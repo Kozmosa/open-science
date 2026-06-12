@@ -14,6 +14,7 @@ import {
   getTask,
   getTaskEdges,
   getWorkspaces,
+  updateTaskProject,
 } from '../api';
 import { extractErrorMessage } from '../utils/error';
 import type { TaskCreatePayload, TaskRecord } from '../types';
@@ -122,6 +123,17 @@ export default function ProjectsPage() {
     },
   });
 
+  const handleMoveTaskToProject = useCallback(
+    async (taskId: string, targetProjectId: string) => {
+      await updateTaskProject(taskId, targetProjectId);
+      void queryClient.invalidateQueries({ queryKey: ['project-tasks', effectiveProjectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-tasks', targetProjectId] });
+      void queryClient.invalidateQueries({ queryKey: ['task-edges', effectiveProjectId] });
+      void queryClient.invalidateQueries({ queryKey: ['task-edges', targetProjectId] });
+    },
+    [effectiveProjectId, queryClient]
+  );
+
   return (
     <>
       <PageShell>
@@ -143,9 +155,11 @@ export default function ProjectsPage() {
             projectId={effectiveProjectId}
             tasks={tasks}
             edges={edges}
+            projects={projects}
             onNodeClick={handleNodeClick}
             onNewTask={() => setCreateDialogOpen(true)}
             onResetLayout={handleResetLayout}
+            onMoveTaskToProject={handleMoveTaskToProject}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">

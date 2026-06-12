@@ -117,9 +117,11 @@ describe('ProjectCanvas', () => {
         projectId="p1"
         tasks={mockTasks}
         edges={mockEdges}
+        projects={[]}
         onNodeClick={vi.fn()}
         onNewTask={vi.fn()}
         onResetLayout={vi.fn()}
+        onMoveTaskToProject={vi.fn()}
       />
     );
 
@@ -134,9 +136,11 @@ describe('ProjectCanvas', () => {
         projectId="p1"
         tasks={mockTasks}
         edges={mockEdges}
+        projects={[]}
         onNodeClick={vi.fn()}
         onNewTask={onNewTask}
         onResetLayout={vi.fn()}
+        onMoveTaskToProject={vi.fn()}
       />
     );
 
@@ -145,19 +149,22 @@ describe('ProjectCanvas', () => {
     expect(onNewTask).toHaveBeenCalledTimes(1);
   });
 
-  it('auto-connects tasks linearly by created_at when no explicit edges exist', () => {
+  it('does not auto-connect tasks when no explicit edges exist', () => {
     render(
       <ProjectCanvas
         projectId="p1"
         tasks={multiMockTasks}
         edges={[]}
+        projects={[]}
         onNodeClick={vi.fn()}
         onNewTask={vi.fn()}
         onResetLayout={vi.fn()}
+        onMoveTaskToProject={vi.fn()}
       />
     );
 
-    expect(screen.getByTestId('edge-count')).toHaveTextContent('2');
+    // With auto-connect removed, only manually-created edges appear.
+    expect(screen.getByTestId('edge-count')).toHaveTextContent('0');
   });
 
   it('uses explicit edges instead of auto-connect when edges are provided', () => {
@@ -175,9 +182,11 @@ describe('ProjectCanvas', () => {
         projectId="p1"
         tasks={multiMockTasks}
         edges={explicitEdges}
+        projects={[]}
         onNodeClick={vi.fn()}
         onNewTask={vi.fn()}
         onResetLayout={vi.fn()}
+        onMoveTaskToProject={vi.fn()}
       />
     );
 

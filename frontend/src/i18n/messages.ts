@@ -194,6 +194,8 @@ export const messages = {
         resetLayout: 'Reset Layout',
         emptyCanvas: "Click 'New Task' to get started",
         noProjects: 'No projects yet. Create one to start.',
+        moveToProject: 'Move to project',
+        noOtherProjects: 'No other projects to move to.',
       },
       dashboard: {
         eyebrow: 'Terminal',
@@ -1231,6 +1233,8 @@ export const messages = {
         resetLayout: '重置布局',
         emptyCanvas: "点击'新建任务'开始",
         noProjects: '暂无项目。创建一个项目开始。',
+        moveToProject: '移动到项目',
+        noOtherProjects: '没有其他可移动到的项目。',
       },
       dashboard: {
         eyebrow: '终端',

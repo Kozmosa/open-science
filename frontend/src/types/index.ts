@@ -287,6 +287,10 @@ export interface TaskListResponse {
   next_cursor?: string | null;
 }
 
+export interface TaskUpdateProjectRequest {
+  project_id: string;
+}
+
 export interface TaskEdge {
   edge_id: string;
   project_id: string;

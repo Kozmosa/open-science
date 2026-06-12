@@ -651,6 +651,17 @@ class AgenticResearcherService:
             conn.execute("DELETE FROM task_outputs WHERE task_id = ?", (task_id,))
             conn.commit()
 
+    def update_task_project(self, task_id: str, new_project_id: str) -> Task:
+        self.get_task(task_id)  # raises TaskNotFoundError if missing
+        now = self._now()
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "UPDATE tasks SET project_id = ?, updated_at = ? WHERE task_id = ?",
+                (new_project_id, now, task_id),
+            )
+            conn.commit()
+        return self.get_task(task_id)
+
     def retry_task(self, task_id: str) -> Task:
         old = self.get_task(task_id)
         if old.status not in {TaskStatus.FAILED, TaskStatus.CANCELLED}:

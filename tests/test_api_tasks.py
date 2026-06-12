@@ -688,3 +688,96 @@ async def test_project_tasks_endpoint_uses_task_filters(tmp_path: Path) -> None:
         assert archived_payload["total"] == 1
         assert archived_payload["items"][0]["project_id"] == "proj-001"
         assert archived_payload["items"][0]["workspace_id"] == workspace.workspace_id
+
+
+@pytest.mark.anyio
+async def test_create_task_resolves_per_user_default_project(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)  # registers the "test-user" admin
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-default",
+            label="Default workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the workspace.",
+            owner_user_id=None,
+        )
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Default-project task",
+                "prompt": "Resolve my project.",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_payload = create_response.json()
+        # Empty project_id resolves to the per-user default (<username>_default).
+        assert task_payload["project_id"] == "test-user_default"
+        # The per-user default project is created on demand.
+        default_project = app.state.project_service.get_project("test-user_default")
+        assert default_project.name == "test-user's Project"
+
+
+@pytest.mark.anyio
+async def test_update_task_project_moves_task_and_cleans_edges(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    project_svc = app.state.project_service
+    project_a = project_svc.create_project(name="Project A", description=None)
+    project_b = project_svc.create_project(name="Project B", description=None)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id=project_a.project_id,
+            label="Move workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the workspace.",
+            owner_user_id=None,
+        )
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": project_a.project_id,
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Move me",
+                "prompt": "Run then move.",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+
+        # Seed an edge referencing the task in project A.
+        project_svc.create_task_edge(
+            project_a.project_id,
+            source_task_id=task_id,
+            target_task_id="task-other",
+        )
+        assert len(project_svc.list_task_edges(project_a.project_id)) == 1
+
+        move_response = await client.patch(
+            f"/tasks/{task_id}/project",
+            json={"project_id": project_b.project_id},
+        )
+        assert move_response.status_code == 200
+        assert move_response.json()["project_id"] == project_b.project_id
+        # Project-scoped edges referencing the moved task are cleaned up.
+        assert project_svc.list_task_edges(project_a.project_id) == []

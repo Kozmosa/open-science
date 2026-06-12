@@ -397,7 +397,7 @@ class TaskConfigurationSnapshotRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    project_id: str
+    project_id: str = ""
     workspace_id: str
     environment_id: str
     researcher_type: Literal["vanilla", "aris-researcher"]
@@ -406,6 +406,12 @@ class TaskCreateRequest(BaseModel):
     skills: list[str] = []
     mcp_servers: list[str] = []
     title: str | None = None
+
+
+class TaskUpdateProjectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=1)
 
 
 class WorkspaceResponse(BaseModel):

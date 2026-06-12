@@ -58,6 +58,7 @@ import type { ChangePasswordRequest,
   TaskRetryResponse,
   TaskSummary,
   TaskTokenUsageSummary,
+  TaskUpdateProjectRequest,
   TerminalSession,
   UserInfo,
   UserSessionPairListResponse,
@@ -77,6 +78,7 @@ import type { ChangePasswordRequest,
 import {
   mockArchiveTask,
   mockCancelTask,
+  mockUpdateTaskProject,
   mockDeleteTask,
   mockCreateEnvironment,
   mockCreateProject,
@@ -303,6 +305,11 @@ export const cancelTask = (taskId: string): Promise<TaskSummary> =>
 
 export const retryTask = (taskId: string): Promise<TaskRetryResponse> =>
   api.post<TaskRetryResponse>(`/tasks/${taskId}/retry`, {});
+
+export const updateTaskProject = (taskId: string, projectId: string): Promise<TaskSummary> =>
+  USE_MOCK
+    ? Promise.resolve(mockUpdateTaskProject(taskId, projectId))
+    : api.patch<TaskSummary>(`/tasks/${taskId}/project`, { project_id: projectId } satisfies TaskUpdateProjectRequest);
 
 export const getProjectTasks = (
   projectId: string,

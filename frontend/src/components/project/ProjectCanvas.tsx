@@ -19,8 +19,9 @@ import {
 import { Button } from '../ui';
 import { useT } from '../../i18n';
 import { createTaskEdge } from '../../api';
-import type { TaskEdge, TaskSummary } from '../../types';
+import type { ProjectRecord, TaskEdge, TaskSummary } from '../../types';
 import TaskNode from './TaskNode';
+import ProjectDropZone from './ProjectDropZone';
 import { layoutDagre } from './layoutDagre';
 
 const nodeTypes = { taskNode: TaskNode };
@@ -30,11 +31,15 @@ interface CanvasInnerProps {
   projectId: string;
   tasks: TaskSummary[];
   edges: TaskEdge[];
+  projects: ProjectRecord[];
   onNodeClick: (taskId: string) => void;
+  onMoveTaskToProject: (taskId: string, projectId: string) => void;
 }
-
-function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps) {
+function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTaskToProject }: CanvasInnerProps) {
   const { getNodes, fitView } = useReactFlow();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dropZoneVisible, setDropZoneVisible] = useState(false);
+  const draggingNodeId = useRef<string | null>(null);
   const initialNodes: Node[] = useMemo(
     () =>
       tasks.map((task) => ({
@@ -46,37 +51,17 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     [tasks]
   );
   const initialEdges: Edge[] = useMemo(() => {
-    if (edges.length > 0) {
-      const visibleIds = new Set(tasks.map((t) => t.task_id));
-      const relevant = edges.filter(
-        (e) => visibleIds.has(e.source_task_id) && visibleIds.has(e.target_task_id)
-      );
-      if (relevant.length > 0) {
-        return relevant.map((edge) => ({
-          id: edge.edge_id,
-          source: edge.source_task_id,
-          target: edge.target_task_id,
-          type: 'default',
-          markerEnd: { type: 'arrowclosed' as const, width: 12, height: 12 },
-        }));
-      }
-      // All backend edges reference archived/non-visible tasks — fall through to auto-connect
-    }
-    // No relevant explicit edges: auto-connect tasks linearly by created_at (oldest -> newest)
-    const sorted = [...tasks].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-    const synthetic: Edge[] = [];
-    for (let i = 0; i < sorted.length - 1; i++) {
-      synthetic.push({
-        id: `auto-${sorted[i].task_id}-${sorted[i + 1].task_id}`,
-        source: sorted[i].task_id,
-        target: sorted[i + 1].task_id,
+    if (edges.length === 0) return [];
+    const visibleIds = new Set(tasks.map((t) => t.task_id));
+    return edges
+      .filter((e) => visibleIds.has(e.source_task_id) && visibleIds.has(e.target_task_id))
+      .map((edge) => ({
+        id: edge.edge_id,
+        source: edge.source_task_id,
+        target: edge.target_task_id,
         type: 'default',
         markerEnd: { type: 'arrowclosed' as const, width: 12, height: 12 },
-      });
-    }
-    return synthetic;
+      }));
   }, [edges, tasks]);
 
   // Sync layout on mount so nodes don't stack at (0, 0) on first render
@@ -131,20 +116,6 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     return () => clearTimeout(timeoutId);
   }, [runLayout, initialEdges, fitView]);
 
-  // Auto-persist auto-connected edges to backend (when no explicit edges exist)
-  useEffect(() => {
-    if (edges.length === 0 && initialEdges.length > 0) {
-      for (const edge of initialEdges) {
-        createTaskEdge(projectId, {
-          source_task_id: edge.source,
-          target_task_id: edge.target,
-        }).catch(() => {
-          // best-effort; edge already rendered locally
-        });
-      }
-    }
-  }, [edges.length, initialEdges, projectId]);
-
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setLocalNodes((current) => applyNodeChanges(changes, current));
@@ -187,18 +158,45 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
     [projectId]
   );
 
-  const onNodeDragStop = useCallback(() => {
-    const current = getNodes();
-    const positions: Record<string, { x: number; y: number }> = {};
-    for (const n of current) {
-      positions[n.id] = n.position;
-    }
-    try {
-      localStorage.setItem(LAYOUT_KEY(projectId), JSON.stringify(positions));
-    } catch {
-      // ignore storage errors
-    }
-  }, [getNodes, projectId]);
+  const onNodeDrag = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      draggingNodeId.current = node.id;
+      const rect = containerRef.current?.getBoundingClientRect();
+      const relX = rect ? event.clientX - rect.left : event.clientX;
+      setDropZoneVisible(relX < 96);
+    },
+    []
+  );
+
+  const onNodeDragStop = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      // Hit-test drop-zone cards (tagged with data-project-id) under the pointer.
+      const els = document.elementsFromPoint(event.clientX, event.clientY);
+      const card = els.find(
+        (el): el is HTMLElement =>
+          el instanceof HTMLElement && Boolean(el.dataset.projectId)
+      );
+      const targetProjectId = card?.dataset.projectId;
+      if (targetProjectId && targetProjectId !== projectId) {
+        onMoveTaskToProject(node.id, targetProjectId);
+      } else {
+        // No project drop — persist node positions as before.
+        const current = getNodes();
+        const positions: Record<string, { x: number; y: number }> = {};
+        for (const n of current) {
+          positions[n.id] = n.position;
+        }
+        try {
+          localStorage.setItem(LAYOUT_KEY(projectId), JSON.stringify(positions));
+        } catch {
+          // ignore storage errors
+        }
+      }
+      draggingNodeId.current = null;
+      setDropZoneVisible(false);
+    },
+    [getNodes, projectId, onMoveTaskToProject]
+  );
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -208,33 +206,41 @@ function CanvasInner({ projectId, tasks, edges, onNodeClick }: CanvasInnerProps)
   );
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={flowEdges}
-      nodeTypes={nodeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeDragStop={onNodeDragStop}
-      onNodeClick={handleNodeClick}
-      onConnect={onConnect}
-      connectionLineStyle={{ stroke: 'var(--apple-blue)', strokeWidth: 2 }}
-      defaultEdgeOptions={{
-        type: 'smoothstep',
-        animated: true,
-        style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
-      }}
-      attributionPosition="bottom-right"
-    >
-      <Background gap={16} size={1} color="var(--border)" />
-      <Controls />
-      <MiniMap
-        nodeColor={() => 'var(--apple-blue)'}
-        maskColor="rgba(0,0,0,0.1)"
-        className="rounded-lg"
-        pannable
-        zoomable
+    <div ref={containerRef} className="relative h-full w-full">
+      <ReactFlow
+        nodes={nodes}
+        edges={flowEdges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
+        onNodeClick={handleNodeClick}
+        onConnect={onConnect}
+        connectionLineStyle={{ stroke: 'var(--apple-blue)', strokeWidth: 2 }}
+        defaultEdgeOptions={{
+          type: 'smoothstep',
+          animated: true,
+          style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
+        }}
+        attributionPosition="bottom-right"
+      >
+        <Background gap={16} size={1} color="var(--border)" />
+        <Controls />
+        <MiniMap
+          nodeColor={() => 'var(--apple-blue)'}
+          maskColor="rgba(0,0,0,0.1)"
+          className="rounded-lg"
+          pannable
+          zoomable
+        />
+      </ReactFlow>
+      <ProjectDropZone
+        projects={projects}
+        visible={dropZoneVisible}
+        currentProjectId={projectId}
       />
-    </ReactFlow>
+    </div>
   );
 }
 
@@ -242,18 +248,22 @@ interface Props {
   projectId: string;
   tasks: TaskSummary[];
   edges: TaskEdge[];
+  projects: ProjectRecord[];
   onNodeClick: (taskId: string) => void;
   onNewTask: () => void;
   onResetLayout: () => void;
+  onMoveTaskToProject: (taskId: string, projectId: string) => void;
 }
 
 export default function ProjectCanvas({
   projectId,
   tasks,
   edges,
+  projects,
   onNodeClick,
   onNewTask,
   onResetLayout,
+  onMoveTaskToProject,
 }: Props) {
   const t = useT();
 
@@ -288,7 +298,9 @@ export default function ProjectCanvas({
               projectId={projectId}
               tasks={tasks}
               edges={edges}
+              projects={projects}
               onNodeClick={onNodeClick}
+              onMoveTaskToProject={onMoveTaskToProject}
             />
           </ReactFlowProvider>
         )}

@@ -20,6 +20,7 @@ import { useToast } from '../components/common/Toast';
 import { useT } from '../i18n';
 import { PageShell, SplitPane } from '../components/layout';
 import { extractErrorMessage } from '../utils/error';
+import { useAuth } from '../contexts/AuthContext';
 import type { TaskCreatePayload, TaskListResponse } from '../types';
 import TaskCreateForm from './tasks/TaskCreateForm';
 import TaskDetail from './tasks/TaskDetail';
@@ -168,7 +169,15 @@ function TasksPage() {
   });
 
 
-  const defaultProjectId = projectsQuery.data?.items?.[0]?.project_id ?? '';
+  const { user } = useAuth();
+  const defaultProjectId = useMemo(() => {
+    const items = projectsQuery.data?.items;
+    if (user) {
+      const userDefault = items?.find((p) => p.project_id === `${user.username}_default`);
+      if (userDefault) return userDefault.project_id;
+    }
+    return items?.[0]?.project_id ?? '';
+  }, [user, projectsQuery.data]);
   const defaultWorkspaceId = workspacesQuery.data?.items?.[0]?.workspace_id ?? '';
   const defaultEnvironmentId = environmentsQuery.data?.items?.[0]?.id ?? '';
   const availableProjects = projectsQuery.data?.items ?? [];

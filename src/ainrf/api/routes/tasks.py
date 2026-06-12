@@ -15,6 +15,7 @@ from ainrf.agentic_researcher import (
 )
 from ainrf.agentic_researcher.models import Task, TaskOutputEvent
 from ainrf.agentic_researcher.service import TaskNotFoundError, TaskOperationError
+from ainrf.projects import ProjectNotFoundError, ProjectRegistryService
 from ainrf.api.schemas import (
     MessageItemResponse,
     TaskCreateRequest,
@@ -29,6 +30,7 @@ from ainrf.api.schemas import (
     TaskRetryResponse,
     TaskSummaryResponse,
     TaskTokenUsageSummaryResponse,
+    TaskUpdateProjectRequest,
 )
 from ainrf.auth.permissions import (
     check_resource_ownership,
@@ -42,6 +44,13 @@ def _get_service(request: Request) -> AgenticResearcherService:
     service = getattr(request.app.state, "agentic_researcher_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="AgenticResearcher service not initialized")
+    return service
+
+
+def _get_project_service(request: Request) -> ProjectRegistryService:
+    service = getattr(request.app.state, "project_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="Project service not initialized")
     return service
 
 
@@ -240,9 +249,18 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
             status_code=400, detail=f"Unknown researcher type: {payload.researcher_type}"
         )
 
+    effective_project_id = payload.project_id
+    if not effective_project_id:
+        project_svc = _get_project_service(request)
+        default_project = project_svc.get_or_create_user_default(
+            username=user["username"],
+            owner_user_id=user["id"],
+        )
+        effective_project_id = default_project.project_id
+
     try:
         task = service.create_task(
-            project_id=payload.project_id,
+            project_id=effective_project_id,
             workspace_id=payload.workspace_id,
             environment_id=payload.environment_id,
             researcher=researcher,
@@ -367,6 +385,26 @@ async def delete_task(request: Request, task_id: str) -> None:
     """Permanently delete a task."""
     service, _ = _assert_task_owner(request, task_id)
     service.delete_task(task_id)
+
+
+@router.patch("/{task_id}/project", response_model=TaskSummaryResponse)
+async def update_task_project(
+    task_id: str,
+    payload: TaskUpdateProjectRequest,
+    request: Request,
+) -> TaskSummaryResponse:
+    """Move a task to a different project."""
+    _assert_task_owner(request, task_id)
+    service = _get_service(request)
+    project_svc = _get_project_service(request)
+    try:
+        project_svc.get_project(payload.project_id)
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    updated = service.update_task_project(task_id, payload.project_id)
+    # Edges are project-scoped; orphan any referencing the moved task.
+    project_svc.delete_task_edges_for_task(task_id)
+    return _task_to_response(updated, service)
 
 
 @router.post("/{task_id}/retry", status_code=201)
