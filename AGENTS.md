@@ -323,14 +323,22 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 ### Rebuild & Redeploy
 
 ```bash
-# Backend-only changes
-docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
+# Backend-only changes — use the wrapper so the host git commit is stamped
+# into the image (otherwise the backend reports "Unavailable" for its version).
+bash deploy/redeploy-backend.sh
 
-# Frontend changes — must build on host first, then restart nginx
-cd frontend && npm run build && cd ..
-docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
-docker compose -f deploy/docker-compose.cpu.yml restart nginx
+# Frontend-only changes — rebuilds host frontend/dist, then restarts nginx.
+bash deploy/redeploy-frontend.sh
+
+# Bare fallback (no commit stamping; backend version shows "Unavailable"):
+# docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
 ```
+
+**Version provenance is split**: the backend bakes its OWN commit into
+`/opt/ainrf/backend-build-info.json` (via `redeploy-backend.sh` build-args),
+and the frontend ships its OWN `frontend/dist/build-info.json` (built on the
+host). Because the two build at different times, they may differ — the
+Settings page shows both and flags a mismatch.
 
 **Why host build is required**: nginx serves frontend from a **host-mounted** volume (`frontend/dist:/usr/share/nginx/html:ro`), not from the container's built-in `/opt/ainrf/frontend/dist`. After frontend changes, the host `frontend/dist` must be rebuilt or nginx will serve stale files. Verify by checking the `index-*.js` hash in `frontend/dist/index.html` matches what the browser requests.
 
