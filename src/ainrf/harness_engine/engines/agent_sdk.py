@@ -195,7 +195,11 @@ class AgentSdkEngine(HarnessEngine):
             include_partial_messages=True,
             can_use_tool=self._can_use_tool,
             sandbox=self._build_sandbox_settings(),
-            user=context.tenant_user,
+            # NOTE: We intentionally do NOT pass user=context.tenant_user here.
+            # The SDK's `user` param uses subprocess.Popen(user=...) which calls
+            # os.setuid() internally — that requires CAP_SETUID which ainrf (uid=1000)
+            # does not have.  Tenant isolation is instead handled by the Claude Code
+            # engine via `sudo -u <tenant>`.
         )
 
         async with self._run_lock:
