@@ -103,6 +103,8 @@ class ClaudeCodeEngine(HarnessEngine):
             )
             mcp_config_file.write(mcp_json.encode())
             mcp_config_file.close()
+            # Make world-readable so tenant users (via sudo -u) can read it
+            os.chmod(mcp_config_file.name, 0o644)
             command.extend(["--mcp-config", mcp_config_file.name])
 
         env = os.environ.copy()
