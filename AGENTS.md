@@ -276,60 +276,41 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 
 **Known operational issues:**
 
-- **SSH socket FD leak**: The backend opens SSH connections to localhost for terminal sessions that are not always properly cleaned up. Over time (~14h), this can exhaust the default 1024 FD limit. Both `docker-compose.yml` and `docker-compose.cpu.yml` now set `ulimits.nofile` to 65536 as mitigation.
 - **sshd session proliferation**: Each terminal health-check spawns an SSH session pair (root priv + ainrf child). These accumulate over the container lifetime. Container restart is the current cleanup path.
 
-**Rebuild & redeploy (zero-downtime):**
+### Rebuild & Redeploy
 
 ```bash
-# Backend-only changes: rebuild and restart
+# Backend-only changes
 docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
 
-# Frontend changes: build on host, then rebuild backend + restart nginx
+# Frontend changes — must build on host first, then restart nginx
 cd frontend && npm run build && cd ..
 docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
 docker compose -f deploy/docker-compose.cpu.yml restart nginx
-
-### Frontend Deployment: Dual-Source Pitfall
-
-nginx serves frontend static files from **host-mounted** `frontend/dist` (`docker-compose.cpu.yml`: `../frontend/dist:/usr/share/nginx/html:ro`), **not** from the container's `/opt/ainrf/frontend/dist`.
-
-After frontend code changes, `docker compose up -d --build ainrf` rebuilds the backend image (which includes a frontend build step), but nginx continues serving the **old host-mounted files**. This causes confusing situations where the correct code exists inside the container but the browser loads stale JS/CSS.
-
-**Correct deploy sequence for frontend changes:**
-
-```bash
-# 1. Build frontend on host first
-cd frontend && npm run build
-
-# 2. Rebuild backend (picks up host dist via Dockerfile COPY)
-docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
-
-# 3. Restart nginx to pick up new host-mounted files
-docker compose -f deploy/docker-compose.cpu.yml restart nginx
 ```
 
-**Verification**: After deploy, check which JS file the browser loads. The `index-*.js` hash in `frontend/dist/index.html` must match what the browser requests. If they differ, nginx is serving stale files.
+**Why host build is required**: nginx serves frontend from a **host-mounted** volume (`frontend/dist:/usr/share/nginx/html:ro`), not from the container's built-in `/opt/ainrf/frontend/dist`. After frontend changes, the host `frontend/dist` must be rebuilt or nginx will serve stale files. Verify by checking the `index-*.js` hash in `frontend/dist/index.html` matches what the browser requests.
 
-### Browser Tool & Chrome Configuration
+### Browser & DevTools (Working)
 
-The OMP browser tool and chrome-devtools MCP both need a working Chrome/Chromium binary. The system has snap chromium at `/snap/bin/chromium` which **fails on non-standard HOME directories** (e.g., `/data/yile.chen`) because snap mount namespaces require HOME to exist under `/home/`.
+Both the OMP built-in browser tool and the chrome-devtools MCP are functional. Use the **chrome-devtools MCP** (via `browser` tool) as the primary tool for frontend inspection; fall back to the OMP browser tool when needed.
 
-**Configuration:**
+The system snap chromium at `/snap/bin/chromium` is **broken** (snap namespace fails on non-standard HOME `/data/yile.chen`). All browser tools use the Puppeteer-cached Chrome for Testing binary instead:
 
-- `PUPPETEER_EXECUTABLE_PATH` in `~/.omp/agent/config.yml` `env` section points to the puppeteer-cached Chrome for Testing binary
-- A wrapper at `~/.local/bin/chromium` (symlinked as `chromium-browser` and `google-chrome`) shadows the snap binary via PATH priority
-- Both OMP and Claude Code MCP configs reference the same binary
-
-**Key config files:**
-- `~/.omp/agent/config.yml` — OMP env vars (only loaded at session start)
-- `~/.omp/agent/mcp.json` — OMP MCP server definitions
-- `~/.claude/settings.json` — Claude Code env + MCP servers
-
-**Important**: OMP config `env` vars only take effect when the agent process starts. Mid-session changes require a session restart.
+```
+/data/yile.chen/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
 ```
 
-**First-time admin password:**
+This is configured via:
+- `PUPPETEER_EXECUTABLE_PATH` in `~/.omp/agent/config.yml` `env` section
+- `~/.local/bin/chromium` wrapper (symlinked as `chromium-browser`, `google-chrome`) shadows the snap binary via PATH priority
+- `~/.omp/agent/mcp.json` — chrome-devtools MCP server definition
+- `~/.claude/settings.json` — Claude Code env (`PUPPETEER_EXECUTABLE_PATH`) + `mcpServers`
+
+**Note**: OMP config `env` vars only take effect at session start. Mid-session changes require a session restart.
+
+### First-Time Admin Password
 
 ```bash
 docker compose -f deploy/docker-compose.cpu.yml exec ainrf cat /opt/ainrf/state/admin_initial_password.txt
