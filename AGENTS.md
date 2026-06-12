@@ -81,6 +81,45 @@ Formatting and linting are enforced with `ruff`; static type checking must pass 
 - `tasks/` - 旧的 ManagedTask 系统（已删除）
 - `task_harness/` - 旧的 TaskHarness 系统（已删除）
 
+
+### Multi-Tenant Permission Model
+
+AINRF uses Linux user isolation for multi-tenancy. Understanding the permission model is critical to avoid silent failures.
+
+**User roles:**
+- `ainrf` (uid=1000) — the backend process user. Owns `/opt/ainrf/state/`, `/opt/ainrf/.ainrf_workspaces/`.
+- `ainrf_<username>` (gid=2000/`ainrf_tenants`) — one Linux user per registered tenant. Home at `/home/ainrf_tenants/<username>/` with mode `0700`.
+- `root` — runs entrypoint.py which provisions tenant users, homes, and workspace directories.
+
+**Execution flow:**
+1. Backend (ainrf) receives task → resolves `tenant_user = ainrf_<owner>`
+2. Engine builds command → prefixes with `sudo -u ainrf_<owner>`
+3. `sudoers` grants: `ainrf ALL=(%ainrf_tenants) NOPASSWD: ALL`
+4. Agent process (claude/codex) runs as tenant user with tenant's workspace as cwd
+
+**Permission constraints:**
+- `ainrf` **cannot write** to tenant home dirs (mode 0700, owned by tenant)
+- `ainrf` **cannot write** to tenant workspace dirs (owned by tenant, group ainrf_tenants, ainrf is not in that group)
+- Any file/directory creation by `ainrf` inside tenant paths will EPERM
+- Temp files created by `ainrf` (e.g., MCP config) must be `chmod 0644` if tenant subprocess needs to read them
+- `sudo -u <tenant>` does NOT inherit `ainrf`'s env vars for API keys — these must be explicitly passed via the engine's env setup
+
+**Known permission-sensitive code paths:**
+
+| Path | Operation | Status |
+|------|-----------|--------|
+| `claude_code.py:107` | MCP config temp file → chmod 0644 | Fixed |
+| `claude_code.py:269` | `_prepare_workspace_skills` creates `.claude/skills/` in tenant workspace | **RISK: EPERM** — ainrf cannot mkdir in tenant-owned workspace. Currently guarded by `exist_ok=True` and OSError catch, but symlink creation will fail silently |
+| `service.py:765` | `_resolve_working_directory` mkdir in workspace | **RISK: EPERM** — mitigated by entrypoint pre-creating `workspaces/default/`, but non-default labels would fail |
+| `auth/service.py:526-528` | `provision_tenant_user` mkdir + chown | OK — runs during registration, useradd --create-home handles it |
+| `files.py:268` | Upload → chown to tenant | Fixed — explicit chown after upload |
+| `agent_sdk.py` | No `user=` param (removed) | Fixed — avoids CAP_SETUID requirement |
+
+**Guidelines for new code:**
+- Never assume `ainrf` can write to `/home/ainrf_tenants/<username>/` paths
+- If a file must be readable by a tenant subprocess (via `sudo -u`), set `chmod 0644` after creation
+- If a directory must be created in tenant space, use `subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path])`
+- Workspace dirs for new labels should be created via the tenant user, not directly by ainrf
 ### Build Pipeline
 
 `scripts/build_html_notes.py` is the core docs build script. It:
