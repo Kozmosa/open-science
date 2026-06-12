@@ -7,10 +7,8 @@ interface Props {
 
 export default function PageShell({ children, className = '' }: Props) {
   return (
-    <div className={`flex min-h-0 flex-1 bg-[var(--bg)] p-4 ${className}`}>
-      <div className="flex min-h-0 w-full overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-        {children}
-      </div>
+    <div className={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm ${className}`}>
+      {children}
     </div>
   );
 }

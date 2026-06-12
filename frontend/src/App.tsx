@@ -67,6 +67,8 @@ function RootRedirect() {
 
 function AuthenticatedRoutes() {
   const t = useT();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <Layout>
@@ -86,8 +88,8 @@ function AuthenticatedRoutes() {
           <Route path="/workspace-browser" element={<FileBrowserPage />} />
           <Route path="/environments" element={<EnvironmentsPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
-          <Route path="/sessions" element={<SessionsPage />} />
-          <Route path="/timeline" element={<TimelinePage />} />
+          <Route path="/sessions" element={isAdmin ? <SessionsPage /> : <Navigate to="/" replace />} />
+          <Route path="/timeline" element={isAdmin ? <TimelinePage /> : <Navigate to="/" replace />} />
           <Route path="/literature" element={<LiteraturePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>

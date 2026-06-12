@@ -96,6 +96,7 @@ function Layout({ children }: Props) {
   }, [pageTitle, t]);
 
   const asideWidth = useMemo(() => (isCollapsed ? 'w-[56px]' : 'w-[248px]'), [isCollapsed]);
+  const isAdmin = user?.role === 'admin';
   const navigationItems: NavigationItem[] = [
     {
       label: t('navigation.projects.label'),
@@ -139,18 +140,22 @@ function Layout({ children }: Props) {
       description: t('navigation.resources.description'),
       icon: Activity,
     },
-    {
-      label: t('navigation.sessions.label'),
-      to: '/sessions',
-      description: t('navigation.sessions.description'),
-      icon: History,
-    },
-    {
-      label: t('navigation.timeline.label'),
-      to: '/timeline',
-      description: t('navigation.timeline.description'),
-      icon: Clock,
-    },
+    ...(isAdmin
+      ? [
+          {
+            label: t('navigation.sessions.label'),
+            to: '/sessions' as const,
+            description: t('navigation.sessions.description'),
+            icon: History,
+          },
+          {
+            label: t('navigation.timeline.label'),
+            to: '/timeline' as const,
+            description: t('navigation.timeline.description'),
+            icon: Clock,
+          },
+        ]
+      : []),
     {
       label: t('nav.literature'),
       to: '/literature',
