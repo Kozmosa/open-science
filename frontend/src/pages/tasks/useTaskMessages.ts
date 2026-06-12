@@ -154,13 +154,24 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
 
   const [streamMessages, setStreamMessages] = useState<MessageItem[]>([]);
   const lastProcessedSeqRef = useRef<number>(0);
+  const boundTaskIdRef = useRef<string | null>(null);
 
+  // Single effect: reset on task change, then convert new events.
+  // Combining into one effect prevents the old task's outputItems from being
+  // converted between the "reset" and "clear" phases across separate effects.
   useEffect(() => {
-    setStreamMessages([]);
-    lastProcessedSeqRef.current = 0;
-  }, [taskId]);
+    // Task changed — discard everything from the previous task
+    if (taskId !== boundTaskIdRef.current) {
+      boundTaskIdRef.current = taskId ?? null;
+      setStreamMessages([]);
+      lastProcessedSeqRef.current = 0;
+      // If there's no task, or outputItems still holds stale events from
+      // the previous task, wait for the next render with correct data.
+      if (!taskId || outputItems.some((e) => e.task_id !== taskId)) {
+        return;
+      }
+    }
 
-  useEffect(() => {
     // Only convert events we haven't processed yet
     const newEvents = outputItems.filter((e) => e.seq > lastProcessedSeqRef.current);
     if (newEvents.length === 0) return;
@@ -206,7 +217,7 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
       }
       return result;
     });
-  }, [outputItems, initialPrompt]);
+  }, [taskId, outputItems, initialPrompt]);
 
   const allMessages = useMemo(() => {
     const historyMsgs = history || [];

@@ -69,11 +69,15 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
   const reconnectTimerRef = useRef<number | null>(null);
   const refillPromiseRef = useRef<Promise<void> | null>(null);
   const loadMoreSeqRef = useRef<number>(0);
-
   const writeCacheTimerRef = useRef<number | null>(null);
+  /** Tracks the task ID the hook is currently bound to. Used as a stale-closure
+   *  guard so late-fire callbacks from a previous task are silently discarded. */
+  const activeTaskIdRef = useRef<string | null>(null);
 
   const appendOutput = useCallback(
     (items: TaskOutputEvent[], taskId: string) => {
+      // Reject data arriving for a task the hook is no longer tracking
+      if (taskId !== activeTaskIdRef.current) return;
       const taskItems = items.filter((item) => item.task_id === taskId);
       if (taskItems.length === 0) return;
       setOutputItems((current) => {
@@ -148,6 +152,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
     setIsLoadingMore(false);
     nextSeqRef.current = 0;
     loadMoreSeqRef.current = 0;
+    activeTaskIdRef.current = taskId;
 
     if (taskId === null) {
       return undefined;
@@ -176,8 +181,8 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
     const openStream = (): void => {
       closeCurrentStream();
       const source = new EventSource(buildTaskStreamUrl(taskId, nextSeqRef.current));
-      eventSourceRef.current = source;
       source.onmessage = (event: MessageEvent<string>) => {
+        if (!active) return;
         try {
           const item = JSON.parse(event.data) as TaskOutputEvent;
           if (item.task_id !== taskId) return;
@@ -190,7 +195,7 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
             void queryClient.invalidateQueries({ queryKey: ['task', taskId] });
           }
         } catch (error) {
-          setOutputError(error instanceof Error ? error.message : t('pages.tasks.output.parseFailed'));
+          if (active) setOutputError(error instanceof Error ? error.message : t('pages.tasks.output.parseFailed'));
         }
       };
       source.onerror = () => {
