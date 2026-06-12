@@ -191,6 +191,16 @@ export const getDeploymentVersion = (): Promise<DeploymentVersionResponse> =>
     ? Promise.resolve({ short_commit: null, committed_at: null })
     : api.get<DeploymentVersionResponse>('/settings/deployment-version');
 
+// Frontend self-reports its OWN build commit (captured at `npm run build`
+// time, served as a static /build-info.json by nginx). Built separately from
+// the backend, so it may target a different commit than the backend version.
+export const getFrontendBuildVersion = (): Promise<DeploymentVersionResponse> => {
+  if (USE_MOCK) return Promise.resolve({ short_commit: null, committed_at: null });
+  return fetch('/build-info.json', { headers: { Accept: 'application/json' } })
+    .then((r) => (r.ok ? (r.json() as Promise<DeploymentVersionResponse>) : { short_commit: null, committed_at: null }))
+    .catch(() => ({ short_commit: null, committed_at: null }));
+};
+
 export const getTerminalSession = (environmentId?: string): Promise<TerminalSession> =>
   USE_MOCK
     ? Promise.resolve(mockGetTerminalSession(environmentId))

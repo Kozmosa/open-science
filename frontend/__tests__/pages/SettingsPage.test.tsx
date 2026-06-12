@@ -4,6 +4,7 @@ import {
   getCodexDefaults,
   getDeploymentVersion,
   getEnvironments,
+  getFrontendBuildVersion,
   getSearchSettings,
   getSkillRegistries,
   getSkills,
@@ -37,9 +38,10 @@ vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
   ),
 }));
 
-
-vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('../../src/api', () => ({
+  getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getDeploymentVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
+  getFrontendBuildVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getEnvironments: vi.fn(),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
@@ -66,6 +68,7 @@ const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetDeploymentVersion = vi.mocked(getDeploymentVersion);
+const mockGetFrontendBuildVersion = vi.mocked(getFrontendBuildVersion);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
 const mockGetSkillRegistries = vi.mocked(getSkillRegistries);
@@ -104,6 +107,8 @@ beforeEach(() => {
   mockGetWorkspaces.mockReset();
   mockGetDeploymentVersion.mockReset();
   mockGetDeploymentVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
+  mockGetFrontendBuildVersion.mockReset();
+  mockGetFrontendBuildVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
   mockGetSkillRegistries.mockReset();
   mockGetSkillRegistries.mockResolvedValue({ items: [] });
   vi.mocked(getSearchSettings).mockReset();
@@ -158,12 +163,25 @@ describe('SettingsPage', () => {
     );
   });
 
-  it('renders the deployment version card with commit metadata', async () => {
+  it('renders backend and frontend deployment versions separately', async () => {
     renderWithProviders(<SettingsPage />);
 
-    expect(await screen.findByRole('heading', { name: 'Deployment Version' })).toBeInTheDocument();
-    expect(screen.getByTestId('deployment-version-commit')).toHaveTextContent('abc123');
-    expect(screen.getByTestId('deployment-version-committed-at')).toHaveTextContent('20260612-2004');
+    expect(await screen.findByRole('heading', { name: 'Deployment Versions' })).toBeInTheDocument();
+    expect(screen.getByTestId('deployment-version-backend-commit')).toHaveTextContent('abc123');
+    expect(screen.getByTestId('deployment-version-backend-committed-at')).toHaveTextContent('20260612-2004');
+    expect(screen.getByTestId('deployment-version-frontend-commit')).toHaveTextContent('abc123');
+    expect(screen.getByTestId('deployment-version-frontend-committed-at')).toHaveTextContent('20260612-2004');
+    // Matching commits -> no mismatch banner.
+    expect(screen.queryByTestId('deployment-version-mismatch')).not.toBeInTheDocument();
+  });
+
+  it('flags a mismatch when backend and frontend commits differ', async () => {
+    mockGetFrontendBuildVersion.mockResolvedValue({ short_commit: 'feedfa', committed_at: '20260612-2100' });
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByTestId('deployment-version-mismatch')).toBeInTheDocument();
+    expect(screen.getByTestId('deployment-version-backend-commit')).toHaveTextContent('abc123');
+    expect(screen.getByTestId('deployment-version-frontend-commit')).toHaveTextContent('feedfa');
   });
 
   it('hydrates codex profile defaults from local codex settings API', async () => {

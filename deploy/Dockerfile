@@ -50,6 +50,16 @@ RUN mkdir -p src/ainrf && \
 # Layer 2: overlay real source (invalidates only when Python code changes)
 COPY src/ainrf/ src/ainrf/
 RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --system --no-cache-dir .
+# Stamp backend build provenance from host git (passed via build-args by the
+# compose deploy wrapper). This is the backend's OWN version, independent of
+# the frontend build — /settings/deployment-version reads it at runtime.
+ARG AINRF_BUILD_COMMIT=""
+ARG AINRF_BUILD_COMMITTED_AT=""
+RUN python3 -c "import json,os; \
+    c=(os.environ.get('AINRF_BUILD_COMMIT') or '').strip(); \
+    t=(os.environ.get('AINRF_BUILD_COMMITTED_AT') or '').strip(); \
+    json.dump({'short_commit': c[:6] or None, 'committed_at': t or None}, \
+              open('/build/backend-build-info.json','w'), indent=2)"
 
 # ── Stage 3: Agent tools ─────────────────────────────────────────
 # Pin versions via build-arg so Docker layer cache is stable.
@@ -81,6 +91,9 @@ RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debi
 
 # uv from official image (needed for runtime Python dev commands)
 COPY --from=ghcr.1ms.run/astral-sh/uv:0.11.20 /uv /usr/local/bin/uv
+
+# Backend build provenance (own version, independent of frontend build)
+COPY --from=backend-build /build/backend-build-info.json /opt/ainrf/backend-build-info.json
 
 # Node.js runtime + Claude Code CLI + Codex CLI from agent-tools stage
 COPY --from=agent-tools /usr/local/bin/node /usr/local/bin/node

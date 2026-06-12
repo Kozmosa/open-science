@@ -572,11 +572,14 @@ export const messages = {
           saved: 'Saved',
         },
         version: {
-          title: 'Deployment Version',
-          description: 'Shows the Git commit currently baked into this frontend deployment.',
+          title: 'Deployment Versions',
+          description: 'Git commits baked into the running backend and frontend builds.',
+          backendLabel: 'Backend',
+          frontendLabel: 'Frontend',
           commitLabel: 'Commit',
           committedAtLabel: 'Committed at',
           unavailable: 'Unavailable',
+          mismatchWarning: 'Backend and frontend were built from different commits.',
         },
         account: {
           title: 'Account & Security',
@@ -1606,10 +1609,13 @@ export const messages = {
         },
         version: {
           title: '部署版本',
-          description: '显示当前前端部署内置的 Git 提交信息。',
+          description: '当前运行的后端与前端构建各自内置的 Git 提交。',
+          backendLabel: '后端',
+          frontendLabel: '前端',
           commitLabel: '提交',
           committedAtLabel: '提交时间',
           unavailable: '不可用',
+          mismatchWarning: '后端与前端基于不同的提交构建，版本不一致。',
         },
         account: {
           title: '账号与安全',

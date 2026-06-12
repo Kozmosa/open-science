@@ -12,6 +12,7 @@ from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
 
+
 async def _noop_async(self: object, **kwargs: object) -> None:
     """No-op for mocking SSHExecutor connect/close."""
 
@@ -119,15 +120,21 @@ async def test_settings_codex_defaults_reads_local_files(
     }
 
 
-
 @pytest.mark.anyio
-async def test_settings_deployment_version_reads_shared_build_info(
+async def test_settings_deployment_version_reads_backend_build_info(
     tmp_path: Path,
 ) -> None:
+    # The backend reports its OWN build provenance (baked at backend-image
+    # build time), not the frontend's build-info, which is built separately.
+    (tmp_path / "backend-build-info.json").write_text(
+        '{"short_commit":"abc123","committed_at":"20260612-2017"}',
+        encoding="utf-8",
+    )
+    # A frontend build-info artifact must NOT leak into the backend version.
     frontend_public = tmp_path / "frontend" / "public"
     frontend_public.mkdir(parents=True, exist_ok=True)
     (frontend_public / "build-info.json").write_text(
-        '{"short_commit":"abc123","committed_at":"20260612-2017"}',
+        '{"short_commit":"deadbeef","committed_at":"19990101-0000"}',
         encoding="utf-8",
     )
 

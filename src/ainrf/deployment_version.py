@@ -59,10 +59,12 @@ def _info_from_file(startup_cwd: Path) -> DeploymentVersionInfo:
 
 
 def _build_info_candidates(startup_cwd: Path) -> tuple[Path, ...]:
+    # The backend reports ITS OWN build provenance, baked at backend-image
+    # build time (not the frontend's build-info, which is built separately
+    # and may target a different commit). Local dev falls through to git.
     return (
-        startup_cwd / "frontend" / "public" / "build-info.json",
-        startup_cwd / "frontend" / "dist" / "build-info.json",
-        Path("/opt/ainrf/frontend/dist/build-info.json"),
+        startup_cwd / "backend-build-info.json",
+        Path("/opt/ainrf/backend-build-info.json"),
     )
 
 
@@ -78,6 +80,7 @@ def _info_from_git(startup_cwd: Path) -> DeploymentVersionInfo:
         normalize=_normalize_timestamp,
     )
     return DeploymentVersionInfo(short_commit=short_commit, committed_at=committed_at)
+
 
 def _run_git(
     startup_cwd: Path,

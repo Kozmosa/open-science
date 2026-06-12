@@ -31,6 +31,9 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
+        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
     restart: unless-stopped
     container_name: ainrf
     environment:

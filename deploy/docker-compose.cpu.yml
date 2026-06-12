@@ -32,6 +32,11 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        # Host git commit captured by deploy/redeploy-backend.sh (falls back to
+        # empty -> backend reports "Unavailable" when built without the wrapper).
+        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
+        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
     restart: unless-stopped
     container_name: ainrf
     network_mode: host
