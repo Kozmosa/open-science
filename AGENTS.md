@@ -42,7 +42,7 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 - `UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py build`: convert Obsidian notes and build the MkDocs site.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py serve`: run the local docs preview server.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ainrf --help`: inspect the CLI scaffold.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`: run the current Python test suite.
+- `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto`: run the Python test suite in parallel across CPU cores via pytest-xdist (the `addopts` default is serial, so pass `-n auto` explicitly). Use `-n 0` or drop `-n` for serial execution when debugging an ordered failure.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests`: run lint checks.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests`: verify formatting.
 
@@ -56,7 +56,7 @@ Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activatio
 ### Frontend Command Constraints
 
 - Frontend type-check must run from `frontend/`: `cd frontend && node_modules/.bin/tsc -b`
-- Frontend tests: `cd frontend && npm run test:run`
+- Frontend tests: `cd frontend && npm run test:run` (vitest runs test files in parallel by default; pass `--no-file-parallelism` for serial execution).
 - Frontend build: `cd frontend && npm run build`
 - Do **not** use `npx tsc --noEmit`, `npx tsc -p tsconfig.app.json`, or run plain `tsc` from the repo root.
 - This frontend uses project references; always use `tsc -b` from the `frontend/` directory.
@@ -213,13 +213,13 @@ pytestmark = [pytest.mark.api]  # or unit, middleware, engine, cli, integration
 ```
 ### Before Submitting
 Before submitting changes to Python code, run both runtime and static checks:
-- `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`
+- `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto`
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
 ### Command Reference
-- Backend tests must run from repo root: `cd /home/xuyang/code/scholar-agent && UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`
+- Backend tests must run from the repo root: `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto` (parallel; add `-n 0` for serial). Backend tests must not rely on the process working directory for output — write to `tmp_path` so parallel workers never collide.
 - Frontend tests and type-check must run from `frontend/`.
 - Start manual service testing with `uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`.
-- Selective runs: `pytest -m api`, `pytest -m unit`, `pytest -m 'not slow'`.
+- Selective runs (also parallel by default): `pytest -m api -n auto`, `pytest -m unit -n auto`, `pytest -m 'not slow' -n auto`.
 - Frontend test command: `cd frontend && npm run test:run`.
 
 ### Agent E2E Testing
