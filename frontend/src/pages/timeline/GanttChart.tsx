@@ -88,15 +88,23 @@ export function GanttChart({ tasks, loading }: Props) {
   }, [tasks]);
 
   if (loading) {
-    return <p className="p-4 text-sm text-[var(--text-tertiary)]">{t('pages.sessions.timeline.loading')}</p>;
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-[var(--border)] p-4 text-sm text-[var(--text-tertiary)]">
+        {t('pages.sessions.timeline.loading')}
+      </div>
+    );
   }
 
   if (tasks.length === 0) {
-    return <p className="p-4 text-sm text-[var(--text-tertiary)]">{t('pages.sessions.timeline.empty')}</p>;
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-[var(--border)] p-4 text-sm text-[var(--text-tertiary)]">
+        {t('pages.sessions.timeline.empty')}
+      </div>
+    );
   }
 
   return (
-    <div className="w-full overflow-x-auto overflow-y-auto rounded-lg border border-[var(--border)]">
+    <div className="flex min-h-0 flex-1 w-full flex-col overflow-x-auto overflow-y-auto rounded-lg border border-[var(--border)]">
       <div className="flex border-b border-[var(--border)] bg-[var(--bg)]">
         <div className="w-[280px] min-w-[280px] border-r-2 border-[var(--border)] p-2 text-xs font-semibold text-[var(--text-secondary)]">
           {t('pages.sessions.timeline.title')}
