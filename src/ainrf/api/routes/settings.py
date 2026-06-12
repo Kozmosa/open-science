@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -12,6 +13,8 @@ from ainrf.harness_engine.mcp_servers import (
     load_search_settings,
     save_search_settings,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

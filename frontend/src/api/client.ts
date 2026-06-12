@@ -3,6 +3,14 @@ const API_BASE = '/api';
 let _accessToken: string | null = null;
 let _refreshPromise: Promise<string | null> | null = null;
 
+// Track the last X-Request-ID for error correlation with server logs.
+let _lastRequestId: string | null = null;
+
+/** Return the most recent X-Request-ID received from the backend. */
+export function getLastRequestId(): string | null {
+  return _lastRequestId;
+}
+
 export function setAccessToken(token: string | null) {
   _accessToken = token;
 }
@@ -119,6 +127,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   const response = await fetch(url, init);
+
+  // Capture request ID for error correlation.
+  const reqId = response.headers.get('x-request-id');
+  if (reqId) {
+    _lastRequestId = reqId;
+  }
 
   // Auto-refresh on 401 (unless already on auth endpoints)
   if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {

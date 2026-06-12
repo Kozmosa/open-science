@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 from fastapi import APIRouter, Request
@@ -7,6 +8,8 @@ from fastapi import APIRouter, Request
 from ainrf.api.schemas import ApiStatus, HealthResponse
 from ainrf.execution import SSHExecutor
 from ainrf.runtime.readiness import check_runtime_readiness
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 import tempfile
@@ -19,6 +20,8 @@ from ainrf.api.schemas import (
 )
 from ainrf.skills import SkillsDiscoveryService
 from ainrf.skills.merge import deep_merge_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 

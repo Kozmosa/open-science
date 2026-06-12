@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 
 from ainrf.api.schemas import (
@@ -12,6 +14,8 @@ from ainrf.api.schemas import (
     EnvironmentAccessResponse,
 )
 from ainrf.auth.permissions import get_current_user, require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

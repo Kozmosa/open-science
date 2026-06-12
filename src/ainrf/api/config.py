@@ -51,6 +51,7 @@ class ApiConfig:
     login_lockout_hours: int = 24
     metrics_enabled: bool = False
     metrics_path: str = "/metrics"
+    slow_request_threshold_seconds: float = 5.0
     public_registration_enabled: bool = True
     trusted_proxy_cidrs: tuple[str, ...] = ()
 
@@ -93,6 +94,9 @@ class ApiConfig:
             "yes",
         )
         metrics_path = os.environ.get("AINRF_METRICS_PATH", "/metrics")
+        slow_request_threshold = float(
+            os.environ.get("AINRF_SLOW_REQUEST_THRESHOLD_SECONDS", "5.0")
+        )
         public_registration_enabled = os.environ.get(
             "AINRF_PUBLIC_REGISTRATION_ENABLED", "true"
         ).lower() in ("1", "true", "yes")
@@ -110,6 +114,7 @@ class ApiConfig:
             login_lockout_hours=login_lockout_hours,
             metrics_enabled=metrics_enabled,
             metrics_path=metrics_path,
+            slow_request_threshold_seconds=slow_request_threshold,
             public_registration_enabled=public_registration_enabled,
             trusted_proxy_cidrs=trusted_proxy_cidrs,
         )

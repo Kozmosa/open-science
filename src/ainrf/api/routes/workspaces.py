@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -14,6 +15,8 @@ from ainrf.workspaces import (
     WorkspaceRegistryService,
 )
 from ainrf.workspaces.models import WorkspaceRecord
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 

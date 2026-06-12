@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import StreamingResponse
@@ -36,6 +37,8 @@ from ainrf.auth.permissions import (
     check_resource_ownership,
     get_current_user,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -280,8 +283,10 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
         )
         service.schedule_task(task.task_id)
     except Exception as exc:
+        logger.exception("task_create_failed", exc_info=exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    logger.info("task_created_via_api", task_id=task.task_id, project_id=effective_project_id)
     return _task_to_response(task, service)
 
 

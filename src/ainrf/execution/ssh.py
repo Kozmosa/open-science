@@ -92,7 +92,26 @@ class SSHExecutor:
         async def operation(connection: asyncssh.SSHClientConnection) -> CommandResult:
             return await self._run_command_once(connection, cmd, effective_timeout, cwd, env)
 
-        return await self._run_with_reconnect(operation, operation_timeout=effective_timeout)
+        import time as _time
+
+        from ainrf.api.routes.metrics import inc_counter, observe_histogram
+
+        start = _time.monotonic()
+        try:
+            result = await self._run_with_reconnect(operation, operation_timeout=effective_timeout)
+        except Exception as exc:
+            inc_counter(
+                "ainrf_ssh_connection_error_total",
+                {"host": self._container.host, "error_type": type(exc).__name__},
+            )
+            raise
+        elapsed = _time.monotonic() - start
+        observe_histogram(
+            "ainrf_ssh_command_duration_seconds",
+            elapsed,
+            {"host": self._container.host},
+        )
+        return result
 
     async def create_process(
         self,
@@ -280,6 +299,8 @@ class SSHExecutor:
                 attempt += 1
                 try:
                     self._logger.info("connect_attempt", attempt=attempt)
+                    from ainrf.api.routes.metrics import inc_counter as _inc
+                    _inc("ainrf_ssh_connection_attempt_total", {"host": self._container.host})
                     self._connection = await self._open_connection()
                     return self._connection
                 except Exception as exc:

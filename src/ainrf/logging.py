@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import datetime
 import logging
+import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import structlog
@@ -12,8 +14,10 @@ def configure_logging(state_root: Path) -> None:
 
     Log file: ``<state_root>/logs/backend-YYYYMMDD.log``
     The date is fixed at server start time so a single process always writes
-    to one file.  A ``RotatingFileHandler`` could be added later for very
-    long-running processes.
+    to one file.  Logs are also emitted to **stdout** so that ``docker logs``
+    captures structured output.
+
+    File rotation: each file grows up to 50 MB with up to 10 backups.
     """
     log_dir = state_root / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -31,9 +35,15 @@ def configure_logging(state_root: Path) -> None:
 
     formatter = logging.Formatter("%(message)s")
 
-    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler = RotatingFileHandler(
+        log_path, maxBytes=50_000_000, backupCount=10, encoding="utf-8"
+    )
     file_handler.setFormatter(formatter)
     root.addHandler(file_handler)
+
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(formatter)
+    root.addHandler(stdout_handler)
 
     # --- structlog side ---
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)

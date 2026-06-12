@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Request
 
 from ainrf.auth.permissions import get_current_user, is_admin
 from ainrf.monitor.models import ResourcesResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 

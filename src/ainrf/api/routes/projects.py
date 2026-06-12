@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json as json_mod
+import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -34,6 +35,8 @@ from ainrf.environments import (
 )
 from ainrf.projects import ProjectNotFoundError, ProjectRegistryService, TaskEdgeNotFoundError
 from ainrf.projects.models import ProjectRecord, TaskEdgeRecord
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 task_edges_router = APIRouter(prefix="/task-edges", tags=["projects"])

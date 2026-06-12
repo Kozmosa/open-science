@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+import structlog
+
 from ainrf.auth.service import AuthService
 from ainrf.agentic_researcher.models import (
     AgenticResearcher,
@@ -29,6 +31,8 @@ from ainrf.workspaces.service import WorkspaceNotFoundError
 
 if TYPE_CHECKING:
     from ainrf.workspaces import WorkspaceRegistryService
+
+_LOG = structlog.get_logger(__name__).bind(component="agentic_researcher")
 
 
 class TaskNotFoundError(LookupError):
@@ -248,6 +252,12 @@ class AgenticResearcherService:
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
+    @staticmethod
+    def _compute_duration_ms(task: Task) -> int | None:
+        if task.started_at and task.completed_at:
+            return max(int((task.completed_at - task.started_at).total_seconds() * 1000), 0)
+        return None
+
     def _new_id(self) -> str:
         return uuid4().hex[:12]
 
@@ -306,27 +316,44 @@ class AgenticResearcherService:
                 ),
             )
             conn.commit()
+        _LOG.info(
+            "task_created",
+            task_id=task.task_id,
+            project_id=task.project_id,
+            researcher_type=task.researcher_type.value,
+            harness_engine=task.harness_engine.value,
+            owner_user_id=owner_user_id,
+        )
         return task
 
     def schedule_task(self, task_id: str) -> None:
         if task_id in self._running_tasks:
+            _LOG.debug("schedule_skipped_already_running", task_id=task_id)
+            return
             return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError as exc:
             raise TaskOperationError("Task execution requires an active event loop") from exc
         self._running_tasks[task_id] = loop.create_task(self.run_task(task_id))
+        _LOG.info("task_scheduled", task_id=task_id)
 
     async def run_task(self, task_id: str) -> None:
         task = self.get_task(task_id)
         if task.status != TaskStatus.QUEUED:
             raise TaskOperationError(f"Cannot run task with status: {task.status}")
 
+        # Bind task_id to structlog context so all downstream log entries
+        # (SSH executor, DB queries, etc.) carry the correlation key.
+        structlog.contextvars.bind_contextvars(task_id=task_id)
+
         try:
+            _LOG.info("task_starting", project_id=task.project_id, researcher_type=task.researcher_type.value)
             await self._set_status(task_id, TaskStatus.STARTING, started=True)
             context = self._build_execution_context(task)
             engine = self._get_engine(task.harness_engine)
             await self._set_status(task_id, TaskStatus.RUNNING)
+            _LOG.info("task_running", harness_engine=task.harness_engine.value)
             latest = self.get_task(task_id)
             if latest.latest_output_seq == 0:
                 await self.append_output(
@@ -337,9 +364,12 @@ class AgenticResearcherService:
             await engine.start(context, lambda event: self._handle_engine_event(task_id, event))
             latest = self.get_task(task_id)
             if latest.status in {TaskStatus.STARTING, TaskStatus.RUNNING}:
+                duration_ms = self._compute_duration_ms(latest)
                 await self._set_status(task_id, TaskStatus.SUCCEEDED, completed=True, exit_code=0)
+                _LOG.info("task_succeeded", duration_ms=duration_ms)
         except asyncio.CancelledError:
             await self._set_status(task_id, TaskStatus.CANCELLED, completed=True)
+            _LOG.warning("task_cancelled")
             raise
         except Exception as exc:
             await self.append_output(task_id, "stderr", str(exc))
@@ -349,8 +379,10 @@ class AgenticResearcherService:
                 completed=True,
                 error_summary=str(exc),
             )
+            _LOG.error("task_failed", error_summary=str(exc))
         finally:
             self._running_tasks.pop(task_id, None)
+            structlog.contextvars.unbind_contextvars("task_id")
 
     async def pause_task(self, task_id: str) -> Task:
         task = self.get_task(task_id)
@@ -620,6 +652,7 @@ class AgenticResearcherService:
 
     async def cancel_running_task(self, task_id: str) -> Task:
         task = self.get_task(task_id)
+        _LOG.warning("task_cancel_requested", task_id=task_id, current_status=task.status.value)
         if task.status == TaskStatus.RUNNING:
             engine = self._get_engine(task.harness_engine)
             await engine.cancel(task_id)
@@ -864,6 +897,7 @@ class AgenticResearcherService:
             status = event.payload.get("status")
             exit_code = event.payload.get("exit_code")
             if status == "succeeded":
+                _LOG.info("task_engine_succeeded", task_id=task_id, exit_code=exit_code)
                 await self._set_status(
                     task_id,
                     TaskStatus.SUCCEEDED,
@@ -871,6 +905,7 @@ class AgenticResearcherService:
                     exit_code=exit_code if isinstance(exit_code, int) else 0,
                 )
             elif status == "failed":
+                _LOG.error("task_engine_failed", task_id=task_id, exit_code=exit_code)
                 await self._set_status(
                     task_id,
                     TaskStatus.FAILED,
@@ -882,6 +917,7 @@ class AgenticResearcherService:
         elif event.event_type == "system":
             subtype = event.payload.get("subtype")
             if subtype == "task_paused":
+                _LOG.info("task_paused", task_id=task_id)
                 await self._set_status(task_id, TaskStatus.PAUSED)
             elif subtype == "task_failed":
                 payload = event.payload
@@ -1069,6 +1105,7 @@ class AgenticResearcherService:
         if completed:
             with self._stream_lock:
                 self._stream_buffers.pop(task_id, None)
+        _LOG.debug("task_status_changed", task_id=task_id, to_status=status.value, exit_code=exit_code)
 
     def _row_to_task(self, row: sqlite3.Row) -> Task:
         return Task(

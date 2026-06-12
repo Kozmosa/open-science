@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -17,6 +18,8 @@ from ainrf.api.schemas import (
 )
 from ainrf.skills.registry_models import DEFAULT_REGISTRIES
 from ainrf.skills.registry_sync import DirtyWorktreeError, SkillRegistrySyncService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/skill-registries", tags=["skill-registries"])
 

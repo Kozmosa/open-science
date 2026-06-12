@@ -19,6 +19,7 @@ from ainrf.api.middleware import (
     build_request_size_middleware,
 )
 from ainrf.api.middleware.request_context import build_request_context_middleware
+from ainrf.api.middleware.request_logging import build_request_logging_middleware
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.environments import router as environments_router
@@ -34,6 +35,7 @@ from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
+from ainrf.api.routes.client_logs import router as client_logs_router
 from ainrf.auth import AuthService
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.files import FileBrowserService
@@ -79,6 +81,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     literature_router,
     resources_router,
     settings_router,
+    client_logs_router,
 )
 
 
@@ -146,9 +149,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     + "=" * 60
                     + "\n"
                 )
+                _LOG.info("initial_admin_created", username="admin", password_file=str(password_file))
             # Admin role fix is handled by auth migration_003_admin_role_fix
         except Exception:
-            pass
+            _LOG.exception("Failed to create initial admin user")
         # Backfill per-user default projects for any user lacking one (idempotent).
         # Covers pre-existing users and the bootstrap admin created directly above,
         # which bypasses the HTTP registration hook that normally provisions it.
@@ -246,15 +250,14 @@ def create_app(
     app.state.agentic_researcher_service = agentic_researcher_service
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
     # Middleware order (outermost first):
-    #   1. IP allowlist — reject unknown networks before anything else
-    #   2. Request body size limit + concurrency guard
-    # Middleware order (outermost first):
     #   1. Request context — attach request_id + structlog binding
-    #   2. IP allowlist — reject unknown networks before anything else
-    #   3. Request body size limit
-    #   4. Concurrency guard (optional)
-    #   5. JWT / API-key authentication
+    #   2. Request logging — log method/path/status/duration with request_id
+    #   3. IP allowlist — reject unknown networks before anything else
+    #   4. Request body size limit
+    #   5. Concurrency guard (optional)
+    #   6. JWT / API-key authentication
     app.middleware("http")(build_request_context_middleware())
+    app.middleware("http")(build_request_logging_middleware(api_config))
     app.middleware("http")(build_ip_allowlist_middleware(api_config.allowed_cidrs))
     app.middleware("http")(build_request_size_middleware(api_config.max_request_body_bytes))
     if api_config.max_concurrent_requests > 0:

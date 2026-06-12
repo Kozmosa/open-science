@@ -50,6 +50,13 @@ def _init_counters() -> None:
         "ainrf_files_sensitive_path_access_total",
         "ainrf_environment_update_total",
         "ainrf_code_session_created_total",
+        "ainrf_task_created_total",
+        "ainrf_task_completed_total",
+        "ainrf_task_failed_total",
+        "ainrf_ssh_connection_attempt_total",
+        "ainrf_ssh_connection_error_total",
+        "ainrf_db_slow_query_total",
+        "ainrf_client_error_events_total",
     ]
     for name in names:
         _counters.setdefault(name, {frozenset(): 0})
@@ -57,6 +64,8 @@ def _init_counters() -> None:
 
 def _init_histograms() -> None:
     _histograms.setdefault("ainrf_http_request_duration_seconds", {frozenset(): []})
+    _histograms.setdefault("ainrf_ssh_command_duration_seconds", {frozenset(): []})
+    _histograms.setdefault("ainrf_db_query_duration_seconds", {frozenset(): []})
 
 
 def _init_gauges() -> None:

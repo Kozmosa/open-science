@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -17,6 +18,8 @@ from ainrf.api.schemas import (
     SessionUpdateRequest,
 )
 from ainrf.sessions import SessionService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 

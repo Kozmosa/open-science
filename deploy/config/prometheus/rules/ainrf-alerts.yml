@@ -1,0 +1,87 @@
+# AINRF Alerting Rules
+# ────────────────────
+# Loaded by Prometheus via rule_files in prometheus.yml.
+# These rules assume the AINRF metrics endpoint is being scraped at /metrics.
+
+groups:
+  - name: ainrf.http
+    rules:
+      - alert: AINRFHighErrorRate
+        expr: |
+          (
+            sum(rate(ainrf_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(ainrf_http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "AINRF 5xx error rate exceeds 5%"
+          description: >
+            The AINRF backend is returning 5xx errors for more than 5% of
+            requests over the last 5 minutes. Current rate:
+            {{ $value | printf "%.2f" }}.
+
+      - alert: AINRFHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ainrf_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "AINRF P95 latency exceeds 5 seconds"
+          description: >
+            The 95th percentile HTTP request latency has been above 5 seconds
+            for 10 minutes. Current P95: {{ $value | printf "%.1f" }}s.
+
+  - name: ainrf.tasks
+    rules:
+      - alert: AINRFTaskFailureSpike
+        expr: |
+          increase(ainrf_task_failed_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: agentic_researcher
+        annotations:
+          summary: "AINRF task failure spike detected"
+          description: >
+            {{ $value }} tasks have failed in the last 10 minutes.
+            This may indicate a systemic issue with the task execution pipeline
+            or the underlying AI harness engines.
+
+  - name: ainrf.ssh
+    rules:
+      - alert: AINRFSSHConnectionErrors
+        expr: |
+          rate(ainrf_ssh_connection_error_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: execution
+        annotations:
+          summary: "AINRF SSH connection errors detected"
+          description: >
+            SSH connection errors are occurring at {{ $value | printf "%.2f" }}
+            per second on host {{ $labels.host }}.  Check container health and
+            network connectivity.
+
+  - name: ainrf.db
+    rules:
+      - alert: AINRFSlowQuerySpike
+        expr: |
+          increase(ainrf_db_slow_query_total[10m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "AINRF database slow query spike"
+          description: >
+            {{ $value }} slow queries (>1s) were recorded in the last 10
+            minutes on database {{ $labels.db }}.  Consider adding indexes or
+            optimizing the queries.

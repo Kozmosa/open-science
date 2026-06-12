@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from ainrf.execution.ssh import SSHExecutor
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
 from ainrf.files.service import _build_container_config
 from ainrf.workspaces.service import WorkspaceNotFoundError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/files", tags=["files"])
 
