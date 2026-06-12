@@ -75,7 +75,7 @@ def test_create_backup_skips_missing_dbs(tmp_path: Path) -> None:
     conn.close()
 
     svc = BackupService(state_root)
-    archive = svc.create_backup()
+    archive = svc.create_backup(tmp_path / "out")
     manifest = svc.verify_backup(archive)
 
     assert "auth.sqlite3" in manifest.databases
@@ -87,7 +87,7 @@ def test_verify_rejects_corrupted_archive(tmp_path: Path) -> None:
     _seed_state(state_root)
 
     svc = BackupService(state_root)
-    archive = svc.create_backup()
+    archive = svc.create_backup(tmp_path / "out")
 
     # Corrupt the archive by truncating
     data = archive.read_bytes()
@@ -102,7 +102,7 @@ def test_restore_roundtrip(tmp_path: Path) -> None:
     _seed_state(src_root)
 
     svc = BackupService(src_root)
-    archive = svc.create_backup()
+    archive = svc.create_backup(tmp_path / "out")
 
     # Restore into a fresh directory
     dst_root = tmp_path / "dst-state"
