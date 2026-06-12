@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from claude_agent_sdk import ResultMessage, StreamEvent
+from claude_agent_sdk import ResultMessage, StreamEvent, SystemMessage
 
 from ainrf.harness_engine import (
     EngineEvent,
@@ -104,6 +104,23 @@ def test_agent_sdk_ignores_partial_stream_deltas() -> None:
     )
 
     assert engine._convert_sdk_message(event, session) == []
+
+
+def test_agent_sdk_ignores_noisy_system_progress_updates() -> None:
+    engine = AgentSdkEngine()
+    session = AgentSession(task_id="task-001")
+
+    thinking_tokens = SystemMessage(
+        subtype="thinking_tokens",
+        data={"estimated_tokens": 12, "estimated_tokens_delta": 2},
+    )
+    status = SystemMessage(
+        subtype="status",
+        data={"status": "requesting"},
+    )
+
+    assert engine._convert_sdk_message(thinking_tokens, session) == []
+    assert engine._convert_sdk_message(status, session) == []
 
 
 def test_agent_sdk_failed_result_does_not_require_extra_stderr() -> None:

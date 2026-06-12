@@ -25,6 +25,7 @@ import {
   getTasks,
   getWorkspaces,
 } from '../../src/api';
+import { convertOutputEventToMessage } from '../../src/pages/tasks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '../../src/pages/tasks/output';
 
 class MockEventSource {
@@ -319,6 +320,18 @@ describe('task output helpers', () => {
     expect(merged.map((item) => item.seq)).toEqual([1, 2, 3]);
     expect(merged[2]?.content).toBe('fresh third line');
     expect(getNextOutputSeq([merged[1]!, merged[0]!], 3)).toBe(3);
+  });
+
+  it('suppresses agent-sdk thinking token lifecycle noise from message conversion', () => {
+    const message = convertOutputEventToMessage(
+      createOutputEvent(2, {
+        kind: 'lifecycle',
+        content:
+          '{"event_type":"system","payload":{"subtype":"thinking_tokens","data":{"estimated_tokens":8,"estimated_tokens_delta":3}},"token_usage":null}',
+      })
+    );
+
+    expect(message).toBeNull();
   });
 });
 

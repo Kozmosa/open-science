@@ -4,6 +4,7 @@ import asyncio
 import json
 import sqlite3
 from contextlib import closing
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -18,6 +19,8 @@ from ainrf.agentic_researcher import (
 )
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.api.routes.tasks import _output_item_to_message
+from ainrf.agentic_researcher.models import TaskOutputEvent
 from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
 from ainrf.harness_engine.base import EngineEmit
 from tests.testutil import get_jwt_headers
@@ -325,6 +328,23 @@ async def test_task_token_usage_is_tracked_and_summarized(tmp_path: Path) -> Non
             ],
         }
 
+
+
+def test_output_item_to_message_suppresses_agent_sdk_progress_noise() -> None:
+    message = _output_item_to_message(
+        TaskOutputEvent(
+            task_id='task-001',
+            seq=2,
+            kind='lifecycle',
+            content=(
+                '{"event_type":"system","payload":{"subtype":"thinking_tokens",'
+                '"data":{"estimated_tokens":8,"estimated_tokens_delta":3}},"token_usage":null}'
+            ),
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+
+    assert message is None
 
 @pytest.mark.anyio
 async def test_archive_succeeded_task_hides_it_from_default_list(tmp_path: Path) -> None:

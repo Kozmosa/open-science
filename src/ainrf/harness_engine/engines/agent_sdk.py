@@ -60,6 +60,9 @@ _ANTHROPIC_PROVIDER_ENV_KEYS = (
     "ANTHROPIC_DEFAULT_HAIKU_MODEL",
 )
 
+_IGNORED_SYSTEM_SUBTYPES = frozenset({"status", "thinking_tokens"})
+
+
 
 def _build_token_usage(sdk_msg: object) -> dict[str, Any] | None:
     """Build token_usage dict from SDK ResultMessage."""
@@ -372,13 +375,24 @@ class AgentSdkEngine(HarnessEngine):
             return []
         if isinstance(sdk_msg, SystemMessage):
             subtype = sdk_msg.subtype
-            payload = {"subtype": subtype, "data": sdk_msg.data}
             if subtype == "init":
-                payload = {
-                    "subtype": "task_started",
-                    "session_id": sdk_msg.data.get("session_id"),
-                }
-            return [EngineEvent(event_type="system", payload=payload)]
+                return [
+                    EngineEvent(
+                        event_type="system",
+                        payload={
+                            "subtype": "task_started",
+                            "session_id": sdk_msg.data.get("session_id"),
+                        },
+                    )
+                ]
+            if subtype in _IGNORED_SYSTEM_SUBTYPES:
+                return []
+            return [
+                EngineEvent(
+                    event_type="system",
+                    payload={"subtype": subtype, "data": sdk_msg.data},
+                )
+            ]
         if isinstance(sdk_msg, ResultMessage):
             return self._convert_result_message(sdk_msg, session)
         if isinstance(sdk_msg, StreamEvent):

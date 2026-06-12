@@ -3,6 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { getTaskMessages } from '../../api';
 import type { MessageItem, TaskOutputEvent } from '../../types';
 
+const SUPPRESSED_SYSTEM_SUBTYPES = new Set(['status', 'thinking_tokens']);
+
+function shouldSuppressSystemPayload(payload: Record<string, unknown>): boolean {
+  const subtype = payload.subtype;
+  return typeof subtype === 'string' && SUPPRESSED_SYSTEM_SUBTYPES.has(subtype);
+}
+
+
 export function parseOutputPayload(content: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(content);
@@ -69,6 +77,9 @@ export function convertOutputEventToMessage(event: TaskOutputEvent, initialPromp
       };
     case 'system':
     case 'lifecycle':
+      if (shouldSuppressSystemPayload(payload)) {
+        return null;
+      }
       return {
         ...base,
         type: 'system_event',

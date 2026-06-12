@@ -127,6 +127,14 @@ def _parse_output_payload(content: str) -> dict:
         return wrapped_payload
     return payload
 
+_SUPPRESSED_SYSTEM_SUBTYPES = {"status", "thinking_tokens"}
+
+
+def _is_suppressed_system_payload(payload: dict[str, object]) -> bool:
+    subtype = payload.get("subtype")
+    return isinstance(subtype, str) and subtype in _SUPPRESSED_SYSTEM_SUBTYPES
+
+
 
 def _output_item_to_message(
     item: TaskOutputEvent,
@@ -173,6 +181,8 @@ def _output_item_to_message(
             metadata={**metadata, "isFolded": True},
         )
     if item.kind in {"system", "lifecycle"}:
+        if _is_suppressed_system_payload(payload):
+            return None
         return MessageItemResponse(
             id=message_id,
             type="system_event",
