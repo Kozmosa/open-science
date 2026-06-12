@@ -8,6 +8,8 @@ Agents working in this repository must treat [`PROJECT_BASIS.md`](PROJECT_BASIS.
 - If this file and `PROJECT_BASIS.md` overlap, apply the stricter rule.
 - If a task-specific user instruction conflicts with `PROJECT_BASIS.md`, follow the user instruction for that task and keep other `PROJECT_BASIS.md` rules intact.
 
+- Review [`dev-bitter-lesson.md`](dev-bitter-lesson.md) before debugging frontend deployment, browser/devtools tooling, multi-tenant permissions, or session-scoped config issues. It captures recurring high-cost mistakes and the corresponding fixed workflow.
+
 ## Project Structure & Module Organization
 
 This repository's active product surface is the AINRF runtime plus WebUI, while the docs tree remains the long-lived product/reference knowledge base:
