@@ -170,7 +170,88 @@ subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path], ...)
 
 只有证据指向“确实是构建缓存/镜像层问题”，再做全量无缓存重建。
 
-## 8. 建议固定成每次开发的检查清单
+## 8. `data?.items[0]` 不是安全访问，空列表和缺字段要分开防
+
+### 现象
+- 接口请求成功返回了对象
+- 页面还是在 render 阶段直接崩
+- 控制台报的是 `Cannot read properties of undefined (reading '0')`
+
+### 根因
+`data?.items[0]` 只保护了 `data`，**没有保护 `items`**。
+
+- `data === undefined`：安全
+- `data.items === undefined`：仍然会炸
+
+这类问题特别容易出现在：
+- query 首帧未完成
+- mock 数据不完整
+- 后端返回 shape 变化或部分字段省略
+
+### 硬规则
+只要是列表首项默认值，一律写成：
+
+```ts
+const firstId = data?.items?.[0]?.id ?? ''
+```
+
+不要写：
+
+```ts
+const firstId = data?.items[0].id ?? ''
+```
+
+前者同时覆盖：
+- query 未返回
+- `items` 字段不存在
+- `items` 是空数组
+
+## 9. 前端高频流式性能优化，必须区分“逻辑正确”和“渲染成本”
+
+### 现象
+- 功能上没错
+- 但 thinking / token delta 一多，详情页就开始频繁重排、重渲染
+
+### 根因
+“消息模型正确”不等于“UI 更新粒度合理”。
+
+对高频流式数据，如果每个 delta 都：
+- 进 React state
+- 触发 message merge
+- 触发 markdown / block render
+
+那么即使最终展示是折叠的，也已经白白付出了渲染成本。
+
+### 硬规则
+做流式性能优化时，检查顺序固定为：
+1. **这个流式更新在折叠态是否根本不该渲染？**
+2. **相邻碎片是否可以先在数据层合并成一个逻辑块？**
+3. **纯 thinking delta 是否可以短时间批量 flush，而不是逐条 setState？**
+
+先减更新次数，再谈组件 memo。
+
+## 10. 手动验证需要临时 harness，但 harness 必须是“用完即删”的工具
+
+### 现象
+- 真实页面数据链路太长
+- 想验证高频 streaming / 展开折叠 / 边界状态
+- 直接在生产页上做很慢，也不稳定
+
+### 有效做法
+临时做一个最小 harness 页面是对的，因为它能：
+- 可控地产生高频 delta
+- 快速验证 collapsed / expanded / completed 三个状态
+- 直接观察“一个逻辑块”是否被维持
+
+### 硬规则
+但 harness 只能是**一次性测试工具**：
+- 为了验证而建
+- 验证完立即删除
+- 不把临时页面、临时代码、临时入口留在主分支里
+
+否则它会从“验证工具”退化成“没人维护的灰色功能”。
+
+## 11. 建议固定成每次开发的检查清单
 
 ### 前端改动前后
 - [ ] devtools/browser tool 可用
