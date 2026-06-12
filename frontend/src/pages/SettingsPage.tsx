@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -15,6 +15,7 @@ import {
 import { PageShell, SectionStack } from '../components/layout';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
 import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry, getSearchSettings, updateSearchSettings } from '../api';
+import { changePassword } from '../api/endpoints';
 import { useT } from '../i18n';
 import {
   clampEditorFontSize,
@@ -1413,10 +1414,127 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
   );
 }
 
+function AccountSection({ onPasswordClick }: { onPasswordClick: () => void }) {
+  const t = useT();
+  const { user } = useAuth();
+
+  return (
+    <SectionCard
+      header={
+        <SectionHeader
+          title={t('pages.settings.account.title')}
+          description={t('pages.settings.account.description')}
+        />
+      }
+    >
+      <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-[var(--text)]">{user?.display_name ?? user?.username}</p>
+            <p className="text-xs text-[var(--text-secondary)]">{user?.username} · {user?.role}</p>
+          </div>
+          <Button variant="secondary" onClick={onPasswordClick}>
+            {t('auth.changePassword')}
+          </Button>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
+  const { logout } = useAuth();
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setOldPassword('');
+    setNewPassword('');
+    setConfirm('');
+    setError('');
+    onClose();
+  }, [onClose]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (newPassword !== confirm) {
+      setError(t('auth.passwordMismatch'));
+      return;
+    }
+    if (newPassword.length < 4) {
+      setError(t('auth.passwordTooShort'));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await changePassword({ old_password: oldPassword, new_password: newPassword });
+      await logout();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || t('auth.changePasswordFailed'));
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        className="bg-[var(--surface)] p-6 rounded-2xl border border-[var(--border)] shadow-lg w-full max-w-sm"
+      >
+        <h2 className="text-lg font-semibold mb-4">{t('auth.changePassword')}</h2>
+        {error && <p className="mb-3 text-sm text-[var(--danger)]">{error}</p>}
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-[var(--text-secondary)]">{t('auth.currentPassword')}</span>
+            <Input
+              type="password"
+              value={oldPassword}
+              onChange={(e) => setOldPassword(e.target.value)}
+              autoFocus
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-[var(--text-secondary)]">{t('auth.newPassword')}</span>
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-[var(--text-secondary)]">{t('auth.confirmPassword')}</span>
+            <Input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+          </label>
+          <div className="flex gap-2 justify-end mt-2">
+            <Button type="button" variant="secondary" onClick={handleClose}>{t('common.cancel')}</Button>
+            <Button type="submit" disabled={submitting || !oldPassword || !newPassword || !confirm}>
+              {submitting ? t('common.loading') : t('auth.changePassword')}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const t = useT();
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'llmProviders' | 'users' | 'envAccess' | 'collaborators'>('general');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
     queryFn: getEnvironments,
@@ -1554,6 +1672,8 @@ function SettingsPage() {
           />
 
           <SkillRepositorySection availableSkills={availableSkills} />
+          <AccountSection onPasswordClick={() => setShowPasswordModal(true)} />
+          <ChangePasswordModal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} />
           <SearchBackendSection />
 
           <ProjectDefaultsSection

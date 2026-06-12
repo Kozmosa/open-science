@@ -565,6 +565,10 @@ export const messages = {
           saving: 'Saving…',
           saved: 'Saved',
         },
+        account: {
+          title: 'Account & Security',
+          description: 'Manage your account credentials.',
+        },
         tabs: {
           general: 'General',
           llmProviders: 'LLM Providers',
@@ -1580,6 +1584,10 @@ export const messages = {
           ccWebMcp: 'CC-Web-MCP',
           saving: '保存中…',
           saved: '已保存',
+        },
+        account: {
+          title: '账号与安全',
+          description: '管理你的账号凭证。',
         },
         tabs: {
           general: '通用',
