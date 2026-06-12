@@ -235,6 +235,106 @@ Pull requests should include:
 
 Do NOT operate production deployment containers (Docker, Kubernetes, etc.) — including `docker exec`, `docker compose restart`, `docker logs`, or any other container interaction — unless the user explicitly asks you to. This applies to any environment that serves real users or holds production data. When in doubt, ask first.
 
+### Production Deployment Architecture (CPU-only)
+
+The current production environment uses **CPU-only Docker Compose** with host networking:
+
+```bash
+# Deploy command (from repo root)
+docker compose -f deploy/docker-compose.cpu.yml up -d --build
+```
+
+**Architecture overview:**
+
+| Service | Image | Listen | Role |
+|---------|-------|--------|------|
+| `ainrf` | `deploy/Dockerfile` (built) | `127.0.0.1:18000` | FastAPI backend |
+| `nginx` | `nginx:1.27-alpine` | `0.0.0.0:8192` | Reverse proxy + frontend static |
+| `prometheus` | `prom/prometheus:v3.3.1` | `127.0.0.1:9091` | Metrics collection |
+| `grafana` | `grafana/grafana:11.6.1` | `127.0.0.1:3000` | Monitoring dashboard |
+
+- All services use `network_mode: host` (no Docker NAT).
+- External access: `http://<host>:8192` → nginx → backend on 18000.
+- Frontend static files served by nginx from `frontend/dist` (host-mounted, read-only).
+- Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
+- Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
+
+**Named Docker volumes (persistent data):**
+
+| Volume | Mount point | Content |
+|--------|-------------|---------|
+| `ainrf-state` | `/opt/ainrf/state` | SQLite databases, config, logs |
+| `ainrf-workspaces` | `/opt/ainrf/.ainrf_workspaces` | User workspaces |
+| `ainrf-tenants` | `/home/ainrf_tenants` | Tenant home directories |
+
+**Key configuration (set in `.env`):**
+
+- `AINRF_JWT_SECRET` — JWT signing key (required)
+- `AINRF_API_KEY_HASHES` — SHA-256 hashes of API keys (required)
+- `AINRF_PUBLIC_REGISTRATION_ENABLED` — defaults to `false`
+- Agent tool keys: `ANTHROPIC_API_KEY`, `CODEX_API_KEY`, etc.
+
+**Known operational issues:**
+
+- **SSH socket FD leak**: The backend opens SSH connections to localhost for terminal sessions that are not always properly cleaned up. Over time (~14h), this can exhaust the default 1024 FD limit. Both `docker-compose.yml` and `docker-compose.cpu.yml` now set `ulimits.nofile` to 65536 as mitigation.
+- **sshd session proliferation**: Each terminal health-check spawns an SSH session pair (root priv + ainrf child). These accumulate over the container lifetime. Container restart is the current cleanup path.
+
+**Rebuild & redeploy (zero-downtime):**
+
+```bash
+# Backend-only changes: rebuild and restart
+docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
+
+# Frontend changes: build on host, then rebuild backend + restart nginx
+cd frontend && npm run build && cd ..
+docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
+docker compose -f deploy/docker-compose.cpu.yml restart nginx
+
+### Frontend Deployment: Dual-Source Pitfall
+
+nginx serves frontend static files from **host-mounted** `frontend/dist` (`docker-compose.cpu.yml`: `../frontend/dist:/usr/share/nginx/html:ro`), **not** from the container's `/opt/ainrf/frontend/dist`.
+
+After frontend code changes, `docker compose up -d --build ainrf` rebuilds the backend image (which includes a frontend build step), but nginx continues serving the **old host-mounted files**. This causes confusing situations where the correct code exists inside the container but the browser loads stale JS/CSS.
+
+**Correct deploy sequence for frontend changes:**
+
+```bash
+# 1. Build frontend on host first
+cd frontend && npm run build
+
+# 2. Rebuild backend (picks up host dist via Dockerfile COPY)
+docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
+
+# 3. Restart nginx to pick up new host-mounted files
+docker compose -f deploy/docker-compose.cpu.yml restart nginx
+```
+
+**Verification**: After deploy, check which JS file the browser loads. The `index-*.js` hash in `frontend/dist/index.html` must match what the browser requests. If they differ, nginx is serving stale files.
+
+### Browser Tool & Chrome Configuration
+
+The OMP browser tool and chrome-devtools MCP both need a working Chrome/Chromium binary. The system has snap chromium at `/snap/bin/chromium` which **fails on non-standard HOME directories** (e.g., `/data/yile.chen`) because snap mount namespaces require HOME to exist under `/home/`.
+
+**Configuration:**
+
+- `PUPPETEER_EXECUTABLE_PATH` in `~/.omp/agent/config.yml` `env` section points to the puppeteer-cached Chrome for Testing binary
+- A wrapper at `~/.local/bin/chromium` (symlinked as `chromium-browser` and `google-chrome`) shadows the snap binary via PATH priority
+- Both OMP and Claude Code MCP configs reference the same binary
+
+**Key config files:**
+- `~/.omp/agent/config.yml` — OMP env vars (only loaded at session start)
+- `~/.omp/agent/mcp.json` — OMP MCP server definitions
+- `~/.claude/settings.json` — Claude Code env + MCP servers
+
+**Important**: OMP config `env` vars only take effect when the agent process starts. Mid-session changes require a session restart.
+```
+
+**First-time admin password:**
+
+```bash
+docker compose -f deploy/docker-compose.cpu.yml exec ainrf cat /opt/ainrf/state/admin_initial_password.txt
+```
+
 ## Security & Configuration Tips
 
 Do not commit secrets, SSH keys, or generated artifacts. Keep runtime state under `.ainrf/` out of version control. Prefer `uv run` over manual venv management so local execution matches the project lockfile.
