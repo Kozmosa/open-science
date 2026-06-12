@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Button, Select } from '../ui';
 import { useT } from '../../i18n';
-import { useAuth } from '../../contexts/AuthContext';
 import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '../../types';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../../pages/tasks/taskPresets';
 
@@ -96,7 +95,6 @@ export default function ConvertToTaskDialog({
   onCancel,
 }: Props) {
   const t = useT();
-  const { user } = useAuth();
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState('');
@@ -125,7 +123,7 @@ export default function ConvertToTaskDialog({
 
   const handleConfirm = () => {
     onConfirm({
-      project_id: user ? `${user.username}_default` : '',
+      project_id: '',
       workspace_id: effectiveWorkspaceId,
       environment_id: effectiveEnvironmentId,
       researcher_type: researcherType,

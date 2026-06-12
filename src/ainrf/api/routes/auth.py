@@ -57,6 +57,16 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
         assert isinstance(workspace_service, WorkspaceRegistryService)
         workspace_service.ensure_tenant_workspace(username=payload.username)
 
+    # Provision the per-user default project alongside the tenant workspace.
+    project_service = getattr(request.app.state, "project_service", None)
+    if project_service is not None:
+        from ainrf.projects import ProjectRegistryService
+
+        assert isinstance(project_service, ProjectRegistryService)
+        project_service.get_or_create_user_default(
+            username=payload.username, owner_user_id=user.id
+        )
+
     _ = user  # user created; admin approval is still required for login
     return {"message": "Registration submitted. Awaiting admin approval."}
 

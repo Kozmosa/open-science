@@ -136,13 +136,13 @@ def _parse_output_payload(content: str) -> dict:
         return wrapped_payload
     return payload
 
+
 _SUPPRESSED_SYSTEM_SUBTYPES = {"status", "thinking_tokens"}
 
 
 def _is_suppressed_system_payload(payload: dict[str, object]) -> bool:
     subtype = payload.get("subtype")
     return isinstance(subtype, str) and subtype in _SUPPRESSED_SYSTEM_SUBTYPES
-
 
 
 def _output_item_to_message(
@@ -249,14 +249,24 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
             status_code=400, detail=f"Unknown researcher type: {payload.researcher_type}"
         )
 
+    project_svc = _get_project_service(request)
     effective_project_id = payload.project_id
     if not effective_project_id:
-        project_svc = _get_project_service(request)
+        # No project bound → route to the user's default project (created on demand).
         default_project = project_svc.get_or_create_user_default(
             username=user["username"],
             owner_user_id=user["id"],
         )
         effective_project_id = default_project.project_id
+    else:
+        # Reject orphan tasks: an explicitly bound project must exist.
+        try:
+            project_svc.get_project(effective_project_id)
+        except ProjectNotFoundError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Project not found: {effective_project_id}",
+            ) from exc
 
     try:
         task = service.create_task(
@@ -431,7 +441,6 @@ async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
         archived_task_id=task_id,
         edge_id="",
     )
-
 
 
 @router.get("/{task_id}/output")

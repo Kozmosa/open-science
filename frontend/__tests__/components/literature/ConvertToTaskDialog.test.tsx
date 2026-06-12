@@ -108,6 +108,32 @@ describe('ConvertToTaskDialog', () => {
     });
   });
 
+  it('routes into the user default project by sending an empty project_id', async () => {
+    const onConfirm = vi.fn<(payload: TaskCreatePayload) => void>();
+
+    renderWithProviders(
+      <ConvertToTaskDialog
+        isOpen
+        isSubmitting={false}
+        paperId="2401.00001"
+        paperTitle="Paper title"
+        paperAbstract="Paper abstract"
+        workspaces={[workspace]}
+        environments={[environment]}
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
+
+    await waitFor(() => {
+      const payload = onConfirm.mock.calls[0]?.[0];
+      // Empty project_id lets the backend resolve (and create) the user's
+      // <username>_default project — never an orphan task.
+      expect(payload?.project_id).toBe('');
+    });
+  });
   it('localizes researcher and engine controls in Chinese', () => {
     renderWithProviders(
       <ConvertToTaskDialog

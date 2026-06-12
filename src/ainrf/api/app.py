@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import TypeVar
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,9 +51,15 @@ from ainrf.terminal.tmux import TmuxAdapter
 from ainrf.workspaces import WorkspaceRegistryService
 
 
-def _run_sync_in_lifespan(callback: Callable[[], None]) -> Awaitable[None]:
+T = TypeVar("T")
+
+
+def _run_sync_in_lifespan(callback: Callable[[], T]) -> Awaitable[T]:
     # Startup services do filesystem/tmux work; run them off the event loop during lifespan.
     return to_thread.run_sync(callback)
+
+
+_LOG = logging.getLogger(__name__)
 
 
 ROUTERS: tuple[APIRouter, ...] = (
@@ -141,6 +149,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Admin role fix is handled by auth migration_003_admin_role_fix
         except Exception:
             pass
+        # Backfill per-user default projects for any user lacking one (idempotent).
+        # Covers pre-existing users and the bootstrap admin created directly above,
+        # which bypasses the HTTP registration hook that normally provisions it.
+        try:
+            from ainrf.projects.backfill import backfill_user_default_projects
+
+            created, _skipped = await _run_sync_in_lifespan(
+                lambda: backfill_user_default_projects(
+                    project_service=project_service,
+                    users=auth_service.list_users(),
+                )
+            )
+            if created:
+                _LOG.info("Backfilled %d per-user default project(s)", created)
+        except Exception:
+            _LOG.exception("Failed to backfill per-user default projects")
         yield
     finally:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
@@ -257,6 +281,7 @@ def create_app(
 
         class _SPAStaticFiles(StaticFiles):
             """StaticFiles that returns index.html for non-file paths (SPA fallback)."""
+
             async def get_response(self, path: str, scope) -> Response:
                 try:
                     response = await super().get_response(path, scope)

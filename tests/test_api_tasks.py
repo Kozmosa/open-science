@@ -20,12 +20,14 @@ from ainrf.agentic_researcher import (
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.routes.tasks import _output_item_to_message
+from ainrf.projects import ProjectRecord
 from ainrf.agentic_researcher.models import TaskOutputEvent
 from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
 from ainrf.harness_engine.base import EngineEmit
 from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
+
 
 class FakeEngine(HarnessEngine):
     def __init__(self) -> None:
@@ -131,6 +133,25 @@ def make_app(tmp_path: Path, engine: FakeEngine) -> FastAPI:
     return app
 
 
+def _seed_project(app: FastAPI, project_id: str, *, name: str = "Test project") -> None:
+    """Register a project with a fixed id so task creation validates against it."""
+    svc = app.state.project_service
+    svc.initialize()
+    if project_id in svc._projects:
+        return
+    now = datetime.now(timezone.utc)
+    svc._projects[project_id] = ProjectRecord(
+        project_id=project_id,
+        name=name,
+        description=None,
+        default_workspace_id=None,
+        default_environment_id=None,
+        created_at=now,
+        updated_at=now,
+        owner_user_id=None,
+    )
+
+
 async def wait_for_status(
     client: httpx.AsyncClient,
     task_id: str,
@@ -164,6 +185,8 @@ async def test_tasks_api_create_output_stream_and_prompt(tmp_path: Path) -> None
             workspace_prompt="Use the task workspace.",
             owner_user_id=None,
         )
+        _seed_project(app, "proj-001")
+
         create_response = await client.post(
             "/tasks",
             json={
@@ -242,6 +265,8 @@ async def test_task_token_usage_is_tracked_and_summarized(tmp_path: Path) -> Non
             workspace_prompt="Track tokens.",
             owner_user_id=None,
         )
+        _seed_project(app, "proj-token")
+
         create_response = await client.post(
             "/tasks",
             json={
@@ -329,13 +354,12 @@ async def test_task_token_usage_is_tracked_and_summarized(tmp_path: Path) -> Non
         }
 
 
-
 def test_output_item_to_message_suppresses_agent_sdk_progress_noise() -> None:
     message = _output_item_to_message(
         TaskOutputEvent(
-            task_id='task-001',
+            task_id="task-001",
             seq=2,
-            kind='lifecycle',
+            kind="lifecycle",
             content=(
                 '{"event_type":"system","payload":{"subtype":"thinking_tokens",'
                 '"data":{"estimated_tokens":8,"estimated_tokens_delta":3}},"token_usage":null}'
@@ -345,6 +369,7 @@ def test_output_item_to_message_suppresses_agent_sdk_progress_noise() -> None:
     )
 
     assert message is None
+
 
 @pytest.mark.anyio
 async def test_archive_succeeded_task_hides_it_from_default_list(tmp_path: Path) -> None:
@@ -363,6 +388,8 @@ async def test_archive_succeeded_task_hides_it_from_default_list(tmp_path: Path)
             workspace_prompt="Use the archive workspace.",
             owner_user_id=None,
         )
+        _seed_project(app, "proj-archive")
+
         create_response = await client.post(
             "/tasks",
             json={
@@ -478,6 +505,8 @@ async def test_task_stream_allows_query_api_key_for_eventsource(tmp_path: Path) 
             workspace_prompt="Use the task workspace.",
             owner_user_id=None,
         )
+        _seed_project(app, "proj-001")
+
         create_response = await authed_client.post(
             "/tasks",
             json={
@@ -536,9 +565,7 @@ def test_agentic_researcher_initialization_migrates_legacy_pending_status(
     with closing(sqlite3.connect(service._db_path)) as conn:
         conn.execute("UPDATE tasks SET status = 'pending' WHERE task_id = ?", (task.task_id,))
         # Revert schema version so migration_004_legacy_status_rename will re-run
-        conn.execute(
-            "UPDATE _schema_version SET version = 3 WHERE database = 'agentic_researcher'"
-        )
+        conn.execute("UPDATE _schema_version SET version = 3 WHERE database = 'agentic_researcher'")
         conn.commit()
 
     restarted = AgenticResearcherService(
@@ -647,6 +674,8 @@ async def test_project_tasks_endpoint_uses_task_filters(tmp_path: Path) -> None:
             workspace_prompt="Use the task workspace.",
             owner_user_id=None,
         )
+        _seed_project(app, "proj-001")
+
         create_response = await client.post(
             "/tasks",
             json={
@@ -727,6 +756,40 @@ async def test_create_task_resolves_per_user_default_project(tmp_path: Path) -> 
         # The per-user default project is created on demand.
         default_project = app.state.project_service.get_project("test-user_default")
         assert default_project.name == "test-user's Project"
+
+
+@pytest.mark.anyio
+async def test_create_task_rejects_unknown_project(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-001",
+            label="Task workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the task workspace.",
+            owner_user_id=None,
+        )
+        response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "does-not-exist",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Orphan task",
+                "prompt": "Should fail.",
+                "skills": [],
+            },
+        )
+        assert response.status_code == 400
+        assert "does-not-exist" in response.json()["detail"]
 
 
 @pytest.mark.anyio

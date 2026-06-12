@@ -12,6 +12,7 @@ from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
 
+
 def make_client(tmp_path: Path) -> httpx.AsyncClient:
     app = create_app(
         ApiConfig(
@@ -42,6 +43,7 @@ async def test_non_api_route_is_not_auth_gated(tmp_path: Path) -> None:
 
     # Not 401 — SPA routes are exempt from backend auth
     assert response.status_code in (200, 404)
+
 
 @pytest.mark.anyio
 async def test_terminal_session_requires_api_key(tmp_path: Path) -> None:
@@ -159,3 +161,30 @@ def test_api_config_uses_login_shell_by_default(
     )
 
     assert config.terminal_command == ("/bin/zsh",)
+
+
+@pytest.mark.anyio
+async def test_registration_creates_per_user_default_project(tmp_path: Path) -> None:
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+            public_registration_enabled=True,
+        )
+    )
+    app.state.auth_service.initialize()
+    # ensure_tenant_workspace creates dirs under /home/ainrf_tenants (container-only);
+    # it is not under test here, so stub it out to reach the project-provisioning hook.
+    app.state.workspace_service.ensure_tenant_workspace = lambda **_kwargs: None
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/auth/register",
+            json={"username": "alice", "display_name": "Alice", "password": "secret123"},
+        )
+        assert response.status_code == 201, response.text
+        default_project = app.state.project_service.get_project("alice_default")
+        assert default_project.name == "alice's Project"
+        assert default_project.owner_user_id is not None
