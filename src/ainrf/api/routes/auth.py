@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, Response
+
+_LOG = logging.getLogger(__name__)
+from ainrf.api.routes.metrics import inc_counter
 
 from ainrf.api.config import ApiConfig
 from ainrf.api.schemas import (
@@ -62,20 +67,31 @@ async def login(payload: LoginRequest, request: Request) -> Response:
     client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     if not client_ip and request.client:
         client_ip = request.client.host
+    ip = client_ip or "unknown"
     try:
-        service.check_login_lockout(username=payload.username, ip_address=client_ip or "unknown")
+        service.check_login_lockout(username=payload.username, ip_address=ip)
     except service.AccountLockedError as exc:
+        inc_counter("ainrf_auth_login_failed_total", {"reason": "locked"})
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        _LOG.exception("login_lockout_check_failed username=%s", payload.username)
+        raise HTTPException(
+            status_code=503, detail="Authentication service temporarily unavailable"
+        ) from exc
     try:
         result = service.login(username=payload.username, password=payload.password)
     except Exception as exc:
-        service.record_login_attempt(
-            username=payload.username, ip_address=client_ip or "unknown", success=False
-        )
+        try:
+            service.record_login_attempt(username=payload.username, ip_address=ip, success=False)
+        except Exception:
+            _LOG.exception("record_login_attempt_failed username=%s", payload.username)
+        inc_counter("ainrf_auth_login_failed_total", {"reason": "invalid_credentials"})
         raise HTTPException(status_code=401, detail=str(exc)) from exc
-    service.record_login_attempt(
-        username=payload.username, ip_address=client_ip or "unknown", success=True
-    )
+    try:
+        service.record_login_attempt(username=payload.username, ip_address=ip, success=True)
+    except Exception:
+        _LOG.exception("record_login_attempt_failed username=%s", payload.username)
+    inc_counter("ainrf_auth_login_success_total")
     body = AuthTokenResponse.model_validate(result)
     response = Response(
         content=body.model_dump_json(),

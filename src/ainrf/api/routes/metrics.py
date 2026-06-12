@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import re
 import threading
+import time
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
 from starlette import status
+from starlette.responses import Response
 
 if TYPE_CHECKING:
     from ainrf.api.config import ApiConfig
-
 # ---------------------------------------------------------------------------
 # Storage
 # ---------------------------------------------------------------------------
@@ -203,3 +206,65 @@ def create_metrics_router(config: ApiConfig) -> APIRouter:
         return PlainTextResponse(get_metrics_text())
 
     return router
+
+# ---------------------------------------------------------------------------
+# HTTP metrics middleware
+# ---------------------------------------------------------------------------
+
+_UUID_RE = re.compile(r"[0-9a-f]{8,}-?[0-9a-f]{4,}")
+_NUM_RE = re.compile(r"/\d{2,}")
+
+
+def _normalize_path(path: str) -> str:
+    """Reduce path cardinality for Prometheus labels."""
+    p = _NUM_RE.sub("/{id}", path)
+    p = _UUID_RE.sub("{id}", p)
+    if len(p) > 80:
+        p = p[:77] + "..."
+    return p
+
+
+def build_http_metrics_middleware() -> Callable[
+    [Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]
+]:
+    """Starlette middleware that records request rate and latency histograms."""
+
+    async def http_metrics_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        # Skip the /metrics endpoint itself to avoid self-referential noise.
+        if request.url.path in ("/metrics", "/api/metrics", "/v1/metrics"):
+            return await call_next(request)
+
+        start = time.monotonic()
+        try:
+            response = await call_next(request)
+        except Exception:
+            elapsed = time.monotonic() - start
+            path = _normalize_path(request.url.path)
+            inc_counter(
+                "ainrf_http_requests_total",
+                {"method": request.method, "path": path, "status": "500"},
+            )
+            observe_histogram(
+                "ainrf_http_request_duration_seconds",
+                elapsed,
+                {"method": request.method, "path": path},
+            )
+            raise
+
+        elapsed = time.monotonic() - start
+        path = _normalize_path(request.url.path)
+        inc_counter(
+            "ainrf_http_requests_total",
+            {"method": request.method, "path": path, "status": str(response.status_code)},
+        )
+        observe_histogram(
+            "ainrf_http_request_duration_seconds",
+            elapsed,
+            {"method": request.method, "path": path},
+        )
+        return response
+
+    return http_metrics_middleware

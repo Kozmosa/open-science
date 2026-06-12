@@ -244,8 +244,9 @@ def create_app(
         app.include_router(router, prefix="/api")
     # Metrics endpoint (gated by config)
     if api_config.metrics_enabled:
-        from ainrf.api.routes.metrics import create_metrics_router
+        from ainrf.api.routes.metrics import build_http_metrics_middleware, create_metrics_router
 
+        app.middleware("http")(build_http_metrics_middleware())
         app.include_router(create_metrics_router(api_config))
 
     # ── Serve frontend static files ───────────────────────────────

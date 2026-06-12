@@ -2,6 +2,7 @@
 # ────────────────────────────────────────────────────
 # For docker-compose.cpu.yml where network_mode: host is used.
 # Both Prometheus and AINRF share the host network namespace.
+# Backend serves /metrics on port 18000; Prometheus scrapes directly.
 
 global:
   scrape_interval: 15s
@@ -16,6 +17,6 @@ scrape_configs:
   - job_name: "ainrf"
     metrics_path: /metrics
     static_configs:
-      - targets: ["localhost:8192"]
+      - targets: ["localhost:18000"]
         labels:
           env: "production"
