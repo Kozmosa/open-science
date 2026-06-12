@@ -52,3 +52,6 @@ pre-restore-*.tar.gz
 
 # local runtime tenant state
 deploy/data/tenants/
+
+# generated frontend deployment metadata
+frontend/public/build-info.json

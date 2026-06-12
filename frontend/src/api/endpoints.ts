@@ -72,6 +72,7 @@ import type { ChangePasswordRequest,
   TaskMessagesResponse,
   SearchSettingsResponse,
   SearchSettingsUpdateRequest,
+  DeploymentVersionResponse,
 } from '../types';
 import {
   mockArchiveTask,
@@ -182,6 +183,11 @@ export const getCodexDefaults = (): Promise<CodexDefaults> =>
   USE_MOCK
     ? Promise.resolve({ codex_config_toml: null, codex_auth_json: null })
     : api.get<CodexDefaults>('/settings/codex-defaults');
+
+export const getDeploymentVersion = (): Promise<DeploymentVersionResponse> =>
+  USE_MOCK
+    ? Promise.resolve({ short_commit: null, committed_at: null })
+    : api.get<DeploymentVersionResponse>('/settings/deployment-version');
 
 export const getTerminalSession = (environmentId?: string): Promise<TerminalSession> =>
   USE_MOCK

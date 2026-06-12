@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getCodexDefaults,
+  getDeploymentVersion,
   getEnvironments,
   getSearchSettings,
   getSkillRegistries,
@@ -36,14 +37,9 @@ vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
   ),
 }));
 
-vi.mock('../../src/buildInfo', () => ({
-  deploymentBuildInfo: {
-    shortCommit: 'abc123',
-    committedAt: '20260612-2004',
-  },
-}));
 
 vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+  getDeploymentVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getEnvironments: vi.fn(),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
@@ -69,6 +65,7 @@ vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve(
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetSkills = vi.mocked(getSkills);
+const mockGetDeploymentVersion = vi.mocked(getDeploymentVersion);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
 const mockGetSkillRegistries = vi.mocked(getSkillRegistries);
@@ -105,6 +102,8 @@ beforeEach(() => {
   mockGetCodexDefaults.mockReset();
   mockGetSkills.mockReset();
   mockGetWorkspaces.mockReset();
+  mockGetDeploymentVersion.mockReset();
+  mockGetDeploymentVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
   mockGetSkillRegistries.mockReset();
   mockGetSkillRegistries.mockResolvedValue({ items: [] });
   vi.mocked(getSearchSettings).mockReset();

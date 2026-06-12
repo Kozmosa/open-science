@@ -882,3 +882,8 @@ export interface SearchSettingsUpdateRequest {
   active_backend?: string;
   auto_start_mcp_servers?: string[];
 }
+
+export interface DeploymentVersionResponse {
+  short_commit: string | null;
+  committed_at: string | null;
+}

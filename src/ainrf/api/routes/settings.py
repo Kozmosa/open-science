@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
+from ainrf.deployment_version import resolve_deployment_version
 from ainrf.harness_engine.mcp_servers import (
     available_mcp_servers,
     list_backends,
@@ -23,6 +24,24 @@ class CodexDefaultsResponse(BaseModel):
 
     codex_config_toml: str | None = None
     codex_auth_json: str | None = None
+
+
+class DeploymentVersionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    short_commit: str | None = None
+    committed_at: str | None = None
+
+
+@router.get("/deployment-version", response_model=DeploymentVersionResponse)
+async def get_deployment_version(request: Request) -> DeploymentVersionResponse:
+    config = getattr(request.app.state, "api_config", None)
+    startup_cwd = getattr(config, "startup_cwd", Path.cwd())
+    version_info = resolve_deployment_version(startup_cwd)
+    return DeploymentVersionResponse(
+        short_commit=version_info.short_commit,
+        committed_at=version_info.committed_at,
+    )
 
 
 def _read_optional_text(path: Path) -> str | None:

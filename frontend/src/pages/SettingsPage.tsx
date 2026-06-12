@@ -14,9 +14,8 @@ import {
 } from '../components/ui';
 import { PageShell, SectionStack } from '../components/layout';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
-import { getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry, getSearchSettings, updateSearchSettings } from '../api';
+import { getDeploymentVersion, getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry, getSearchSettings, updateSearchSettings } from '../api';
 import { changePassword } from '../api/endpoints';
-import { deploymentBuildInfo } from '../buildInfo';
 import { useT } from '../i18n';
 import {
   clampEditorFontSize,
@@ -1445,8 +1444,12 @@ function AccountSection({ onPasswordClick }: { onPasswordClick: () => void }) {
 
 function DeploymentVersionSection() {
   const t = useT();
-  const commitValue = deploymentBuildInfo.shortCommit ?? t('pages.settings.version.unavailable');
-  const committedAtValue = deploymentBuildInfo.committedAt ?? t('pages.settings.version.unavailable');
+  const { data } = useQuery({
+    queryKey: ['deploymentVersion'],
+    queryFn: getDeploymentVersion,
+  });
+  const commitValue = data?.short_commit ?? t('pages.settings.version.unavailable');
+  const committedAtValue = data?.committed_at ?? t('pages.settings.version.unavailable');
 
   return (
     <SectionCard

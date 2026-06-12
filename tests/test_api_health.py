@@ -117,3 +117,40 @@ async def test_settings_codex_defaults_reads_local_files(
         "codex_config_toml": 'model = "gpt-5-codex"\n',
         "codex_auth_json": '{"token":"abc"}\n',
     }
+
+
+
+@pytest.mark.anyio
+async def test_settings_deployment_version_reads_shared_build_info(
+    tmp_path: Path,
+) -> None:
+    frontend_public = tmp_path / "frontend" / "public"
+    frontend_public.mkdir(parents=True, exist_ok=True)
+    (frontend_public / "build-info.json").write_text(
+        '{"short_commit":"abc123","committed_at":"20260612-2017"}',
+        encoding="utf-8",
+    )
+
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+            startup_cwd=tmp_path,
+        )
+    )
+    jwt_headers = get_jwt_headers(app)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            "/settings/deployment-version",
+            headers=jwt_headers,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "short_commit": "abc123",
+        "committed_at": "20260612-2017",
+    }

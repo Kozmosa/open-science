@@ -232,6 +232,7 @@ async def test_production_api_routes_require_auth(tmp_path: Path) -> None:
             "/api/sessions",
             "/api/environments",
             "/api/settings/codex-defaults",
+            "/api/settings/deployment-version",
         ]:
             resp = await client.get(path)
             assert resp.status_code == 401, f"GET {path} should be 401, got {resp.status_code}"
