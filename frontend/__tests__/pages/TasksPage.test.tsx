@@ -25,7 +25,7 @@ import {
   getTasks,
   getWorkspaces,
 } from '../../src/api';
-import { convertOutputEventToMessage, mergeAdjacentThinkingMessages } from '../../src/pages/tasks/useTaskMessages';
+import { convertOutputEventToMessage, mergeAdjacentThinkingMessages, mergeStreamMessages, shouldDeferMessageBatch } from '../../src/pages/tasks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '../../src/pages/tasks/output';
 
 class MockEventSource {
@@ -369,6 +369,63 @@ describe('task output helpers', () => {
     expect(merged[0]?.content).toBe('first pass\n\nsecond pass');
     expect(merged[0]?.metadata.sequence).toBe(2);
     expect(merged[0]?.metadata.isStreaming).toBe(true);
+  });
+
+  it('defers only pure streaming thinking delta batches', () => {
+    const thinkingDelta = convertOutputEventToMessage(
+      createOutputEvent(4, {
+        kind: 'thinking',
+        content:
+          '{"content":"delta","block_id":"thinking-1","is_partial":true,"is_delta":true}',
+      })
+    );
+    const thinkingFinal = convertOutputEventToMessage(
+      createOutputEvent(5, {
+        kind: 'thinking',
+        content:
+          '{"content":"full text","block_id":"thinking-1","is_partial":false}',
+      })
+    );
+    const assistantDelta = convertOutputEventToMessage(
+      createOutputEvent(6, {
+        kind: 'message',
+        content:
+          '{"role":"assistant","content":"hello","block_id":"text-1","is_partial":true,"is_delta":true}',
+      })
+    );
+
+    expect(thinkingDelta).not.toBeNull();
+    expect(thinkingFinal).not.toBeNull();
+    expect(assistantDelta).not.toBeNull();
+    expect(shouldDeferMessageBatch([thinkingDelta!])).toBe(true);
+    expect(shouldDeferMessageBatch([thinkingDelta!, thinkingFinal!])).toBe(false);
+    expect(shouldDeferMessageBatch([assistantDelta!])).toBe(false);
+  });
+
+  it('merges deferred stream updates back into a single block', () => {
+    const initial = convertOutputEventToMessage(
+      createOutputEvent(7, {
+        kind: 'thinking',
+        content:
+          '{"content":"alpha","block_id":"thinking-2","is_partial":true,"is_delta":true}',
+      })
+    );
+    const next = convertOutputEventToMessage(
+      createOutputEvent(8, {
+        kind: 'thinking',
+        content:
+          '{"content":"beta","block_id":"thinking-2","is_partial":true,"is_delta":true}',
+      })
+    );
+
+    expect(initial).not.toBeNull();
+    expect(next).not.toBeNull();
+
+    const merged = mergeStreamMessages([initial!], [next!]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.content).toBe('alphabeta');
+    expect(merged[0]?.metadata.sequence).toBe(8);
   });
 });
 

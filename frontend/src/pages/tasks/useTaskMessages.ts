@@ -5,6 +5,16 @@ import type { MessageItem, TaskOutputEvent } from '../../types';
 
 const SUPPRESSED_SYSTEM_SUBTYPES = new Set(['status', 'thinking_tokens']);
 
+const THINKING_STREAM_FLUSH_MS = 96;
+
+function isDeferredThinkingMessage(message: MessageItem): boolean {
+  return message.type === 'thinking' && message.metadata.isStreaming === true && message.metadata.isDelta === true;
+}
+
+export function shouldDeferMessageBatch(messages: MessageItem[]): boolean {
+  return messages.length > 0 && messages.every(isDeferredThinkingMessage);
+}
+
 function shouldSuppressSystemPayload(payload: Record<string, unknown>): boolean {
   const subtype = payload.subtype;
   return typeof subtype === 'string' && SUPPRESSED_SYSTEM_SUBTYPES.has(subtype);
@@ -171,6 +181,46 @@ export function mergeAdjacentThinkingMessages(messages: MessageItem[]): MessageI
   return merged;
 }
 
+export function mergeStreamMessages(previousMessages: MessageItem[], newMessages: MessageItem[]): MessageItem[] {
+  const byBlockId = new Map<string, number>();
+  previousMessages.forEach((message, index) => {
+    const blockId = message.metadata.blockId;
+    if (blockId) {
+      byBlockId.set(blockId, index);
+    }
+  });
+
+  const existingIds = new Set(previousMessages.map((message) => message.id));
+  const result = [...previousMessages];
+  for (const message of newMessages) {
+    const blockId = message.metadata.blockId;
+    if (blockId) {
+      const existingIdx = byBlockId.get(blockId);
+      if (existingIdx !== undefined) {
+        const isDelta = message.metadata.isDelta === true;
+        const previousContent = typeof result[existingIdx].content === 'string'
+          ? result[existingIdx].content as string
+          : '';
+        const nextContent = isDelta
+          ? previousContent + (typeof message.content === 'string' ? message.content : '')
+          : message.content;
+        result[existingIdx] = {
+          ...result[existingIdx],
+          content: nextContent,
+          metadata: { ...result[existingIdx].metadata, ...message.metadata },
+        };
+        continue;
+      }
+      byBlockId.set(blockId, result.length);
+    }
+    if (!existingIds.has(message.id)) {
+      existingIds.add(message.id);
+      result.push(message);
+    }
+  }
+  return result;
+}
+
 async function fetchAllMessages(taskId: string): Promise<MessageItem[]> {
   const allMessages: MessageItem[] = [];
   let afterSeq = 0;
@@ -198,6 +248,29 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
   const [streamMessages, setStreamMessages] = useState<MessageItem[]>([]);
   const lastProcessedSeqRef = useRef<number>(0);
   const boundTaskIdRef = useRef<string | null>(null);
+  const pendingMessagesRef = useRef<MessageItem[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+
+  const flushPendingMessages = () => {
+    if (flushTimerRef.current !== null) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    if (pendingMessagesRef.current.length === 0) {
+      return;
+    }
+    const pendingMessages = pendingMessagesRef.current;
+    pendingMessagesRef.current = [];
+    setStreamMessages((previousMessages) => mergeStreamMessages(previousMessages, pendingMessages));
+  };
+
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+      }
+    };
+  }, []);
 
   // Single effect: reset on task change, then convert new events.
   // Combining into one effect prevents the old task's outputItems from being
@@ -206,60 +279,39 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
     // Task changed — discard everything from the previous task
     if (taskId !== boundTaskIdRef.current) {
       boundTaskIdRef.current = taskId ?? null;
+      pendingMessagesRef.current = [];
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
       setStreamMessages([]);
       lastProcessedSeqRef.current = 0;
       // If there's no task, or outputItems still holds stale events from
       // the previous task, wait for the next render with correct data.
-      if (!taskId || outputItems.some((e) => e.task_id !== taskId)) {
+      if (!taskId || outputItems.some((event) => event.task_id !== taskId)) {
         return;
       }
     }
 
     // Only convert events we haven't processed yet
-    const newEvents = outputItems.filter((e) => e.seq > lastProcessedSeqRef.current);
+    const newEvents = outputItems.filter((event) => event.seq > lastProcessedSeqRef.current);
     if (newEvents.length === 0) return;
 
     const newMessages = convertOutputEventsToMessages(newEvents, initialPrompt);
     lastProcessedSeqRef.current = newEvents[newEvents.length - 1].seq;
+    if (newMessages.length === 0) {
+      return;
+    }
 
-    setStreamMessages((prev) => {
-      // Build a map of existing messages by blockId for quick lookup
-      const byBlockId = new Map<string, number>();
-      prev.forEach((m, i) => {
-        const bid = m.metadata.blockId;
-        if (bid) byBlockId.set(bid, i);
-      });
-
-      const result = [...prev];
-      for (const msg of newMessages) {
-        const bid = msg.metadata.blockId;
-        if (bid) {
-          const existingIdx = byBlockId.get(bid);
-          if (existingIdx !== undefined) {
-            const isDelta = msg.metadata.isDelta === true;
-            const prevContent = typeof result[existingIdx].content === 'string'
-              ? result[existingIdx].content as string
-              : '';
-            const newContent = isDelta
-              ? prevContent + (typeof msg.content === 'string' ? msg.content : '')
-              : msg.content;
-            result[existingIdx] = {
-              ...result[existingIdx],
-              content: newContent,
-              metadata: { ...result[existingIdx].metadata, ...msg.metadata },
-            };
-            continue;
-          }
-          byBlockId.set(bid, result.length);
-        }
-        // New message — add only if not already present by id
-        const existingIds = new Set(result.map((m) => m.id));
-        if (!existingIds.has(msg.id)) {
-          result.push(msg);
-        }
+    pendingMessagesRef.current.push(...newMessages);
+    if (shouldDeferMessageBatch(newMessages)) {
+      if (flushTimerRef.current === null) {
+        flushTimerRef.current = window.setTimeout(flushPendingMessages, THINKING_STREAM_FLUSH_MS);
       }
-      return result;
-    });
+      return;
+    }
+
+    flushPendingMessages();
   }, [taskId, outputItems, initialPrompt]);
 
   const allMessages = useMemo(() => {
