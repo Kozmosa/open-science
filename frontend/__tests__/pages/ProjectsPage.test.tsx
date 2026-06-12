@@ -145,4 +145,37 @@ const environmentAlt = {
       })
     })
   })
+
+  it('opens the create-project modal and creates a project on submit', async () => {
+    let createdProjectPayload: Record<string, unknown> | null = null
+    server.use(
+      http.post('/api/projects', async ({ request }) => {
+        createdProjectPayload = await request.json() as Record<string, unknown>
+        return HttpResponse.json({
+          project_id: 'proj-new',
+          name: 'My New Project',
+          description: 'A fresh project',
+          default_workspace_id: null,
+          default_environment_id: null,
+          created_at: '2026-01-02T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+        }, { status: 201 })
+      }),
+    )
+
+    renderWithProviders(<ProjectsPage />, { route: '/projects' })
+    fireEvent.click(await screen.findByRole('button', { name: /new project/i }))
+
+    const nameInput = await screen.findByLabelText('Project name')
+    fireEvent.change(nameInput, { target: { value: 'My New Project' } })
+    fireEvent.change(screen.getByLabelText('Description (optional)'), { target: { value: 'A fresh project' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
+
+    await waitFor(() => {
+      expect(createdProjectPayload).toMatchObject({
+        name: 'My New Project',
+        description: 'A fresh project',
+      })
+    })
+  })
 })

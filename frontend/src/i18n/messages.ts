@@ -196,6 +196,10 @@ export const messages = {
         noProjects: 'No projects yet. Create one to start.',
         moveToProject: 'Move to project',
         noOtherProjects: 'No other projects to move to.',
+        createTitle: 'Create project',
+        createNameLabel: 'Project name',
+        createDescriptionLabel: 'Description (optional)',
+        createSubmit: 'Create project',
       },
       dashboard: {
         eyebrow: 'Terminal',
@@ -1235,6 +1239,10 @@ export const messages = {
         noProjects: '暂无项目。创建一个项目开始。',
         moveToProject: '移动到项目',
         noOtherProjects: '没有其他可移动到的项目。',
+        createTitle: '创建项目',
+        createNameLabel: '项目名称',
+        createDescriptionLabel: '描述（可选）',
+        createSubmit: '创建项目',
       },
       dashboard: {
         eyebrow: '终端',
