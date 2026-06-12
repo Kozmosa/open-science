@@ -31,9 +31,19 @@ export function getNextOutputSeq(items: TaskOutputEvent[], fallback: number = 0)
  */
 const STREAMING_WINDOW = 50;
 
+/** Hard cap on how many output events are rendered at once. The rendered stream
+ *  keeps only the most recent events so the DOM cannot grow unboundedly during
+ *  long runs; older history stays reachable via scroll-up loadMore (served from
+ *  the backend, which is the source of truth). */
+const MAX_RENDER_ITEMS = 200;
+
+function capRenderWindow(items: TaskOutputEvent[]): TaskOutputEvent[] {
+  return items.length > MAX_RENDER_ITEMS ? items.slice(items.length - MAX_RENDER_ITEMS) : items;
+}
+
 export function trimStreamingWindow(items: TaskOutputEvent[], windowSize: number = STREAMING_WINDOW): TaskOutputEvent[] {
   const streamingKinds = new Set(['message', 'thinking']);
-  if (!items.some((item) => streamingKinds.has(item.kind))) return items;
+  if (!items.some((item) => streamingKinds.has(item.kind))) return capRenderWindow(items);
 
   // Collect indices per block_id for streaming events
   const blockIndices = new Map<string, number[]>();  // block_id → [indices]
@@ -63,7 +73,7 @@ export function trimStreamingWindow(items: TaskOutputEvent[], windowSize: number
     }
   }
 
-  if (streamingByIndex.size === 0) return items;
+  if (streamingByIndex.size === 0) return capRenderWindow(items);
 
   // For each block, mark the oldest deltas beyond the window for removal
   const removeIndices = new Set<number>();
@@ -75,7 +85,7 @@ export function trimStreamingWindow(items: TaskOutputEvent[], windowSize: number
     }
   }
 
-  if (removeIndices.size === 0) return items;
+  if (removeIndices.size === 0) return capRenderWindow(items);
 
   const result: TaskOutputEvent[] = [];
   for (let i = 0; i < items.length; i++) {
@@ -83,5 +93,5 @@ export function trimStreamingWindow(items: TaskOutputEvent[], windowSize: number
       result.push(items[i]);
     }
   }
-  return result;
+  return capRenderWindow(result);
 }

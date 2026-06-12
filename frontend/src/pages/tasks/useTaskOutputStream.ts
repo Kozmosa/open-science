@@ -181,6 +181,8 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
     const openStream = (): void => {
       closeCurrentStream();
       const source = new EventSource(buildTaskStreamUrl(taskId, nextSeqRef.current));
+      // Track the live source so the effect cleanup / task switch can close it.
+      eventSourceRef.current = source;
       source.onmessage = (event: MessageEvent<string>) => {
         if (!active) return;
         try {
