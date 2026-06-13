@@ -311,6 +311,33 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 - Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
 - Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
 
+**Monitoring & Alerting (production default):**
+
+The CPU-only deployment includes Prometheus + Grafana with pre-configured dashboards and alert rules:
+
+- **Grafana dashboard**: `http://<host>:8192/monitoring` — pre-provisioned `ainrf-overview` dashboard shows HTTP request rates, auth events, SSH connections, terminal exec denials, and DB query latency. Auth proxy is enabled (login via AINRF session).
+- **Prometheus**: scrapes `http://localhost:18000/metrics` every 15s; alert rules in `deploy/examples/prometheus-rules.example.yml` cover login failure rate, account lockouts, terminal exec denials, sensitive file access, high request/error rate. Copy to `deploy/config/prometheus/rules/ainrf.yml` and adjust thresholds.
+- **Alert routing**: Prometheus evaluates rules; to receive notifications, configure Alertmanager or Grafana alert channels (not included by default — add a Grafana contact point for email/Slack/webhook).
+
+**LLM Observability (optional overlay):**
+
+An independent Litefuse (Langfuse fork) stack provides trace-level LLM observability — token usage per call, prompt/completion logging, latency breakdown, cost tracking:
+
+```bash
+# Layer the observability stack on top of the base deployment
+docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up -d
+```
+
+- **Litefuse UI**: `http://<host>:13000` — after first start, create admin account and generate API keys.
+- **Configuration**: set `AINRF_OBSERVABILITY_ENABLED=true` plus `AINRF_OBSERVABILITY_SECRET_KEY` / `PUBLIC_KEY` / `BASE_URL` in `.env`, then restart the ainrf service. See `deploy/docker-compose.observability.yml` header for full secret generation instructions.
+- **Integration points**: `AgenticResearcherService` wraps each task lifecycle as a trace with per-turn generation spans; `LiteratureScheduler` wraps each subscription fetch. Both coexist with existing SQLite token tracking (dual-write).
+- **Graceful degradation**: when Litefuse is disabled or unreachable, `SafeReporter` wraps all calls in try/except — observability failures never affect the main application.
+
+| Observability Stack | Service | Port | What it shows |
+|---------------------|---------|------|---------------|
+| **Grafana** | Infrastructure + API metrics | `:8192/monitoring` | HTTP rates, auth events, SSH, DB latency |
+| **Litefuse** | LLM call traces | `:13000` | Per-call tokens, prompts, latency, cost |
+
 **Named Docker volumes (persistent data):**
 
 | Volume | Mount point | Content |
