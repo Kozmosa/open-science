@@ -273,11 +273,9 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
   }, []);
 
   // Single effect: reset on task change, then convert new events.
-  // Combining into one effect prevents the old task's outputItems from being
-  // converted between the "reset" and "clear" phases across separate effects.
   useEffect(() => {
-    // Task changed — discard everything from the previous task
-    if (taskId !== boundTaskIdRef.current) {
+    const taskChanged = taskId !== boundTaskIdRef.current;
+    if (taskChanged) {
       boundTaskIdRef.current = taskId ?? null;
       pendingMessagesRef.current = [];
       if (flushTimerRef.current !== null) {
@@ -286,12 +284,14 @@ export function useTaskMessages(taskId: string | null, outputItems: TaskOutputEv
       }
       setStreamMessages([]);
       lastProcessedSeqRef.current = 0;
-      // If there's no task, or outputItems still holds stale events from
-      // the previous task, wait for the next render with correct data.
-      if (!taskId || outputItems.some((event) => event.task_id !== taskId)) {
-        return;
-      }
+      // outputItems is owned by useTaskOutputStream, which clears it in its
+      // own effect (runs after commit). On the render where taskId changes
+      // synchronously, outputItems may still hold the previous task's events.
+      // Skip processing this frame and wait for the next render with clean data.
+      return;
     }
+
+    if (!taskId) return;
 
     // Only convert events we haven't processed yet
     const newEvents = outputItems.filter((event) => event.seq > lastProcessedSeqRef.current);

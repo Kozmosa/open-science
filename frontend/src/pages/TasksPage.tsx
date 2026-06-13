@@ -266,6 +266,7 @@ function TasksPage() {
         sidebarTestId="task-sidebar"
       >
         <TaskDetail
+          taskId={effectiveSelectedTaskId}
           selectedTask={selectedTask}
           detailError={detailError}
           outputItems={outputItems}

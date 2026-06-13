@@ -105,17 +105,19 @@ export function useTaskOutputStream(taskId: string | null): TaskOutputStreamStat
   // ── Load more (scroll up) ──────────────────────────────────
   const loadMore = useCallback(() => {
     if (!taskId || isLoadingMore || !hasMore) return;
+    if (taskId !== activeTaskIdRef.current) return;
     setIsLoadingMore(true);
+    const capturedTaskId = taskId;
     const seq = loadMoreSeqRef.current;
-    void getTaskOutput(taskId, seq, PAGE_SIZE)
+    void getTaskOutput(capturedTaskId, seq, PAGE_SIZE)
       .then((page) => {
+        if (capturedTaskId !== activeTaskIdRef.current) return;
         if (page.items.length > 0) {
           setOutputItems((current) => {
             const merged = mergeOutputItems(current, page.items);
-            writeCache(taskId, merged);
+            writeCache(capturedTaskId, merged);
             return merged;
           });
-          // loadMoreSeq moves to the next batch boundary
           loadMoreSeqRef.current = page.items[page.items.length - 1].seq;
         }
         setHasMore(page.has_more);

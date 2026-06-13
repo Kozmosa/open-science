@@ -11,6 +11,7 @@ import { useTaskActions } from './useTaskActions';
 const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
 
 interface Props {
+  taskId: string | null;
   selectedTask: TaskRecord | null;
   detailError: string | null;
   outputItems: TaskOutputEvent[];
@@ -43,6 +44,7 @@ function MetadataRow({
 }
 
 export default function TaskDetail({
+  taskId,
   selectedTask,
   detailError,
   outputItems,
@@ -54,7 +56,6 @@ export default function TaskDetail({
   const t = useT();
   const metadataFallback = t('pages.tasks.unavailable');
 
-  const taskId = selectedTask?.task_id ?? null;
   const { messages } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
 
   const MIN_WIDTH = 48;

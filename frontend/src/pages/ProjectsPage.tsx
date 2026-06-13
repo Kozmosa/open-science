@@ -198,6 +198,7 @@ export default function ProjectsPage() {
       >
         {selectedTask ? (
           <TaskDetail
+            taskId={selectedTaskId}
             selectedTask={selectedTask}
             detailError={extractErrorMessage(selectedTaskQuery.error)}
             outputItems={[]}
