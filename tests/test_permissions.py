@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import httpx
+import pytest
+
+from ainrf.api.app import create_app
+from ainrf.api.config import ApiConfig, hash_api_key
 
 pytestmark = [pytest.mark.middleware]
 
@@ -60,21 +65,54 @@ class TestPermissionHelpers:
 
 @pytest.mark.anyio
 class TestAdminApi:
-    async def test_list_users_requires_admin(self):
-        from tests._testutil import make_client
+    async def test_list_users_requires_admin(self, tmp_path: Path) -> None:
+        from tests.testutil import make_client_and_app
 
-        async with make_client() as client:
-            # Without auth headers, should get 401
+        app, client, _ = make_client_and_app(tmp_path)
+        async with client:
+            # Use bare httpx client (no auth headers) against the same app
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://testserver",
+            ) as anon:
+                resp = await anon.get("/admin/users")
+                assert resp.status_code == 401
+
+    async def test_non_admin_cannot_list_users(self, tmp_path: Path) -> None:
+        import tempfile
+
+        from ainrf.auth import AuthService
+        from tests.testutil import get_jwt_headers
+
+        api_config = ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+        )
+        app = create_app(api_config)
+
+        # Register a member user and get JWT headers
+        auth_svc: AuthService = app.state.auth_service
+        auth_svc.initialize()
+        auth_svc.register(
+            username="member_user", display_name="Member", password="test-pass"
+        )
+        with auth_svc._connect() as conn:
+            conn.execute(
+                "UPDATE users SET status = 'active', activated_at = ?, role = 'member'"
+                " WHERE username = ?",
+                ("2025-01-01T00:00:00+00:00", "member_user"),
+            )
+            conn.commit()
+        token_data = auth_svc.login(username="member_user", password="test-pass")
+        headers = {"Authorization": f"Bearer {token_data['access_token']}"}
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+            headers=headers,
+        ) as client:
             resp = await client.get("/admin/users")
-            assert resp.status_code == 401
-
-    async def test_non_admin_cannot_list_users(self):
-        from tests._testutil import get_jwt_headers, make_client
-
-        async with make_client() as client:
-            headers = get_jwt_headers(client, user_id="member_user", role="member")
-            resp = await client.get("/admin/users", headers=headers)
-            assert resp.status_code in (403, 404)  # 403 if route in test app, 404 otherwise
+            assert resp.status_code in (403, 404)
 
 
 def _ensure_user(auth_svc, username, password):

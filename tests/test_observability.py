@@ -206,7 +206,7 @@ class TestResearcherObservability:
 # Literature fetcher integration
 # ---------------------------------------------------------------------------
 class TestLiteratureObservability:
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_fetch_for_subscription_accepts_reporter(self):
         """fetch_for_subscription accepts optional reporter parameter."""
         from ainrf.literature.models import LiteratureSubscription
