@@ -602,7 +602,7 @@ class TaskRetryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     new_task: TaskSummaryResponse
-    archived_task_id: str
+    archived_task_id: str | None
     edge_id: str
 
 
