@@ -87,43 +87,10 @@ Formatting and linting are enforced with `ruff`; static type checking must pass 
 
 ### Multi-Tenant Permission Model
 
-AINRF uses Linux user isolation for multi-tenancy. Understanding the permission model is critical to avoid silent failures.
+AINRF uses Linux user isolation for multi-tenancy (`ainrf` backend user, `ainrf_<tenant>` per tenant, `sudo -u` execution). Any code creating files/dirs in tenant paths must use the tenant user. Never assume the `ainrf` user can write to `/home/ainrf_tenants/`.
 
-**User roles:**
-- `ainrf` (uid=1000) — the backend process user. Owns `/opt/ainrf/state/`, `/opt/ainrf/.ainrf_workspaces/`.
-- `ainrf_<username>` (gid=2000/`ainrf_tenants`) — one Linux user per registered tenant. Home at `/home/ainrf_tenants/<username>/` with mode `0700`.
-- `root` — runs entrypoint.py which provisions tenant users, homes, and workspace directories.
+> **Full details including code-path audit table**: [.rules/multi-tenant-permissions.md](.rules/multi-tenant-permissions.md)
 
-**Execution flow:**
-1. Backend (ainrf) receives task → resolves `tenant_user = ainrf_<owner>`
-2. Engine builds command → prefixes with `sudo -u ainrf_<owner>`
-3. `sudoers` grants: `ainrf ALL=(%ainrf_tenants) NOPASSWD: ALL`
-4. Agent process (claude/codex) runs as tenant user with tenant's workspace as cwd
-
-**Permission constraints:**
-- `ainrf` **cannot write** to tenant home dirs (mode 0700, owned by tenant)
-- `ainrf` **cannot write** to tenant workspace dirs (owned by tenant, group ainrf_tenants, ainrf is not in that group)
-- Any file/directory creation by `ainrf` inside tenant paths will EPERM
-- Temp files created by `ainrf` (e.g., MCP config) must be `chmod 0644` if tenant subprocess needs to read them
-- `sudo -u <tenant>` does NOT inherit `ainrf`'s env vars for API keys — these must be explicitly passed via the engine's env setup
-
-**Known permission-sensitive code paths:**
-
-| Path | Operation | Status |
-|------|-----------|--------|
-| `claude_code.py` | MCP config temp file → chmod 0644 | Fixed |
-| `claude_code.py` | `_prepare_workspace_skills` creates dirs/symlinks via `sudo -u <tenant>` | Fixed |
-| `service.py` | `_resolve_working_directory` uses `sudo -u <tenant> mkdir -p` for tenant workspaces | Fixed |
-| `workspaces/service.py` | `ensure_tenant_workspace` uses `sudo -u <tenant> mkdir -p` | Fixed |
-| `auth/service.py` | `provision_tenant_user` mkdir + chown | OK — runs during registration |
-| `files.py` | Upload → chown to tenant | Fixed |
-| `agent_sdk.py` | No `user=` param (removed) | Fixed |
-
-**Guidelines for new code:**
-- Never assume `ainrf` can write to `/home/ainrf_tenants/<username>/` paths
-- If a file must be readable by a tenant subprocess (via `sudo -u`), set `chmod 0644` after creation
-- If a directory must be created in tenant space, use `subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path])`
-- Workspace dirs for new labels should be created via the tenant user, not directly by ainrf
 ### Docs Build Pipeline
 
 Product documentation lives in `docs-site/` and is built with Astro + Starlight:
@@ -143,24 +110,11 @@ Internal research notes in `docs/` use Obsidian-style Markdown with wikilinks an
 - `docs/summary/`: cross-project comparison and synthesis.
 - `.codex-skill-staging/`: Codex skill definitions and staging assets.
 
-### Frontend Layout Components
+### Frontend Patterns
 
-- Reusable layout shells live in `frontend/src/components/layout/`.
-- `PageShell`: standard outer card wrapper.
-- `SplitPane`: left-right split layout with drag handle, keyboard resizing, and ARIA support.
-- `SectionStack`: vertical section spacing with optional actions slot.
-- `CardGrid`: draggable card grid with DnD and localStorage persistence.
-- Prefer these shared layout primitives over duplicating layout patterns.
+Use shared layout primitives (`PageShell`, `SplitPane`, `SectionStack`, `CardGrid`) from `frontend/src/components/layout/`. Dynamic Tailwind classes do not work — use static lookup maps. Do not nest `@dnd-kit` draggable wrappers.
 
-### Tailwind CSS Constraints
-
-- Dynamic Tailwind classes such as `space-y-${gap}` or `gap-${n}` do not work reliably with Tailwind v4 JIT in this repo.
-- Use static lookup maps instead, e.g. `const GAP_CLASSES: Record<number, string> = { 2: 'gap-2', 4: 'gap-4' }`.
-
-### `@dnd-kit` Gotcha
-
-- Do not nest `useDraggable` / `useDroppable` wrappers.
-- `CardGrid` already provides an internal draggable wrapper; content passed via `renderCard` must not add another draggable layer.
+> **Full details (component API, Tailwind, DnD, DevTools config, E2E testing)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)
 
 ### API Key Middleware
 
@@ -223,17 +177,9 @@ Before submitting changes to Python code, run both runtime and static checks:
 
 ### Agent E2E Testing
 
-AINRF uses a coding-agent-driven E2E testing approach. A coding agent (Claude Code, Codex, etc.) uses Playwright MCP to drive a browser against a production-like Docker container, executing the test scenarios defined in `testing/e2e/CHECKLIST.md`.
+AINRF uses coding-agent-driven E2E testing with Playwright MCP against a production-like Docker container. Test infrastructure lives in `testing/e2e/`.
 
-- **Test environment**: `testing/e2e/` — isolated Docker Compose with ephemeral tmpfs volumes, seeded test users, no TLS.
-- **Start**: `testing/e2e/run.sh up` — builds image, starts containers, seeds users, prints credentials.
-- **Stop**: `testing/e2e/run.sh down` — removes all containers and volumes.
-- **Prerequisites**: `testing/e2e/check-prereqs.sh` — verifies Docker, Node.js, Playwright MCP, curl.
-- **Agent prompt**: `testing/e2e/AGENT_PROMPT.md` — system prompt for the test agent.
-- **MCP config**: `testing/e2e/config/mcp-servers.json` — Playwright MCP server configuration.
-- **Results**: Agent writes reports to `testing/e2e/results/` (gitignored).
-
-Ports: frontend on 8198, backend on 8199 (configurable via `AIWebPort`/`AITestPort`).
+> **Full details (environment, scripts, MCP config, ports)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)
 
 ## Workspace Cleanliness
 
@@ -257,233 +203,30 @@ Follow the existing commit style: short, imperative, and scoped when useful, e.g
 - Daily worklog updates under `docs/LLM-Working/worklog/` do not require a standalone `docs:`/`chore:` commit; they should normally be committed together with the corresponding `feat:`/`fix:`/`refactor:` work slice they record.
 - Root-level governance documents such as `AGENTS.md`, `CLAUDE.md`, and `PROJECT_BASIS.md` must be committed in a dedicated `docs:` or `chore:` commit when they change. A single dedicated commit may update multiple such root-level governance files together.
 
-### Git Workflow
+### Git Workflow & Worktree Hygiene
 
-- `master` is the protected stable branch. Treat it as read-mostly: sync from it, review from it, and merge into it via PR only.
-- `develop` is the pre-release integration buffer. It may accept direct merges for validation/integration, but it is not the default branch to start feature work from.
-- Start every new feature, fix, refactor, docs, or chore branch from the latest `master`, not from `develop`.
-- Preferred branch prefixes are: `feat/`, `fix/`, `refactor/`, `docs/`, and `chore/`.
-- Agent-only temporary branches should not be pushed to the remote and should be deleted after their useful changes are merged or extracted.
+`master` is protected; start branches from latest `master` (not `develop`). Use worktree-first development. Preferred prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`.
 
-### Worktree Hygiene
-
-- Default to worktree-first development for non-trivial work.
-- The main workspace should stay clean and should not be the default place for feature implementation.
-- Use `/.worktrees/<branch>` for formal development worktrees.
-- Treat `/.claude/worktrees/` as temporary agent execution space only, not as a long-lived development location.
-- After a branch is merged or abandoned, remove its corresponding worktree and delete the local branch.
-- Regularly prune stale remote-tracking refs with `git fetch --prune origin` when reviewing repository hygiene.
-- When auditing hygiene, inspect `git worktree list --porcelain` and `git branch -vv` before deleting anything.
-- Preserve dirty or unaudited worktrees until their state is understood.
-
-Pull requests should include:
-
-- a brief summary of what changed,
-- the commands you ran to validate it,
-- screenshots only for docs/site rendering changes,
-- links to related issues or design notes when applicable.
+> **Full details (branch strategy, worktree conventions, PR expectations)**: [.rules/git-workflow.md](.rules/git-workflow.md)
 
 ## Production Environment Safety
 
 Do NOT operate production deployment containers (Docker, Kubernetes, etc.) — including `docker exec`, `docker compose restart`, `docker logs`, or any other container interaction — unless the user explicitly asks you to. This applies to any environment that serves real users or holds production data. When in doubt, ask first.
 
-### Production Deployment Architecture (CPU-only)
+### Production Deployment
 
-The current production environment uses **CPU-only Docker Compose** with host networking:
+CPU-only Docker Compose with host networking. Backend on `:18000`, nginx on `:8192`, Prometheus + Grafana for monitoring. Deploy: `docker compose -f deploy/docker-compose.cpu.yml up -d --build`. Rebuild via `deploy/redeploy-backend.sh` / `deploy/redeploy-frontend.sh`.
 
-```bash
-# Deploy command (from repo root)
-docker compose -f deploy/docker-compose.cpu.yml up -d --build
-```
-
-**Architecture overview:**
-
-| Service | Image | Listen | Role |
-|---------|-------|--------|------|
-| `ainrf` | `deploy/Dockerfile` (built) | `127.0.0.1:18000` | FastAPI backend |
-| `nginx` | `nginx:1.27-alpine` | `0.0.0.0:8192` | Reverse proxy + frontend static |
-| `prometheus` | `prom/prometheus:v3.3.1` | `127.0.0.1:9091` | Metrics collection |
-| `grafana` | `grafana/grafana:11.6.1` | `127.0.0.1:3000` | Monitoring dashboard |
-
-- All services use `network_mode: host` (no Docker NAT).
-- External access: `http://<host>:8192` → nginx → backend on 18000.
-- Frontend static files served by nginx from `frontend/dist` (host-mounted, read-only).
-- Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
-- Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
-
-**Monitoring & Alerting (production default):**
-
-The CPU-only deployment includes Prometheus + Grafana with pre-configured dashboards and alert rules:
-
-- **Grafana dashboard**: `http://<host>:8192/monitoring` — pre-provisioned `ainrf-overview` dashboard shows HTTP request rates, auth events, SSH connections, terminal exec denials, and DB query latency. Auth proxy is enabled (login via AINRF session).
-- **Prometheus**: scrapes `http://localhost:18000/metrics` every 15s; alert rules in `deploy/examples/prometheus-rules.example.yml` cover login failure rate, account lockouts, terminal exec denials, sensitive file access, high request/error rate. Copy to `deploy/config/prometheus/rules/ainrf.yml` and adjust thresholds.
-- **Alert routing**: Prometheus evaluates rules; to receive notifications, configure Alertmanager or Grafana alert channels (not included by default — add a Grafana contact point for email/Slack/webhook).
-
-**LLM Observability (optional overlay):**
-
-An independent Litefuse (Langfuse fork) stack provides trace-level LLM observability — token usage per call, prompt/completion logging, latency breakdown, cost tracking:
-
-```bash
-# Layer the observability stack on top of the base deployment
-docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up -d
-```
-
-- **Litefuse UI**: `http://<host>:13000` — after first start, create admin account and generate API keys.
-- **Configuration**: set `AINRF_OBSERVABILITY_ENABLED=true` plus `AINRF_OBSERVABILITY_SECRET_KEY` / `PUBLIC_KEY` / `BASE_URL` in `.env`, then restart the ainrf service. See `deploy/docker-compose.observability.yml` header for full secret generation instructions.
-- **Integration points**: `AgenticResearcherService` wraps each task lifecycle as a trace with per-turn generation spans; `LiteratureScheduler` wraps each subscription fetch. Both coexist with existing SQLite token tracking (dual-write).
-- **Graceful degradation**: when Litefuse is disabled or unreachable, `SafeReporter` wraps all calls in try/except — observability failures never affect the main application.
-
-| Observability Stack | Service | Port | What it shows |
-|---------------------|---------|------|---------------|
-| **Grafana** | Infrastructure + API metrics | `:8192/monitoring` | HTTP rates, auth events, SSH, DB latency |
-| **Litefuse** | LLM call traces | `:13000` | Per-call tokens, prompts, latency, cost |
-
-**Named Docker volumes (persistent data):**
-
-| Volume | Mount point | Content |
-|--------|-------------|---------|
-| `ainrf-state` | `/opt/ainrf/state` | SQLite databases, config, logs |
-| `ainrf-workspaces` | `/opt/ainrf/.ainrf_workspaces` | User workspaces |
-| `ainrf-tenants` | `/home/ainrf_tenants` | Tenant home directories |
-
-**Key configuration (set in `.env`):**
-
-- `AINRF_JWT_SECRET` — JWT signing key (required)
-- `AINRF_API_KEY_HASHES` — SHA-256 hashes of API keys (required)
-- `AINRF_PUBLIC_REGISTRATION_ENABLED` — defaults to `false`
-- Agent tool keys: `ANTHROPIC_API_KEY`, `CODEX_API_KEY`, etc.
-
-**Known operational issues:**
-
-- **sshd session proliferation**: Each terminal health-check spawns an SSH session pair (root priv + ainrf child). These accumulate over the container lifetime. Container restart is the current cleanup path.
-
-### Rebuild & Redeploy
-
-```bash
-# Backend-only changes — use the wrapper so the host git commit is stamped
-# into the image (otherwise the backend reports "Unavailable" for its version).
-bash deploy/redeploy-backend.sh
-
-# Frontend-only changes — rebuilds host frontend/dist, then restarts nginx.
-bash deploy/redeploy-frontend.sh
-
-# Staging targets (same scripts, different target):
-bash deploy/redeploy-backend.sh --target staging
-bash deploy/redeploy-frontend.sh --target staging
-
-# Bare fallback (no commit stamping; backend version shows "Unavailable"):
-# docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
-```
-
-**Version provenance is split**: the backend bakes its OWN commit into
-`/opt/ainrf/backend-build-info.json` (via `redeploy-backend.sh` build-args),
-and the frontend ships its OWN `frontend/dist/build-info.json` (built on the
-host). Because the two build at different times, they may differ — the
-Settings page shows both and flags a mismatch.
-
-**Why host build is required**: nginx serves frontend from a **host-mounted** volume (`frontend/dist:/usr/share/nginx/html:ro`), not from the container's built-in `/opt/ainrf/frontend/dist`. After frontend changes, the host `frontend/dist` must be rebuilt or nginx will serve stale files. Verify by checking the `index-*.js` hash in `frontend/dist/index.html` matches what the browser requests.
+> **Full details (architecture, volumes, monitoring, observability, rebuild, admin credentials)**: [.rules/deployment.md](.rules/deployment.md)
 
 ### Staging Environment
 
-The staging environment mirrors the production stack (nginx + Prometheus + Grafana + backend) with offset ports and isolated volumes. Backend source code is bind-mounted for hot-reload — changes to `src/ainrf/` take effect without rebuilding the image.
+Staging mirrors production with offset ports (`:7192` nginx, `:17000` backend). Backend source is bind-mounted for hot-reload. Start: `bash scripts/staging.sh up`.
 
-**Quick start:**
+> **Full details (ports, hot-reload, test workflow, lifecycle)**: [.rules/staging-environment.md](.rules/staging-environment.md)
 
-```bash
-# Start staging (builds image, starts all services, prints URLs)
-bash scripts/staging.sh up
+### Browser & DevTools
 
-# Tail backend logs (shows uvicorn reload events)
-bash scripts/staging.sh logs
+Use chrome-devtools MCP as primary frontend inspection tool. Snap chromium is broken; Puppeteer-cached Chrome for Testing binary is configured instead. Config changes may require session restart.
 
-# Stop and destroy everything (including data)
-bash scripts/staging.sh down
-```
-
-**Access URLs:**
-
-| Service | URL | Notes |
-|---------|-----|-------|
-| App | `http://<host>:7192/` | Full AINRF WebUI |
-| Grafana | `http://<host>:7192/monitoring` | Auth-gated via AINRF session |
-| Backend direct | `http://<host>:17000/health` | Bypasses nginx |
-| Prometheus | `localhost:9090` | Internal only, no nginx proxy |
-
-**Port mapping (staging ↔ production):**
-
-| Service | Staging | Production |
-|---------|---------|------------|
-| nginx | `:7192` | `:8192` |
-| backend | `:17000` | `:18000` |
-| sshd | `:2223` | `:2222` |
-| prometheus | `:9092` | `:9091` |
-| grafana | `:2300` | `:3000` |
-
-**Backend hot-reload workflow:**
-
-1. `bash scripts/staging.sh up` — builds image, starts all services
-2. Edit files in `src/ainrf/` — uvicorn detects changes and reloads automatically
-3. Verify changes at `http://localhost:7192/`
-4. For dependency changes (`pyproject.toml`), rebuild: `bash scripts/staging.sh rebuild`
-
-**Frontend update workflow:**
-
-```bash
-cd frontend && npm run build
-bash deploy/redeploy-frontend.sh --target staging
-```
-
-**Data isolation:** All staging data lives in `staging-*` Docker volumes. Production (`ainrf-*`) volumes are never touched. Both environments can run simultaneously on the same host.
-
-**Lifecycle commands:**
-
-```bash
-bash scripts/staging.sh up        # build + start, wait for healthy
-bash scripts/staging.sh status    # show running state and URLs
-bash scripts/staging.sh logs      # tail backend logs
-bash scripts/staging.sh rebuild   # rebuild image, keep data
-bash scripts/staging.sh creds     # print admin initial password
-bash scripts/staging.sh down      # stop + remove all containers and volumes
-```
-
-**Test and debug workflow on staging:**
-
-1. **Start staging**: `bash scripts/staging.sh up`
-2. **Iterate on backend code**: edit files under `src/ainrf/` — uvicorn auto-reloads within seconds; watch reload events in `bash scripts/staging.sh logs`
-3. **Test API changes**: `curl http://localhost:7192/api/...` or open `http://<host>:7192/` in browser
-4. **Check metrics**: `curl http://localhost:7192/metrics` or Grafana at `/monitoring`
-5. **Verify health**: `curl http://localhost:17000/health` — shows SSH status, Claude version, runtime readiness
-6. **Compare with production**: both stacks run simultaneously — test the same API on `:7192` (staging) vs `:8192` (production) to confirm behavior parity
-7. **View container logs**: `docker logs ainrf-staging` (backend), `docker logs ainrf-staging-nginx` (nginx), `docker logs ainrf-staging-prometheus` (metrics)
-8. **Reset state**: `bash scripts/staging.sh down && bash scripts/staging.sh up` — destroys all data and starts fresh
-9. **Deploy to production**: once verified on staging, run `bash deploy/redeploy-backend.sh` (production target) and `bash deploy/redeploy-frontend.sh`
-
-**Important**: staging runs `AINRF_PRODUCTION=1` (same as production) so middleware, auth, and security behavior match exactly. The only differences are ports and data volumes.
-
-### Browser & DevTools (Working)
-
-Both the OMP built-in browser tool and the chrome-devtools MCP are functional. Use the **chrome-devtools MCP** (via `browser` tool) as the primary tool for frontend inspection; fall back to the OMP browser tool when needed.
-
-The system snap chromium at `/snap/bin/chromium` is **broken** (snap namespace fails on non-standard HOME `/data/yile.chen`). All browser tools use the Puppeteer-cached Chrome for Testing binary instead:
-
-```
-/data/yile.chen/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
-```
-
-This is configured via:
-- `PUPPETEER_EXECUTABLE_PATH` in `~/.omp/agent/config.yml` `env` section
-- `~/.local/bin/chromium` wrapper (symlinked as `chromium-browser`, `google-chrome`) shadows the snap binary via PATH priority
-- `~/.omp/agent/mcp.json` — chrome-devtools MCP server definition
-- `~/.claude/settings.json` — Claude Code env (`PUPPETEER_EXECUTABLE_PATH`) + `mcpServers`
-
-**Note**: OMP config `env` vars only take effect at session start. Mid-session changes require a session restart.
-
-### First-Time Admin Password
-
-```bash
-docker compose -f deploy/docker-compose.cpu.yml exec ainrf cat /opt/ainrf/state/admin_initial_password.txt
-```
-
-## Security & Configuration Tips
-
-Do not commit secrets, SSH keys, or generated artifacts. Keep runtime state under `.ainrf/` out of version control. Prefer `uv run` over manual venv management so local execution matches the project lockfile.
+> **Full details (binary path, config locations, OMP setup)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)

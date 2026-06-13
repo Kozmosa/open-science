@@ -1,0 +1,115 @@
+# Deployment Architecture & Operations
+
+Production and staging deployment topology, rebuild procedures, monitoring,
+observability stack, and operational safety. Read this when deploying,
+debugging production issues, modifying Docker/deploy configurations, or
+setting up monitoring.
+
+**Safety rule** (from AGENTS.md): Do NOT operate production deployment
+containers unless the user explicitly asks you to.
+
+## Production Deployment Architecture (CPU-only)
+
+The current production environment uses **CPU-only Docker Compose** with host networking:
+
+```bash
+# Deploy command (from repo root)
+docker compose -f deploy/docker-compose.cpu.yml up -d --build
+```
+
+**Architecture overview:**
+
+| Service | Image | Listen | Role |
+|---------|-------|--------|------|
+| `ainrf` | `deploy/Dockerfile` (built) | `127.0.0.1:18000` | FastAPI backend |
+| `nginx` | `nginx:1.27-alpine` | `0.0.0.0:8192` | Reverse proxy + frontend static |
+| `prometheus` | `prom/prometheus:v3.3.1` | `127.0.0.1:9091` | Metrics collection |
+| `grafana` | `grafana/grafana:11.6.1` | `127.0.0.1:3000` | Monitoring dashboard |
+
+- All services use `network_mode: host` (no Docker NAT).
+- External access: `http://<host>:8192` → nginx → backend on 18000.
+- Frontend static files served by nginx from `frontend/dist` (host-mounted, read-only).
+- Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
+- Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
+
+### Monitoring & Alerting (production default)
+
+The CPU-only deployment includes Prometheus + Grafana with pre-configured dashboards and alert rules:
+
+- **Grafana dashboard**: `http://<host>:8192/monitoring` — pre-provisioned `ainrf-overview` dashboard shows HTTP request rates, auth events, SSH connections, terminal exec denials, and DB query latency. Auth proxy is enabled (login via AINRF session).
+- **Prometheus**: scrapes `http://localhost:18000/metrics` every 15s; alert rules in `deploy/examples/prometheus-rules.example.yml` cover login failure rate, account lockouts, terminal exec denials, sensitive file access, high request/error rate. Copy to `deploy/config/prometheus/rules/ainrf.yml` and adjust thresholds.
+- **Alert routing**: Prometheus evaluates rules; to receive notifications, configure Alertmanager or Grafana alert channels (not included by default — add a Grafana contact point for email/Slack/webhook).
+
+### LLM Observability (optional overlay)
+
+An independent Litefuse (Langfuse fork) stack provides trace-level LLM observability — token usage per call, prompt/completion logging, latency breakdown, cost tracking:
+
+```bash
+# Layer the observability stack on top of the base deployment
+docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up -d
+```
+
+- **Litefuse UI**: `http://<host>:13000` — after first start, create admin account and generate API keys.
+- **Configuration**: set `AINRF_OBSERVABILITY_ENABLED=true` plus `AINRF_OBSERVABILITY_SECRET_KEY` / `PUBLIC_KEY` / `BASE_URL` in `.env`, then restart the ainrf service. See `deploy/docker-compose.observability.yml` header for full secret generation instructions.
+- **Integration points**: `AgenticResearcherService` wraps each task lifecycle as a trace with per-turn generation spans; `LiteratureScheduler` wraps each subscription fetch. Both coexist with existing SQLite token tracking (dual-write).
+- **Graceful degradation**: when Litefuse is disabled or unreachable, `SafeReporter` wraps all calls in try/except — observability failures never affect the main application.
+
+| Observability Stack | Service | Port | What it shows |
+|---------------------|---------|------|---------------|
+| **Grafana** | Infrastructure + API metrics | `:8192/monitoring` | HTTP rates, auth events, SSH, DB latency |
+| **Litefuse** | LLM call traces | `:13000` | Per-call tokens, prompts, latency, cost |
+
+### Named Docker Volumes (persistent data)
+
+| Volume | Mount point | Content |
+|--------|-------------|---------|
+| `ainrf-state` | `/opt/ainrf/state` | SQLite databases, config, logs |
+| `ainrf-workspaces` | `/opt/ainrf/.ainrf_workspaces` | User workspaces |
+| `ainrf-tenants` | `/home/ainrf_tenants` | Tenant home directories |
+
+### Key Configuration (set in `.env`)
+
+- `AINRF_JWT_SECRET` — JWT signing key (required)
+- `AINRF_API_KEY_HASHES` — SHA-256 hashes of API keys (required)
+- `AINRF_PUBLIC_REGISTRATION_ENABLED` — defaults to `false`
+- Agent tool keys: `ANTHROPIC_API_KEY`, `CODEX_API_KEY`, etc.
+
+### Known Operational Issues
+
+- **sshd session proliferation**: Each terminal health-check spawns an SSH session pair (root priv + ainrf child). These accumulate over the container lifetime. Container restart is the current cleanup path.
+
+## Rebuild & Redeploy
+
+```bash
+# Backend-only changes — use the wrapper so the host git commit is stamped
+# into the image (otherwise the backend reports "Unavailable" for its version).
+bash deploy/redeploy-backend.sh
+
+# Frontend-only changes — rebuilds host frontend/dist, then restarts nginx.
+bash deploy/redeploy-frontend.sh
+
+# Staging targets (same scripts, different target):
+bash deploy/redeploy-backend.sh --target staging
+bash deploy/redeploy-frontend.sh --target staging
+
+# Bare fallback (no commit stamping; backend version shows "Unavailable"):
+# docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
+```
+
+**Version provenance is split**: the backend bakes its OWN commit into
+`/opt/ainrf/backend-build-info.json` (via `redeploy-backend.sh` build-args),
+and the frontend ships its OWN `frontend/dist/build-info.json` (built on the
+host). Because the two build at different times, they may differ — the
+Settings page shows both and flags a mismatch.
+
+**Why host build is required**: nginx serves frontend from a **host-mounted** volume (`frontend/dist:/usr/share/nginx/html:ro`), not from the container's built-in `/opt/ainrf/frontend/dist`. After frontend changes, the host `frontend/dist` must be rebuilt or nginx will serve stale files. Verify by checking the `index-*.js` hash in `frontend/dist/index.html` matches what the browser requests.
+
+## First-Time Admin Password
+
+```bash
+docker compose -f deploy/docker-compose.cpu.yml exec ainrf cat /opt/ainrf/state/admin_initial_password.txt
+```
+
+## Security & Configuration Tips
+
+Do not commit secrets, SSH keys, or generated artifacts. Keep runtime state under `.ainrf/` out of version control. Prefer `uv run` over manual venv management so local execution matches the project lockfile.
