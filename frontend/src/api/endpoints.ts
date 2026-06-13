@@ -321,6 +321,9 @@ export const updateTaskProject = (taskId: string, projectId: string): Promise<Ta
     ? Promise.resolve(mockUpdateTaskProject(taskId, projectId))
     : api.patch<TaskSummary>(`/tasks/${taskId}/project`, { project_id: projectId } satisfies TaskUpdateProjectRequest);
 
+export const updateTask = (taskId: string, data: { title?: string }): Promise<TaskSummary> =>
+  api.patch<TaskSummary>(`/tasks/${taskId}`, data);
+
 export const getProjectTasks = (
   projectId: string,
   params: { includeArchived?: boolean; cursor?: string; limit?: number } = {},

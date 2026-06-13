@@ -439,7 +439,7 @@ class AgenticResearcherService:
 
     async def send_prompt(self, task_id: str, prompt: str) -> TaskOutputEvent:
         task = self.get_task(task_id)
-        if task.status not in {TaskStatus.RUNNING, TaskStatus.PAUSED, TaskStatus.SUCCEEDED}:
+        if task.status not in {TaskStatus.RUNNING, TaskStatus.PAUSED, TaskStatus.SUCCEEDED, TaskStatus.FAILED}:
             raise TaskOperationError(f"Cannot send prompt to task with status: {task.status}")
         engine = self._get_engine(task.harness_engine)
         try:
@@ -451,7 +451,7 @@ class AgenticResearcherService:
             "message",
             json.dumps({"role": "user", "content": prompt}, ensure_ascii=True),
         )
-        if task.status in {TaskStatus.PAUSED, TaskStatus.SUCCEEDED}:
+        if task.status in {TaskStatus.PAUSED, TaskStatus.SUCCEEDED, TaskStatus.FAILED}:
             self._mark_task_queued_for_rerun(task_id)
             self.schedule_task(task_id)
         return event
@@ -729,10 +729,42 @@ class AgenticResearcherService:
             conn.commit()
         return self.get_task(task_id)
 
-    def retry_task(self, task_id: str) -> Task:
+    def update_task(self, task_id: str, *, title: str | None = None) -> Task:
+        """Update mutable task fields (title, etc.)."""
+        self.get_task(task_id)  # raises TaskNotFoundError if missing
+        updates: dict[str, str] = {}
+        if title is not None:
+            updates["title"] = title
+        if not updates:
+            return self.get_task(task_id)
+        now = self._now()
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        with closing(self._connect()) as conn:
+            conn.execute(
+                f"UPDATE tasks SET {set_clause}, updated_at = ? WHERE task_id = ?",
+                [*updates.values(), now, task_id],
+            )
+            conn.commit()
+        return self.get_task(task_id)
+
+    async def retry_task(self, task_id: str) -> Task:
         old = self.get_task(task_id)
         if old.status not in {TaskStatus.FAILED, TaskStatus.CANCELLED}:
             raise TaskOperationError(f"Cannot retry task with status: {old.status}")
+
+        engine = self._get_engine(old.harness_engine)
+
+        # Agent-SDK: resume the same session and resend the last user message.
+        # One task = one conversation session; retry replays the failed turn.
+        if old.harness_engine == HarnessEngineType.AGENT_SDK:
+            last_user_msg = self._find_last_user_message(task_id)
+            if last_user_msg:
+                await engine.send_input(task_id, last_user_msg)
+            self._mark_task_queued_for_rerun(task_id)
+            self.schedule_task(task_id)
+            return self.get_task(task_id)
+
+        # Other engines: create a brand-new task (existing behaviour).
         researcher = AgenticResearcher(
             type=old.researcher_type,
             harness_engine=old.harness_engine,
@@ -749,6 +781,29 @@ class AgenticResearcherService:
             owner_user_id=old.owner_user_id,
             title=f"Retry: {old.title}",
         )
+
+    def _find_last_user_message(self, task_id: str) -> str | None:
+        """Return the content of the last user message from task_outputs.
+
+        Scans from the most recent output backwards, looking for
+        ``kind='message'`` whose JSON payload has ``role='user'``.
+        Returns ``None`` when no user message is found.
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT content FROM task_outputs WHERE task_id = ? AND kind = 'message' ORDER BY seq DESC LIMIT 20",
+                (task_id,),
+            ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["content"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if payload.get("role") == "user":
+                content = payload.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content
+        return None
 
     def _resolve_skill_load_dir(self, task: Task) -> str | None:
         """Resolve the skill load directory for the task's configured skills.

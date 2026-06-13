@@ -414,6 +414,12 @@ class TaskUpdateProjectRequest(BaseModel):
     project_id: str = Field(min_length=1)
 
 
+class TaskUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 class WorkspaceResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

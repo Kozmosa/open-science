@@ -32,6 +32,7 @@ from ainrf.api.schemas import (
     TaskSummaryResponse,
     TaskTokenUsageSummaryResponse,
     TaskUpdateProjectRequest,
+    TaskUpdateRequest,
 )
 from ainrf.auth.permissions import (
     check_resource_ownership,
@@ -422,9 +423,25 @@ async def update_task_project(
     return _task_to_response(updated, service)
 
 
+@router.patch("/{task_id}", response_model=TaskSummaryResponse)
+async def update_task(
+    task_id: str,
+    payload: TaskUpdateRequest,
+    request: Request,
+) -> TaskSummaryResponse:
+    """Update mutable task fields (title, etc.)."""
+    service, _ = _assert_task_owner(request, task_id)
+    updated = service.update_task(task_id, title=payload.title)
+    return _task_to_response(updated, service)
+
+
 @router.post("/{task_id}/retry", status_code=201)
 async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
-    """Retry a failed or cancelled task by creating a new copy."""
+    """Retry a failed or cancelled task.
+
+    For agent-sdk tasks, this resumes the same session and resends the last
+    user message. For other engines, a new task is created.
+    """
     user = get_current_user(request)
     service = _get_service(request)
 
@@ -436,14 +453,19 @@ async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
     check_resource_ownership(user, old_task.owner_user_id)
 
     try:
-        new_task = service.retry_task(task_id)
-        service.schedule_task(new_task.task_id)
+        new_task = await service.retry_task(task_id)
     except TaskOperationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    # Agent-sdk retry returns the same task; other engines create a new one.
+    same_task = new_task.task_id == task_id
+
+    if not same_task:
+        service.schedule_task(new_task.task_id)
+
     return TaskRetryResponse(
         new_task=_task_to_response(new_task, service),
-        archived_task_id=task_id,
+        archived_task_id=task_id if not same_task else None,
         edge_id="",
     )
 

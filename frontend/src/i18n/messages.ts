@@ -381,6 +381,10 @@ export const messages = {
         layout: {
           showOnlyDetails: 'Show only details',
           showOnlyConversation: 'Show only conversation',
+          collapseSidebar: 'Collapse details',
+          expandSidebar: 'Show details',
+          resizeSidebar: 'Resize details panel',
+          errorIndicator: 'Task has errors — click to view',
         },
         output: {
           replayFailed: 'Unable to replay task output',
@@ -1423,6 +1427,10 @@ export const messages = {
         layout: {
           showOnlyDetails: '仅显示详情',
           showOnlyConversation: '仅显示对话',
+          collapseSidebar: '收起详情',
+          expandSidebar: '展开详情',
+          resizeSidebar: '调整详情面板宽度',
+          errorIndicator: '任务有错误 — 点击查看',
         },
         output: {
           replayFailed: '无法回放任务输出',
