@@ -239,11 +239,12 @@ class AgentSdkEngine(HarnessEngine):
                     ):
                         stderr_text = "\n".join(stderr_lines)
                         logger.warning(
-                            "session_resume_failed_retrying_fresh",
-                            task_id=context.task_id,
-                            session_id=session.session_id,
-                            error=str(exc),
-                            stderr=stderr_text[:500],
+                            "session_resume_failed_retrying_fresh "
+                            "task_id=%s session_id=%s error=%s stderr=%s",
+                            context.task_id,
+                            session.session_id,
+                            exc,
+                            stderr_text[:500],
                         )
                         await emit(
                             EngineEvent(

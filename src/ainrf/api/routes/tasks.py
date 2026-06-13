@@ -287,7 +287,7 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
         logger.exception("task_create_failed", exc_info=exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    logger.info("task_created_via_api", task_id=task.task_id, project_id=effective_project_id)
+    logger.info("task_created_via_api task_id=%s project_id=%s", task.task_id, effective_project_id)
     return _task_to_response(task, service)
 
 
