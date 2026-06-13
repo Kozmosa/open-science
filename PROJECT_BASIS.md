@@ -34,9 +34,9 @@
 ### 语言与工具
 
 - 主要语言：`Python 3.13` 与 `Markdown`
-- 运行时与构建：`uv run` 驱动的 Python CLI 与脚本执行，文档侧由 `scripts/build_html_notes.py` 构建 MkDocs 站点
-- 包管理：`uv`
-- 主要框架或库：`Typer`、`structlog`、`PyYAML`、`MkDocs`、`mkdocs-material`、`mkdocs-mermaid2-plugin`、`pytest`、`ruff`
+- 运行时与构建：`uv run` 驱动的 Python CLI 与脚本执行，文档侧由 `docs-site/` 中的 Astro + Starlight 构建
+- 包管理：`uv`（后端）、`npm`（docs-site）
+- 主要框架或库：`Typer`、`structlog`、`PyYAML`、`FastAPI`、`Astro`、`Starlight`、`pytest`、`ruff`
 
 ### 编译器 / 类型系统约束
 
@@ -60,7 +60,7 @@
 - 对不可能状态与关键解析失败应快速失败，不静默吞错。
 - 对外部输入、文件路径、frontmatter、wikilink 解析结果等边界值，在入口处完成校验与收敛。
 - CLI 或脚本层输出应提供可定位问题的错误信息，避免只给出模糊失败描述。
-- 生成目录 `site/` 与 `.cache/html-notes/` 视为构建产物，不直接手工编辑。
+- 生成目录 `site/`、`.cache/html-notes/` 与 `docs-site/dist/` 视为构建产物，不直接手工编辑。
 
 ## 架构解耦要求
 
@@ -74,14 +74,14 @@
 
 ## 目录约定
 
-- `docs/`：AINRF 产品文档、研究知识库与历史设计材料。
+- `docs/`：研究知识库与历史设计材料（Obsidian 笔记）。
+- `docs-site/`：AINRF 产品文档站点（Astro + Starlight，部署至 GitHub Pages）。
 - `frontend/`：AINRF WebUI 前端。
 - `src/ainrf/`：AINRF Python 包、CLI 入口、后端 API、日志与运行时代码。
 - `src/ainrf/agentic_researcher/`：AINRF 任务管理门面，提供统一的任务 CRUD 和研究员预设
 - `src/ainrf/harness_engine/`：AINRF 执行引擎抽象，封装 claude-code、agent-sdk、codex-app-server
 - `tests/`：CLI smoke tests 与后续 Python 测试。
 - `scripts/`：本地构建与预览辅助脚本。
-- `site/`、`.cache/html-notes/`：生成产物，仅由构建流程维护。
 - `ref-repos/`：参考仓库，只读研究输入，不在此目录内直接做业务开发，也不把它们视为本仓库主产品源码的一部分。
 
 ## 技术栈与官方参考链接
@@ -92,10 +92,10 @@
   - reference: `https://docs.astral.sh/uv/`
 - Typer
   - reference: `https://typer.tiangolo.com/`
-- MkDocs
-  - reference: `https://www.mkdocs.org/`
-- MkDocs Material
-  - reference: `https://squidfunk.github.io/mkdocs-material/`
+- Astro
+  - reference: `https://docs.astro.build/`
+- Starlight
+  - reference: `https://starlight.astro.build/`
 - Ruff
   - reference: `https://docs.astral.sh/ruff/`
 - pytest
@@ -105,9 +105,9 @@
 
 - 安装依赖：`UV_CACHE_DIR=/tmp/uv-cache uv sync --dev`
 - 本地开发：`UV_CACHE_DIR=/tmp/uv-cache uv run ainrf --help`
-- 生产构建：`UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py build`
+- 生产构建：`cd docs-site && npm run build`
 - 测试：`UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`
-- 预览：`UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py serve`
+- 预览：`cd docs-site && npm run dev`
 - 其他关键命令：
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
@@ -117,7 +117,7 @@
 
 - 本地标准入口优先使用 `uv run`，避免手工维护与锁文件不一致的虚拟环境。
 - 本仓库不在标准文档中记录开发机私有绝对路径、账号信息或密钥路径。
-- 本地辅助脚本如 `scripts/build.sh`、`scripts/serve.sh` 纳入版本控制。
+- 本地辅助脚本纳入版本控制；产品文档使用 `docs-site/` 下的 Astro + Starlight 构建。
 - 日志输出当前以标准输出为主；CLI 运行时日志统一经 `structlog` 配置，后续服务化时应继续沿用统一日志入口。
 - 排障优先级：
   - 先检查 `uv` 环境、依赖安装与 Python 版本是否满足 `>=3.13`

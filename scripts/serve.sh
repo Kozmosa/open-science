@@ -1,1 +1,0 @@
-UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py serve

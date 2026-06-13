@@ -47,4 +47,4 @@ scripts/webui.sh preview
 
 - 前端默认通过同源代理访问 `/api`、`/code` 与 `/terminal`。
 - 浏览器端不应直接持有或手动注入服务端 API key。
-- 产品 contract 以仓库根目录 `docs/ainrf/index.md`、`src/ainrf/README.md` 与当前测试为准。
+- 产品 contract 以 `docs-site/` 产品文档站点、`src/ainrf/README.md` 与当前测试为准。

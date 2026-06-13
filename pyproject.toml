@@ -13,11 +13,7 @@ dependencies = [
   "claude_agent_sdk>=0.1.77",
   "fastapi>=0.116.1",
   "httpx>=0.28.1",
-  "mkdocs>=1.6.0",
-  "mkdocs-material>=9.5.0",
-  "mkdocs-mermaid2-plugin>=1.1.1",
   "pydantic>=2.11.7",
-  "pymdown-extensions>=10.14",
   "structlog>=25.4.0",
   "typer>=0.17.4",
   "uvicorn>=0.35.0",
@@ -28,6 +24,7 @@ dependencies = [
   "arxiv>=4.0.0",
   "apscheduler>=3.11.2",
   "json-repair>=0.59.10",
+  "langfuse>=2.0.0",
 ]
 
 [project.scripts]

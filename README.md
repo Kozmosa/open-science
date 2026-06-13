@@ -158,7 +158,7 @@ npm run build
 文档站点构建：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py build
+cd docs-site && npm run build
 ```
 
 ---
@@ -171,7 +171,8 @@ UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py build
 ├── frontend/         # React + Vite WebUI
 ├── tests/            # Python test suite
 ├── scripts/          # 本地开发、WebUI、docs 构建辅助脚本
-├── docs/             # AINRF 产品文档、设计笔记和知识资产
+├── docs/             # 研究笔记、设计笔记和知识资产
+├── docs-site/        # AINRF 产品文档站点（Astro + Starlight）
 ├── ref-repos/        # 只读参考仓库，用于产品设计与对照研究
 └── PROJECT_BASIS.md  # 长期工程约束与协作规则
 ```
@@ -210,17 +211,17 @@ npm run test:run
 npm run build
 ```
 
-Docs checks:
+Docs build:
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py build
+cd docs-site && npm run build
 ```
 
 ---
 
 ## 📚 Documentation
 
-- [AINRF 使用文档](docs/ainrf/index.md)
+- [AINRF 产品文档](https://kozmosa.github.io/scholar-agent/)（Astro + Starlight）
 - [项目长期工程约束](PROJECT_BASIS.md)
 - [框架设计与 RFC](docs/framework/)
 - [参考项目调研](docs/projects/)
@@ -240,7 +241,7 @@ AINRF 已具备可安装 CLI、FastAPI backend、React WebUI，以及围绕 envi
 
 - `PROJECT_BASIS.md`
 - `CLAUDE.md`
-- `docs/ainrf/index.md`
+- `docs-site/`（产品文档源码）
 
 提交信息使用 Conventional Commits，例如：
 

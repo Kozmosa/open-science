@@ -16,16 +16,16 @@ This repository's active product surface is the AINRF runtime plus WebUI, while 
 
 - `frontend/`: React + Vite WebUI for AINRF.
 - `src/ainrf/`: Python package, CLI, backend API, and runtime code.
-- `docs/`: AINRF product docs plus source-of-truth Obsidian-style notes. Key areas are `docs/framework/`, `docs/projects/`, and `docs/summary/`.
+- `docs/`: Obsidian-style research notes and design docs. Key areas are `docs/framework/`, `docs/projects/`, and `docs/summary/`.
+- `docs-site/`: Astro + Starlight product documentation site (deployed to GitHub Pages).
 - `tests/`: CLI smoke tests for the Python package.
-- `scripts/`: local build helpers for the notes site.
-- `site/` and `.cache/html-notes/`: generated output; do not edit them directly.
+- `scripts/`: local build helpers.
 
 Reference repositories live under `ref-repos/` and are treated as read-only research inputs.
 
 ## Project Overview
 
-`scholar-agent` currently centers on the AINRF frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities, while `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs, and the repository still generates a static HTML site from `docs/` with MkDocs.
+`scholar-agent` currently centers on the AINRF frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities, while `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with Astro + Starlight in `docs-site/` and deployed to GitHub Pages.
 
 ## LLM Working Log
 
@@ -39,8 +39,9 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 
 ## Build, Test, and Development Commands
 
-- `UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py build`: convert Obsidian notes and build the MkDocs site.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run python scripts/build_html_notes.py serve`: run the local docs preview server.
+- `cd docs-site && npm run dev`: start the docs site dev server with hot reload.
+- `cd docs-site && npm run build`: build the static docs site for production.
+- `cd docs-site && npm run preview`: preview the production build locally.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ainrf --help`: inspect the CLI scaffold.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto`: run the Python test suite in parallel across CPU cores via pytest-xdist (the `addopts` default is serial, so pass `-n auto` explicitly). Use `-n 0` or drop `-n` for serial execution when debugging an ordered failure.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests`: run lint checks.
@@ -48,8 +49,8 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 
 ### Build & Serve Shortcuts
 
-- `scripts/build.sh`: build the static docs site.
-- `scripts/serve.sh`: run the local docs preview server.
+- `cd docs-site && npm run build`: build the static docs site.
+- `cd docs-site && npm run dev`: run the local docs dev server with hot reload.
 
 Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activation so execution stays aligned with the lockfile.
 
@@ -123,18 +124,16 @@ AINRF uses Linux user isolation for multi-tenancy. Understanding the permission 
 - If a file must be readable by a tenant subprocess (via `sudo -u`), set `chmod 0644` after creation
 - If a directory must be created in tenant space, use `subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path])`
 - Workspace dirs for new labels should be created via the tenant user, not directly by ainrf
-### Build Pipeline
+### Docs Build Pipeline
 
-`scripts/build_html_notes.py` is the core docs build script. It:
+Product documentation lives in `docs-site/` and is built with Astro + Starlight:
 
-1. Reads all `.md` files from `docs/`.
-2. Converts Obsidian-only syntax to MkDocs-compatible Markdown.
-3. Validates internal wikilinks and fails on unresolved targets.
-4. Computes backlinks and appends a `反向链接` section to each note.
-5. Writes processed files to `.cache/html-notes/docs/`.
-6. Runs `mkdocs build` or `mkdocs serve` against the generated output.
+1. Content files are in `docs-site/src/content/docs/` (MDX format).
+2. Sidebar and navigation configured in `docs-site/astro.config.mjs`.
+3. `npm run build` generates static HTML to `docs-site/dist/`.
+4. CI deploys `docs-site/dist/` to GitHub Pages on push to master.
 
-Never edit files under `.cache/html-notes/` or `site/`; they are generated artifacts.
+Internal research notes in `docs/` use Obsidian-style Markdown with wikilinks and are not part of the public docs site.
 
 ### Directory Layout Notes
 

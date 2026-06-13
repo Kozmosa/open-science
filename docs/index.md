@@ -8,7 +8,6 @@ tags:
   - obsidian-note
 source_repo: scholar-agent
 source_path: /home/xuyang/code/scholar-agent
-last_local_commit: workspace aggregate
 ---
 # AINRF 文档与参考索引
 
@@ -17,19 +16,19 @@ last_local_commit: workspace aggregate
 
 ## 当前产品入口
 
-- 使用与运行入口：[[ainrf/index]]
+- **产品文档站点**：[AINRF Docs](https://kozmosa.github.io/scholar-agent/)（Astro + Starlight，源码在 `docs-site/`）
 - 设计规范：`docs/superpowers/specs/`（最新的架构与功能设计）
 - 历史文档：`docs/archive/`（V1 框架 RFC、外部项目调研、跨项目综述）
 
 ## 适合什么场景
 
-- 如果你的目标是”直接启动或联调 AINRF”，先读 [[ainrf/index]]。
-- 如果你的目标是”理解当前产品设计与架构取舍”，读 `docs/superpowers/specs/` 下的最新规范。
-- 如果你的目标是”回看历史框架、外部项目比较或早期想法”，进入 `docs/archive/`。
+- 如果你的目标是"直接启动或联调 AINRF"，访问 [AINRF Docs](https://kozmosa.github.io/scholar-agent/)。
+- 如果你的目标是"理解当前产品设计与架构取舍"，读 `docs/superpowers/specs/` 下的最新规范。
+- 如果你的目标是"回看历史框架、外部项目比较或早期想法"，进入 `docs/archive/`。
 
 ## 默认阅读顺序
 
-1. [[ainrf/index]]
+1. [AINRF Docs](https://kozmosa.github.io/scholar-agent/)
 2. `docs/superpowers/specs/`（最新设计规范）
 3. `docs/archive/`（历史参考）
 
