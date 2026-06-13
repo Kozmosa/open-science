@@ -22,6 +22,7 @@
 # Port mapping (staging ↔ production):
 #   nginx       :7192  (prod :8192)
 #   backend     :17000 (prod :18000)
+#   sshd        :2223  (prod :2222)
 #   prometheus  :9092  (prod :9091)
 #   grafana     :2300  (prod :3000)
 #
@@ -51,6 +52,12 @@ services:
       AINRF_LOGIN_MAX_FAILURES: "100"
       AINRF_LOGIN_LOCKOUT_HOURS: "1"
       AINRF_METRICS_ENABLED: "true"
+      # ── SSH / Container (offset port for host-network isolation) ──
+      AINRF_SSHD_PORT: "2223"
+      AINRF_CONTAINER_HOST: "127.0.0.1"
+      AINRF_CONTAINER_PORT: "2223"
+      AINRF_CONTAINER_USER: "root"
+      AINRF_CONTAINER_SSH_KEY_PATH: "/opt/ainrf/.ssh/ainrf_local"
       # ── LLM Observability (disabled by default) ──
       AINRF_OBSERVABILITY_ENABLED: ${AINRF_OBSERVABILITY_ENABLED:-false}
       AINRF_OBSERVABILITY_BASE_URL: ${AINRF_OBSERVABILITY_BASE_URL:-http://localhost:13000}
@@ -91,10 +98,7 @@ services:
         limits:
           memory: 4G
     healthcheck:
-      # TCP-only check: staging shares the host network with production,
-      # so port 2222 (sshd) is already owned by the production container.
-      # The /health endpoint does an SSH probe which fails — check TCP instead.
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',17000)); s.close()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:17000/health')"]
       interval: 15s
       retries: 5
       start_period: 15s

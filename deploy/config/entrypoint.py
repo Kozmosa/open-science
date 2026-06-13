@@ -65,20 +65,25 @@ def _generate_codex_config() -> None:
 
 
 def _start_sshd() -> None:
-    """Start sshd on port 2222 so localhost self-test works.
+    """Start sshd on an alternate port so localhost self-test works.
 
     In host-network deployments the host sshd already owns port 22,
-    so the container must use an alternate port.
+    so the container must use an alternate port.  The port is
+    configurable via ``AINRF_SSHD_PORT`` (default: 2222) so that
+    staging environments running alongside production on the same
+    host can each bind their own port without collision.
     """
     import subprocess
 
+    port = os.environ.get("AINRF_SSHD_PORT", "2222")
+
     try:
         subprocess.Popen(
-            ["/usr/sbin/sshd", "-p", "2222"],
+            ["/usr/sbin/sshd", "-p", port],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        print("[entrypoint] sshd started on port 2222", flush=True)
+        print(f"[entrypoint] sshd started on port {port}", flush=True)
     except FileNotFoundError:
         print("[entrypoint] sshd not found, skipping", flush=True)
     except OSError as exc:
