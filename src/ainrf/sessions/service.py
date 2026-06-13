@@ -40,10 +40,9 @@ class SessionService:
         self._initialized = True
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path), isolation_level="IMMEDIATE")
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.row_factory = sqlite3.Row
-        return conn
+        from ainrf.db.connection import connect
+
+        return connect(str(self._db_path))
 
     # --- Session CRUD ---
 
@@ -299,21 +298,26 @@ class SessionService:
         return (int(row["seq"]) if row else 0) + 1
 
     def _recalc_session(self, session_id: str) -> None:
+        # Single UPDATE with scalar subqueries — one round-trip instead of
+        # SELECT-then-UPDATE, reducing write amplification under concurrency.
         with self._connect() as conn:
-            agg = conn.execute(
-                "SELECT COUNT(*) AS cnt, "
-                "COALESCE(SUM(duration_ms), 0) AS dur, "
-                "COALESCE(SUM(CAST(json_extract(token_usage_json, '$.total.cost_usd') AS REAL)), 0.0) AS total_cost "
-                "FROM task_attempts WHERE session_id = ? AND duration_ms IS NOT NULL",
-                (session_id,),
-            ).fetchone()
-            if agg:
-                conn.execute(
-                    "UPDATE task_sessions SET task_count = ?, total_duration_ms = ?, "
-                    "total_cost_usd = ?, updated_at = ? WHERE id = ?",
-                    (agg["cnt"], agg["dur"], agg["total_cost"], _now_iso(), session_id),
-                )
-                conn.commit()
+            conn.execute(
+                """
+                UPDATE task_sessions SET
+                    task_count = COALESCE(
+                        (SELECT COUNT(*) FROM task_attempts WHERE session_id = ?1), 0),
+                    total_duration_ms = COALESCE(
+                        (SELECT SUM(duration_ms) FROM task_attempts
+                         WHERE session_id = ?1 AND duration_ms IS NOT NULL), 0),
+                    total_cost_usd = COALESCE(
+                        (SELECT SUM(CAST(json_extract(token_usage_json, '$.total.cost_usd') AS REAL))
+                         FROM task_attempts WHERE session_id = ?1), 0.0),
+                    updated_at = ?2
+                WHERE id = ?3
+                """,
+                (session_id, _now_iso(), session_id),
+            )
+            conn.commit()
 
 
 def _row_to_session(row: sqlite3.Row) -> Session:

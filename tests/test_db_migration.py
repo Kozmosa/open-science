@@ -52,9 +52,9 @@ class TestBaselineCreatesTables:
     @pytest.mark.parametrize(
         "db_name,expected_count",
         [
-            ("auth", 3),
-            ("sessions", 2),
-            ("agentic_researcher", 4),
+            ("auth", 4),
+            ("sessions", 3),
+            ("agentic_researcher", 5),
             ("literature", 1),
             ("terminal", 1),
         ],
@@ -130,7 +130,7 @@ class TestUpgradeFromV0:
             from ainrf.db.migration import registry
 
             pending = registry.get_pending("auth", 1)
-            assert len(pending) == 2  # migration_002 + migration_003
+            assert len(pending) == 3  # migration_002 + migration_003 + migration_004
             run_pending(conn, "auth")
             cols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
             assert "must_change_password" in cols

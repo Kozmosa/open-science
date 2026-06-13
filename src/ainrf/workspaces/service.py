@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
+from ainrf.db.connection import atomic_write_json
 from ainrf.environments.models import utc_now
 from ainrf.runtime.paths import RuntimePathConfig
 from ainrf.workspaces.models import WorkspaceRecord
@@ -238,7 +239,4 @@ class WorkspaceRegistryService:
                 for workspace in self._workspaces.values()
             ]
         }
-        self._registry_path.write_text(
-            json.dumps(payload, ensure_ascii=True, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        atomic_write_json(self._registry_path, payload)

@@ -106,3 +106,12 @@ def migration_003_admin_role_fix(conn: sqlite3.Connection) -> None:
     conn.execute(
         "UPDATE users SET role = 'admin' WHERE username = 'admin' AND role != 'admin'"
     )
+
+
+@registry.register(_DATABASE)
+def migration_004_login_attempts_cleanup_index(conn: sqlite3.Connection) -> None:
+    """Index on attempted_at so periodic cleanup DELETE is a range scan, not a full table scan."""
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_login_attempts_attempted_at "
+        "ON login_attempts(attempted_at)"
+    )

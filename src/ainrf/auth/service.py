@@ -75,10 +75,9 @@ class AuthService:
         self._initialized = True
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path), isolation_level="IMMEDIATE")
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.row_factory = sqlite3.Row
-        return conn
+        from ainrf.db.connection import connect
+
+        return connect(str(self._db_path))
 
     # --- Registration ---
 

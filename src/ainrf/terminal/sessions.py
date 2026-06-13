@@ -957,7 +957,6 @@ class SessionManager:
         self._tmux_adapter.resize_window(session_name=session_name, cols=cols, rows=rows)
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db_path, isolation_level="IMMEDIATE")
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.row_factory = sqlite3.Row
-        return connection
+        from ainrf.db.connection import connect
+
+        return connect(self._db_path)

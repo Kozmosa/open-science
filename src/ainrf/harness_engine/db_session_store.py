@@ -45,7 +45,9 @@ class DbSessionStore:
         self._ensure_table()
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self._db_path, isolation_level="IMMEDIATE")
+        from ainrf.db.connection import connect
+
+        return connect(self._db_path, row_factory=None)
 
     def _ensure_table(self) -> None:
         """Create the table if it doesn't exist (idempotent)."""

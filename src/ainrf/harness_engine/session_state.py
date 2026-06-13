@@ -26,9 +26,11 @@ class SessionStateStore:
         return self._root / task_id / "checkpoint.json"
 
     def save(self, checkpoint: SessionCheckpoint) -> None:
+        from ainrf.db.connection import atomic_write_json
+
         path = self.checkpoint_path(checkpoint.task_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(checkpoint), indent=2), encoding="utf-8")
+        atomic_write_json(path, asdict(checkpoint))
 
     def load(self, task_id: str) -> SessionCheckpoint | None:
         path = self.checkpoint_path(task_id)

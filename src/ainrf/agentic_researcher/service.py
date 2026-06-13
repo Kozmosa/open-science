@@ -184,6 +184,9 @@ class AgenticResearcherService:
         self._stream_buffers: dict[str, list[TaskOutputEvent]] = {}
         self._seq_cache: dict[str, int] = {}
         self._stream_lock = threading.Lock()
+        # Serializes the read-modify-write in _record_token_usage_sync so
+        # concurrent engine events for the same task don't lose token data.
+        self._token_usage_lock = threading.Lock()
 
     def initialize(self) -> None:
         if self._initialized:
@@ -255,10 +258,9 @@ class AgenticResearcherService:
             pass  # Non-critical; don't block startup for legacy DB issues
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, isolation_level="IMMEDIATE")
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.row_factory = sqlite3.Row
-        return conn
+        from ainrf.db.connection import connect
+
+        return connect(self._db_path)
 
 
     def _now(self) -> str:
@@ -538,6 +540,11 @@ class AgenticResearcherService:
             raise TaskNotFoundError(f"Task not found: {task_id}")
         return self._row_to_task(row)
 
+    # Whitelist of sort → column name mappings to prevent SQL injection
+    # through ORDER BY interpolation.  Unknown values fall back to
+    # "updated_at".
+    _SORT_COLUMNS: dict[str, str] = {"updated": "updated_at", "created": "created_at"}
+
     def list_tasks(
         self,
         project_id: str | None = None,
@@ -559,7 +566,7 @@ class AgenticResearcherService:
             query += " AND status != ?"
             params.append(TaskStatus.CANCELLED.value)
 
-        order_col = "updated_at" if sort == "updated" else "created_at"
+        order_col = self._SORT_COLUMNS.get(sort, "updated_at")
         query += f" ORDER BY {order_col} DESC"
         query += " LIMIT ?"
         params.append(limit)
@@ -1161,29 +1168,33 @@ class AgenticResearcherService:
         await asyncio.to_thread(self._record_token_usage_sync, task_id, usage, replace)
 
     def _record_token_usage_sync(self, task_id: str, usage: dict, replace: bool) -> None:
-        with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT token_usage_json FROM tasks WHERE task_id = ?",
-                (task_id,),
-            ).fetchone()
-            if row is None:
-                raise TaskNotFoundError(f"Task not found: {task_id}")
-            current = None
-            if row["token_usage_json"]:
-                try:
-                    current = json.loads(row["token_usage_json"])
-                except json.JSONDecodeError:
-                    current = None
-            merged = (
-                _normalize_token_usage(usage)
-                if replace or current is None
-                else _merge_token_usage(current, usage)
-            )
-            conn.execute(
-                "UPDATE tasks SET token_usage_json = ?, updated_at = ? WHERE task_id = ?",
-                (json.dumps(merged, ensure_ascii=True), self._now(), task_id),
-            )
-            conn.commit()
+        # Hold _token_usage_lock during the read-modify-write cycle to prevent
+        # concurrent merges from silently dropping token data when two engine
+        # events for the same task race through the thread pool.
+        with self._token_usage_lock:
+            with closing(self._connect()) as conn:
+                row = conn.execute(
+                    "SELECT token_usage_json FROM tasks WHERE task_id = ?",
+                    (task_id,),
+                ).fetchone()
+                if row is None:
+                    raise TaskNotFoundError(f"Task not found: {task_id}")
+                current = None
+                if row["token_usage_json"]:
+                    try:
+                        current = json.loads(row["token_usage_json"])
+                    except json.JSONDecodeError:
+                        current = None
+                merged = (
+                    _normalize_token_usage(usage)
+                    if replace or current is None
+                    else _merge_token_usage(current, usage)
+                )
+                conn.execute(
+                    "UPDATE tasks SET token_usage_json = ?, updated_at = ? WHERE task_id = ?",
+                    (json.dumps(merged, ensure_ascii=True), self._now(), task_id),
+                )
+                conn.commit()
 
     def _event_content(self, event: EngineEvent) -> str:
         if event.event_type in {"message", "thinking", "tool_call", "tool_result"}:

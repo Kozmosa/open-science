@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
+from ainrf.db.connection import atomic_write_json
 from ainrf.environments.models import utc_now
 from ainrf.projects.models import ProjectRecord, TaskEdgeRecord
 
@@ -274,10 +275,7 @@ class ProjectRegistryService:
                 for project in self._projects.values()
             ]
         }
-        self._registry_path.write_text(
-            json.dumps(payload, ensure_ascii=True, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        atomic_write_json(self._registry_path, payload)
 
     def _persist_task_edges(self) -> None:
         payload = {
@@ -289,7 +287,4 @@ class ProjectRegistryService:
                 for edge in self._task_edges.values()
             ]
         }
-        self._task_edges_path.write_text(
-            json.dumps(payload, ensure_ascii=True, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        atomic_write_json(self._task_edges_path, payload)

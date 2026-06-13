@@ -65,3 +65,16 @@ def migration_002_owner_user_id(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE task_sessions ADD COLUMN owner_user_id TEXT")
     except sqlite3.OperationalError:
         pass  # column already exists
+
+
+@registry.register(_DATABASE)
+def migration_003_performance_indexes(conn: sqlite3.Connection) -> None:
+    """Indexes for multi-tenant filtering and attempt-seq lookups."""
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_owner "
+        "ON task_sessions(owner_user_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_attempts_session_seq "
+        "ON task_attempts(session_id, attempt_seq)"
+    )
