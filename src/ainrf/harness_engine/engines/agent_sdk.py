@@ -64,7 +64,6 @@ _ANTHROPIC_PROVIDER_ENV_KEYS = (
 _IGNORED_SYSTEM_SUBTYPES = frozenset({"status", "thinking_tokens"})
 
 
-
 def _build_token_usage(sdk_msg: object) -> dict[str, Any] | None:
     """Build token_usage dict from SDK ResultMessage."""
     usage = getattr(sdk_msg, "usage", None)
@@ -99,6 +98,7 @@ class AgentSession:
     stream_block_index: int = -1
     stream_block_type: str | None = None  # "thinking" or "text"
     stream_block_accumulated: str = ""
+
 
 class AgentSdkEngine(HarnessEngine):
     def __init__(self, session_store: object | None = None) -> None:
@@ -146,7 +146,7 @@ class AgentSdkEngine(HarnessEngine):
                 context.default_haiku_model,
             )
         ) or any(key in (context.env_overrides or {}) for key in _ANTHROPIC_PROVIDER_ENV_KEYS)
-        return () if has_explicit_provider else _ANTHROPIC_PROVIDER_ENV_KEYS
+        return _ANTHROPIC_PROVIDER_ENV_KEYS if has_explicit_provider else ()
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         async with self._lock:
@@ -201,6 +201,11 @@ class AgentSdkEngine(HarnessEngine):
         def _on_stderr(line: str) -> None:
             stderr_lines.append(line)
 
+        # Resolve provider env once before creating options so the SDK
+        # passes credentials explicitly to the CLI subprocess instead of
+        # relying on fragile os.environ mutation.
+        env = self._provider_env(context)
+
         options = ClaudeAgentOptions(
             model=context.model or "claude-sonnet-4-5",
             system_prompt=context.system_prompt,
@@ -220,6 +225,7 @@ class AgentSdkEngine(HarnessEngine):
             can_use_tool=self._can_use_tool,
             sandbox=self._build_sandbox_settings(),
             stderr=_on_stderr,
+            env=env,
             session_store=self._session_store,
             # NOTE: We intentionally do NOT pass user=context.tenant_user here.
             # The SDK's `user` param uses subprocess.Popen(user=...) which calls
@@ -229,25 +235,28 @@ class AgentSdkEngine(HarnessEngine):
         )
 
         async with self._run_lock:
-            env_overrides = self._provider_env(context)
-            saved_env: dict[str, str | None] = {}
-
             # Route Claude's local transcript to a temp directory so the
             # SessionStore (DbSessionStore) is the sole persistent copy.
             # This prevents ~/.claude from accumulating transcript files
             # and ensures resume works across container restarts.
+            #
+            # NOTE: Anthropic credentials (ANTHROPIC_API_KEY,
+            # ANTHROPIC_BASE_URL, etc.) are passed explicitly via
+            # ClaudeAgentOptions(env=...) rather than via os.environ
+            # mutation. The SDK merges options.env on top of the
+            # inherited subprocess environment, so explicit values
+            # always win without a fragile pop/set/restore dance.
             config_tmp = tempfile.mkdtemp(prefix="ainrf-claude-")
             os.environ["CLAUDE_CONFIG_DIR"] = config_tmp
             try:
-                for key in self._implicit_provider_env_keys(context):
-                    saved_env[key] = os.environ.get(key)
-                    os.environ.pop(key, None)
-                for key, value in env_overrides.items():
-                    saved_env[key] = os.environ.get(key)
-                    os.environ[key] = value
                 try:
                     await self._run_query(
-                        context, session, prompt_stream, options, emit, stderr_lines,
+                        context,
+                        session,
+                        prompt_stream,
+                        options,
+                        emit,
+                        stderr_lines,
                     )
                 except Exception as exc:
                     # If the CLI exited with an error and a session resume was
@@ -255,10 +264,7 @@ class AgentSdkEngine(HarnessEngine):
                     # was lost (container restart, volume recreation, etc.).
                     # Retry without --resume so the conversation continues from
                     # a fresh Claude Code session.
-                    if (
-                        session.session_id is not None
-                        and not session.abort_event.is_set()
-                    ):
+                    if session.session_id is not None and not session.abort_event.is_set():
                         stderr_text = "\n".join(stderr_lines)
                         logger.warning(
                             "session_resume_failed_retrying_fresh "
@@ -304,25 +310,31 @@ class AgentSdkEngine(HarnessEngine):
                             skills=skills,
                             allowed_tools=allowed_tools,
                             hooks={
-                                "PostToolUse": [HookMatcher(hooks=[self._post_tool_use_hook(emit)])],
-                                "Notification": [HookMatcher(hooks=[self._notification_hook(emit)])],
+                                "PostToolUse": [
+                                    HookMatcher(hooks=[self._post_tool_use_hook(emit)])
+                                ],
+                                "Notification": [
+                                    HookMatcher(hooks=[self._notification_hook(emit)])
+                                ],
                             },
                             include_partial_messages=True,
                             can_use_tool=self._can_use_tool,
                             sandbox=self._build_sandbox_settings(),
                             stderr=_on_stderr,
+                            env=env,
+                            session_store=self._session_store,
                         )
                         await self._run_query(
-                            context, session, fresh_stream, fresh_options, emit, stderr_lines,
+                            context,
+                            session,
+                            fresh_stream,
+                            fresh_options,
+                            emit,
+                            stderr_lines,
                         )
                     else:
                         raise
             finally:
-                for key, value in saved_env.items():
-                    if value is None:
-                        os.environ.pop(key, None)
-                    else:
-                        os.environ[key] = value
                 # Clean up the per-task temp Claude config directory.
                 try:
                     shutil.rmtree(config_tmp, ignore_errors=True)
@@ -565,7 +577,9 @@ class AgentSdkEngine(HarnessEngine):
             ]
         return events
 
-    def _convert_stream_event(self, sdk_msg: StreamEvent, session: AgentSession) -> list[EngineEvent]:
+    def _convert_stream_event(
+        self, sdk_msg: StreamEvent, session: AgentSession
+    ) -> list[EngineEvent]:
         """Convert raw Anthropic streaming events into incremental thinking/text events.
 
         Emits partial events with block_id so the frontend can update a single
