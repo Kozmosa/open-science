@@ -39,8 +39,10 @@ export default function Modal({
   // Handle open/close with animation
   useEffect(() => {
     if (isOpen) {
+      // Reset the closing flag and start the enter transition after a small
+      // delay to allow the DOM to mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsClosing(false);
-      // Small delay to allow the DOM to mount before starting the enter transition
       const showTimeout = setTimeout(() => setIsVisible(true), 10);
       return () => clearTimeout(showTimeout);
     }

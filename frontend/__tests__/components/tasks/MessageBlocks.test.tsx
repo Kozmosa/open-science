@@ -1,6 +1,8 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { AssistantMessage, MessageBlock, ThinkingBlock } from '../../../src/pages/tasks/MessageBlocks';
+import { AssistantBubble } from '../../../src/components/messages/AssistantBubble';
+import { ToolResultBlock } from '../../../src/components/messages/ToolResultBlock';
+import { ThinkingBlock } from '../../../src/components/messages/ThinkingBlock';
 import { renderWithProviders } from '../../../src/test/render';
 import type { MessageItem } from '../../../src/types';
 
@@ -19,7 +21,7 @@ function message(content: string): MessageItem {
 describe('MessageBlocks workspace file links', () => {
   it('renders absolute workspace markdown links as file browser links', () => {
     renderWithProviders(
-      <AssistantMessage
+      <AssistantBubble
         message={message(
           '已保存文献导读到：\n\n[docs/literature/2606.04620-overview.md](/home/xuyang/.ainrf_workspaces/default/docs/literature/2606.04620-overview.md)'
         )}
@@ -35,7 +37,7 @@ describe('MessageBlocks workspace file links', () => {
 
   it('renders tool result workspace links consistently', () => {
     renderWithProviders(
-      <MessageBlock
+      <ToolResultBlock
         message={{
           id: 'msg-2',
           type: 'tool_result',

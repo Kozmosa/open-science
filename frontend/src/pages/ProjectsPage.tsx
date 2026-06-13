@@ -20,7 +20,8 @@ import {
 import { extractErrorMessage } from '../utils/error';
 import type { ProjectCreateRequest, TaskCreatePayload, TaskRecord } from '../types';
 import TaskCreateForm from './tasks/TaskCreateForm';
-import TaskDetail from './tasks/TaskDetail';
+import TaskDetailPage from './tasks/TaskDetailPage';
+import { useTaskStream } from './tasks/useTaskStream';
 
 
 export default function ProjectsPage() {
@@ -69,6 +70,7 @@ export default function ProjectsPage() {
     enabled: selectedTaskId !== null,
   });
   const selectedTask: TaskRecord | null = selectedTaskQuery.data ?? null;
+  const { outputItems, outputError, hasMore, loadMore, isLoadingMore } = useTaskStream(selectedTaskId);
 
   // Fetch defaults for task creation
   const projectDetailQuery = useQuery({
@@ -197,15 +199,16 @@ export default function ProjectsPage() {
         size="lg"
       >
         {selectedTask ? (
-          <TaskDetail
+          <TaskDetailPage
+            key={selectedTaskId ?? 'none'}
             taskId={selectedTaskId}
             selectedTask={selectedTask}
             detailError={extractErrorMessage(selectedTaskQuery.error)}
-            outputItems={[]}
-            outputError={null}
-            hasMore={false}
-            loadMore={() => {}}
-            isLoadingMore={false}
+            outputItems={outputItems}
+            outputError={outputError}
+            hasMore={hasMore}
+            loadMore={loadMore}
+            isLoadingMore={isLoadingMore}
           />
         ) : null}
       </Modal>

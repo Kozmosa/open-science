@@ -8,7 +8,10 @@ interface Props {
 export default function LoadMoreSentinel({ onVisible, loading }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const onVisibleRef = useRef(onVisible);
-  onVisibleRef.current = onVisible;
+
+  useEffect(() => {
+    onVisibleRef.current = onVisible;
+  });
 
   useEffect(() => {
     const el = ref.current;

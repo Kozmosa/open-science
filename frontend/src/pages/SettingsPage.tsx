@@ -282,6 +282,8 @@ function TaskConfigurationSection({
     const nextProfile = taskConfiguration.researchAgentProfiles.find(
       (p) => p.profileId === taskConfiguration.defaultResearchAgentProfileId
     );
+    // Reset draft when the external server configuration changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfileDraft(
       nextProfile ?? taskConfiguration.researchAgentProfiles[0] ?? {
         profileId: 'claude-code-default',
@@ -1113,11 +1115,12 @@ function SkillRepositorySection({ availableSkills }: SkillRepositorySectionProps
       setShowDirtyConfirm(false);
       setPendingRegistryId(null);
     },
-    onError: (err: any) => {
-      if (err.status === 409) {
+    onError: (err: unknown) => {
+      const status = typeof err === 'object' && err !== null && 'status' in err ? (err as { status?: number }).status : undefined;
+      if (status === 409) {
         setShowDirtyConfirm(true);
       } else {
-        alert(err.message || t('pages.settings.llmProviders.updateFailed'));
+        alert(err instanceof Error ? err.message : t('pages.settings.llmProviders.updateFailed'));
         setShowDirtyConfirm(false);
         setPendingRegistryId(null);
       }

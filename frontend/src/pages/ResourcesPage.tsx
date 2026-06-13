@@ -24,7 +24,7 @@ export default function ResourcesPage() {
   });
   const { layout, setLayout } = useCardLayout();
 
-  const snapshots = resourcesQuery.data?.items ?? [];
+  const snapshots = useMemo(() => resourcesQuery.data?.items ?? [], [resourcesQuery.data]);
   const groups = useMemo(
     () => [
       {

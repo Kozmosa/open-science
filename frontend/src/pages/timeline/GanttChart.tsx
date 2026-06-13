@@ -69,7 +69,8 @@ export function GanttChart({ tasks, loading }: Props) {
   const t = useT();
   const { minTime, span, timeLabels } = useMemo(() => {
     if (tasks.length === 0) {
-      const now = Date.now();
+      // Empty-state placeholder range; no real timestamps are rendered.
+      const now = 0;
       return {
         minTime: now - 3600000,
         span: 7200000,

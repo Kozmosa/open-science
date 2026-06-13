@@ -24,8 +24,8 @@ export default function LoginPage() {
       } else {
         navigate('/');
       }
-    } catch (err: any) {
-      setError(err.message || t('auth.loginFailed'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('auth.loginFailed'));
     } finally {
       setSubmitting(false);
     }

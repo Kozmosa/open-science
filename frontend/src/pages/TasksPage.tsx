@@ -23,9 +23,9 @@ import { extractErrorMessage } from '../utils/error';
 import { useAuth } from '../contexts/AuthContext';
 import type { TaskCreatePayload, TaskListResponse } from '../types';
 import TaskCreateForm from './tasks/TaskCreateForm';
-import TaskDetail from './tasks/TaskDetail';
+import TaskDetailPage from './tasks/TaskDetailPage';
 import TaskList from './tasks/TaskList';
-import { useTaskOutputStream } from './tasks/useTaskOutputStream';
+import { useTaskStream } from './tasks/useTaskStream';
 
 
 function TasksPage() {
@@ -85,7 +85,7 @@ function TasksPage() {
   });
 
   const selectedTask = selectedTaskQuery.data ?? null;
-  const { outputItems, outputError, hasMore, loadMore, isLoadingMore } = useTaskOutputStream(effectiveSelectedTaskId);
+  const { outputItems, outputError, hasMore, loadMore, isLoadingMore } = useTaskStream(effectiveSelectedTaskId);
 
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreatePayload) => createTask(payload),
@@ -265,7 +265,8 @@ function TasksPage() {
         onSidebarWidthChange={setTaskSidebarWidth}
         sidebarTestId="task-sidebar"
       >
-        <TaskDetail
+        <TaskDetailPage
+          key={effectiveSelectedTaskId ?? 'none'}
           taskId={effectiveSelectedTaskId}
           selectedTask={selectedTask}
           detailError={detailError}

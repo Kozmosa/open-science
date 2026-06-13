@@ -102,9 +102,12 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
   }, [projectId, initialNodes, initialEdges]);
 
   useEffect(() => {
+    // Layout initializes or restores nodes; suppress the rule because this is
+    // intentionally synchronizing React Flow state after the tasks/edges change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     runLayout();
+    // Preserve manually-added edges that aren't yet in the backend set
     setFlowEdges((current) => {
-      // Preserve manually-added edges that aren't yet in the backend set
       const initialIds = new Set(initialEdges.map((e) => e.id));
       const manualEdges = current.filter(
         (e) => manualEdgeIds.current.has(e.id) && !initialIds.has(e.id)

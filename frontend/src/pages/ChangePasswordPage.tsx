@@ -32,8 +32,8 @@ export default function ChangePasswordPage() {
       // Force re-login with new password to refresh the session state
       await logout();
       navigate('/login');
-    } catch (err: any) {
-      setError(err.message || t('auth.changePasswordFailed'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('auth.changePasswordFailed'));
     } finally {
       setSubmitting(false);
     }

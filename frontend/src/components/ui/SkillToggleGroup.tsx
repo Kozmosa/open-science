@@ -75,6 +75,8 @@ export default function SkillToggleGroup({ skills, skillModes, onChange }: Props
 
   // When new groups appear (e.g., after async skill loading), apply default expand/collapse
   useEffect(() => {
+    // Initialize expand state for any groups not yet present.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpanded((prev) => {
       const next: Record<string, boolean> = { ...prev };
       let changed = false;

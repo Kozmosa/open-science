@@ -106,7 +106,7 @@ function normalizeTaskConfigurationSettings(
         }
 
         // Normalize skillModes
-        let skillModes: Record<string, 'disabled' | 'enabled' | 'auto'> = {};
+        const skillModes: Record<string, 'disabled' | 'enabled' | 'auto'> = {};
         if (isRecord(item.skillModes)) {
           for (const [skillId, mode] of Object.entries(item.skillModes)) {
             if (mode === 'disabled' || mode === 'enabled' || mode === 'auto') {
@@ -363,7 +363,7 @@ export function readStoredSettings(): SettingsLoadResult {
     ? general.defaultRoute
     : defaults.general.defaultRoute;
   // v2 → v3 migration: rename 'containers' route to 'environments'
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+   
   if ((defaultRoute as string) === 'containers') {
     defaultRoute = 'environments';
   }

@@ -678,7 +678,7 @@ export const getLiteraturePapers = (params: { subscription_id?: string; unread_o
   USE_MOCK
     ? Promise.resolve({ items: [] })
     : api.get(`/literature/papers?` + new URLSearchParams(
-        Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined)) as Record<string, string>
+        Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined)) as Record<string, string>
       ).toString());
 
 export const markPaperRead = (paperId: string, subscriptionId?: string): Promise<void> =>

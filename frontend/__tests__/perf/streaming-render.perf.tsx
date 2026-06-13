@@ -8,18 +8,28 @@
  *
  * Run: cd frontend && npx vitest run __tests__/perf/streaming-render.perf.tsx
  */
-import { createElement, memo, useState as realUseState, useCallback as realUseCallback, useMemo as realUseMemo } from 'react';
-import { renderHook, act, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { marked } from 'marked';
+import { createElement } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
-import { AssistantMessage, MessageBlock } from '../../src/pages/tasks/MessageBlocks';
+import { AssistantBubble } from '../../src/components/messages/AssistantBubble';
+import { MessageBubble } from '../../src/components/messages/MessageBubble';
 import { renderWithProviders } from '../../src/test/render';
 import { mergeOutputItems, trimStreamingWindow } from '../../src/pages/tasks/output';
 import {
-  convertOutputEventsToMessages,
+  convertOutputEventToMessage,
+  mergeMessages,
 } from '../../src/pages/tasks/useTaskMessages';
 import type { MessageItem, TaskOutputEvent } from '../../src/types';
+
+// ── Helpers ──────────────────────────────────────────────────
+
+function convertOutputEventsToMessages(events: TaskOutputEvent[], initialPrompt?: string | null): MessageItem[] {
+  return mergeMessages(
+    events
+      .map((event) => convertOutputEventToMessage(event, initialPrompt))
+      .filter((message): message is MessageItem => message !== null)
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -63,13 +73,13 @@ describe('Streaming Render Benchmarks', () => {
       let renderCount = 0;
 
       // Track by checking DOM updates
-      const { rerender, container } = renderWithProviders(<AssistantMessage message={msg} />);
+      const { rerender, container } = renderWithProviders(<AssistantBubble message={msg} />);
       renderCount = container.querySelectorAll('[class*="rounded-tl-sm"]').length;
       expect(renderCount).toBe(1);
 
       // Re-render with same message object 9 times
       for (let i = 0; i < 9; i++) {
-        rerender(<AssistantMessage message={msg} />);
+        rerender(<AssistantBubble message={msg} />);
       }
 
       // With React.memo, the component should not re-render when
@@ -88,7 +98,7 @@ describe('Streaming Render Benchmarks', () => {
       // fails, so it re-renders. But useMemo caches the parse result.
       for (let i = 0; i < 5; i++) {
         const start = performance.now();
-        const { unmount } = renderWithProviders(<AssistantMessage message={message(md)} />);
+        const { unmount } = renderWithProviders(<AssistantBubble message={message(md)} />);
         durations.push(performance.now() - start);
         unmount();
       }
@@ -110,7 +120,7 @@ describe('Streaming Render Benchmarks', () => {
 
       let accumulated = '';
       let outputItems: TaskOutputEvent[] = [];
-      let messages: MessageItem[] = [];
+      const messages: MessageItem[] = [];
       let totalConvertTime = 0;
       let totalMergeTime = 0;
       let totalPruneTime = 0;
@@ -201,7 +211,7 @@ describe('Streaming Render Benchmarks', () => {
       // Create a wrapper that tracks renders
       function TrackedMessageBlock({ message }: { message: MessageItem }) {
         renderSpy(message.id);
-        return createElement(MessageBlock, { message });
+        return createElement(MessageBubble, { message });
       }
 
       const msg1 = message('static message');

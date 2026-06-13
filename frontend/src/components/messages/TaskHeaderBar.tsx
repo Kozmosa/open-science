@@ -1,0 +1,117 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef, useState } from 'react';
+import { PanelRightOpen } from 'lucide-react';
+import { updateTask } from '../../api';
+import { useT } from '../../i18n';
+import { statusClassName } from '../../pages/tasks/status';
+import type { TaskRecord } from '../../types';
+
+interface TaskHeaderBarProps {
+  task: TaskRecord;
+  onToggleDrawer: () => void;
+  showPause?: boolean;
+  showResume?: boolean;
+  onPause?: () => void;
+  onResume?: () => void;
+}
+
+export default function TaskHeaderBar({
+  task,
+  onToggleDrawer,
+  showPause = false,
+  showResume = false,
+  onPause,
+  onResume,
+}: TaskHeaderBarProps) {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(task.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const renameMutation = useMutation({
+    mutationFn: (title: string) => updateTask(task.task_id, { title }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
+  const startEdit = useCallback(() => {
+    setEditTitle(task.title);
+    setIsEditing(true);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [task.title]);
+
+  const commitTitle = useCallback(() => {
+    setIsEditing(false);
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== task.title) {
+      renameMutation.mutate(trimmed);
+    }
+  }, [editTitle, task.title, renameMutation]);
+
+  return (
+    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTitle();
+              if (e.key === 'Escape') setIsEditing(false);
+            }}
+            className="min-w-0 max-w-md rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm font-semibold text-[var(--text)] outline-none focus:border-[var(--apple-blue)]"
+          />
+        ) : (
+          <h1
+            className="min-w-0 max-w-md cursor-pointer truncate text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
+            title={task.title}
+            onClick={startEdit}
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter') startEdit(); }}
+          >
+            {task.title}
+          </h1>
+        )}
+        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusClassName[task.status]}`}>
+          {t(`pages.tasks.status.${task.status}`)}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {showPause && onPause && (
+          <button
+            type="button"
+            onClick={onPause}
+            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+          >
+            {t('pages.tasks.actions.pause')}
+          </button>
+        )}
+        {showResume && onResume && (
+          <button
+            type="button"
+            onClick={onResume}
+            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+          >
+            {t('pages.tasks.actions.resume')}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onToggleDrawer}
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] transition hover:bg-[var(--border)] hover:text-[var(--text)]"
+          title={t('pages.tasks.layout.expandSidebar')}
+          aria-label={t('pages.tasks.layout.expandSidebar')}
+        >
+          <PanelRightOpen size={16} />
+        </button>
+      </div>
+    </header>
+  );
+}

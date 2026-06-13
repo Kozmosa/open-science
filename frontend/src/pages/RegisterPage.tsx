@@ -26,8 +26,8 @@ export default function RegisterPage() {
     try {
       await register(username, displayName, password);
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || t('auth.registerFailed'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('auth.registerFailed'));
     } finally {
       setSubmitting(false);
     }

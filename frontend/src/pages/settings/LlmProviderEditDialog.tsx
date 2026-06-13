@@ -38,6 +38,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
 
   useEffect(() => {
     if (provider) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(provider.name);
       setFormat(provider.format);
       setBaseUrl(provider.baseUrl);

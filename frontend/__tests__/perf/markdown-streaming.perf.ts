@@ -10,11 +10,22 @@
 import { describe, expect, it } from 'vitest';
 import { marked } from 'marked';
 
-import { mergeOutputItems, getNextOutputSeq, trimStreamingWindow } from '../../src/pages/tasks/output';
+import { mergeOutputItems, trimStreamingWindow } from '../../src/pages/tasks/output';
 import {
-  convertOutputEventsToMessages,
+  convertOutputEventToMessage,
+  mergeMessages,
 } from '../../src/pages/tasks/useTaskMessages';
-import type { TaskOutputEvent } from '../../src/types';
+import type { MessageItem, TaskOutputEvent } from '../../src/types';
+
+// ── Helpers ──────────────────────────────────────────────────
+
+function convertOutputEventsToMessages(events: TaskOutputEvent[], initialPrompt?: string | null): MessageItem[] {
+  return mergeMessages(
+    events
+      .map((event) => convertOutputEventToMessage(event, initialPrompt))
+      .filter((message): message is MessageItem => message !== null)
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 

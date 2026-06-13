@@ -850,7 +850,8 @@ export function mockArchiveTask(taskId: string): TaskSummary {
 }
 
 export function mockDeleteTask(taskId: string): Promise<void> {
-  const { [taskId]: _, ...rest } = mockTasks;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { [taskId]: _removed, ...rest } = mockTasks;
   mockTasks = rest;
   return Promise.resolve();
 }
@@ -1160,6 +1161,7 @@ export function mockPreviewSkillSettings(skillId: string): SkillPreview {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function mockImportSkill(_payload: SkillImportRequest): SkillImportResponse {
   return {
     skill_id: 'imported-skill',
@@ -1214,6 +1216,7 @@ export function mockReadFile(_environmentId: string, path: string): FileReadResp
 
 const _mockSessions: SessionRecord[] = [];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function mockGetSessions(_filters?: {
   projectId?: string;
   status?: string;
@@ -1263,6 +1266,7 @@ export function mockDeleteSession(_id: string): void {
   if (idx >= 0) _mockSessions.splice(idx, 1);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function mockGetAttempts(_sessionId: string): AttemptListResponse {
   return { items: [] };
 }

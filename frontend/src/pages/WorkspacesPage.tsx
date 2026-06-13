@@ -70,11 +70,13 @@ function WorkspacesPage() {
 
   useEffect(() => {
     if (!selectedWorkspaceId && workspaces[0]) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedWorkspaceId(workspaces[0].workspace_id);
     }
   }, [selectedWorkspaceId, workspaces]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(toDraft(isCreating ? null : selectedWorkspace));
     setIsConfirmingDelete(false);
   }, [isCreating, selectedWorkspace]);

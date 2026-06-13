@@ -25,7 +25,7 @@ import {
   getTasks,
   getWorkspaces,
 } from '../../src/api';
-import { convertOutputEventToMessage, mergeAdjacentThinkingMessages, mergeStreamMessages, shouldDeferMessageBatch } from '../../src/pages/tasks/useTaskMessages';
+import { convertOutputEventToMessage, mergeMessages } from '../../src/pages/tasks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '../../src/pages/tasks/output';
 
 class MockEventSource {
@@ -349,60 +349,29 @@ describe('task output helpers', () => {
     expect(message?.metadata.isStreaming).toBe(true);
   });
 
-  it('merges adjacent thinking messages into a single display block', () => {
-    const merged = mergeAdjacentThinkingMessages([
+  it('merges thinking deltas sharing the same block_id into a single display block', () => {
+    const merged = mergeMessages([
       {
-        id: 'thinking-1',
+        id: 'task-1-1',
         type: 'thinking',
         content: 'first pass',
-        metadata: { sequence: 1, timestamp: '2026-01-01T00:00:00Z', isFolded: true },
+        metadata: { sequence: 1, timestamp: '2026-01-01T00:00:00Z', isFolded: true, blockId: 'thinking-1', isDelta: true },
       },
       {
-        id: 'thinking-2',
+        id: 'task-1-2',
         type: 'thinking',
         content: 'second pass',
-        metadata: { sequence: 2, timestamp: '2026-01-01T00:00:01Z', isFolded: true, isStreaming: true },
+        metadata: { sequence: 2, timestamp: '2026-01-01T00:00:01Z', isFolded: true, blockId: 'thinking-1', isDelta: true, isStreaming: true },
       },
     ]);
 
     expect(merged).toHaveLength(1);
-    expect(merged[0]?.content).toBe('first pass\n\nsecond pass');
+    expect(merged[0]?.content).toBe('first passsecond pass');
     expect(merged[0]?.metadata.sequence).toBe(2);
     expect(merged[0]?.metadata.isStreaming).toBe(true);
   });
 
-  it('defers only pure streaming thinking delta batches', () => {
-    const thinkingDelta = convertOutputEventToMessage(
-      createOutputEvent(4, {
-        kind: 'thinking',
-        content:
-          '{"content":"delta","block_id":"thinking-1","is_partial":true,"is_delta":true}',
-      })
-    );
-    const thinkingFinal = convertOutputEventToMessage(
-      createOutputEvent(5, {
-        kind: 'thinking',
-        content:
-          '{"content":"full text","block_id":"thinking-1","is_partial":false}',
-      })
-    );
-    const assistantDelta = convertOutputEventToMessage(
-      createOutputEvent(6, {
-        kind: 'message',
-        content:
-          '{"role":"assistant","content":"hello","block_id":"text-1","is_partial":true,"is_delta":true}',
-      })
-    );
-
-    expect(thinkingDelta).not.toBeNull();
-    expect(thinkingFinal).not.toBeNull();
-    expect(assistantDelta).not.toBeNull();
-    expect(shouldDeferMessageBatch([thinkingDelta!])).toBe(true);
-    expect(shouldDeferMessageBatch([thinkingDelta!, thinkingFinal!])).toBe(false);
-    expect(shouldDeferMessageBatch([assistantDelta!])).toBe(false);
-  });
-
-  it('merges deferred stream updates back into a single block', () => {
+  it('merges stream deltas back into a single block', () => {
     const initial = convertOutputEventToMessage(
       createOutputEvent(7, {
         kind: 'thinking',
@@ -421,7 +390,7 @@ describe('task output helpers', () => {
     expect(initial).not.toBeNull();
     expect(next).not.toBeNull();
 
-    const merged = mergeStreamMessages([initial!], [next!]);
+    const merged = mergeMessages([initial!, next!]);
 
     expect(merged).toHaveLength(1);
     expect(merged[0]?.content).toBe('alphabeta');
@@ -878,7 +847,7 @@ describe('TasksPage', () => {
 
     expect(await screen.findByText('hello codex')).toBeInTheDocument();
     expect(screen.getAllByText('tell me the time')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: /tool call|tool result/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /tool call|tool result/i })[0]!);
     expect(await screen.findByText(/commandExecution/)).toBeInTheDocument();
   });
 
@@ -897,16 +866,20 @@ describe('TasksPage', () => {
     await screen.findByText('first line');
 
     const source = MockEventSource.instances[0];
-    source.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify(createOutputEvent(4, { content: 'fourth line' })),
-      })
-    );
-    source.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify(createOutputEvent(5, { content: 'fifth line' })),
-      })
-    );
+    await act(async () => {
+      source.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(createOutputEvent(4, { content: 'fourth line' })),
+        })
+      );
+      source.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(createOutputEvent(5, { content: 'fifth line' })),
+        })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     expect(mockGetTaskOutput).toHaveBeenCalledTimes(2);
 
@@ -979,21 +952,23 @@ describe('TasksPage', () => {
     await screen.findByText('Train model');
 
     const source = MockEventSource.instances[0];
-    source.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify(createOutputEvent(1, { content: 'duplicate first line' })),
-      })
-    );
-    source.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify(createOutputEvent(0, { content: 'older line' })),
-      })
-    );
-    source.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify(createOutputEvent(2, { content: 'second line' })),
-      })
-    );
+    act(() => {
+      source.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(createOutputEvent(1, { content: 'duplicate first line' })),
+        })
+      );
+      source.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(createOutputEvent(0, { content: 'older line' })),
+        })
+      );
+      source.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(createOutputEvent(2, { content: 'second line' })),
+        })
+      );
+    });
 
     expect(await screen.findByText('second line')).toBeInTheDocument();
     expect(screen.getAllByText('first line')).toHaveLength(1);
@@ -1054,16 +1029,20 @@ describe('TasksPage', () => {
     await screen.findByText('Train model');
 
     const source = MockEventSource.instances[0];
-    source.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify(
-          createOutputEvent(3, {
-            content: 'third line',
-            created_at: '2026-04-23T08:01:07Z',
-          })
-        ),
-      })
-    );
+    await act(async () => {
+      source.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(
+            createOutputEvent(3, {
+              content: 'third line',
+              created_at: '2026-04-23T08:01:07Z',
+            })
+          ),
+        })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     expect(await screen.findByText('second line')).toBeInTheDocument();
     expect(await screen.findByText('third line')).toBeInTheDocument();

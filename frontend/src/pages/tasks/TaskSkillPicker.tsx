@@ -40,6 +40,7 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpanded((current) => {
       let changed = false;
       const next = { ...current };
