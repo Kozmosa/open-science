@@ -221,7 +221,7 @@ def main() -> None:
     if os.getuid() == 0:
         import subprocess
 
-        for d in ("/opt/ainrf/state", "/opt/ainrf/.ainrf_workspaces"):
+        for d in ("/opt/ainrf/state", "/opt/ainrf/.ainrf_workspaces", "/opt/ainrf/.claude"):
             subprocess.run(
                 ["chown", "-R", f"{_uid}:{_gid}", d],
                 check=False,

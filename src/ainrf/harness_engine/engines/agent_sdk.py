@@ -180,6 +180,13 @@ class AgentSdkEngine(HarnessEngine):
         # plus built-in tools (WebSearch, Fetch) so agents can search the web.
         skills = context.skills or []
         allowed_tools = list(skills)
+        # Capture CLI stderr so "Command failed with exit code N" errors
+        # include the actual reason instead of a generic "Check stderr" message.
+        stderr_lines: list[str] = []
+
+        def _on_stderr(line: str) -> None:
+            stderr_lines.append(line)
+
         options = ClaudeAgentOptions(
             model=context.model or "claude-sonnet-4-5",
             system_prompt=context.system_prompt,
@@ -198,6 +205,7 @@ class AgentSdkEngine(HarnessEngine):
             include_partial_messages=True,
             can_use_tool=self._can_use_tool,
             sandbox=self._build_sandbox_settings(),
+            stderr=_on_stderr,
             # NOTE: We intentionally do NOT pass user=context.tenant_user here.
             # The SDK's `user` param uses subprocess.Popen(user=...) which calls
             # os.setuid() internally — that requires CAP_SETUID which ainrf (uid=1000)
@@ -215,7 +223,77 @@ class AgentSdkEngine(HarnessEngine):
                 saved_env[key] = os.environ.get(key)
                 os.environ[key] = value
             try:
-                await self._run_query(context, session, prompt_stream, options, emit)
+                try:
+                    await self._run_query(
+                        context, session, prompt_stream, options, emit, stderr_lines,
+                    )
+                except Exception as exc:
+                    # If the CLI exited with an error and a session resume was
+                    # attempted, the most likely cause is that the session data
+                    # was lost (container restart, volume recreation, etc.).
+                    # Retry without --resume so the conversation continues from
+                    # a fresh Claude Code session.
+                    if (
+                        session.session_id is not None
+                        and not session.abort_event.is_set()
+                    ):
+                        stderr_text = "\n".join(stderr_lines)
+                        logger.warning(
+                            "session_resume_failed_retrying_fresh",
+                            task_id=context.task_id,
+                            session_id=session.session_id,
+                            error=str(exc),
+                            stderr=stderr_text[:500],
+                        )
+                        await emit(
+                            EngineEvent(
+                                event_type="system",
+                                payload={
+                                    "subtype": "notification",
+                                    "message": (
+                                        f"Session {session.session_id[:8]}… not found, "
+                                        "starting fresh conversation."
+                                    ),
+                                },
+                            )
+                        )
+                        # Reset session state for a fresh start
+                        session.session_id = None
+                        session.terminal_emitted = False
+                        session.had_error = False
+                        session.stream_block_index = -1
+                        session.stream_block_type = None
+                        session.stream_block_accumulated = ""
+                        stderr_lines.clear()
+
+                        # Re-resolve prompt (pending_prompts already consumed)
+                        fresh_prompt = self._resolve_prompt_fresh(context, session)
+                        fresh_stream = self._wrap_prompt_stream(fresh_prompt)
+                        fresh_options = ClaudeAgentOptions(
+                            model=context.model or "claude-sonnet-4-5",
+                            system_prompt=context.system_prompt,
+                            permission_mode=permission_mode,
+                            cwd=context.working_directory,
+                            resume=None,
+                            max_turns=context.max_turns,
+                            max_budget_usd=context.max_budget_usd,
+                            mcp_servers=mcp_servers,
+                            skills=skills,
+                            allowed_tools=allowed_tools,
+                            hooks={
+                                "PostToolUse": [HookMatcher(hooks=[self._post_tool_use_hook(emit)])],
+                                "Notification": [HookMatcher(hooks=[self._notification_hook(emit)])],
+                            },
+                            include_partial_messages=True,
+                            can_use_tool=self._can_use_tool,
+                            sandbox=self._build_sandbox_settings(),
+                            stderr=_on_stderr,
+                        )
+                        await self._run_query(
+                            context, session, fresh_stream, fresh_options, emit, stderr_lines,
+                        )
+                    else:
+                        raise
             finally:
                 for key, value in saved_env.items():
                     if value is None:
@@ -277,6 +355,17 @@ class AgentSdkEngine(HarnessEngine):
             return "Continue from where you left off."
         return context.rendered_prompt
 
+    def _resolve_prompt_fresh(self, context: ExecutionContext, session: AgentSession) -> str:
+        """Resolve prompt for a fresh session (after resume failure).
+
+        Unlike ``_resolve_prompt``, this never falls back to "Continue from
+        where you left off" because we no longer have a session to continue.
+        If no pending prompt exists, use the original rendered prompt.
+        """
+        if session.pending_prompts:
+            return session.pending_prompts.popleft()
+        return context.rendered_prompt
+
     async def _run_query(
         self,
         context: ExecutionContext,
@@ -284,6 +373,7 @@ class AgentSdkEngine(HarnessEngine):
         prompt: AsyncIterator[dict[str, Any]],
         options: ClaudeAgentOptions,
         emit: EngineEmit,
+        stderr_lines: list[str] | None = None,
     ) -> None:
         try:
             async for sdk_msg in query(prompt=prompt, options=options):
@@ -323,10 +413,17 @@ class AgentSdkEngine(HarnessEngine):
         except Exception as exc:
             session.had_error = True
             if not session.terminal_emitted:
+                # Enrich error message with captured stderr so callers see the
+                # *actual* CLI error instead of "Check stderr output for details".
+                message = str(exc)
+                if stderr_lines:
+                    stderr_text = "\n".join(stderr_lines).strip()
+                    if stderr_text:
+                        message = f"{message}\nCLI stderr:\n{stderr_text}"
                 await emit(
                     EngineEvent(
                         event_type="error",
-                        payload={"message": str(exc), "task_id": context.task_id},
+                        payload={"message": message, "task_id": context.task_id},
                     )
                 )
                 await emit(
