@@ -149,15 +149,21 @@ class AgentSdkEngine(HarnessEngine):
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         async with self._lock:
             session = self._sessions.get(context.task_id)
-            is_new_session = session is None
             if session is None:
                 session = AgentSession(task_id=context.task_id)
                 self._sessions[context.task_id] = session
+            # Restore from checkpoint whenever the session lacks a session_id,
+            # not only when the session object is brand-new. send_input() runs
+            # before start() on follow-up messages and retry, pre-creating a
+            # session (session_id=None) that would otherwise mask a persisted
+            # session_id after a process restart — causing the resume flag to
+            # be dropped and the conversation to start fresh.
+            needs_checkpoint = session.session_id is None
             session.had_error = False
             session.terminal_emitted = False
             session.abort_event.clear()
 
-        if context.session_state_path and is_new_session:
+        if context.session_state_path and needs_checkpoint:
             checkpoint_path = Path(context.session_state_path)
             if checkpoint_path.exists():
                 data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -165,8 +171,14 @@ class AgentSdkEngine(HarnessEngine):
                 session.session_id = checkpoint.session_id
                 session.turn_count = checkpoint.turn_count
                 session.total_cost_usd = checkpoint.total_cost_usd
-                if checkpoint.pending_prompts:
-                    session.pending_prompts = deque(checkpoint.pending_prompts)
+                # Merge instead of overwrite: send_input() may have queued the
+                # user's new follow-up already. Prepend any prompts that were
+                # still pending when the checkpoint was written (older), then
+                # the freshly-queued message (newer).
+                restored = list(checkpoint.pending_prompts)
+                if restored:
+                    existing = list(session.pending_prompts)
+                    session.pending_prompts = deque(restored + existing)
 
         prompt = self._resolve_prompt(context, session)
         prompt_stream = self._wrap_prompt_stream(prompt)

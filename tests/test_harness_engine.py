@@ -144,6 +144,67 @@ def test_agent_sdk_failed_result_does_not_require_extra_stderr() -> None:
 
 
 @pytest.mark.anyio
+async def test_agent_sdk_start_restores_session_id_when_send_input_precreated_session(
+    tmp_path: Path,
+) -> None:
+    """Regression: send_input() pre-creates a session (session_id=None) before
+    start() runs on follow-up messages. After a process restart the in-memory
+    session is gone, so start() must still restore session_id from the
+    checkpoint — otherwise --resume is dropped and the conversation restarts
+    fresh, losing multi-turn context.
+    """
+    import json
+
+    engine = AgentSdkEngine()
+
+    # Persisted checkpoint from a prior completed turn (process restarted after).
+    checkpoint_path = tmp_path / "checkpoint.json"
+    checkpoint_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "task_id": "task-restart",
+                "session_id": "prev-session-abc",
+                "cwd": "/tmp",
+                "created_at": "2026-01-01T00:00:00Z",
+                "turn_count": 2,
+                "total_cost_usd": 0.5,
+                "pending_prompts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    context = ExecutionContext(
+        task_id="task-restart",
+        working_directory="/tmp",
+        rendered_prompt="ignored",
+        session_state_path=str(checkpoint_path),
+    )
+
+    # Simulate the timing: send_input runs first (follow-up message), creating
+    # a session with session_id=None and queuing the user's new message.
+    await engine.send_input("task-restart", "What about the second approach?")
+
+    captured: dict[str, object] = {}
+
+    async def fake_run_query(ctx, sess, prompt_stream, options, emit, stderr_lines=None):
+        captured["session_id"] = sess.session_id
+        captured["resume"] = options.resume
+        captured["pending_prompts_after"] = list(sess.pending_prompts)
+
+    with patch.object(engine, "_run_query", fake_run_query):
+        await engine.start(context, lambda _event: None)
+
+    # session_id restored from checkpoint → --resume flag will be set.
+    assert captured["session_id"] == "prev-session-abc"
+    assert captured["resume"] == "prev-session-abc"
+    # The follow-up message queued by send_input was consumed by _resolve_prompt,
+    # not lost to the checkpoint overwrite.
+    assert captured["pending_prompts_after"] == []
+
+
+@pytest.mark.anyio
 async def test_codex_app_server_ignores_partial_agent_message_delta() -> None:
     engine = CodexAppServerEngine()
     emitted: list[EngineEvent] = []
