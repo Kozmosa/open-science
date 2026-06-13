@@ -50,7 +50,7 @@ function SectionCard({
 
   return (
     <section
-      className={['rounded-xl bg-[var(--surface)] p-6 shadow-sm', className].join(' ')}
+      className={['rounded-xl bg-[var(--surface)] p-6', 'shadow-[var(--shadow-card)]', className].join(' ')}
     >
       {header ? (
         <div

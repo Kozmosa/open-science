@@ -891,3 +891,17 @@ export interface DeploymentVersionResponse {
   short_commit: string | null;
   committed_at: string | null;
 }
+
+// ── Monitoring / observability platform links ─────────────────────
+
+export interface MonitoringServiceItem {
+  id: string;
+  display_name: string;
+  description: string;
+  url: string | null;
+  icon: string;
+}
+
+export interface MonitoringSettingsResponse {
+  services: MonitoringServiceItem[];
+}

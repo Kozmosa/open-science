@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -184,3 +185,82 @@ async def list_mcp_servers() -> McpServersResponse:
             for name, desc in servers.items()
         ],
     )
+
+
+# ── Monitoring / observability platform links ──────────────────────
+
+
+class MonitoringServiceItem(BaseModel):
+    """A configured monitoring/observability service entry point."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    display_name: str
+    description: str
+    url: str | None = None
+    icon: str  # key the frontend maps to a Lucide icon
+
+
+class MonitoringSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    services: list[MonitoringServiceItem]
+
+
+_MONITORING_SERVICE_DEFAULTS: list[dict[str, object]] = [
+    {
+        "id": "grafana",
+        "display_name": "Grafana",
+        "description": "Metrics dashboards, alerts, and visualization",
+        "icon": "grafana",
+        "env_var": "AINRF_GRAFANA_URL",
+    },
+    {
+        "id": "prometheus",
+        "display_name": "Prometheus",
+        "description": "Time-series metrics collection and querying",
+        "icon": "prometheus",
+        "env_var": "AINRF_PROMETHEUS_URL",
+    },
+    {
+        "id": "litefuse",
+        "display_name": "Litefuse",
+        "description": "LLM observability: traces, generations, and token analytics",
+        "icon": "litefuse",
+        "env_var": "AINRF_OBSERVABILITY_BASE_URL",
+    },
+]
+
+
+def _build_monitoring_services(request: Request) -> list[MonitoringServiceItem]:
+    """Build the list of monitoring service links from environment and config."""
+    config = getattr(request.app.state, "api_config", None)
+    services: list[MonitoringServiceItem] = []
+
+    for entry in _MONITORING_SERVICE_DEFAULTS:
+        env_var = str(entry["env_var"])
+        service_id = str(entry["id"])
+        url: str | None = os.environ.get(env_var)
+
+        # Litefuse URL may also come from the ApiConfig observability settings.
+        if config is not None and service_id == "litefuse" and not url:
+            url = getattr(config, "observability_base_url", None) or None
+
+        services.append(
+            MonitoringServiceItem(
+                id=service_id,
+                display_name=str(entry["display_name"]),
+                description=str(entry["description"]),
+                url=url,
+                icon=str(entry["icon"]),
+            )
+        )
+
+    return services
+
+
+@router.get("/monitoring", response_model=MonitoringSettingsResponse)
+async def get_monitoring_settings(request: Request) -> MonitoringSettingsResponse:
+    """Return configured monitoring / observability platform entry points."""
+    return MonitoringSettingsResponse(services=_build_monitoring_services(request))

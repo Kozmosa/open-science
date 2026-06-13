@@ -592,9 +592,20 @@ export const messages = {
         tabs: {
           general: 'General',
           llmProviders: 'LLM Providers',
+          monitoring: 'Monitoring & Audit',
           users: 'User Management',
           envAccess: 'Environment Access',
           collaborators: 'Collaborators',
+        },
+        monitoring: {
+          title: 'Observability Platforms',
+          description: 'Quick access to monitoring, metrics, and LLM observability dashboards.',
+          noServices: 'No monitoring services are configured. Set the appropriate environment variables on the backend to enable links.',
+          notConfigured: 'Not configured',
+          openService: 'Open {{name}}',
+          grafanaDesc: 'Metrics dashboards, alerts, and visualization',
+          prometheusDesc: 'Time-series metrics collection and querying',
+          litefuseDesc: 'LLM observability: traces, generations, and token analytics',
         },
         envAccess: {
           selectEnv: 'Select environment...',
@@ -1632,9 +1643,20 @@ export const messages = {
         tabs: {
           general: '通用',
           llmProviders: 'LLM 提供商',
+          monitoring: '监控审计',
           users: '用户管理',
           envAccess: '环境访问',
           collaborators: '协作者',
+        },
+        monitoring: {
+          title: '可观测性平台',
+          description: '快速访问监控、指标和 LLM 可观测性仪表盘。',
+          noServices: '未配置任何监控服务。请在后端设置相应的环境变量以启用链接。',
+          notConfigured: '未配置',
+          openService: '打开 {{name}}',
+          grafanaDesc: '指标仪表盘、告警与数据可视化',
+          prometheusDesc: '时序指标采集与查询',
+          litefuseDesc: 'LLM 可观测性：链路追踪、生成记录与 Token 分析',
         },
         envAccess: {
           selectEnv: '选择环境...',

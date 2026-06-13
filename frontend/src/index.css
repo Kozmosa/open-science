@@ -46,10 +46,10 @@
   --sidebar-border: rgba(23, 23, 23, 0.08);
   --code-background: #eeeeef;
   --code-foreground: #171717;
-  --shadow-pane: 0 1px 3px rgba(15, 23, 42, 0.08);
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-input: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-toolbar: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-pane: 0 4px 16px rgba(15, 23, 42, 0.10), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-input: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-toolbar: 0 1px 3px rgba(15, 23, 42, 0.08);
 
   --text: var(--foreground);
   --text-secondary: rgba(23, 23, 23, 0.72);
@@ -112,10 +112,10 @@
     --sidebar-border: rgba(255, 255, 255, 0.1);
     --code-background: #27272a;
     --code-foreground: #f4f4f5;
-    --shadow-pane: 0 8px 24px rgba(0, 0, 0, 0.35);
-    --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.28);
-    --shadow-input: 0 2px 8px rgba(0, 0, 0, 0.25);
-    --shadow-toolbar: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-pane: 0 8px 28px rgba(0, 0, 0, 0.50);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.40), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-input: 0 2px 6px rgba(0, 0, 0, 0.35);
+    --shadow-toolbar: 0 2px 8px rgba(0, 0, 0, 0.40);
 
     --text: var(--foreground);
     --text-secondary: rgba(247, 247, 248, 0.76);

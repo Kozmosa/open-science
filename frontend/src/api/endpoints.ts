@@ -74,6 +74,7 @@ import type { ChangePasswordRequest,
   SearchSettingsResponse,
   SearchSettingsUpdateRequest,
   DeploymentVersionResponse,
+  MonitoringSettingsResponse,
 } from '../types';
 import {
   mockArchiveTask,
@@ -705,3 +706,14 @@ export const getSearchSettings = (): Promise<SearchSettingsResponse> =>
 
 export const updateSearchSettings = (payload: SearchSettingsUpdateRequest): Promise<SearchSettingsResponse> =>
   api.patch<SearchSettingsResponse>('/settings/search', payload);
+
+export const getMonitoringSettings = (): Promise<MonitoringSettingsResponse> =>
+  USE_MOCK
+    ? Promise.resolve({
+        services: [
+          { id: 'grafana', display_name: 'Grafana', description: 'Metrics dashboards', url: null, icon: 'grafana' },
+          { id: 'prometheus', display_name: 'Prometheus', description: 'Time-series metrics', url: null, icon: 'prometheus' },
+          { id: 'litefuse', display_name: 'Litefuse', description: 'LLM observability', url: null, icon: 'litefuse' },
+        ],
+      })
+    : api.get<MonitoringSettingsResponse>('/settings/monitoring');

@@ -39,6 +39,7 @@ import { UsersTab } from './settings/UsersTab';
 import { EnvAccessTab } from './settings/EnvAccessTab';
 import { CollaboratorsTab } from './settings/CollaboratorsTab';
 import { LlmProvidersTab } from './settings/LlmProvidersTab';
+import MonitoringTab from './settings/MonitoringTab';
 import { useAuth } from '../contexts/AuthContext';
 
 interface GeneralDraftState {
@@ -1645,7 +1646,7 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
 function SettingsPage() {
   const t = useT();
   const { user: currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'llmProviders' | 'users' | 'envAccess' | 'collaborators'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'llmProviders' | 'monitoring' | 'users' | 'envAccess' | 'collaborators'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const environmentsQuery = useQuery({
     queryKey: ['environments'],
@@ -1694,6 +1695,7 @@ function SettingsPage() {
   const tabs = [
     { key: 'general' as const, label: t('pages.settings.tabs.general') },
     { key: 'llmProviders' as const, label: t('pages.settings.tabs.llmProviders') },
+    { key: 'monitoring' as const, label: t('pages.settings.tabs.monitoring') },
     ...(currentUser?.role === 'admin' ? [
       { key: 'users' as const, label: t('pages.settings.tabs.users') },
       { key: 'envAccess' as const, label: t('pages.settings.tabs.envAccess') },
@@ -1813,6 +1815,7 @@ function SettingsPage() {
         )}
 
         {activeTab === 'llmProviders' && <LlmProvidersTab />}
+        {activeTab === 'monitoring' && <MonitoringTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'envAccess' && <EnvAccessTab />}
         {activeTab === 'collaborators' && <CollaboratorsTab />}
