@@ -52,8 +52,15 @@ paper-test/.cache/perf-report/
 ainrf-backup-*.tar.gz
 pre-restore-*.tar.gz
 
-# local runtime tenant state
+# local runtime state (tenants + workspaces)
 deploy/data/tenants/
+deploy/data/workspaces/
+
+# benchmark artifacts
+.benchmarks/
+
+# large binary downloads
+*.iso
 
 # generated frontend deployment metadata
 frontend/public/build-info.json

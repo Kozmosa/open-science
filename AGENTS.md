@@ -235,6 +235,17 @@ AINRF uses a coding-agent-driven E2E testing approach. A coding agent (Claude Co
 
 Ports: frontend on 8198, backend on 8199 (configurable via `AIWebPort`/`AITestPort`).
 
+## Workspace Cleanliness
+
+Agents must not leave temporary, backup, or one-off files in the repository root or any tracked directory. Specifically:
+
+- **No backup archives** in the repo tree: `*.tar.gz`, `*.zip`, `*.iso`, `*.bak` must never be committed. If generated locally, they must stay gitignored and be cleaned up after use.
+- **No one-off exports**: files like `kimi-export-*.md`, `session-*.md`, `*.log` are gitignored for a reason — do not `git add -f` them.
+- **No large binaries**: PDF, PNG, JPEG, MP4, ISO and other binary blobs do not belong in the main repo. If needed for docs, host externally and link. The exceptions are `frontend/public/` assets and `docs/assets/` for small diagrams.
+- **No temp scripts**: Do not create throwaway scripts in `scripts/` or at the root. If a script is needed for a task, put it in a worktree or `.claude/` scratch space and do not commit it.
+- **Clean up after yourself**: Remove any files you created during investigation (profiling output, debug logs, temp configs) before finishing a session.
+- **Runtime data is local**: `deploy/data/tenants/` and `deploy/data/workspaces/` are runtime state — never track them in git. If you need seed data for testing, put it in `deploy/examples/` or `testing/`.
+
 ## Commit & Pull Request Guidelines
 
 Follow the existing commit style: short, imperative, and scoped when useful, e.g. `docs: revise framework...` or `chore: update gitignore`. Keep commits focused.
