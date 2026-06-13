@@ -1,0 +1,178 @@
+# ══════════════════════════════════════════════════════════════════
+# AINRF Staging — Docker Compose (host network, hot-reload)
+# ══════════════════════════════════════════════════════════════════
+#
+# Mirrors the production docker-compose.cpu.yml topology with offset
+# ports and isolated volumes so staging never touches production data.
+#
+# Backend hot-reload: src/ainrf/ is bind-mounted (read-only) over the
+# installed package, and uvicorn runs with --reload. Code changes on
+# the host take effect automatically — no image rebuild needed.
+#
+# Usage:
+#   bash scripts/staging.sh up        # build + start, wait for healthy
+#   bash scripts/staging.sh status    # print URLs
+#   bash scripts/staging.sh logs      # tail backend logs
+#   bash scripts/staging.sh down      # destroy everything (including data)
+#   bash scripts/staging.sh rebuild   # rebuild image, keep data
+#
+# Or directly:
+#   docker compose -f deploy/docker-compose.staging.yml up -d --build
+#
+# Port mapping (staging ↔ production):
+#   nginx       :7192  (prod :8192)
+#   backend     :17000 (prod :18000)
+#   prometheus  :9090  (prod :9091)
+#   grafana     :2300  (prod :3000)
+#
+# ══════════════════════════════════════════════════════════════════
+
+services:
+  ainrf-staging:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
+        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    restart: unless-stopped
+    container_name: ainrf-staging
+    network_mode: host
+    environment:
+      AINRF_STAGING: "1"
+      AINRF_HOST: "127.0.0.1"
+      AINRF_PORT: "17000"
+      AINRF_STATE_ROOT: "/opt/ainrf/state"
+      # ── 必填：在 .env 文件中设置（同生产共享）──
+      AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
+      AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
+      # ── 安全 ────────────────────────────────────────────
+      AINRF_PUBLIC_REGISTRATION_ENABLED: ${STAGING_PUBLIC_REGISTRATION:-true}
+      AINRF_LOGIN_MAX_FAILURES: "100"
+      AINRF_LOGIN_LOCKOUT_HOURS: "1"
+      AINRF_METRICS_ENABLED: "true"
+      # ── LLM Observability (disabled by default) ──
+      AINRF_OBSERVABILITY_ENABLED: ${AINRF_OBSERVABILITY_ENABLED:-false}
+      AINRF_OBSERVABILITY_BASE_URL: ${AINRF_OBSERVABILITY_BASE_URL:-http://localhost:13000}
+      AINRF_OBSERVABILITY_SECRET_KEY: ${AINRF_OBSERVABILITY_SECRET_KEY:-}
+      AINRF_OBSERVABILITY_PUBLIC_KEY: ${AINRF_OBSERVABILITY_PUBLIC_KEY:-}
+      # ── Agent 工具配置（在 .env 中设置）──
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+    volumes:
+      - staging-ainrf-state:/opt/ainrf/state
+      - staging-ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - staging-ainrf-tenants:/home/ainrf_tenants
+      # Hot-reload: mount host source over the installed package.
+      # uvicorn --reload watches this directory for changes.
+      - ../src/ainrf/:/usr/local/lib/python3.13/site-packages/ainrf/:ro
+    # Override CMD: uvicorn with --reload instead of the default `ainrf serve`.
+    # ENTRYPOINT (entrypoint.py) still runs — provisions tenants, generates
+    # agent configs, starts sshd, drops privileges — then execs this CMD.
+    command:
+      - "sh"
+      - "-c"
+      - >-
+        uvicorn ainrf.api:create_app --factory
+        --host 127.0.0.1 --port 17000
+        --reload --reload-dir /usr/local/lib/python3.13/site-packages/ainrf
+    cap_add:
+      - SYS_ADMIN
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:17000/health')"]
+      interval: 15s
+      retries: 5
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  nginx-staging:
+    image: docker.1ms.run/nginx:1.27-alpine
+    restart: unless-stopped
+    container_name: ainrf-staging-nginx
+    network_mode: host
+    volumes:
+      - ./config/nginx-staging.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      ainrf-staging:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus-staging:
+    image: docker.1ms.run/prom/prometheus:v3.3.1
+    restart: unless-stopped
+    container_name: ainrf-staging-prometheus
+    network_mode: host
+    volumes:
+      - ./config/prometheus-staging.yml:/etc/prometheus/prometheus.yml:ro
+      - ./examples/prometheus-rules.example.yml:/etc/prometheus/rules/ainrf.yml:ro
+      - staging-prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+      - "--storage.tsdb.retention.size=1GB"
+      - "--web.enable-remote-write-receiver"
+      - "--web.listen-address=127.0.0.1:9090"
+    depends_on:
+      ainrf-staging:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  grafana-staging:
+    image: docker.1ms.run/grafana/grafana:11.6.1
+    restart: unless-stopped
+    container_name: ainrf-staging-grafana
+    network_mode: host
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-ainrf-grafana}
+      GF_SERVER_HTTP_ADDR: "127.0.0.1"
+      GF_SERVER_HTTP_PORT: "2300"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SERVER_ROOT_URL: "${STAGING_GRAFANA_ROOT_URL:-http://localhost:7192/monitoring}"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER: "X-WEBAUTH-USER"
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+    volumes:
+      - ./config/grafana/provisioning-staging:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - staging-grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus-staging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  staging-ainrf-state:
+  staging-ainrf-workspaces:
+  staging-ainrf-tenants:
+  staging-prometheus-data:
+  staging-grafana-data:

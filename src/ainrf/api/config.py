@@ -66,7 +66,11 @@ class ApiConfig:
     @classmethod
     def from_env(cls, state_root: Path | None = None) -> ApiConfig:
         startup_cwd = Path.cwd().resolve()
-        resolved_state_root = state_root or default_state_root()
+        resolved_state_root = (
+            state_root
+            or Path(os.environ.get("AINRF_STATE_ROOT", ""))
+            or default_state_root()
+        )
         env_hashes = os.environ.get("AINRF_API_KEY_HASHES")
         api_key_hashes = _parse_api_key_hashes(env_hashes) if env_hashes else frozenset()
 

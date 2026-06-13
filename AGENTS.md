@@ -367,6 +367,10 @@ bash deploy/redeploy-backend.sh
 # Frontend-only changes — rebuilds host frontend/dist, then restarts nginx.
 bash deploy/redeploy-frontend.sh
 
+# Staging targets (same scripts, different target):
+bash deploy/redeploy-backend.sh --target staging
+bash deploy/redeploy-frontend.sh --target staging
+
 # Bare fallback (no commit stamping; backend version shows "Unavailable"):
 # docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
 ```
@@ -378,6 +382,68 @@ host). Because the two build at different times, they may differ — the
 Settings page shows both and flags a mismatch.
 
 **Why host build is required**: nginx serves frontend from a **host-mounted** volume (`frontend/dist:/usr/share/nginx/html:ro`), not from the container's built-in `/opt/ainrf/frontend/dist`. After frontend changes, the host `frontend/dist` must be rebuilt or nginx will serve stale files. Verify by checking the `index-*.js` hash in `frontend/dist/index.html` matches what the browser requests.
+
+### Staging Environment
+
+The staging environment mirrors the production stack (nginx + Prometheus + Grafana + backend) with offset ports and isolated volumes. Backend source code is bind-mounted for hot-reload — changes to `src/ainrf/` take effect without rebuilding the image.
+
+**Quick start:**
+
+```bash
+# Start staging (builds image, starts all services, prints URLs)
+bash scripts/staging.sh up
+
+# Tail backend logs (shows uvicorn reload events)
+bash scripts/staging.sh logs
+
+# Stop and destroy everything (including data)
+bash scripts/staging.sh down
+```
+
+**Access URLs:**
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| App | `http://<host>:7192/` | Full AINRF WebUI |
+| Grafana | `http://<host>:7192/monitoring` | Auth-gated via AINRF session |
+| Backend direct | `http://<host>:17000/health` | Bypasses nginx |
+| Prometheus | `localhost:9090` | Internal only, no nginx proxy |
+
+**Port mapping (staging ↔ production):**
+
+| Service | Staging | Production |
+|---------|---------|------------|
+| nginx | `:7192` | `:8192` |
+| backend | `:17000` | `:18000` |
+| prometheus | `:9090` | `:9091` |
+| grafana | `:2300` | `:3000` |
+
+**Backend hot-reload workflow:**
+
+1. `bash scripts/staging.sh up` — builds image, starts all services
+2. Edit files in `src/ainrf/` — uvicorn detects changes and reloads automatically
+3. Verify changes at `http://localhost:7192/`
+4. For dependency changes (`pyproject.toml`), rebuild: `bash scripts/staging.sh rebuild`
+
+**Frontend update workflow:**
+
+```bash
+cd frontend && npm run build
+bash deploy/redeploy-frontend.sh --target staging
+```
+
+**Data isolation:** All staging data lives in `staging-*` Docker volumes. Production (`ainrf-*`) volumes are never touched. Both environments can run simultaneously on the same host.
+
+**Lifecycle commands:**
+
+```bash
+bash scripts/staging.sh up        # build + start, wait for healthy
+bash scripts/staging.sh status    # show running state and URLs
+bash scripts/staging.sh logs      # tail backend logs
+bash scripts/staging.sh rebuild   # rebuild image, keep data
+bash scripts/staging.sh creds     # print admin initial password
+bash scripts/staging.sh down      # stop + remove all containers and volumes
+```
 
 ### Browser & DevTools (Working)
 
