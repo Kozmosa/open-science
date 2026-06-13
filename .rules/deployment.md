@@ -36,7 +36,7 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 
 The CPU-only deployment includes Prometheus + Grafana with pre-configured dashboards and alert rules:
 
-- **Grafana dashboard**: `http://<host>:8192/monitoring` — pre-provisioned `ainrf-overview` dashboard shows HTTP request rates, auth events, SSH connections, terminal exec denials, and DB query latency. Auth proxy is enabled (login via AINRF session).
+- **Grafana dashboard**: `http://<host>:8192/grafana` — pre-provisioned `ainrf-overview` dashboard shows HTTP request rates, auth events, SSH connections, terminal exec denials, and DB query latency. Auth proxy is enabled (login via AINRF session).
 - **Prometheus**: scrapes `http://localhost:18000/metrics` every 15s; alert rules in `deploy/examples/prometheus-rules.example.yml` cover login failure rate, account lockouts, terminal exec denials, sensitive file access, high request/error rate. Copy to `deploy/config/prometheus/rules/ainrf.yml` and adjust thresholds.
 - **Alert routing**: Prometheus evaluates rules; to receive notifications, configure Alertmanager or Grafana alert channels (not included by default — add a Grafana contact point for email/Slack/webhook).
 
@@ -56,8 +56,9 @@ docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up 
 
 | Observability Stack | Service | Port | What it shows |
 |---------------------|---------|------|---------------|
-| **Grafana** | Infrastructure + API metrics | `:8192/monitoring` | HTTP rates, auth events, SSH, DB latency |
-| **Litefuse** | LLM call traces | `:13000` | Per-call tokens, prompts, latency, cost |
+| **Grafana** | Infrastructure + API metrics | `:8192/grafana` | HTTP rates, auth events, SSH, DB latency |
+| **Prometheus** | Time-series metrics + queries | `:8192/prometheus` | Query builder, scrape targets, rules |
+| **Litefuse** | LLM call traces | `:8192/litefuse` | Per-call tokens, prompts, latency, cost |
 
 ### Named Docker Volumes (persistent data)
 

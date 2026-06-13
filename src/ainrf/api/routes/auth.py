@@ -108,7 +108,7 @@ async def login(payload: LoginRequest, request: Request) -> Response:
         media_type="application/json",
         status_code=200,
     )
-    # Set session cookie so nginx auth_request on /monitoring/ can authenticate.
+    # Set session cookie so nginx auth_request on /grafana, /prometheus, /litefuse can authenticate.
     # HttpOnly for XSS protection; SameSite=Lax for CSRF; Secure in production.
     is_secure = request.url.scheme == "https"
     response.set_cookie(

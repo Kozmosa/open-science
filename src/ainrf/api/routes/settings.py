@@ -215,7 +215,7 @@ _MONITORING_SERVICE_DEFAULTS: list[dict[str, object]] = [
         "description": "Metrics dashboards, alerts, and visualization",
         "icon": "grafana",
         "env_var": "AINRF_MONITORING_GRAFANA_URL",
-        "default_url": "/monitoring",
+        "default_url": "/grafana",
     },
     {
         "id": "prometheus",

@@ -25,7 +25,7 @@ bash scripts/staging.sh down
 | Service | URL | Notes |
 |---------|-----|-------|
 | App | `http://<host>:7192/` | Full AINRF WebUI |
-| Grafana | `http://<host>:7192/monitoring` | Auth-gated via AINRF session |
+| Grafana | `http://<host>:7192/grafana` | Auth-gated via AINRF session |
 | Backend direct | `http://<host>:17000/health` | Bypasses nginx |
 | Prometheus | `localhost:9090` | Internal only, no nginx proxy |
 
@@ -73,7 +73,7 @@ bash scripts/staging.sh down      # stop + remove all containers and volumes
 1. **Start staging**: `bash scripts/staging.sh up`
 2. **Iterate on backend code**: edit files under `src/ainrf/` — uvicorn auto-reloads within seconds; watch reload events in `bash scripts/staging.sh logs`
 3. **Test API changes**: `curl http://localhost:7192/api/...` or open `http://<host>:7192/` in browser
-4. **Check metrics**: `curl http://localhost:7192/metrics` or Grafana at `/monitoring`
+4. **Check metrics**: `curl http://localhost:7192/metrics` or Grafana at `/grafana`
 5. **Verify health**: `curl http://localhost:17000/health` — shows SSH status, Claude version, runtime readiness
 6. **Compare with production**: both stacks run simultaneously — test the same API on `:7192` (staging) vs `:8192` (production) to confirm behavior parity
 7. **View container logs**: `docker logs ainrf-staging` (backend), `docker logs ainrf-staging-nginx` (nginx), `docker logs ainrf-staging-prometheus` (metrics)

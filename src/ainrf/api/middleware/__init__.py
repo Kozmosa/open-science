@@ -169,7 +169,7 @@ def build_jwt_auth_middleware(
             request.state.auth_scheme = "bearer"
             return await call_next(request)
 
-        # Fallback: session cookie (needed for nginx auth_request /monitoring/ path)
+        # Fallback: session cookie (needed for nginx auth_request on /grafana, /prometheus, /litefuse)
         cookie_token = request.cookies.get("ainrf_access_token")
         if cookie_token:
             try:
