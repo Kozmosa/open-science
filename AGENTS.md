@@ -446,6 +446,20 @@ bash scripts/staging.sh creds     # print admin initial password
 bash scripts/staging.sh down      # stop + remove all containers and volumes
 ```
 
+**Test and debug workflow on staging:**
+
+1. **Start staging**: `bash scripts/staging.sh up`
+2. **Iterate on backend code**: edit files under `src/ainrf/` — uvicorn auto-reloads within seconds; watch reload events in `bash scripts/staging.sh logs`
+3. **Test API changes**: `curl http://localhost:7192/api/...` or open `http://<host>:7192/` in browser
+4. **Check metrics**: `curl http://localhost:7192/metrics` or Grafana at `/monitoring`
+5. **Verify health**: `curl http://localhost:17000/health` — shows SSH status, Claude version, runtime readiness
+6. **Compare with production**: both stacks run simultaneously — test the same API on `:7192` (staging) vs `:8192` (production) to confirm behavior parity
+7. **View container logs**: `docker logs ainrf-staging` (backend), `docker logs ainrf-staging-nginx` (nginx), `docker logs ainrf-staging-prometheus` (metrics)
+8. **Reset state**: `bash scripts/staging.sh down && bash scripts/staging.sh up` — destroys all data and starts fresh
+9. **Deploy to production**: once verified on staging, run `bash deploy/redeploy-backend.sh` (production target) and `bash deploy/redeploy-frontend.sh`
+
+**Important**: staging runs `AINRF_PRODUCTION=1` (same as production) so middleware, auth, and security behavior match exactly. The only differences are ports and data volumes.
+
 ### Browser & DevTools (Working)
 
 Both the OMP built-in browser tool and the chrome-devtools MCP are functional. Use the **chrome-devtools MCP** (via `browser` tool) as the primary tool for frontend inspection; fall back to the OMP browser tool when needed.
