@@ -214,42 +214,55 @@ _MONITORING_SERVICE_DEFAULTS: list[dict[str, object]] = [
         "display_name": "Grafana",
         "description": "Metrics dashboards, alerts, and visualization",
         "icon": "grafana",
-        "env_var": "AINRF_GRAFANA_URL",
+        "env_var": "AINRF_MONITORING_GRAFANA_URL",
+        "default_url": "/monitoring",
     },
     {
         "id": "prometheus",
         "display_name": "Prometheus",
         "description": "Time-series metrics collection and querying",
         "icon": "prometheus",
-        "env_var": "AINRF_PROMETHEUS_URL",
+        "env_var": "AINRF_MONITORING_PROMETHEUS_URL",
+        "default_url": "/prometheus",
     },
     {
         "id": "litefuse",
         "display_name": "Litefuse",
         "description": "LLM observability: traces, generations, and token analytics",
         "icon": "litefuse",
-        "env_var": "AINRF_OBSERVABILITY_BASE_URL",
+        "env_var": "AINRF_MONITORING_LITEFUSE_URL",
+        "default_url": "/litefuse",
     },
 ]
 
 
 def _build_monitoring_services(request: Request) -> list[MonitoringServiceItem]:
-    """Build the list of monitoring service links from environment and config."""
-    config = getattr(request.app.state, "api_config", None)
+    """Build the list of monitoring service links.
+
+    Each service reads its URL from a dedicated environment variable.
+    The default values are relative paths that work through the nginx
+    reverse proxy (port 8192 in host-network deployments).
+
+    Set the env var to an empty string to explicitly disable a service
+    card (url will be null).  Unset env vars fall back to the defaults.
+    """
     services: list[MonitoringServiceItem] = []
 
     for entry in _MONITORING_SERVICE_DEFAULTS:
         env_var = str(entry["env_var"])
-        service_id = str(entry["id"])
-        url: str | None = os.environ.get(env_var)
+        default_url = str(entry["default_url"])
 
-        # Litefuse URL may also come from the ApiConfig observability settings.
-        if config is not None and service_id == "litefuse" and not url:
-            url = getattr(config, "observability_base_url", None) or None
+        raw = os.environ.get(env_var)
+        if raw is None:
+            url = default_url
+        elif raw == "":
+            url = None  # explicitly disabled
+        else:
+            url = raw  # custom absolute/relative URL
 
         services.append(
             MonitoringServiceItem(
-                id=service_id,
+                id=str(entry["id"]),
                 display_name=str(entry["display_name"]),
                 description=str(entry["description"]),
                 url=url,

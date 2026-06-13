@@ -711,9 +711,9 @@ export const getMonitoringSettings = (): Promise<MonitoringSettingsResponse> =>
   USE_MOCK
     ? Promise.resolve({
         services: [
-          { id: 'grafana', display_name: 'Grafana', description: 'Metrics dashboards', url: null, icon: 'grafana' },
-          { id: 'prometheus', display_name: 'Prometheus', description: 'Time-series metrics', url: null, icon: 'prometheus' },
-          { id: 'litefuse', display_name: 'Litefuse', description: 'LLM observability', url: null, icon: 'litefuse' },
+          { id: 'grafana', display_name: 'Grafana', description: 'Metrics dashboards, alerts, and visualization', url: '/monitoring', icon: 'grafana' },
+          { id: 'prometheus', display_name: 'Prometheus', description: 'Time-series metrics collection and querying', url: '/prometheus', icon: 'prometheus' },
+          { id: 'litefuse', display_name: 'Litefuse', description: 'LLM observability: traces, generations, and token analytics', url: '/litefuse', icon: 'litefuse' },
         ],
       })
     : api.get<MonitoringSettingsResponse>('/settings/monitoring');

@@ -50,6 +50,10 @@ services:
       AINRF_LOGIN_LOCKOUT_HOURS: "24"
       AINRF_MAX_CONCURRENT_REQUESTS: "100"
       AINRF_METRICS_ENABLED: "true"
+      # ── Monitoring / observability dashboard links (browser-facing) ──
+      AINRF_MONITORING_GRAFANA_URL: ${AINRF_MONITORING_GRAFANA_URL:-/monitoring}
+      AINRF_MONITORING_PROMETHEUS_URL: ${AINRF_MONITORING_PROMETHEUS_URL:-/prometheus}
+      AINRF_MONITORING_LITEFUSE_URL: ${AINRF_MONITORING_LITEFUSE_URL:-/litefuse}
       # ── Agent 工具配置（在 .env 中设置）──
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}

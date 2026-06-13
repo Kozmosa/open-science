@@ -53,6 +53,13 @@ services:
       AINRF_LOGIN_LOCKOUT_HOURS: "24"
       AINRF_MAX_CONCURRENT_REQUESTS: "100"
       AINRF_METRICS_ENABLED: "true"
+      # ── Monitoring / observability dashboard links (browser-facing) ──
+      # Defaults are relative paths that work through nginx on port 8192.
+      # Set to a fully-qualified URL if services are accessed externally.
+      # Set to "" (empty) to hide a service card in the frontend.
+      AINRF_MONITORING_GRAFANA_URL: ${AINRF_MONITORING_GRAFANA_URL:-/monitoring}
+      AINRF_MONITORING_PROMETHEUS_URL: ${AINRF_MONITORING_PROMETHEUS_URL:-/prometheus}
+      AINRF_MONITORING_LITEFUSE_URL: ${AINRF_MONITORING_LITEFUSE_URL:-/litefuse}
       # ── LLM Observability (Litefuse overlay, disabled by default) ──
       AINRF_OBSERVABILITY_ENABLED: ${AINRF_OBSERVABILITY_ENABLED:-false}
       AINRF_OBSERVABILITY_BASE_URL: ${AINRF_OBSERVABILITY_BASE_URL:-http://localhost:13000}
@@ -105,6 +112,8 @@ services:
       - "--storage.tsdb.retention.size=2GB"
       - "--web.enable-remote-write-receiver"
       - "--web.listen-address=127.0.0.1:9091"
+      - "--web.external-url=/prometheus"
+      - "--web.route-prefix=/prometheus"
     depends_on:
       ainrf:
         condition: service_healthy

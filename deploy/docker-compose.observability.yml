@@ -150,6 +150,9 @@ services:
       SALT: ${LITEFUSE_SALT:?Set LITEFUSE_SALT in .env}
       ENCRYPTION_KEY: ${LITEFUSE_ENCRYPTION_KEY:?Set LITEFUSE_ENCRYPTION_KEY in .env}
       NEXTAUTH_URL: ${LITEFUSE_NEXTAUTH_URL:-http://localhost:13000}
+      # When running behind nginx reverse proxy at /litefuse, set:
+      #   LITEFUSE_NEXTAUTH_URL=http://<host>:<port>/litefuse
+      # and ensure litefuse-web is reachable from the nginx container.
       DATABASE_URL: postgresql://langfuse:${LITEFUSE_POSTGRES_PASSWORD}@litefuse-postgres:5432/langfuse
       REDIS_HOST: litefuse-redis
       REDIS_PORT: "6379"
