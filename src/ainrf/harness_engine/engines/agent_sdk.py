@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, field
@@ -100,10 +101,11 @@ class AgentSession:
     stream_block_accumulated: str = ""
 
 class AgentSdkEngine(HarnessEngine):
-    def __init__(self) -> None:
+    def __init__(self, session_store: object | None = None) -> None:
         self._sessions: dict[str, AgentSession] = {}
         self._lock = asyncio.Lock()
         self._run_lock = asyncio.Lock()
+        self._session_store = session_store
 
     @property
     def engine_type(self) -> HarnessEngineType:
@@ -218,6 +220,7 @@ class AgentSdkEngine(HarnessEngine):
             can_use_tool=self._can_use_tool,
             sandbox=self._build_sandbox_settings(),
             stderr=_on_stderr,
+            session_store=self._session_store,
             # NOTE: We intentionally do NOT pass user=context.tenant_user here.
             # The SDK's `user` param uses subprocess.Popen(user=...) which calls
             # os.setuid() internally — that requires CAP_SETUID which ainrf (uid=1000)
@@ -228,13 +231,20 @@ class AgentSdkEngine(HarnessEngine):
         async with self._run_lock:
             env_overrides = self._provider_env(context)
             saved_env: dict[str, str | None] = {}
-            for key in self._implicit_provider_env_keys(context):
-                saved_env[key] = os.environ.get(key)
-                os.environ.pop(key, None)
-            for key, value in env_overrides.items():
-                saved_env[key] = os.environ.get(key)
-                os.environ[key] = value
+
+            # Route Claude's local transcript to a temp directory so the
+            # SessionStore (DbSessionStore) is the sole persistent copy.
+            # This prevents ~/.claude from accumulating transcript files
+            # and ensures resume works across container restarts.
+            config_tmp = tempfile.mkdtemp(prefix="ainrf-claude-")
+            os.environ["CLAUDE_CONFIG_DIR"] = config_tmp
             try:
+                for key in self._implicit_provider_env_keys(context):
+                    saved_env[key] = os.environ.get(key)
+                    os.environ.pop(key, None)
+                for key, value in env_overrides.items():
+                    saved_env[key] = os.environ.get(key)
+                    os.environ[key] = value
                 try:
                     await self._run_query(
                         context, session, prompt_stream, options, emit, stderr_lines,
@@ -313,6 +323,11 @@ class AgentSdkEngine(HarnessEngine):
                         os.environ.pop(key, None)
                     else:
                         os.environ[key] = value
+                # Clean up the per-task temp Claude config directory.
+                try:
+                    shutil.rmtree(config_tmp, ignore_errors=True)
+                except Exception:
+                    pass
 
     async def _can_use_tool(
         self,
@@ -374,10 +389,41 @@ class AgentSdkEngine(HarnessEngine):
         Unlike ``_resolve_prompt``, this never falls back to "Continue from
         where you left off" because we no longer have a session to continue.
         If no pending prompt exists, use the original rendered prompt.
+
+        When prior conversation messages are available from task_outputs
+        (last-resort context recovery), prepend them as a formatted context
+        block so the model has awareness of prior turns even though tool
+        execution history is lost.
         """
         if session.pending_prompts:
-            return session.pending_prompts.popleft()
-        return context.rendered_prompt
+            prompt = session.pending_prompts.popleft()
+        else:
+            prompt = context.rendered_prompt
+
+        # Layer 2 fallback: if the session was lost and we have prior
+        # user/assistant messages from task_outputs, inject them as
+        # a degraded context prefix.
+        if context.prior_messages:
+            prior = context.prior_messages
+            # Limit to last 50 turns to keep the prompt manageable.
+            if len(prior) > 100:
+                prior = prior[-100:]
+            lines: list[str] = []
+            lines.append(
+                "[Previous conversation — recovered from task history. "
+                "You are continuing a prior session whose state was lost. "
+                "You do NOT remember the exact tool calls or file edits "
+                "from the prior session, but the user/assistant messages "
+                "below summarize what was discussed.]"
+            )
+            for msg in prior:
+                role_label = "User" if msg["role"] == "user" else "Assistant"
+                lines.append(f"{role_label}: {msg['content']}")
+            lines.append("---")
+            lines.append(prompt)
+            return "\n\n".join(lines)
+
+        return prompt
 
     async def _run_query(
         self,

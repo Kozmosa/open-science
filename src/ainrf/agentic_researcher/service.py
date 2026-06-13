@@ -805,6 +805,45 @@ class AgenticResearcherService:
                     return content
         return None
 
+    def _get_prior_user_assistant_messages(
+        self, task_id: str
+    ) -> list[dict[str, str]]:
+        """Return prior user/assistant messages from task_outputs in seq order.
+
+        Used as a last-resort context fallback when the engine's session
+        (agent-sdk session_id or codex thread_id) is lost and cannot be
+        resumed from the primary persistence mechanism.
+
+        Only returns ``kind='message'`` entries with ``role='user'`` or
+        ``role='assistant'``. Thinking, tool calls, tool results, stderr,
+        and system events are excluded — the reconstructed context is a
+        degraded view of the conversation, but enough to give the model
+        awareness of prior turns.
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                """
+                SELECT content FROM task_outputs
+                WHERE task_id = ? AND kind = 'message'
+                ORDER BY seq
+                """,
+                (task_id,),
+            ).fetchall()
+        messages: list[dict[str, str]] = []
+        for row in rows:
+            try:
+                payload = json.loads(row["content"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            role = payload.get("role")
+            if role not in ("user", "assistant"):
+                continue
+            content = payload.get("content")
+            if not isinstance(content, str) or not content.strip():
+                continue
+            messages.append({"role": role, "content": content})
+        return messages
+
     def _resolve_skill_load_dir(self, task: Task) -> str | None:
         """Resolve the skill load directory for the task's configured skills.
 
@@ -864,6 +903,9 @@ class AgenticResearcherService:
             ),
             tenant_user=tenant_user,
             skill_load_dir=skill_load_dir,
+            prior_messages=(
+                self._get_prior_user_assistant_messages(task.task_id) or None
+            ),
         )
 
     def get_runtime_summary(self, task: Task) -> dict[str, object]:
@@ -950,6 +992,11 @@ class AgenticResearcherService:
         engine = self._engines.get(engine_type)
         if engine is None:
             engine = self._engine_factory(engine_type.value)
+            # Agent-sdk engine gets a DB-backed session store so transcript
+            # persistence survives container restarts.
+            if engine_type == HarnessEngineType.AGENT_SDK:
+                from ainrf.harness_engine.db_session_store import DbSessionStore
+                engine._session_store = DbSessionStore(str(self._db_path))
             self._engines[engine_type] = engine
         return engine
 

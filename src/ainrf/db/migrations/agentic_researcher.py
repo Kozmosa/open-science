@@ -84,3 +84,32 @@ def migration_003_token_usage(conn: sqlite3.Connection) -> None:
 def migration_004_legacy_status_rename(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE tasks SET status = 'queued' WHERE status = 'pending'")
     conn.execute("UPDATE tasks SET status = 'cancelled' WHERE status = 'canceled'")
+
+
+@registry.register(_DATABASE)
+def migration_005_session_transcripts(conn: sqlite3.Connection) -> None:
+    """DB-backed SessionStore mirror table for Claude SDK transcript persistence.
+
+    Used by agent-sdk engine to survive container restarts / volume recreation.
+    The SDK mirrors every transcript line via SessionStore.append() and resumes
+    from the store via SessionStore.load() when the local JSONL is absent.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS session_transcripts (
+            project_key TEXT NOT NULL,
+            session_id  TEXT NOT NULL,
+            subpath     TEXT NOT NULL DEFAULT '',
+            seq         INTEGER NOT NULL,
+            entry_json  TEXT NOT NULL,
+            created_at  TEXT NOT NULL,
+            PRIMARY KEY (project_key, session_id, subpath, seq)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_session_transcripts_lookup
+        ON session_transcripts(project_key, session_id, subpath)
+        """
+    )

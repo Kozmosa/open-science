@@ -68,17 +68,21 @@ class CodexAppServerEngine(HarnessEngine):
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         async with self._lock:
             session = self._sessions.get(context.task_id)
-            is_new_session = session is None
             if session is None:
                 session = CodexSession(task_id=context.task_id)
                 self._sessions[context.task_id] = session
+            # Restore from checkpoint whenever we lack a thread_id, not just
+            # when the session is brand-new. send_input() pre-creates sessions
+            # before start() runs on follow-up / retry, masking the persisted
+            # thread_id after a process restart (same bug as agent-sdk had).
+            needs_checkpoint = session.thread_id is None
             session.had_error = False
             session.terminal_emitted = False
             session.abort_event.clear()
             session.turn_done.clear()
             session.turn_status = None
 
-        if context.session_state_path and is_new_session:
+        if context.session_state_path and needs_checkpoint:
             self._restore_checkpoint(context, session)
 
         prompt = self._resolve_prompt(context, session) or "Continue from where you left off."
@@ -141,15 +145,45 @@ class CodexAppServerEngine(HarnessEngine):
             session.turn_id = turn_id
         session.turn_count = checkpoint.turn_count
         session.total_cost_usd = checkpoint.total_cost_usd
-        if checkpoint.pending_prompts:
-            session.pending_prompts = deque(checkpoint.pending_prompts)
+        # Merge: preserve prompts already queued by send_input() (the
+        # user's new follow-up) and prepend any that were still pending
+        # when the checkpoint was written.
+        restored = list(checkpoint.pending_prompts) if checkpoint.pending_prompts else []
+        if restored:
+            existing = list(session.pending_prompts)
+            session.pending_prompts = deque(restored + existing)
 
     def _resolve_prompt(self, context: ExecutionContext, session: CodexSession) -> str:
         if session.pending_prompts:
-            return session.pending_prompts.popleft()
-        if session.thread_id is not None:
-            return "Continue from where you left off."
-        return context.rendered_prompt
+            prompt = session.pending_prompts.popleft()
+        elif session.thread_id is not None:
+            prompt = "Continue from where you left off."
+        else:
+            prompt = context.rendered_prompt
+
+        # Layer 2 fallback: if the thread was lost and we have prior
+        # user/assistant messages from task_outputs, inject them as a
+        # degraded context prefix so the model is aware of prior turns.
+        if session.thread_id is None and context.prior_messages:
+            prior = context.prior_messages
+            if len(prior) > 100:
+                prior = prior[-100:]
+            lines: list[str] = []
+            lines.append(
+                "[Previous conversation — recovered from task history. "
+                "You are continuing a prior session whose state was lost. "
+                "You do NOT remember the exact tool calls or file edits "
+                "from the prior session, but the user/assistant messages "
+                "below summarize what was discussed.]"
+            )
+            for msg in prior:
+                role_label = "User" if msg["role"] == "user" else "Assistant"
+                lines.append(f"{role_label}: {msg['content']}")
+            lines.append("---")
+            lines.append(prompt)
+            return "\n\n".join(lines)
+
+        return prompt
 
     async def _ensure_connection(
         self,
