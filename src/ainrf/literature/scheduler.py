@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ainrf.literature.fetcher import fetch_for_subscription
 from ainrf.literature.service import LiteratureService
+
+if TYPE_CHECKING:
+    from ainrf.observability.protocol import ObservabilityReporter
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +19,16 @@ logger = logging.getLogger(__name__)
 class LiteratureScheduler:
     """Manages scheduled literature fetching for active subscriptions."""
 
-    def __init__(self, service: LiteratureService, interval_hours: int = 6):
+    def __init__(
+        self,
+        service: LiteratureService,
+        interval_hours: int = 6,
+        reporter: ObservabilityReporter | None = None,
+    ):
         self._service = service
         self._scheduler = AsyncIOScheduler()
         self._interval_hours = interval_hours
+        self._reporter = reporter
 
     def start(self) -> None:
         self._scheduler.add_job(
@@ -60,7 +70,7 @@ class LiteratureScheduler:
         logger.info("Literature fetch: checking %d due subscriptions", len(due_subs))
         for sub in due_subs:
             try:
-                papers = await fetch_for_subscription(sub)
+                papers = await fetch_for_subscription(sub, self._reporter)
                 new = [
                     p
                     for p in papers

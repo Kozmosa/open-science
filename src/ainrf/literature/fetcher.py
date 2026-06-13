@@ -5,11 +5,15 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+from typing import TYPE_CHECKING
 
 import arxiv
 import json_repair
 
 from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
+
+if TYPE_CHECKING:
+    from ainrf.observability.protocol import ObservabilityReporter
 
 _DEFAULT_MODEL = "deepseek-v4-flash"
 _DEFAULT_BASE_URL = "https://api.deepseek.com"
@@ -66,10 +70,17 @@ def _extract_json(text: str) -> dict | None:
     return repaired if isinstance(repaired, dict) else None
 
 
-async def _summarize_papers(papers: list[LiteraturePaper]) -> None:
+async def _summarize_papers(
+    papers: list[LiteraturePaper],
+    reporter: ObservabilityReporter | None = None,
+    trace_id: str | None = None,
+) -> None:
     """Call LLM API to summarize papers. Reads config from environment."""
     import httpx
 
+    from ainrf.observability.protocol import NullReporter
+
+    _obs = reporter or NullReporter()
     api_key, base_url, model = _get_api_config()
     if not api_key:
         return  # no API key configured, skip summarization
@@ -100,6 +111,21 @@ async def _summarize_papers(papers: list[LiteraturePaper]) -> None:
                         bullet_points = result.get("ai_summary", [])
                         paper.ai_summary = "\n".join(f"- {s}" for s in bullet_points)
                         paper.ai_practice_note = result.get("ai_practice_note")
+                    # Report generation to observability backend.
+                    usage = data.get("usage") if isinstance(data, dict) else None
+                    usage_details = None
+                    if isinstance(usage, dict):
+                        usage_details = {
+                            k: int(v) for k, v in usage.items() if isinstance(v, int | float)
+                        }
+                    _obs.record_generation(
+                        trace_id=trace_id or "lit-unknown",
+                        name=f"summarize-{paper.paper_id}",
+                        model=model,
+                        usage_details=usage_details,
+                        input={"paper_title": paper.title},
+                        output={"title_zh": paper.title_zh},
+                    )
         except Exception:
             continue
         # Rate limiting: random delay between API calls
@@ -144,6 +170,7 @@ def _fetch_arxiv_papers(sub: LiteratureSubscription) -> list[LiteraturePaper]:
 
 async def fetch_for_subscription(
     sub: LiteratureSubscription,
+    reporter: ObservabilityReporter | None = None,
 ) -> list[LiteraturePaper]:
     """Fetch papers for a single subscription.
 
@@ -154,9 +181,27 @@ async def fetch_for_subscription(
     - ANTHROPIC_BASE_URL / DEEPSEEK_BASE_URL (default: https://api.deepseek.com)
     - AINRF_LITERATURE_MODEL / ANTHROPIC_MODEL (default: deepseek-v4-flash)
     """
+    from ainrf.observability.protocol import NullReporter
+
+    _obs = reporter or NullReporter()
+    trace_id = f"lit-{sub.subscription_id}"
+
+    _obs.start_trace(
+        trace_id=trace_id,
+        name="literature-fetch",
+        metadata={
+            "keywords": sub.keywords,
+            "categories": sub.arxiv_categories,
+        },
+    )
+
     papers = await asyncio.to_thread(_fetch_arxiv_papers, sub)
 
     if papers:
-        await _summarize_papers(papers)
+        await _summarize_papers(papers, _obs, trace_id)
 
+    _obs.end_trace(
+        trace_id=trace_id,
+        output={"paper_count": len(papers)},
+    )
     return papers

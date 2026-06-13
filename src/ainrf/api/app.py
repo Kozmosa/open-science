@@ -105,7 +105,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         auth_service = app.state.auth_service
         await _run_sync_in_lifespan(auth_service.initialize)
         await _run_sync_in_lifespan(app.state.literature_service.initialize)
-        literature_scheduler = LiteratureScheduler(app.state.literature_service)
+        literature_scheduler = LiteratureScheduler(
+            app.state.literature_service,
+            reporter=app.state.observability_reporter,
+        )
         literature_scheduler.start()
         app.state.literature_scheduler = literature_scheduler
         # Create initial admin if no users exist
@@ -241,10 +244,24 @@ def create_app(
     app.state.session_service = SessionService(
         state_root=api_config.state_root,
     )
+    # Initialize LLM observability reporter (singleton).
+    from ainrf.observability.factory import get_reporter
+    from ainrf.observability.protocol import ObservabilityConfig
+
+    obs_config = ObservabilityConfig(
+        enabled=api_config.observability_enabled,
+        base_url=api_config.observability_base_url,
+        secret_key=api_config.observability_secret_key,
+        public_key=api_config.observability_public_key,
+    )
+    reporter = get_reporter(obs_config)
+    app.state.observability_reporter = reporter
+
     agentic_researcher_service = AgenticResearcherService(
         state_root=api_config.state_root,
         workspace_service=app.state.workspace_service,
         auth_service=auth_service,
+        observability_reporter=reporter,
     )
     agentic_researcher_service.initialize()
     app.state.agentic_researcher_service = agentic_researcher_service

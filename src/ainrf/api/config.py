@@ -54,6 +54,10 @@ class ApiConfig:
     slow_request_threshold_seconds: float = 5.0
     public_registration_enabled: bool = True
     trusted_proxy_cidrs: tuple[str, ...] = ()
+    observability_enabled: bool = False
+    observability_base_url: str = ""
+    observability_secret_key: str = ""
+    observability_public_key: str = ""
 
     @property
     def runtime_paths(self) -> RuntimePathConfig:
@@ -102,6 +106,14 @@ class ApiConfig:
         ).lower() in ("1", "true", "yes")
         trusted_raw = os.environ.get("AINRF_TRUSTED_PROXY_CIDRS", "")
         trusted_proxy_cidrs = tuple(c.strip() for c in trusted_raw.split(",") if c.strip())
+        observability_enabled = os.environ.get("AINRF_OBSERVABILITY_ENABLED", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        observability_base_url = os.environ.get("AINRF_OBSERVABILITY_BASE_URL", "")
+        observability_secret_key = os.environ.get("AINRF_OBSERVABILITY_SECRET_KEY", "")
+        observability_public_key = os.environ.get("AINRF_OBSERVABILITY_PUBLIC_KEY", "")
         return cls(
             api_key_hashes=api_key_hashes,
             state_root=resolved_state_root,
@@ -117,6 +129,10 @@ class ApiConfig:
             slow_request_threshold_seconds=slow_request_threshold,
             public_registration_enabled=public_registration_enabled,
             trusted_proxy_cidrs=trusted_proxy_cidrs,
+            observability_enabled=observability_enabled,
+            observability_base_url=observability_base_url,
+            observability_secret_key=observability_secret_key,
+            observability_public_key=observability_public_key,
         )
 
     @staticmethod

@@ -55,6 +55,11 @@ services:
       CODEX_API_KEY: ${CODEX_API_KEY:-}
       CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+      # ── LLM Observability (Litefuse) ────────────────────────
+      AINRF_OBSERVABILITY_ENABLED: ${AINRF_OBSERVABILITY_ENABLED:-false}
+      AINRF_OBSERVABILITY_BASE_URL: ${AINRF_OBSERVABILITY_BASE_URL:-http://litefuse-web:3000}
+      AINRF_OBSERVABILITY_SECRET_KEY: ${AINRF_OBSERVABILITY_SECRET_KEY:-}
+      AINRF_OBSERVABILITY_PUBLIC_KEY: ${AINRF_OBSERVABILITY_PUBLIC_KEY:-}
     volumes:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces

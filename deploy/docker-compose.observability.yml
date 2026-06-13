@@ -1,0 +1,253 @@
+# ══════════════════════════════════════════════════════════════════
+# AINRF LLM Observability — Litefuse (Docker Compose Overlay)
+# ══════════════════════════════════════════════════════════════════
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# This overlay adds Litefuse (Langfuse fork) for LLM observability:
+#   - Trace-level visibility into every LLM call
+#   - Token usage dashboards with cost tracking
+#   - Prompt/completion logging and latency analysis
+#
+# Environment variables (set in .env):
+#   LITEFUSE_NEXTAUTH_SECRET  — NextAuth secret (openssl rand -hex 32)
+#   LITEFUSE_SALT             — Salt for hashing (openssl rand -hex 16)
+#   LITEFUSE_ENCRYPTION_KEY   — Encryption key (openssl rand -hex 16)
+#   LITEFUSE_POSTGRES_PASSWORD — Postgres password (openssl rand -hex 16)
+#   LITEFUSE_REDIS_AUTH       — Redis password (openssl rand -hex 16)
+#   LITEFUSE_MINIO_ROOT_PASSWORD — MinIO password (openssl rand -hex 16)
+#   AINRF_OBSERVABILITY_SECRET_KEY — Litefuse secret key (from Litefuse UI)
+#   AINRF_OBSERVABILITY_PUBLIC_KEY — Litefuse public key (from Litefuse UI)
+#
+# Quick secret generation:
+#   for var in NEXTAUTH_SECRET SALT ENCRYPTION_KEY POSTGRES_PASSWORD \
+#             REDIS_AUTH MINIO_ROOT_PASSWORD; do
+#     echo "LITEFUSE_${var}=$(openssl rand -hex 16)"
+#   done
+#
+# After first start, open http://localhost:13000 to create your admin
+# account and generate API keys. Then set AINRF_OBSERVABILITY_* in .env
+# and restart the ainrf service.
+# ══════════════════════════════════════════════════════════════════
+
+services:
+  # ── Litefuse Postgres ──────────────────────────────────────────
+  litefuse-postgres:
+    image: docker.1ms.run/postgres:16-alpine
+    container_name: ainrf-litefuse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: langfuse
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LITEFUSE_POSTGRES_PASSWORD:?Set LITEFUSE_POSTGRES_PASSWORD in .env}
+    volumes:
+      - litefuse-postgres-data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - litefuse-internal
+
+  # ── Litefuse Redis ─────────────────────────────────────────────
+  litefuse-redis:
+    image: docker.1ms.run/redis:7-alpine
+    container_name: ainrf-litefuse-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${LITEFUSE_REDIS_AUTH:?Set LITEFUSE_REDIS_AUTH in .env}
+    expose:
+      - "6379"
+    volumes:
+      - litefuse-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${LITEFUSE_REDIS_AUTH}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - litefuse-internal
+
+  # ── Litefuse MinIO (S3-compatible object storage) ──────────────
+  litefuse-minio:
+    image: docker.1ms.run/minio/minio:latest
+    container_name: ainrf-litefuse-minio
+    restart: unless-stopped
+    command: minio server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: langfuse
+      MINIO_ROOT_PASSWORD: ${LITEFUSE_MINIO_ROOT_PASSWORD:?Set LITEFUSE_MINIO_ROOT_PASSWORD in .env}
+    expose:
+      - "9000"
+      - "9001"
+    volumes:
+      - litefuse-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - litefuse-internal
+
+  # ── Litefuse Doris FE (Analytical data store — Frontend) ──────
+  litefuse-doris-fe:
+    image: docker.1ms.run/litefuse/doris-fe:${LITEFUSE_TAG:-latest}
+    container_name: ainrf-litefuse-doris-fe
+    restart: unless-stopped
+    environment:
+      FE_SERVERS: "fe1:ainrf-litefuse-doris-fe:9010"
+      FE_ID: "1"
+      TZ: UTC
+    expose:
+      - "8030"
+      - "9010"
+      - "9030"
+    volumes:
+      - litefuse-doris-fe-meta:/opt/apache-doris/fe/doris-meta
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8030/api/bootstrap || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - litefuse-internal
+      - litefuse-doris
+
+  # ── Litefuse Doris BE (Analytical data store — Backend) ───────
+  litefuse-doris-be:
+    image: docker.1ms.run/litefuse/doris-be:${LITEFUSE_TAG:-latest}
+    container_name: ainrf-litefuse-doris-be
+    restart: unless-stopped
+    environment:
+      FE_SERVERS: "fe1:ainrf-litefuse-doris-fe:9010"
+      BE_ADDR: "ainrf-litefuse-doris-be:9050"
+      TZ: UTC
+    expose:
+      - "8040"
+      - "9050"
+      - "9060"
+    volumes:
+      - litefuse-doris-be-storage:/opt/apache-doris/be/storage
+    depends_on:
+      litefuse-doris-fe:
+        condition: service_healthy
+    networks:
+      - litefuse-internal
+      - litefuse-doris
+
+  # ── Litefuse Web (UI + API) ────────────────────────────────────
+  litefuse-web:
+    image: docker.1ms.run/litefuse/langfuse:${LITEFUSE_TAG:-latest}
+    container_name: ainrf-litefuse-web
+    restart: unless-stopped
+    environment:
+      NEXTAUTH_SECRET: ${LITEFUSE_NEXTAUTH_SECRET:?Set LITEFUSE_NEXTAUTH_SECRET in .env}
+      SALT: ${LITEFUSE_SALT:?Set LITEFUSE_SALT in .env}
+      ENCRYPTION_KEY: ${LITEFUSE_ENCRYPTION_KEY:?Set LITEFUSE_ENCRYPTION_KEY in .env}
+      NEXTAUTH_URL: ${LITEFUSE_NEXTAUTH_URL:-http://localhost:13000}
+      DATABASE_URL: postgresql://langfuse:${LITEFUSE_POSTGRES_PASSWORD}@litefuse-postgres:5432/langfuse
+      REDIS_HOST: litefuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LITEFUSE_REDIS_AUTH}
+      # S3 / MinIO for event upload
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LITEFUSE_MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://litefuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      # Doris for analytics
+      LANGFUSE_ANALYTICS_BACKEND: doris
+      LANGFUSE_DORIS_HOST: litefuse-doris-fe
+      LANGFUSE_DORIS_PORT: "9030"
+      LANGFUSE_DORIS_USER: root
+      LANGFUSE_DORIS_PASSWORD: ""
+      LANGFUSE_DORIS_DATABASE: langfuse
+      # General
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+      TZ: UTC
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      litefuse-postgres:
+        condition: service_healthy
+      litefuse-redis:
+        condition: service_healthy
+      litefuse-minio:
+        condition: service_healthy
+      litefuse-doris-fe:
+        condition: service_healthy
+    ports:
+      - "${LITEFUSE_WEB_PORT:-13000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - litefuse-internal
+      - default
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ── Litefuse Worker (Background jobs) ──────────────────────────
+  litefuse-worker:
+    image: docker.1ms.run/litefuse/langfuse:${LITEFUSE_TAG:-latest}
+    container_name: ainrf-litefuse-worker
+    restart: unless-stopped
+    environment:
+      NEXTAUTH_SECRET: ${LITEFUSE_NEXTAUTH_SECRET:?Set LITEFUSE_NEXTAUTH_SECRET in .env}
+      SALT: ${LITEFUSE_SALT:?Set LITEFUSE_SALT in .env}
+      ENCRYPTION_KEY: ${LITEFUSE_ENCRYPTION_KEY:?Set LITEFUSE_ENCRYPTION_KEY in .env}
+      DATABASE_URL: postgresql://langfuse:${LITEFUSE_POSTGRES_PASSWORD}@litefuse-postgres:5432/langfuse
+      REDIS_HOST: litefuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LITEFUSE_REDIS_AUTH}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LITEFUSE_MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://litefuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_ANALYTICS_BACKEND: doris
+      LANGFUSE_DORIS_HOST: litefuse-doris-fe
+      LANGFUSE_DORIS_PORT: "9030"
+      LANGFUSE_DORIS_USER: root
+      LANGFUSE_DORIS_PASSWORD: ""
+      LANGFUSE_DORIS_DATABASE: langfuse
+      TZ: UTC
+      TELEMETRY_ENABLED: "false"
+    depends_on:
+      litefuse-postgres:
+        condition: service_healthy
+      litefuse-redis:
+        condition: service_healthy
+    networks:
+      - litefuse-internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  litefuse-postgres-data:
+  litefuse-redis-data:
+  litefuse-minio-data:
+  litefuse-doris-fe-meta:
+  litefuse-doris-be-storage:
+
+networks:
+  litefuse-internal:
+    driver: bridge
+  litefuse-doris:
+    driver: bridge

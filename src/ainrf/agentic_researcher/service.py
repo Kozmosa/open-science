@@ -29,6 +29,8 @@ from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
 from ainrf.harness_engine.base import HarnessEngine
 from ainrf.workspaces.service import WorkspaceNotFoundError
 
+from ainrf.observability.protocol import NullReporter, ObservabilityReporter
+
 if TYPE_CHECKING:
     from ainrf.workspaces import WorkspaceRegistryService
 
@@ -137,6 +139,14 @@ def _add_model_usage(target: dict, incoming: dict) -> None:
         current["tokens"] = _token_total(current)
 
 
+def _extract_model_from_usage(usage: dict) -> str | None:
+    """Return the first model name from a token_usage dict, if any."""
+    by_model = usage.get("by_model")
+    if isinstance(by_model, dict) and by_model:
+        return str(next(iter(by_model)))
+    return None
+
+
 def _merge_token_usage(current: dict, incoming: dict) -> dict:
     merged = _normalize_token_usage(current)
     normalized_incoming = _normalize_token_usage(incoming)
@@ -156,6 +166,7 @@ class AgenticResearcherService:
         workspace_service: WorkspaceRegistryService | None = None,
         engine_factory: Callable[[str], HarnessEngine] = get_engine,
         auth_service: AuthService | None = None,
+        observability_reporter: ObservabilityReporter | None = None,
     ) -> None:
         self._state_root = state_root
         self._runtime_root = state_root / "runtime"
@@ -163,6 +174,7 @@ class AgenticResearcherService:
         self._workspace_service = workspace_service
         self._engine_factory = engine_factory
         self._auth_service = auth_service
+        self._observability = observability_reporter or NullReporter()
         self._engines: dict[HarnessEngineType, HarnessEngine] = {}
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._initialized = False
@@ -347,6 +359,19 @@ class AgenticResearcherService:
         # (SSH executor, DB queries, etc.) carry the correlation key.
         structlog.contextvars.bind_contextvars(task_id=task_id)
 
+        self._observability.start_trace(
+            trace_id=task_id,
+            name=f"task-{task.researcher_type.value}-{task.harness_engine.value}",
+            user_id=task.owner_user_id,
+            session_id=task.project_id,
+            metadata={
+                "researcher_type": task.researcher_type.value,
+                "harness_engine": task.harness_engine.value,
+                "title": task.title,
+            },
+            input={"prompt": task.prompt},
+        )
+
         try:
             _LOG.info("task_starting", project_id=task.project_id, researcher_type=task.researcher_type.value)
             await self._set_status(task_id, TaskStatus.STARTING, started=True)
@@ -367,9 +392,15 @@ class AgenticResearcherService:
                 duration_ms = self._compute_duration_ms(latest)
                 await self._set_status(task_id, TaskStatus.SUCCEEDED, completed=True, exit_code=0)
                 _LOG.info("task_succeeded", duration_ms=duration_ms)
+            self._observability.end_trace(
+                trace_id=task_id, output={"status": "succeeded"},
+            )
         except asyncio.CancelledError:
             await self._set_status(task_id, TaskStatus.CANCELLED, completed=True)
             _LOG.warning("task_cancelled")
+            self._observability.end_trace(
+                trace_id=task_id, output={"status": "cancelled"},
+            )
             raise
         except Exception as exc:
             await self.append_output(task_id, "stderr", str(exc))
@@ -380,6 +411,9 @@ class AgenticResearcherService:
                 error_summary=str(exc),
             )
             _LOG.error("task_failed", error_summary=str(exc))
+            self._observability.end_trace(
+                trace_id=task_id, error=str(exc),
+            )
         finally:
             self._running_tasks.pop(task_id, None)
             structlog.contextvars.unbind_contextvars("task_id")
@@ -892,6 +926,22 @@ class AgenticResearcherService:
         if event.token_usage:
             await self._record_token_usage(
                 task_id, event.token_usage, replace=event.event_type != "token"
+            )
+            # Report LLM generation to observability backend (dual-write).
+            self._observability.record_generation(
+                trace_id=task_id,
+                name=f"llm-{event.event_type}",
+                model=_extract_model_from_usage(event.token_usage),
+                usage_details={
+                    k: _int_number(event.token_usage.get("total", {}).get(k))
+                    for k in TOKEN_TOTAL_FIELDS
+                },
+                cost_details={
+                    "cost_usd": _number(
+                        event.token_usage.get("total", {}).get("cost_usd")
+                    ),
+                },
+                metadata={"source": event.token_usage.get("source", "unknown")},
             )
         if event.event_type == "status":
             status = event.payload.get("status")
