@@ -713,7 +713,7 @@ export const getMonitoringSettings = (): Promise<MonitoringSettingsResponse> =>
         services: [
           { id: 'grafana', display_name: 'Grafana', description: 'Metrics dashboards, alerts, and visualization', url: '/grafana', icon: 'grafana' },
           { id: 'prometheus', display_name: 'Prometheus', description: 'Time-series metrics collection and querying', url: '/prometheus', icon: 'prometheus' },
-          { id: 'litefuse', display_name: 'Litefuse', description: 'LLM observability: traces, generations, and token analytics', url: '/litefuse', icon: 'litefuse' },
+          { id: 'litefuse', display_name: 'Litefuse', description: 'LLM observability: traces, generations, and token analytics', url: '/litefuse/', icon: 'litefuse' },
         ],
       })
     : api.get<MonitoringSettingsResponse>('/settings/monitoring');

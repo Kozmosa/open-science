@@ -58,7 +58,7 @@ docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up 
 |---------------------|---------|------|---------------|
 | **Grafana** | Infrastructure + API metrics | `:8192/grafana` | HTTP rates, auth events, SSH, DB latency |
 | **Prometheus** | Time-series metrics + queries | `:8192/prometheus` | Query builder, scrape targets, rules |
-| **Litefuse** | LLM call traces | `:8192/litefuse` | Per-call tokens, prompts, latency, cost |
+| **Litefuse** | LLM call traces | `:8192/litefuse/` | Per-call tokens, prompts, latency, cost |
 
 ### Named Docker Volumes (persistent data)
 

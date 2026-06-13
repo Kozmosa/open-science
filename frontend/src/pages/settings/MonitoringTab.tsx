@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, BarChart3, Activity, Sparkles, Server } from 'lucide-react';
 import { getMonitoringSettings } from '../../api';
@@ -18,13 +19,41 @@ function ServiceIcon({ icon, className }: { icon: string; className?: string }) 
   return <IconComponent className={className} />;
 }
 
+/** Returns true if the URL is an absolute external URL (has a scheme). */
+function isExternalUrl(url: string): boolean {
+  return /^https?:\/\//.test(url);
+}
+
 function MonitoringCard({ service }: { service: MonitoringServiceItem }) {
   const t = useT();
   const configured = !!service.url;
 
+  const handleNavigate = useCallback(() => {
+    if (!service.url) return;
+    if (isExternalUrl(service.url)) {
+      window.open(service.url, '_blank', 'noopener,noreferrer');
+    } else {
+      // Relative path — navigate in the same tab so browser back works.
+      window.location.href = service.url;
+    }
+  }, [service.url]);
+
   return (
     <div
-      className={`group relative flex flex-col rounded-xl border bg-[var(--surface)] p-5 transition-all duration-200 ${
+      role={configured ? 'button' : undefined}
+      tabIndex={configured ? 0 : undefined}
+      onClick={configured ? handleNavigate : undefined}
+      onKeyDown={
+        configured
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleNavigate();
+              }
+            }
+          : undefined
+      }
+      className={`group relative flex flex-col rounded-xl border bg-[var(--surface)] p-5 transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${
         configured
           ? 'border-[var(--border)] shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-pane)] hover:-translate-y-0.5 cursor-pointer'
           : 'border-dashed border-[var(--border)] opacity-60'
@@ -42,7 +71,7 @@ function MonitoringCard({ service }: { service: MonitoringServiceItem }) {
           <ServiceIcon icon={service.icon} className="h-5 w-5" />
         </div>
         {configured && (
-          <ExternalLink className="h-4 w-4 text-[var(--text-tertiary)] opacity-0 transition-opacity group-hover:opacity-100" />
+          <ExternalLink className="h-4 w-4 shrink-0 text-[var(--text-tertiary)] opacity-0 transition-opacity group-hover:opacity-100" />
         )}
       </div>
 
@@ -59,8 +88,8 @@ function MonitoringCard({ service }: { service: MonitoringServiceItem }) {
         {configured ? (
           <a
             href={service.url!}
-            target="_blank"
-            rel="noopener noreferrer"
+            target={isExternalUrl(service.url!) ? '_blank' : undefined}
+            rel={isExternalUrl(service.url!) ? 'noopener noreferrer' : undefined}
             className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)]/10 px-3 py-2 text-xs font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/20"
             onClick={(e) => e.stopPropagation()}
           >

@@ -231,7 +231,7 @@ _MONITORING_SERVICE_DEFAULTS: list[dict[str, object]] = [
         "description": "LLM observability: traces, generations, and token analytics",
         "icon": "litefuse",
         "env_var": "AINRF_MONITORING_LITEFUSE_URL",
-        "default_url": "/litefuse",
+        "default_url": "/litefuse/",
     },
 ]
 
