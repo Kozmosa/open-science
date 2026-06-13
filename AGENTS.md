@@ -415,7 +415,7 @@ bash scripts/staging.sh down
 |---------|---------|------------|
 | nginx | `:7192` | `:8192` |
 | backend | `:17000` | `:18000` |
-| prometheus | `:9090` | `:9091` |
+| prometheus | `:9092` | `:9091` |
 | grafana | `:2300` | `:3000` |
 
 **Backend hot-reload workflow:**

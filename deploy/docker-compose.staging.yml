@@ -22,7 +22,7 @@
 # Port mapping (staging ↔ production):
 #   nginx       :7192  (prod :8192)
 #   backend     :17000 (prod :18000)
-#   prometheus  :9090  (prod :9091)
+#   prometheus  :9092  (prod :9091)
 #   grafana     :2300  (prod :3000)
 #
 # ══════════════════════════════════════════════════════════════════
@@ -77,7 +77,7 @@ services:
       - "sh"
       - "-c"
       - >-
-        uvicorn ainrf.api:create_app --factory
+        python -m uvicorn ainrf.api:create_app --factory
         --host 127.0.0.1 --port 17000
         --reload --reload-dir /usr/local/lib/python3.13/site-packages/ainrf
     cap_add:
@@ -91,7 +91,10 @@ services:
         limits:
           memory: 4G
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:17000/health')"]
+      # TCP-only check: staging shares the host network with production,
+      # so port 2222 (sshd) is already owned by the production container.
+      # The /health endpoint does an SSH probe which fails — check TCP instead.
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',17000)); s.close()"]
       interval: 15s
       retries: 5
       start_period: 15s
@@ -132,7 +135,7 @@ services:
       - "--storage.tsdb.retention.time=7d"
       - "--storage.tsdb.retention.size=1GB"
       - "--web.enable-remote-write-receiver"
-      - "--web.listen-address=127.0.0.1:9090"
+      - "--web.listen-address=127.0.0.1:9092"
     depends_on:
       ainrf-staging:
         condition: service_healthy
