@@ -29,6 +29,10 @@ services:
       AINRF_LOGIN_MAX_FAILURES: "100"
       AINRF_LOGIN_LOCKOUT_HOURS: "0"
       AINRF_METRICS_ENABLED: "true"
+      # ── Monitoring / observability dashboard links (browser-facing) ──
+      AINRF_MONITORING_GRAFANA_URL: ${AINRF_MONITORING_GRAFANA_URL:-/grafana}
+      AINRF_MONITORING_PROMETHEUS_URL: ${AINRF_MONITORING_PROMETHEUS_URL:-/prometheus}
+      AINRF_MONITORING_LITEFUSE_URL: ${AINRF_MONITORING_LITEFUSE_URL:-/litefuse}
       # Seed mode: entrypoint creates test users on first boot
       AINRF_E2E_SEED: "1"
       # Agent tool keys — dummy for E2E; real keys only in CI secrets
