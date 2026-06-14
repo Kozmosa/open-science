@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 
 from ainrf.skills.discovery import SkillsDiscoveryService
-from ainrf.skills.models import InjectMode, SkillDefinition
-import pytest
+from ainrf.skills.models import InjectMode, SkillDefinition, SkillItem
 
 pytestmark = [pytest.mark.unit]
 
@@ -49,6 +49,41 @@ def test_discover_full_returns_definitions(tmp_path: Path) -> None:
     assert by_id["skill-two"].inject_mode == InjectMode.PROMPT_ONLY
 
 
+def test_discover_returns_items_from_physical_skills(tmp_path: Path) -> None:
+    """discover() returns SkillItem objects for the same physical skills."""
+    root = tmp_path / "skills"
+    root.mkdir()
+
+    _make_skill_dir(root, "skill-one", "Skill One")
+    _make_skill_dir(root, "skill-two", "Skill Two")
+
+    service = SkillsDiscoveryService(scan_roots=[root])
+    items = service.discover()
+    full = service.discover_full()
+
+    assert all(isinstance(item, SkillItem) for item in items)
+    assert {item.skill_id for item in items} == {skill.skill_id for skill in full}
+    assert {item.skill_id for item in items} == {"skill-one", "skill-two"}
+
+
+def test_discover_and_discover_full_use_same_scan_rules(tmp_path: Path) -> None:
+    """Both methods discover the same set of skills from scan roots."""
+    root = tmp_path / "skills-root"
+    root.mkdir()
+    subdir = root / "skills"
+    subdir.mkdir()
+
+    _make_skill_dir(root, "root-skill", "Root Skill")
+    _make_skill_dir(subdir, "subdir-skill", "Subdir Skill")
+
+    service = SkillsDiscoveryService(scan_roots=[root])
+    item_ids = {item.skill_id for item in service.discover()}
+    full_ids = {skill.skill_id for skill in service.discover_full()}
+
+    assert item_ids == full_ids
+    assert item_ids == {"root-skill", "subdir-skill"}
+
+
 def test_discover_full_deduplicates(tmp_path: Path) -> None:
     """When two scan roots have overlapping skill IDs, first root wins."""
     root1 = tmp_path / "skills1"
@@ -71,8 +106,8 @@ def test_discover_full_deduplicates(tmp_path: Path) -> None:
 def test_discover_full_empty_roots() -> None:
     """discover_full() with no scan roots returns empty list."""
     service = SkillsDiscoveryService(scan_roots=[])
-    results = service.discover_full()
-    assert results == []
+    assert service.discover_full() == []
+    assert service.discover() == []
 
 
 def test_discover_full_skips_invalid(tmp_path: Path) -> None:
@@ -94,35 +129,6 @@ def test_discover_full_skips_invalid(tmp_path: Path) -> None:
 
     assert len(results) == 1
     assert results[0].skill_id == "valid-skill"
-
-
-def test_discover_full_returns_builtin_and_scanned(tmp_path: Path) -> None:
-    """discover_full() does NOT include builtins; discover() does."""
-    root = tmp_path / "skills-root"
-    root.mkdir()
-    # discover_full scans immediate subdirectories of root
-    _make_skill_dir(root, "scanned-skill", "Scanned Skill")
-    # discover scans skills/ subdirectory under root
-    skills_subdir = root / "skills"
-    skills_subdir.mkdir()
-    _make_skill_dir(skills_subdir, "scanned-skill", "Scanned Skill")
-
-    service = SkillsDiscoveryService(scan_roots=[root])
-
-    full_results = service.discover_full()
-    discover_results = service.discover()
-
-    # discover_full should only have the scanned skill (no builtins)
-    full_ids = {s.skill_id for s in full_results}
-    assert "scanned-skill" in full_ids
-    assert "web-search" not in full_ids
-    assert "code-analysis" not in full_ids
-
-    # discover should have builtins + scanned skill
-    discover_ids = {s.skill_id for s in discover_results}
-    assert "scanned-skill" in discover_ids
-    assert "web-search" in discover_ids
-    assert "code-analysis" in discover_ids
 
 
 def test_discover_full_reads_package(tmp_path: Path) -> None:
@@ -149,21 +155,8 @@ def test_discover_full_reads_package(tmp_path: Path) -> None:
     assert results[0].package == "aris"
 
 
-def test_discover_reads_package_from_skills_json(tmp_path: Path) -> None:
-    """discover() reads package field from skills.json files."""
-    root = tmp_path / "skills-root"
-    root.mkdir()
-    skills_subdir = root / "skills"
-    skills_subdir.mkdir()
-
-    skills_json = skills_subdir / "skills.json"
-    skills_json.write_text(
-        json.dumps([{"skill_id": "json-skill", "label": "JSON Skill", "package": "my-pkg"}])
-    )
-
-    service = SkillsDiscoveryService(scan_roots=[root])
+def test_discover_no_virtual_skills(tmp_path: Path) -> None:
+    """discover() no longer returns virtual built-in skills when scan roots are empty."""
+    service = SkillsDiscoveryService(scan_roots=[tmp_path / "empty"])
     results = service.discover()
-
-    by_id = {s.skill_id: s for s in results}
-    assert "json-skill" in by_id
-    assert by_id["json-skill"].package == "my-pkg"
+    assert results == []
