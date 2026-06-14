@@ -881,6 +881,31 @@ class AgenticResearcherService:
 
         return str(load_dir)
 
+    @staticmethod
+    def _skills_need_codex(skill_load_dir: str, user_skills: list[str]) -> bool:
+        """Check whether any selected skill declares the codex MCP server.
+
+        Reads ``skill.json`` for each requested skill and returns ``True`` if
+        at least one lists ``"codex"`` in its ``mcp_servers`` field.  This
+        avoids starting the Codex MCP server for every skill-enabled task.
+        """
+        import json
+
+        load_dir = Path(skill_load_dir)
+        for skill_id in user_skills:
+            skill_json = load_dir / skill_id / "skill.json"
+            if not skill_json.is_file():
+                continue
+            try:
+                data = json.loads(skill_json.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    mcp_servers = data.get("mcp_servers", [])
+                    if isinstance(mcp_servers, list) and "codex" in mcp_servers:
+                        return True
+            except (json.JSONDecodeError, OSError):
+                continue
+        return False
+
     def _build_execution_context(self, task: Task) -> ExecutionContext:
         tenant_user = self._resolve_tenant_user(task.owner_user_id)
         working_directory = self._resolve_working_directory(task, tenant_user=tenant_user)
@@ -890,9 +915,11 @@ class AgenticResearcherService:
         )
         skill_load_dir = self._resolve_skill_load_dir(task)
 
-        # When ARIS skills are loaded, automatically add the Codex MCP server
-        # so that research review skills can perform cross-model validation.
-        if skill_load_dir is not None:
+        # Add the Codex MCP server only when a selected skill explicitly declares
+        # it in skill.json, instead of injecting it for every skill-enabled task.
+        if skill_load_dir is not None and self._skills_need_codex(
+            skill_load_dir, task.user_skills
+        ):
             from ainrf.harness_engine.mcp_servers import _codex_mcp_config
 
             mcp_servers.setdefault("codex", _codex_mcp_config())

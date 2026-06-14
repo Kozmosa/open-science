@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
@@ -8,13 +9,79 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def _resolve_skill_dependencies(load_dir: Path, requested: list[str]) -> list[str]:
+    """Expand requested skills to include their declared dependencies.
+
+    Reads ``skill.json`` from the load directory for each requested skill and
+    recursively adds dependency skill IDs. Circular dependencies are broken by
+    tracking visited skills. Missing dependencies are logged and skipped.
+
+    Returns a topologically-ish ordered list with each dependency appearing
+    before the skill that depends on it.
+    """
+    resolved: list[str] = []
+    visited: set[str] = set()
+    stack: set[str] = set()
+
+    def visit(skill_id: str) -> None:
+        if skill_id in visited:
+            return
+        if skill_id in stack:
+            logger.warning("circular dependency detected involving skill %s", skill_id)
+            return
+
+        stack.add(skill_id)
+        skill_dir = load_dir / skill_id
+        skill_json = skill_dir / "skill.json"
+        deps: list[str] = []
+        if skill_json.is_file():
+            try:
+                data = json.loads(skill_json.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    raw_deps = data.get("dependencies", [])
+                    if isinstance(raw_deps, list):
+                        deps = [str(d) for d in raw_deps if isinstance(d, str)]
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        for dep in deps:
+            dep_dir = load_dir / dep
+            if dep_dir.is_dir():
+                visit(dep)
+            else:
+                logger.warning(
+                    "dependency %s of skill %s not found in load dir %s, skipping",
+                    dep,
+                    skill_id,
+                    load_dir,
+                )
+
+        stack.remove(skill_id)
+        if skill_id not in visited:
+            visited.add(skill_id)
+            resolved.append(skill_id)
+
+    for skill_id in requested:
+        skill_dir = load_dir / skill_id
+        if skill_dir.is_dir():
+            visit(skill_id)
+        else:
+            logger.warning(
+                "requested skill %s not found in load dir %s, skipping",
+                skill_id,
+                load_dir,
+            )
+
+    return resolved
+
+
 def prepare_workspace_skills(
     working_directory: str,
     skill_load_dir: str,
     requested_skills: list[str],
     tenant_user: str | None = None,
 ) -> list[Path]:
-    """Symlink requested skill directories into ``<workdir>/.claude/skills/``.
+    """Symlink requested skill directories (and their dependencies) into ``<workdir>/.claude/skills/``.
 
     Both Claude Code and the Claude Agent SDK discover skills by scanning
     ``.claude/skills/<name>/SKILL.md`` in the project directory.  This helper
@@ -66,7 +133,9 @@ def prepare_workspace_skills(
         else:
             p.unlink(missing_ok=True)
 
-    for skill_id in requested_skills:
+    skills_to_mount = _resolve_skill_dependencies(load_dir, requested_skills)
+
+    for skill_id in skills_to_mount:
         source = load_dir / skill_id
         if not source.is_dir():
             logger.debug("skill %s not found in load dir %s, skipping", skill_id, load_dir)

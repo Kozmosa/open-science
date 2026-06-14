@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -327,16 +328,19 @@ def test_build_execution_context_includes_skill_load_dir(
     assert ctx.skills == ["arxiv"]
 
 
-def test_build_execution_context_adds_codex_mcp_when_skills_loaded(
+def test_build_execution_context_adds_codex_mcp_when_skill_declares_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Codex MCP is automatically added when ARIS skills are loaded."""
+    """Codex MCP is automatically added when a selected skill declares it."""
     monkeypatch.setenv("HOME", str(tmp_path))
     workspace_dir = tmp_path / ".ainrf_workspaces" / "default"
     load_dir = workspace_dir / "skills"
     skill_dir = load_dir / "research-lit"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("# research-lit\n")
+    (skill_dir / "skill.json").write_text(
+        json.dumps({"skill_id": "research-lit", "mcp_servers": ["codex"]})
+    )
 
     svc = AgenticResearcherService(state_root=tmp_path)
     svc.initialize()
