@@ -18,6 +18,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/deploy/docker-compose.staging.yml"
 
+# shellcheck source=../deploy/lib/health.sh
+source "${REPO_ROOT}/deploy/lib/health.sh"
+
 COMPOSE_CMD=(docker compose -f "${COMPOSE_FILE}")
 
 # ── Colors ─────────────────────────────────────────────────────────
@@ -51,20 +54,8 @@ cmd_up() {
   "${COMPOSE_CMD[@]}" up -d --build
 
   _info "Waiting for backend to become healthy..."
-  local retries=60
-  while ((retries > 0)); do
-    if curl -sf http://localhost:17000/health >/dev/null 2>&1; then
-      _info "Backend is healthy!"
-      break
-    fi
-    retries=$((retries - 1))
-    sleep 2
-  done
-  if ((retries == 0)); then
-    _error "Backend did not become healthy in time. Check logs:"
-    echo "  ${COMPOSE_CMD[*]} logs ainrf-staging"
-    exit 1
-  fi
+  wait_for_compose_service "${COMPOSE_FILE}" "ainrf-staging" 60 2
+  wait_for_url "http://localhost:17000/health" 60 2
 
   echo
   _info "${BOLD}Staging environment is ready!${NC}"
@@ -91,13 +82,13 @@ cmd_status() {
   "${COMPOSE_CMD[@]}" ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
   echo
 
-  if curl -sf http://localhost:17000/health >/dev/null 2>&1; then
+  if wait_for_url "http://localhost:17000/health" 1 0 >/dev/null 2>&1; then
     _info "Backend: ${GREEN}healthy${NC}"
   else
     _warn "Backend: not responding"
   fi
 
-  if curl -sf http://localhost:7192/ >/dev/null 2>&1; then
+  if wait_for_url "http://localhost:7192/" 1 0 >/dev/null 2>&1; then
     _info "Nginx:   ${GREEN}healthy${NC}"
   else
     _warn "Nginx:   not responding"

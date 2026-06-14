@@ -123,6 +123,12 @@ services:
     depends_on:
       ainrf-staging:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:7192/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     logging:
       driver: json-file
       options:

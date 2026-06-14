@@ -3,7 +3,7 @@
 #
 # The frontend ships its own build-info (frontend/dist/build-info.json),
 # captured at `npm run build` time. nginx bind-mounts the host
-# frontend/dist, so a rebuild + nginx restart is enough — no image
+# frontend/dist, so a rebuild + nginx recreate is enough — no image
 # rebuild needed.
 #
 # Usage:
@@ -14,6 +14,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 REPO_ROOT="$(cd .. && pwd)"
+
+# Load shared health helpers.
+# shellcheck source=lib/health.sh
+source "${REPO_ROOT}/deploy/lib/health.sh"
 
 TARGET="production"
 EXTRA_ARGS=()
@@ -35,13 +39,15 @@ case "$TARGET" in
   production)
     COMPOSE_FILE="docker-compose.cpu.yml"
     SERVICE="nginx"
+    NGINX_HEALTH_URL="http://localhost:8192/health"
     ;;
   staging)
     COMPOSE_FILE="docker-compose.staging.yml"
     SERVICE="nginx-staging"
+    NGINX_HEALTH_URL="http://localhost:7192/health"
     ;;
   *)
-    echo "Unknown target: $TARGET (use 'production' or 'staging')" >&2
+    _ainrf_error "Unknown target: $TARGET (use 'production' or 'staging')"
     exit 1
     ;;
 esac
@@ -51,6 +57,15 @@ cd "${REPO_ROOT}/frontend"
 npm run build
 
 echo
-echo "=== Restarting ${SERVICE} (${TARGET}) ==="
+echo "=== Recreating ${SERVICE} (${TARGET}) ==="
 cd "${REPO_ROOT}/deploy"
-exec docker compose -f "${COMPOSE_FILE}" restart "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
+# Use --force-recreate so nginx picks up any changes to nginx-host.conf or
+# nginx-staging.conf, not just the updated frontend/dist.
+docker compose -f "${COMPOSE_FILE}" up -d --no-deps --force-recreate "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
+
+# Verify nginx serves traffic through the reverse proxy.
+wait_for_url "${NGINX_HEALTH_URL}" 30 2
+
+echo
+echo "=== ${TARGET} frontend redeploy complete ==="
+echo "  Nginx: ${NGINX_HEALTH_URL}"

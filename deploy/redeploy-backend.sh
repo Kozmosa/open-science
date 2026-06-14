@@ -14,6 +14,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 REPO_ROOT="$(cd .. && pwd)"
 
+# Load shared health helpers.
+# shellcheck source=lib/health.sh
+source "${REPO_ROOT}/deploy/lib/health.sh"
+
 TARGET="production"
 EXTRA_ARGS=()
 
@@ -34,13 +38,19 @@ case "$TARGET" in
   production)
     COMPOSE_FILE="docker-compose.cpu.yml"
     SERVICE="ainrf"
+    NGINX_SERVICE="nginx"
+    BACKEND_HEALTH_URL="http://localhost:18000/health"
+    NGINX_HEALTH_URL="http://localhost:8192/health"
     ;;
   staging)
     COMPOSE_FILE="docker-compose.staging.yml"
     SERVICE="ainrf-staging"
+    NGINX_SERVICE="nginx-staging"
+    BACKEND_HEALTH_URL="http://localhost:17000/health"
+    NGINX_HEALTH_URL="http://localhost:7192/health"
     ;;
   *)
-    echo "Unknown target: $TARGET (use 'production' or 'staging')" >&2
+    _ainrf_error "Unknown target: $TARGET (use 'production' or 'staging')"
     exit 1
     ;;
 esac
@@ -56,4 +66,21 @@ echo "  committed_at: ${AINRF_BUILD_COMMITTED_AT}"
 echo "  target:       ${TARGET} (${SERVICE})"
 echo
 
-exec docker compose -f "${COMPOSE_FILE}" up -d --build "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
+docker compose -f "${COMPOSE_FILE}" up -d --build "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
+
+# Propagate nginx config changes too.  A plain 'docker compose up --build ainrf'
+# leaves the nginx container untouched, which can hide stale configs (e.g. the
+# container still references litefuse-web while the host config was switched to
+# 127.0.0.1).
+echo "=== Recreating ${NGINX_SERVICE} to pick up latest nginx config ==="
+docker compose -f "${COMPOSE_FILE}" up -d --no-deps --force-recreate "${NGINX_SERVICE}"
+
+# Wait for both backend and nginx to be responsive.
+wait_for_compose_service "${COMPOSE_FILE}" "${SERVICE}" 30 2
+wait_for_url "${BACKEND_HEALTH_URL}" 30 2
+wait_for_url "${NGINX_HEALTH_URL}" 30 2
+
+echo
+echo "=== ${TARGET} backend redeploy complete ==="
+echo "  Backend: ${BACKEND_HEALTH_URL}"
+echo "  Nginx:   ${NGINX_HEALTH_URL}"
