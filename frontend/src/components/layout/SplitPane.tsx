@@ -155,7 +155,7 @@ export default function SplitPane({
 
       {rightSidebar && (
         <aside
-          className="flex shrink-0 flex-col overflow-y-auto border-l border-[var(--sidebar-border)] bg-[var(--sidebar)] p-3"
+          className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
           style={{ width: rightSidebarWidth }}
           data-testid={rightSidebarTestId}
         >

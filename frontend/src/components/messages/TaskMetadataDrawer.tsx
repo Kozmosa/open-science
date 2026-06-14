@@ -55,16 +55,18 @@ export default function TaskMetadataDrawer({ task, open, onToggleCollapsed }: Ta
 
   if (!open) {
     return (
-      <div className="flex h-full flex-col items-center pt-1">
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
-          title={t('pages.tasks.layout.expandSidebar')}
-          aria-label={t('pages.tasks.layout.expandSidebar')}
-        >
-          <PanelRightOpen size={16} />
-        </button>
+      <div className="flex h-full flex-col">
+        <div className="-mx-3 -mt-3 flex items-center justify-center border-b border-[var(--sidebar-border)] py-2">
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
+            title={t('pages.tasks.layout.expandSidebar')}
+            aria-label={t('pages.tasks.layout.expandSidebar')}
+          >
+            <PanelRightOpen size={16} />
+          </button>
+        </div>
       </div>
     );
   }

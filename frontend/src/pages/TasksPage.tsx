@@ -224,16 +224,18 @@ function TasksPage() {
     : SIDEBAR_COLLAPSED_WIDTH;
 
   const taskSidebarContent = taskSidebarCollapsed ? (
-    <div className="flex h-full flex-col items-center pt-1">
-      <button
-        type="button"
-        onClick={toggleTaskSidebar}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
-        title={t('layout.expandSidebar')}
-        aria-label={t('layout.expandSidebar')}
-      >
-        <PanelLeftOpen size={16} />
-      </button>
+    <div className="flex h-full flex-col">
+      <div className="-mx-3 -mt-3 flex items-center justify-center border-b border-[var(--sidebar-border)] py-2">
+        <button
+          type="button"
+          onClick={toggleTaskSidebar}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
+          title={t('layout.expandSidebar')}
+          aria-label={t('layout.expandSidebar')}
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+      </div>
     </div>
   ) : (
     <>
