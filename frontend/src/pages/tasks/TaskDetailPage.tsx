@@ -1,11 +1,9 @@
-import { useSearchParams } from 'react-router-dom';
 import { useT } from '../../i18n';
 import { useTaskActions } from './useTaskActions';
 import { useTaskMessages } from './useTaskMessages';
 import MessageList from '../../components/messages/MessageList';
 import TaskHeaderBar from '../../components/messages/TaskHeaderBar';
 import TaskInputBar from './TaskInputBar';
-import TaskMetadataDrawer from '../../components/messages/TaskMetadataDrawer';
 import type { TaskOutputEvent, TaskRecord } from '../../types';
 
 const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
@@ -19,6 +17,8 @@ interface TaskDetailPageProps {
   hasMore: boolean;
   loadMore: () => void;
   isLoadingMore: boolean;
+  metadataSidebarOpen?: boolean;
+  onToggleMetadataSidebar?: () => void;
 }
 
 export default function TaskDetailPage({
@@ -30,25 +30,12 @@ export default function TaskDetailPage({
   hasMore,
   loadMore,
   isLoadingMore,
+  metadataSidebarOpen = true,
+  onToggleMetadataSidebar = () => {},
 }: TaskDetailPageProps) {
   const t = useT();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const drawerOpen = searchParams.get('sidebar') !== 'closed';
-
   const { messages, isLoading, error } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
   const actions = useTaskActions(taskId);
-
-  const toggleDrawer = () => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      if (drawerOpen) {
-        next.set('sidebar', 'closed');
-      } else {
-        next.delete('sidebar');
-      }
-      return next;
-    });
-  };
 
   if (detailError) {
     return (
@@ -83,7 +70,8 @@ export default function TaskDetailPage({
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
       <TaskHeaderBar
         task={selectedTask}
-        onToggleDrawer={toggleDrawer}
+        onToggleDrawer={onToggleMetadataSidebar}
+        metadataSidebarOpen={metadataSidebarOpen}
         showPause={showPause}
         showResume={showResume}
         onPause={() => actions.pause()}
@@ -116,18 +104,6 @@ export default function TaskDetailPage({
       </div>
 
       {showInput && <TaskInputBar onSubmit={actions.sendPrompt} disabled={actions.isPending} />}
-
-      <TaskMetadataDrawer
-        task={selectedTask}
-        open={drawerOpen}
-        onClose={() => {
-          setSearchParams((current) => {
-            const next = new URLSearchParams(current);
-            next.set('sidebar', 'closed');
-            return next;
-          });
-        }}
-      />
     </section>
   );
 }

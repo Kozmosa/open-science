@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
@@ -25,8 +25,12 @@ import type { TaskCreatePayload, TaskListResponse } from '../types';
 import TaskCreateForm from './tasks/TaskCreateForm';
 import TaskDetailPage from './tasks/TaskDetailPage';
 import TaskList from './tasks/TaskList';
+import TaskMetadataDrawer from '../components/messages/TaskMetadataDrawer';
 import { useTaskStream } from './tasks/useTaskStream';
 
+const SIDEBAR_COLLAPSED_WIDTH = 48;
+const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
+const DEFAULT_METADATA_SIDEBAR_WIDTH = 320;
 
 function TasksPage() {
   const t = useT();
@@ -45,8 +49,10 @@ function TasksPage() {
 
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
-  const [taskSidebarWidth, setTaskSidebarWidth] = useState(320);
-  const createButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [taskSidebarWidth, setTaskSidebarWidth] = useState(DEFAULT_TASK_SIDEBAR_WIDTH);
+  const [taskSidebarCollapsed, setTaskSidebarCollapsed] = useState(false);
+  const [metadataSidebarWidth, setMetadataSidebarWidth] = useState(DEFAULT_METADATA_SIDEBAR_WIDTH);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
 
   const requestedTaskId = searchParams.get('task');
   const effectiveSelectedTaskId = useMemo(() => {
@@ -55,6 +61,8 @@ function TasksPage() {
     }
     return tasks[0]?.task_id ?? null;
   }, [requestedTaskId, tasks]);
+
+  const metadataSidebarOpen = searchParams.get('sidebar') !== 'closed';
 
   const selectTask = useCallback(
     (taskId: string | null) => {
@@ -70,6 +78,22 @@ function TasksPage() {
     },
     [setSearchParams]
   );
+
+  const toggleMetadataSidebar = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (metadataSidebarOpen) {
+        next.set('sidebar', 'closed');
+      } else {
+        next.delete('sidebar');
+      }
+      return next;
+    });
+  }, [metadataSidebarOpen, setSearchParams]);
+
+  const toggleTaskSidebar = useCallback(() => {
+    setTaskSidebarCollapsed((current) => !current);
+  }, []);
 
   useEffect(() => {
     if (effectiveSelectedTaskId && requestedTaskId !== effectiveSelectedTaskId) {
@@ -192,91 +216,136 @@ function TasksPage() {
     window.setTimeout(() => createButtonRef.current?.focus(), 0);
   }, []);
 
+  const effectiveTaskSidebarWidth = taskSidebarCollapsed
+    ? SIDEBAR_COLLAPSED_WIDTH
+    : taskSidebarWidth;
+  const effectiveMetadataSidebarWidth = metadataSidebarOpen
+    ? metadataSidebarWidth
+    : SIDEBAR_COLLAPSED_WIDTH;
+
+  const taskSidebarContent = taskSidebarCollapsed ? (
+    <div className="flex h-full flex-col items-center pt-1">
+      <button
+        type="button"
+        onClick={toggleTaskSidebar}
+        className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
+        title={t('layout.expandSidebar')}
+        aria-label={t('layout.expandSidebar')}
+      >
+        <PanelLeftOpen size={16} />
+      </button>
+    </div>
+  ) : (
+    <>
+      <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+            {t('pages.tasks.sidebarEyebrow')}
+          </p>
+          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
+            {t('pages.tasks.sidebarTitle')}
+          </h1>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+            {t('pages.tasks.sidebarCount', { count: tasks.length })}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <button
+            type="button"
+            onClick={toggleTaskSidebar}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
+            title={t('layout.collapseSidebar')}
+            aria-label={t('layout.collapseSidebar')}
+          >
+            <PanelLeftClose size={16} />
+          </button>
+          <Button
+            ref={createButtonRef}
+            onClick={() => setCreateDialogOpen(true)}
+            className="inline-flex h-9 shrink-0 items-center px-3 shadow-sm transition-all"
+          >
+            <Plus size={15} className="shrink-0" />
+            <span
+              className={[
+                'overflow-hidden whitespace-nowrap transition-all duration-200',
+                taskSidebarWidth < 300 ? 'ml-0 max-w-0 opacity-0' : 'ml-2 max-w-[100px] opacity-100',
+              ].join(' ')}
+            >
+              {t('pages.tasks.newTask')}
+            </span>
+          </Button>
+          <Select
+            value={taskSort}
+            onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
+            className="w-full text-[11px] py-1"
+          >
+            <option value="updated">{t('pages.tasks.sort.updated')}</option>
+            <option value="created">{t('pages.tasks.sort.created')}</option>
+            <option value="name">{t('pages.tasks.sort.name')}</option>
+          </Select>
+          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(event) => setShowArchived(event.target.checked)}
+              className="rounded border-[var(--border)]"
+            />
+            {t('pages.tasks.actions.showArchived')}
+          </label>
+        </div>
+      </div>
+
+      <TaskList
+        tasks={tasks}
+        selectedTaskId={effectiveSelectedTaskId}
+        tasksError={tasksError}
+        searchQuery={taskSearchQuery}
+        showArchived={showArchived}
+        onSearchQueryChange={setTaskSearchQuery}
+        onSelectTask={selectTask}
+        onArchiveTask={(taskId) => archiveMutation.mutate(taskId)}
+        onCancelTask={(taskId) => cancelMutation.mutate(taskId)}
+        onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
+        onRetryTask={(taskId) => retryMutation.mutate(taskId)}
+      />
+    </>
+  );
+
   return (
     <>
       <PageShell>
         <SplitPane
-        sidebar={
-          <>
-            <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-                {t('pages.tasks.sidebarEyebrow')}
-              </p>
-              <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
-                {t('pages.tasks.sidebarTitle')}
-              </h1>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                {t('pages.tasks.sidebarCount', { count: tasks.length })}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <Button
-                ref={createButtonRef}
-                onClick={() => setCreateDialogOpen(true)}
-                className="inline-flex h-9 shrink-0 items-center px-3 shadow-sm transition-all"
-              >
-                <Plus size={15} className="shrink-0" />
-                <span
-                  className={[
-                    'overflow-hidden whitespace-nowrap transition-all duration-200',
-                    taskSidebarWidth < 300 ? 'ml-0 max-w-0 opacity-0' : 'ml-2 max-w-[100px] opacity-100',
-                  ].join(' ')}
-                >
-                  {t('pages.tasks.newTask')}
-                </span>
-              </Button>
-              <Select
-                value={taskSort}
-                onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
-                className="w-full text-[11px] py-1"
-              >
-                <option value="updated">{t('pages.tasks.sort.updated')}</option>
-                <option value="created">{t('pages.tasks.sort.created')}</option>
-                <option value="name">{t('pages.tasks.sort.name')}</option>
-              </Select>
-              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
-                <input
-                  type="checkbox"
-                  checked={showArchived}
-                  onChange={(event) => setShowArchived(event.target.checked)}
-                  className="rounded border-[var(--border)]"
-                />
-                {t('pages.tasks.actions.showArchived')}
-              </label>
-            </div>
-          </div>
-
-          <TaskList
-            tasks={tasks}
-            selectedTaskId={effectiveSelectedTaskId}
-            tasksError={tasksError}
-            searchQuery={taskSearchQuery}
-            showArchived={showArchived}
-            onSearchQueryChange={setTaskSearchQuery}
-            onSelectTask={selectTask}
-            onArchiveTask={(taskId) => archiveMutation.mutate(taskId)}
-            onCancelTask={(taskId) => cancelMutation.mutate(taskId)}
-            onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
-            onRetryTask={(taskId) => retryMutation.mutate(taskId)}
+          sidebar={taskSidebarContent}
+          sidebarWidth={effectiveTaskSidebarWidth}
+          onSidebarWidthChange={setTaskSidebarWidth}
+          rightSidebar={
+            selectedTask ? (
+              <TaskMetadataDrawer
+                task={selectedTask}
+                open={metadataSidebarOpen}
+                onToggleCollapsed={toggleMetadataSidebar}
+              />
+            ) : null
+          }
+          rightSidebarWidth={effectiveMetadataSidebarWidth}
+          onRightSidebarWidthChange={setMetadataSidebarWidth}
+          sidebarTestId="task-sidebar"
+          rightSidebarTestId="task-metadata-sidebar"
+        >
+          <TaskDetailPage
+            key={effectiveSelectedTaskId ?? 'none'}
+            taskId={effectiveSelectedTaskId}
+            selectedTask={selectedTask}
+            detailError={detailError}
+            outputItems={outputItems}
+            outputError={outputError}
+            hasMore={hasMore}
+            loadMore={loadMore}
+            isLoadingMore={isLoadingMore}
+            metadataSidebarOpen={metadataSidebarOpen}
+            onToggleMetadataSidebar={toggleMetadataSidebar}
           />
-        </>}
-        sidebarWidth={taskSidebarWidth}
-        onSidebarWidthChange={setTaskSidebarWidth}
-        sidebarTestId="task-sidebar"
-      >
-        <TaskDetailPage
-          key={effectiveSelectedTaskId ?? 'none'}
-          taskId={effectiveSelectedTaskId}
-          selectedTask={selectedTask}
-          detailError={detailError}
-          outputItems={outputItems}
-          outputError={outputError}
-          hasMore={hasMore}
-          loadMore={loadMore}
-          isLoadingMore={isLoadingMore}
-        />
-      </SplitPane>
+        </SplitPane>
       </PageShell>
 
       <Modal

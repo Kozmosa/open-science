@@ -1,12 +1,12 @@
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Alert } from '../ui';
-import { Drawer } from '../shared';
 import { useT } from '../../i18n';
 import type { TaskRecord } from '../../types';
 
 interface TaskMetadataDrawerProps {
   task: TaskRecord;
   open: boolean;
-  onClose: () => void;
+  onToggleCollapsed: () => void;
 }
 
 function MetadataRow({
@@ -31,7 +31,7 @@ function MetadataRow({
   );
 }
 
-export default function TaskMetadataDrawer({ task, open, onClose }: TaskMetadataDrawerProps) {
+export default function TaskMetadataDrawer({ task, open, onToggleCollapsed }: TaskMetadataDrawerProps) {
   const t = useT();
   const fallback = t('pages.tasks.unavailable');
 
@@ -53,9 +53,42 @@ export default function TaskMetadataDrawer({ task, open, onClose }: TaskMetadata
     task.binding?.environment?.display_name ??
     null;
 
+  if (!open) {
+    return (
+      <div className="flex h-full flex-col items-center pt-1">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
+          title={t('pages.tasks.layout.expandSidebar')}
+          aria-label={t('pages.tasks.layout.expandSidebar')}
+        >
+          <PanelRightOpen size={16} />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <Drawer open={open} onClose={onClose} title={t('pages.tasks.summary')} width={380}>
-      <div className="flex h-full flex-col gap-5 p-4">
+    <>
+      <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+            {t('pages.tasks.summary')}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
+          title={t('pages.tasks.layout.collapseSidebar')}
+          aria-label={t('pages.tasks.layout.collapseSidebar')}
+        >
+          <PanelRightClose size={16} />
+        </button>
+      </div>
+
+      <div className="flex h-full flex-col gap-5 overflow-y-auto">
         {task.error_summary && (
           <Alert variant="error" className="shrink-0">{task.error_summary}</Alert>
         )}
@@ -90,6 +123,6 @@ export default function TaskMetadataDrawer({ task, open, onClose }: TaskMetadata
           </div>
         </section>
       </div>
-    </Drawer>
+    </>
   );
 }

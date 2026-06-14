@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
-import { PanelRightOpen } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { updateTask } from '../../api';
 import { useT } from '../../i18n';
 import { statusClassName } from '../../pages/tasks/status';
@@ -9,6 +9,7 @@ import type { TaskRecord } from '../../types';
 interface TaskHeaderBarProps {
   task: TaskRecord;
   onToggleDrawer: () => void;
+  metadataSidebarOpen?: boolean;
   showPause?: boolean;
   showResume?: boolean;
   onPause?: () => void;
@@ -18,6 +19,7 @@ interface TaskHeaderBarProps {
 export default function TaskHeaderBar({
   task,
   onToggleDrawer,
+  metadataSidebarOpen = true,
   showPause = false,
   showResume = false,
   onPause,
@@ -106,10 +108,10 @@ export default function TaskHeaderBar({
           type="button"
           onClick={onToggleDrawer}
           className="flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] transition hover:bg-[var(--border)] hover:text-[var(--text)]"
-          title={t('pages.tasks.layout.expandSidebar')}
-          aria-label={t('pages.tasks.layout.expandSidebar')}
+          title={metadataSidebarOpen ? t('pages.tasks.layout.collapseSidebar') : t('pages.tasks.layout.expandSidebar')}
+          aria-label={metadataSidebarOpen ? t('pages.tasks.layout.collapseSidebar') : t('pages.tasks.layout.expandSidebar')}
         >
-          <PanelRightOpen size={16} />
+          {metadataSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
         </button>
       </div>
     </header>
