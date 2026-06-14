@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from ainrf.skills.json_generator import generate_skill_json, parse_skill_md_frontmatter
 from ainrf.skills.registry_models import SkillRegistryConfig, SkillRegistryStatus
+
+
+_YAML_DELIM_RE = re.compile(r"^---\s*$", re.MULTILINE)
 
 
 class DirtyWorktreeError(Exception):
@@ -19,6 +25,10 @@ class DirtyWorktreeError(Exception):
     def __init__(self, files: list[str]) -> None:
         self.files = files
         super().__init__(f"Git worktree is dirty: {', '.join(files)}")
+
+
+class SkillSyncError(RuntimeError):
+    """Raised when skill validation or sync fails before any changes are made."""
 
 
 class SkillRegistrySyncService:
@@ -42,6 +52,9 @@ class SkillRegistrySyncService:
     def _manifest_path(self) -> Path:
         """Path to the sync manifest file tracking skills installed by this registry."""
         return self.load_dir / ".ainrf-registry-manifest.json"
+
+    def _backup_dir_for(self, skill_name: str, timestamp: str) -> Path:
+        return self.load_dir / f"{skill_name}.bak.{timestamp}"
 
     def is_installed(self) -> bool:
         """Check if this registry has been installed in the load directory."""
@@ -135,8 +148,44 @@ class SkillRegistrySyncService:
         added, removed = self._sync_all()
         return self._build_status(), added, removed
 
+    def rollback(self) -> tuple[list[str], list[str]]:
+        """Rollback the most recent sync by restoring per-skill backups.
+
+        Returns:
+            Tuple of (restored_skill_names, backup_names_removed).
+        """
+        if not self.is_installed():
+            raise RuntimeError("Registry is not installed; nothing to rollback")
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        restored: list[str] = []
+        removed_backups: list[str] = []
+
+        for backup in sorted(self.load_dir.glob("*.bak.*")):
+            # Backup filename format: <skill_name>.bak.<timestamp>
+            parts = backup.name.split(".bak.")
+            if len(parts) != 2:
+                continue
+            skill_name = parts[0]
+            target = self.load_dir / skill_name
+
+            # Move current (failed) version aside and restore backup.
+            failed_dir = self.load_dir / f"{skill_name}.failed.{timestamp}"
+            if target.exists():
+                shutil.move(str(target), str(failed_dir))
+            shutil.move(str(backup), str(target))
+            restored.append(skill_name)
+            removed_backups.append(backup.name)
+
+        return restored, removed_backups
+
     def _sync_all(self) -> tuple[list[str], list[str]]:
-        """Sync all skills from git workspace to load directory.
+        """Sync all skills from git workspace to load directory atomically per skill.
+
+        Each skill is written to a temporary directory, then the old skill
+        directory is renamed to a timestamped backup and the temp directory is
+        renamed into place. This keeps symlinks to unchanged skills valid during
+        the sync and allows rollback if something goes wrong.
 
         Returns:
             Tuple of (added_skill_names, removed_skill_names).
@@ -149,6 +198,10 @@ class SkillRegistrySyncService:
 
         self.load_dir.mkdir(parents=True, exist_ok=True)
 
+        # Validate all source skills before touching the load directory.
+        skill_dirs = self._find_skill_dirs(source_root)
+        self._validate_source_skills(source_root, skill_dirs)
+
         # Read previous manifest to detect removed skills
         old_manifest = self._read_manifest()
         old_skills = set(old_manifest.get("skills", []))
@@ -156,15 +209,16 @@ class SkillRegistrySyncService:
         current_skills: list[str] = []
         core_set = set(self.registry.core_skill_ids)
         seen_basenames: set[str] = set()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
-        for rel_path in self._find_skill_dirs(source_root):
+        for rel_path in skill_dirs:
             source = source_root / rel_path
             basename = Path(rel_path).name
             if basename in seen_basenames:
                 continue
             seen_basenames.add(basename)
             is_core = basename in core_set
-            self._sync_skill_dir(source, self.load_dir, is_core)
+            self._sync_skill_dir(source, self.load_dir, basename, is_core, timestamp)
             current_skills.append(basename)
 
         current_set = set(current_skills)
@@ -174,12 +228,14 @@ class SkillRegistrySyncService:
         for orphaned in removed:
             orphaned_dir = self.load_dir / orphaned
             if orphaned_dir.exists():
-                shutil.rmtree(orphaned_dir)
+                backup = self._backup_dir_for(orphaned, timestamp)
+                shutil.move(str(orphaned_dir), str(backup))
 
         # Write manifest and marker
         manifest = {
             "registry_id": self.registry.registry_id,
             "skills": current_skills,
+            "core_skill_ids": self.registry.core_skill_ids,
             "synced_at": datetime.now().isoformat(),
         }
         self._manifest_path().write_text(
@@ -190,6 +246,42 @@ class SkillRegistrySyncService:
 
         added = current_set - old_skills
         return (sorted(added), sorted(removed))
+
+    def _validate_source_skills(self, source_root: Path, skill_dirs: list[str]) -> None:
+        """Validate that every source skill has a readable SKILL.md.
+
+        Raises SkillSyncError if any skill is missing required files or has
+        invalid frontmatter. Validation happens before the load directory is
+        modified so a bad source never leaves the install in a half-written state.
+        """
+        import yaml
+
+        errors: list[str] = []
+        for rel_path in skill_dirs:
+            source = source_root / rel_path
+            skill_md_path = source / "SKILL.md"
+            if not skill_md_path.is_file():
+                errors.append(f"{rel_path}: missing SKILL.md")
+                continue
+            try:
+                content = skill_md_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                errors.append(f"{rel_path}: cannot read SKILL.md: {exc}")
+                continue
+
+            # Replicate frontmatter parsing to surface YAML errors.
+            if content.startswith("---"):
+                end_match = _YAML_DELIM_RE.search(content, 3)
+                if end_match:
+                    yaml_block = content[3 : end_match.start()]
+                    if yaml_block.strip():
+                        try:
+                            yaml.safe_load(yaml_block)
+                        except yaml.YAMLError as exc:
+                            errors.append(f"{rel_path}: invalid SKILL.md frontmatter: {exc}")
+
+        if errors:
+            raise SkillSyncError("Skill validation failed:\n" + "\n".join(errors))
 
     def source_skill_fingerprint(self, source_dir: Path | None = None) -> str:
         """Compute a fingerprint of available skills in a source directory.
@@ -262,22 +354,40 @@ class SkillRegistrySyncService:
             result.append(rel)
         return result
 
-    def _sync_skill_dir(self, source: Path, dest_root: Path, is_core: bool) -> None:
-        """Sync a single skill: generate skill.json and copy SKILL.md."""
-        skill_name = source.name
+    def _sync_skill_dir(
+        self,
+        source: Path,
+        dest_root: Path,
+        skill_name: str,
+        is_core: bool,
+        timestamp: str,
+    ) -> None:
+        """Atomically sync a single skill: generate skill.json and copy SKILL.md."""
         dest = dest_root / skill_name
-        dest.mkdir(parents=True, exist_ok=True)
+        tmp_dest = dest_root / f"{skill_name}.tmp.{timestamp}"
+
+        if tmp_dest.exists():
+            shutil.rmtree(tmp_dest)
+        tmp_dest.mkdir(parents=True)
 
         skill_md_path = source / "SKILL.md"
         skill_md_content = skill_md_path.read_text(encoding="utf-8")
         frontmatter = parse_skill_md_frontmatter(skill_md_content)
 
         skill_json = generate_skill_json(skill_name, frontmatter, is_core)
-        (dest / "skill.json").write_text(
+        (tmp_dest / "skill.json").write_text(
             json.dumps(skill_json, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        shutil.copy2(skill_md_path, dest / "SKILL.md")
+        shutil.copy2(skill_md_path, tmp_dest / "SKILL.md")
+
+        # Backup existing directory if present, then atomically swap in tmp.
+        if dest.exists():
+            backup = self._backup_dir_for(skill_name, timestamp)
+            if backup.exists():
+                shutil.rmtree(backup)
+            shutil.move(str(dest), str(backup))
+        shutil.move(str(tmp_dest), str(dest))
 
     def _read_manifest(self) -> dict[str, Any]:
         """Read the sync manifest if it exists."""
@@ -320,12 +430,15 @@ class SkillRegistrySyncService:
         if bundled_source is not None and bundled_source.is_dir():
             bundled_fp = self.source_skill_fingerprint(bundled_source)
 
+        backup_available = any(self.load_dir.glob("*.bak.*"))
+
         return SkillRegistryStatus(
             registry_id=self.registry.registry_id,
             installed=self.is_installed(),
             installed_count=installed_count,
             last_sync_at=last_sync_at,
             bundled_skill_fingerprint=bundled_fp,
+            backup_available=backup_available,
         )
 
     def _git_run(self, args: list[str], timeout: float = 30) -> subprocess.CompletedProcess[str]:

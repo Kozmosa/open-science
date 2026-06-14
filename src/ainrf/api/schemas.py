@@ -841,6 +841,7 @@ class SkillRegistryItemResponse(BaseModel):
     is_dirty: bool = False
     last_sync_at: str | None = None
     bundled_skill_fingerprint: str | None = None
+    backup_available: bool = False
 
 
 class SkillRegistryListResponse(BaseModel):
@@ -862,6 +863,7 @@ class SkillRegistryStatusResponse(BaseModel):
     is_dirty: bool
     sync_in_progress: bool
     bundled_skill_fingerprint: str | None = None
+    backup_available: bool = False
 
 
 class SkillRegistryUpdateRequest(BaseModel):

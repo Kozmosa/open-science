@@ -83,6 +83,7 @@ class SkillRegistryStatus:
     is_dirty: bool = False
     sync_in_progress: bool = False
     bundled_skill_fingerprint: str | None = None
+    backup_available: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {

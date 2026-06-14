@@ -135,23 +135,27 @@ async def import_skill(
         if not payload.url:
             raise HTTPException(status_code=400, detail="url is required when source=git")
 
-        # Whitelist allowed git URL patterns for security
-        ALLOWED_GIT_DOMAINS = [
+        # Whitelist allowed git URL patterns for security. Use exact host match
+        # so subdomains such as "github.com.evil.example" cannot bypass the list.
+        ALLOWED_GIT_HOSTS = {
             "github.com",
+            "www.github.com",
             "gitlab.com",
+            "www.gitlab.com",
             "bitbucket.org",
+            "www.bitbucket.org",
             "git.sr.ht",
-        ]
+            "www.git.sr.ht",
+        }
         import urllib.parse
 
         parsed_url = urllib.parse.urlparse(payload.url)
-        domain = parsed_url.netloc.lower().replace("www.", "")
+        host = parsed_url.netloc.lower()
 
-        # Check if domain is whitelisted
-        if not any(domain.endswith(allowed) for allowed in ALLOWED_GIT_DOMAINS):
+        if host not in ALLOWED_GIT_HOSTS:
             raise HTTPException(
                 status_code=403,
-                detail=f"Git URL domain '{domain}' not in allowed list: {', '.join(ALLOWED_GIT_DOMAINS)}",
+                detail=f"Git URL host '{host}' not in allowed list",
             )
 
         tmp_clone = tempfile.mkdtemp(prefix="skill-import-")

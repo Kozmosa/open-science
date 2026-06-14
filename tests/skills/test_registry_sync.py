@@ -70,7 +70,7 @@ class TestSkillRegistrySyncService:
             "---\nname: my-skill\ndescription: A test skill\n---\n\n# My Skill"
         )
 
-        service._sync_skill_dir(source, tmp_path / "skills", is_core=False)
+        service._sync_skill_dir(source, tmp_path / "skills", "my-skill", is_core=False, timestamp="20240101000000")
 
         skill_json_path = tmp_path / "skills" / "my-skill" / "skill.json"
         assert skill_json_path.exists()
@@ -83,7 +83,7 @@ class TestSkillRegistrySyncService:
         source.mkdir(parents=True)
         source.joinpath("SKILL.md").write_text("---\nname: core-skill\n---\n\n# Core")
 
-        service._sync_skill_dir(source, tmp_path / "skills", is_core=True)
+        service._sync_skill_dir(source, tmp_path / "skills", "core-skill", is_core=True, timestamp="20240101000000")
 
         data = json.loads((tmp_path / "skills" / "core-skill" / "skill.json").read_text())
         assert data["inject_mode"] == "auto"
@@ -93,7 +93,7 @@ class TestSkillRegistrySyncService:
         source.mkdir(parents=True)
         source.joinpath("SKILL.md").write_text("# Content")
 
-        service._sync_skill_dir(source, tmp_path / "skills", is_core=False)
+        service._sync_skill_dir(source, tmp_path / "skills", "my-skill", is_core=False, timestamp="20240101000000")
 
         md_path = tmp_path / "skills" / "my-skill" / "SKILL.md"
         assert md_path.exists()
@@ -434,3 +434,117 @@ class TestSkillRegistrySyncService:
 
         status = service._build_status(bundled_source=source)
         assert status.bundled_skill_fingerprint == "a"
+
+    def test_sync_all_is_atomic_per_skill_and_creates_backups(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        """Updating an existing skill should leave a timestamped backup."""
+        load_dir = tmp_path / "skills"
+        load_dir.mkdir(parents=True)
+        old_skill = load_dir / "skill-a"
+        old_skill.mkdir()
+        (old_skill / "SKILL.md").write_text("# Old A")
+        (old_skill / "skill.json").write_text('{"skill_id": "skill-a"}')
+        manifest = {
+            "registry_id": "test-registry",
+            "skills": ["skill-a"],
+            "synced_at": "2024-01-01T00:00:00",
+        }
+        (load_dir / ".ainrf-registry-manifest.json").write_text(json.dumps(manifest))
+        (load_dir / ".ainrf-registry").write_text("test-registry")
+
+        source_root = tmp_path / "source" / "skills"
+        (source_root / "skill-a").mkdir(parents=True)
+        (source_root / "skill-a" / "SKILL.md").write_text("# New A")
+
+        service.git_workspace.mkdir(parents=True)
+        import shutil
+
+        shutil.copytree(source_root, service.git_workspace / "skills")
+
+        added, removed = service._sync_all()
+        assert added == []
+        assert removed == []
+
+        # New content in place
+        assert (load_dir / "skill-a" / "SKILL.md").read_text() == "# New A"
+        # Backup exists
+        backups = list(load_dir.glob("skill-a.bak.*"))
+        assert len(backups) == 1
+        assert backups[0].joinpath("SKILL.md").read_text() == "# Old A"
+
+    def test_rollback_restores_backups(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        load_dir = tmp_path / "skills"
+        load_dir.mkdir(parents=True)
+
+        # Create current (bad) version and backup (good) version
+        current = load_dir / "skill-a"
+        current.mkdir()
+        (current / "SKILL.md").write_text("# Bad")
+        backup = load_dir / "skill-a.bak.20240101000000"
+        backup.mkdir()
+        (backup / "SKILL.md").write_text("# Good")
+
+        manifest = {
+            "registry_id": "test-registry",
+            "skills": ["skill-a"],
+            "synced_at": "2024-01-01T00:00:00",
+        }
+        (load_dir / ".ainrf-registry-manifest.json").write_text(json.dumps(manifest))
+        (load_dir / ".ainrf-registry").write_text("test-registry")
+
+        restored, removed = service.rollback()
+
+        assert restored == ["skill-a"]
+        assert len(removed) == 1
+        assert (load_dir / "skill-a" / "SKILL.md").read_text() == "# Good"
+        assert not backup.exists()
+
+    def test_sync_all_validates_source_before_modifying_load_dir(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        """A source with invalid frontmatter should not touch the load directory."""
+        load_dir = tmp_path / "skills"
+        load_dir.mkdir(parents=True)
+        old_skill = load_dir / "skill-a"
+        old_skill.mkdir()
+        (old_skill / "SKILL.md").write_text("# Existing")
+        manifest = {
+            "registry_id": "test-registry",
+            "skills": ["skill-a"],
+            "synced_at": "2024-01-01T00:00:00",
+        }
+        (load_dir / ".ainrf-registry-manifest.json").write_text(json.dumps(manifest))
+
+        source_root = tmp_path / "source" / "skills"
+        (source_root / "skill-a").mkdir(parents=True)
+        # Invalid YAML frontmatter
+        (source_root / "skill-a" / "SKILL.md").write_text("---\nname: [unclosed\n---\n# A")
+
+        service.git_workspace.mkdir(parents=True)
+        import shutil
+
+        shutil.copytree(source_root, service.git_workspace / "skills")
+
+        from ainrf.skills.registry_sync import SkillSyncError
+
+        with pytest.raises(SkillSyncError):
+            service._sync_all()
+
+        # Load directory should be untouched
+        assert (load_dir / "skill-a" / "SKILL.md").read_text() == "# Existing"
+
+    def test_build_status_reports_backup_available(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
+        load_dir = tmp_path / "skills"
+        load_dir.mkdir(parents=True)
+        (load_dir / ".ainrf-registry").write_text("test-registry")
+        backup = load_dir / "skill-a.bak.20240101000000"
+        backup.mkdir()
+
+        status = service._build_status()
+        assert status.backup_available is True
+

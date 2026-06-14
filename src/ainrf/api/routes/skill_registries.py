@@ -88,6 +88,7 @@ async def list_registries(request: Request) -> SkillRegistryListResponse:
                 is_dirty=status.is_dirty,
                 last_sync_at=status.last_sync_at.isoformat() if status.last_sync_at else None,
                 bundled_skill_fingerprint=status.bundled_skill_fingerprint,
+                backup_available=status.backup_available,
             )
         )
 
@@ -127,6 +128,7 @@ async def get_registry_status(request: Request, registry_id: str) -> SkillRegist
         is_dirty=status.is_dirty,
         sync_in_progress=status.sync_in_progress,
         bundled_skill_fingerprint=status.bundled_skill_fingerprint,
+        backup_available=status.backup_available,
     )
 
 
