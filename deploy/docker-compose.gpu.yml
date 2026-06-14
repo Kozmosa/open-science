@@ -34,10 +34,16 @@ services:
       args:
         AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
         AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+        # GPU deployments use a CUDA runtime base image so the container has
+        # the CUDA libraries needed for GPU workloads.  The Dockerfile installs
+        # Python 3.13 on top if the base does not provide it.
+        RUNTIME_BASE_IMAGE: ${AINRF_GPU_RUNTIME_BASE_IMAGE:-docker.1ms.run/nvidia/cuda:12.5.1-runtime-ubuntu24.04}
+        PYTHON_VERSION: "3.13"
     restart: unless-stopped
     container_name: ainrf
     expose:
       - "8000"
+    runtime: nvidia
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
@@ -61,21 +67,18 @@ services:
       CODEX_API_KEY: ${CODEX_API_KEY:-}
       CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+      # ── GPU 透传（nvidia-docker2 runtime）────────────────────────────
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
     volumes:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
       - ainrf-tenants:/home/ainrf_tenants
-      - frontend-dist:/opt/ainrf/frontend/dist
     cap_add:
       - SYS_ADMIN
-    # ── GPU 全透传 ────────────────────────────────────────
+    # ── 资源限制 ────────────────────────────────────────
     deploy:
       resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
         limits:
           memory: 8G
     healthcheck:
@@ -147,7 +150,7 @@ services:
       - "8192:8192"
     volumes:
       - ./config/nginx-bridge.conf:/etc/nginx/conf.d/default.conf:ro
-      - frontend-dist:/usr/share/nginx/html:ro
+      - ../frontend/dist:/usr/share/nginx/html:ro
     depends_on:
       ainrf:
         condition: service_healthy
@@ -169,6 +172,5 @@ volumes:
   ainrf-state:
   ainrf-workspaces:
   ainrf-tenants:
-  frontend-dist:
   prometheus-data:
   grafana-data:

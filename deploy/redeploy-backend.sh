@@ -8,6 +8,7 @@
 # Usage:
 #   bash deploy/redeploy-backend.sh                  # production (default)
 #   bash deploy/redeploy-backend.sh --target staging  # staging
+#   bash deploy/redeploy-backend.sh --target gpu      # GPU lab (bridge network)
 #
 set -euo pipefail
 
@@ -49,6 +50,14 @@ case "$TARGET" in
     BACKEND_HEALTH_URL="http://localhost:17000/health"
     NGINX_HEALTH_URL="http://localhost:7192/health"
     ;;
+  gpu)
+    COMPOSE_FILE="docker-compose.gpu.yml"
+    SERVICE="ainrf"
+    NGINX_SERVICE="nginx"
+    # GPU compose uses bridge networking; only nginx exposes port 8192.
+    BACKEND_HEALTH_URL="http://localhost:8192/health"
+    NGINX_HEALTH_URL="http://localhost:8192/health"
+    ;;
   *)
     _ainrf_error "Unknown target: $TARGET (use 'production' or 'staging')"
     exit 1
@@ -65,6 +74,18 @@ echo "  commit:       ${AINRF_BUILD_COMMIT}"
 echo "  committed_at: ${AINRF_BUILD_COMMITTED_AT}"
 echo "  target:       ${TARGET} (${SERVICE})"
 echo
+
+# GPU deployments require the legacy nvidia container runtime (nvidia-docker2).
+if [ "${TARGET}" = "gpu" ]; then
+    if ! docker info --format '{{range $k,$v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null | grep -qw nvidia; then
+        _ainrf_error "GPU target requires the nvidia container runtime."
+        _ainrf_error "Install it with:"
+        _ainrf_error "  sudo apt-get install -y nvidia-container-toolkit"
+        _ainrf_error "  sudo nvidia-ctk runtime configure --runtime=docker"
+        _ainrf_error "  sudo systemctl restart docker"
+        exit 1
+    fi
+fi
 
 docker compose -f "${COMPOSE_FILE}" up -d --build "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
 

@@ -24,6 +24,11 @@
 #
 # ══════════════════════════════════════════════════════════════════
 
+# Build-args that must be declared before the first FROM so they can be used
+# in FROM lines (e.g. selecting the runtime base image for CPU vs GPU).
+ARG RUNTIME_BASE_IMAGE="docker.1ms.run/python:3.13-slim"
+ARG PYTHON_VERSION="3.13"
+
 # ── Stage 1: Frontend build ────────────────────────────────────────
 FROM docker.1ms.run/node:24-slim AS frontend-build
 
@@ -86,7 +91,28 @@ RUN --mount=type=cache,target=/root/.npm \
     fi
 
 # ── Stage 4: Runtime ──────────────────────────────────────────────
-FROM docker.1ms.run/python:3.13-slim AS runtime
+# Default runtime image ships Python 3.13.  Override with a CUDA runtime image
+# for GPU deployments (e.g. nvidia/cuda:*-runtime-ubuntu24.04); the Python
+# bootstrap step below will install python3.13 from deadsnakes if needed.
+FROM ${RUNTIME_BASE_IMAGE} AS runtime
+ARG PYTHON_VERSION
+
+# If the chosen runtime base does not provide the required Python version,
+# install it via deadsnakes.  This keeps the default CPU image unchanged while
+# allowing nvidia/cuda-based GPU images to work without baking a custom image.
+RUN set -eux; \
+    installed_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo ""); \
+    if [ "${installed_version}" != "${PYTHON_VERSION}" ]; then \
+        sed -i 's|archive.ubuntu.com|mirrors.ustc.edu.cn|g; s|security.ubuntu.com|mirrors.ustc.edu.cn|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends software-properties-common; \
+        add-apt-repository -y ppa:deadsnakes/ppa; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends python${PYTHON_VERSION} python${PYTHON_VERSION}-venv; \
+        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1; \
+        update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1; \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Runtime OS packages (USTC mirror) — includes SSH server for localhost self-test
 RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null; \
