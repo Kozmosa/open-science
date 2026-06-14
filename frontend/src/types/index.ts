@@ -689,6 +689,7 @@ export interface MessageItem {
     blockId?: string;
     isStreaming?: boolean;
     isDelta?: boolean;
+    sourceKind?: TaskOutputKind;
   };
 }
 

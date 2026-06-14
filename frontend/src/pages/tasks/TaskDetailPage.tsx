@@ -1,9 +1,8 @@
 import { useT } from '../../i18n';
 import { useTaskActions } from './useTaskActions';
 import { useTaskMessages } from './useTaskMessages';
-import MessageList from '../../components/messages/MessageList';
+import { groupMessages, ChatInputBar, ChatMessageList } from '../../components/chat';
 import TaskHeaderBar from '../../components/messages/TaskHeaderBar';
-import TaskInputBar from './TaskInputBar';
 import type { TaskOutputEvent, TaskRecord } from '../../types';
 
 const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
@@ -32,6 +31,7 @@ export default function TaskDetailPage({
   const t = useT();
   const { messages, isLoading, error } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
   const actions = useTaskActions(taskId);
+  const chatMessages = groupMessages(messages);
 
   if (detailError) {
     return (
@@ -63,7 +63,7 @@ export default function TaskDetailPage({
   const showResume = selectedTask.status === 'paused' && interactiveEngines.has(engine);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
+    <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
       <TaskHeaderBar
         task={selectedTask}
         showPause={showPause}
@@ -88,8 +88,8 @@ export default function TaskDetailPage({
             {error instanceof Error ? error.message : String(error)}
           </div>
         ) : (
-          <MessageList
-            messages={messages}
+          <ChatMessageList
+            messages={chatMessages}
             hasMore={hasMore}
             loadMore={loadMore}
             isLoadingMore={isLoadingMore}
@@ -97,7 +97,11 @@ export default function TaskDetailPage({
         )}
       </div>
 
-      {showInput && <TaskInputBar onSubmit={actions.sendPrompt} disabled={actions.isPending} />}
+      {showInput && (
+        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
+          <ChatInputBar onSubmit={actions.sendPrompt} disabled={actions.isPending} />
+        </div>
+      )}
     </section>
   );
 }

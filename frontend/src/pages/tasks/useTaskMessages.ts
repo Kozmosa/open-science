@@ -31,7 +31,7 @@ export function convertOutputEventToMessage(
 
   const base = {
     id: `${event.task_id}-${event.seq}`,
-    metadata: { timestamp: event.created_at, sequence: event.seq },
+    metadata: { timestamp: event.created_at, sequence: event.seq, sourceKind: event.kind },
   };
 
   switch (event.kind) {
@@ -66,7 +66,7 @@ export function convertOutputEventToMessage(
       return {
         ...base,
         type: 'tool_call',
-        content: { name: payload.name, arguments: payload.arguments },
+        content: { id: payload.id, name: payload.name, arguments: payload.arguments },
         metadata: { ...base.metadata, isFolded: true },
       };
     case 'tool_result':

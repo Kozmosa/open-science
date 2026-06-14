@@ -847,7 +847,7 @@ describe('TasksPage', () => {
 
     expect(await screen.findByText('hello codex')).toBeInTheDocument();
     expect(screen.getAllByText('tell me the time')).toHaveLength(1);
-    fireEvent.click(screen.getAllByRole('button', { name: /tool call|tool result/i })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'commandExecution' }));
     expect(await screen.findByText(/commandExecution/)).toBeInTheDocument();
   });
 

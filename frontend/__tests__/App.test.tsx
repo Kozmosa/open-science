@@ -6,6 +6,8 @@ import { getTasks } from '../src/api';
 import { LocaleProvider } from '../src/i18n';
 import { createDefaultWebUiSettings, settingsStorageKey } from '../src/settings';
 
+vi.mock('../src/index.css', () => ({}));
+
 vi.mock('../src/queryClient', async () => {
   const actual = await vi.importActual<typeof import('../src/queryClient')>('../src/queryClient');
   return {

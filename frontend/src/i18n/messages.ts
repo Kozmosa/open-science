@@ -18,6 +18,19 @@ type Paths<T, Prefix extends string = ''> = T extends string
 
 export const messages = {
   en: {
+    chat: {
+      thinking: 'Thinking process',
+      disclaimer: 'AI can make mistakes. Please verify important information.',
+      inputPlaceholder: 'Message AI...',
+      send: 'Send message',
+      attach: 'Attach file',
+      webSearch: 'Web search',
+      reason: 'Reason',
+      copy: 'Copy',
+      retry: 'Retry',
+      collapseTools: 'Collapse tools',
+      scrollToBottom: 'Scroll to bottom',
+    },
     common: {
       appName: 'AINRF Console',
       language: 'Language',
@@ -1082,6 +1095,19 @@ export const messages = {
     },
   },
   zh: {
+    chat: {
+      thinking: '思考过程',
+      disclaimer: 'AI 可以犯错。请核实重要信息。',
+      inputPlaceholder: '给 AI 发送消息…',
+      send: '发送消息',
+      attach: '附加文件',
+      webSearch: '联网搜索',
+      reason: '深度思考',
+      copy: '复制',
+      retry: '重试',
+      collapseTools: '折叠工具',
+      scrollToBottom: '滚动到底部',
+    },
     common: {
       appName: 'AINRF 控制台',
       language: '语言',
