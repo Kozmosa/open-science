@@ -46,6 +46,7 @@ from ainrf.harness_engine.base import (
     HarnessEngineType,
 )
 from ainrf.harness_engine.session_state import SessionCheckpoint
+from ainrf.skills.mount import prepare_workspace_skills
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +235,18 @@ class AgentSdkEngine(HarnessEngine):
             # engine via `sudo -u <tenant>`.
         )
 
+        # Mount skills into the workspace so the Agent SDK can discover them
+        # via project setting sources (it scans .claude/skills/ under cwd).
+        # This mirrors what ClaudeCodeEngine does before starting the CLI.
+        skill_cleanup_dirs: list[Path] = []
+        if context.skill_load_dir and context.skills:
+            skill_cleanup_dirs = prepare_workspace_skills(
+                context.working_directory,
+                context.skill_load_dir,
+                context.skills,
+                tenant_user=context.tenant_user,
+            )
+
         async with self._run_lock:
             # Route Claude's local transcript to a temp directory so the
             # SessionStore (DbSessionStore) is the sole persistent copy.
@@ -340,6 +353,13 @@ class AgentSdkEngine(HarnessEngine):
                     shutil.rmtree(config_tmp, ignore_errors=True)
                 except Exception:
                     pass
+                # Clean up skill symlinks created for this task.
+                for skill_dir in skill_cleanup_dirs:
+                    try:
+                        if skill_dir.is_symlink():
+                            skill_dir.unlink()
+                    except OSError:
+                        pass
 
     async def _can_use_tool(
         self,

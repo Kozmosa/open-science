@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,6 +18,7 @@ from ainrf.harness_engine import (
 from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine, AgentSession
 from ainrf.harness_engine.engines.claude_code import ClaudeCodeEngine
 from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, CodexSession
+from ainrf.skills.mount import prepare_workspace_skills
 
 
 pytestmark = [pytest.mark.engine]
@@ -206,6 +206,44 @@ async def test_agent_sdk_start_restores_session_id_when_send_input_precreated_se
 
 
 @pytest.mark.anyio
+async def test_agent_sdk_mounts_skills_into_workspace(tmp_path: Path) -> None:
+    """AgentSdkEngine must symlink skills into .claude/skills/ before query()
+    and clean them up afterward, just like ClaudeCodeEngine."""
+    engine = AgentSdkEngine()
+
+    # Set up a skill load directory with one skill.
+    load_dir = tmp_path / "skills"
+    skill_dir = load_dir / "arxiv"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# arxiv\n")
+
+    # Workspace starts empty.
+    workdir = tmp_path / "workspace"
+    workdir.mkdir()
+
+    context = ExecutionContext(
+        task_id="task-skills",
+        working_directory=str(workdir),
+        rendered_prompt="use arxiv skill",
+        skill_load_dir=str(load_dir),
+        skills=["arxiv"],
+    )
+
+    mounted_during_query: bool | None = None
+
+    async def fake_run_query(ctx, sess, prompt_stream, options, emit, stderr_lines=None):
+        nonlocal mounted_during_query
+        mounted_during_query = (workdir / ".claude" / "skills" / "arxiv").is_symlink()
+
+    with patch.object(engine, "_run_query", fake_run_query):
+        await engine.start(context, lambda _event: None)
+
+    assert mounted_during_query is True
+    # After start() returns the symlink should be cleaned up.
+    assert not (workdir / ".claude" / "skills" / "arxiv").exists()
+
+
+@pytest.mark.anyio
 async def test_codex_app_server_ignores_partial_agent_message_delta() -> None:
     engine = CodexAppServerEngine()
     emitted: list[EngineEvent] = []
@@ -380,7 +418,7 @@ async def test_codex_app_server_start_fails_when_process_exits_before_response()
 
 
 def test_prepare_workspace_skills_symlinks(tmp_path: Path) -> None:
-    """_prepare_workspace_skills creates symlinks in .claude/skills/ for each
+    """prepare_workspace_skills creates symlinks in .claude/skills/ for each
     requested skill that exists in the load directory."""
     # Set up a load directory with two skills
     load_dir = tmp_path / "load" / "skills"
@@ -392,7 +430,7 @@ def test_prepare_workspace_skills_symlinks(tmp_path: Path) -> None:
     workdir = tmp_path / "workspace"
     workdir.mkdir()
 
-    cleanup = ClaudeCodeEngine._prepare_workspace_skills(
+    cleanup = prepare_workspace_skills(
         working_directory=str(workdir),
         skill_load_dir=str(load_dir),
         requested_skills=["research-lit", "arxiv", "missing-skill"],
@@ -411,7 +449,7 @@ def test_prepare_workspace_skills_symlinks(tmp_path: Path) -> None:
 
 
 def test_prepare_workspace_skills_preserves_user_owned_dirs(tmp_path: Path) -> None:
-    """_prepare_workspace_skills does not overwrite a real (non-symlink) directory."""
+    """prepare_workspace_skills does not overwrite a real (non-symlink) directory."""
     load_dir = tmp_path / "load" / "skills"
     skill_dir = load_dir / "research-lit"
     skill_dir.mkdir(parents=True)
@@ -424,7 +462,7 @@ def test_prepare_workspace_skills_preserves_user_owned_dirs(tmp_path: Path) -> N
     user_skill.mkdir(parents=True)
     (user_skill / "SKILL.md").write_text("# user owned\n")
 
-    cleanup = ClaudeCodeEngine._prepare_workspace_skills(
+    cleanup = prepare_workspace_skills(
         working_directory=str(workdir),
         skill_load_dir=str(load_dir),
         requested_skills=["research-lit"],
@@ -436,7 +474,7 @@ def test_prepare_workspace_skills_preserves_user_owned_dirs(tmp_path: Path) -> N
 
 
 def test_prepare_workspace_skills_replaces_stale_symlink(tmp_path: Path) -> None:
-    """_prepare_workspace_skills replaces a symlink pointing to a different target."""
+    """prepare_workspace_skills replaces a symlink pointing to a different target."""
     old_target = tmp_path / "old" / "skills" / "research-lit"
     old_target.mkdir(parents=True)
     (old_target / "SKILL.md").write_text("# old\n")
@@ -452,7 +490,7 @@ def test_prepare_workspace_skills_replaces_stale_symlink(tmp_path: Path) -> None
     claude_skills.mkdir(parents=True)
     (claude_skills / "research-lit").symlink_to(str(old_target))
 
-    cleanup = ClaudeCodeEngine._prepare_workspace_skills(
+    cleanup = prepare_workspace_skills(
         working_directory=str(workdir),
         skill_load_dir=str(new_load_dir),
         requested_skills=["research-lit"],
@@ -556,7 +594,7 @@ async def test_codex_start_restores_thread_id_when_send_input_precreated_session
         encoding="utf-8",
     )
 
-    context = ExecutionContext(
+    _ = ExecutionContext(
         task_id="task-codex",
         working_directory="/tmp",
         rendered_prompt="ignored",
