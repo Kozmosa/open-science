@@ -342,8 +342,6 @@ function TasksPage() {
             hasMore={hasMore}
             loadMore={loadMore}
             isLoadingMore={isLoadingMore}
-            metadataSidebarOpen={metadataSidebarOpen}
-            onToggleMetadataSidebar={toggleMetadataSidebar}
           />
         </SplitPane>
       </PageShell>

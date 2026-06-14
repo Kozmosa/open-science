@@ -17,8 +17,6 @@ interface TaskDetailPageProps {
   hasMore: boolean;
   loadMore: () => void;
   isLoadingMore: boolean;
-  metadataSidebarOpen?: boolean;
-  onToggleMetadataSidebar?: () => void;
 }
 
 export default function TaskDetailPage({
@@ -30,8 +28,6 @@ export default function TaskDetailPage({
   hasMore,
   loadMore,
   isLoadingMore,
-  metadataSidebarOpen = true,
-  onToggleMetadataSidebar = () => {},
 }: TaskDetailPageProps) {
   const t = useT();
   const { messages, isLoading, error } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
@@ -70,8 +66,6 @@ export default function TaskDetailPage({
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
       <TaskHeaderBar
         task={selectedTask}
-        onToggleDrawer={onToggleMetadataSidebar}
-        metadataSidebarOpen={metadataSidebarOpen}
         showPause={showPause}
         showResume={showResume}
         onPause={() => actions.pause()}
