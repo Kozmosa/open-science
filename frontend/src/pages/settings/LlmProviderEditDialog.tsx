@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button, FormField, Input, Select } from '../../components/ui';
-import { useT } from '../../i18n';
+import { Button, FormField, Input, Select } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
 import type { LlmProvider, LlmProviderFormat } from '../../settings';
 
 interface LlmProviderEditDialogProps {

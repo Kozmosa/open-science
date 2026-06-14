@@ -1,4 +1,4 @@
-import { semanticDotClasses } from './theme';
+import { semanticDotClasses } from '@design-system/tokens/theme';
 
 interface Props {
   status: 'success' | 'error' | 'warning' | 'idle';

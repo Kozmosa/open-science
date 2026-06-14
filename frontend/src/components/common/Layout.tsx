@@ -17,10 +17,10 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, useLocation } from 'react-router-dom';
-import { getTasks } from '../../api';
-import type { TaskSummary } from '../../types';
+import { getTasks } from '@/shared/api';
+import type { TaskSummary } from '@/shared/types';
 import LocaleSwitcher from './LocaleSwitcher';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface Props {

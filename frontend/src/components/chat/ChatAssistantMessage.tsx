@@ -1,5 +1,5 @@
 import { Copy, RotateCcw } from 'lucide-react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import SafeMarkdown from '../messages/SafeMarkdown';
 import ChatThinkingBlock from './ChatThinkingBlock';
 import ChatToolCallGroup from './ChatToolCallGroup';

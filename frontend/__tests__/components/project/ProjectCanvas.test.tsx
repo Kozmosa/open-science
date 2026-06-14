@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import ProjectCanvas from '../../../src/components/project/ProjectCanvas';
-import type { TaskSummary, TaskEdge } from '../../../src/types';
+import type { TaskSummary, TaskEdge } from '@/shared/types';
 
 const mockFitView = vi.fn();
 const mockGetNodes = vi.fn(() => []);

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from '../api';
-import { useT } from '../i18n';
+import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from '@/shared/api';
+import { useT } from '@/shared/i18n';
 import { useAuth } from '../contexts/AuthContext';
-import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '../types';
-import { PageShell, SplitPane } from '../components/layout';
-import { Button, FormField, Input, Textarea, Alert } from '../components/ui';
+import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '@/shared/types';
+import { PageShell, SplitPane } from '@design-system/layout';
+import { Button, FormField, Input, Textarea, Alert } from '@design-system/primitives';
 
 interface WorkspaceDraft {
   label: string;

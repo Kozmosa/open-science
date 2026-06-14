@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getEnvironments, getEnvAccess, grantEnvAccess, revokeEnvAccess, getAdminUsers } from '../../api';
+import { getEnvironments, getEnvAccess, grantEnvAccess, revokeEnvAccess, getAdminUsers } from '@/shared/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { useT } from '../../i18n';
-import { Select } from '../../components/ui';
+import { useT } from '@/shared/i18n';
+import { Select } from '@design-system/primitives';
 import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';
 import { AccessItemRow } from '../../components/settings/AccessItemRow';
 import LoadingSpinner from '../../components/common/LoadingSpinner';

@@ -1,4 +1,4 @@
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 
 function formatMB(mb: number): string {
   if (mb >= 1024) {

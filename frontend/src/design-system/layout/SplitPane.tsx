@@ -1,5 +1,5 @@
 import { useCallback, useRef, type ReactNode } from 'react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 
 interface SplitPaneProps {
   sidebar: ReactNode;

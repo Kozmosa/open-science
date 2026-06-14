@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen } from 'lucide-react';
-import { useT } from '../../i18n';
-import type { FileEntry } from '../../types';
+import { useT } from '@/shared/i18n';
+import type { FileEntry } from '@/shared/types';
 
 interface FileTreeProps {
   entries: FileEntry[];

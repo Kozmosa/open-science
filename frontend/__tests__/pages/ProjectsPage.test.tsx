@@ -2,7 +2,7 @@ import { describe, expect, it, afterAll, afterEach, beforeAll } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
-import { renderWithProviders } from '../../src/test/render'
+import { renderWithProviders } from '@/shared/test/render'
 import { handlers } from '../mocks/handlers'
 import ProjectsPage from '../../src/pages/ProjectsPage'
 

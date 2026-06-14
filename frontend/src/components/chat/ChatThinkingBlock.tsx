@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 
 interface ChatThinkingBlockProps {
   content?: string;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 
 interface CardGroup {
   id: string;

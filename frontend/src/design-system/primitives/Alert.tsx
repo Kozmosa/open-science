@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { semanticToneClasses } from './theme';
+import { semanticToneClasses } from '@design-system/tokens/theme';
 
 interface Props {
   children: ReactNode;

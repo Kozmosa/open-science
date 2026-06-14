@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
-import { updateTask } from '../../api';
-import { useT } from '../../i18n';
+import { updateTask } from '@/shared/api';
+import { useT } from '@/shared/i18n';
 import { statusClassName } from '../../pages/tasks/status';
-import type { TaskRecord } from '../../types';
+import type { TaskRecord } from '@/shared/types';
 
 interface TaskHeaderBarProps {
   task: TaskRecord;

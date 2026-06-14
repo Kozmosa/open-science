@@ -1,14 +1,14 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { getLiteratureSubscriptions, getWorkspaces, createTask, convertPaperToTask } from '../api';
-import { SplitPane, PageShell } from '../components/layout';
-import { useT } from '../i18n';
+import { getLiteratureSubscriptions, getWorkspaces, createTask, convertPaperToTask } from '@/shared/api';
+import { SplitPane, PageShell } from '@design-system/layout';
+import { useT } from '@/shared/i18n';
 import { useToast } from '../components/common/Toast';
 import { useEnvironmentSelection } from '../components';
 import SubscriptionSidebar from '../components/literature/SubscriptionSidebar';
 import PaperFeed from '../components/literature/PaperFeed';
 import ConvertToTaskDialog from '../components/literature/ConvertToTaskDialog';
-import type { TaskCreatePayload } from '../types';
+import type { TaskCreatePayload } from '@/shared/types';
 
 interface PendingConversion {
   paperId: string;

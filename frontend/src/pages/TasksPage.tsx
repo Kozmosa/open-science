@@ -14,14 +14,14 @@ import {
   getTasks,
   getWorkspaces,
   retryTask,
-} from '../api';
-import { Button, Modal, Select } from '../components/ui';
+} from '@/shared/api';
+import { Button, Modal, Select } from '@design-system/primitives';
 import { useToast } from '../components/common/Toast';
-import { useT } from '../i18n';
-import { PageShell, SplitPane } from '../components/layout';
-import { extractErrorMessage } from '../utils/error';
+import { useT } from '@/shared/i18n';
+import { PageShell, SplitPane } from '@design-system/layout';
+import { extractErrorMessage } from '@/shared/utils/error';
 import { useAuth } from '../contexts/AuthContext';
-import type { TaskCreatePayload, TaskListResponse } from '../types';
+import type { TaskCreatePayload, TaskListResponse } from '@/shared/types';
 import TaskCreateForm from './tasks/TaskCreateForm';
 import TaskDetailPage from './tasks/TaskDetailPage';
 import TaskList from './tasks/TaskList';

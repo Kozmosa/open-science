@@ -2,8 +2,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { TerminalAttachmentMode, TerminalSessionStatus } from '../../types';
-import { useT } from '../../i18n';
+import type { TerminalAttachmentMode, TerminalSessionStatus } from '@/shared/types';
+import { useT } from '@/shared/i18n';
 import { useTerminalFontSize } from '../../settings';
 import { useTerminalFitScheduling } from './useTerminalFitScheduling';
 

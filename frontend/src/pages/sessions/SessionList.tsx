@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import Input from '../../components/ui/Input';
-import StatusDot from '../../components/ui/StatusDot';
-import { useT } from '../../i18n';
-import type { TaskSummary } from '../../types';
+import Input from '@design-system/primitives/Input';
+import StatusDot from '@design-system/primitives/StatusDot';
+import { useT } from '@/shared/i18n';
+import type { TaskSummary } from '@/shared/types';
 
 interface Props {
   tasks: TaskSummary[];

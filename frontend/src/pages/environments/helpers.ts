@@ -8,7 +8,7 @@ import type {
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
-} from '../../types';
+} from '@/shared/types';
 
 export const environmentsQueryKey = ['environments'] as const;
 export const projectEnvironmentRefsQueryKey = ['project-environment-refs', 'default'] as const;

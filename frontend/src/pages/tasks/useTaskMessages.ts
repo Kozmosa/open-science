@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTaskHistory } from './useTaskHistory';
-import type { MessageItem, TaskOutputEvent } from '../../types';
+import type { MessageItem, TaskOutputEvent } from '@/shared/types';
 
 const SUPPRESSED_SYSTEM_SUBTYPES = new Set(['status', 'thinking_tokens']);
 

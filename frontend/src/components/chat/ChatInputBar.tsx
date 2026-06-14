@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowUp, Plus, Globe } from 'lucide-react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import ReasonIcon from './ReasonIcon';
 
 interface ChatInputBarProps {

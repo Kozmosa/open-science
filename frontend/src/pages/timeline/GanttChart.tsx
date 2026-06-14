@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import type { TaskSummary } from '../../types';
-import { useT } from '../../i18n';
+import type { TaskSummary } from '@/shared/types';
+import { useT } from '@/shared/i18n';
 import { GanttRow } from './GanttRow';
 
 interface Props {

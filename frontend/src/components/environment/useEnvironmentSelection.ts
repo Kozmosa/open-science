@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getEnvironments, getProjectEnvironmentReferences } from '../../api';
-import type { EnvironmentRecord, ProjectEnvironmentReference } from '../../types';
+import { getEnvironments, getProjectEnvironmentReferences } from '@/shared/api';
+import type { EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
 import { useSettings } from '../../settings';
 
 const defaultProjectId = 'default';

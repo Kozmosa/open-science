@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getProjects, getTasks } from '../api';
-import PageShell from '../components/layout/PageShell';
-import SectionStack from '../components/layout/SectionStack';
+import { getProjects, getTasks } from '@/shared/api';
+import PageShell from '@design-system/layout/PageShell';
+import SectionStack from '@design-system/layout/SectionStack';
 import { GanttChart } from './timeline/GanttChart';
 import { TimelineControls } from './timeline/TimelineControls';
-import type { TaskSummary } from '../types';
+import type { TaskSummary } from '@/shared/types';
 
 function taskStartTime(task: TaskSummary): number {
   return new Date(task.started_at ?? task.created_at).getTime();

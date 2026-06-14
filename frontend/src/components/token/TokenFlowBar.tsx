@@ -1,5 +1,5 @@
-import type { TokenUsage } from '../../types';
-import { useT } from '../../i18n';
+import type { TokenUsage } from '@/shared/types';
+import { useT } from '@/shared/i18n';
 
 interface Props {
   tokenUsageJson: string | null;

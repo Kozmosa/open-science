@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTask, getTasks } from '../api';
-import PageShell from '../components/layout/PageShell';
-import SplitPane from '../components/layout/SplitPane';
+import { getTask, getTasks } from '@/shared/api';
+import PageShell from '@design-system/layout/PageShell';
+import SplitPane from '@design-system/layout/SplitPane';
 import { SessionDetail } from './sessions/SessionDetail';
 import { SessionList } from './sessions/SessionList';
 

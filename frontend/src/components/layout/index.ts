@@ -1,4 +1,2 @@
-export { default as CardGrid } from './CardGrid';
-export { default as PageShell } from './PageShell';
-export { default as SectionStack } from './SectionStack';
-export { default as SplitPane } from './SplitPane';
+// Temporary re-export until all consumers migrate to @design-system/layout
+export * from '@design-system/layout';

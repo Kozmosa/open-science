@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import ChatAssistantMessage from './ChatAssistantMessage';
 import ChatUserMessage from './ChatUserMessage';
 import type { ChatMessage } from './types';

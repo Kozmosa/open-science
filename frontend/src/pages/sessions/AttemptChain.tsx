@@ -1,8 +1,8 @@
-import SectionStack from '../../components/layout/SectionStack';
+import SectionStack from '@design-system/layout/SectionStack';
 import { TokenFlowBar } from '../../components/token/TokenFlowBar';
-import { semanticDotClasses, semanticToneClasses } from '../../components/ui/theme';
-import { useT } from '../../i18n';
-import type { AttemptRecord } from '../../types';
+import { semanticDotClasses, semanticToneClasses } from '@design-system/tokens/theme';
+import { useT } from '@/shared/i18n';
+import type { AttemptRecord } from '@/shared/types';
 
 interface Props {
   attempts: AttemptRecord[];

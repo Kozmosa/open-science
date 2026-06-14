@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { semanticToneClasses } from '../../components/ui/theme';
-import { useT } from '../../i18n';
-import type { SkillItem } from '../../types';
+import { semanticToneClasses } from '@design-system/tokens/theme';
+import { useT } from '@/shared/i18n';
+import type { SkillItem } from '@/shared/types';
 
 interface Props {
   skills: SkillItem[];

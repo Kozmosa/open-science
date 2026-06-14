@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { semanticDotClasses } from '../ui/theme';
-import { useLocale } from '../../i18n';
-import type { TaskSummary } from '../../types';
+import { semanticDotClasses } from '@design-system/tokens/theme';
+import { useLocale } from '@/shared/i18n';
+import type { TaskSummary } from '@/shared/types';
 
 interface TaskNodeData extends Record<string, unknown> {
   task: TaskSummary;

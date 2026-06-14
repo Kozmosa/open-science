@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, FormField, Input, Modal, Textarea } from '../components/ui';
+import { Button, FormField, Input, Modal, Textarea } from '@design-system/primitives';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
-import { useT } from '../i18n';
-import { PageShell, SplitPane } from '../components/layout';
+import { useT } from '@/shared/i18n';
+import { PageShell, SplitPane } from '@design-system/layout';
 import {
   createProject,
   createTask,
@@ -16,9 +16,9 @@ import {
   getTaskEdges,
   getWorkspaces,
   updateTaskProject,
-} from '../api';
-import { extractErrorMessage } from '../utils/error';
-import type { ProjectCreateRequest, TaskCreatePayload, TaskRecord } from '../types';
+} from '@/shared/api';
+import { extractErrorMessage } from '@/shared/utils/error';
+import type { ProjectCreateRequest, TaskCreatePayload, TaskRecord } from '@/shared/types';
 import TaskCreateForm from './tasks/TaskCreateForm';
 import TaskDetailPage from './tasks/TaskDetailPage';
 import { useTaskStream } from './tasks/useTaskStream';

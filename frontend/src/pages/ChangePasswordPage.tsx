@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { changePassword } from '../api';
-import { useT } from '../i18n';
-import { Button, Input } from '../components/ui';
+import { changePassword } from '@/shared/api';
+import { useT } from '@/shared/i18n';
+import { Button, Input } from '@design-system/primitives';
 
 export default function ChangePasswordPage() {
   const t = useT();

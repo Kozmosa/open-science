@@ -5,8 +5,8 @@ import {
   deleteTerminalSession,
   getTerminalSession,
   resetTerminalSession,
-} from '../../api';
-import type { EnvironmentRecord, TerminalSession, TerminalSessionStatus } from '../../types';
+} from '@/shared/api';
+import type { EnvironmentRecord, TerminalSession, TerminalSessionStatus } from '@/shared/types';
 
 const terminalSessionQueryKey = ['terminal-session'] as const;
 

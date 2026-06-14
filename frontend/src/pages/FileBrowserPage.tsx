@@ -2,13 +2,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FolderOpen, RefreshCw } from 'lucide-react';
-import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
+import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '@/shared/api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { useEnvironmentSelection } from '../components';
-import { PageShell, SplitPane } from '../components/layout';
-import { Select } from '../components/ui';
-import { useT } from '../i18n';
-import type { FileEntry, FileReadResponse } from '../types';
+import { PageShell, SplitPane } from '@design-system/layout';
+import { Select } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import type { FileEntry, FileReadResponse } from '@/shared/types';
 
 const FILE_TREE_DEFAULT_WIDTH = 288;
 const FILE_TREE_MIN_WIDTH = 200;

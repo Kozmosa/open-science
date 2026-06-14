@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import { memo, useEffect, useRef, useState } from 'react';
-import { workspaceFileBrowserHref } from '../../utils/workspaceFileLinks';
+import { workspaceFileBrowserHref } from '@/shared/utils/workspaceFileLinks';
 
 /** Parse markdown into HTML, rewriting workspace file links (absolute paths under
  *  `/.ainrf_workspaces/<slug>/...`) into in-app file-browser routes so assistant /

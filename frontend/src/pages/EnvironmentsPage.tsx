@@ -10,8 +10,8 @@ import {
   SectionCard,
   Select,
   Textarea,
-} from '../components/ui';
-import { PageShell, SectionStack } from '../components/layout';
+} from '@design-system/primitives';
+import { PageShell, SectionStack } from '@design-system/layout';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -20,15 +20,15 @@ import {
   detectEnvironment,
   updateProjectEnvironmentReference,
   updateEnvironment,
-} from '../api';
+} from '@/shared/api';
 import type {
   EnvironmentAuthKind,
   EnvironmentListResponse,
   EnvironmentRecord,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
-} from '../types';
-import { useLocale, useT } from '../i18n';
+} from '@/shared/types';
+import { useLocale, useT } from '@/shared/i18n';
 import { useEnvironmentSelection } from '../components';
 import { useToast } from '../components/common';
 import { EnvironmentDetectionModal } from '../components/environment';

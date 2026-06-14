@@ -6,10 +6,10 @@ import {
   deleteLiteratureSubscription,
   updateLiteratureSubscription,
   triggerLiteratureFetch,
-} from '../../api';
-import { useT } from '../../i18n';
-import { Button, Input, Select } from '../../components/ui';
-import type { LiteratureSubscription } from '../../types';
+} from '@/shared/api';
+import { useT } from '@/shared/i18n';
+import { Button, Input, Select } from '@design-system/primitives';
+import type { LiteratureSubscription } from '@/shared/types';
 
 const ARXIV_CATEGORIES = ['cs.AI', 'cs.CL', 'cs.LG', 'cs.CV', 'stat.ML'];
 

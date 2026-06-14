@@ -1,11 +1,11 @@
 import { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getResources, getTaskTokenUsageSummary } from '../api';
+import { getResources, getTaskTokenUsageSummary } from '@/shared/api';
 import { SystemResourceCard, AinrfProcessCard, TaskUsageCard } from '../components/resources';
-import { useT } from '../i18n';
+import { useT } from '@/shared/i18n';
 import { useCardLayout } from '../hooks/useCardLayout';
 import type { CardKind } from '../hooks/useCardLayout';
-import { CardGrid, PageShell } from '../components/layout';
+import { CardGrid, PageShell } from '@design-system/layout';
 
 
 export default function ResourcesPage() {

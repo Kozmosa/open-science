@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const guardedPaths = [
   'src/pages/tasks',
-  'src/components/ui',
+  'src/design-system/primitives',
   'src/components/common/Layout.tsx',
 ] as const;
 

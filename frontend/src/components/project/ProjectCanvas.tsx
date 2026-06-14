@@ -17,9 +17,9 @@ import {
   applyEdgeChanges,
 } from '@xyflow/react';
 import { Button } from '../ui';
-import { useT } from '../../i18n';
-import { createTaskEdge } from '../../api';
-import type { ProjectRecord, TaskEdge, TaskSummary } from '../../types';
+import { useT } from '@/shared/i18n';
+import { createTaskEdge } from '@/shared/api';
+import type { ProjectRecord, TaskEdge, TaskSummary } from '@/shared/types';
 import TaskNode from './TaskNode';
 import ProjectDropZone from './ProjectDropZone';
 import { layoutDagre } from './layoutDagre';

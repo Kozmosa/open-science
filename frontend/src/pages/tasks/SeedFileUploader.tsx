@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { useT } from '../../i18n';
-import { uploadFile } from '../../api/endpoints';
+import { useT } from '@/shared/i18n';
+import { uploadFile } from '@/shared/api/endpoints';
 
 const MAX_SEED_FILES = 5;
 const ACCEPTED_EXTENSIONS = ['.pdf', '.md'];

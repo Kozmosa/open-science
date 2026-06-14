@@ -7,16 +7,16 @@ import { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalBenchCard from '../../../src/components/terminal/TerminalBenchCard';
-import type { EnvironmentRecord, TerminalSession } from '../../../src/types';
-import { renderWithProviders } from '../../../src/test/render';
+import type { EnvironmentRecord, TerminalSession } from '@/shared/types';
+import { renderWithProviders } from '@/shared/test/render';
 import {
   createTerminalSession,
   deleteTerminalSession,
   getTerminalSession,
   resetTerminalSession,
-} from '../../../src/api';
+} from '@/shared/api';
 
-vi.mock('../../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   createTerminalSession: vi.fn(),
   deleteTerminalSession: vi.fn(),
   getTerminalSession: vi.fn(),

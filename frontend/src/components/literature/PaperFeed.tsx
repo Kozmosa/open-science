@@ -1,10 +1,10 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Button, Select } from '../../components/ui';
-import { getLiteratureFetchStatus, getLiteraturePapers, triggerLiteratureFetch } from '../../api';
-import { useT } from '../../i18n';
-import type { LiteratureSubscription } from '../../types';
+import { Button, Select } from '@design-system/primitives';
+import { getLiteratureFetchStatus, getLiteraturePapers, triggerLiteratureFetch } from '@/shared/api';
+import { useT } from '@/shared/i18n';
+import type { LiteratureSubscription } from '@/shared/types';
 import PaperCard from './PaperCard';
 
 interface Props {

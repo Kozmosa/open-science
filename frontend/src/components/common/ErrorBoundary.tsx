@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode, type ContextType } from 'react';
 import { Alert, Button } from '../ui';
-import { I18nContext } from '../../i18n';
+import { I18nContext } from '@/shared/i18n';
 
 interface Props {
   children: ReactNode;

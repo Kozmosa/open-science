@@ -1,4 +1,4 @@
-import type { TaskOutputEvent } from '../../types';
+import type { TaskOutputEvent } from '@/shared/types';
 
 export function mergeOutputItems(
   current: TaskOutputEvent[],

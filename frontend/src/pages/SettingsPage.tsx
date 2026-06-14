@@ -11,12 +11,12 @@ import {
   Select,
   SkillToggleGroup,
   Textarea,
-} from '../components/ui';
-import { PageShell, SectionStack } from '../components/layout';
+} from '@design-system/primitives';
+import { PageShell, SectionStack } from '@design-system/layout';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '../components';
-import { getDeploymentVersion, getFrontendBuildVersion, getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry, getSearchSettings, updateSearchSettings } from '../api';
-import { changePassword } from '../api/endpoints';
-import { useT } from '../i18n';
+import { getDeploymentVersion, getFrontendBuildVersion, getEnvironments, getSkills, getWorkspaces, getSkillDetail, previewSkillSettings, importSkill, getSkillRegistries, installSkillRegistry, updateSkillRegistry, getSearchSettings, updateSearchSettings } from '@/shared/api';
+import { changePassword } from '@/shared/api/endpoints';
+import { useT } from '@/shared/i18n';
 import {
   clampEditorFontSize,
   clampTerminalFontSize,
@@ -34,7 +34,7 @@ import type {
   TaskConfigurationSettings,
   WebUiSettingsDocument,
 } from '../settings';
-import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview, SkillRegistryItem, SearchBackendItem } from '../types';
+import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview, SkillRegistryItem, SearchBackendItem } from '@/shared/types';
 import { UsersTab } from './settings/UsersTab';
 import { EnvAccessTab } from './settings/EnvAccessTab';
 import { CollaboratorsTab } from './settings/CollaboratorsTab';

@@ -1,12 +1,12 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EnvironmentsPage from '../../src/pages/EnvironmentsPage';
-import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '../../src/types';
-import { renderWithProviders } from '../../src/test/render';
+import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
+import { renderWithProviders } from '@/shared/test/render';
 import {
   createDefaultWebUiSettings,
   settingsStorageKey,
-} from '../../src/settings';
+} from '@/features/settings';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -15,9 +15,9 @@ import {
   getEnvironments,
   getProjectEnvironmentReferences,
   updateProjectEnvironmentReference,
-} from '../../src/api';
+} from '@/shared/api';
 
-vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   createProjectEnvironmentReference: vi.fn(),
   createEnvironment: vi.fn(),
   deleteEnvironment: vi.fn(),

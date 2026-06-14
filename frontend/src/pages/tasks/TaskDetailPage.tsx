@@ -1,9 +1,9 @@
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import { useTaskActions } from './useTaskActions';
 import { useTaskMessages } from './useTaskMessages';
 import { groupMessages, ChatInputBar, ChatMessageList } from '../../components/chat';
 import TaskHeaderBar from '../../components/messages/TaskHeaderBar';
-import type { TaskOutputEvent, TaskRecord } from '../../types';
+import type { TaskOutputEvent, TaskRecord } from '@/shared/types';
 
 const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
 

@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
-import { getTasks } from '../src/api';
-import { LocaleProvider } from '../src/i18n';
-import { createDefaultWebUiSettings, settingsStorageKey } from '../src/settings';
+import { getTasks } from '@/shared/api';
+import { LocaleProvider } from '@/shared/i18n';
+import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
 
 vi.mock('../src/index.css', () => ({}));
 
@@ -39,7 +39,7 @@ vi.mock('../src/contexts/AuthContext', () => ({
   }),
 }));
 
-vi.mock('../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getTasks: vi.fn(),
 }));
 

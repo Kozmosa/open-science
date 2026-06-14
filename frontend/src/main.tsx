@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import '@xyflow/react/dist/style.css'
 import './index.css'
 import App from './App.tsx'
-import { LocaleProvider } from './i18n'
+import { LocaleProvider } from '@/shared/i18n'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

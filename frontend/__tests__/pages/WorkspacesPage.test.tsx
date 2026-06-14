@@ -1,16 +1,16 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import WorkspacesPage from '../../src/pages/WorkspacesPage';
-import { renderWithProviders } from '../../src/test/render';
+import { renderWithProviders } from '@/shared/test/render';
 import {
   createWorkspace,
   deleteWorkspace,
   getWorkspaces,
   updateWorkspace,
-} from '../../src/api';
-import type { WorkspaceListResponse, WorkspaceRecord } from '../../src/types';
+} from '@/shared/api';
+import type { WorkspaceListResponse, WorkspaceRecord } from '@/shared/types';
 
-vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   createWorkspace: vi.fn(),
   deleteWorkspace: vi.fn(),
   getWorkspaces: vi.fn(),

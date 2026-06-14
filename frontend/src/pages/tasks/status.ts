@@ -1,5 +1,5 @@
-import type { TaskStatus } from '../../types';
-import { semanticToneClasses } from '../../components/ui/theme';
+import type { TaskStatus } from '@/shared/types';
+import { semanticToneClasses } from '@design-system/tokens/theme';
 
 export const statusClassName: Record<TaskStatus, string> = {
   queued: semanticToneClasses.muted,

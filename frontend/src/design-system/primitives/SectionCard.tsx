@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
+import { cn } from '@/shared/utils/cn';
+import { Card, CardBody, CardHeader } from './Card';
 
 interface Props {
   children: ReactNode;
@@ -35,10 +37,10 @@ function SectionCard({
 
   const content = collapsible ? (
     <div
-      className={[
+      className={cn(
         'grid transition-[grid-template-rows] duration-200 ease-out',
-        expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-      ].join(' ')}
+        expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+      )}
     >
       <div className="overflow-hidden">
         <div className="space-y-5 pt-5">{children}</div>
@@ -49,15 +51,13 @@ function SectionCard({
   );
 
   return (
-    <section
-      className={['rounded-xl bg-[var(--surface)] p-6', 'shadow-[var(--shadow-card)]', className].join(' ')}
-    >
+    <Card className={cn('p-6', className)}>
       {header ? (
-        <div
-          className={[
-            'flex items-start justify-between gap-3',
-            collapsible ? 'cursor-pointer select-none' : '',
-          ].join(' ')}
+        <CardHeader
+          className={cn(
+            'flex items-start justify-between gap-3 p-0',
+            collapsible && 'cursor-pointer select-none'
+          )}
           onClick={collapsible ? toggle : undefined}
         >
           <div className="flex-1">{header}</div>
@@ -75,10 +75,10 @@ function SectionCard({
               )}
             </button>
           ) : null}
-        </div>
+        </CardHeader>
       ) : null}
-      {content}
-    </section>
+      <CardBody className="p-0">{content}</CardBody>
+    </Card>
   );
 }
 

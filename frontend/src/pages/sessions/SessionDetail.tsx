@@ -1,7 +1,7 @@
-import SectionStack from '../../components/layout/SectionStack';
-import { semanticToneClasses } from '../../components/ui/theme';
-import { useT } from '../../i18n';
-import type { TaskRecord } from '../../types';
+import SectionStack from '@design-system/layout/SectionStack';
+import { semanticToneClasses } from '@design-system/tokens/theme';
+import { useT } from '@/shared/i18n';
+import type { TaskRecord } from '@/shared/types';
 
 interface Props {
   detail: TaskRecord | null;

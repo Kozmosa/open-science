@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { CardKind } from '../../hooks/useCardLayout';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 
 interface Props {
   id: string;

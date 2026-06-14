@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getCodexDefaults } from '../api';
-import { getStoredRefreshToken } from '../api/client';
+import { getCodexDefaults } from '@/shared/api';
+import { getStoredRefreshToken } from '@/shared/api/client';
 import {
   applyCodexDefaultsToProfile,
   clampEditorFontSize,

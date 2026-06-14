@@ -1,6 +1,6 @@
 import { Alert, StatusDot } from '../ui';
-import type { SystemHealth } from '../../types';
-import { useT } from '../../i18n';
+import type { SystemHealth } from '@/shared/types';
+import { useT } from '@/shared/i18n';
 
 interface Props {
   health: SystemHealth | undefined;

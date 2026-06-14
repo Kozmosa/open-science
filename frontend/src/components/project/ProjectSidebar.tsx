@@ -1,8 +1,8 @@
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Button, Input } from '../ui';
-import { useT } from '../../i18n';
-import type { ProjectRecord } from '../../types';
+import { useT } from '@/shared/i18n';
+import type { ProjectRecord } from '@/shared/types';
 
 interface Props {
   projects: ProjectRecord[];

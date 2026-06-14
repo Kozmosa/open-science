@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import useFocusTrap from '../../hooks/useFocusTrap';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
+import { cn } from '@/shared/utils/cn';
 
 interface Props {
   isOpen: boolean;
@@ -83,13 +84,20 @@ export default function Modal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 transition-opacity duration-150 ${backdropOpacity}`}
+      className={cn(
+        'fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 transition-opacity duration-150',
+        backdropOpacity
+      )}
       onClick={handleBackdropClick}
       role="presentation"
     >
       <div
         ref={dialogRef}
-        className={`w-full ${sizeClasses[size]} max-h-[90vh] overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl transition-all duration-200 ease-out ${dialogTransform}`}
+        className={cn(
+          'max-h-[90vh] w-full overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl transition-all duration-200 ease-out',
+          sizeClasses[size],
+          dialogTransform
+        )}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel ?? undefined}

@@ -1,13 +1,13 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getEnvironments, getProjectEnvironmentReferences } from '../../../src/api';
-import { renderWithProviders } from '../../../src/test/render';
-import type { EnvironmentRecord } from '../../../src/types';
-import { createDefaultWebUiSettings, settingsStorageKey } from '../../../src/settings';
+import { getEnvironments, getProjectEnvironmentReferences } from '@/shared/api';
+import { renderWithProviders } from '@/shared/test/render';
+import type { EnvironmentRecord } from '@/shared/types';
+import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
 import EnvironmentSelectorPanel from '../../../src/components/environment/EnvironmentSelectorPanel';
 import { useEnvironmentSelection } from '../../../src/components/environment/useEnvironmentSelection';
 
-vi.mock('../../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(),
 }));

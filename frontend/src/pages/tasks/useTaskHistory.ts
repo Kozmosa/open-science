@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getTaskMessages } from '../../api';
-import type { MessageItem } from '../../types';
+import { getTaskMessages } from '@/shared/api';
+import type { MessageItem } from '@/shared/types';
 
 async function fetchAllMessages(taskId: string): Promise<MessageItem[]> {
   const allMessages: MessageItem[] = [];

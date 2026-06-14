@@ -7,6 +7,18 @@
     "types": ["vite/client"],
     "skipLibCheck": true,
 
+    /* TypeScript 6 deprecated baseUrl/paths; silence until TS 7 migration */
+    "ignoreDeprecations": "6.0",
+
+    /* Path aliases */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@design-system/*": ["src/design-system/*"],
+      "@features/*": ["src/features/*"],
+      "@shared/*": ["src/shared/*"]
+    },
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getAdminUsers, updateAdminUser, resetUserPassword } from '../../api';
-import { useT } from '../../i18n';
+import { getAdminUsers, updateAdminUser, resetUserPassword } from '@/shared/api';
+import { useT } from '@/shared/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function UsersTab() {

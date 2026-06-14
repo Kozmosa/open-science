@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { pauseTask, resumeTask, sendTaskPrompt } from '../../api';
+import { pauseTask, resumeTask, sendTaskPrompt } from '@/shared/api';
 import { useToast } from '../../components/common/Toast';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error) return error.message;
