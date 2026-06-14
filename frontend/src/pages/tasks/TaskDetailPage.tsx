@@ -16,6 +16,10 @@ interface TaskDetailPageProps {
   hasMore: boolean;
   loadMore: () => void;
   isLoadingMore: boolean;
+  taskSidebarCollapsed?: boolean;
+  metadataSidebarOpen?: boolean;
+  onToggleTaskSidebar?: () => void;
+  onToggleMetadataSidebar?: () => void;
 }
 
 export default function TaskDetailPage({
@@ -27,6 +31,10 @@ export default function TaskDetailPage({
   hasMore,
   loadMore,
   isLoadingMore,
+  taskSidebarCollapsed = false,
+  metadataSidebarOpen = true,
+  onToggleTaskSidebar,
+  onToggleMetadataSidebar,
 }: TaskDetailPageProps) {
   const t = useT();
   const { messages, isLoading, error } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
@@ -70,6 +78,10 @@ export default function TaskDetailPage({
         showResume={showResume}
         onPause={() => actions.pause()}
         onResume={() => actions.resume()}
+        taskSidebarCollapsed={taskSidebarCollapsed}
+        metadataSidebarOpen={metadataSidebarOpen}
+        onToggleTaskSidebar={onToggleTaskSidebar}
+        onToggleMetadataSidebar={onToggleMetadataSidebar}
       />
 
       {outputError && (

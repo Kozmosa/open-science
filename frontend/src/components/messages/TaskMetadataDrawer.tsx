@@ -1,12 +1,9 @@
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Alert } from '../ui';
 import { useT } from '../../i18n';
 import type { TaskRecord } from '../../types';
 
 interface TaskMetadataDrawerProps {
   task: TaskRecord;
-  open: boolean;
-  onToggleCollapsed: () => void;
 }
 
 function MetadataRow({
@@ -31,7 +28,7 @@ function MetadataRow({
   );
 }
 
-export default function TaskMetadataDrawer({ task, open, onToggleCollapsed }: TaskMetadataDrawerProps) {
+export default function TaskMetadataDrawer({ task }: TaskMetadataDrawerProps) {
   const t = useT();
   const fallback = t('pages.tasks.unavailable');
 
@@ -53,41 +50,12 @@ export default function TaskMetadataDrawer({ task, open, onToggleCollapsed }: Ta
     task.binding?.environment?.display_name ??
     null;
 
-  if (!open) {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="-mx-3 -mt-3 flex items-center justify-center border-b border-[var(--sidebar-border)] py-2">
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
-            title={t('pages.tasks.layout.expandSidebar')}
-            aria-label={t('pages.tasks.layout.expandSidebar')}
-          >
-            <PanelRightOpen size={16} />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
-            {t('pages.tasks.summary')}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
-          title={t('pages.tasks.layout.collapseSidebar')}
-          aria-label={t('pages.tasks.layout.collapseSidebar')}
-        >
-          <PanelRightClose size={16} />
-        </button>
+      <div className="mb-3 border-b border-[var(--sidebar-border)] pb-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+          {t('pages.tasks.summary')}
+        </p>
       </div>
 
       <div className="flex h-full flex-col gap-5 overflow-y-auto">

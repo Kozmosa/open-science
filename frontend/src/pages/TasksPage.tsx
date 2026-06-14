@@ -1,4 +1,4 @@
-import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
@@ -28,7 +28,7 @@ import TaskList from './tasks/TaskList';
 import TaskMetadataDrawer from '../components/messages/TaskMetadataDrawer';
 import { useTaskStream } from './tasks/useTaskStream';
 
-const SIDEBAR_COLLAPSED_WIDTH = 48;
+const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
 const DEFAULT_METADATA_SIDEBAR_WIDTH = 320;
 
@@ -223,21 +223,7 @@ function TasksPage() {
     ? metadataSidebarWidth
     : SIDEBAR_COLLAPSED_WIDTH;
 
-  const taskSidebarContent = taskSidebarCollapsed ? (
-    <div className="flex h-full flex-col">
-      <div className="-mx-3 -mt-3 flex items-center justify-center border-b border-[var(--sidebar-border)] py-2">
-        <button
-          type="button"
-          onClick={toggleTaskSidebar}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
-          title={t('layout.expandSidebar')}
-          aria-label={t('layout.expandSidebar')}
-        >
-          <PanelLeftOpen size={16} />
-        </button>
-      </div>
-    </div>
-  ) : (
+  const taskSidebarContent = taskSidebarCollapsed ? null : (
     <>
       <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
         <div className="min-w-0">
@@ -252,15 +238,6 @@ function TasksPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <button
-            type="button"
-            onClick={toggleTaskSidebar}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sidebar-foreground)] transition hover:bg-[var(--sidebar-primary)]"
-            title={t('layout.collapseSidebar')}
-            aria-label={t('layout.collapseSidebar')}
-          >
-            <PanelLeftClose size={16} />
-          </button>
           <Button
             ref={createButtonRef}
             onClick={() => setCreateDialogOpen(true)}
@@ -324,8 +301,6 @@ function TasksPage() {
             selectedTask ? (
               <TaskMetadataDrawer
                 task={selectedTask}
-                open={metadataSidebarOpen}
-                onToggleCollapsed={toggleMetadataSidebar}
               />
             ) : null
           }
@@ -344,6 +319,10 @@ function TasksPage() {
             hasMore={hasMore}
             loadMore={loadMore}
             isLoadingMore={isLoadingMore}
+            taskSidebarCollapsed={taskSidebarCollapsed}
+            metadataSidebarOpen={metadataSidebarOpen}
+            onToggleTaskSidebar={toggleTaskSidebar}
+            onToggleMetadataSidebar={toggleMetadataSidebar}
           />
         </SplitPane>
       </PageShell>

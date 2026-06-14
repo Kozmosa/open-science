@@ -111,20 +111,22 @@ export default function SplitPane({
 }: SplitPaneProps) {
   const t = useT();
 
-  const leftCollapsed = sidebarWidth <= 60;
-  const rightCollapsed = (rightSidebarWidth ?? 0) <= 60;
+  const leftCollapsed = sidebarWidth <= 0;
+  const rightCollapsed = (rightSidebarWidth ?? 0) <= 0;
 
   return (
     <div className={`flex min-h-0 w-full flex-1 ${className ?? ''}`}>
-      <aside
-        className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
-        style={{ width: sidebarWidth }}
-        data-testid={sidebarTestId}
-      >
-        <div className="flex min-h-0 flex-1 flex-col [&>*:last-child]:min-h-0 [&>*:last-child]:flex-1">
-          {sidebar}
-        </div>
-      </aside>
+      {!leftCollapsed && (
+        <aside
+          className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
+          style={{ width: sidebarWidth }}
+          data-testid={sidebarTestId}
+        >
+          <div className="flex min-h-0 flex-1 flex-col [&>*:last-child]:min-h-0 [&>*:last-child]:flex-1">
+            {sidebar}
+          </div>
+        </aside>
+      )}
 
       {!leftCollapsed && (
         <ResizeHandle
@@ -153,7 +155,7 @@ export default function SplitPane({
         />
       )}
 
-      {rightSidebar && (
+      {rightSidebar && !rightCollapsed && (
         <aside
           className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
           style={{ width: rightSidebarWidth }}
