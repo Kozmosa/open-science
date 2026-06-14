@@ -68,6 +68,14 @@ echo
 
 docker compose -f "${COMPOSE_FILE}" up -d --build "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
 
+# Production nginx serves the host frontend/dist, not the dist baked into the
+# backend image. Rebuild it here so the frontend build-info matches the backend
+# commit and the user sees a consistent deployment version.
+echo "=== Building frontend on host ==="
+cd "${REPO_ROOT}/frontend"
+npm run build
+cd "${REPO_ROOT}/deploy"
+
 # Propagate nginx config changes too.  A plain 'docker compose up --build ainrf'
 # leaves the nginx container untouched, which can hide stale configs (e.g. the
 # container still references litefuse-web while the host config was switched to

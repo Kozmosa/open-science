@@ -32,6 +32,13 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm config set registry https://registry.npmmirror.com && npm ci --ignore-scripts
 COPY frontend/ ./
+# Stamp frontend build provenance with the same commit as the backend.
+# The host redeploy wrapper sets these; if unset, write-build-info.mjs
+# falls back to git or the existing public/build-info.json.
+ARG AINRF_BUILD_COMMIT=""
+ARG AINRF_BUILD_COMMITTED_AT=""
+ENV AINRF_BUILD_COMMIT=${AINRF_BUILD_COMMIT}
+ENV AINRF_BUILD_COMMITTED_AT=${AINRF_BUILD_COMMITTED_AT}
 RUN npm run build
 
 # ── Stage 2: Backend build ────────────────────────────────────────

@@ -52,7 +52,14 @@ case "$TARGET" in
     ;;
 esac
 
+export AINRF_BUILD_COMMIT
+export AINRF_BUILD_COMMITTED_AT
+AINRF_BUILD_COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short=6 HEAD)"
+AINRF_BUILD_COMMITTED_AT="$(git -C "${REPO_ROOT}" show -s --format=%cd --date=format:%Y%m%d-%H%M HEAD)"
+
 echo "=== Building frontend (host) ==="
+echo "  commit:       ${AINRF_BUILD_COMMIT}"
+echo "  committed_at: ${AINRF_BUILD_COMMITTED_AT}"
 cd "${REPO_ROOT}/frontend"
 npm run build
 

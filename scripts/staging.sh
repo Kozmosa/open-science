@@ -10,6 +10,7 @@
 #   bash scripts/staging.sh logs      # tail ainrf-staging logs
 #   bash scripts/staging.sh rebuild   # rebuild image, keep data
 #   bash scripts/staging.sh creds     # print admin initial password
+#   bash scripts/staging.sh test      # run integration tests against staging
 #
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -121,6 +122,19 @@ cmd_creds() {
   "${COMPOSE_CMD[@]}" exec ainrf-staging cat /opt/ainrf/state/admin_initial_password.txt 2>/dev/null || _warn "Not available yet. Is the staging environment running?"
 }
 
+cmd_test() {
+  local base_url="http://localhost:17000"
+  if ! wait_for_url "${base_url}/health" 1 0 >/dev/null 2>&1; then
+    _error "Staging backend is not healthy at ${base_url}"
+    _error "Run: bash scripts/staging.sh up"
+    exit 1
+  fi
+
+  _info "Running integration tests against staging at ${base_url}"
+  cd "${REPO_ROOT}"
+  AINRF_STAGING_URL="${base_url}" uv run pytest -m integration -q --timeout=180
+}
+
 # ── Main ───────────────────────────────────────────────────────────
 
 usage() {
@@ -134,6 +148,7 @@ Commands:
   logs      Tail ainrf-staging container logs
   rebuild   Rebuild backend image (keep data volumes)
   creds     Print the admin initial password
+  test      Run integration tests against the running staging backend
 EOF
 }
 
@@ -144,6 +159,7 @@ case "${1:-}" in
   logs)     shift || true; cmd_logs "$@" ;;
   rebuild)  shift || true; cmd_rebuild "$@" ;;
   creds)    shift || true; cmd_creds "$@" ;;
+  test)     shift || true; cmd_test "$@" ;;
   -h|--help|help)
     usage
     ;;
