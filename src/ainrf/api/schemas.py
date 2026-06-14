@@ -870,6 +870,31 @@ class SkillRegistryUpdateRequest(BaseModel):
     force: bool = False
 
 
+class SkillRegistryCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    registry_id: str = Field(..., min_length=1)
+    display_name: str = Field(..., min_length=1)
+    git_url: str = Field(..., min_length=1)
+    git_ref: str = "main"
+    source_skills_path: str = "skills"
+    core_skill_ids: list[str] = Field(default_factory=list)
+    install_mode: str = "copy"
+    enabled: bool = True
+
+
+class SkillRegistryUpdateConfigRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, min_length=1)
+    git_url: str | None = Field(default=None, min_length=1)
+    git_ref: str | None = Field(default=None, min_length=1)
+    source_skills_path: str | None = Field(default=None, min_length=1)
+    core_skill_ids: list[str] | None = None
+    install_mode: str | None = Field(default=None, pattern="^(copy|symlink)$")
+    enabled: bool | None = None
+
+
 class SkillRegistryInstallResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

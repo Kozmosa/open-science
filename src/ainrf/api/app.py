@@ -46,6 +46,7 @@ from ainrf.projects import ProjectRegistryService
 from ainrf.runtime.readiness import check_runtime_readiness
 from ainrf.sessions import SessionService
 from ainrf.skills import SkillsDiscoveryService
+from ainrf.skills.registry_config_service import SkillRegistryConfigService
 from ainrf.agentic_researcher import AgenticResearcherService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
@@ -241,6 +242,10 @@ def create_app(
     app.state.skills_discovery_service = SkillsDiscoveryService(
         scan_roots=[default_workspace_dir],
     )
+    app.state.skill_registry_config_service = SkillRegistryConfigService(
+        state_root=api_config.state_root,
+    )
+    app.state.skill_registry_config_service.initialize()
     app.state.session_service = SessionService(
         state_root=api_config.state_root,
     )
