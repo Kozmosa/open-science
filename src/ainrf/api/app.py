@@ -271,6 +271,11 @@ def create_app(
     agentic_researcher_service.initialize()
     app.state.agentic_researcher_service = agentic_researcher_service
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
+
+    # Initialize OpenTelemetry auto-instrumentation (disabled by default).
+    from ainrf.telemetry import init_telemetry
+    init_telemetry(app)
+
     # Middleware order (outermost first):
     #   1. Request context — attach request_id + structlog binding
     #   2. Request logging — log method/path/status/duration with request_id

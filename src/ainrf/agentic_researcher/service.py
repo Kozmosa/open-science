@@ -364,6 +364,9 @@ class AgenticResearcherService:
         # (SSH executor, DB queries, etc.) carry the correlation key.
         structlog.contextvars.bind_contextvars(task_id=task_id)
 
+        from ainrf.api.routes.sla_metrics import record_task_started
+
+        record_task_started(task_id)
         self._observability.start_trace(
             trace_id=task_id,
             name=f"task-{task.researcher_type.value}-{task.harness_engine.value}",
@@ -405,12 +408,24 @@ class AgenticResearcherService:
                 trace_id=task_id,
                 output={"status": "succeeded"},
             )
+            from ainrf.api.routes.sla_metrics import record_task_completed
+            record_task_completed(
+                task_id, "succeeded",
+                researcher_type=task.researcher_type.value,
+                harness_engine=task.harness_engine.value,
+            )
         except asyncio.CancelledError:
             await self._set_status(task_id, TaskStatus.CANCELLED, completed=True)
             _LOG.warning("task_cancelled")
             self._observability.end_trace(
                 trace_id=task_id,
                 output={"status": "cancelled"},
+            )
+            from ainrf.api.routes.sla_metrics import record_task_completed
+            record_task_completed(
+                task_id, "cancelled",
+                researcher_type=task.researcher_type.value,
+                harness_engine=task.harness_engine.value,
             )
             raise
         except Exception as exc:
@@ -426,9 +441,17 @@ class AgenticResearcherService:
                 trace_id=task_id,
                 error=str(exc),
             )
+            from ainrf.api.routes.sla_metrics import record_task_completed
+            record_task_completed(
+                task_id, "failed",
+                researcher_type=task.researcher_type.value,
+                harness_engine=task.harness_engine.value,
+            )
         finally:
             with self._task_lock:
                 self._running_tasks.pop(task_id, None)
+            from ainrf.api.routes.sla_metrics import cleanup_task_state
+            cleanup_task_state(task_id)
             structlog.contextvars.unbind_contextvars("task_id")
 
     async def pause_task(self, task_id: str) -> Task:
@@ -1080,10 +1103,11 @@ class AgenticResearcherService:
                 task_id, event.token_usage, replace=event.event_type != "token"
             )
             # Report LLM generation to observability backend (dual-write).
+            model = _extract_model_from_usage(event.token_usage)
             self._observability.record_generation(
                 trace_id=task_id,
                 name=f"llm-{event.event_type}",
-                model=_extract_model_from_usage(event.token_usage),
+                model=model,
                 usage_details={
                     k: _int_number(event.token_usage.get("total", {}).get(k))
                     for k in TOKEN_TOTAL_FIELDS
@@ -1093,6 +1117,21 @@ class AgenticResearcherService:
                 },
                 metadata={"source": event.token_usage.get("source", "unknown")},
             )
+            # Record SLA: first-token latency (best-effort from usage timestamp).
+            from ainrf.api.routes.sla_metrics import (
+                record_llm_first_token,
+                record_llm_first_token_latency,
+            )
+            record_llm_first_token(task_id, model=model or "")
+            ttft = event.token_usage.get("time_to_first_token")
+            if ttft is not None:
+                try:
+                    record_llm_first_token_latency(
+                        model=model or "",
+                        latency_seconds=float(ttft),
+                    )
+                except (TypeError, ValueError):
+                    pass
         if event.event_type == "status":
             status = event.payload.get("status")
             exit_code = event.payload.get("exit_code")

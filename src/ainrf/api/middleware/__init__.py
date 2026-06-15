@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse, Response
 
 
 from ainrf.api.config import ApiConfig
+from ainrf.auth.presence import record_activity
 from ainrf.auth.service import AuthService
 
 _EXEMPT_PATH_PREFIXES = (
@@ -167,6 +168,7 @@ def build_jwt_auth_middleware(
 
             request.state.current_user = user
             request.state.auth_scheme = "bearer"
+            record_activity(user["id"])
             return await call_next(request)
 
         # Fallback: session cookie (needed for nginx auth_request on /grafana, /prometheus, /litefuse)
@@ -181,6 +183,7 @@ def build_jwt_auth_middleware(
 
             request.state.current_user = user
             request.state.auth_scheme = "cookie"
+            record_activity(user["id"])
             return await call_next(request)
 
         # Fallback: API key in query string (needed for native EventSource/SSE)
@@ -245,6 +248,8 @@ def build_concurrency_limit_middleware(
         try:
             await asyncio.wait_for(semaphore.acquire(), timeout=5.0)
         except TimeoutError:
+            from ainrf.api.routes.sla_metrics import rate_limited
+            rate_limited("concurrency", request.url.path)
             return JSONResponse(
                 {"detail": "Server is busy. Please retry later."},
                 status_code=503,

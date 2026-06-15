@@ -90,6 +90,16 @@ class ProjectUpdateRequest(BaseModel):
     default_environment_id: str | None = None
 
 
+class ComponentHealth(BaseModel):
+    """Health status for a single component (database, Litefuse, etc.)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str  # "ok" | "degraded" | "unhealthy"
+    latency_ms: float | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -101,6 +111,8 @@ class HealthResponse(BaseModel):
     container_health: dict[str, Any] | None = None
     runtime_readiness: dict[str, object] | None = None
     detail: str | None = None
+    uptime_seconds: float | None = None
+    checks: dict[str, ComponentHealth] | None = None
 
 
 class TerminalSessionResponse(BaseModel):
@@ -1055,6 +1067,7 @@ class AdminUserResponse(BaseModel):
     status: str
     created_at: str
     last_login_at: str | None = None
+    is_online: bool = False
 
 
 class AdminUserListResponse(BaseModel):
