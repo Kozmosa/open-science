@@ -56,6 +56,8 @@ class LiteraturePaper:
     arxiv_category: str = ""
     ai_summary: str | None = None
     ai_practice_note: str | None = None
+    summary_version: str | None = None
+    summary_model: str | None = None
     is_read: bool = False
     is_converted_to_task: bool = False
     task_id: str | None = None
@@ -74,6 +76,8 @@ class LiteraturePaper:
             "arxiv_category": self.arxiv_category,
             "ai_summary": self.ai_summary,
             "ai_practice_note": self.ai_practice_note,
+            "summary_version": self.summary_version,
+            "summary_model": self.summary_model,
             "is_read": self.is_read,
             "is_converted_to_task": self.is_converted_to_task,
             "task_id": self.task_id,

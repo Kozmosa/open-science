@@ -222,7 +222,7 @@ class LiteratureService:
             for p in papers:
                 try:
                     conn.execute(
-                        """INSERT INTO literature_papers VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        """INSERT INTO literature_papers VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             p.paper_id,
                             p.subscription_id,
@@ -239,6 +239,8 @@ class LiteratureService:
                             int(p.is_converted_to_task),
                             p.task_id,
                             p.created_at,
+                            p.summary_version,
+                            p.summary_model,
                         ),
                     )
                     count += 1
@@ -278,6 +280,8 @@ class LiteratureService:
             arxiv_category=d.get("arxiv_category", ""),
             ai_summary=d.get("ai_summary"),
             ai_practice_note=d.get("ai_practice_note"),
+            summary_version=d.get("summary_version"),
+            summary_model=d.get("summary_model"),
             is_read=bool(d.get("is_read", 0)),
             is_converted_to_task=bool(d.get("is_converted_to_task", 0)),
             task_id=d.get("task_id"),

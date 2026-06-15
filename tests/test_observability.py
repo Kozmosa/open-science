@@ -240,7 +240,7 @@ class TestLiteratureObservability:
             arxiv_categories=["cs.AI"],
             frequency="daily",
         )
-        # Patch _fetch_arxiv_papers to return empty list (no real API call).
-        with patch("ainrf.literature.fetcher._fetch_arxiv_papers", return_value=[]):
+        # Patch arxiv fetch to return empty list (no real API call).
+        with patch("ainrf.literature.fetcher.fetch_papers", return_value=[]):
             result = await fetch_for_subscription(sub, NullReporter())
         assert isinstance(result, list)

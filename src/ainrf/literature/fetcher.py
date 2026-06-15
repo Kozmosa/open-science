@@ -1,185 +1,47 @@
-"""arXiv fetch + LLM summarization pipeline."""
+"""arXiv fetch + LLM summarization pipeline orchestrator."""
 
 from __future__ import annotations
 
-import asyncio
-import os
-import random
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-import arxiv
-import json_repair
-
-from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
+from ainrf.literature.arxiv_client import fetch_papers
+from ainrf.literature.models import LiteratureSubscription
+from ainrf.literature.summarizer import AnthropicSummarizer
 
 if TYPE_CHECKING:
     from ainrf.observability.protocol import ObservabilityReporter
 
-_DEFAULT_MODEL = "deepseek-v4-flash"
-_DEFAULT_BASE_URL = "https://api.deepseek.com"
-_RATE_DELAY_MIN = 0.1  # seconds
-_RATE_DELAY_MAX = 0.3  # seconds
+logger = logging.getLogger(__name__)
 
-SUMMARIZE_PROMPT = """你是一个学术文献摘要助手。请对以下论文做提炼：
-
-1. 将标题翻译为中文（简洁准确，不超过 40 字）
-2. 写 3 条"重点概要"（每条 1 句话，分别覆盖核心发现、方法创新、实践意义，用中文）
-3. 写 1 条"实践提醒"（面向研究者的一句话行动建议，以"可以"开头，用中文）
-
-论文标题: {title}
-摘要: {abstract}
-作者: {authors}
-
-请用以下 JSON 格式回复（不要输出其他内容）：
-{{"title_zh": "...", "ai_summary": ["...", "...", "..."], "ai_practice_note": "..."}}"""
+DEFAULT_LOOKBACK_DAYS = 7
 
 
-def _get_api_config() -> tuple[str, str, str]:
-    """Returns (api_key, base_url, model) from environment or defaults."""
-    api_key = (
-        os.environ.get("ANTHROPIC_API_KEY")
-        or os.environ.get("ANTHROPIC_AUTH_TOKEN")
-        or os.environ.get("DEEPSEEK_API_KEY")
-        or ""
-    )
-    base_url = (
-        os.environ.get("ANTHROPIC_BASE_URL")
-        or os.environ.get("DEEPSEEK_BASE_URL")
-        or _DEFAULT_BASE_URL
-    )
-    model = (
-        os.environ.get("AINRF_LITERATURE_MODEL")
-        or os.environ.get("ANTHROPIC_MODEL")
-        or _DEFAULT_MODEL
-    )
-    return api_key, base_url, model
-
-
-def _extract_json(text: str) -> dict | None:
-    """Extract JSON from LLM response, handling markdown code fences and trailing commas."""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        text = "\n".join(lines[1:]) if len(lines) > 1 else text
-        if text.endswith("```"):
-            text = text[:-3]
-    try:
-        repaired = json_repair.repair_json(text, return_json=True)
-    except Exception:
-        return None
-    return repaired if isinstance(repaired, dict) else None
-
-
-async def _summarize_papers(
-    papers: list[LiteraturePaper],
-    reporter: ObservabilityReporter | None = None,
-    trace_id: str | None = None,
-) -> None:
-    """Call LLM API to summarize papers. Reads config from environment."""
-    import httpx
-
-    from ainrf.observability.protocol import NullReporter
-
-    _obs = reporter or NullReporter()
-    api_key, base_url, model = _get_api_config()
-    if not api_key:
-        return  # no API key configured, skip summarization
-
-    for paper in papers:
-        prompt = SUMMARIZE_PROMPT.format(
-            title=paper.title,
-            abstract=paper.abstract[:2000],
-            authors=", ".join(paper.authors[:5]),
-        )
+def _since_for_subscription(sub: LiteratureSubscription) -> datetime | None:
+    """Return the datetime from which we should search for new papers."""
+    if sub.last_fetched_at:
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.post(
-                    f"{base_url}/v1/messages",
-                    headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
-                    json={
-                        "model": model,
-                        "max_tokens": 500,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    text = data["content"][0]["text"]
-                    result = _extract_json(text)
-                    if result:
-                        paper.title_zh = result.get("title_zh")
-                        bullet_points = result.get("ai_summary", [])
-                        paper.ai_summary = "\n".join(f"- {s}" for s in bullet_points)
-                        paper.ai_practice_note = result.get("ai_practice_note")
-                    # Report generation to observability backend.
-                    usage = data.get("usage") if isinstance(data, dict) else None
-                    usage_details = None
-                    if isinstance(usage, dict):
-                        usage_details = {
-                            k: int(v) for k, v in usage.items() if isinstance(v, int | float)
-                        }
-                    _obs.record_generation(
-                        trace_id=trace_id or "lit-unknown",
-                        name=f"summarize-{paper.paper_id}",
-                        model=model,
-                        usage_details=usage_details,
-                        input={"paper_title": paper.title},
-                        output={"title_zh": paper.title_zh},
-                    )
-        except Exception:
-            continue
-        # Rate limiting: random delay between API calls
-        await asyncio.sleep(random.uniform(_RATE_DELAY_MIN, _RATE_DELAY_MAX))
-
-
-def _fetch_arxiv_papers(sub: LiteratureSubscription) -> list[LiteraturePaper]:
-    client = arxiv.Client()
-    query_parts: list[str] = []
-
-    if sub.keywords:
-        query_parts.append("(" + " AND ".join(f'"{kw}"' for kw in sub.keywords) + ")")
-    if sub.arxiv_categories:
-        query_parts.append("(" + " OR ".join(f"cat:{cat}" for cat in sub.arxiv_categories) + ")")
-
-    query = " AND ".join(query_parts) if query_parts else "all:recent"
-    search = arxiv.Search(
-        query=query,
-        max_results=10,
-        sort_by=arxiv.SortCriterion.SubmittedDate,
-    )
-
-    papers: list[LiteraturePaper] = []
-    try:
-        results = list(client.results(search))
-        for result in results:
-            papers.append(
-                LiteraturePaper(
-                    paper_id=result.entry_id.split("/")[-1].split("v")[0],
-                    subscription_id=sub.subscription_id,
-                    title=result.title,
-                    authors=[a.name for a in result.authors],
-                    abstract=result.summary,
-                    published_at=result.published.isoformat(),
-                    arxiv_category=result.primary_category,
-                )
+            return datetime.fromisoformat(sub.last_fetched_at)
+        except ValueError:
+            logger.warning(
+                "invalid last_fetched_at for subscription=%s: %s",
+                sub.subscription_id,
+                sub.last_fetched_at,
             )
-    except Exception:
-        pass
-    return papers
+    return datetime.now(timezone.utc) - timedelta(days=DEFAULT_LOOKBACK_DAYS)
 
 
 async def fetch_for_subscription(
     sub: LiteratureSubscription,
     reporter: ObservabilityReporter | None = None,
-) -> list[LiteraturePaper]:
-    """Fetch papers for a single subscription.
+) -> list:
+    """Fetch papers for a single subscription and summarize them.
 
     Queries arXiv with the subscription's keywords and categories,
-    then optionally summarizes each paper via the configured LLM API.
-    API configuration is read from environment variables:
-    - ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / DEEPSEEK_API_KEY
-    - ANTHROPIC_BASE_URL / DEEPSEEK_BASE_URL (default: https://api.deepseek.com)
-    - AINRF_LITERATURE_MODEL / ANTHROPIC_MODEL (default: deepseek-v4-flash)
+    restricted to papers submitted since the last successful fetch (or the
+    default lookback window). Papers are then summarized in batches via the
+    Anthropic-compatible Messages API configured through environment variables.
     """
     from ainrf.observability.protocol import NullReporter
 
@@ -195,10 +57,19 @@ async def fetch_for_subscription(
         },
     )
 
-    papers = await asyncio.to_thread(_fetch_arxiv_papers, sub)
+    try:
+        since = _since_for_subscription(sub)
+        papers = await fetch_papers(sub, since=since)
 
-    if papers:
-        await _summarize_papers(papers, _obs, trace_id)
+        if papers:
+            summarizer = AnthropicSummarizer(
+                reporter=_obs,
+                trace_id=trace_id,
+            )
+            await summarizer.summarize(papers)
+    except Exception:
+        _obs.end_trace(trace_id=trace_id, output={"paper_count": 0})
+        raise
 
     _obs.end_trace(
         trace_id=trace_id,
