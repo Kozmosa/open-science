@@ -148,7 +148,7 @@ function TasksPage() {
     mutationFn: (taskId: string) => deleteTask(taskId),
     onSuccess: (_data, taskId) => {
       queryClient.setQueryData<TaskListResponse>(
-        ['tasks', showArchived, taskSort],
+        queryKeys.tasks.list(showArchived, taskSort),
         (current) => ({
           items: (current?.items ?? []).filter((item) => item.task_id !== taskId),
           total: current?.total != null ? current.total - 1 : undefined,
@@ -228,10 +228,10 @@ function TasksPage() {
     <>
       <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">
             {t('pages.tasks.sidebarEyebrow')}
           </p>
-          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
+          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--foreground)]">
             {t('pages.tasks.sidebarTitle')}
           </h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -242,7 +242,7 @@ function TasksPage() {
           <Button
             ref={createButtonRef}
             onClick={() => setCreateDialogOpen(true)}
-            className="inline-flex h-9 shrink-0 items-center px-3 shadow-sm transition-all"
+            className="inline-flex h-9 shrink-0 items-center rounded-xl px-3 shadow-[var(--shadow-sm)] transition-all active:scale-[0.98]"
           >
             <Plus size={15} className="shrink-0" />
             <span
@@ -257,18 +257,18 @@ function TasksPage() {
           <Select
             value={taskSort}
             onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
-            className="w-full text-[11px] py-1"
+            className="w-full rounded-lg py-1 text-[11px]"
           >
             <option value="updated">{t('pages.tasks.sort.updated')}</option>
             <option value="created">{t('pages.tasks.sort.created')}</option>
             <option value="name">{t('pages.tasks.sort.name')}</option>
           </Select>
-          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
+          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-tertiary)]">
             <input
               type="checkbox"
               checked={showArchived}
               onChange={(event) => setShowArchived(event.target.checked)}
-              className="rounded border-[var(--border)]"
+              className="rounded border-[var(--border)] accent-[var(--prism-primary)]"
             />
             {t('pages.tasks.actions.showArchived')}
           </label>

@@ -53,10 +53,16 @@ pre {
 
 /* React Flow theme integration */
 .react-flow {
+  --xy-background: var(--background);
   --xy-edge-stroke: var(--border);
-  --xy-edge-stroke-selected: var(--apple-blue);
-  --xy-handle-background: var(--apple-blue);
+  --xy-edge-stroke-selected: var(--prism-primary);
+  --xy-handle-background: var(--prism-primary);
   --xy-handle-border-color: var(--surface);
+  --xy-selection-background: var(--prism-primary-soft);
+  --xy-selection-border: var(--prism-primary-border);
+  --xy-node-background: var(--surface);
+  --xy-node-border: var(--border);
+  --xy-node-color: var(--foreground);
 }
 
 .react-flow__attribution {

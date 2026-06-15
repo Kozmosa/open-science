@@ -59,13 +59,13 @@ export default function TaskHeaderBar({
   }, [editTitle, task.title, renameMutation]);
 
   return (
-    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--bg)] px-4 py-3">
+    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--prism-glass)]/90 backdrop-blur-lg px-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
         {onToggleTaskSidebar && (
           <button
             type="button"
             onClick={onToggleTaskSidebar}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-secondary)] transition hover:bg-[var(--bg-secondary)]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-secondary)] transition hover:bg-[var(--prism-primary-soft)] hover:text-[var(--foreground)]"
             title={taskSidebarCollapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
             aria-label={taskSidebarCollapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
           >
@@ -84,7 +84,7 @@ export default function TaskHeaderBar({
               if (e.key === 'Enter') commitTitle();
               if (e.key === 'Escape') setIsEditing(false);
             }}
-            className="min-w-0 max-w-md rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm font-semibold text-[var(--text)] outline-none focus:border-[var(--apple-blue)]"
+            className="min-w-0 max-w-md rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm font-semibold text-[var(--text)] outline-none focus:border-[var(--prism-primary)] focus:ring-2 focus:ring-[var(--ring)]"
           />
         ) : (
           <h1
@@ -107,7 +107,7 @@ export default function TaskHeaderBar({
           <button
             type="button"
             onClick={onPause}
-            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+            className="rounded-lg bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--prism-primary-soft)] hover:text-[var(--foreground)]"
           >
             {t('pages.tasks.actions.pause')}
           </button>
@@ -116,7 +116,7 @@ export default function TaskHeaderBar({
           <button
             type="button"
             onClick={onResume}
-            className="rounded-md bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--border)]"
+            className="rounded-lg bg-[var(--prism-primary-soft)] px-3 py-1 text-xs font-medium text-[var(--prism-primary)] transition hover:bg-[var(--prism-primary-soft)]/70"
           >
             {t('pages.tasks.actions.resume')}
           </button>
@@ -126,7 +126,7 @@ export default function TaskHeaderBar({
           <button
             type="button"
             onClick={onToggleMetadataSidebar}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-secondary)] transition hover:bg-[var(--bg-secondary)]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-secondary)] transition hover:bg-[var(--prism-primary-soft)] hover:text-[var(--foreground)]"
             title={metadataSidebarOpen ? t('pages.tasks.layout.collapseSidebar') : t('pages.tasks.layout.expandSidebar')}
             aria-label={metadataSidebarOpen ? t('pages.tasks.layout.collapseSidebar') : t('pages.tasks.layout.expandSidebar')}
           >

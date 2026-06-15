@@ -63,7 +63,7 @@ export default function TaskList({
           aria-label={t('pages.tasks.searchLabel')}
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] pl-9 pr-3 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--text-secondary)] focus:border-[var(--apple-blue)] focus:ring-2 focus:ring-[var(--apple-blue)]/15"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-3 py-2 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--prism-primary)] focus:ring-2 focus:ring-[var(--ring)]"
           placeholder={t('pages.tasks.searchPlaceholder')}
         />
       </label>
@@ -91,7 +91,7 @@ export default function TaskList({
                 className={[
                   'group flex w-full flex-col gap-2 rounded-lg border px-3 py-3 text-left transition',
                   isSelected
-                    ? 'border-[var(--apple-blue)]/35 bg-[var(--apple-blue)]/10 shadow-sm'
+                    ? 'border-[var(--prism-primary-border)] bg-[var(--prism-primary-soft)] shadow-[var(--shadow-sm)]'
                     : 'border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-secondary)]',
                 ].join(' ')}
               >
@@ -114,7 +114,7 @@ export default function TaskList({
                             onCancelTask(task.task_id);
                           }
                         }}
-                        className="whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.cancel')}
                       </span>
@@ -133,7 +133,7 @@ export default function TaskList({
                             onRetryTask(task.task_id);
                           }
                         }}
-                        className="whitespace-nowrap rounded-md border border-[var(--apple-blue)]/30 bg-[var(--apple-blue)]/5 px-2 py-0.5 text-[11px] font-medium text-[var(--apple-blue)] opacity-0 transition hover:bg-[var(--apple-blue)]/15 group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-lg border border-[var(--prism-primary-border)] bg-[var(--prism-primary-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--prism-primary)] opacity-0 transition hover:bg-[var(--prism-primary-soft)]/70 group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.retry')}
                       </span>
@@ -152,7 +152,7 @@ export default function TaskList({
                             onArchiveTask(task.task_id);
                           }
                         }}
-                        className="whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
                       >
                         {t('pages.tasks.actions.archive')}
                       </span>
@@ -171,7 +171,7 @@ export default function TaskList({
                             onDeleteTask(task.task_id);
                           }
                         }}
-                        className="whitespace-nowrap rounded-md border border-[var(--danger-border)] bg-[var(--danger-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--danger-foreground)] opacity-0 transition hover:opacity-80 group-hover:opacity-100"
+                        className="whitespace-nowrap rounded-lg border border-[var(--danger-border)] bg-[var(--danger-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--danger-foreground)] opacity-0 transition hover:opacity-80 group-hover:opacity-100"
                       >
                         {t('common.delete')}
                       </span>

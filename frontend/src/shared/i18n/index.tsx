@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { messages, type Locale, type MessageKey } from './messages';
+import { messages } from './catalog';
+import { type Locale, type MessageKey } from './messages';
 
 const localeStorageKey = 'scholar-agent:locale';
 
@@ -135,4 +136,4 @@ export function useLocaleSwitcher(): Pick<I18nContextValue, 'locale' | 'setLocal
 }
 
 export { messages };
-export type { Locale } from './messages';
+export type { Locale, MessageKey } from './messages';

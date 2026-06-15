@@ -26,12 +26,12 @@ export default function ChatToolCallBlock({
   const statusIcon = (status: 'running' | 'success' | 'error') => {
     switch (status) {
       case 'success':
-        return <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />;
+        return <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-msg-tool-result)]" />;
       case 'error':
-        return <CheckCircle2 className="w-3.5 h-3.5 text-red-500" />;
+        return <CheckCircle2 className="w-3.5 h-3.5 text-[var(--danger)]" />;
       case 'running':
       default:
-        return <Loader2 className="w-3.5 h-3.5 text-[var(--apple-blue)] animate-spin" />;
+        return <Loader2 className="w-3.5 h-3.5 text-[var(--color-msg-tool-call)] animate-spin" />;
     }
   };
 
@@ -41,12 +41,12 @@ export default function ChatToolCallBlock({
     <motion.div layout className="w-full max-w-full">
       <motion.div
         layout
-        className="relative overflow-hidden rounded-[14px] bg-[var(--surface)]/50 backdrop-blur-[32px] backdrop-saturate-[180%] border border-[var(--border)]/60 shadow-[0_2px_8px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.8)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.05)] transition-colors duration-300"
+        className="relative overflow-hidden rounded-[14px] bg-[var(--prism-glass)] backdrop-blur-xl border border-[var(--border)] shadow-[var(--shadow-sm)] transition-colors duration-300"
       >
         <motion.button
           type="button"
           layout="position"
-          className="flex w-full items-center justify-between px-3 py-2.5 cursor-pointer select-none hover:bg-black/5 dark:hover:bg-white/5 transition-colors bg-transparent border-none"
+          className="flex w-full items-center justify-between px-3 py-2.5 cursor-pointer select-none hover:bg-[var(--color-msg-tool-call-fade)] transition-colors bg-transparent border-none"
           onClick={() => {
             if (onExpand) {
               onExpand();
@@ -59,8 +59,8 @@ export default function ChatToolCallBlock({
           aria-expanded={isExpanded}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-[var(--bg-secondary)] flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.05)] border border-[var(--border)]/50">
-              <Settings2 className="w-3.5 h-3.5 text-[var(--apple-blue)]" />
+            <div className="w-6 h-6 rounded-full bg-[var(--color-msg-tool-call-fade)] flex items-center justify-center shadow-[var(--shadow-sm)] border border-[var(--prism-primary-border)]/30">
+              <Settings2 className="w-3.5 h-3.5 text-[var(--color-msg-tool-call)]" />
             </div>
             <span className="font-mono text-[12.5px] font-medium text-[var(--text)] tracking-tight truncate">
               {isSummary ? `${totalCalls ?? call.id} Tools Called` : call.name}

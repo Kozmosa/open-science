@@ -32,10 +32,10 @@ function TaskNode({ data, selected }: NodeProps<TaskNodeType>) {
   const locale = useLocale();
   return (
     <div
-      className={`rounded-xl border bg-[var(--surface)] p-3 min-w-[180px] shadow-sm transition
-        ${selected ? 'border-[var(--apple-blue)] ring-2 ring-[var(--apple-blue)]/20' : 'border-[var(--border)]'}`}
+      className={`rounded-xl border bg-[var(--surface)] p-3 min-w-[180px] shadow-[var(--shadow-sm)] transition
+        ${selected ? 'border-[var(--prism-primary)] ring-2 ring-[var(--prism-primary-border)]' : 'border-[var(--border)]'}`}
     >
-      <Handle id="target" type="target" position={Position.Left} className="!bg-[var(--apple-blue)] !w-2 !h-2" />
+      <Handle id="target" type="target" position={Position.Left} className="!bg-[var(--prism-primary)] !w-2 !h-2" />
       <div className="flex items-center gap-2 mb-1">
         <StatusDot status={task.status} />
         <span className="truncate text-sm font-medium text-[var(--text)]" title={task.title}>{task.title}</span>
@@ -43,7 +43,7 @@ function TaskNode({ data, selected }: NodeProps<TaskNodeType>) {
       <div className="text-[11px] text-[var(--text-secondary)]">
         {task.environment_summary?.alias ?? task.environment_id} · {formatTime(task.created_at, locale)}
       </div>
-      <Handle id="source" type="source" position={Position.Right} className="!bg-[var(--apple-blue)] !w-2 !h-2" />
+      <Handle id="source" type="source" position={Position.Right} className="!bg-[var(--prism-primary)] !w-2 !h-2" />
     </div>
   );
 }
