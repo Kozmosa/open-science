@@ -86,7 +86,7 @@ export default function ChatMessageList({
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
         ref={containerRef}
-        className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-6 pb-32 space-y-8"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 py-6 pb-28 space-y-8"
       >
         {hasMore && (
           <div ref={topSentinelRef} className="flex justify-center py-2">

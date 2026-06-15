@@ -126,9 +126,5 @@ describe('ChatInputBar', () => {
     expect(onScroll).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the disclaimer text', () => {
-    renderWithProviders(<ChatInputBar onSubmit={vi.fn()} />);
-
-    expect(screen.getByText(/ai can make mistakes/i)).toBeInTheDocument();
-  });
 });
+

@@ -26,7 +26,7 @@ export default function ChatThinkingBlock({ content }: ChatThinkingBlockProps) {
         </span>
       </button>
       {isExpanded && content && (
-        <div className="text-sm text-[var(--text-secondary)] italic leading-snug whitespace-pre-wrap animate-in fade-in duration-200">
+        <div className="text-sm text-[var(--text-secondary)] italic leading-snug whitespace-pre-wrap break-words animate-in fade-in duration-200">
           {content}
         </div>
       )}

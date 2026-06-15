@@ -59,7 +59,7 @@ export default function ChatInputBar({
   }, []);
 
   return (
-    <div className="pointer-events-none bg-gradient-to-t from-[var(--surface)]/60 to-transparent pt-10 pb-6 z-10 transition-colors duration-300">
+    <div className="pointer-events-none bg-gradient-to-t from-[var(--surface)]/60 to-transparent pt-8 pb-3 z-10 transition-colors duration-300">
       <div className="relative max-w-[760px] mx-auto px-4 pointer-events-auto">
         {scrollButtonVisible && onScrollToBottom && (
           <button
@@ -136,10 +136,6 @@ export default function ChatInputBar({
               <ReasonIcon className="w-5 h-5" />
             </button>
           </div>
-        </div>
-
-        <div className="text-center text-[11px] text-[var(--text-tertiary)] font-medium mt-3 transition-colors">
-          {t('chat.disclaimer')}
         </div>
       </div>
     </div>

@@ -86,7 +86,7 @@ function TasksPage() {
       if (metadataSidebarOpen) {
         next.set('sidebar', 'closed');
       } else {
-        next.delete('sidebar');
+        next.set('sidebar', 'open');
       }
       return next;
     });
