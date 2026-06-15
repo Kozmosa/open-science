@@ -533,6 +533,7 @@ async def test_task_list_uses_fallback_workdir_for_missing_legacy_workspace(
 async def test_admin_task_lists_include_tasks_from_other_owners(tmp_path: Path) -> None:
     app = make_app(tmp_path, FakeEngine())
     headers = get_jwt_headers(app, username="admin-viewer", password="admin-pass")
+    _seed_project(app, "proj-001")
     service: AgenticResearcherService = app.state.agentic_researcher_service
     workspace = app.state.workspace_service.create_workspace(
         project_id="proj-001",

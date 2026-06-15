@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from dataclasses import asdict
 from datetime import datetime
@@ -10,6 +11,8 @@ from threading import Lock
 from ainrf.db.connection import atomic_write_json
 from ainrf.environments.models import utc_now
 from ainrf.projects.models import ProjectRecord, TaskEdgeRecord
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectNotFoundError(LookupError):
@@ -77,6 +80,7 @@ class ProjectRegistryService:
                 seed = self._build_seed_project()
                 self._projects[seed.project_id] = seed
                 self._persist()
+            self._backfill_null_owners()
             self._initialized = True
 
     def list_projects(
@@ -210,6 +214,14 @@ class ProjectRegistryService:
         self.get_project(project_id)
         return [edge for edge in self._task_edges.values() if edge.project_id == project_id]
 
+    def get_task_edge(self, edge_id: str) -> TaskEdgeRecord:
+        """Retrieve a single task edge by ID."""
+        self.initialize()
+        try:
+            return self._task_edges[edge_id]
+        except KeyError as exc:
+            raise TaskEdgeNotFoundError(edge_id) from exc
+
     def create_task_edge(
         self,
         project_id: str,
@@ -271,6 +283,26 @@ class ProjectRegistryService:
             created_at=now,
             updated_at=now,
         )
+
+    def _backfill_null_owners(self) -> None:
+        """Assign projects with null owner_user_id to a default admin owner.
+
+        This is a one-shot migration for projects created before the
+        permission system was fully wired.
+        """
+        null_owner_projects = [
+            p for p in self._projects.values() if p.owner_user_id is None
+        ]
+        if not null_owner_projects:
+            return
+        logger.warning(
+            "backfill_null_project_owners count=%d projects=%s",
+            len(null_owner_projects),
+            [p.project_id for p in null_owner_projects],
+        )
+        for p in null_owner_projects:
+            p.owner_user_id = "admin"
+        self._persist()
 
     def _persist(self) -> None:
         payload = {

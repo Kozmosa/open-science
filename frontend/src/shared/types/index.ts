@@ -95,6 +95,7 @@ export interface ProjectRecord {
   default_environment_id: string | null;
   created_at: string;
   updated_at: string;
+  owner_user_id: string | null;
 }
 
 export interface ProjectListResponse {
@@ -124,6 +125,7 @@ export interface WorkspaceRecord {
   workspace_prompt: string;
   created_at: string;
   updated_at: string;
+  owner_user_id: string | null;
 }
 
 export interface WorkspaceListResponse {
@@ -816,7 +818,7 @@ export interface ProjectCostSummary {
   by_model: Record<string, { cost_usd: number; tokens: number }>;
 }
 
-export interface AdminUserItem { id: string; username: string; display_name: string; role: string; status: string; created_at: string; last_login_at: string | null }
+export interface AdminUserItem { id: string; username: string; display_name: string; role: string; status: string; created_at: string; last_login_at: string | null; is_online: boolean }
 export interface AdminUserResponse { id: string; username: string; display_name: string; status: string }
 export interface AdminUserListResponse { items: AdminUserItem[] }
 export interface AdminUserUpdateRequest { status?: string | null }

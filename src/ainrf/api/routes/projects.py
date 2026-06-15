@@ -24,8 +24,8 @@ from ainrf.api.schemas import (
     TaskEdgeResponse,
     TaskListResponse,
 )
-from ainrf.api.routes.tasks import _task_list_owner_filter, _task_to_response
-from ainrf.auth.permissions import check_resource_ownership, get_current_user
+from ainrf.api.routes.tasks import _task_to_response
+from ainrf.auth.permissions import get_current_user, is_admin
 from ainrf.environments import (
     EnvironmentNotFoundError,
     InMemoryEnvironmentService,
@@ -68,6 +68,52 @@ def _get_auth_service(request: Request):
     if service is None:
         raise HTTPException(status_code=500, detail="auth service not initialized")
     return service
+
+
+def _check_project_visible(
+    user: dict,
+    project: ProjectRecord,
+    auth_svc,
+    *,
+    require_owner: bool = False,
+) -> None:
+    """Verify the current user is authorized to access *project*.
+
+    Admins bypass all checks. Owners have full access.
+    Collaborators have read-only access unless *require_owner* is set
+    (used for write operations such as update / delete / add-collaborator).
+    """
+    # Admin bypasses all checks.
+    if is_admin(user):
+        return
+
+    # Owner has full access.
+    if project.owner_user_id == user["id"]:
+        return
+
+    # Collaborator has read-only access (unless require_owner is set).
+    if not require_owner and auth_svc is not None:
+        collab_ids = auth_svc.get_user_project_ids(user["id"])
+        if project.project_id in collab_ids:
+            return
+
+    raise HTTPException(status_code=403, detail="无权访问此项目")
+
+
+def _get_visible_project_ids(
+    user: dict,
+    project_service: ProjectRegistryService,
+    auth_svc,
+) -> set[str]:
+    """Return the set of *project_id* values visible to *user*."""
+    if is_admin(user):
+        return {p.project_id for p in project_service.list_projects()}
+
+    owned = {p.project_id for p in project_service.list_projects(owner_user_id=user["id"])}
+    if auth_svc is not None:
+        collab = set(auth_svc.get_user_project_ids(user["id"]))
+        owned |= collab
+    return owned
 
 
 def _get_agentic_researcher_service(request: Request):
@@ -145,10 +191,16 @@ def _translate_reference_error(exc: Exception) -> HTTPException:
 
 @router.get("", response_model=ProjectListResponse)
 async def list_projects(request: Request) -> ProjectListResponse:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
+    auth_svc = _get_auth_service(request)
     try:
-        items = [_serialize_project(project) for project in service.list_projects()]
+        visible_ids = _get_visible_project_ids(user, service, auth_svc)
+        items = [
+            _serialize_project(project)
+            for project in service.list_projects()
+            if project.project_id in visible_ids
+        ]
     except Exception as exc:
         raise _translate_project_error(exc) from exc
     return ProjectListResponse(items=items)
@@ -156,12 +208,13 @@ async def list_projects(request: Request) -> ProjectListResponse:
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreateRequest, request: Request) -> ProjectResponse:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
     try:
         project = service.create_project(
             name=payload.name,
             description=payload.description,
+            owner_user_id=user["id"],
         )
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -170,10 +223,12 @@ async def create_project(payload: ProjectCreateRequest, request: Request) -> Pro
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def read_project(project_id: str, request: Request) -> ProjectResponse:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
+    auth_svc = _get_auth_service(request)
     try:
         project = service.get_project(project_id)
+        _check_project_visible(user, project, auth_svc)
     except Exception as exc:
         raise _translate_project_error(exc) from exc
     return _serialize_project(project)
@@ -185,9 +240,12 @@ async def update_project(
     payload: ProjectUpdateRequest,
     request: Request,
 ) -> ProjectResponse:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
+    auth_svc = _get_auth_service(request)
     try:
+        project = service.get_project(project_id)
+        _check_project_visible(user, project, auth_svc, require_owner=True)
         changes = payload.model_dump(exclude_unset=True)
         project = service.update_project(
             project_id,
@@ -203,9 +261,12 @@ async def update_project(
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: str, request: Request) -> None:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
+    auth_svc = _get_auth_service(request)
     try:
+        project = service.get_project(project_id)
+        _check_project_visible(user, project, auth_svc, require_owner=True)
         service.delete_project(project_id)
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -220,6 +281,9 @@ async def list_project_environment_refs(
     project_id: str,
     request: Request,
 ) -> ProjectEnvironmentReferenceListResponse:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    _check_project_visible(user, proj, _get_auth_service(request))
     service = _get_environment_service(request)
     items = [
         _serialize_reference(reference) for reference in service.list_project_references(project_id)
@@ -237,6 +301,9 @@ async def create_project_environment_ref(
     payload: ProjectEnvironmentReferenceCreateRequest,
     request: Request,
 ) -> ProjectEnvironmentReferenceResponse:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     service = _get_environment_service(request)
     try:
         reference = service.create_project_reference(
@@ -263,6 +330,9 @@ async def update_project_environment_ref(
     payload: ProjectEnvironmentReferenceUpdateRequest,
     request: Request,
 ) -> ProjectEnvironmentReferenceResponse:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     service = _get_environment_service(request)
     try:
         current = service.get_project_reference(project_id, environment_id)
@@ -293,6 +363,9 @@ async def delete_project_environment_ref(
     environment_id: str,
     request: Request,
 ) -> None:
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     service = _get_environment_service(request)
     try:
         service.delete_project_reference(project_id, environment_id)
@@ -303,7 +376,9 @@ async def delete_project_environment_ref(
 
 @router.get("/{project_id}/cost-summary", response_model=ProjectCostSummaryResponse)
 async def get_project_cost_summary(project_id: str, request: Request) -> ProjectCostSummaryResponse:
-    get_current_user(request)
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    _check_project_visible(user, proj, _get_auth_service(request))
     session_service = _get_session_service(request)
     try:
         sessions = session_service.list_sessions(project_id=project_id)
@@ -355,9 +430,12 @@ async def list_project_task_edges(
     project_id: str,
     request: Request,
 ) -> TaskEdgeListResponse:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
+    auth_svc = _get_auth_service(request)
     try:
+        project = service.get_project(project_id)
+        _check_project_visible(user, project, auth_svc)
         edges = service.list_task_edges(project_id)
     except Exception as exc:
         raise _translate_task_edge_error(exc) from exc
@@ -374,9 +452,12 @@ async def create_project_task_edge(
     payload: TaskEdgeCreateRequest,
     request: Request,
 ) -> TaskEdgeResponse:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
+    auth_svc = _get_auth_service(request)
     try:
+        project = service.get_project(project_id)
+        _check_project_visible(user, project, auth_svc)
         edge = service.create_task_edge(
             project_id,
             source_task_id=payload.source_task_id,
@@ -389,9 +470,13 @@ async def create_project_task_edge(
 
 @task_edges_router.delete("/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task_edge(edge_id: str, request: Request) -> None:
-    get_current_user(request)
+    user = get_current_user(request)
     service = _get_project_service(request)
+    auth_svc = _get_auth_service(request)
     try:
+        edge = service.get_task_edge(edge_id)
+        project = service.get_project(edge.project_id)
+        _check_project_visible(user, project, auth_svc)
         service.delete_task_edge(edge_id)
     except Exception as exc:
         raise _translate_task_edge_error(exc) from exc
@@ -405,23 +490,30 @@ async def list_project_tasks(
     limit: int = Query(200, ge=1, le=1000),
     sort: str = Query("updated"),
 ) -> TaskListResponse:
-    """List tasks belonging to a specific project."""
+    """List tasks belonging to a specific project.
+
+    Users who can view the project see all tasks inside it (not just
+    their own), matching the "project as a collaboration unit" model.
+    """
     user = get_current_user(request)
     service = _get_agentic_researcher_service(request)
+    auth_svc = _get_auth_service(request)
+    proj_svc = _get_project_service(request)
 
     try:
-        tasks = service.list_tasks(
-            project_id=project_id,
-            user_id=_task_list_owner_filter(user),
-            include_archived=include_archived,
-            limit=limit,
-            sort=sort,
-        )
+        project = proj_svc.get_project(project_id)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list tasks: {exc}",
-        ) from exc
+        raise _translate_project_error(exc) from exc
+
+    _check_project_visible(user, project, auth_svc)
+    # Visible users see every task in the project (collaboration model).
+    tasks = service.list_tasks(
+        project_id=project_id,
+        user_id=None,
+        include_archived=include_archived,
+        limit=limit,
+        sort=sort,
+    )
 
     return TaskListResponse(
         items=[_task_to_response(task, service) for task in tasks],
@@ -431,7 +523,9 @@ async def list_project_tasks(
 
 @router.get("/{project_id}/collaborators", response_model=CollaboratorListResponse)
 async def list_collaborators(project_id: str, request: Request) -> CollaboratorListResponse:
-    get_current_user(request)
+    user = get_current_user(request)
+    proj = _get_project_service(request).get_project(project_id)
+    _check_project_visible(user, proj, _get_auth_service(request))
     auth_svc = _get_auth_service(request)
     collabs = auth_svc.list_collaborators(project_id)
     return CollaboratorListResponse.model_validate({"items": collabs})
@@ -447,7 +541,7 @@ async def add_collaborator(
 ) -> CollaboratorResponse:
     user = get_current_user(request)
     proj = _get_project_service(request).get_project(project_id)
-    check_resource_ownership(user, proj.owner_user_id)
+    _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     auth_svc = _get_auth_service(request)
     auth_svc.add_collaborator(
         project_id=project_id, user_id=payload.user_id, role=payload.role, added_by=user["id"]
@@ -461,7 +555,7 @@ async def add_collaborator(
 async def remove_collaborator(project_id: str, user_id: str, request: Request) -> Response:
     user = get_current_user(request)
     proj = _get_project_service(request).get_project(project_id)
-    check_resource_ownership(user, proj.owner_user_id)
+    _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     auth_svc = _get_auth_service(request)
     auth_svc.remove_collaborator(project_id, user_id)
     return Response(status_code=204)
