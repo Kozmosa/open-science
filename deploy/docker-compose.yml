@@ -131,7 +131,6 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=30d"
       - "--storage.tsdb.retention.size=2GB"
-      - "--web.enable-remote-write-receiver"
       - "--web.external-url=/prometheus"
       - "--web.route-prefix=/prometheus"
     depends_on:
@@ -171,6 +170,23 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ── Loki (Log Aggregation) ──────────────────────────────────────
+  loki:
+    image: docker.1ms.run/grafana/loki:3.5.0
+    restart: unless-stopped
+    container_name: ainrf-loki
+    volumes:
+      - ./config/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    expose:
+      - "3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   ainrf-state:
   ainrf-workspaces:
@@ -178,3 +194,4 @@ volumes:
   frontend-dist:
   prometheus-data:
   grafana-data:
+  loki-data:

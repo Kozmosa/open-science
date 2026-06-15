@@ -1,25 +1,32 @@
 """SQLite query performance instrumentation.
 
+.. deprecated:: 0.2.0
+    Manual query timing via :class:`QueryTimer` is superseded by OpenTelemetry
+    auto-instrumentation (``SQLite3Instrumentor``) which creates spans for
+    every SQLite query automatically.  ``QueryTimer`` is kept for backward
+    compatibility and direct-use cases where OTel is disabled.
+
+    :func:`instrument_connection` remains useful for attaching the ``db_label``
+    and enabling the debug trace callback.
+
 Provides opt-in connection instrumentation that logs slow queries and
 records Prometheus metrics without modifying core service code.
 
 Usage::
 
-    from ainrf.db.instrumentation import instrument_connection, QueryTimer
+    from ainrf.db.instrumentation import instrument_connection
 
     conn = sqlite3.connect(...)
     instrument_connection(conn, db_label="agentic_researcher")
-
-    with QueryTimer("agentic_researcher", conn=conn) as t:
-        cursor.execute("SELECT ...")
-    # t.elapsed is populated; slow-query counter/histogram updated.
-    # t.sql is automatically populated from the connection's trace callback.
+    # All queries are now traced via OTel (when enabled).  For manual timing
+    # when OTel is off, use QueryTimer with conn=conn.
 """
 
 from __future__ import annotations
 
 import sqlite3
 import time
+import warnings
 
 import structlog
 
@@ -77,6 +84,10 @@ def instrument_connection(
 class QueryTimer:
     """Context manager that times a database operation and records metrics.
 
+    .. deprecated:: 0.2.0
+        Superseded by OpenTelemetry ``SQLite3Instrumentor`` auto-instrumentation.
+        Use ``with QueryTimer(...)`` only when OTel is disabled.
+
     When a *conn* is provided, ``sql`` is automatically populated from the
     connection's trace callback (set by :func:`instrument_connection`).
     An explicit ``sql`` parameter always takes precedence.
@@ -98,6 +109,11 @@ class QueryTimer:
         sql: str = "",
         conn: sqlite3.Connection | None = None,
     ) -> None:
+        warnings.warn(
+            "QueryTimer is deprecated; use OpenTelemetry SQLite3Instrumentor instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._label = db_label
         self._threshold = slow_threshold
         self.elapsed: float = 0.0

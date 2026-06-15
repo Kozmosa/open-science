@@ -146,3 +146,71 @@ groups:
           description: >
             Rate-limited requests are occurring at {{ $value | printf "%.2f" }}
             per second. Reason: {{ $labels.reason }}. Path: {{ $labels.path }}.
+
+  - name: ainrf.auth
+    rules:
+      - alert: AINRFHighLoginFailureRate
+        expr: rate(ainrf_auth_login_failed_total[5m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "High login failure rate on AINRF"
+          description: >
+            {{ $value }} login failures per second over the last 5 minutes.
+            Possible brute-force attack. Check audit logs for details.
+
+      - alert: AINRFAccountLockouts
+        expr: rate(ainrf_auth_login_failed_total{reason="locked"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: info
+          component: auth
+        annotations:
+          summary: "Account lockouts occurring on AINRF"
+          description: >
+            {{ $value }} account lockout events per second. Users are being
+            locked out due to repeated failed login attempts.
+
+  - name: ainrf.terminal
+    rules:
+      - alert: AINRFTerminalExecDenials
+        expr: rate(ainrf_terminal_exec_denied_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: warning
+          component: terminal
+        annotations:
+          summary: "Terminal exec commands being denied"
+          description: >
+            {{ $value }} exec denials per second. May indicate unauthorized
+            command attempts or policy violations.
+
+  - name: ainrf.security
+    rules:
+      - alert: AINRFSensitiveFileAccess
+        expr: rate(ainrf_files_sensitive_path_access_total[5m]) > 0.5
+        for: 1m
+        labels:
+          severity: high
+          component: security
+        annotations:
+          summary: "Sensitive file access detected on AINRF"
+          description: >
+            {{ $value }} sensitive file access attempts per second. Check
+            audit logs for which paths and users are involved.
+
+  - name: ainrf.system
+    rules:
+      - alert: AINRFHighRequestRate
+        expr: rate(ainrf_http_requests_total[1m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High HTTP request rate on AINRF"
+          description: >
+            {{ $value }} requests per second. May indicate abuse or
+            misconfigured clients.

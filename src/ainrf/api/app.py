@@ -36,6 +36,7 @@ from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.api.routes.client_logs import router as client_logs_router
+from ainrf.api.routes.client_metrics import router as client_metrics_router
 from ainrf.auth import AuthService
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.files import FileBrowserService
@@ -83,6 +84,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     resources_router,
     settings_router,
     client_logs_router,
+    client_metrics_router,
 )
 
 
@@ -283,7 +285,8 @@ def create_app(
     #   4. Request body size limit
     #   5. Concurrency guard (optional)
     #   6. JWT / API-key authentication
-    #   7. Exception handler — catch unhandled exceptions, return structured 500
+    #   7. Rate limiting (per-user/IP, optional, after auth so we can key by user)
+    #   8. Exception handler — catch unhandled exceptions, return structured 500
     app.middleware("http")(build_request_context_middleware())
     app.middleware("http")(build_request_logging_middleware(api_config))
     app.middleware("http")(build_ip_allowlist_middleware(api_config.allowed_cidrs))
@@ -293,6 +296,8 @@ def create_app(
             build_concurrency_limit_middleware(api_config.max_concurrent_requests)
         )
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
+    from ainrf.api.middleware.rate_limit import build_rate_limit_middleware
+    app.middleware("http")(build_rate_limit_middleware())
     # Innermost: exception handler must be registered after other middleware
     # so it can catch exceptions from route handlers (and from upstream
     # middleware that re-raises).

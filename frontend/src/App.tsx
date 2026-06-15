@@ -1,4 +1,4 @@
-import { lazy, Profiler, Suspense, type ProfilerOnRenderCallback } from 'react';
+import { lazy, Profiler, Suspense, useEffect, type ProfilerOnRenderCallback } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
@@ -6,6 +6,7 @@ import { useT } from '@/shared/i18n';
 import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useGeneralSettings } from '@features/settings';
 import { AuthProvider, useAuth } from '@features/auth';
+import { reportWebVitals } from '@/shared/utils/reportWebVitals';
 import './index.css';
 
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
@@ -140,6 +141,11 @@ function AppRoutes() {
 }
 
 function App() {
+  // Start collecting Core Web Vitals (LCP, FCP, INP, CLS) on mount.
+  useEffect(() => {
+    reportWebVitals();
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

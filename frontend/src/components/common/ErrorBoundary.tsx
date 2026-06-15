@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode, type ContextType } from 'react';
 import { Alert, Button } from '@design-system/primitives';
 import { I18nContext } from '@/shared/i18n';
+import { logError } from '@/shared/utils/logging';
 
 interface Props {
   children: ReactNode;
@@ -26,7 +27,8 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
+    // Log to backend via the buffered sendBeacon pipeline in logging.ts.
+    logError(error, { componentStack: errorInfo.componentStack?.slice(0, 1000) });
   }
 
   render() {

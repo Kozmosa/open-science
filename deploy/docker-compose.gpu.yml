@@ -105,7 +105,6 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=30d"
       - "--storage.tsdb.retention.size=2GB"
-      - "--web.enable-remote-write-receiver"
     depends_on:
       ainrf:
         condition: service_healthy
