@@ -25,6 +25,7 @@ dependencies = [
   "apscheduler>=3.11.2",
   "json-repair>=0.59.10",
   "langfuse>=2.0.0",
+  "prometheus-client>=0.22.0",
 ]
 
 [project.scripts]

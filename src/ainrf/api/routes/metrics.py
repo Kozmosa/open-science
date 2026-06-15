@@ -1,205 +1,227 @@
+"""Prometheus metrics exposition backed by the ``prometheus_client`` library.
+
+Replaces the hand-rolled in-memory dicts with production-grade histogram
+bucketing (fixed memory) and standard exposition-format rendering.
+
+Public API functions (``inc_counter``, ``observe_histogram``, ``inc_gauge``,
+``dec_gauge``, ``get_metrics_text``, ``reset_metrics``) are preserved so
+existing call sites work without changes.
+
+Label names are pre-declared for each metric.  Metrics not listed in the
+pre-declaration tables are created lazily (without labels, for test usage).
+"""
+
 from __future__ import annotations
 
+import logging
 import re
-import threading
 import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
+from prometheus_client import Counter, Gauge, Histogram, REGISTRY, generate_latest
 from starlette import status
 from starlette.responses import Response
 
 if TYPE_CHECKING:
     from ainrf.api.config import ApiConfig
-# ---------------------------------------------------------------------------
-# Storage
-# ---------------------------------------------------------------------------
-_counters: dict[str, dict[frozenset[tuple[str, str]], int]] = {}
-_histograms: dict[str, dict[frozenset[tuple[str, str]], list[float]]] = {}
-_gauges: dict[str, dict[frozenset[tuple[str, str]], int]] = {}
 
-_lock = threading.Lock()
+_LOG = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Pre-declared metric specs
+# ---------------------------------------------------------------------------
+# (name, label_names, documentation)
+_COUNTER_SPECS: list[tuple[str, list[str], str]] = [
+    ("ainrf_http_requests_total", ["method", "path", "status"], "Total HTTP requests"),
+    ("ainrf_auth_login_success_total", [], "Successful login attempts"),
+    ("ainrf_auth_login_failed_total", ["reason"], "Failed login attempts"),
+    ("ainrf_terminal_exec_total", [], "Terminal command executions"),
+    ("ainrf_terminal_exec_denied_total", [], "Denied terminal command executions"),
+    ("ainrf_files_sensitive_path_access_total", [], "Sensitive file path access events"),
+    ("ainrf_environment_update_total", [], "Environment detection/update events"),
+    ("ainrf_code_session_created_total", [], "Code session spawn events"),
+    ("ainrf_task_created_total", [], "Tasks created"),
+    ("ainrf_task_completed_total", [], "Tasks completed"),
+    ("ainrf_task_failed_total", [], "Tasks failed"),
+    ("ainrf_ssh_connection_attempt_total", ["host"], "SSH connection attempts"),
+    ("ainrf_ssh_connection_error_total", ["host", "error_type"], "SSH connection errors"),
+    ("ainrf_db_slow_query_total", ["db"], "Slow database queries (>1s)"),
+    ("ainrf_client_error_events_total", [], "Client-side error events ingested"),
+]
+
+_HISTOGRAM_SPECS: list[tuple[str, list[str], str]] = [
+    ("ainrf_http_request_duration_seconds", ["method", "path"], "HTTP request latency"),
+    ("ainrf_ssh_command_duration_seconds", ["host"], "SSH command execution latency"),
+    ("ainrf_db_query_duration_seconds", ["db"], "Database query latency"),
+]
+
+_GAUGE_SPECS: list[tuple[str, list[str], str]] = [
+    ("ainrf_terminal_ws_active", [], "Active WebSocket terminal sessions"),
+]
+
+# Default histogram buckets (seconds): 5 ms → 10 s
 _DEFAULT_BUCKETS = (
-    0.005,
-    0.01,
-    0.025,
-    0.05,
-    0.1,
-    0.25,
-    0.5,
-    1.0,
-    2.5,
-    5.0,
-    10.0,
+    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
 )
 
+# Set of metric names we own (for selective reset).
+_OWN_METRIC_NAMES: set[str] = set()
 
 # ---------------------------------------------------------------------------
-# Pre-declared metrics
+# Metric storage (populated by _init_all)
 # ---------------------------------------------------------------------------
-def _init_counters() -> None:
-    names = [
-        "ainrf_http_requests_total",
-        "ainrf_auth_login_success_total",
-        "ainrf_auth_login_failed_total",
-        "ainrf_terminal_exec_total",
-        "ainrf_terminal_exec_denied_total",
-        "ainrf_files_sensitive_path_access_total",
-        "ainrf_environment_update_total",
-        "ainrf_code_session_created_total",
-        "ainrf_task_created_total",
-        "ainrf_task_completed_total",
-        "ainrf_task_failed_total",
-        "ainrf_ssh_connection_attempt_total",
-        "ainrf_ssh_connection_error_total",
-        "ainrf_db_slow_query_total",
-        "ainrf_client_error_events_total",
-    ]
-    for name in names:
-        _counters.setdefault(name, {frozenset(): 0})
+
+_COUNTERS: dict[str, Counter] = {}
+_HISTOGRAMS: dict[str, Histogram] = {}
+_GAUGES: dict[str, Gauge] = {}
 
 
-def _init_histograms() -> None:
-    _histograms.setdefault("ainrf_http_request_duration_seconds", {frozenset(): []})
-    _histograms.setdefault("ainrf_ssh_command_duration_seconds", {frozenset(): []})
-    _histograms.setdefault("ainrf_db_query_duration_seconds", {frozenset(): []})
+def _init_all() -> None:
+    """Create all pre-declared metrics in the default registry."""
+    for name, labelnames, doc in _COUNTER_SPECS:
+        if name not in _COUNTERS:
+            _COUNTERS[name] = Counter(name, doc, labelnames=labelnames, registry=REGISTRY)
+            _OWN_METRIC_NAMES.add(name)
+    for name, labelnames, doc in _HISTOGRAM_SPECS:
+        if name not in _HISTOGRAMS:
+            _HISTOGRAMS[name] = Histogram(
+                name, doc, labelnames=labelnames, buckets=_DEFAULT_BUCKETS, registry=REGISTRY,
+            )
+            _OWN_METRIC_NAMES.add(name)
+    for name, labelnames, doc in _GAUGE_SPECS:
+        if name not in _GAUGES:
+            _GAUGES[name] = Gauge(name, doc, labelnames=labelnames, registry=REGISTRY)
+            _OWN_METRIC_NAMES.add(name)
 
 
-def _init_gauges() -> None:
-    _gauges.setdefault("ainrf_terminal_ws_active", {frozenset(): 0})
+_init_all()
 
 
-_init_counters()
-_init_histograms()
-_init_gauges()
+def _get_or_create_counter(name: str) -> Counter:
+    c = _COUNTERS.get(name)
+    if c is not None:
+        return c
+    # Lazily create an unlabelled counter (test-only path).
+    _LOG.debug("lazy_register_counter name=%s", name)
+    c = Counter(name, name, registry=REGISTRY)
+    _COUNTERS[name] = c
+    _OWN_METRIC_NAMES.add(name)
+    return c
+
+
+def _get_or_create_histogram(name: str) -> Histogram:
+    h = _HISTOGRAMS.get(name)
+    if h is not None:
+        return h
+    _LOG.debug("lazy_register_histogram name=%s", name)
+    h = Histogram(name, name, buckets=_DEFAULT_BUCKETS, registry=REGISTRY)
+    _HISTOGRAMS[name] = h
+    _OWN_METRIC_NAMES.add(name)
+    return h
+
+
+def _get_or_create_gauge(name: str) -> Gauge:
+    g = _GAUGES.get(name)
+    if g is not None:
+        return g
+    _LOG.debug("lazy_register_gauge name=%s", name)
+    g = Gauge(name, name, registry=REGISTRY)
+    _GAUGES[name] = g
+    _OWN_METRIC_NAMES.add(name)
+    return g
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Public mutation API (same signatures as the hand-rolled originals)
 # ---------------------------------------------------------------------------
-def _label_key(labels: dict[str, str] | None) -> frozenset[tuple[str, str]]:
-    return frozenset((labels or {}).items())
-
 
 def inc_counter(name: str, labels: dict[str, str] | None = None) -> None:
-    key = _label_key(labels)
-    with _lock:
-        _counters.setdefault(name, {})[key] = _counters.get(name, {}).get(key, 0) + 1
+    """Increment a Prometheus counter."""
+    c = _get_or_create_counter(name)
+    if labels:
+        c.labels(**labels).inc()
+    else:
+        c.inc()
 
 
-def observe_histogram(name: str, value: float, labels: dict[str, str] | None = None) -> None:
-    key = _label_key(labels)
-    with _lock:
-        _histograms.setdefault(name, {})[key] = _histograms.get(name, {}).get(key, []) + [value]
+def observe_histogram(
+    name: str, value: float, labels: dict[str, str] | None = None,
+) -> None:
+    """Record an observation on a Prometheus histogram."""
+    h = _get_or_create_histogram(name)
+    if labels:
+        h.labels(**labels).observe(value)
+    else:
+        h.observe(value)
 
 
-def set_gauge(name: str, value: int, labels: dict[str, str] | None = None) -> None:
-    key = _label_key(labels)
-    with _lock:
-        _gauges.setdefault(name, {})[key] = value
+def set_gauge(name: str, value: float, labels: dict[str, str] | None = None) -> None:
+    """Set a Prometheus gauge to an absolute value."""
+    g = _get_or_create_gauge(name)
+    if labels:
+        g.labels(**labels).set(value)
+    else:
+        g.set(value)
 
 
 def inc_gauge(name: str, labels: dict[str, str] | None = None) -> None:
-    key = _label_key(labels)
-    with _lock:
-        _gauges.setdefault(name, {})[key] = _gauges.get(name, {}).get(key, 0) + 1
+    """Increment a Prometheus gauge by 1."""
+    g = _get_or_create_gauge(name)
+    if labels:
+        g.labels(**labels).inc()
+    else:
+        g.inc()
 
 
 def dec_gauge(name: str, labels: dict[str, str] | None = None) -> None:
-    key = _label_key(labels)
-    with _lock:
-        _gauges.setdefault(name, {})[key] = _gauges.get(name, {}).get(key, 0) - 1
+    """Decrement a Prometheus gauge by 1."""
+    g = _get_or_create_gauge(name)
+    if labels:
+        g.labels(**labels).dec()
+    else:
+        g.dec()
 
 
-def _format_labels(key: frozenset[tuple[str, str]]) -> str:
-    if not key:
-        return ""
-    items = sorted(key)
-    pairs = ",".join(f'{k}="{v}"' for k, v in items)
-    return "{" + pairs + "}"
-
-
-def _render_counter(name: str) -> list[str]:
-    lines: list[str] = []
-    lines.append(f"# TYPE {name} counter")
-    with _lock:
-        data = dict(_counters.get(name, {}))
-    for key, value in sorted(data.items(), key=lambda x: sorted(x[0]) if x[0] else []):
-        lines.append(f"{name}{_format_labels(key)} {value}")
-    return lines
-
-
-def _render_gauge(name: str) -> list[str]:
-    lines: list[str] = []
-    lines.append(f"# TYPE {name} gauge")
-    with _lock:
-        data = dict(_gauges.get(name, {}))
-    for key, value in sorted(data.items(), key=lambda x: sorted(x[0]) if x[0] else []):
-        lines.append(f"{name}{_format_labels(key)} {value}")
-    return lines
-
-
-def _render_histogram(name: str) -> list[str]:
-    lines: list[str] = []
-    lines.append(f"# TYPE {name} histogram")
-    with _lock:
-        data = dict(_histograms.get(name, {}))
-    for key, observations in sorted(data.items(), key=lambda x: sorted(x[0]) if x[0] else []):
-        label_str = _format_labels(key)
-        # bucket lines
-        for bound in _DEFAULT_BUCKETS:
-            count = sum(1 for v in observations if v <= bound)
-            bucket_label = (
-                "{" + ",".join(f'{k}="{v}"' for k, v in sorted(key)) + ',le="' + str(bound) + '"}'
-                if key
-                else '{le="' + str(bound) + '"}'
-            )
-            lines.append(f"{name}_bucket{bucket_label} {count}")
-        # +Inf bucket
-        inf_label = (
-            "{" + ",".join(f'{k}="{v}"' for k, v in sorted(key)) + ',le="+Inf"}'
-            if key
-            else '{le="+Inf"}'
-        )
-        lines.append(f"{name}_bucket{inf_label} {len(observations)}")
-        lines.append(f"{name}_sum{label_str} {sum(observations)}")
-        lines.append(f"{name}_count{label_str} {len(observations)}")
-    return lines
-
+# ---------------------------------------------------------------------------
+# Exposition
+# ---------------------------------------------------------------------------
 
 def get_metrics_text() -> str:
-    """Render all metrics in Prometheus text exposition format."""
-    lines: list[str] = []
-    with _lock:
-        counter_names = list(_counters.keys())
-        histogram_names = list(_histograms.keys())
-        gauge_names = list(_gauges.keys())
-    for name in counter_names:
-        lines.extend(_render_counter(name))
-    for name in gauge_names:
-        lines.extend(_render_gauge(name))
-    for name in histogram_names:
-        lines.extend(_render_histogram(name))
-    return "\n".join(lines) + "\n"
+    """Render all registered metrics in Prometheus text exposition format."""
+    return generate_latest(REGISTRY).decode("utf-8")
 
 
 def reset_metrics() -> None:
-    """Reset all metrics to their initial state (for testing)."""
-    with _lock:
-        _counters.clear()
-        _histograms.clear()
-        _gauges.clear()
-    _init_counters()
-    _init_histograms()
-    _init_gauges()
+    """Reset all metrics (for test isolation).
+
+    Unregisters only our own collectors from the default registry and clears
+    the internal lookup dicts so metrics are re-created on next use.
+    Python runtime collectors (GC, platform) are left untouched.
+    """
+    for name in list(_OWN_METRIC_NAMES):
+        # Find and unregister the collector that owns this metric name.
+        for collector in list(REGISTRY._collector_to_names):
+            if name in REGISTRY._collector_to_names[collector]:
+                try:
+                    REGISTRY.unregister(collector)
+                except KeyError:
+                    pass
+                break
+    _COUNTERS.clear()
+    _HISTOGRAMS.clear()
+    _GAUGES.clear()
+    _OWN_METRIC_NAMES.clear()
+    # Re-initialize pre-declared metrics.
+    _init_all()
 
 
 # ---------------------------------------------------------------------------
 # Router factory
 # ---------------------------------------------------------------------------
+
 def create_metrics_router(config: ApiConfig) -> APIRouter:
     """Return a router with a GET /metrics endpoint.
 
@@ -215,6 +237,7 @@ def create_metrics_router(config: ApiConfig) -> APIRouter:
         return PlainTextResponse(get_metrics_text())
 
     return router
+
 
 # ---------------------------------------------------------------------------
 # HTTP metrics middleware
@@ -246,11 +269,11 @@ def build_http_metrics_middleware() -> Callable[
         if request.url.path in ("/metrics", "/api/metrics", "/v1/metrics"):
             return await call_next(request)
 
-        start = time.monotonic()
+        start_time = time.monotonic()
         try:
             response = await call_next(request)
         except Exception:
-            elapsed = time.monotonic() - start
+            elapsed = time.monotonic() - start_time
             path = _normalize_path(request.url.path)
             inc_counter(
                 "ainrf_http_requests_total",
@@ -263,7 +286,7 @@ def build_http_metrics_middleware() -> Callable[
             )
             raise
 
-        elapsed = time.monotonic() - start
+        elapsed = time.monotonic() - start_time
         path = _normalize_path(request.url.path)
         inc_counter(
             "ainrf_http_requests_total",

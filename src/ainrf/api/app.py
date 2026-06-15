@@ -278,6 +278,7 @@ def create_app(
     #   4. Request body size limit
     #   5. Concurrency guard (optional)
     #   6. JWT / API-key authentication
+    #   7. Exception handler — catch unhandled exceptions, return structured 500
     app.middleware("http")(build_request_context_middleware())
     app.middleware("http")(build_request_logging_middleware(api_config))
     app.middleware("http")(build_ip_allowlist_middleware(api_config.allowed_cidrs))
@@ -287,6 +288,11 @@ def create_app(
             build_concurrency_limit_middleware(api_config.max_concurrent_requests)
         )
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
+    # Innermost: exception handler must be registered after other middleware
+    # so it can catch exceptions from route handlers (and from upstream
+    # middleware that re-raises).
+    from ainrf.api.middleware.exception_handler import build_exception_handler_middleware
+    app.middleware("http")(build_exception_handler_middleware())
     for router in ROUTERS:
         app.include_router(router)
         app.include_router(router, prefix="/v1")

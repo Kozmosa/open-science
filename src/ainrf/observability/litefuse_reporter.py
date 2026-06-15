@@ -1,4 +1,17 @@
-"""Litefuse (Langfuse SDK) reporter implementation."""
+"""Litefuse (Langfuse SDK) reporter implementation.
+
+Uses the ``langfuse`` Python SDK's context-manager API to create traces
+and generations.  The ``langfuse`` import is deferred to ``__init__`` so
+the application can start even when the package is missing — the factory
+falls back to :class:`NullReporter` in that case.
+
+Trace hierarchy:
+  - ``start_trace()`` creates a **trace**-type observation (the root).
+  - ``record_generation()`` and ``record_span()`` each create observations
+    nested under the trace via ``trace_context={\"trace_id\": trace_id}``.
+  - ``end_trace()`` finalizes and exits the trace context manager.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -27,12 +40,13 @@ class LitefuseReporter(ObservabilityReporter):
             host=config.base_url,
         )
         self._config = config
-        # Map AINRF trace_id → active Langfuse span context.
+        # Map AINRF trace_id → active Langfuse trace context manager.
         self._active_traces: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # Health check (used by the factory to verify connectivity)
     # ------------------------------------------------------------------
+
     def is_healthy(self) -> bool:
         """Return ``True`` if the Litefuse backend is reachable."""
         try:
@@ -43,6 +57,7 @@ class LitefuseReporter(ObservabilityReporter):
     # ------------------------------------------------------------------
     # ObservabilityReporter interface
     # ------------------------------------------------------------------
+
     def start_trace(
         self,
         trace_id: str,
@@ -53,10 +68,10 @@ class LitefuseReporter(ObservabilityReporter):
         metadata: dict[str, Any] | None = None,
         input: Any = None,
     ) -> None:
+        # Create a trace-type observation as the root of the trace hierarchy.
         ctx = self._client.start_as_current_observation(
-            as_type="span",
+            as_type="trace",
             name=name,
-            trace_context={"trace_id": trace_id},
             input=input,
             metadata=metadata,
         )
@@ -114,11 +129,14 @@ class LitefuseReporter(ObservabilityReporter):
         if metadata is not None:
             update_kwargs["metadata"] = metadata
 
+        # Nest the generation under the parent trace via trace_context
+        # so it appears in the Litefuse/Langfuse UI as a child observation.
         ctx = self._client.start_as_current_observation(
             as_type="generation",
             name=name,
             model=model,
             input=input,
+            trace_context={"trace_id": trace_id},
         )
         gen = ctx.__enter__()
         if update_kwargs:
@@ -140,10 +158,12 @@ class LitefuseReporter(ObservabilityReporter):
         if metadata is not None:
             update_kwargs["metadata"] = metadata
 
+        # Nest the span under the parent trace via trace_context.
         ctx = self._client.start_as_current_observation(
             as_type="span",
             name=name,
             input=input,
+            trace_context={"trace_id": trace_id},
         )
         span = ctx.__enter__()
         if update_kwargs:

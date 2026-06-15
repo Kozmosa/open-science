@@ -57,7 +57,11 @@ class TestCounterOps:
 
 class TestHistogramOps:
     def test_observe_histogram(self) -> None:
-        observe_histogram("ainrf_http_request_duration_seconds", 0.5)
+        observe_histogram(
+            "ainrf_http_request_duration_seconds",
+            0.5,
+            labels={"method": "GET", "path": "/test"},
+        )
         text = get_metrics_text()
         assert "ainrf_http_request_duration_seconds" in text
         assert "le=" in text

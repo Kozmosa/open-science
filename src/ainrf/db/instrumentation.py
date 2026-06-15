@@ -5,11 +5,17 @@ records Prometheus metrics without modifying core service code.
 
 Usage::
 
-    from ainrf.db.instrumentation import instrument_connection
+    from ainrf.db.instrumentation import instrument_connection, QueryTimer
 
     conn = sqlite3.connect(...)
     instrument_connection(conn, db_label="agentic_researcher")
+
+    with QueryTimer("agentic_researcher", conn=conn) as t:
+        cursor.execute("SELECT ...")
+    # t.elapsed is populated; slow-query counter/histogram updated.
+    # t.sql is automatically populated from the connection's trace callback.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -54,18 +60,16 @@ def instrument_connection(
     last_sql: list[str] = [""]  # mutable closure container
 
     def _on_sql(sql: str) -> None:
-        # SQLite trace callback fires *before* execution, so we cannot
-        # measure duration directly.  Instead we record the SQL text and
-        # use a wrapper approach.  For a lightweight alternative we just
-        # log the SQL at debug level and rely on the service-layer timing
-        # in critical paths.
+        # SQLite trace callback fires *before* execution, so we stash the
+        # SQL text on the connection object where QueryTimer can read it
+        # after the query completes.
         if trace_all:
             _LOG.debug("db_query", db=db_label, sql=sql[:200])
-
         last_sql[0] = sql
 
-    # Store the label on the connection so callers can reference it.
+    # Store label and SQL buffer on the connection so QueryTimer can read them.
     conn._ainrf_db_label = db_label  # type: ignore[attr-defined]
+    conn._ainrf_last_sql = last_sql  # type: ignore[attr-defined]
     conn.set_trace_callback(_on_sql)
     return conn
 
@@ -73,14 +77,18 @@ def instrument_connection(
 class QueryTimer:
     """Context manager that times a database operation and records metrics.
 
+    When a *conn* is provided, ``sql`` is automatically populated from the
+    connection's trace callback (set by :func:`instrument_connection`).
+    An explicit ``sql`` parameter always takes precedence.
+
     Usage::
 
-        with QueryTimer("agentic_researcher") as t:
+        with QueryTimer("agentic_researcher", conn=conn) as t:
             cursor.execute("SELECT ...")
-        # t.elapsed is populated, slow-query counter/histogram updated.
+        # t.elapsed is populated; t.sql contains the actual query text.
     """
 
-    __slots__ = ("_label", "_threshold", "elapsed", "sql")
+    __slots__ = ("_label", "_threshold", "elapsed", "_explicit_sql", "_conn")
 
     def __init__(
         self,
@@ -88,11 +96,28 @@ class QueryTimer:
         *,
         slow_threshold: float = DEFAULT_SLOW_THRESHOLD_SECONDS,
         sql: str = "",
+        conn: sqlite3.Connection | None = None,
     ) -> None:
         self._label = db_label
         self._threshold = slow_threshold
         self.elapsed: float = 0.0
-        self.sql = sql
+        self._explicit_sql = sql
+        self._conn = conn
+
+    @property
+    def sql(self) -> str:
+        """The SQL text of the query being timed.
+
+        Returns the explicit ``sql`` parameter if set; otherwise reads from
+        the connection's trace callback (``conn._ainrf_last_sql``).  Falls
+        back to ``"(unknown)"`` if neither is available.
+        """
+        if self._explicit_sql:
+            return self._explicit_sql
+        if self._conn is not None and hasattr(self._conn, "_ainrf_last_sql"):
+            last_sql: list[str] = self._conn._ainrf_last_sql  # type: ignore[union-attr]
+            return last_sql[0] if last_sql[0] else "(unknown)"
+        return "(unknown)"
 
     def __enter__(self) -> QueryTimer:
         self._start = time.monotonic()
@@ -106,7 +131,7 @@ class QueryTimer:
             _LOG.warning(
                 "slow_query",
                 db=self._label,
-                sql=self.sql[:200] if self.sql else "(unknown)",
+                sql=self.sql[:200],
                 elapsed_ms=round(self.elapsed * 1000, 1),
             )
             inc_counter("ainrf_db_slow_query_total", labels)
