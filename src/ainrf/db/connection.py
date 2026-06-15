@@ -89,15 +89,24 @@ def connect(
 def atomic_write_json(path: Path, payload: object) -> None:
     """Atomically write *payload* as JSON to *path*.
 
-    Writes to a temporary file first, then renames (POSIX atomic) to the
-    target path.  This prevents corruption if the process crashes mid-write.
+    Writes to a unique temporary file in the same directory first, then renames
+    (POSIX atomic) to the target path.  This prevents corruption if the process
+    crashes mid-write and avoids temp-file collisions under concurrent writers.
     """
     import json
     import os
+    import tempfile
 
-    tmp = Path(str(path) + ".tmp")
-    tmp.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    os.replace(tmp, path)  # atomic on POSIX
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_str = tempfile.mkstemp(suffix=".tmp", prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", closefd=True) as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+        os.replace(tmp_str, path)
+    except Exception:
+        try:
+            os.unlink(tmp_str)
+        except FileNotFoundError:
+            pass
+        raise

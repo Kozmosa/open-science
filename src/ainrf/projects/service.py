@@ -39,7 +39,11 @@ class ProjectRegistryService:
                 return
             self._runtime_root.mkdir(parents=True, exist_ok=True)
             if self._registry_path.exists():
-                payload = json.loads(self._registry_path.read_text(encoding="utf-8"))
+                raw = self._registry_path.read_text(encoding="utf-8")
+                try:
+                    payload = json.loads(raw) if raw.strip() else {}
+                except json.JSONDecodeError:
+                    raise
                 self._projects = {
                     item["project_id"]: ProjectRecord(
                         project_id=item["project_id"],
@@ -54,7 +58,11 @@ class ProjectRegistryService:
                     for item in payload.get("items", [])
                 }
             if self._task_edges_path.exists():
-                edge_payload = json.loads(self._task_edges_path.read_text(encoding="utf-8"))
+                raw = self._task_edges_path.read_text(encoding="utf-8")
+                try:
+                    edge_payload = json.loads(raw) if raw.strip() else {}
+                except json.JSONDecodeError:
+                    raise
                 self._task_edges = {
                     item["edge_id"]: TaskEdgeRecord(
                         edge_id=item["edge_id"],

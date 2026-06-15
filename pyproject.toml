@@ -36,7 +36,10 @@ dev = [
   "pytest>=8.4.2",
   "pytest-asyncio>=0.24.0",
   "pytest-benchmark>=5.1",
+  "pytest-rerunfailures>=14.0",
+  "pytest-timeout>=2.3.1",
   "pytest-xdist>=3.8.0",
+  "freezegun>=1.5.0",
   "trio>=0.26.0",
   "ruff>=0.12.11",
   "ty>=0.0.1a19",
@@ -46,7 +49,7 @@ dev = [
 packages = ["src/ainrf"]
 
 [tool.pytest.ini_options]
-addopts = "-q -n auto"
+addopts = "-q -n auto --timeout=30 --reruns=1 --reruns-delay=0.5"
 testpaths = ["tests"]
 markers = [
     "api: HTTP API route integration tests",
@@ -56,17 +59,24 @@ markers = [
     "cli: CLI and build/deploy script tests",
     "integration: production-like integration tests",
     "slow: tests that take >1s",
+    "concurrent: threading/asyncio race and contention tests",
+    "db_race: SQLite edge cases and contention tests",
+    "json_edge: JSON file persistence edge cases",
+    "backup: backup/restore tests",
+    "token: token usage aggregation edge cases",
 ]
 filterwarnings = [
     # xdist incompatibility — expected, not actionable
     "ignore:Benchmarks are automatically disabled because xdist plugin is active:pytest_benchmark.logger.PytestBenchmarkWarning",
     # FastAPI testclient uses deprecated starlette httpx path — upstream issue
-    "ignore:Using httpx with starlette.testclient is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+    "ignore:Using httpx with starlette.testclient is deprecated:DeprecationWarning",
     # pytest-asyncio internals
     "ignore:There is no current event loop:DeprecationWarning",
     # ResourceWarning from xdist worker process cleanup — not real leaks
     "ignore:unclosed database:ResourceWarning",
     "ignore:Enable tracemalloc:ResourceWarning",
+    # freezegun may emit warnings on newer Python
+    "ignore:datetime.datetime.utcnow:DeprecationWarning",
 ]
 [tool.ruff]
 line-length = 100

@@ -43,7 +43,11 @@ class WorkspaceRegistryService:
                 return
             self._runtime_root.mkdir(parents=True, exist_ok=True)
             if self._registry_path.exists():
-                payload = json.loads(self._registry_path.read_text(encoding="utf-8"))
+                raw = self._registry_path.read_text(encoding="utf-8")
+                try:
+                    payload = json.loads(raw) if raw.strip() else {}
+                except json.JSONDecodeError:
+                    raise
                 self._workspaces = {
                     item["workspace_id"]: WorkspaceRecord(
                         workspace_id=item["workspace_id"],
@@ -168,7 +172,6 @@ class WorkspaceRegistryService:
             del self._workspaces[workspace_id]
             self._persist()
 
-
     def ensure_tenant_workspace(
         self,
         *,
@@ -194,9 +197,11 @@ class WorkspaceRegistryService:
         linux_user = f"ainrf_{username}"
         if not default_workdir.exists():
             import subprocess
+
             subprocess.run(
                 ["sudo", "-u", linux_user, "mkdir", "-p", str(default_workdir)],
-                check=False, capture_output=True,
+                check=False,
+                capture_output=True,
             )
         return self.create_workspace(
             label=label,

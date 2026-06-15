@@ -16,42 +16,9 @@ from ainrf.agentic_researcher import (
     vanilla,
 )
 from ainrf.agentic_researcher.service import TaskNotFoundError
-from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
-from ainrf.harness_engine.base import EngineEmit
+from tests.testutil import FakeEngine
 
 pytestmark = [pytest.mark.unit]
-
-
-class FakeEngine(HarnessEngine):
-    def __init__(self) -> None:
-        self.pending_prompts: list[str] = []
-
-    @property
-    def engine_type(self) -> HarnessEngineType:
-        return HarnessEngineType.CLAUDE_CODE
-
-    async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
-        prompt = self.pending_prompts.pop(0) if self.pending_prompts else context.rendered_prompt
-        await emit(
-            EngineEvent(
-                event_type="message",
-                payload={"role": "assistant", "content": f"ran: {prompt}"},
-            )
-        )
-        await emit(
-            EngineEvent(
-                event_type="status",
-                payload={"status": "succeeded", "exit_code": 0},
-            )
-        )
-
-    async def cancel(self, task_id: str) -> None:
-        _ = task_id
-        return None
-
-    async def send_input(self, task_id: str, text: str) -> None:
-        _ = task_id
-        self.pending_prompts.append(text)
 
 
 @pytest.fixture

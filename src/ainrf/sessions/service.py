@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,7 @@ class SessionService:
         self._runtime_root = state_root / "runtime"
         self._db_path = self._runtime_root / "sessions.sqlite3"
         self._initialized = False
+        self._lock = threading.Lock()
 
     def initialize(self) -> None:
         if self._initialized:
@@ -200,29 +202,30 @@ class SessionService:
         parent_attempt_id: str | None = None,
         intervention_reason: str | None = None,
     ) -> SessionAttempt:
-        self._load_session(session_id)
-        next_seq = self._next_attempt_seq(session_id)
-        aid = _new_id()
-        now = _now_iso()
-        with self._connect() as conn:
-            conn.execute(
-                "INSERT INTO task_attempts "
-                "(id, session_id, task_id, parent_attempt_id, attempt_seq, "
-                "intervention_reason, status, started_at, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)",
-                (
-                    aid,
-                    session_id,
-                    task_id,
-                    parent_attempt_id,
-                    next_seq,
-                    intervention_reason,
-                    now,
-                    now,
-                ),
-            )
-            conn.commit()
-        return self._load_attempt(aid)
+        with self._lock:
+            self._load_session(session_id)
+            next_seq = self._next_attempt_seq(session_id)
+            aid = _new_id()
+            now = _now_iso()
+            with self._connect() as conn:
+                conn.execute(
+                    "INSERT INTO task_attempts "
+                    "(id, session_id, task_id, parent_attempt_id, attempt_seq, "
+                    "intervention_reason, status, started_at, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+                    (
+                        aid,
+                        session_id,
+                        task_id,
+                        parent_attempt_id,
+                        next_seq,
+                        intervention_reason,
+                        now,
+                        now,
+                    ),
+                )
+                conn.commit()
+            return self._load_attempt(aid)
 
     def complete_attempt(
         self,

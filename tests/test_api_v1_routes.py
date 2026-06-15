@@ -7,9 +7,11 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.execution import ContainerConfig
 from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
+
 
 def make_client(tmp_path: Path) -> httpx.AsyncClient:
     app = create_app(
@@ -333,3 +335,27 @@ async def test_workspace_delete_rejects_seed_workspace(tmp_path: Path) -> None:
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Default workspace cannot be deleted"
+
+
+@pytest.mark.anyio
+async def test_get_resources_returns_list(tmp_path: Path) -> None:
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+            container_config=ContainerConfig(host="gpu-server-01", user="root"),
+        )
+    )
+    jwt_headers = get_jwt_headers(app)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=jwt_headers,
+    ) as client:
+        response = await client.get("/resources")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert isinstance(data["items"], list)

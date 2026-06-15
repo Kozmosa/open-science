@@ -187,6 +187,8 @@ class AgenticResearcherService:
         # Serializes the read-modify-write in _record_token_usage_sync so
         # concurrent engine events for the same task don't lose token data.
         self._token_usage_lock = threading.Lock()
+        # Serializes schedule/cancel access to _running_tasks.
+        self._task_lock = threading.Lock()
 
     def initialize(self) -> None:
         if self._initialized:
@@ -261,7 +263,6 @@ class AgenticResearcherService:
         from ainrf.db.connection import connect
 
         return connect(self._db_path)
-
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -340,17 +341,19 @@ class AgenticResearcherService:
         )
         return task
 
-    def schedule_task(self, task_id: str) -> None:
-        if task_id in self._running_tasks:
-            _LOG.debug("schedule_skipped_already_running", task_id=task_id)
-            return
-            return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError as exc:
-            raise TaskOperationError("Task execution requires an active event loop") from exc
-        self._running_tasks[task_id] = loop.create_task(self.run_task(task_id))
-        _LOG.info("task_scheduled", task_id=task_id)
+    def schedule_task(self, task_id: str) -> asyncio.Task[None] | None:
+        with self._task_lock:
+            if task_id in self._running_tasks:
+                _LOG.debug("schedule_skipped_already_running", task_id=task_id)
+                return None
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError as exc:
+                raise TaskOperationError("Task execution requires an active event loop") from exc
+            task = loop.create_task(self.run_task(task_id))
+            self._running_tasks[task_id] = task
+            _LOG.info("task_scheduled", task_id=task_id)
+            return task
 
     async def run_task(self, task_id: str) -> None:
         task = self.get_task(task_id)
@@ -375,7 +378,11 @@ class AgenticResearcherService:
         )
 
         try:
-            _LOG.info("task_starting", project_id=task.project_id, researcher_type=task.researcher_type.value)
+            _LOG.info(
+                "task_starting",
+                project_id=task.project_id,
+                researcher_type=task.researcher_type.value,
+            )
             await self._set_status(task_id, TaskStatus.STARTING, started=True)
             context = self._build_execution_context(task)
             engine = self._get_engine(task.harness_engine)
@@ -395,13 +402,15 @@ class AgenticResearcherService:
                 await self._set_status(task_id, TaskStatus.SUCCEEDED, completed=True, exit_code=0)
                 _LOG.info("task_succeeded", duration_ms=duration_ms)
             self._observability.end_trace(
-                trace_id=task_id, output={"status": "succeeded"},
+                trace_id=task_id,
+                output={"status": "succeeded"},
             )
         except asyncio.CancelledError:
             await self._set_status(task_id, TaskStatus.CANCELLED, completed=True)
             _LOG.warning("task_cancelled")
             self._observability.end_trace(
-                trace_id=task_id, output={"status": "cancelled"},
+                trace_id=task_id,
+                output={"status": "cancelled"},
             )
             raise
         except Exception as exc:
@@ -414,10 +423,12 @@ class AgenticResearcherService:
             )
             _LOG.error("task_failed", error_summary=str(exc))
             self._observability.end_trace(
-                trace_id=task_id, error=str(exc),
+                trace_id=task_id,
+                error=str(exc),
             )
         finally:
-            self._running_tasks.pop(task_id, None)
+            with self._task_lock:
+                self._running_tasks.pop(task_id, None)
             structlog.contextvars.unbind_contextvars("task_id")
 
     async def pause_task(self, task_id: str) -> Task:
@@ -441,7 +452,12 @@ class AgenticResearcherService:
 
     async def send_prompt(self, task_id: str, prompt: str) -> TaskOutputEvent:
         task = self.get_task(task_id)
-        if task.status not in {TaskStatus.RUNNING, TaskStatus.PAUSED, TaskStatus.SUCCEEDED, TaskStatus.FAILED}:
+        if task.status not in {
+            TaskStatus.RUNNING,
+            TaskStatus.PAUSED,
+            TaskStatus.SUCCEEDED,
+            TaskStatus.FAILED,
+        }:
             raise TaskOperationError(f"Cannot send prompt to task with status: {task.status}")
         engine = self._get_engine(task.harness_engine)
         try:
@@ -521,7 +537,7 @@ class AgenticResearcherService:
                 (task_id, seq, kind, content, now),
             )
             conn.execute(
-                "UPDATE tasks SET latest_output_seq = ?, updated_at = ? WHERE task_id = ?",
+                "UPDATE tasks SET latest_output_seq = MAX(latest_output_seq, ?), updated_at = ? WHERE task_id = ?",
                 (seq, now, task_id),
             )
             conn.commit()
@@ -697,7 +713,9 @@ class AgenticResearcherService:
         if task.status == TaskStatus.RUNNING:
             engine = self._get_engine(task.harness_engine)
             await engine.cancel(task_id)
-        running_task = self._running_tasks.get(task_id)
+        running_task = None
+        with self._task_lock:
+            running_task = self._running_tasks.get(task_id)
         if running_task is not None:
             running_task.cancel()
         return self.cancel_task(task_id)
@@ -812,9 +830,7 @@ class AgenticResearcherService:
                     return content
         return None
 
-    def _get_prior_user_assistant_messages(
-        self, task_id: str
-    ) -> list[dict[str, str]]:
+    def _get_prior_user_assistant_messages(self, task_id: str) -> list[dict[str, str]]:
         """Return prior user/assistant messages from task_outputs in seq order.
 
         Used as a last-resort context fallback when the engine's session
@@ -917,9 +933,7 @@ class AgenticResearcherService:
 
         # Add the Codex MCP server only when a selected skill explicitly declares
         # it in skill.json, instead of injecting it for every skill-enabled task.
-        if skill_load_dir is not None and self._skills_need_codex(
-            skill_load_dir, task.user_skills
-        ):
+        if skill_load_dir is not None and self._skills_need_codex(skill_load_dir, task.user_skills):
             from ainrf.harness_engine.mcp_servers import _codex_mcp_config
 
             mcp_servers.setdefault("codex", _codex_mcp_config())
@@ -937,9 +951,7 @@ class AgenticResearcherService:
             ),
             tenant_user=tenant_user,
             skill_load_dir=skill_load_dir,
-            prior_messages=(
-                self._get_prior_user_assistant_messages(task.task_id) or None
-            ),
+            prior_messages=(self._get_prior_user_assistant_messages(task.task_id) or None),
         )
 
     def get_runtime_summary(self, task: Task) -> dict[str, object]:
@@ -965,7 +977,9 @@ class AgenticResearcherService:
         return ["claude-agent-sdk", "query"]
 
     def _resolve_working_directory(
-        self, task: Task, tenant_user: str | None = None,
+        self,
+        task: Task,
+        tenant_user: str | None = None,
     ) -> Path:
         if self._workspace_service is not None:
             try:
@@ -991,7 +1005,8 @@ class AgenticResearcherService:
         if tenant_user:
             subprocess.run(
                 ["sudo", "-u", tenant_user, "mkdir", "-p", str(path)],
-                check=False, capture_output=True,
+                check=False,
+                capture_output=True,
             )
         else:
             path.mkdir(parents=True, exist_ok=True)
@@ -1030,6 +1045,7 @@ class AgenticResearcherService:
             # persistence survives container restarts.
             if engine_type == HarnessEngineType.AGENT_SDK:
                 from ainrf.harness_engine.db_session_store import DbSessionStore
+
                 engine._session_store = DbSessionStore(str(self._db_path))
             self._engines[engine_type] = engine
         return engine
@@ -1073,9 +1089,7 @@ class AgenticResearcherService:
                     for k in TOKEN_TOTAL_FIELDS
                 },
                 cost_details={
-                    "cost_usd": _number(
-                        event.token_usage.get("total", {}).get("cost_usd")
-                    ),
+                    "cost_usd": _number(event.token_usage.get("total", {}).get("cost_usd")),
                 },
                 metadata={"source": event.token_usage.get("source", "unknown")},
             )
@@ -1295,7 +1309,9 @@ class AgenticResearcherService:
         if completed:
             with self._stream_lock:
                 self._stream_buffers.pop(task_id, None)
-        _LOG.debug("task_status_changed", task_id=task_id, to_status=status.value, exit_code=exit_code)
+        _LOG.debug(
+            "task_status_changed", task_id=task_id, to_status=status.value, exit_code=exit_code
+        )
 
     def _row_to_task(self, row: sqlite3.Row) -> Task:
         return Task(

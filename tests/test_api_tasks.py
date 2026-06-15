@@ -22,98 +22,9 @@ from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.routes.tasks import _output_item_to_message
 from ainrf.projects import ProjectRecord
 from ainrf.agentic_researcher.models import TaskOutputEvent
-from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
-from ainrf.harness_engine.base import EngineEmit
-from tests.testutil import get_jwt_headers
+from tests.testutil import FakeEngine, TokenEngine, get_jwt_headers
 
 pytestmark = [pytest.mark.api]
-
-
-class FakeEngine(HarnessEngine):
-    def __init__(self) -> None:
-        self.pending_prompts: list[str] = []
-
-    @property
-    def engine_type(self) -> HarnessEngineType:
-        return HarnessEngineType.CLAUDE_CODE
-
-    async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
-        prompt = self.pending_prompts.pop(0) if self.pending_prompts else context.rendered_prompt
-        await emit(
-            EngineEvent(
-                event_type="message",
-                payload={"role": "assistant", "content": f"ran: {prompt}"},
-            )
-        )
-        await emit(
-            EngineEvent(
-                event_type="status",
-                payload={"status": "succeeded", "exit_code": 0},
-            )
-        )
-
-    async def send_input(self, task_id: str, text: str) -> None:
-        _ = task_id
-        self.pending_prompts.append(text)
-
-    async def cancel(self, task_id: str) -> None:
-        _ = task_id
-
-
-class TokenEngine(FakeEngine):
-    async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
-        await emit(
-            EngineEvent(
-                event_type="token",
-                payload={"turn": 1},
-                token_usage={
-                    "source": "agent-sdk",
-                    "total": {
-                        "input_tokens": 10,
-                        "output_tokens": 5,
-                        "cache_creation_input_tokens": 3,
-                        "cache_read_input_tokens": 2,
-                        "cost_usd": 0.01,
-                    },
-                    "by_model": {
-                        "claude-sonnet": {
-                            "input_tokens": 10,
-                            "output_tokens": 5,
-                            "cost_usd": 0.01,
-                        }
-                    },
-                },
-            )
-        )
-        await emit(
-            EngineEvent(
-                event_type="system",
-                payload={"subtype": "task_completed", "total_cost_usd": 0.02},
-                token_usage={
-                    "source": "agent-sdk",
-                    "total": {
-                        "input_tokens": 20,
-                        "output_tokens": 8,
-                        "cache_creation_input_tokens": 4,
-                        "cache_read_input_tokens": 2,
-                        "cost_usd": 0.02,
-                    },
-                    "by_model": {
-                        "claude-sonnet": {
-                            "input_tokens": 20,
-                            "output_tokens": 8,
-                            "cost_usd": 0.02,
-                        }
-                    },
-                },
-            )
-        )
-        await emit(
-            EngineEvent(
-                event_type="status",
-                payload={"status": "succeeded", "exit_code": 0},
-            )
-        )
 
 
 def make_app(tmp_path: Path, engine: FakeEngine) -> FastAPI:

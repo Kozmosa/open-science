@@ -30,6 +30,15 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
 docker compose -f deploy/docker-compose.cpu.yml restart nginx
 ```
 
+### 部署顺序：前后端配套改动时，先发后端
+nginx 挂载的是宿主机 `frontend/dist`，重建 dist 后**立即**对外提供新版前端。如果前端先上线、后端还是旧的，新前端调用旧后端没有的端点（例：新增 `PATCH /tasks/{id}` 重命名接口）会直接 404 / 功能不可用。
+
+配套改动时固定顺序：
+
+1. 先 `docker compose ... up -d --build ainrf`（后端，新端点先就位）
+2. 再 `cd frontend && npm run build`（前端，此时后端已能接住新调用）
+3. 必要时 `restart nginx`
+
 ### 最小验证
 - 看 `frontend/dist/index.html` 里的 `index-*.js` hash
 - 再看浏览器实际加载的是不是同一个 hash
@@ -251,13 +260,88 @@ const firstId = data?.items[0].id ?? ''
 
 否则它会从“验证工具”退化成“没人维护的灰色功能”。
 
-## 11. 建议固定成每次开发的检查清单
+## 11. 行为变化后，必须重新审计 response schema 的可选性
+
+### 现象
+- retry 功能改完
+- `pytest tests/` 508 全绿
+- 推到 staging 点 retry，直接 `Internal Server Error`（500）
+
+### 根因
+`retry_task()` 从“永远新建 task”改成“agent-sdk 复用同一 task”。返回体里的 `archived_task_id` 以前一定有值，新逻辑下 agent-sdk 路径是 `None`。但 schema 没跟着改：
+
+```python
+class TaskRetryResponse(BaseModel):
+    archived_task_id: str   # ← 非 Optional，但新路径会传 None
+```
+
+Pydantic v2 对非 Optional 字段**严格拒绝 `None`**，在构造 response 时抛 `ValidationError` → 500。
+
+### 为什么单测没抓到
+service 层单测只验证 `retry_task()` 返回的 `Task` 对象正确，**完全不经过 response schema 序列化**。`None` 路径只有走到“真实 HTTP 响应构造”那一步才会触发，而这一步单测覆盖不到。
+
+### 硬规则
+当某个行为从“必然产生 X”变成“条件性产生 X”（或反过来）：
+
+1. **立刻重新审计所有受影响 response schema 的字段可选性**
+2. 只要新逻辑下某字段可能为 `None`，类型就写 `X | None`，不要保留旧的 `X`
+3. 这种 bug 只能在 staging 用真实 HTTP 请求跑一遍才暴露 —— 新功能的“完整链路验证”不能只靠 pytest
+
+### 最小验证
+新功能上线前，至少在 staging 上跑一次“会触发条件分支”的真实请求（本文档的 case：触发 same-task 复用路径），而不是只 curl 一个 happy path。
+
+## 12. structlog 和 stdlib logger 不能混用 kwargs
+
+### 现象
+- agent-sdk task retry / follow-up 一律失败
+- stderr 报 `Logger._log() got an unexpected keyword argument 'task_id'`
+- task 被 `run_task` 的 except 捕获后标 FAILED
+- **每次 retry 都重新踩一遍同一颗雷**，task 永久卡死在 failed
+
+### 根因
+两处用了 `logging.getLogger()`（**stdlib**），却传了 structlog 风格的关键字参数：
+
+```python
+# ❌ 错：stdlib logger 不认这些 kwargs
+logger = logging.getLogger(__name__)
+logger.warning("session_resume_failed_retrying_fresh", task_id=..., session_id=...)
+# → TypeError: Logger._log() got an unexpected keyword argument 'task_id'
+```
+
+stdlib `Logger._log()` 只认自己的签名，多传一个 kwarg 就 TypeError。这个异常又被任务循环当成“任务失败”吞掉，于是表现为业务功能挂掉而不是日志层报错。
+
+### 硬规则
+传结构化字段前，先确认这个 logger 是哪一种：
+
+```python
+# stdlib (logging.getLogger / logging.getLogger(__name__))
+#   → 只能用 %-format 位置参数
+logger.warning("retry task_id=%s session=%s", task_id, session_id)
+
+# structlog (structlog.get_logger() / 模块级 `log = structlog.get_logger(...)`)
+#   → 可以直接传结构化 kwargs
+log.warning("session_resume_failed_retrying_fresh", task_id=task_id, session_id=session_id)
+```
+
+不要因为“看起来都是记日志”就把 structlog 的调用风格复制到 stdlib logger 上。
+
+### 最小验证
+改动涉及日志时，grep 当前文件的 logger 来源：
+
+```bash
+grep -nE "logging\.getLogger|structlog\.get_logger|^\s*log\s*=" path/to/file.py
+```
+
+确认传参风格和 logger 类型一致。
+
+## 13. 建议固定成每次开发的检查清单
 
 ### 前端改动前后
 - [ ] devtools/browser tool 可用
 - [ ] 确认浏览器加载的 bundle hash
 - [ ] 宿主机 `frontend/dist` 已重建
 - [ ] nginx 已重启
+- [ ] 前后端配套改动时，先发后端再发前端（见 §1）
 
 ### 多租户/权限改动前后
 - [ ] 明确文件/目录是谁创建的
@@ -269,5 +353,10 @@ const firstId = data?.items[0].id ?? ''
 - [ ] 是否需要重启 session
 - [ ] 是否需要重启容器
 - [ ] 是否需要重启 nginx / 浏览器
+
+### 行为 / 接口改动后
+- [ ] 行为从“必然产生 X”变成“条件性产生 X”了吗？是 → 审计 response schema 可选性（见 §11）
+- [ ] 改动涉及日志吗？是 → 确认 logger 是 stdlib 还是 structlog，传参风格匹配（见 §12）
+- [ ] 单测绿之后，是否在 staging 用真实 HTTP 请求跑过会触发条件分支的路径？（见 §11）
 
 如果未来再踩到类似坑，优先补这份文档，而不是把经验散落在聊天记录里。

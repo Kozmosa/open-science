@@ -27,21 +27,10 @@ from ainrf.terminal.models import (
 from ainrf.terminal.pty import TERMINAL_LOCAL_TARGET_KIND
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter, TmuxCommandError, TmuxProbeTimeoutError
+from tests.testutil import make_terminal_manager
 
 
-pytestmark = [pytest.mark.engine]
-def make_manager(
-    tmp_path: Path, *, user_id: str = "daemon-user"
-) -> tuple[SessionManager, InMemoryEnvironmentService]:
-    environment_service = InMemoryEnvironmentService()
-    manager = SessionManager(
-        state_root=tmp_path,
-        environment_service=environment_service,
-        tmux_adapter=TmuxAdapter(tmp_path),
-        default_shell="/bin/bash",
-        user_id=user_id,
-    )
-    return manager, environment_service
+pytestmark = [pytest.mark.engine, pytest.mark.concurrent]
 
 
 def tmux_session_target(session_name: str) -> str:
@@ -53,7 +42,7 @@ def assert_short_session_name(session_name: str, *, prefix: str) -> None:
 
 
 def test_binding_upsert_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -79,7 +68,7 @@ def test_binding_upsert_is_idempotent(tmp_path: Path, monkeypatch: pytest.Monkey
 
 
 def test_session_name_generation_is_stable(tmp_path: Path) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -93,7 +82,7 @@ def test_session_name_generation_is_stable(tmp_path: Path) -> None:
 
 
 def test_agent_session_name_generation_is_stable(tmp_path: Path) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -772,7 +761,7 @@ def test_detach_only_closes_bridge_runtime(tmp_path: Path, monkeypatch: pytest.M
 def test_attachment_disconnect_preserves_personal_tmux_session(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -849,7 +838,7 @@ def test_reset_kills_and_recreates_personal_session(
 def test_session_manager_serializes_personal_ensure_and_reset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -918,7 +907,7 @@ def test_session_manager_serializes_personal_ensure_and_reset(
 def test_personal_session_reattach_reuses_tmux_safe_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="localhost-2",
         display_name="Localhost 2",
@@ -986,7 +975,7 @@ def test_personal_session_reattach_reuses_tmux_safe_target(
 def test_reconcile_restores_running_state_from_sqlite(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -1019,7 +1008,7 @@ def test_reconcile_restores_running_state_from_sqlite(
 
 
 def test_session_names_include_app_user_namespace(tmp_path: Path) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",
@@ -1042,7 +1031,7 @@ def test_session_names_include_app_user_namespace(tmp_path: Path) -> None:
 def test_first_real_app_user_claims_legacy_binding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    manager, environment_service = make_manager(tmp_path)
+    manager, environment_service = make_terminal_manager(tmp_path)
     environment = environment_service.create_environment(
         alias="gpu-lab",
         display_name="GPU Lab",

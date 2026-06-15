@@ -79,10 +79,7 @@ class TestAdminApi:
                 assert resp.status_code == 401
 
     async def test_non_admin_cannot_list_users(self, tmp_path: Path) -> None:
-        import tempfile
-
         from ainrf.auth import AuthService
-        from tests.testutil import get_jwt_headers
 
         api_config = ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -93,9 +90,7 @@ class TestAdminApi:
         # Register a member user and get JWT headers
         auth_svc: AuthService = app.state.auth_service
         auth_svc.initialize()
-        auth_svc.register(
-            username="member_user", display_name="Member", password="test-pass"
-        )
+        auth_svc.register(username="member_user", display_name="Member", password="test-pass")
         with auth_svc._connect() as conn:
             conn.execute(
                 "UPDATE users SET status = 'active', activated_at = ?, role = 'member'"

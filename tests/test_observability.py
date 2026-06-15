@@ -1,4 +1,5 @@
 """Tests for the LLM observability abstraction layer."""
+
 from __future__ import annotations
 
 import os
@@ -11,6 +12,8 @@ from ainrf.observability.protocol import (
     ObservabilityConfig,
     SafeReporter,
 )
+
+pytestmark = [pytest.mark.unit]
 
 
 # ---------------------------------------------------------------------------
@@ -61,15 +64,20 @@ class TestNullReporter:
 
     def test_kwargs_accepted(self):
         r = NullReporter()
-        r.start_trace("t1", "test", user_id="u1", session_id="s1",
-                       metadata={"k": "v"}, input={"q": "?"})
+        r.start_trace(
+            "t1", "test", user_id="u1", session_id="s1", metadata={"k": "v"}, input={"q": "?"}
+        )
         r.end_trace("t1", output={"a": 42}, error="oops")
-        r.record_generation("t1", "gen-1", model="claude-3",
-                            usage_details={"input_tokens": 100},
-                            cost_details={"cost_usd": 0.01},
-                            input="prompt", output="reply")
-        r.record_span("t1", "span-1", input="in", output="out",
-                       metadata={"key": "val"})
+        r.record_generation(
+            "t1",
+            "gen-1",
+            model="claude-3",
+            usage_details={"input_tokens": 100},
+            cost_details={"cost_usd": 0.01},
+            input="prompt",
+            output="reply",
+        )
+        r.record_span("t1", "span-1", input="in", output="out", metadata={"key": "val"})
 
 
 # ---------------------------------------------------------------------------
@@ -102,14 +110,17 @@ class TestSafeReporter:
 class TestFactory:
     def setup_method(self):
         from ainrf.observability.factory import reset_reporter
+
         reset_reporter()
 
     def teardown_method(self):
         from ainrf.observability.factory import reset_reporter
+
         reset_reporter()
 
     def test_returns_null_when_disabled(self):
         from ainrf.observability.factory import get_reporter
+
         cfg = ObservabilityConfig(enabled=False)
         reporter = get_reporter(cfg)
         # Should be a SafeReporter wrapping NullReporter
@@ -118,8 +129,8 @@ class TestFactory:
 
     def test_returns_null_on_import_error(self):
         from ainrf.observability.factory import get_reporter
-        cfg = ObservabilityConfig(enabled=True, base_url="http://x",
-                                  secret_key="s", public_key="p")
+
+        cfg = ObservabilityConfig(enabled=True, base_url="http://x", secret_key="s", public_key="p")
         with patch.dict("sys.modules", {"langfuse": None}):
             reporter = get_reporter(cfg)
         assert isinstance(reporter, SafeReporter)
@@ -127,12 +138,14 @@ class TestFactory:
 
     def test_singleton_pattern(self):
         from ainrf.observability.factory import get_reporter
+
         r1 = get_reporter(ObservabilityConfig(enabled=False))
         r2 = get_reporter()
         assert r1 is r2
 
     def test_reset_clears_singleton(self):
         from ainrf.observability.factory import get_reporter, reset_reporter
+
         r1 = get_reporter(ObservabilityConfig(enabled=False))
         reset_reporter()
         r2 = get_reporter(ObservabilityConfig(enabled=False))
@@ -146,9 +159,14 @@ class TestApiConfigObservability:
     def test_defaults_disabled(self):
         from ainrf.api.config import ApiConfig
         from pathlib import Path
-        with patch.dict(os.environ, {
-            "AINRF_API_KEY_HASHES": "abc123",
-        }, clear=False):
+
+        with patch.dict(
+            os.environ,
+            {
+                "AINRF_API_KEY_HASHES": "abc123",
+            },
+            clear=False,
+        ):
             cfg = ApiConfig.from_env(state_root=Path("/tmp/ainrf-test"))
         assert cfg.observability_enabled is False
         assert cfg.observability_base_url == ""
@@ -156,6 +174,7 @@ class TestApiConfigObservability:
     def test_reads_env_vars(self):
         from ainrf.api.config import ApiConfig
         from pathlib import Path
+
         env = {
             "AINRF_API_KEY_HASHES": "abc123",
             "AINRF_OBSERVABILITY_ENABLED": "true",
@@ -187,7 +206,8 @@ class TestResearcherObservability:
         with tempfile.TemporaryDirectory() as tmp:
             reporter = NullReporter()
             svc = AgenticResearcherService(
-                Path(tmp), observability_reporter=reporter,
+                Path(tmp),
+                observability_reporter=reporter,
             )
             assert svc._observability is reporter
 
