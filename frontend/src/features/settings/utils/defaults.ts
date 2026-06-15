@@ -6,7 +6,7 @@ import type {
   TaskConfigurationPreset,
   TaskConfigurationSettings,
   WebUiSettingsDocument,
-} from './types';
+} from '@features/settings/types';
 
 export const settingsStorageKey = 'scholar-agent:webui-settings';
 export const defaultTerminalFontSize = 13;

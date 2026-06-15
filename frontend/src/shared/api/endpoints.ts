@@ -75,7 +75,7 @@ import type { ChangePasswordRequest,
   SearchSettingsUpdateRequest,
   DeploymentVersionResponse,
   MonitoringSettingsResponse,
-} from '../types';
+} from '@/shared/types';
 import {
   mockArchiveTask,
   mockCancelTask,

@@ -44,7 +44,7 @@ import type {
   TaskEdge,
   TaskEdgeCreateRequest,
   TaskEdgeListResponse,
-} from '../types';
+} from '@/shared/types';
 import { ApiError } from './client';
 
 const DEFAULT_PROJECT_ID = 'default';

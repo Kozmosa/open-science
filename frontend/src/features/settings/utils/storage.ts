@@ -10,7 +10,7 @@ import {
   isDefaultRoute,
   rawPromptTaskConfigurationId,
   settingsStorageKey,
-} from './defaults';
+} from '@features/settings/utils/defaults';
 import type {
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
@@ -21,7 +21,7 @@ import type {
   TaskConfigurationPreset,
   TaskConfigurationSettings,
   WebUiSettingsDocument,
-} from './types';
+} from '@features/settings/types';
 
 interface SettingsLoadResult {
   settings: WebUiSettingsDocument;

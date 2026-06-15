@@ -4,7 +4,7 @@ import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TerminalAttachmentMode, TerminalSessionStatus } from '@/shared/types';
 import { useT } from '@/shared/i18n';
-import { useTerminalFontSize } from '../../settings';
+import { useTerminalFontSize } from '@features/settings';
 import { useTerminalFitScheduling } from './useTerminalFitScheduling';
 
 type SocketStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';

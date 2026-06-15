@@ -4,7 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary, Layout, ToastProvider } from './components/common';
 import { useT } from '@/shared/i18n';
 import { createAppQueryClient } from './queryClient';
-import { SettingsProvider, useSettings } from './settings';
+import { SettingsProvider, useSettings } from '@features/settings';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 

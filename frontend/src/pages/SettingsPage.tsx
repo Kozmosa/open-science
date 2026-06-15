@@ -25,7 +25,7 @@ import {
   minEditorFontSize,
   minTerminalFontSize,
   useSettings,
-} from '../settings';
+} from '@features/settings';
 import type {
   DefaultRoute,
   EnvironmentTaskDefaults,
@@ -33,7 +33,7 @@ import type {
   ResearchAgentProfileSettings,
   TaskConfigurationSettings,
   WebUiSettingsDocument,
-} from '../settings';
+} from '@features/settings';
 import type { EnvironmentRecord, SkillItem, SkillDetail, SkillImportRequest, SkillPreview, SkillRegistryItem, SearchBackendItem } from '@/shared/types';
 import { UsersTab } from './settings/UsersTab';
 import { EnvAccessTab } from './settings/EnvAccessTab';

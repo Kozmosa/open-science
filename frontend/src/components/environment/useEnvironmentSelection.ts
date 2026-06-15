@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getEnvironments, getProjectEnvironmentReferences } from '@/shared/api';
 import type { EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
-import { useSettings } from '../../settings';
+import { useSettings } from '@features/settings';
 
 const defaultProjectId = 'default';
 const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];

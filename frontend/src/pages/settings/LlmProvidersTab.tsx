@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Button, SectionCard, SectionHeader } from '@design-system/primitives';
 import { SectionStack } from '@design-system/layout';
 import { useT } from '@/shared/i18n';
-import { useSettings } from '../../settings';
-import type { LlmProvider } from '../../settings';
+import { useSettings } from '@features/settings';
+import type { LlmProvider } from '@features/settings';
 import { LlmProviderEditDialog } from './LlmProviderEditDialog';
 
 export function LlmProvidersTab() {

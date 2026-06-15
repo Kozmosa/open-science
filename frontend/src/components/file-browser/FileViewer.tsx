@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { FileReadResponse } from '@/shared/types';
 import { useT } from '@/shared/i18n';
-import { useEditorSettings } from '../../settings';
+import { useEditorSettings } from '@features/settings';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 

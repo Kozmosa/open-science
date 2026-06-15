@@ -6,7 +6,7 @@ import { ToastProvider } from '@/components/common';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LocaleProvider, type Locale } from '@/shared/i18n';
 import { appQueryClientDefaultOptions } from '@/queryClient';
-import { SettingsProvider } from '@/settings';
+import { SettingsProvider } from '@features/settings';
 
 interface RenderOptions {
   route?: string;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, FormField, Input, Select } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
-import type { LlmProvider, LlmProviderFormat } from '../../settings';
+import type { LlmProvider, LlmProviderFormat } from '@features/settings';
 
 interface LlmProviderEditDialogProps {
   provider: LlmProvider | null;
