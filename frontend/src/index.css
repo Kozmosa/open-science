@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "./design-system/tokens/index.css";
+@import "./design-system/tokens/prism-tokens.css";
 
 html,
 body,
