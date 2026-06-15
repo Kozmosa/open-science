@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messages } from '../../../src/i18n/messages';
+import { messages } from '@/shared/i18n/messages';
 
 function collectLeafPaths(value: unknown, prefix = ''): string[] {
   if (typeof value === 'string') {

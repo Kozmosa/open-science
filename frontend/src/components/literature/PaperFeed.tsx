@@ -1,11 +1,12 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Button, Select } from '../../components/ui';
-import { getLiteratureFetchStatus, getLiteraturePapers, triggerLiteratureFetch } from '../../api';
-import { useT } from '../../i18n';
-import type { LiteratureSubscription } from '../../types';
+import { Button, Select } from '@design-system/primitives';
+import { getLiteratureFetchStatus, getLiteraturePapers, triggerLiteratureFetch } from '@/shared/api';
+import { useT } from '@/shared/i18n';
+import type { LiteratureSubscription } from '@/shared/types';
 import PaperCard from './PaperCard';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 interface Props {
   subscriptions: LiteratureSubscription[];
@@ -26,7 +27,7 @@ export default function PaperFeed({ subscriptions, selectedSubscriptionId, onSub
   const [unreadOnly, setUnreadOnly] = useState(false);
 
   const papersQuery = useQuery({
-    queryKey: ['literature-papers', selectedSubscriptionId, unreadOnly],
+    queryKey: queryKeys.literature.papers(selectedSubscriptionId, unreadOnly),
     queryFn: () => getLiteraturePapers({
       subscription_id: selectedSubscriptionId,
       unread_only: unreadOnly || undefined,

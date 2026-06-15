@@ -1,5 +1,5 @@
 import { Globe } from 'lucide-react';
-import { useLocaleSwitcher, useT } from '../../i18n';
+import { useLocaleSwitcher, useT } from '@/shared/i18n';
 
 function LocaleSwitcher() {
   const t = useT();

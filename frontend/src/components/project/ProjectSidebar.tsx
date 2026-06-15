@@ -1,8 +1,8 @@
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
-import { Button, Input } from '../ui';
-import { useT } from '../../i18n';
-import type { ProjectRecord } from '../../types';
+import { Button, Input } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import type { ProjectRecord } from '@/shared/types';
 
 interface Props {
   projects: ProjectRecord[];
@@ -27,10 +27,10 @@ export default function ProjectSidebar({
     <div className="flex h-full flex-col p-3">
       <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">
             {t('pages.projects.sidebarEyebrow')}
           </p>
-          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
+          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--foreground)]">
             {t('pages.projects.sidebarTitle')}
           </h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -39,7 +39,7 @@ export default function ProjectSidebar({
         </div>
         <Button
           onClick={onCreateProject}
-          className="inline-flex h-9 items-center gap-2 px-3 shadow-sm"
+          className="inline-flex h-9 items-center gap-2 rounded-xl px-3 shadow-[var(--shadow-sm)] transition-all active:scale-[0.98]"
         >
           <Plus size={15} />
           {t('pages.projects.newProject')}
@@ -61,10 +61,10 @@ export default function ProjectSidebar({
           <button
             key={project.project_id}
             onClick={() => onSelectProject(project.project_id)}
-            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition
+            className={`w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition
               ${selectedProjectId === project.project_id
-                ? 'bg-[var(--sidebar-primary)] text-[var(--sidebar-primary-foreground)]'
-                : 'text-[var(--muted-foreground)] hover:bg-[var(--sidebar-primary)] hover:text-[var(--sidebar-foreground)]'
+                ? 'bg-[var(--prism-primary-soft)] text-[var(--prism-primary)]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--prism-primary-soft)]/40 hover:text-[var(--foreground)]'
               }`}
           >
             <div className="truncate font-medium">{project.name}</div>

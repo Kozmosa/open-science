@@ -1,4 +1,4 @@
-import type { MessageItem } from '../../types';
+import type { MessageItem } from '@/shared/types';
 
 export type ChatMessageRole = 'user' | 'assistant' | 'system';
 

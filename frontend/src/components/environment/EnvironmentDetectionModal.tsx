@@ -1,7 +1,7 @@
 import { Globe, Package, Terminal, Cpu, HardDrive, Variable, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
-import { Modal, StatusDot, Alert } from '../ui';
-import { useT } from '../../i18n';
-import type { EnvironmentDetection } from '../../types';
+import { Modal, StatusDot, Alert } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import type { EnvironmentDetection } from '@/shared/types';
 
 interface EnvironmentDetectionModalProps {
   detection: EnvironmentDetection;

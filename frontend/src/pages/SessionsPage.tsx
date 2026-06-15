@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTask, getTasks } from '../api';
-import PageShell from '../components/layout/PageShell';
-import SplitPane from '../components/layout/SplitPane';
+import { getTask, getTasks } from '@/shared/api';
+import PageShell from '@design-system/layout/PageShell';
+import SplitPane from '@design-system/layout/SplitPane';
 import { SessionDetail } from './sessions/SessionDetail';
 import { SessionList } from './sessions/SessionList';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 export default function SessionsPage() {
   const queryClient = useQueryClient();
@@ -12,7 +13,7 @@ export default function SessionsPage() {
   const [sidebarWidth, setSidebarWidth] = useState(320);
 
   const tasksQuery = useQuery({
-    queryKey: ['session-task-runs'],
+    queryKey: queryKeys.sessions.taskRuns,
     queryFn: () => getTasks({ includeArchived: false, limit: 200, sort: 'updated' }),
     refetchInterval: 10000,
   });
@@ -23,7 +24,7 @@ export default function SessionsPage() {
   );
 
   const detailQuery = useQuery({
-    queryKey: ['task', selectedId],
+    queryKey: queryKeys.tasks.detail(selectedId),
     queryFn: () => getTask(selectedId!),
     enabled: selectedId !== null,
   });
@@ -31,7 +32,7 @@ export default function SessionsPage() {
   const handleSelect = useCallback(
     (id: string) => {
       setSelectedId(id);
-      queryClient.invalidateQueries({ queryKey: ['task', id] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(id) });
     },
     [queryClient],
   );

@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
+import { resolve } from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { sharedAinrfProxyConfig } from './vite.proxy'
 
@@ -38,6 +39,14 @@ const config = defineConfig({
           return 'vendor'
         },
       },
+    },
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+      '@design-system': resolve(__dirname, './src/design-system'),
+      '@features': resolve(__dirname, './src/features'),
+      '@shared': resolve(__dirname, './src/shared'),
     },
   },
   server: {

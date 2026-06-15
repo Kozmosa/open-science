@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, BarChart3, Activity, Sparkles, Server } from 'lucide-react';
-import { getMonitoringSettings } from '../../api';
-import { SectionCard, SectionHeader } from '../../components/ui';
-import { useT } from '../../i18n';
-import type { MonitoringServiceItem } from '../../types';
+import { getMonitoringSettings } from '@/shared/api';
+import { SectionCard, SectionHeader } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import type { MonitoringServiceItem } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   grafana: BarChart3,
@@ -110,7 +111,7 @@ function MonitoringCard({ service }: { service: MonitoringServiceItem }) {
 export default function MonitoringTab() {
   const t = useT();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['monitoringSettings'],
+    queryKey: queryKeys.monitoring.settings,
     queryFn: getMonitoringSettings,
     staleTime: 5 * 60 * 1000, // 5 minutes — these URLs rarely change
   });

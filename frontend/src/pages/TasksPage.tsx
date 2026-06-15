@@ -14,19 +14,20 @@ import {
   getTasks,
   getWorkspaces,
   retryTask,
-} from '../api';
-import { Button, Modal, Select } from '../components/ui';
+} from '@/shared/api';
+import { Button, Modal, Select } from '@design-system/primitives';
 import { useToast } from '../components/common/Toast';
-import { useT } from '../i18n';
-import { PageShell, SplitPane } from '../components/layout';
-import { extractErrorMessage } from '../utils/error';
-import { useAuth } from '../contexts/AuthContext';
-import type { TaskCreatePayload, TaskListResponse } from '../types';
-import TaskCreateForm from './tasks/TaskCreateForm';
-import TaskDetailPage from './tasks/TaskDetailPage';
-import TaskList from './tasks/TaskList';
+import { useT } from '@/shared/i18n';
+import { PageShell, SplitPane } from '@design-system/layout';
+import { extractErrorMessage } from '@/shared/utils/error';
+import { useAuth } from '@features/auth';
+import type { TaskCreatePayload, TaskListResponse } from '@/shared/types';
+import TaskCreateForm from '@features/tasks/components/TaskCreateForm';
+import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
+import TaskList from '@features/tasks/pages/TaskList';
 import TaskMetadataDrawer from '../components/messages/TaskMetadataDrawer';
-import { useTaskStream } from './tasks/useTaskStream';
+import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
@@ -40,7 +41,7 @@ function TasksPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
   const tasksQuery = useQuery({
-    queryKey: ['tasks', showArchived, taskSort],
+    queryKey: queryKeys.tasks.list(showArchived, taskSort),
     queryFn: () => getTasks({ includeArchived: showArchived, limit: 200, sort: taskSort }),
     refetchInterval: 5000,
   });
@@ -85,7 +86,7 @@ function TasksPage() {
       if (metadataSidebarOpen) {
         next.set('sidebar', 'closed');
       } else {
-        next.delete('sidebar');
+        next.set('sidebar', 'open');
       }
       return next;
     });
@@ -102,7 +103,7 @@ function TasksPage() {
   }, [effectiveSelectedTaskId, requestedTaskId, selectTask]);
 
   const selectedTaskQuery = useQuery({
-    queryKey: ['task', effectiveSelectedTaskId],
+    queryKey: queryKeys.tasks.detail(effectiveSelectedTaskId),
     queryFn: () => getTask(effectiveSelectedTaskId ?? ''),
     enabled: effectiveSelectedTaskId !== null,
     refetchInterval: 5000,
@@ -114,7 +115,7 @@ function TasksPage() {
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreatePayload) => createTask(payload),
     onSuccess: (task) => {
-      queryClient.setQueryData<TaskListResponse>(['tasks', showArchived, taskSort], (current) => ({
+      queryClient.setQueryData<TaskListResponse>(queryKeys.tasks.list(showArchived, taskSort), (current) => ({
         items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
         total: (current?.total ?? 0) + 1,
         has_more: current?.has_more ?? false,
@@ -122,24 +123,24 @@ function TasksPage() {
       }));
       selectTask(task.task_id);
       closeCreateDialog();
-      void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
-      void queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject('default') });
     },
   });
 
   const archiveMutation = useMutation({
     mutationFn: (taskId: string) => archiveTask(taskId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['tasks', true] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
     },
   });
 
   const cancelMutation = useMutation({
     mutationFn: (taskId: string) => cancelTask(taskId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['tasks', true] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
     },
   });
 
@@ -147,7 +148,7 @@ function TasksPage() {
     mutationFn: (taskId: string) => deleteTask(taskId),
     onSuccess: (_data, taskId) => {
       queryClient.setQueryData<TaskListResponse>(
-        ['tasks', showArchived, taskSort],
+        queryKeys.tasks.list(showArchived, taskSort),
         (current) => ({
           items: (current?.items ?? []).filter((item) => item.task_id !== taskId),
           total: current?.total != null ? current.total - 1 : undefined,
@@ -164,8 +165,8 @@ function TasksPage() {
   const retryMutation = useMutation({
     mutationFn: (taskId: string) => retryTask(taskId),
     onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['task-edges'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject('default') });
       selectTask(data.new_task.task_id);
       showToast(t('pages.tasks.retrySuccess'), 'success');
     },
@@ -176,19 +177,19 @@ function TasksPage() {
 
   // Fetch defaults for task creation
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
+    queryKey: queryKeys.projects.all,
     queryFn: getProjects,
   });
   const workspacesQuery = useQuery({
-    queryKey: ['workspaces'],
+    queryKey: queryKeys.workspaces.all,
     queryFn: getWorkspaces,
   });
   const environmentsQuery = useQuery({
-    queryKey: ['environments'],
+    queryKey: queryKeys.environments.all,
     queryFn: getEnvironments,
   });
   const skillsQuery = useQuery({
-    queryKey: ['skills'],
+    queryKey: queryKeys.skills.all,
     queryFn: getSkills,
   });
 
@@ -227,10 +228,10 @@ function TasksPage() {
     <>
       <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">
             {t('pages.tasks.sidebarEyebrow')}
           </p>
-          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
+          <h1 className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--foreground)]">
             {t('pages.tasks.sidebarTitle')}
           </h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -241,7 +242,7 @@ function TasksPage() {
           <Button
             ref={createButtonRef}
             onClick={() => setCreateDialogOpen(true)}
-            className="inline-flex h-9 shrink-0 items-center px-3 shadow-sm transition-all"
+            className="inline-flex h-9 shrink-0 items-center rounded-xl px-3 shadow-[var(--shadow-sm)] transition-all active:scale-[0.98]"
           >
             <Plus size={15} className="shrink-0" />
             <span
@@ -256,18 +257,18 @@ function TasksPage() {
           <Select
             value={taskSort}
             onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
-            className="w-full text-[11px] py-1"
+            className="w-full rounded-lg py-1 text-[11px]"
           >
             <option value="updated">{t('pages.tasks.sort.updated')}</option>
             <option value="created">{t('pages.tasks.sort.created')}</option>
             <option value="name">{t('pages.tasks.sort.name')}</option>
           </Select>
-          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
+          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-tertiary)]">
             <input
               type="checkbox"
               checked={showArchived}
               onChange={(event) => setShowArchived(event.target.checked)}
-              className="rounded border-[var(--border)]"
+              className="rounded border-[var(--border)] accent-[var(--prism-primary)]"
             />
             {t('pages.tasks.actions.showArchived')}
           </label>

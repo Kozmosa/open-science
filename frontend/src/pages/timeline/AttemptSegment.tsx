@@ -1,5 +1,5 @@
-import { useT } from '../../i18n';
-import type { AttemptRecord } from '../../types';
+import { useT } from '@/shared/i18n';
+import type { AttemptRecord } from '@/shared/types';
 
 interface Props {
   attempt: AttemptRecord;

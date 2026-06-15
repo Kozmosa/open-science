@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ChatAssistantMessage, ChatThinkingBlock, ChatToolCallBlock } from '../../../src/components/chat';
-import { renderWithProviders } from '../../../src/test/render';
+import { renderWithProviders } from '@/shared/test/render';
 import type { ChatAssistantMessage as ChatAssistantMessageType } from '../../../src/components/chat';
 
 function assistantMessage(content: string, overrides?: Partial<ChatAssistantMessageType>): ChatAssistantMessageType {

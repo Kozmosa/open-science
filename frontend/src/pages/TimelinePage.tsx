@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getProjects, getTasks } from '../api';
-import PageShell from '../components/layout/PageShell';
-import SectionStack from '../components/layout/SectionStack';
+import { getProjects, getTasks } from '@/shared/api';
+import PageShell from '@design-system/layout/PageShell';
+import SectionStack from '@design-system/layout/SectionStack';
 import { GanttChart } from './timeline/GanttChart';
 import { TimelineControls } from './timeline/TimelineControls';
-import type { TaskSummary } from '../types';
+import type { TaskSummary } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 function taskStartTime(task: TaskSummary): number {
   return new Date(task.started_at ?? task.created_at).getTime();
@@ -25,7 +26,7 @@ export default function TimelinePage() {
   const [toDate, setToDate] = useState<string>('');
 
   const tasksQuery = useQuery({
-    queryKey: ['timeline-task-runs'],
+    queryKey: queryKeys.timeline.taskRuns,
     queryFn: () => getTasks({ includeArchived: false, limit: 1000, sort: 'created' }),
     refetchInterval: 15000,
   });
@@ -54,7 +55,7 @@ export default function TimelinePage() {
   }, [allTasks, fromDate, projectId, toDate]);
 
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
+    queryKey: queryKeys.projects.all,
     queryFn: () => getProjects(),
   });
 

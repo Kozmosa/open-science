@@ -1,8 +1,8 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import ConvertToTaskDialog from '../../../src/components/literature/ConvertToTaskDialog';
-import { renderWithProviders } from '../../../src/test/render';
-import type { EnvironmentRecord, TaskCreatePayload, WorkspaceRecord } from '../../../src/types';
+import { renderWithProviders } from '@/shared/test/render';
+import type { EnvironmentRecord, TaskCreatePayload, WorkspaceRecord } from '@/shared/types';
 
 const workspace: WorkspaceRecord = {
   workspace_id: 'workspace-default',

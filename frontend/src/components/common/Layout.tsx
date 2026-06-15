@@ -17,11 +17,12 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, useLocation } from 'react-router-dom';
-import { getTasks } from '../../api';
-import type { TaskSummary } from '../../types';
+import { getTasks } from '@/shared/api';
+import type { TaskSummary } from '@/shared/types';
 import LocaleSwitcher from './LocaleSwitcher';
-import { useT } from '../../i18n';
-import { useAuth } from '../../contexts/AuthContext';
+import { useT, type MessageKey } from '@/shared/i18n';
+import { useAuth } from '@features/auth';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 interface Props {
   children: ReactNode;
@@ -48,13 +49,20 @@ function buildTaskStatusSummary(
   }
 
   const items = tasks ?? [];
-  const running = items.filter((task) => task.status === 'running' || task.status === 'starting').length;
+  const running = items.filter(
+    (task) => task.status === 'running' || task.status === 'starting'
+  ).length;
   const pending = items.filter((task) => task.status === 'queued').length;
   const finished = items.filter(
     (task) => task.status === 'succeeded' || task.status === 'failed'
   ).length;
 
-  return t('common.taskStatusSummary', { total: items.length, running, pending, finished });
+  return t('common.taskStatusSummary', {
+    total: items.length,
+    running,
+    pending,
+    finished,
+  });
 }
 
 function Layout({ children }: Props) {
@@ -64,7 +72,7 @@ function Layout({ children }: Props) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const tasksQuery = useQuery({
-    queryKey: ['tasks'],
+    queryKey: queryKeys.tasks.all,
     queryFn: () => getTasks(),
     refetchInterval: 5000,
   });
@@ -74,7 +82,7 @@ function Layout({ children }: Props) {
     tasksQuery.isError,
     tasksQuery.isLoading
   );
-  const ROUTE_TITLE_KEYS: Record<string, string> = {
+  const ROUTE_TITLE_KEYS: Record<string, MessageKey> = {
     '/projects': 'navigation.projects.label',
     '/terminal': 'navigation.terminal.label',
     '/tasks': 'navigation.tasks.label',
@@ -88,14 +96,16 @@ function Layout({ children }: Props) {
     '/settings': 'navigation.settings.label',
   };
   const pageTitleKey = ROUTE_TITLE_KEYS[location.pathname] ?? '';
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pageTitle = pageTitleKey ? t(pageTitleKey as any) : '';
+  const pageTitle = pageTitleKey ? t(pageTitleKey) : '';
 
   useEffect(() => {
     document.title = pageTitle ? `${pageTitle} - AINRF` : t('common.appName');
   }, [pageTitle, t]);
 
-  const asideWidth = useMemo(() => (isCollapsed ? 'w-[56px]' : 'w-[248px]'), [isCollapsed]);
+  const asideWidth = useMemo(
+    () => (isCollapsed ? 'w-[56px]' : 'w-[248px]'),
+    [isCollapsed]
+  );
   const isAdmin = user?.role === 'admin';
   const navigationItems: NavigationItem[] = [
     {
@@ -173,115 +183,151 @@ function Layout({ children }: Props) {
   return (
     <div className="h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className="flex h-screen">
+        {/* ── Glass sidebar ────────────────────────────────── */}
         <aside
-          className={`${asideWidth} sticky top-0 h-screen shrink-0 overflow-hidden border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] text-[var(--sidebar-foreground)] transition-all duration-200 ease-out`}
+          className={`${asideWidth} sticky top-0 h-screen shrink-0 overflow-hidden border-r border-[var(--sidebar-border)] bg-[var(--prism-glass)] backdrop-blur-xl text-[var(--sidebar-foreground)] transition-all duration-300 ease-out`}
         >
           <div className="flex h-full flex-col">
+            {/* Brand / collapse toggle */}
             <div className="flex h-12 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
-            {!isCollapsed && (
-              <div className="min-w-0">
-                <p className="truncate text-lg font-bold tracking-tight">{t('common.appName')}</p>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => setIsCollapsed((value) => !value)}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)] transition hover:bg-[var(--sidebar-primary)] hover:text-[var(--sidebar-foreground)]"
-              aria-label={isCollapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
-            >
-              {isCollapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
-            </button>
-          </div>
-
-          {user && (
-            <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-[var(--sidebar-border)]">
-              {!isCollapsed && <span className="truncate text-[var(--text-secondary)]" title={user.display_name}>{user.display_name}</span>}
-              <button type="button" onClick={() => setShowLogoutConfirm(true)} className="ml-auto text-[var(--text-tertiary)] hover:text-[var(--sidebar-foreground)]">
-                {t('auth.logout')}
+              {!isCollapsed && (
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-semibold tracking-tight text-[var(--foreground)]">
+                    {t('common.appName')}
+                  </p>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsCollapsed((v) => !v)}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-tertiary)] transition hover:bg-[var(--prism-primary-soft)] hover:text-[var(--foreground)]"
+                aria-label={
+                  isCollapsed
+                    ? t('layout.expandSidebar')
+                    : t('layout.collapseSidebar')
+                }
+              >
+                {isCollapsed ? (
+                  <ChevronRight size={15} />
+                ) : (
+                  <ChevronLeft size={15} />
+                )}
               </button>
             </div>
-          )}
 
-          <nav className="flex flex-1 flex-col gap-1 px-2 py-3">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    [
-                      'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition',
-                      isCollapsed ? 'justify-center' : '',
-                      isActive
-                        ? 'bg-[var(--sidebar-primary)] text-[var(--sidebar-primary-foreground)] shadow-[var(--shadow-toolbar)]'
-                        : 'text-[var(--muted-foreground)] hover:bg-[var(--sidebar-primary)] hover:text-[var(--sidebar-foreground)]',
-                    ].join(' ')
-                  }
-                  title={isCollapsed ? item.label : undefined}
+            {/* User row */}
+            {user && (
+              <div className="flex items-center gap-2 border-b border-[var(--sidebar-border)] px-3 py-2 text-xs">
+                {!isCollapsed && (
+                  <span
+                    className="truncate text-[var(--text-secondary)]"
+                    title={user.display_name}
+                  >
+                    {user.display_name}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="ml-auto rounded px-1.5 py-0.5 text-[var(--text-tertiary)] transition hover:bg-[var(--prism-primary-soft)] hover:text-[var(--foreground)]"
                 >
-                  <Icon size={17} className="shrink-0" strokeWidth={1.7} />
-                  {isCollapsed ? null : (
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium leading-tight">{item.label}</span>
-                      <span className="block truncate text-[11px] leading-relaxed text-[var(--text-tertiary)]">
-                        {item.description}
-                      </span>
-                    </span>
-                  )}
-                </NavLink>
-              );
-            })}
-          </nav>
+                  {t('auth.logout')}
+                </button>
+              </div>
+            )}
 
-          {!isCollapsed && (
-            <div className="border-t border-[var(--sidebar-border)] px-3 py-3">
-              <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
-                {t('common.builtBy')}
-              </p>
-            </div>
-          )}
+            {/* Navigation */}
+            <nav className="flex flex-1 flex-col gap-0.5 px-2 py-3">
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      [
+                        'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-150',
+                        isCollapsed ? 'justify-center' : '',
+                        isActive
+                          ? 'bg-[var(--prism-primary-soft)] text-[var(--prism-primary)]'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--prism-primary-soft)]/40 hover:text-[var(--foreground)]',
+                      ].join(' ')
+                    }
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <Icon size={18} className="shrink-0" strokeWidth={1.6} />
+                    {isCollapsed ? null : (
+                      <span className="min-w-0">
+                        <span className="block truncate leading-tight">
+                          {item.label}
+                        </span>
+                        <span className="block truncate text-[11px] leading-relaxed text-[var(--text-tertiary)]">
+                          {item.description}
+                        </span>
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </nav>
+
+            {/* Footer */}
+            {!isCollapsed && (
+              <div className="border-t border-[var(--sidebar-border)] px-3 py-3">
+                <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">
+                  {t('common.builtBy')}
+                </p>
+              </div>
+            )}
           </div>
         </aside>
 
+        {/* ── Main content area ─────────────────────────────── */}
         <div className="flex h-screen min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--background)]/85 px-4 backdrop-blur-xl">
-            <p className="truncate text-sm font-medium text-[var(--text)]">
+          {/* Glass header */}
+          <header className="sticky top-0 z-40 flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--prism-glass)]/90 px-5 backdrop-blur-lg">
+            <p className="truncate text-sm font-semibold text-[var(--text)]">
               {pageTitle}
             </p>
             <div className="flex items-center gap-4">
-              <p className="hidden truncate text-xs font-medium text-[var(--muted-foreground)] sm:block">
+              <p className="hidden truncate text-xs font-medium text-[var(--text-secondary)] sm:block">
                 {taskStatusSummary}
               </p>
               <LocaleSwitcher />
             </div>
           </header>
 
-          <main
-            className="flex w-full flex-1 flex-col overflow-hidden"
-          >
+          <main className="flex w-full flex-1 flex-col overflow-hidden">
             {children}
           </main>
         </div>
       </div>
 
+      {/* ── Logout confirm dialog ──────────────────────────── */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-lg p-6 w-full max-w-xs mx-4">
-            <p className="text-sm font-medium mb-2">{t('common.confirmLogout')}</p>
-            <p className="text-xs text-[var(--text-secondary)] mb-4">{t('common.confirmLogoutMessage')}</p>
-            <div className="flex gap-2 justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="w-full max-w-xs rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-pane)]">
+            <p className="mb-2 text-sm font-medium">
+              {t('common.confirmLogout')}
+            </p>
+            <p className="mb-4 text-xs text-[var(--text-secondary)]">
+              {t('common.confirmLogoutMessage')}
+            </p>
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
-                className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--bg)]"
+                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs transition hover:bg-[var(--bg-secondary)]"
               >
                 {t('common.cancel')}
               </button>
               <button
                 type="button"
-                onClick={() => { setShowLogoutConfirm(false); logout(); }}
-                className="px-3 py-1.5 text-xs rounded-lg bg-[var(--danger)] text-[var(--destructive-foreground)] hover:opacity-90"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  logout();
+                }}
+                className="rounded-lg bg-[var(--danger)] px-3 py-1.5 text-xs text-[var(--destructive-foreground)] transition hover:opacity-90"
               >
                 {t('common.logOut')}
               </button>

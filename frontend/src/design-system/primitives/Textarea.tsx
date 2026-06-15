@@ -1,0 +1,28 @@
+import { forwardRef, type TextareaHTMLAttributes } from 'react';
+import { cn } from '@/shared/utils/cn';
+
+interface Props extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  error?: string;
+}
+
+export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea(
+  { error, className = '', ...rest },
+  ref
+) {
+  const errorClasses = error
+    ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[var(--danger)]/15'
+    : 'border-[var(--border)] focus:border-[var(--apple-blue)] focus:ring-[var(--apple-blue)]/15';
+  return (
+    <textarea
+      ref={ref}
+      className={cn(
+        'w-full rounded-lg border bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition',
+        errorClasses,
+        'focus:ring-2',
+        className
+      )}
+      {...rest}
+    />
+  );
+});
+

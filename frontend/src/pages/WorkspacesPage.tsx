@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from '../api';
-import { useT } from '../i18n';
-import { useAuth } from '../contexts/AuthContext';
-import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '../types';
-import { PageShell, SplitPane } from '../components/layout';
-import { Button, FormField, Input, Textarea, Alert } from '../components/ui';
+import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from '@/shared/api';
+import { useT } from '@/shared/i18n';
+import { useAuth } from '@features/auth';
+import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '@/shared/types';
+import { PageShell, SplitPane } from '@design-system/layout';
+import { Button, FormField, Input, Textarea, Alert } from '@design-system/primitives';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 interface WorkspaceDraft {
   label: string;
@@ -56,7 +57,7 @@ function WorkspacesPage() {
   const [labelError, setLabelError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const workspacesQuery = useQuery({
-    queryKey: ['workspaces'],
+    queryKey: queryKeys.workspaces.all,
     queryFn: getWorkspaces,
   });
   const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
@@ -82,7 +83,7 @@ function WorkspacesPage() {
   }, [isCreating, selectedWorkspace]);
 
   const invalidateWorkspaces = () => {
-    void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.all });
   };
 
   const createMutation = useMutation({

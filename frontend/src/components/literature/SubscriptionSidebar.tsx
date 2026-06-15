@@ -6,10 +6,11 @@ import {
   deleteLiteratureSubscription,
   updateLiteratureSubscription,
   triggerLiteratureFetch,
-} from '../../api';
-import { useT } from '../../i18n';
-import { Button, Input, Select } from '../../components/ui';
-import type { LiteratureSubscription } from '../../types';
+} from '@/shared/api';
+import { useT } from '@/shared/i18n';
+import { Button, Input, Select } from '@design-system/primitives';
+import type { LiteratureSubscription } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 const ARXIV_CATEGORIES = ['cs.AI', 'cs.CL', 'cs.LG', 'cs.CV', 'stat.ML'];
 
@@ -52,7 +53,7 @@ export default function SubscriptionSidebar({
   const [form, setForm] = useState<FormState>(emptyForm());
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['literature-subscriptions'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.literature.subscriptions });
   };
 
   const startNew = () => {

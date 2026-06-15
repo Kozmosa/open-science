@@ -1,4 +1,4 @@
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 
 interface CpuRingProps {
   percent: number;

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getHealth } from '../api';
+import { getHealth } from '@/shared/api';
 import {
   EnvironmentSelectorPanel,
   HealthStatusBar,
@@ -9,11 +9,12 @@ import {
   TerminalBenchCard,
   useEnvironmentSelection,
 } from '../components';
-import { useT } from '../i18n';
+import { useT } from '@/shared/i18n';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 function DashboardPage() {
   const t = useT();
-  const healthQuery = useQuery({ queryKey: ['health'], queryFn: getHealth });
+  const healthQuery = useQuery({ queryKey: queryKeys.health.all, queryFn: getHealth });
   const environmentSelection = useEnvironmentSelection();
 
   return (

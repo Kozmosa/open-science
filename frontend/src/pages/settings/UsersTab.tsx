@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getAdminUsers, updateAdminUser, resetUserPassword } from '../../api';
-import { useT } from '../../i18n';
-import { useAuth } from '../../contexts/AuthContext';
+import { getAdminUsers, updateAdminUser, resetUserPassword } from '@/shared/api';
+import { useT } from '@/shared/i18n';
+import { useAuth } from '@features/auth';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 export function UsersTab() {
   const t = useT();
@@ -12,7 +13,7 @@ export function UsersTab() {
   const [newPassword, setNewPassword] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'users'],
+    queryKey: queryKeys.admin.users,
     queryFn: getAdminUsers,
     enabled: currentUser?.role === 'admin',
   });
@@ -20,7 +21,7 @@ export function UsersTab() {
   const updateMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       updateAdminUser(id, { status }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.users }),
   });
 
   const resetMutation = useMutation({

@@ -1,6 +1,6 @@
-import { Badge, SectionCard, SectionHeader, Select, StatusDot } from '../ui';
-import type { EnvironmentRecord } from '../../types';
-import { useT } from '../../i18n';
+import { Badge, SectionCard, SectionHeader, Select, StatusDot } from '@design-system/primitives';
+import type { EnvironmentRecord } from '@/shared/types';
+import { useT } from '@/shared/i18n';
 
 interface Props {
   environments: EnvironmentRecord[];

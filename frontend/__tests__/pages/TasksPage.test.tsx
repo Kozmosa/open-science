@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
-import { createTestQueryClient, renderWithProviders } from '../../src/test/render';
+import { createTestQueryClient, renderWithProviders } from '@/shared/test/render';
 import type {
   EnvironmentRecord,
   TaskOutputEvent,
@@ -10,7 +10,7 @@ import type {
   TaskRecord,
   TaskSummary,
   WorkspaceRecord,
-} from '../../src/types';
+} from '@/shared/types';
 import {
   buildTaskStreamUrl,
   createTask,
@@ -24,9 +24,9 @@ import {
   getTaskOutput,
   getTasks,
   getWorkspaces,
-} from '../../src/api';
-import { convertOutputEventToMessage, mergeMessages } from '../../src/pages/tasks/useTaskMessages';
-import { getNextOutputSeq, mergeOutputItems } from '../../src/pages/tasks/output';
+} from '@/shared/api';
+import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
+import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -234,7 +234,7 @@ function createOutputPage(
   };
 }
 
-vi.mock('../../src/api', () => ({
+vi.mock('@/shared/api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
   getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),

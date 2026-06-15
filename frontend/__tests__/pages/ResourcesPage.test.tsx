@@ -1,11 +1,11 @@
 import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ResourcesPage from '../../src/pages/ResourcesPage';
-import type { ResourcesResponse } from '../../src/types';
-import { renderWithProviders } from '../../src/test/render';
-import { getResources, getTaskTokenUsageSummary } from '../../src/api';
+import type { ResourcesResponse } from '@/shared/types';
+import { renderWithProviders } from '@/shared/test/render';
+import { getResources, getTaskTokenUsageSummary } from '@/shared/api';
 
-vi.mock('../../src/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getResources: vi.fn(),
   getTaskTokenUsageSummary: vi.fn(),
 }));

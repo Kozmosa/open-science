@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const guardedPaths = [
-  'src/pages/tasks',
-  'src/components/ui',
+  'src/features/tasks',
+  'src/design-system/primitives',
   'src/components/common/Layout.tsx',
 ] as const;
 

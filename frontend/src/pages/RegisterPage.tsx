@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useT } from '../i18n';
-import { Button, Input } from '../components/ui';
+import { useAuth } from '@features/auth';
+import { useT } from '@/shared/i18n';
+import { Button, Input } from '@design-system/primitives';
 
 export default function RegisterPage() {
   const t = useT();

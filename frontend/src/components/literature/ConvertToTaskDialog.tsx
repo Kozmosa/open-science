@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Button, Select } from '../ui';
-import { useT } from '../../i18n';
-import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '../../types';
-import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../../pages/tasks/taskPresets';
+import { Button, Select } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '@/shared/types';
+import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '@features/tasks/utils/taskPresets';
 
 const FIELD_IDS = {
   taskPreset: 'convert-task-preset',

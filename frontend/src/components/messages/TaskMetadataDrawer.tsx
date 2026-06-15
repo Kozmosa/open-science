@@ -1,6 +1,6 @@
-import { Alert } from '../ui';
-import { useT } from '../../i18n';
-import type { TaskRecord } from '../../types';
+import { Alert } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import type { TaskRecord } from '@/shared/types';
 
 interface TaskMetadataDrawerProps {
   task: TaskRecord;

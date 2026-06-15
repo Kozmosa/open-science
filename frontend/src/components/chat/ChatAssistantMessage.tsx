@@ -1,5 +1,5 @@
 import { Copy, RotateCcw } from 'lucide-react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import SafeMarkdown from '../messages/SafeMarkdown';
 import ChatThinkingBlock from './ChatThinkingBlock';
 import ChatToolCallGroup from './ChatToolCallGroup';
@@ -24,8 +24,8 @@ export default function ChatAssistantMessage({ message, onRetry }: ChatAssistant
 
   return (
     <div className="flex gap-4 max-w-full relative">
-      <div className="w-8 h-8 rounded-full border border-[var(--border)] bg-[var(--surface)] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm transition-colors">
-        <svg className="w-5 h-5 text-green-600 dark:text-green-500" viewBox="0 0 24 24" fill="currentColor">
+      <div className="w-8 h-8 rounded-full border border-[var(--border)] bg-[var(--color-msg-assistant-fade)] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm transition-colors">
+        <svg className="w-5 h-5 text-[var(--color-msg-assistant)]" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" />
         </svg>
       </div>
@@ -45,10 +45,10 @@ export default function ChatAssistantMessage({ message, onRetry }: ChatAssistant
         )}
 
         {message.isStreaming && (
-          <div className="flex items-center gap-1.5 w-fit rounded-2xl bg-[var(--bg-secondary)] px-3 py-2 border border-[var(--border)] transition-colors">
-            <div className="w-1.5 h-1.5 bg-[var(--text-secondary)] rounded-full animate-bounce [animation-delay:-0.3s]" />
-            <div className="w-1.5 h-1.5 bg-[var(--text-secondary)] rounded-full animate-bounce [animation-delay:-0.15s]" />
-            <div className="w-1.5 h-1.5 bg-[var(--text-secondary)] rounded-full animate-bounce" />
+          <div className="flex items-center gap-1.5 w-fit rounded-2xl bg-[var(--color-msg-assistant-fade)] px-3 py-2 border border-[var(--border)] transition-colors">
+            <div className="w-1.5 h-1.5 bg-[var(--color-msg-assistant)] rounded-full animate-bounce [animation-delay:-0.3s]" />
+            <div className="w-1.5 h-1.5 bg-[var(--color-msg-assistant)] rounded-full animate-bounce [animation-delay:-0.15s]" />
+            <div className="w-1.5 h-1.5 bg-[var(--color-msg-assistant)] rounded-full animate-bounce" />
           </div>
         )}
 

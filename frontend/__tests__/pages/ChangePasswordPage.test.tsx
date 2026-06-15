@@ -1,7 +1,7 @@
 import { describe, expect, it, afterAll, afterEach, beforeAll } from 'vitest'
 import { screen } from '@testing-library/react'
 import { setupServer } from 'msw/node'
-import { renderWithProviders } from '../../src/test/render'
+import { renderWithProviders } from '@/shared/test/render'
 import { handlers } from '../mocks/handlers'
 import ChangePasswordPage from '../../src/pages/ChangePasswordPage'
 

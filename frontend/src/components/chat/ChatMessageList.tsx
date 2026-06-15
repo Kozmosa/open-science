@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import ChatAssistantMessage from './ChatAssistantMessage';
 import ChatUserMessage from './ChatUserMessage';
 import type { ChatMessage } from './types';
@@ -86,7 +86,7 @@ export default function ChatMessageList({
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
         ref={containerRef}
-        className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-6 pb-32 space-y-8"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 py-6 pb-28 space-y-8"
       >
         {hasMore && (
           <div ref={topSentinelRef} className="flex justify-center py-2">
@@ -120,7 +120,7 @@ export default function ChatMessageList({
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-36 left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)] shadow-sm transition-all animate-in fade-in slide-in-from-bottom-2 z-20 cursor-pointer"
+          className="absolute bottom-36 left-1/2 -translate-x-1/2 bg-[var(--prism-glass)] backdrop-blur-xl border border-[var(--border)] w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface)] shadow-[var(--shadow-sm)] transition-all z-20 cursor-pointer"
           aria-label={t('chat.scrollToBottom')}
         >
           <svg

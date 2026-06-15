@@ -5,10 +5,10 @@ import {
   deleteTerminalSession,
   getTerminalSession,
   resetTerminalSession,
-} from '../../api';
-import type { EnvironmentRecord, TerminalSession, TerminalSessionStatus } from '../../types';
+} from '@/shared/api';
+import type { EnvironmentRecord, TerminalSession, TerminalSessionStatus } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
-const terminalSessionQueryKey = ['terminal-session'] as const;
 
 interface AttachRequest {
   environmentId: string;
@@ -73,7 +73,7 @@ export function useTerminalBenchSession(
   const [consoleExpanded, setConsoleExpanded] = useState(false);
 
   const terminalQuery = useQuery({
-    queryKey: [...terminalSessionQueryKey, selectedEnvironmentId],
+    queryKey: [...queryKeys.terminal.session, selectedEnvironmentId],
     queryFn: () => {
       if (selectedEnvironmentId === null) {
         return Promise.resolve<TerminalSession>(idleTerminalSession());
@@ -91,7 +91,7 @@ export function useTerminalBenchSession(
       if (attachRequestKeyRef.current === variables.requestKey) {
         attachRequestKeyRef.current = null;
       }
-      queryClient.setQueryData([...terminalSessionQueryKey, variables.environmentId], session);
+      queryClient.setQueryData([...queryKeys.terminal.session, variables.environmentId], session);
     },
     onError: (_error, variables) => {
       if (attachRequestKeyRef.current === variables.requestKey) {
@@ -109,7 +109,7 @@ export function useTerminalBenchSession(
     mutationFn: (payload: { environmentId: string; attachmentId: string | null }) =>
       deleteTerminalSession(payload),
     onSuccess: (session, payload) => {
-      queryClient.setQueryData([...terminalSessionQueryKey, payload.environmentId], session);
+      queryClient.setQueryData([...queryKeys.terminal.session, payload.environmentId], session);
     },
   });
 
@@ -117,7 +117,7 @@ export function useTerminalBenchSession(
     mutationFn: (payload: { environmentId: string; attachmentId: string | null }) =>
       resetTerminalSession(payload.environmentId, payload.attachmentId),
     onSuccess: (session, payload) => {
-      queryClient.setQueryData([...terminalSessionQueryKey, payload.environmentId], session);
+      queryClient.setQueryData([...queryKeys.terminal.session, payload.environmentId], session);
     },
   });
 
@@ -217,7 +217,7 @@ export function useTerminalBenchSession(
     onTerminalDisconnected: () => {
       attachRequestKeyRef.current = null;
       queryClient.invalidateQueries({
-        queryKey: [...terminalSessionQueryKey, selectedEnvironmentId],
+        queryKey: [...queryKeys.terminal.session, selectedEnvironmentId],
       });
     },
     consoleExpanded,

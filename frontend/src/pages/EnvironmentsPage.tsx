@@ -10,8 +10,8 @@ import {
   SectionCard,
   Select,
   Textarea,
-} from '../components/ui';
-import { PageShell, SectionStack } from '../components/layout';
+} from '@design-system/primitives';
+import { PageShell, SectionStack } from '@design-system/layout';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -20,15 +20,16 @@ import {
   detectEnvironment,
   updateProjectEnvironmentReference,
   updateEnvironment,
-} from '../api';
+} from '@/shared/api';
 import type {
   EnvironmentAuthKind,
   EnvironmentListResponse,
   EnvironmentRecord,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
-} from '../types';
-import { useLocale, useT } from '../i18n';
+} from '@/shared/types';
+import { useLocale, useT } from '@/shared/i18n';
+import { queryKeys } from '@/shared/api/queryKeys';
 import { useEnvironmentSelection } from '../components';
 import { useToast } from '../components/common';
 import { EnvironmentDetectionModal } from '../components/environment';
@@ -39,11 +40,9 @@ import {
   EMPTY_ENVIRONMENTS,
   EMPTY_PROJECT_REFS,
   emptyFormValues,
-  environmentsQueryKey,
   formatTimestamp,
   mergeEnvironmentList,
   mergeProjectReferenceList,
-  projectEnvironmentRefsQueryKey,
   removeEnvironmentFromList,
   removeProjectReferenceFromList,
   toEnvironmentUpdateRequest,
@@ -356,10 +355,10 @@ function EnvironmentsPage() {
       : null;
 
   const syncEnvironmentList = (next: EnvironmentListResponse) => {
-    queryClient.setQueryData(environmentsQueryKey, next);
+    queryClient.setQueryData(queryKeys.environments.all, next);
   };
   const syncProjectReferenceList = (next: ProjectEnvironmentReferenceListResponse) => {
-    queryClient.setQueryData(projectEnvironmentRefsQueryKey, next);
+    queryClient.setQueryData(queryKeys.projectEnvironmentRefs.byProject('default'), next);
   };
 
   const saveMutation = useMutation({
@@ -381,7 +380,7 @@ function EnvironmentsPage() {
       return updateEnvironment(editorEnvironmentId, toEnvironmentUpdateRequest(request));
     },
     onSuccess: (environment) => {
-      const current = queryClient.getQueryData<EnvironmentListResponse>(environmentsQueryKey);
+      const current = queryClient.getQueryData<EnvironmentListResponse>(queryKeys.environments.all);
       syncEnvironmentList(mergeEnvironmentList(current, environment));
       environmentSelection.onSelectEnvironment(environment.id);
       setEditorEnvironmentId(environment.id);
@@ -392,7 +391,7 @@ function EnvironmentsPage() {
   const deleteMutation = useMutation({
     mutationFn: async (environmentId: string) => deleteEnvironment(environmentId),
     onSuccess: (_, environmentId) => {
-      const current = queryClient.getQueryData<EnvironmentListResponse>(environmentsQueryKey);
+      const current = queryClient.getQueryData<EnvironmentListResponse>(queryKeys.environments.all);
       syncEnvironmentList(removeEnvironmentFromList(current, environmentId));
       if (editorEnvironmentId === environmentId) {
         setEditorEnvironmentId(null);
@@ -411,7 +410,7 @@ function EnvironmentsPage() {
       });
     },
     onSuccess: (environment) => {
-      const current = queryClient.getQueryData<EnvironmentListResponse>(environmentsQueryKey);
+      const current = queryClient.getQueryData<EnvironmentListResponse>(queryKeys.environments.all);
       syncEnvironmentList(mergeEnvironmentList(current, environment));
       const detection = environment.latest_detection;
       console.info('environment detect succeeded', {
@@ -456,7 +455,7 @@ function EnvironmentsPage() {
     },
     onSuccess: (reference) => {
       const current = queryClient.getQueryData<ProjectEnvironmentReferenceListResponse>(
-        projectEnvironmentRefsQueryKey
+        queryKeys.projectEnvironmentRefs.byProject('default')
       );
       syncProjectReferenceList(mergeProjectReferenceList(current, reference));
     },
@@ -474,7 +473,7 @@ function EnvironmentsPage() {
         return;
       }
       const current = queryClient.getQueryData<ProjectEnvironmentReferenceListResponse>(
-        projectEnvironmentRefsQueryKey
+        queryKeys.projectEnvironmentRefs.byProject('default')
       );
       syncProjectReferenceList(removeProjectReferenceFromList(current, selectedEnvironment.id));
     },

@@ -2,13 +2,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FolderOpen, RefreshCw } from 'lucide-react';
-import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
+import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '@/shared/api';
 import { FileTree, FileViewer } from '../components/file-browser';
 import { useEnvironmentSelection } from '../components';
-import { PageShell, SplitPane } from '../components/layout';
-import { Select } from '../components/ui';
-import { useT } from '../i18n';
-import type { FileEntry, FileReadResponse } from '../types';
+import { PageShell, SplitPane } from '@design-system/layout';
+import { Select } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import type { FileEntry, FileReadResponse } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 const FILE_TREE_DEFAULT_WIDTH = 288;
 const FILE_TREE_MIN_WIDTH = 200;
@@ -31,7 +32,7 @@ export default function FileBrowserPage() {
   const environmentId = selectedEnvironment?.id ?? null;
 
   const workspacesQuery = useQuery({
-    queryKey: ['workspaces'],
+    queryKey: queryKeys.workspaces.all,
     queryFn: getWorkspaces,
   });
   const workspaces = workspacesQuery.data?.items ?? [];
@@ -46,7 +47,7 @@ export default function FileBrowserPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const rootQuery = useQuery({
-    queryKey: ['files', environmentId, effectiveWorkspaceId, ''],
+    queryKey: queryKeys.files.list(environmentId, effectiveWorkspaceId),
     queryFn: () =>
       environmentId
         ? listFiles(environmentId, '', effectiveWorkspaceId || undefined)
@@ -121,7 +122,7 @@ export default function FileBrowserPage() {
   const handleRefresh = useCallback(() => {
     if (!environmentId) return;
     queryClient.invalidateQueries({
-      queryKey: ['files', environmentId, effectiveWorkspaceId],
+      queryKey: queryKeys.files.list(environmentId, effectiveWorkspaceId),
     });
     setSelectedPath(null);
     setCurrentFile(null);

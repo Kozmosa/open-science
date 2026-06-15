@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useT } from '../../i18n';
+import { useT } from '@/shared/i18n';
 import ChatToolCallBlock from './ChatToolCallBlock';
 import type { ChatToolCallData } from './types';
 

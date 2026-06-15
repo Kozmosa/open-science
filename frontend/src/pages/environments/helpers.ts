@@ -8,10 +8,8 @@ import type {
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
   ProjectEnvironmentReferenceUpdateRequest,
-} from '../../types';
+} from '@/shared/types';
 
-export const environmentsQueryKey = ['environments'] as const;
-export const projectEnvironmentRefsQueryKey = ['project-environment-refs', 'default'] as const;
 export const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
 export const EMPTY_PROJECT_REFS: ProjectEnvironmentReference[] = [];
 export const defaultProjectId = 'default';

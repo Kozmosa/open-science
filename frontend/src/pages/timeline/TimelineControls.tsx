@@ -1,5 +1,5 @@
-import { useT } from '../../i18n';
-import type { ProjectRecord, TaskSummary } from '../../types';
+import { useT } from '@/shared/i18n';
+import type { ProjectRecord, TaskSummary } from '@/shared/types';
 
 interface Props {
   projectId: string | null;

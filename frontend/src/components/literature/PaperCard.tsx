@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useT } from '../../i18n';
-import type { LiteraturePaper } from '../../types';
-import { markPaperRead } from '../../api';
-import { Button } from '../../components/ui';
+import { useT } from '@/shared/i18n';
+import type { LiteraturePaper } from '@/shared/types';
+import { markPaperRead } from '@/shared/api';
+import { Button } from '@design-system/primitives';
 
 interface Props {
   paper: LiteraturePaper;

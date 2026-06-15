@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, FormField, Input, Modal, Textarea } from '../components/ui';
+import { Button, FormField, Input, Modal, Textarea } from '@design-system/primitives';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
-import { useT } from '../i18n';
-import { PageShell, SplitPane } from '../components/layout';
+import { useT } from '@/shared/i18n';
+import { PageShell, SplitPane } from '@design-system/layout';
 import {
   createProject,
   createTask,
@@ -16,19 +16,20 @@ import {
   getTaskEdges,
   getWorkspaces,
   updateTaskProject,
-} from '../api';
-import { extractErrorMessage } from '../utils/error';
-import type { ProjectCreateRequest, TaskCreatePayload, TaskRecord } from '../types';
-import TaskCreateForm from './tasks/TaskCreateForm';
-import TaskDetailPage from './tasks/TaskDetailPage';
-import { useTaskStream } from './tasks/useTaskStream';
+} from '@/shared/api';
+import { extractErrorMessage } from '@/shared/utils/error';
+import type { ProjectCreateRequest, TaskCreatePayload, TaskRecord } from '@/shared/types';
+import TaskCreateForm from '@features/tasks/components/TaskCreateForm';
+import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
+import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 
 export default function ProjectsPage() {
   const t = useT();
   const queryClient = useQueryClient();
 
-  const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: getProjects });
+  const projectsQuery = useQuery({ queryKey: queryKeys.projects.all, queryFn: getProjects });
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(320);
@@ -43,7 +44,7 @@ export default function ProjectsPage() {
   const effectiveProjectId = selectedProjectId ?? projects[0]?.project_id ?? null;
 
   const tasksQuery = useQuery({
-    queryKey: ['project-tasks', effectiveProjectId],
+    queryKey: queryKeys.projectTasks.byProject(effectiveProjectId),
     queryFn: () =>
       effectiveProjectId
         ? getProjectTasks(effectiveProjectId, { limit: 500 })
@@ -52,7 +53,7 @@ export default function ProjectsPage() {
   });
 
   const edgesQuery = useQuery({
-    queryKey: ['task-edges', effectiveProjectId],
+    queryKey: queryKeys.taskEdges.byProject(effectiveProjectId),
     queryFn: () =>
       effectiveProjectId ? getTaskEdges(effectiveProjectId) : Promise.resolve({ items: [] }),
     enabled: effectiveProjectId !== null,
@@ -65,7 +66,7 @@ export default function ProjectsPage() {
   const edges = useMemo(() => edgesQuery.data?.items ?? [], [edgesQuery.data]);
 
   const selectedTaskQuery = useQuery({
-    queryKey: ['task', selectedTaskId],
+    queryKey: queryKeys.tasks.detail(selectedTaskId),
     queryFn: () => getTask(selectedTaskId ?? ''),
     enabled: selectedTaskId !== null,
   });
@@ -74,20 +75,20 @@ export default function ProjectsPage() {
 
   // Fetch defaults for task creation
   const projectDetailQuery = useQuery({
-    queryKey: ['project', effectiveProjectId],
+    queryKey: queryKeys.projects.detail(effectiveProjectId),
     queryFn: () => getProject(effectiveProjectId ?? ''),
     enabled: effectiveProjectId !== null,
   });
   const workspacesQuery = useQuery({
-    queryKey: ['workspaces'],
+    queryKey: queryKeys.workspaces.all,
     queryFn: getWorkspaces,
   });
   const environmentsQuery = useQuery({
-    queryKey: ['environments'],
+    queryKey: queryKeys.environments.all,
     queryFn: getEnvironments,
   });
   const skillsQuery = useQuery({
-    queryKey: ['skills'],
+    queryKey: queryKeys.skills.all,
     queryFn: getSkills,
   });
 
@@ -116,7 +117,7 @@ export default function ProjectsPage() {
   const createProjectMutation = useMutation({
     mutationFn: (payload: ProjectCreateRequest) => createProject(payload),
     onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
       setSelectedProjectId(created.project_id);
       setCreateProjectOpen(false);
     },
@@ -139,9 +140,9 @@ export default function ProjectsPage() {
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreatePayload) => createTask(payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['project-tasks', effectiveProjectId] });
-      void queryClient.invalidateQueries({ queryKey: ['task-edges', effectiveProjectId] });
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(effectiveProjectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(effectiveProjectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       closeCreateDialog();
     },
   });
@@ -149,10 +150,10 @@ export default function ProjectsPage() {
   const handleMoveTaskToProject = useCallback(
     async (taskId: string, targetProjectId: string) => {
       await updateTaskProject(taskId, targetProjectId);
-      void queryClient.invalidateQueries({ queryKey: ['project-tasks', effectiveProjectId] });
-      void queryClient.invalidateQueries({ queryKey: ['project-tasks', targetProjectId] });
-      void queryClient.invalidateQueries({ queryKey: ['task-edges', effectiveProjectId] });
-      void queryClient.invalidateQueries({ queryKey: ['task-edges', targetProjectId] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(effectiveProjectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(targetProjectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(effectiveProjectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(targetProjectId) });
     },
     [effectiveProjectId, queryClient]
   );

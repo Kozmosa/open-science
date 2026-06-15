@@ -9,15 +9,15 @@ import {
   getSkillRegistries,
   getSkills,
   getWorkspaces,
-} from '../../src/api';
+} from '@/shared/api';
 import {
   createDefaultWebUiSettings,
   defaultResearchAgentProfileId,
   rawPromptTaskConfigurationId,
   settingsStorageKey,
-} from '../../src/settings';
-import { renderWithProviders } from '../../src/test/render';
-import type { EnvironmentRecord } from '../../src/types';
+} from '@/features/settings';
+import { renderWithProviders } from '@/shared/test/render';
+import type { EnvironmentRecord } from '@/shared/types';
 import SettingsPage from '../../src/pages/SettingsPage';
 
 vi.mock('../../src/components/environment/EnvironmentSelectorPanel', () => ({
@@ -38,7 +38,7 @@ vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
   ),
 }));
 
-vi.mock('../../src/api', () => ({
+vi.mock('@/shared/api', () => ({
   getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getDeploymentVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getFrontendBuildVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),

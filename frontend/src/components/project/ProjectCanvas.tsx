@@ -16,10 +16,10 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
-import { Button } from '../ui';
-import { useT } from '../../i18n';
-import { createTaskEdge } from '../../api';
-import type { ProjectRecord, TaskEdge, TaskSummary } from '../../types';
+import { Button } from '@design-system/primitives';
+import { useT } from '@/shared/i18n';
+import { createTaskEdge } from '@/shared/api';
+import type { ProjectRecord, TaskEdge, TaskSummary } from '@/shared/types';
 import TaskNode from './TaskNode';
 import ProjectDropZone from './ProjectDropZone';
 import { layoutDagre } from './layoutDagre';
@@ -145,7 +145,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
             id: edgeId,
             type: 'smoothstep',
             animated: true,
-            style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
+            style: { stroke: 'var(--prism-primary)', strokeWidth: 2 },
           },
           current,
         ),
@@ -220,18 +220,18 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
         onNodeDragStop={onNodeDragStop}
         onNodeClick={handleNodeClick}
         onConnect={onConnect}
-        connectionLineStyle={{ stroke: 'var(--apple-blue)', strokeWidth: 2 }}
+        connectionLineStyle={{ stroke: 'var(--prism-primary)', strokeWidth: 2 }}
         defaultEdgeOptions={{
           type: 'smoothstep',
           animated: true,
-          style: { stroke: 'var(--apple-blue)', strokeWidth: 2 },
+          style: { stroke: 'var(--prism-primary)', strokeWidth: 2 },
         }}
         attributionPosition="bottom-right"
       >
         <Background gap={16} size={1} color="var(--border)" />
         <Controls />
         <MiniMap
-          nodeColor={() => 'var(--apple-blue)'}
+          nodeColor={() => 'var(--prism-primary)'}
           maskColor="rgba(0,0,0,0.1)"
           className="rounded-lg"
           pannable
@@ -272,9 +272,9 @@ export default function ProjectCanvas({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
+      <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--prism-glass)]/80 backdrop-blur-lg px-4 py-2">
         <div className="flex gap-2">
-          <Button onClick={onNewTask} className="h-8 gap-1.5 px-3 text-xs">
+          <Button onClick={onNewTask} className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-[var(--shadow-sm)]">
             <Plus size={14} />
             {t('pages.projects.newTask')}
           </Button>
@@ -284,7 +284,7 @@ export default function ProjectCanvas({
               localStorage.removeItem(LAYOUT_KEY(projectId));
               onResetLayout();
             }}
-            className="h-8 px-3 text-xs"
+            className="h-8 rounded-lg px-3 text-xs"
           >
             {t('pages.projects.resetLayout')}
           </Button>
