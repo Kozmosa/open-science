@@ -137,6 +137,7 @@ function createSeedWorkspace(): WorkspaceRecord {
     workspace_prompt: 'Treat this workspace as the default repository context for the task.',
     created_at: timestamp,
     updated_at: timestamp,
+    owner_user_id: null,
   };
 }
 
@@ -150,6 +151,7 @@ function createSeedProject(): ProjectRecord {
     default_environment_id: 'env-localhost',
     created_at: timestamp,
     updated_at: timestamp,
+    owner_user_id: null,
   };
 }
 
@@ -690,6 +692,7 @@ function createMockWorkspace(
     workspace_prompt: payload.workspace_prompt ?? existing?.workspace_prompt ?? '',
     created_at: existing?.created_at ?? timestamp,
     updated_at: timestamp,
+    owner_user_id: existing?.owner_user_id ?? null,
   };
 }
 
@@ -706,6 +709,7 @@ function createMockProject(
     default_environment_id: payload.default_environment_id ?? existing?.default_environment_id ?? null,
     created_at: existing?.created_at ?? timestamp,
     updated_at: timestamp,
+    owner_user_id: existing?.owner_user_id ?? null,
   };
 }
 
