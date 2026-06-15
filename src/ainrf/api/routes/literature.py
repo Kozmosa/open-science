@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ainrf.auth.permissions import get_current_user
 from ainrf.literature.models import LiteratureSubscription
+from ainrf.literature.scheduler import LiteratureScheduler
 from ainrf.literature.service import LiteratureService
 
 router = APIRouter(prefix="/literature", tags=["literature"])
+
+logger = logging.getLogger(__name__)
 
 
 def _get_service(request: Request) -> LiteratureService:
@@ -18,11 +24,28 @@ def _get_service(request: Request) -> LiteratureService:
     return service
 
 
+def _get_scheduler(request: Request) -> LiteratureScheduler:
+    scheduler = getattr(request.app.state, "literature_scheduler", None)
+    if scheduler is None:
+        raise HTTPException(status_code=500, detail="Literature scheduler not initialized")
+    return scheduler
+
+
 def _get_user_id(request: Request) -> str:
     return get_current_user(request)["id"]
 
 
-def _get_fetch_tasks(request: Request) -> dict[str, tuple[object, dict[str, str | None]]]:
+def _validate_max_results(value) -> int:
+    try:
+        max_results = int(value or 50)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="max_results must be an integer")
+    if not 1 <= max_results <= 100:
+        raise HTTPException(status_code=400, detail="max_results must be between 1 and 100")
+    return max_results
+
+
+def _get_fetch_tasks(request: Request) -> dict[str, tuple[asyncio.Task, dict[str, str | None]]]:
     if not hasattr(request.app.state, "_literature_tasks"):
         request.app.state._literature_tasks = {}
     return request.app.state._literature_tasks
@@ -57,7 +80,12 @@ async def create_subscription(request: Request):
         keywords=body.get("keywords", []),
         arxiv_categories=body.get("arxiv_categories", []),
         frequency=body.get("frequency", "daily"),
+        max_results=_validate_max_results(body.get("max_results", 50)),
     )
+    try:
+        _get_scheduler(request).schedule_subscription(sub)
+    except Exception:
+        logger.exception("failed to schedule subscription=%s", sub.subscription_id)
     return sub.to_dict()
 
 
@@ -69,13 +97,21 @@ async def update_subscription(subscription_id: str, request: Request):
     if sub is None or sub.user_id != user_id:
         raise HTTPException(status_code=404, detail="Subscription not found")
     body = await request.json()
+    max_results_raw = body.get("max_results")
+    max_results = _validate_max_results(max_results_raw) if max_results_raw is not None else None
     updated = service.update_subscription(
         subscription_id,
         label=body.get("label"),
         keywords=body.get("keywords"),
         arxiv_categories=body.get("arxiv_categories"),
         frequency=body.get("frequency"),
+        max_results=max_results,
+        is_active=body.get("is_active"),
     )
+    try:
+        _get_scheduler(request).reschedule_subscription(updated)
+    except Exception:
+        logger.exception("failed to reschedule subscription=%s", subscription_id)
     return updated.to_dict()
 
 
@@ -86,6 +122,10 @@ async def delete_subscription(subscription_id: str, request: Request):
     if sub is None or sub.user_id != user_id:
         raise HTTPException(status_code=404, detail="Subscription not found")
     _get_service(request).delete_subscription(subscription_id)
+    try:
+        _get_scheduler(request).remove_subscription(subscription_id)
+    except Exception:
+        logger.exception("failed to remove subscription schedule=%s", subscription_id)
 
 
 @router.get("/papers")
@@ -146,40 +186,34 @@ async def get_fetch_status(subscription_id: str, request: Request):
 @router.post("/subscriptions/{subscription_id}/fetch", status_code=202)
 async def trigger_fetch(subscription_id: str, request: Request):
     """Manually trigger paper fetching for a subscription."""
-    import asyncio
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     svc, sub = _get_user_subscription(request, subscription_id)
+    scheduler = _get_scheduler(request)
+
     existing = _get_fetch_tasks(request).get(subscription_id)
     if existing is not None and existing[1]["status"] == "running":
         return {"status": "fetch_running", "subscription_id": subscription_id}
-    from ainrf.literature.fetcher import fetch_for_subscription
 
-    # Store background task status for user to query
     task_status = {"status": "running", "error": None}
 
     async def _fetch_and_store():
         try:
-            papers = await fetch_for_subscription(sub)
-            new_papers = [
-                p for p in papers if not svc.paper_exists(p.paper_id, sub.subscription_id)
-            ]
-            if new_papers:
-                svc.insert_papers(new_papers)
-            svc.update_last_fetched(sub.subscription_id)
+            result = await scheduler.fetch_subscription(sub.subscription_id)
             task_status["status"] = "completed"
             logger.info(
-                "fetch complete: subscription=%s papers=%d new=%d",
+                "manual fetch complete: subscription=%s papers=%d new=%d",
                 subscription_id,
-                len(papers),
-                len(new_papers),
+                result.get("paper_count", 0),
+                result.get("new_count", 0),
             )
+        except RuntimeError as exc:
+            # Lock already held by another fetch.
+            task_status["status"] = "fetch_running"
+            task_status["error"] = str(exc)
+            logger.warning("manual fetch already running: subscription=%s", subscription_id)
         except Exception as exc:
             task_status["status"] = "failed"
             task_status["error"] = str(exc)
-            logger.error("fetch failed: subscription=%s error=%s", subscription_id, exc)
+            logger.error("manual fetch failed: subscription=%s error=%s", subscription_id, exc)
 
     task = asyncio.create_task(_fetch_and_store())
     _get_fetch_tasks(request)[subscription_id] = (task, task_status)

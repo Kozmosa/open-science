@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import cast
 
 import httpx
 import pytest
 
+from fastapi import FastAPI
+
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
+from ainrf.literature.scheduler import LiteratureScheduler
 from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
@@ -21,6 +25,7 @@ def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
         )
     )
     app.state.literature_service.initialize()
+    app.state.literature_scheduler = LiteratureScheduler(app.state.literature_service)
     headers = get_jwt_headers(app, username="admin", password="test-admin-password")
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -29,12 +34,11 @@ def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
     )
 
 
-async def fake_fetch_for_subscription(sub: LiteratureSubscription) -> list[LiteraturePaper]:
+async def fake_fetch_for_subscription(sub: LiteratureSubscription, reporter=None) -> list[LiteraturePaper]:
     await asyncio.sleep(0.02)
     return [
         LiteraturePaper(
             paper_id="2401.00001",
-            subscription_id=sub.subscription_id,
             title="Async Literature Fetch",
             authors=["Ada Lovelace"],
             abstract="A test paper.",
@@ -84,3 +88,8 @@ async def test_literature_fetch_status_reports_background_completion(
         )
         assert papers_response.status_code == 200
         assert [paper["paper_id"] for paper in papers_response.json()["items"]] == ["2401.00001"]
+
+        # Ensure the background task finishes before the client (and loop) closes.
+        app = cast(FastAPI, cast(httpx.ASGITransport, client._transport).app)
+        task, _ = app.state._literature_tasks[subscription_id]
+        await task

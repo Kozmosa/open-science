@@ -147,6 +147,16 @@ class AnthropicSummarizer:
         else:
             logger.warning("anthropic api key not configured; summarization will be skipped")
 
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.close()
+
+    async def __aenter__(self) -> AnthropicSummarizer:
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.aclose()
+
     def _need_summary(self, paper: LiteraturePaper) -> bool:
         return not (paper.title_zh and paper.ai_summary and paper.summary_version == self._summary_version)
 

@@ -103,7 +103,6 @@ def test_fetch_papers_sync_maps_results():
     assert paper.authors == ["Author One"]
     assert paper.abstract == "Abstract text."
     assert paper.arxiv_category == "cs.AI"
-    assert paper.subscription_id == "sub-1"
 
 
 def test_fetch_papers_sync_raises_on_arxiv_error():

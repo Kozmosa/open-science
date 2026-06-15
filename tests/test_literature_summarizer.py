@@ -15,7 +15,6 @@ pytestmark = [pytest.mark.unit]
 def _paper(paper_id: str = "2301.00001") -> LiteraturePaper:
     return LiteraturePaper(
         paper_id=paper_id,
-        subscription_id="sub-1",
         title="Test Paper",
         abstract="This is a test abstract.",
         authors=["Author One"],
@@ -52,8 +51,8 @@ async def test_batch_summarize_populates_papers(monkeypatch: pytest.MonkeyPatch)
         "anthropic.resources.messages.messages.AsyncMessages.create", new_callable=AsyncMock
     ) as mock_create:
         mock_create.return_value = _message(response)
-        summarizer = AnthropicSummarizer(batch_size=5)
-        await summarizer.summarize(papers)
+        async with AnthropicSummarizer(batch_size=5) as summarizer:
+            await summarizer.summarize(papers)
 
     assert papers[0].title_zh == "标题一"
     assert papers[0].ai_practice_note == "可以一试"
@@ -73,11 +72,11 @@ async def test_cache_skips_already_summarized_papers(monkeypatch: pytest.MonkeyP
     paper.ai_summary = "- a\n- b\n- c"
     paper.summary_version = "v1:claude-sonnet-4-5"
 
-    summarizer = AnthropicSummarizer(batch_size=5)
-    with patch(
-        "anthropic.resources.messages.messages.AsyncMessages.create", new_callable=AsyncMock
-    ) as mock_create:
-        await summarizer.summarize([paper])
+    async with AnthropicSummarizer(batch_size=5) as summarizer:
+        with patch(
+            "anthropic.resources.messages.messages.AsyncMessages.create", new_callable=AsyncMock
+        ) as mock_create:
+            await summarizer.summarize([paper])
 
     mock_create.assert_not_awaited()
 
@@ -96,8 +95,8 @@ async def test_fallback_single_on_bad_batch_response(monkeypatch: pytest.MonkeyP
             _message("not json"),
             _message('{"title_zh": "单篇标题", "ai_summary": ["a"], "ai_practice_note": "可以"}'),
         ]
-        summarizer = AnthropicSummarizer(batch_size=5)
-        await summarizer.summarize([paper])
+        async with AnthropicSummarizer(batch_size=5) as summarizer:
+            await summarizer.summarize([paper])
 
     assert paper.title_zh == "单篇标题"
     assert mock_create.await_count == 2
@@ -112,7 +111,8 @@ async def test_noop_when_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     with patch(
         "anthropic.resources.messages.messages.AsyncMessages.create", new_callable=AsyncMock
     ) as mock_create:
-        await AnthropicSummarizer().summarize([paper])
+        async with AnthropicSummarizer() as summarizer:
+            await summarizer.summarize([paper])
 
     mock_create.assert_not_awaited()
     assert paper.title_zh is None

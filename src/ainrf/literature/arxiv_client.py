@@ -56,11 +56,10 @@ def build_query(sub: LiteratureSubscription, since: datetime | None = None) -> s
     return " AND ".join(query_parts)
 
 
-def _to_literature_paper(result: Any, subscription_id: str) -> LiteraturePaper:
+def _to_literature_paper(result: Any) -> LiteraturePaper:
     """Convert an arxiv.Result into our internal LiteraturePaper model."""
     return LiteraturePaper(
         paper_id=_paper_id_from_entry_id(str(result.entry_id)),
-        subscription_id=subscription_id,
         title=str(result.title),
         authors=[a.name for a in result.authors],
         abstract=str(result.summary),
@@ -106,7 +105,7 @@ def fetch_papers_sync(
         )
         raise
 
-    papers = [_to_literature_paper(r, sub.subscription_id) for r in results]
+    papers = [_to_literature_paper(r) for r in results]
     logger.info(
         "arxiv fetch ok: subscription=%s returned=%d", sub.subscription_id, len(papers)
     )

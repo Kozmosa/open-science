@@ -30,7 +30,7 @@ class TestBaselineCreatesTables:
             ("auth", {"users", "refresh_tokens", "project_collaborators", "environment_access", "login_attempts"}),
             ("sessions", {"task_sessions", "task_attempts"}),
             ("agentic_researcher", {"tasks", "task_outputs"}),
-            ("literature", {"literature_subscriptions", "literature_papers"}),
+            ("literature", {"literature_subscriptions", "literature_papers", "literature_subscription_papers"}),
             ("terminal", {"user_environment_bindings", "user_session_pairs"}),
         ],
     )
@@ -55,7 +55,7 @@ class TestBaselineCreatesTables:
             ("auth", 4),
             ("sessions", 3),
             ("agentic_researcher", 5),
-            ("literature", 2),
+            ("literature", 3),
             ("terminal", 1),
         ],
     )

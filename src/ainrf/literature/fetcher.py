@@ -66,7 +66,10 @@ async def fetch_for_subscription(
                 reporter=_obs,
                 trace_id=trace_id,
             )
-            await summarizer.summarize(papers)
+            try:
+                await summarizer.summarize(papers)
+            finally:
+                await summarizer.aclose()
     except Exception:
         _obs.end_trace(trace_id=trace_id, output={"paper_count": 0})
         raise

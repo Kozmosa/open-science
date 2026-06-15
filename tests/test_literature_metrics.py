@@ -41,10 +41,9 @@ def _sub(*, subscription_id: str = "sub-test") -> LiteratureSubscription:
     )
 
 
-def _paper(paper_id: str = "2301.00001", subscription_id: str = "sub-test") -> LiteraturePaper:
+def _paper(paper_id: str = "2301.00001") -> LiteraturePaper:
     return LiteraturePaper(
         paper_id=paper_id,
-        subscription_id=subscription_id,
         title="Test Paper Title",
         abstract="This is a test abstract.",
         authors=["Author One", "Author Two"],
@@ -131,7 +130,7 @@ class TestSchedulerFetchSuccess:
             keywords=["test"],
             arxiv_categories=["cs.AI"],
         )
-        scheduler = LiteratureScheduler(svc, interval_hours=6)
+        scheduler = LiteratureScheduler(svc)
 
         stub_paper = _arxiv_stub_paper()
 
@@ -168,7 +167,7 @@ class TestSchedulerFetchSuccess:
             user_id="user-1",
             keywords=["test"],
         )
-        scheduler = LiteratureScheduler(svc, interval_hours=6)
+        scheduler = LiteratureScheduler(svc)
 
         with patch("ainrf.literature.arxiv_client.arxiv.Client") as mock_cls:
             mock_cls.return_value.results.return_value = []
@@ -190,11 +189,11 @@ class TestSchedulerFetchFailure:
             user_id="user-1",
             keywords=["test"],
         )
-        scheduler = LiteratureScheduler(svc, interval_hours=6)
+        scheduler = LiteratureScheduler(svc)
 
         # Make fetch_for_subscription raise to trigger the failure path.
         with patch(
-            "ainrf.literature.scheduler.fetch_for_subscription",
+            "ainrf.literature.fetcher.fetch_for_subscription",
             side_effect=RuntimeError("arXiv down"),
         ):
             await scheduler._fetch_all()
@@ -219,7 +218,7 @@ class TestSchedulerNoSubscriptions:
         """No fetch data lines are emitted when there are no subscriptions."""
         svc = LiteratureService(state_root=tmp_path)
         svc.initialize()
-        scheduler = LiteratureScheduler(svc, interval_hours=6)
+        scheduler = LiteratureScheduler(svc)
         await scheduler._fetch_all()
 
         text = get_metrics_text()
@@ -250,8 +249,8 @@ class TestSummarizeMetrics:
         paper = _paper()
         with patch("anthropic.resources.messages.messages.AsyncMessages.create", new_callable=AsyncMock) as mock_create:
             mock_create.return_value = _anthropic_message(text)
-            summarizer = AnthropicSummarizer()
-            await summarizer.summarize([paper])
+            async with AnthropicSummarizer() as summarizer:
+                await summarizer.summarize([paper])
 
         text = get_metrics_text()
         assert _counter_value("ainrf_literature_summarize_total", text,
@@ -274,8 +273,8 @@ class TestSummarizeMetrics:
             "anthropic.resources.messages.messages.AsyncMessages.create",
             side_effect=RuntimeError("internal"),
         ):
-            summarizer = AnthropicSummarizer()
-            await summarizer.summarize([paper])
+            async with AnthropicSummarizer() as summarizer:
+                await summarizer.summarize([paper])
 
         text = get_metrics_text()
         assert _counter_value("ainrf_literature_summarize_total", text,
@@ -292,8 +291,8 @@ class TestSummarizeMetrics:
             "anthropic.resources.messages.messages.AsyncMessages.create",
             side_effect=httpx.ConnectError("connection refused"),
         ):
-            summarizer = AnthropicSummarizer()
-            await summarizer.summarize([_paper()])
+            async with AnthropicSummarizer() as summarizer:
+                await summarizer.summarize([_paper()])
 
         text = get_metrics_text()
         assert _counter_value("ainrf_literature_summarize_total", text,
@@ -308,7 +307,8 @@ class TestSummarizeMetrics:
         for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
             monkeypatch.delenv(key, raising=False)
 
-        await AnthropicSummarizer().summarize([_paper()])
+        async with AnthropicSummarizer() as summarizer:
+            await summarizer.summarize([_paper()])
 
         text = get_metrics_text()
         # HELP/TYPE lines exist for pre-declared metrics; the data value must be 0.
@@ -385,7 +385,7 @@ class TestFetchForSubscriptionMetrics:
             '"ai_summary": ["a", "b", "c"], "ai_practice_note": "可以试"}]'
         )
 
-        scheduler = LiteratureScheduler(svc, interval_hours=6)
+        scheduler = LiteratureScheduler(svc)
 
         # First fetch: inserts 1 new paper.
         with patch("ainrf.literature.arxiv_client.arxiv.Client") as mock_cls:

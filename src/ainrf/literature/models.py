@@ -24,9 +24,11 @@ class LiteratureSubscription:
     seed_paper_ids: list[str] = field(default_factory=list)
     # TODO: seed paper diffusion not yet implemented
     frequency: str = "daily"
+    max_results: int = 50
     is_active: bool = True
     created_at: str = field(default_factory=_now_iso)
     last_fetched_at: str | None = None
+    next_fetch_at: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -37,16 +39,17 @@ class LiteratureSubscription:
             "arxiv_categories": self.arxiv_categories,
             "seed_paper_ids": self.seed_paper_ids,
             "frequency": self.frequency,
+            "max_results": self.max_results,
             "is_active": self.is_active,
             "created_at": self.created_at,
             "last_fetched_at": self.last_fetched_at,
+            "next_fetch_at": self.next_fetch_at,
         }
 
 
 @dataclass
 class LiteraturePaper:
     paper_id: str = ""
-    subscription_id: str = ""
     title: str = ""
     title_zh: str | None = None
     authors: list[str] = field(default_factory=list)
@@ -58,6 +61,7 @@ class LiteraturePaper:
     ai_practice_note: str | None = None
     summary_version: str | None = None
     summary_model: str | None = None
+    # Subscription-specific state is transient; populated by list_papers joins.
     is_read: bool = False
     is_converted_to_task: bool = False
     task_id: str | None = None
@@ -66,7 +70,6 @@ class LiteraturePaper:
     def to_dict(self) -> dict:
         return {
             "paper_id": self.paper_id,
-            "subscription_id": self.subscription_id,
             "title": self.title,
             "title_zh": self.title_zh,
             "authors": self.authors,
