@@ -10,10 +10,11 @@ import {
   useEnvironmentSelection,
 } from '../components';
 import { useT } from '@/shared/i18n';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 function DashboardPage() {
   const t = useT();
-  const healthQuery = useQuery({ queryKey: ['health'], queryFn: getHealth });
+  const healthQuery = useQuery({ queryKey: queryKeys.health.all, queryFn: getHealth });
   const environmentSelection = useEnvironmentSelection();
 
   return (

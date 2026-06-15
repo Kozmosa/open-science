@@ -6,6 +6,7 @@ import { getLiteratureFetchStatus, getLiteraturePapers, triggerLiteratureFetch }
 import { useT } from '@/shared/i18n';
 import type { LiteratureSubscription } from '@/shared/types';
 import PaperCard from './PaperCard';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 interface Props {
   subscriptions: LiteratureSubscription[];
@@ -26,7 +27,7 @@ export default function PaperFeed({ subscriptions, selectedSubscriptionId, onSub
   const [unreadOnly, setUnreadOnly] = useState(false);
 
   const papersQuery = useQuery({
-    queryKey: ['literature-papers', selectedSubscriptionId, unreadOnly],
+    queryKey: queryKeys.literature.papers(selectedSubscriptionId, unreadOnly),
     queryFn: () => getLiteraturePapers({
       subscription_id: selectedSubscriptionId,
       unread_only: unreadOnly || undefined,

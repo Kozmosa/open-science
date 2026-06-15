@@ -6,18 +6,19 @@ import { useT } from '@/shared/i18n';
 import { useCardLayout } from '../hooks/useCardLayout';
 import type { CardKind } from '../hooks/useCardLayout';
 import { CardGrid, PageShell } from '@design-system/layout';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 
 export default function ResourcesPage() {
   const t = useT();
   const resourcesQuery = useQuery({
-    queryKey: ['resources'],
+    queryKey: queryKeys.resources.all,
     queryFn: getResources,
     refetchInterval: 5000,
     staleTime: 4000,
   });
   const tokenUsageQuery = useQuery({
-    queryKey: ['task-token-usage', { includeArchived: true }],
+    queryKey: queryKeys.tasks.tokenUsage({ includeArchived: true }),
     queryFn: () => getTaskTokenUsageSummary({ includeArchived: true }),
     refetchInterval: 15000,
     staleTime: 10000,

@@ -5,6 +5,7 @@ import { updateTask } from '@/shared/api';
 import { useT } from '@/shared/i18n';
 import { statusClassName } from '@features/tasks/utils/status';
 import type { TaskRecord } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 interface TaskHeaderBarProps {
   task: TaskRecord;
@@ -38,8 +39,8 @@ export default function TaskHeaderBar({
   const renameMutation = useMutation({
     mutationFn: (title: string) => updateTask(task.task_id, { title }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
     },
   });
 

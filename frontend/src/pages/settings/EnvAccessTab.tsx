@@ -7,6 +7,7 @@ import { Select } from '@design-system/primitives';
 import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';
 import { AccessItemRow } from '../../components/settings/AccessItemRow';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 export function EnvAccessTab() {
   const { user } = useAuth();
@@ -17,19 +18,19 @@ export function EnvAccessTab() {
   const [maxTasks, setMaxTasks] = useState('');
 
   const { data: envs, isLoading: envsLoading } = useQuery({
-    queryKey: ['environments'],
+    queryKey: queryKeys.environments.all,
     queryFn: () => getEnvironments(),
     enabled: user?.role === 'admin',
   });
 
   const { data: users } = useQuery({
-    queryKey: ['admin', 'users'],
+    queryKey: queryKeys.admin.users,
     queryFn: getAdminUsers,
     enabled: user?.role === 'admin',
   });
 
   const { data: accessData, isLoading: accessLoading } = useQuery({
-    queryKey: ['envAccess', selectedEnv],
+    queryKey: queryKeys.envAccess.byEnv(selectedEnv),
     queryFn: () => getEnvAccess(selectedEnv!),
     enabled: !!selectedEnv && user?.role === 'admin',
   });
@@ -41,7 +42,7 @@ export function EnvAccessTab() {
         max_concurrent_tasks: maxTasks ? parseInt(maxTasks) : null,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['envAccess', selectedEnv] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.envAccess.byEnv(selectedEnv) });
       setGrantUserId('');
       setMaxTasks('');
     },
@@ -49,7 +50,7 @@ export function EnvAccessTab() {
 
   const revokeMutation = useMutation({
     mutationFn: (userId: string) => revokeEnvAccess(selectedEnv!, userId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['envAccess', selectedEnv] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.envAccess.byEnv(selectedEnv) }),
   });
 
   if (user?.role !== 'admin') return null;

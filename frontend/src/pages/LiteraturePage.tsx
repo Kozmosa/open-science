@@ -9,6 +9,7 @@ import SubscriptionSidebar from '../components/literature/SubscriptionSidebar';
 import PaperFeed from '../components/literature/PaperFeed';
 import ConvertToTaskDialog from '../components/literature/ConvertToTaskDialog';
 import type { TaskCreatePayload } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 interface PendingConversion {
   paperId: string;
@@ -26,11 +27,11 @@ export default function LiteraturePage() {
   const [pendingConversion, setPendingConversion] = useState<PendingConversion | null>(null);
 
   const subscriptionsQuery = useQuery({
-    queryKey: ['literature-subscriptions'],
+    queryKey: queryKeys.literature.subscriptions,
     queryFn: getLiteratureSubscriptions,
   });
   const workspacesQuery = useQuery({
-    queryKey: ['workspaces'],
+    queryKey: queryKeys.workspaces.all,
     queryFn: getWorkspaces,
   });
 

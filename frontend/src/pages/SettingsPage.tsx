@@ -21,6 +21,7 @@ import { ProjectDefaultsSection } from '@features/settings/components/ProjectDef
 import { SearchBackendSection } from '@features/settings/components/SearchBackendSection.tsx';
 import { SkillRepositorySection } from '@features/settings/components/SkillRepositorySection.tsx';
 import { TaskConfigurationSection } from '@features/settings/components/TaskConfigurationSection.tsx';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 function SettingsPage() {
   const t = useT();
@@ -28,15 +29,15 @@ function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'llmProviders' | 'monitoring' | 'users' | 'envAccess' | 'collaborators'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const environmentsQuery = useQuery({
-    queryKey: ['environments'],
+    queryKey: queryKeys.environments.all,
     queryFn: getEnvironments,
   });
   const workspacesQuery = useQuery({
-    queryKey: ['workspaces'],
+    queryKey: queryKeys.workspaces.all,
     queryFn: getWorkspaces,
   });
   const skillsQuery = useQuery({
-    queryKey: ['skills'],
+    queryKey: queryKeys.skills.all,
     queryFn: getSkills,
   });
   const {

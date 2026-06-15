@@ -27,6 +27,7 @@ import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
 import TaskList from '@features/tasks/pages/TaskList';
 import TaskMetadataDrawer from '../components/messages/TaskMetadataDrawer';
 import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
@@ -40,7 +41,7 @@ function TasksPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
   const tasksQuery = useQuery({
-    queryKey: ['tasks', showArchived, taskSort],
+    queryKey: queryKeys.tasks.list(showArchived, taskSort),
     queryFn: () => getTasks({ includeArchived: showArchived, limit: 200, sort: taskSort }),
     refetchInterval: 5000,
   });
@@ -102,7 +103,7 @@ function TasksPage() {
   }, [effectiveSelectedTaskId, requestedTaskId, selectTask]);
 
   const selectedTaskQuery = useQuery({
-    queryKey: ['task', effectiveSelectedTaskId],
+    queryKey: queryKeys.tasks.detail(effectiveSelectedTaskId),
     queryFn: () => getTask(effectiveSelectedTaskId ?? ''),
     enabled: effectiveSelectedTaskId !== null,
     refetchInterval: 5000,
@@ -114,7 +115,7 @@ function TasksPage() {
   const createMutation = useMutation({
     mutationFn: (payload: TaskCreatePayload) => createTask(payload),
     onSuccess: (task) => {
-      queryClient.setQueryData<TaskListResponse>(['tasks', showArchived, taskSort], (current) => ({
+      queryClient.setQueryData<TaskListResponse>(queryKeys.tasks.list(showArchived, taskSort), (current) => ({
         items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
         total: (current?.total ?? 0) + 1,
         has_more: current?.has_more ?? false,
@@ -122,24 +123,24 @@ function TasksPage() {
       }));
       selectTask(task.task_id);
       closeCreateDialog();
-      void queryClient.invalidateQueries({ queryKey: ['task', task.task_id] });
-      void queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject('default') });
     },
   });
 
   const archiveMutation = useMutation({
     mutationFn: (taskId: string) => archiveTask(taskId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['tasks', true] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
     },
   });
 
   const cancelMutation = useMutation({
     mutationFn: (taskId: string) => cancelTask(taskId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['tasks', true] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
     },
   });
 
@@ -164,8 +165,8 @@ function TasksPage() {
   const retryMutation = useMutation({
     mutationFn: (taskId: string) => retryTask(taskId),
     onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['task-edges'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject('default') });
       selectTask(data.new_task.task_id);
       showToast(t('pages.tasks.retrySuccess'), 'success');
     },
@@ -176,19 +177,19 @@ function TasksPage() {
 
   // Fetch defaults for task creation
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
+    queryKey: queryKeys.projects.all,
     queryFn: getProjects,
   });
   const workspacesQuery = useQuery({
-    queryKey: ['workspaces'],
+    queryKey: queryKeys.workspaces.all,
     queryFn: getWorkspaces,
   });
   const environmentsQuery = useQuery({
-    queryKey: ['environments'],
+    queryKey: queryKeys.environments.all,
     queryFn: getEnvironments,
   });
   const skillsQuery = useQuery({
-    queryKey: ['skills'],
+    queryKey: queryKeys.skills.all,
     queryFn: getSkills,
   });
 

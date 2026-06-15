@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getEnvironments, getProjectEnvironmentReferences } from '@/shared/api';
 import type { EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
 import { useSettings } from '@features/settings';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 const defaultProjectId = 'default';
 const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
@@ -62,11 +63,11 @@ export interface EnvironmentSelectionState {
 export function useEnvironmentSelection(): EnvironmentSelectionState {
   const { settings, rememberSelectedEnvironment } = useSettings();
   const environmentsQuery = useQuery({
-    queryKey: ['environments'],
+    queryKey: queryKeys.environments.all,
     queryFn: getEnvironments,
   });
   const projectReferencesQuery = useQuery({
-    queryKey: ['project-environment-refs', defaultProjectId],
+    queryKey: queryKeys.projectEnvironmentRefs.byProject(defaultProjectId),
     queryFn: () => getProjectEnvironmentReferences(defaultProjectId),
   });
   const [sessionEnvironmentId, setSessionEnvironmentId] = useState<string | null>(null);

@@ -6,6 +6,7 @@ import { useT } from '@/shared/i18n';
 import { Select } from '@design-system/primitives';
 import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';
 import { AccessItemRow } from '../../components/settings/AccessItemRow';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 export function CollaboratorsTab() {
   const t = useT();
@@ -16,11 +17,11 @@ export function CollaboratorsTab() {
   const [addRole, setAddRole] = useState('member');
 
   const { data: projects } = useQuery({
-    queryKey: ['projects'],
+    queryKey: queryKeys.projects.all,
     queryFn: () => getProjects(),
   });
   const { data: allUsers } = useQuery({
-    queryKey: ['admin', 'users'],
+    queryKey: queryKeys.admin.users,
     queryFn: getAdminUsers,
     enabled: user?.role === 'admin',
   });
@@ -29,7 +30,7 @@ export function CollaboratorsTab() {
     isLoading: collabsLoading,
     isError: collabsError,
   } = useQuery({
-    queryKey: ['collaborators', selectedProject],
+    queryKey: queryKeys.collaborators.byProject(selectedProject),
     queryFn: () => getCollaborators(selectedProject!),
     enabled: !!selectedProject,
   });
@@ -37,14 +38,14 @@ export function CollaboratorsTab() {
   const addMutation = useMutation({
     mutationFn: () => addCollaborator(selectedProject!, { user_id: addUserId, role: addRole }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['collaborators', selectedProject] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.collaborators.byProject(selectedProject) });
       setAddUserId('');
     },
   });
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) => removeCollaborator(selectedProject!, userId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collaborators', selectedProject] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.collaborators.byProject(selectedProject) }),
   });
 
   const projectList = projects?.items ?? [];

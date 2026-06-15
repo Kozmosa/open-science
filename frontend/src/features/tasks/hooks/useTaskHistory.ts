@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getTaskMessages } from '@/shared/api';
 import type { MessageItem } from '@/shared/types';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 async function fetchAllMessages(taskId: string): Promise<MessageItem[]> {
   const allMessages: MessageItem[] = [];
@@ -21,7 +22,7 @@ async function fetchAllMessages(taskId: string): Promise<MessageItem[]> {
 
 export function useTaskHistory(taskId: string | null) {
   return useQuery({
-    queryKey: ['task-messages', taskId],
+    queryKey: queryKeys.tasks.messages(taskId),
     queryFn: () => fetchAllMessages(taskId!),
     enabled: !!taskId,
     staleTime: 0,

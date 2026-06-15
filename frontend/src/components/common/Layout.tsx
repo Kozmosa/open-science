@@ -22,6 +22,7 @@ import type { TaskSummary } from '@/shared/types';
 import LocaleSwitcher from './LocaleSwitcher';
 import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 interface Props {
   children: ReactNode;
@@ -64,7 +65,7 @@ function Layout({ children }: Props) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const tasksQuery = useQuery({
-    queryKey: ['tasks'],
+    queryKey: queryKeys.tasks.all,
     queryFn: () => getTasks(),
     refetchInterval: 5000,
   });

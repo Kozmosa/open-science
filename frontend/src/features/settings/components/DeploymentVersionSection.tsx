@@ -2,6 +2,7 @@ import { SectionCard, SectionHeader } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import { useQuery } from '@tanstack/react-query';
 import { getDeploymentVersion, getFrontendBuildVersion } from '@/shared/api';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 export function VersionSideCard({
   side,
@@ -57,11 +58,11 @@ export function DeploymentVersionSection() {
   const commitLabel = t('pages.settings.version.commitLabel');
   const committedAtLabel = t('pages.settings.version.committedAtLabel');
   const { data: backend } = useQuery({
-    queryKey: ['deploymentVersion', 'backend'],
+    queryKey: queryKeys.deploymentVersion.backend,
     queryFn: getDeploymentVersion,
   });
   const { data: frontend } = useQuery({
-    queryKey: ['deploymentVersion', 'frontend'],
+    queryKey: queryKeys.deploymentVersion.frontend,
     queryFn: getFrontendBuildVersion,
   });
   const backendCommit = backend?.short_commit ?? unavailable;

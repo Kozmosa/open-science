@@ -4,6 +4,7 @@ import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SkillDetail, SkillImportRequest, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';
 import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, previewSkillSettings, updateSkillRegistry } from '@/shared/api';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 export interface SkillRepositorySectionProps {
   availableSkills: SkillItem[];
@@ -25,13 +26,13 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
   const [pendingRegistryId, setPendingRegistryId] = useState<string | null>(null);
 
   const detailQuery = useQuery<SkillDetail>({
-    queryKey: ['skillDetail', selectedSkillId],
+    queryKey: queryKeys.skills.detail(selectedSkillId),
     queryFn: () => getSkillDetail(selectedSkillId!),
     enabled: !!selectedSkillId,
   });
 
   const previewQuery = useQuery<SkillPreview>({
-    queryKey: ['skillPreview', selectedSkillId],
+    queryKey: queryKeys.skills.preview(selectedSkillId),
     queryFn: () => previewSkillSettings(selectedSkillId!),
     enabled: !!selectedSkillId,
   });
@@ -39,7 +40,7 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
   const importMutation = useMutation({
     mutationFn: importSkill,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['skills'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills.all });
       setShowImport(false);
       setImportUrl('');
       setImportPath('');
@@ -50,15 +51,15 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
   });
 
   const registriesQuery = useQuery({
-    queryKey: ['skillRegistries'],
+    queryKey: queryKeys.skills.registries,
     queryFn: getSkillRegistries,
   });
 
   const installRegistryMutation = useMutation({
     mutationFn: installSkillRegistry,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['skillRegistries'] });
-      queryClient.invalidateQueries({ queryKey: ['skills'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills.registries });
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills.all });
     },
     onError: (err: Error) => {
       alert(err.message);
@@ -69,8 +70,8 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
     mutationFn: ({ id, force }: { id: string; force: boolean }) =>
       updateSkillRegistry(id, { force }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['skillRegistries'] });
-      queryClient.invalidateQueries({ queryKey: ['skills'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills.registries });
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills.all });
       setShowDirtyConfirm(false);
       setPendingRegistryId(null);
     },

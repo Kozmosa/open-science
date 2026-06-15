@@ -3,17 +3,18 @@ import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SearchBackendItem } from '@/shared/types';
 import { getSearchSettings, updateSearchSettings } from '@/shared/api';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 export function SearchBackendSection() {
   const t = useT();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
-    queryKey: ['searchSettings'],
+    queryKey: queryKeys.search.settings,
     queryFn: getSearchSettings,
   });
   const mutation = useMutation({
     mutationFn: updateSearchSettings,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['searchSettings'] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.search.settings }); },
   });
 
   const activeBackend = data?.active_backend ?? 'cc-web-mcp';

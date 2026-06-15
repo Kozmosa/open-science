@@ -4,6 +4,7 @@ import { buildTaskStreamUrl, getTaskOutput } from '@/shared/api';
 import { useT } from '@/shared/i18n';
 import type { TaskOutputEvent } from '@/shared/types';
 import { getNextOutputSeq, mergeOutputItems } from '../utils/output';
+import { queryKeys } from '@/shared/api/queryKeys';
 
 const PAGE_SIZE = 10;
 const MAX_RENDER_ITEMS = 200;
@@ -146,8 +147,8 @@ export function useTaskStream(taskId: string | null): TaskOutputStreamState {
             appendOutput([item]);
           }
           if (shouldRefreshTaskMetadata(item)) {
-            void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-            void queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
           }
         } catch (error) {
           if (activeRef.current) {
