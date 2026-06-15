@@ -1,4 +1,4 @@
-import { Alert } from '../ui';
+import { Alert } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { TaskRecord } from '@/shared/types';
 

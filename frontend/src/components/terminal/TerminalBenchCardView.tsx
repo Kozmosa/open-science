@@ -1,4 +1,4 @@
-import { Button, SectionCard, SectionHeader, StatusDot } from '../ui';
+import { Button, SectionCard, SectionHeader, StatusDot } from '@design-system/primitives';
 import TerminalSessionConsole from './TerminalSessionConsole';
 import type { TerminalSessionStatus } from '@/shared/types';
 import { useT } from '@/shared/i18n';

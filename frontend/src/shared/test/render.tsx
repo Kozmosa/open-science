@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render } from '@testing-library/react';
 import { ToastProvider } from '@/components/common';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider } from '@features/auth';
 import { LocaleProvider, type Locale } from '@/shared/i18n';
 import { appQueryClientDefaultOptions } from '@/queryClient';
 import { SettingsProvider } from '@features/settings';

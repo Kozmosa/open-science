@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { buildTaskStreamUrl, getTaskOutput } from '@/shared/api';
 import { useT } from '@/shared/i18n';
 import type { TaskOutputEvent } from '@/shared/types';
-import { getNextOutputSeq, mergeOutputItems } from './output';
+import { getNextOutputSeq, mergeOutputItems } from '../utils/output';
 
 const PAGE_SIZE = 10;
 const MAX_RENDER_ITEMS = 200;

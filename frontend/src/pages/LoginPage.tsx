@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
 import { Button, Input } from '@design-system/primitives';
 

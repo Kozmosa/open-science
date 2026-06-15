@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react';
 import { useT } from '@/shared/i18n';
 import type { TaskSummary } from '@/shared/types';
-import { statusClassName } from './status';
+import { statusClassName } from '../utils/status';
 
 interface Props {
   tasks: TaskSummary[];

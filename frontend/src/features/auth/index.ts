@@ -1,1 +1,1 @@
-// Placeholder: auth feature migration pending
+export { AuthProvider, useAuth } from './contexts/AuthContext';

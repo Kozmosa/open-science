@@ -21,7 +21,7 @@ import { getTasks } from '@/shared/api';
 import type { TaskSummary } from '@/shared/types';
 import LocaleSwitcher from './LocaleSwitcher';
 import { useT } from '@/shared/i18n';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@features/auth';
 
 interface Props {
   children: ReactNode;

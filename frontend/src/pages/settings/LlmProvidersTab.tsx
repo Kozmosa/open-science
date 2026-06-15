@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { Button, SectionCard, SectionHeader } from '@design-system/primitives';
 import { SectionStack } from '@design-system/layout';
 import { useT } from '@/shared/i18n';
-import { useSettings } from '@features/settings';
+import { useLlmProviders } from '@features/settings';
 import type { LlmProvider } from '@features/settings';
 import { LlmProviderEditDialog } from './LlmProviderEditDialog';
 
 export function LlmProvidersTab() {
   const t = useT();
-  const { settings, saveLlmProvider, updateLlmProvider, deleteLlmProvider } = useSettings();
-  const providers = settings.llmProviders;
+  const { llmProviders: providers, saveLlmProvider, updateLlmProvider, deleteLlmProvider } = useLlmProviders();
 
   const [editingProvider, setEditingProvider] = useState<LlmProvider | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);

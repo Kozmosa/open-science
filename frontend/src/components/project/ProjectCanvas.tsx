@@ -16,7 +16,7 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
-import { Button } from '../ui';
+import { Button } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import { createTaskEdge } from '@/shared/api';
 import type { ProjectRecord, TaskEdge, TaskSummary } from '@/shared/types';

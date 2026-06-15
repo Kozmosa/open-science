@@ -10,11 +10,11 @@
 import { describe, expect, it } from 'vitest';
 import { marked } from 'marked';
 
-import { mergeOutputItems, trimStreamingWindow } from '../../src/pages/tasks/output';
+import { mergeOutputItems, trimStreamingWindow } from '@/features/tasks/utils/output';
 import {
   convertOutputEventToMessage,
   mergeMessages,
-} from '../../src/pages/tasks/useTaskMessages';
+} from '@features/tasks/hooks/useTaskMessages';
 import type { MessageItem, TaskOutputEvent } from '@/shared/types';
 
 // ── Helpers ──────────────────────────────────────────────────

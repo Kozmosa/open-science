@@ -20,13 +20,13 @@ import { useToast } from '../components/common/Toast';
 import { useT } from '@/shared/i18n';
 import { PageShell, SplitPane } from '@design-system/layout';
 import { extractErrorMessage } from '@/shared/utils/error';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@features/auth';
 import type { TaskCreatePayload, TaskListResponse } from '@/shared/types';
-import TaskCreateForm from './tasks/TaskCreateForm';
-import TaskDetailPage from './tasks/TaskDetailPage';
-import TaskList from './tasks/TaskList';
+import TaskCreateForm from '@features/tasks/components/TaskCreateForm';
+import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
+import TaskList from '@features/tasks/pages/TaskList';
 import TaskMetadataDrawer from '../components/messages/TaskMetadataDrawer';
-import { useTaskStream } from './tasks/useTaskStream';
+import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
 
 const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Button, FormField, Input, Select, Textarea } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { EnvironmentRecord, ProjectRecord, SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine, WorkspaceRecord } from '@/shared/types';
-import TaskSkillPicker from './TaskSkillPicker';
-import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from './taskPresets';
-import SeedFileUploader, { type SeedFileInfo } from './SeedFileUploader';
+import TaskSkillPicker from '../components/TaskSkillPicker';
+import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../utils/taskPresets';
+import SeedFileUploader, { type SeedFileInfo } from '../components/SeedFileUploader';
 
 const FIELD_IDS = {
   project: 'task-create-project',

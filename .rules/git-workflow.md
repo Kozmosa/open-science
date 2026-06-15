@@ -26,6 +26,8 @@ Long-lived engineering constraints are in [PROJECT_BASIS.md](../PROJECT_BASIS.md
 - When auditing hygiene, inspect `git worktree list --porcelain` and `git branch -vv` before deleting anything.
 - Preserve dirty or unaudited worktrees until their state is understood.
 
+> **For day-to-day worktree mechanics (CWD, npm --prefix, tsc, sed pitfalls)**: [worktree-working-guide.md](worktree-working-guide.md)
+
 ## Pull Request Content
 
 Pull requests should include:

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { getEnvironments, getEnvAccess, grantEnvAccess, revokeEnvAccess, getAdminUsers } from '@/shared/api';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
 import { Select } from '@design-system/primitives';
 import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';

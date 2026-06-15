@@ -56,11 +56,26 @@ Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activatio
 
 ### Frontend Command Constraints
 
-- Frontend type-check must run from `frontend/`: `cd frontend && node_modules/.bin/tsc -b`
-- Frontend tests: `cd frontend && npm run test:run` (vitest runs test files in parallel by default; pass `--no-file-parallelism` for serial execution).
-- Frontend build: `cd frontend && npm run build`
-- Do **not** use `npx tsc --noEmit`, `npx tsc -p tsconfig.app.json`, or run plain `tsc` from the repo root.
-- This frontend uses project references; always use `tsc -b` from the `frontend/` directory.
+- All frontend tooling lives under `frontend/`. Commands must either `cd frontend && ...` or use `npm --prefix frontend ...`.
+- **Prefer `--prefix`**: `npm --prefix frontend run <script>` works regardless of current `pwd` and avoids the most common worktree mistake (running `npm` from the repo root).
+- Frontend type-check: `npm --prefix frontend run build` wraps `tsc -b`. Do **not** invoke `tsc -b` directly from outside `frontend/`.
+- Frontend tests: `npm --prefix frontend run test:run` (vitest runs test files in parallel by default; pass `--no-file-parallelism` for serial execution).
+- Frontend lint: `npm --prefix frontend run lint`.
+- Do **not** use `npx tsc --noEmit`, `npx tsc -p tsconfig.app.json`, or run plain `tsc` / `npx tsc -b` from the repo root — the latter may install an unrelated `tsc` npm package.
+- This frontend uses TypeScript project references; always use `tsc -b` from the `frontend/` directory.
+- When installing dependencies: `npm --prefix frontend install [-D] <pkg>`.
+
+## Worktree Working Guide
+
+Worktree sessions differ from working in the main repo tree:
+
+- **CWD is the repo root**, not `frontend/`. Shell state (including `cd`) does not persist across tool calls.
+- All frontend commands must use `npm --prefix frontend ...` or explicit `cd frontend && ...`.
+- `sed` batch import rewrites are fast but brittle — grep the full match set before running a batch, replace most-specific paths first, and verify with `npm --prefix frontend run build` immediately after.
+- `git mv <src> <target>` silently nests when `<target>` already exists; check target existence first.
+- When multiple planning documents exist (e.g., proposal vs implementation plan), their Phase 1 scopes may differ — cross-reference and clarify priority before starting.
+
+> **Full details (CWD discipline, tsc hazards, sed mitigation, git mv pitfalls, config paths, dual-plan scoping)**: [.rules/worktree-working-guide.md](.rules/worktree-working-guide.md)
 
 ## Coding Style & Naming Conventions
 

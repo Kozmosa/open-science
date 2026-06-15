@@ -19,9 +19,9 @@ import {
 } from '@/shared/api';
 import { extractErrorMessage } from '@/shared/utils/error';
 import type { ProjectCreateRequest, TaskCreatePayload, TaskRecord } from '@/shared/types';
-import TaskCreateForm from './tasks/TaskCreateForm';
-import TaskDetailPage from './tasks/TaskDetailPage';
-import { useTaskStream } from './tasks/useTaskStream';
+import TaskCreateForm from '@features/tasks/components/TaskCreateForm';
+import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
+import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
 
 
 export default function ProjectsPage() {

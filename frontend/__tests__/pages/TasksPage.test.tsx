@@ -25,8 +25,8 @@ import {
   getTasks,
   getWorkspaces,
 } from '@/shared/api';
-import { convertOutputEventToMessage, mergeMessages } from '../../src/pages/tasks/useTaskMessages';
-import { getNextOutputSeq, mergeOutputItems } from '../../src/pages/tasks/output';
+import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
+import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];

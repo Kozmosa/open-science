@@ -1,4 +1,4 @@
-import { Badge, SectionCard, SectionHeader, Select, StatusDot } from '../ui';
+import { Badge, SectionCard, SectionHeader, Select, StatusDot } from '@design-system/primitives';
 import type { EnvironmentRecord } from '@/shared/types';
 import { useT } from '@/shared/i18n';
 

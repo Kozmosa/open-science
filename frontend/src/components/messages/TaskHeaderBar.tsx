@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { updateTask } from '@/shared/api';
 import { useT } from '@/shared/i18n';
-import { statusClassName } from '../../pages/tasks/status';
+import { statusClassName } from '@features/tasks/utils/status';
 import type { TaskRecord } from '@/shared/types';
 
 interface TaskHeaderBarProps {

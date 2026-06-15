@@ -28,7 +28,7 @@ vi.mock('../src/queryClient', async () => {
   };
 });
 
-vi.mock('../src/contexts/AuthContext', () => ({
+vi.mock('@/features/auth/contexts/AuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useAuth: () => ({
     user: { user_id: 'user-1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true },
