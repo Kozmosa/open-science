@@ -27,37 +27,16 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
   const isEditing = provider !== null;
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const [name, setName] = useState('');
-  const [format, setFormat] = useState<LlmProviderFormat>('anthropic');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [opusModel, setOpusModel] = useState('');
-  const [sonnetModel, setSonnetModel] = useState('');
-  const [haikuModel, setHaikuModel] = useState('');
-  const [defaultModel, setDefaultModel] = useState('');
-
-  useEffect(() => {
-    if (provider) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setName(provider.name);
-      setFormat(provider.format);
-      setBaseUrl(provider.baseUrl);
-      setApiKey(provider.apiKey);
-      setOpusModel(provider.opusModel ?? '');
-      setSonnetModel(provider.sonnetModel ?? '');
-      setHaikuModel(provider.haikuModel ?? '');
-      setDefaultModel(provider.defaultModel ?? '');
-    } else {
-      setName('');
-      setFormat('anthropic');
-      setBaseUrl('');
-      setApiKey('');
-      setOpusModel('');
-      setSonnetModel('');
-      setHaikuModel('');
-      setDefaultModel('');
-    }
-  }, [provider]);
+  // Initialise form state from provider; the parent supplies a key so the
+  // component unmounts/remounts when switching between providers.
+  const [name, setName] = useState(provider?.name ?? '');
+  const [format, setFormat] = useState<LlmProviderFormat>(provider?.format ?? 'anthropic');
+  const [baseUrl, setBaseUrl] = useState(provider?.baseUrl ?? '');
+  const [apiKey, setApiKey] = useState(provider?.apiKey ?? '');
+  const [opusModel, setOpusModel] = useState(provider?.opusModel ?? '');
+  const [sonnetModel, setSonnetModel] = useState(provider?.sonnetModel ?? '');
+  const [haikuModel, setHaikuModel] = useState(provider?.haikuModel ?? '');
+  const [defaultModel, setDefaultModel] = useState(provider?.defaultModel ?? '');
 
   useEffect(() => {
     overlayRef.current?.focus();

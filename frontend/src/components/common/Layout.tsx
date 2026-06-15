@@ -20,7 +20,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { getTasks } from '@/shared/api';
 import type { TaskSummary } from '@/shared/types';
 import LocaleSwitcher from './LocaleSwitcher';
-import { useT } from '@/shared/i18n';
+import { useT, type MessageKey } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
 import { queryKeys } from '@/shared/api/queryKeys';
 
@@ -82,7 +82,7 @@ function Layout({ children }: Props) {
     tasksQuery.isError,
     tasksQuery.isLoading
   );
-  const ROUTE_TITLE_KEYS: Record<string, string> = {
+  const ROUTE_TITLE_KEYS: Record<string, MessageKey> = {
     '/projects': 'navigation.projects.label',
     '/terminal': 'navigation.terminal.label',
     '/tasks': 'navigation.tasks.label',
@@ -96,8 +96,7 @@ function Layout({ children }: Props) {
     '/settings': 'navigation.settings.label',
   };
   const pageTitleKey = ROUTE_TITLE_KEYS[location.pathname] ?? '';
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pageTitle = pageTitleKey ? t(pageTitleKey as any) : '';
+  const pageTitle = pageTitleKey ? t(pageTitleKey) : '';
 
   useEffect(() => {
     document.title = pageTitle ? `${pageTitle} - AINRF` : t('common.appName');

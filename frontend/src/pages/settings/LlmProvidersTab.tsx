@@ -89,6 +89,7 @@ export function LlmProvidersTab() {
 
       {isDialogOpen && (
         <LlmProviderEditDialog
+          key={editingProvider?.id ?? 'new'}
           provider={editingProvider}
           onSave={handleSave}
           onClose={() => setIsDialogOpen(false)}
