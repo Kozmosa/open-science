@@ -36,7 +36,7 @@ interface Props
   children: ReactNode;
 }
 
-const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
   {
     variant = 'primary',
     size = 'md',
@@ -61,4 +61,3 @@ const Button = forwardRef<HTMLButtonElement, Props>(function Button(
   );
 });
 
-export default Button;

@@ -1,19 +1,26 @@
+import { cva, type VariantProps } from 'class-variance-authority';
 import type { ReactNode } from 'react';
+import { cn } from '@/shared/utils/cn';
 
-interface Props {
+const badgeVariants = cva(
+  'rounded-full px-2 py-0.5 text-xs font-semibold',
+  {
+    variants: {
+      variant: {
+        default: 'bg-[var(--apple-blue)]/10 text-[var(--apple-blue)]',
+        outline: 'border border-[var(--border)] bg-transparent text-[var(--text-secondary)]',
+        secondary: 'bg-[var(--bg-secondary)] text-[var(--text)]',
+      },
+    },
+    defaultVariants: { variant: 'default' },
+  }
+);
+
+interface Props extends VariantProps<typeof badgeVariants> {
   children: ReactNode;
-  variant?: 'default' | 'outline' | 'secondary';
   className?: string;
 }
 
-const variantClasses: Record<NonNullable<Props['variant']>, string> = {
-  default: 'rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--apple-blue)]',
-  outline: 'rounded-full border border-[var(--border)] bg-transparent px-2 py-0.5 text-xs font-semibold text-[var(--text-secondary)]',
-  secondary: 'rounded-full bg-[var(--bg-secondary)] px-2 py-0.5 text-xs font-semibold text-[var(--text)]',
-};
-
-function Badge({ children, variant = 'default', className = '' }: Props) {
-  return <span className={[variantClasses[variant], className].join(' ')}>{children}</span>;
+export function Badge({ children, variant = 'default', className = '' }: Props) {
+  return <span className={cn(badgeVariants({ variant }), className)}>{children}</span>;
 }
-
-export default Badge;

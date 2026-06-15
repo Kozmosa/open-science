@@ -22,7 +22,7 @@ const sizeClasses: Record<NonNullable<Props['size']>, string> = {
   xl: 'max-w-4xl',
 };
 
-export default function Modal({
+export function Modal({
   isOpen,
   onClose,
   title = null,

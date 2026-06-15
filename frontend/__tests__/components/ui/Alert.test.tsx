@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import Alert from '@design-system/primitives/Alert';
+import { Alert } from '@design-system/primitives';
 
 describe('Alert', () => {
   it('uses semantic design tokens for error, warning, and success variants', () => {

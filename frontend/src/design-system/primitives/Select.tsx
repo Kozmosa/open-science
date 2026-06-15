@@ -1,11 +1,12 @@
 import { forwardRef, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { cn } from '@/shared/utils/cn';
 
 interface Props extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: string;
   children: ReactNode;
 }
 
-const Select = forwardRef<HTMLSelectElement, Props>(function Select(
+export const Select = forwardRef<HTMLSelectElement, Props>(function Select(
   { error, children, className = '', ...rest },
   ref
 ) {
@@ -15,12 +16,12 @@ const Select = forwardRef<HTMLSelectElement, Props>(function Select(
   return (
     <select
       ref={ref}
-      className={[
+      className={cn(
         'w-full rounded-lg bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition',
         errorClasses,
         'focus:ring-2',
-        className,
-      ].join(' ')}
+        className
+      )}
       {...rest}
     >
       {children}
@@ -28,4 +29,3 @@ const Select = forwardRef<HTMLSelectElement, Props>(function Select(
   );
 });
 
-export default Select;

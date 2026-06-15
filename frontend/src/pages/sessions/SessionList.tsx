@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import Input from '@design-system/primitives/Input';
-import StatusDot from '@design-system/primitives/StatusDot';
+import { Input } from '@design-system/primitives';
+import { StatusDot } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { TaskSummary } from '@/shared/types';
 

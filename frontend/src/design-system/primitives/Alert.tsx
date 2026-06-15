@@ -1,24 +1,30 @@
+import { cva, type VariantProps } from 'class-variance-authority';
 import type { ReactNode } from 'react';
-import { semanticToneClasses } from '@design-system/tokens/theme';
+import { cn } from '@/shared/utils/cn';
 
-interface Props {
+const alertVariants = cva(
+  'rounded-lg border p-3 text-sm',
+  {
+    variants: {
+      variant: {
+        error: 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--danger-foreground)]',
+        warning: 'border-[var(--warning-border)] bg-[var(--warning-soft)] text-[var(--warning-foreground)]',
+        success: 'border-[var(--success-border)] bg-[var(--success-soft)] text-[var(--success-foreground)]',
+      },
+    },
+    defaultVariants: { variant: 'error' },
+  }
+);
+
+interface Props extends VariantProps<typeof alertVariants> {
   children: ReactNode;
-  variant?: 'error' | 'warning' | 'success';
   className?: string;
 }
 
-const variantClasses: Record<NonNullable<Props['variant']>, string> = {
-  error: semanticToneClasses.danger,
-  warning: semanticToneClasses.warning,
-  success: semanticToneClasses.success,
-};
-
-function Alert({ children, variant = 'error', className = '' }: Props) {
+export function Alert({ children, variant = 'error', className = '' }: Props) {
   return (
-    <div className={['rounded-lg border p-3 text-sm', variantClasses[variant], className].join(' ')}>
+    <div className={cn(alertVariants({ variant }), className)}>
       {children}
     </div>
   );
 }
-
-export default Alert;

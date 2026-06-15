@@ -17,8 +17,7 @@ const sizeClasses: Record<NonNullable<Props['size']>, string> = {
   md: 'h-2 w-2',
 };
 
-function StatusDot({ status, size = 'md' }: Props) {
+export function StatusDot({ status, size = 'md' }: Props) {
   return <span className={['inline-block rounded-full', statusColors[status], sizeClasses[size]].join(' ')} />;
 }
 
-export default StatusDot;

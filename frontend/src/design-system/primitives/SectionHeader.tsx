@@ -6,7 +6,7 @@ interface Props {
   className?: string;
 }
 
-function SectionHeader({ title, description, eyebrow, size = 'md', className = '' }: Props) {
+export function SectionHeader({ title, description, eyebrow, size = 'md', className = '' }: Props) {
   const titleClasses: Record<NonNullable<Props['size']>, string> = {
     sm: 'text-base font-semibold leading-tight tracking-[0.231px] text-[var(--text)]',
     md: 'text-lg font-semibold leading-tight tracking-[0.231px] text-[var(--text)]',
@@ -31,4 +31,3 @@ function SectionHeader({ title, description, eyebrow, size = 'md', className = '
   );
 }
 
-export default SectionHeader;

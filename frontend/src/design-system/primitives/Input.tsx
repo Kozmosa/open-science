@@ -1,10 +1,11 @@
 import { forwardRef, type InputHTMLAttributes } from 'react';
+import { cn } from '@/shared/utils/cn';
 
 interface Props extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-const Input = forwardRef<HTMLInputElement, Props>(function Input(
+export const Input = forwardRef<HTMLInputElement, Props>(function Input(
   { error, className = '', ...rest },
   ref
 ) {
@@ -14,15 +15,14 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
   return (
     <input
       ref={ref}
-      className={[
+      className={cn(
         'w-full rounded-lg border bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition',
         errorClasses,
         'focus:ring-2',
-        className,
-      ].join(' ')}
+        className
+      )}
       {...rest}
     />
   );
 });
 
-export default Input;

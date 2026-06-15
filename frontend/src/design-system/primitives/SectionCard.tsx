@@ -14,7 +14,7 @@ interface Props {
   header?: ReactNode;
 }
 
-function SectionCard({
+export function SectionCard({
   children,
   className = '',
   collapsible = false,
@@ -82,4 +82,3 @@ function SectionCard({
   );
 }
 
-export default SectionCard;

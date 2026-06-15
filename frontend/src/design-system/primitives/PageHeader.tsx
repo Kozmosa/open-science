@@ -4,7 +4,7 @@ interface Props {
   description?: string;
 }
 
-function PageHeader({ eyebrow, title, description }: Props) {
+export function PageHeader({ eyebrow, title, description }: Props) {
   return (
     <section className="space-y-3">
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--apple-blue)]">
@@ -25,4 +25,3 @@ function PageHeader({ eyebrow, title, description }: Props) {
   );
 }
 
-export default PageHeader;

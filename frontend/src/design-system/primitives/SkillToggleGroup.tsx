@@ -40,7 +40,7 @@ function getGroupMode(
   return 'mixed';
 }
 
-export default function SkillToggleGroup({ skills, skillModes, onChange }: Props) {
+export function SkillToggleGroup({ skills, skillModes, onChange }: Props) {
   const t = useT();
   const groups = useMemo(() => {
     const map = new Map<string, SkillItem[]>();

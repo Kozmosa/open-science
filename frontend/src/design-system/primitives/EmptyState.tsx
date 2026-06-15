@@ -11,7 +11,7 @@ const variantClasses: Record<NonNullable<Props['variant']>, string> = {
   subtle: 'rounded-lg bg-[var(--bg-secondary)]',
 };
 
-function EmptyState({ message, icon, variant = 'dashed' }: Props) {
+export function EmptyState({ message, icon, variant = 'dashed' }: Props) {
   return (
     <div className={['flex flex-1 items-center justify-center', variantClasses[variant]].join(' ')}>
       <div className="text-center">
@@ -22,4 +22,3 @@ function EmptyState({ message, icon, variant = 'dashed' }: Props) {
   );
 }
 
-export default EmptyState;

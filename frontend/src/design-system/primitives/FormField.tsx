@@ -6,7 +6,7 @@ interface Props {
   children: ReactNode;
 }
 
-function FormField({ label, error, children }: Props) {
+export function FormField({ label, error, children }: Props) {
   return (
     <label className="space-y-2">
       <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">{label}</span>
@@ -16,4 +16,3 @@ function FormField({ label, error, children }: Props) {
   );
 }
 
-export default FormField;

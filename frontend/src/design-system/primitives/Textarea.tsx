@@ -1,10 +1,11 @@
 import { forwardRef, type TextareaHTMLAttributes } from 'react';
+import { cn } from '@/shared/utils/cn';
 
 interface Props extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string;
 }
 
-const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea(
+export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea(
   { error, className = '', ...rest },
   ref
 ) {
@@ -14,15 +15,14 @@ const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea(
   return (
     <textarea
       ref={ref}
-      className={[
+      className={cn(
         'w-full rounded-lg border bg-[var(--bg)] px-3 py-2.5 text-sm tracking-[-0.224px] text-[var(--text)] outline-none transition',
         errorClasses,
         'focus:ring-2',
-        className,
-      ].join(' ')}
+        className
+      )}
       {...rest}
     />
   );
 });
 
-export default Textarea;

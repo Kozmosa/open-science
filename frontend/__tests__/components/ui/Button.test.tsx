@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Plus } from 'lucide-react';
-import Button from '@design-system/primitives/Button';
+import { Button } from '@design-system/primitives';
 
 describe('Button', () => {
   it('renders as an inline-flex container so gap works for icon + label', () => {
