@@ -113,3 +113,29 @@ def migration_005_session_transcripts(conn: sqlite3.Connection) -> None:
         ON session_transcripts(project_key, session_id, subpath)
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_006_task_profile_overrides(conn: sqlite3.Connection) -> None:
+    """Add per-task credential/profile override columns.
+
+    When populated, these override tenant/container defaults via
+    env-var injection at engine launch time.  All columns are optional;
+    a NULL value means "fall back to the engine's default behaviour".
+    """
+    columns = [
+        ("api_base_url", "TEXT"),
+        ("api_key", "TEXT"),
+        ("codex_base_url", "TEXT"),
+        ("codex_api_key", "TEXT"),
+        ("codex_model", "TEXT"),
+        ("codex_app_server_command", "TEXT"),
+        ("codex_approval_policy", "TEXT"),
+    ]
+    for col_name, col_type in columns:
+        try:
+            conn.execute(
+                f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists

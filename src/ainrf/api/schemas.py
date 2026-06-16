@@ -418,6 +418,7 @@ class TaskCreateRequest(BaseModel):
     skills: list[str] = []
     mcp_servers: list[str] = []
     title: str | None = None
+    research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
 
 
 class TaskUpdateProjectRequest(BaseModel):
@@ -821,6 +822,17 @@ class TaskPromptSendResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     task_id: str
     sequence: int
+
+
+class TaskHealthResponse(BaseModel):
+    """Engine liveness and last-event time for a task."""
+
+    model_config = ConfigDict(extra="forbid")
+    task_id: str
+    status: str
+    engine_alive: bool
+    last_event_at: str | None = None
+    inactive_seconds: float | None = None
 
 
 class MessageItemResponse(BaseModel):

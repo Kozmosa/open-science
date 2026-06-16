@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+import time
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from ainrf.agentic_researcher import (
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.routes.tasks import _output_item_to_message
+from ainrf.harness_engine import ExecutionContext, HarnessEngine
 from ainrf.projects import ProjectRecord
 from ainrf.agentic_researcher.models import TaskOutputEvent
 from tests.testutil import FakeEngine, TokenEngine, get_jwt_headers
@@ -283,7 +285,7 @@ def test_output_item_to_message_suppresses_agent_sdk_progress_noise() -> None:
 
 
 @pytest.mark.anyio
-async def test_archive_succeeded_task_hides_it_from_default_list(tmp_path: Path) -> None:
+async def test_archive_succeeded_task_marks_it_cancelled(tmp_path: Path) -> None:
     app = make_app(tmp_path, FakeEngine())
     headers = get_jwt_headers(app)
     async with httpx.AsyncClient(
@@ -322,8 +324,9 @@ async def test_archive_succeeded_task_hides_it_from_default_list(tmp_path: Path)
         assert archive_response.status_code == 200
         assert archive_response.json()["status"] == "cancelled"
 
+        # Cancelled tasks are terminal, not archived, so they remain visible.
         default_list = await client.get("/tasks?include_archived=false")
-        assert task_id not in [item["task_id"] for item in default_list.json()["items"]]
+        assert task_id in [item["task_id"] for item in default_list.json()["items"]]
         archived_list = await client.get("/tasks?include_archived=true")
         assert task_id in [item["task_id"] for item in archived_list.json()["items"]]
 
@@ -523,7 +526,6 @@ async def test_task_list_uses_fallback_workdir_for_missing_legacy_workspace(
     assert payload["items"][0]["command"] == [
         "claude",
         "-p",
-        "--no-session-persistence",
         "--permission-mode",
         "bypassPermissions",
     ]
@@ -588,7 +590,7 @@ async def test_project_tasks_endpoint_uses_task_filters(tmp_path: Path) -> None:
         )
         _seed_project(app, "proj-001")
 
-        create_response = await client.post(
+        first_response = await client.post(
             "/tasks",
             json={
                 "project_id": "proj-001",
@@ -596,39 +598,48 @@ async def test_project_tasks_endpoint_uses_task_filters(tmp_path: Path) -> None:
                 "environment_id": "env-001",
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
-                "title": "Visible task",
-                "prompt": "Visible prompt",
+                "title": "First task",
+                "prompt": "First prompt",
                 "skills": [],
             },
         )
-        assert create_response.status_code == 201
-        owner_user_id = create_response.json()["owner_user_id"]
+        assert first_response.status_code == 201
+        first_task_id = first_response.json()["task_id"]
 
-        service: AgenticResearcherService = app.state.agentic_researcher_service
-        archived = service.create_task(
-            project_id="proj-001",
-            workspace_id=workspace.workspace_id,
-            environment_id="env-001",
-            researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
-            prompt="Archived prompt",
-            owner_user_id=owner_user_id,
-            title="Archived task",
+        second_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-001",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Second task",
+                "prompt": "Second prompt",
+                "skills": [],
+            },
         )
-        service.cancel_task(archived.task_id)
+        assert second_response.status_code == 201
+        second_task_id = second_response.json()["task_id"]
+
+        await wait_for_status(client, first_task_id, "succeeded")
+        await wait_for_status(client, second_task_id, "succeeded")
 
         default_response = await client.get("/projects/proj-001/tasks")
         assert default_response.status_code == 200
-        assert [item["title"] for item in default_response.json()["items"]] == ["Visible task"]
+        assert {item["title"] for item in default_response.json()["items"]} == {
+            "First task",
+            "Second task",
+        }
 
-        archived_response = await client.get(
+        limited_response = await client.get(
             "/projects/proj-001/tasks",
-            params={"include_archived": "true", "limit": "1", "sort": "created"},
+            params={"limit": "1", "sort": "created"},
         )
-        assert archived_response.status_code == 200
-        archived_payload = archived_response.json()
-        assert archived_payload["total"] == 1
-        assert archived_payload["items"][0]["project_id"] == "proj-001"
-        assert archived_payload["items"][0]["workspace_id"] == workspace.workspace_id
+        assert limited_response.status_code == 200
+        limited_payload = limited_response.json()
+        assert limited_payload["total"] == 1
+        assert limited_payload["items"][0]["project_id"] == "proj-001"
 
 
 @pytest.mark.anyio
@@ -756,3 +767,221 @@ async def test_update_task_project_moves_task_and_cleans_edges(tmp_path: Path) -
         assert move_response.json()["project_id"] == project_b.project_id
         # Project-scoped edges referencing the moved task are cleaned up.
         assert project_svc.list_task_edges(project_a.project_id) == []
+
+
+class HungNoHeartbeatEngine(HarnessEngine):
+    """Engine that reports a stale last_event_at and is not alive.
+
+    Used to verify the service watchdog marks the task FAILED when the
+    engine is unresponsive.
+    """
+
+    def __init__(self) -> None:
+        self._last_event_at: dict[str, float] = {}
+
+    @property
+    def engine_type(self) -> HarnessEngineType:
+        return HarnessEngineType.CLAUDE_CODE
+
+    async def start(self, context: ExecutionContext, emit: object) -> None:
+        # Pretend the last event happened long ago and the engine is dead.
+        self._last_event_at[context.task_id] = time.time() - 1000
+        await asyncio.Event().wait()
+
+    async def cancel(self, task_id: str) -> None:
+        pass
+
+    async def send_input(self, task_id: str, text: str) -> None:
+        pass
+
+    async def is_alive(self, task_id: str) -> bool:
+        return False
+
+    async def last_event_at(self, task_id: str) -> float | None:
+        return self._last_event_at.get(task_id)
+
+
+@pytest.mark.anyio
+async def test_watchdog_fails_hung_engine(tmp_path: Path) -> None:
+    from unittest.mock import patch
+    from ainrf.agentic_researcher import service as service_module
+
+    app = make_app(tmp_path, HungNoHeartbeatEngine())
+    headers = get_jwt_headers(app)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-watchdog",
+            label="Watchdog workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the watchdog workspace.",
+            owner_user_id=None,
+        )
+        _seed_project(app, "proj-watchdog")
+
+        with patch.object(service_module, "_DEFAULT_ENGINE_INACTIVITY_TIMEOUT_SECONDS", 0.3):
+            create_response = await client.post(
+                "/tasks",
+                json={
+                    "project_id": "proj-watchdog",
+                    "workspace_id": workspace.workspace_id,
+                    "environment_id": "env-001",
+                    "researcher_type": "vanilla",
+                    "harness_engine": "claude-code",
+                    "title": "Watchdog me",
+                    "prompt": "Hang forever.",
+                    "skills": [],
+                },
+            )
+            assert create_response.status_code == 201
+            task_id = create_response.json()["task_id"]
+
+            detail = await wait_for_status(client, task_id, "failed")
+            assert detail["error_summary"] == "Engine became unresponsive after 1000s"
+
+            output = await client.get(f"/tasks/{task_id}/output")
+            assert output.status_code == 200
+            kinds = [item["kind"] for item in output.json()["items"]]
+            assert "stderr" in kinds
+
+
+@pytest.mark.anyio
+async def test_cancelled_task_appears_in_default_list(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-cancel-visible",
+            label="Cancel workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the cancel workspace.",
+            owner_user_id=None,
+        )
+        _seed_project(app, "proj-cancel-visible")
+
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-cancel-visible",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Cancel me",
+                "prompt": "Finish then cancel.",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        await wait_for_status(client, task_id, "succeeded")
+
+        cancel_response = await client.delete(f"/tasks/{task_id}")
+        assert cancel_response.status_code == 200
+        assert cancel_response.json()["status"] == "cancelled"
+
+        default_list = await client.get("/tasks?include_archived=false")
+        assert task_id in [item["task_id"] for item in default_list.json()["items"]]
+
+
+@pytest.mark.anyio
+async def test_cancelled_task_can_be_retried(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-cancel-retry",
+            label="Cancel retry workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the cancel retry workspace.",
+            owner_user_id=None,
+        )
+        _seed_project(app, "proj-cancel-retry")
+
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-cancel-retry",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Retry me",
+                "prompt": "Original prompt",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        await wait_for_status(client, task_id, "succeeded")
+
+        cancel_response = await client.delete(f"/tasks/{task_id}")
+        assert cancel_response.status_code == 200
+
+        retry_response = await client.post(f"/tasks/{task_id}/retry")
+        assert retry_response.status_code == 201
+        assert retry_response.json()["new_task"]["task_id"] == task_id
+
+        detail = await wait_for_status(client, task_id, "succeeded")
+        assert detail["status"] == "succeeded"
+
+
+@pytest.mark.anyio
+async def test_task_health_endpoint_reports_engine_liveness(tmp_path: Path) -> None:
+    app = make_app(tmp_path, FakeEngine())
+    headers = get_jwt_headers(app)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+        headers=headers,
+    ) as client:
+        workspace = app.state.workspace_service.create_workspace(
+            project_id="proj-health",
+            label="Health workspace",
+            description=None,
+            default_workdir=str(tmp_path / "workspace"),
+            workspace_prompt="Use the health workspace.",
+            owner_user_id=None,
+        )
+        _seed_project(app, "proj-health")
+
+        create_response = await client.post(
+            "/tasks",
+            json={
+                "project_id": "proj-health",
+                "workspace_id": workspace.workspace_id,
+                "environment_id": "env-001",
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "title": "Health task",
+                "prompt": "Check health.",
+                "skills": [],
+            },
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["task_id"]
+        await wait_for_status(client, task_id, "succeeded")
+
+        health_response = await client.get(f"/tasks/{task_id}/health")
+        assert health_response.status_code == 200
+        payload = health_response.json()
+        assert payload["task_id"] == task_id
+        assert payload["status"] == "succeeded"
+        assert payload["engine_alive"] is True
+        assert payload["last_event_at"] is not None
+        assert payload["inactive_seconds"] is not None

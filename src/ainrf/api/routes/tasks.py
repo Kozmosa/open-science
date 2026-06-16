@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import StreamingResponse
@@ -21,6 +23,7 @@ from ainrf.api.schemas import (
     MessageItemResponse,
     TaskCreateRequest,
     TaskListResponse,
+    TaskHealthResponse,
     TaskMessagesResponse,
     TaskOutputItemResponse,
     TaskOutputResponse,
@@ -273,6 +276,20 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
             ) from exc
 
     try:
+        # Build profile overrides from the optional research agent profile.
+        profile_overrides = None
+        if payload.research_agent_profile is not None:
+            p = payload.research_agent_profile
+            profile_overrides = {
+                "api_base_url": p.api_base_url,
+                "api_key": p.api_key,
+                "codex_base_url": p.codex_base_url,
+                "codex_api_key": p.codex_api_key,
+                "codex_model": p.codex_model,
+                "codex_app_server_command": p.codex_app_server_command,
+                "codex_approval_policy": p.codex_approval_policy,
+            }
+
         task = service.create_task(
             project_id=effective_project_id,
             workspace_id=payload.workspace_id,
@@ -281,6 +298,7 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
             prompt=payload.prompt,
             owner_user_id=user["id"],
             title=payload.title,
+            profile_overrides=profile_overrides,
         )
         service.schedule_task(task.task_id)
     except Exception as exc:
@@ -333,6 +351,26 @@ async def get_task_token_usage_summary(
 async def get_task(request: Request, task_id: str) -> TaskSummaryResponse:
     _, task = _assert_task_owner(request, task_id)
     return _task_to_response(task, _get_service(request))
+
+
+@router.get("/{task_id}/health", response_model=TaskHealthResponse)
+async def get_task_health(request: Request, task_id: str) -> TaskHealthResponse:
+    service, task = _assert_task_owner(request, task_id)
+    engine = service.get_engine_for_task(task)
+    engine_alive = await engine.is_alive(task_id)
+    last_event_at = await engine.last_event_at(task_id)
+    inactive_seconds = None
+    last_event_at_iso: str | None = None
+    if last_event_at is not None:
+        last_event_at_iso = datetime.fromtimestamp(last_event_at, tz=timezone.utc).isoformat()
+        inactive_seconds = round(time.time() - last_event_at, 1)
+    return TaskHealthResponse(
+        task_id=task_id,
+        status=task.status.value,
+        engine_alive=engine_alive,
+        last_event_at=last_event_at_iso,
+        inactive_seconds=inactive_seconds,
+    )
 
 
 @router.post("/{task_id}/cancel", status_code=204)

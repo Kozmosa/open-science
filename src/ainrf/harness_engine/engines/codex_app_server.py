@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import shlex
+import time
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -52,6 +53,7 @@ class CodexSession:
     approvals: dict[int, str] = field(default_factory=dict)
     pending_requests: dict[int, asyncio.Future[dict[str, Any]]] = field(default_factory=dict)
     command: list[str] = field(default_factory=list)
+    last_event_at: float = field(default_factory=time.time)
 
 
 class CodexAppServerEngine(HarnessEngine):
@@ -129,6 +131,21 @@ class CodexAppServerEngine(HarnessEngine):
             with contextlib.suppress(Exception):
                 await self._interrupt_turn(session)
         await self._cleanup_session(session)
+
+    async def is_alive(self, task_id: str) -> bool:
+        async with self._lock:
+            session = self._sessions.get(task_id)
+            return (
+                session is not None
+                and session.process is not None
+                and session.process.returncode is None
+                and session.initialized
+            )
+
+    async def last_event_at(self, task_id: str) -> float | None:
+        async with self._lock:
+            session = self._sessions.get(task_id)
+            return session.last_event_at if session is not None else None
 
     def _restore_checkpoint(self, context: ExecutionContext, session: CodexSession) -> None:
         checkpoint_path = Path(context.session_state_path or "")
@@ -245,12 +262,16 @@ class CodexAppServerEngine(HarnessEngine):
         assert session.process.stderr is not None
         stderr = session.process.stderr
 
+        async def _emit(event: EngineEvent) -> None:
+            session.last_event_at = time.time()
+            await emit(event)
+
         async def read_stderr() -> None:
             while True:
                 line = await stderr.readline()
                 if not line:
                     break
-                await emit(
+                await _emit(
                     EngineEvent(
                         event_type="system",
                         payload={
@@ -274,7 +295,7 @@ class CodexAppServerEngine(HarnessEngine):
                 if not isinstance(payload, dict):
                     logger.warning("Codex App Server: ignoring non-dict payload: %s", type(payload))
                     continue
-                await self._handle_message(session, payload, emit)
+                await self._handle_message(session, payload, _emit)
         finally:
             self._fail_pending_requests(
                 session,

@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, field
@@ -64,6 +65,26 @@ _ANTHROPIC_PROVIDER_ENV_KEYS = (
 
 _IGNORED_SYSTEM_SUBTYPES = frozenset({"status", "thinking_tokens"})
 
+# Path to the container-side CLAUDE.md with operator-controlled guardrails
+# (PDF chunking hints, large file handling, JSON buffer size constraints, etc.).
+_USER_CLAUDE_MD = Path.home() / ".claude" / "CLAUDE.md"
+
+
+def _copy_user_claude_md(dst_dir: str) -> None:
+    """Copy the user-level CLAUDE.md into ``dst_dir`` if it exists.
+
+    Called before redirecting :envvar:`CLAUDE_CONFIG_DIR` so the subprocess
+    still discovers the operator-maintained guardrails.  Missing source is
+    silently ignored — the file is optional.
+    """
+    if not _USER_CLAUDE_MD.is_file():
+        return
+    dst = Path(dst_dir) / "CLAUDE.md"
+    try:
+        shutil.copy2(_USER_CLAUDE_MD, dst)
+    except OSError:
+        pass
+
 
 def _build_token_usage(sdk_msg: object) -> dict[str, Any] | None:
     """Build token_usage dict from SDK ResultMessage."""
@@ -95,6 +116,8 @@ class AgentSession:
     total_cost_usd: float = 0.0
     had_error: bool = False
     terminal_emitted: bool = False
+    active: bool = True
+    last_event_at: float = field(default_factory=time.time)
     # Streaming state: track current content block being accumulated
     stream_block_index: int = -1
     stream_block_type: str | None = None  # "thinking" or "text"
@@ -228,6 +251,10 @@ class AgentSdkEngine(HarnessEngine):
             stderr=_on_stderr,
             env=env,
             session_store=self._session_store,
+            # Raise JSON buffer ceiling above the SDK default (1 MB) so large
+            # tool outputs (e.g. PDF text extraction via Read) don't trigger
+            # "JSON message exceeded maximum buffer size" errors.
+            max_buffer_size=30 * 1024 * 1024,  # 30 MB
             # NOTE: We intentionally do NOT pass user=context.tenant_user here.
             # The SDK's `user` param uses subprocess.Popen(user=...) which calls
             # os.setuid() internally — that requires CAP_SETUID which ainrf (uid=1000)
@@ -260,6 +287,15 @@ class AgentSdkEngine(HarnessEngine):
             # inherited subprocess environment, so explicit values
             # always win without a fragile pop/set/restore dance.
             config_tmp = tempfile.mkdtemp(prefix="ainrf-claude-")
+            # Carry over the user-level CLAUDE.md so container-side
+            # guardrails (PDF chunking, large file handling, JSON buffer
+            # constraints) are visible to the CLI subprocess even though
+            # CLAUDE_CONFIG_DIR is redirected. The SDK's resume
+            # materialization creates its own temp dir later and
+            # overwrites CLAUDE_CONFIG_DIR via options.env; CLAUDE.md is
+            # only needed for the initial session bootstrap — resumed
+            # sessions already have the behavioral context established.
+            _copy_user_claude_md(config_tmp)
             os.environ["CLAUDE_CONFIG_DIR"] = config_tmp
             try:
                 try:
@@ -336,6 +372,7 @@ class AgentSdkEngine(HarnessEngine):
                             stderr=_on_stderr,
                             env=env,
                             session_store=self._session_store,
+                            max_buffer_size=30 * 1024 * 1024,  # 30 MB
                         )
                         await self._run_query(
                             context,
@@ -466,12 +503,16 @@ class AgentSdkEngine(HarnessEngine):
         emit: EngineEmit,
         stderr_lines: list[str] | None = None,
     ) -> None:
+        async def _emit(event: EngineEvent) -> None:
+            session.last_event_at = time.time()
+            await emit(event)
+
         try:
             async for sdk_msg in query(prompt=prompt, options=options):
                 if session.abort_event.is_set():
                     break
                 for event in self._convert_sdk_message(sdk_msg, session):
-                    await emit(event)
+                    await _emit(event)
 
             if session.abort_event.is_set():
                 raise asyncio.CancelledError("Task aborted")
@@ -480,20 +521,20 @@ class AgentSdkEngine(HarnessEngine):
 
             if session.should_pause_after_turn:
                 session.should_pause_after_turn = False
-                await emit(
+                await _emit(
                     EngineEvent(
                         event_type="system",
                         payload={"subtype": "task_paused", "task_id": context.task_id},
                     )
                 )
             elif not session.terminal_emitted:
-                await emit(
+                await _emit(
                     EngineEvent(
                         event_type="system",
                         payload={"subtype": "task_completed", "task_id": context.task_id},
                     )
                 )
-                await emit(
+                await _emit(
                     EngineEvent(
                         event_type="status",
                         payload={"status": "succeeded", "exit_code": 0},
@@ -511,13 +552,13 @@ class AgentSdkEngine(HarnessEngine):
                     stderr_text = "\n".join(stderr_lines).strip()
                     if stderr_text:
                         message = f"{message}\nCLI stderr:\n{stderr_text}"
-                await emit(
+                await _emit(
                     EngineEvent(
                         event_type="error",
                         payload={"message": message, "task_id": context.task_id},
                     )
                 )
-                await emit(
+                await _emit(
                     EngineEvent(
                         event_type="status",
                         payload={"status": "failed", "exit_code": None},
@@ -525,6 +566,7 @@ class AgentSdkEngine(HarnessEngine):
                 )
             raise
         finally:
+            session.active = False
             await self._save_checkpoint(context, session)
             if session.abort_event.is_set():
                 async with self._lock:
@@ -554,6 +596,16 @@ class AgentSdkEngine(HarnessEngine):
             session = self._sessions.get(task_id)
             if session is not None:
                 session.abort_event.set()
+
+    async def is_alive(self, task_id: str) -> bool:
+        async with self._lock:
+            session = self._sessions.get(task_id)
+            return session is not None and session.active and not session.abort_event.is_set()
+
+    async def last_event_at(self, task_id: str) -> float | None:
+        async with self._lock:
+            session = self._sessions.get(task_id)
+            return session.last_event_at if session is not None else None
 
     def _convert_sdk_message(self, sdk_msg: object, session: AgentSession) -> list[EngineEvent]:
         events: list[EngineEvent] = []

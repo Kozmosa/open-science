@@ -53,7 +53,10 @@ class ExecutionContext:
     # Prior user/assistant messages from task_outputs for context recovery.
     # Each dict is {"role": "user"|"assistant", "content": "..."}.
     prior_messages: list[dict[str, str]] | None = None
-
+    # Maximum allowed seconds without any engine event while the engine is
+    # supposed to be alive.  When exceeded and the engine is not alive, the
+    # service watchdog marks the task FAILED.
+    engine_inactivity_timeout_seconds: int | None = None
 
     @property
     def prompt(self) -> str:
@@ -134,3 +137,21 @@ class HarnessEngine(ABC):
     async def cancel(self, task_id: str) -> None:
         """取消执行"""
         ...
+
+    async def is_alive(self, task_id: str) -> bool:
+        """Return whether the engine session/process for *task_id* is still alive.
+
+        Engines that do not expose a process handle should return a best-effort
+        proxy based on whether a session is currently active and not aborted.
+        """
+        _ = task_id
+        return False
+
+    async def last_event_at(self, task_id: str) -> float | None:
+        """Return the Unix timestamp of the last event emitted for *task_id*.
+
+        Returns ``None`` when no events have been emitted or the task is not
+        tracked by the engine.
+        """
+        _ = task_id
+        return None

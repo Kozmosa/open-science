@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -128,6 +129,8 @@ class FakeEngine(HarnessEngine):
         self.cancelled_task_ids: set[str] = set()
         self.started_count = 0
         self.completion_event: threading.Event | None = None
+        self._alive: set[str] = set()
+        self._last_event_at: dict[str, float] = {}
 
     @property
     def engine_type(self) -> HarnessEngineType:
@@ -135,6 +138,8 @@ class FakeEngine(HarnessEngine):
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         self.started_count += 1
+        self._alive.add(context.task_id)
+        self._last_event_at[context.task_id] = time.time()
         prompt = self.pending_prompts.pop(0) if self.pending_prompts else context.rendered_prompt
         await emit(
             EngineEvent(
@@ -153,10 +158,17 @@ class FakeEngine(HarnessEngine):
 
     async def cancel(self, task_id: str) -> None:
         self.cancelled_task_ids.add(task_id)
+        self._alive.discard(task_id)
 
     async def send_input(self, task_id: str, text: str) -> None:
         _ = task_id
         self.pending_prompts.append(text)
+
+    async def is_alive(self, task_id: str) -> bool:
+        return task_id in self._alive
+
+    async def last_event_at(self, task_id: str) -> float | None:
+        return self._last_event_at.get(task_id)
 
 
 class TokenEngine(FakeEngine):

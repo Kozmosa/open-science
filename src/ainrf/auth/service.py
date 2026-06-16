@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import uuid
@@ -34,6 +36,26 @@ _USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}$")
 _TENANT_GID = 2000
 _TENANT_GROUP = "ainrf_tenants"
 _TENANT_HOME_ROOT = Path("/home/ainrf_tenants")
+
+
+def _is_root() -> bool:
+    """Return True if the current process is running as root."""
+    return os.geteuid() == 0
+
+
+def _run_privileged(cmd: list[str]) -> None:
+    """Run *cmd* as root, prefixing with ``sudo`` when not already root.
+
+    Raises AuthError if the command fails or if sudo is unavailable.
+    """
+    if not _is_root():
+        if shutil.which("sudo") is None:
+            raise AuthError("sudo is required for tenant provisioning but is not installed")
+        cmd = ["sudo", *cmd]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr = result.stderr.strip() if result.stderr else ""
+        raise AuthError(f"Privileged command failed: {' '.join(cmd)}: {stderr}")
 
 
 def tenant_linux_username(ainrf_username: str) -> str:
@@ -451,11 +473,7 @@ def _ensure_tenant_group() -> None:
     )
     if result.returncode != 0:
         _LOG.info("_ensure_tenant_group: creating group %s (gid %d)", _TENANT_GROUP, _TENANT_GID)
-        subprocess.run(
-            ["groupadd", "--gid", str(_TENANT_GID), _TENANT_GROUP],
-            check=True,
-            capture_output=True,
-        )
+        _run_privileged(["groupadd", "--gid", str(_TENANT_GID), _TENANT_GROUP])
 
 
 def _linux_user_exists(username: str) -> bool:
@@ -465,11 +483,7 @@ def _linux_user_exists(username: str) -> bool:
 
 
 def _chown_recursive(path: Path, user: str, group: str) -> None:
-    subprocess.run(
-        ["chown", "-R", f"{user}:{group}", str(path)],
-        check=True,
-        capture_output=True,
-    )
+    _run_privileged(["chown", "-R", f"{user}:{group}", str(path)])
 
 
 def _row_to_user(row: sqlite3.Row) -> User:
@@ -510,7 +524,7 @@ def provision_tenant_user(username: str) -> None:
         _ensure_tenant_group()
         if not _linux_user_exists(linux_user):
             _LOG.info("provision_tenant_user: creating Linux user %s", linux_user)
-            subprocess.run(
+            _run_privileged(
                 [
                     "useradd",
                     "--gid", str(_TENANT_GID),
@@ -518,12 +532,10 @@ def provision_tenant_user(username: str) -> None:
                     "--create-home",
                     "--shell", "/bin/bash",
                     linux_user,
-                ],
-                check=True,
-                capture_output=True,
+                ]
             )
-        home.mkdir(parents=True, exist_ok=True)
-        workspace_dir.mkdir(parents=True, exist_ok=True)
+        # Create/ensure the home tree as root, then hand ownership to the tenant.
+        _run_privileged(["mkdir", "-p", str(home), str(workspace_dir)])
         _chown_recursive(home, linux_user, _TENANT_GROUP)
     else:
         # Local dev / tests: just ensure the workspace dir is creatable.

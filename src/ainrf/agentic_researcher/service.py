@@ -1127,6 +1127,13 @@ class AgenticResearcherService:
             tenant_user=tenant_user,
             skill_load_dir=skill_load_dir,
             prior_messages=(self._get_prior_user_assistant_messages(task.task_id) or None),
+            api_base_url=task.api_base_url,
+            api_key=task.api_key,
+            codex_base_url=task.codex_base_url,
+            codex_api_key=task.codex_api_key,
+            codex_model=task.codex_model,
+            codex_app_server_command=task.codex_app_server_command,
+            codex_approval_policy=task.codex_approval_policy,
         )
 
     def get_runtime_summary(self, task: Task) -> dict[str, object]:

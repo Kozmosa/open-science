@@ -119,7 +119,7 @@ export default function TaskList({
                         {t('pages.tasks.actions.cancel')}
                       </span>
                     ) : null}
-                    {canRetry(task.status) && !showArchived ? (
+                    {canRetry(task.status) ? (
                       <span
                         role="button"
                         tabIndex={0}

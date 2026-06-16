@@ -81,6 +81,15 @@ class Task:
     exit_code: int | None = None
     error_summary: str | None = None
     token_usage_json: str | None = None
+    # Per-task credential / profile overrides — when set they take
+    # precedence over tenant / container defaults via env-var injection.
+    api_base_url: str | None = None
+    api_key: str | None = None
+    codex_base_url: str | None = None
+    codex_api_key: str | None = None
+    codex_model: str | None = None
+    codex_app_server_command: str | None = None
+    codex_approval_policy: str | None = None
 
 
 @dataclass

@@ -92,14 +92,13 @@ def test_list_tasks_with_filters(service: AgenticResearcherService) -> None:
         prompt="Test prompt",
         owner_user_id="user-001",
     )
-    # Cancel one task - it should be excluded when include_archived=False
+    # Cancel one task - cancelled is a terminal status, not archived, so it
+    # remains visible in the default list.
     service.cancel_task(task.task_id)
 
-    # Default: exclude cancelled (archived)
     tasks = service.list_tasks(project_id="proj-001", include_archived=False)
-    assert len(tasks) == 0
+    assert len(tasks) == 1
 
-    # Include archived
     tasks = service.list_tasks(project_id="proj-001", include_archived=True)
     assert len(tasks) == 1
 
@@ -118,7 +117,7 @@ def test_list_tasks_with_filters(service: AgenticResearcherService) -> None:
 
     # Sort by updated
     tasks = service.list_tasks(project_id="proj-001", sort="updated")
-    assert len(tasks) == 5
+    assert len(tasks) == 6
     # Most recently updated should be last created (updated_at set on creation)
     assert tasks[0].prompt == "Prompt 4"
 
