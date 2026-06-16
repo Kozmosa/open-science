@@ -691,3 +691,9 @@ This design provides a simple, robust retry mechanism for TaskHarness tasks:
 - **Extensible:** Easy to add advanced features later
 
 The core principle is **clone and restart** rather than in-place reset, which keeps the implementation simple and provides clear audit history.
+
+> **Implementation update (2026-06-16):** The retry implementation for session-aware
+> engines (Agent-SDK, Claude Code) diverged from "clone and restart" — it now reuses
+> the **same task** via `send_input()` → resume the session (`--resume` /
+> `session_id`) → re-schedule. Only legacy engines create a brand-new task on retry.
+> See [2026-06-16 worklog] for details.

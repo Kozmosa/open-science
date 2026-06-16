@@ -57,6 +57,9 @@ AINRF 生产环境具备三层可观测性：指标（Prometheus + prometheus_cl
 | 文件 | `ainrf_files_sensitive_path_access_total` | 1 |
 | 环境 | `ainrf_environment_update_total`、`ainrf_code_session_created_total` | 2 |
 | 客户端 | `ainrf_client_error_events_total` | 1 |
+| 文献 | `ainrf_literature_fetch_total`（Counter，labels: subscription_id/status）、`ainrf_literature_papers_fetched_total`（Counter）、`ainrf_literature_papers_new_total`（Counter）、`ainrf_literature_summarize_total`（Counter，labels: status）、`ainrf_literature_fetch_duration_seconds`（Histogram）、`ainrf_literature_summarize_duration_seconds`（Histogram）、`ainrf_literature_last_fetch_timestamp_seconds`（Gauge） | 7 |
+
+> 📋 完整的指标清单、label 维度、触发点、PromQL 查询示例见 **[Prometheus Metrics Reference](../../reference/prometheus-metrics.md)**。
 
 ### SLA 指标
 
