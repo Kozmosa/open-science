@@ -14,6 +14,7 @@ from ainrf.api.schemas import (
     EnvironmentAccessResponse,
 )
 from ainrf.auth.permissions import get_current_user, require_admin
+from ainrf.auth.presence import is_online
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ def _serialize_admin_user(u) -> dict:
         "status": u.status.value if hasattr(u.status, "value") else u.status,
         "created_at": u.created_at,
         "last_login_at": u.last_login_at,
+        "is_online": is_online(u.id),
     }
 
 

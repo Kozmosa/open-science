@@ -92,3 +92,16 @@ async def test_read_file_too_large(tmp_path: Path) -> None:
         response = await client.get("/files/read?environment_id=env-localhost&path=big.bin")
 
     assert response.status_code == 413
+
+
+@pytest.mark.anyio
+async def test_stream_file_localhost_sets_frame_options(tmp_path: Path) -> None:
+    _, workdir = _make_app_and_workdir(tmp_path)
+    (workdir / "report.pdf").write_bytes(b"%PDF-1.4 fake pdf content")
+
+    async with make_client(tmp_path) as client:
+        response = await client.get("/files/stream?environment_id=env-localhost&path=report.pdf")
+
+    assert response.status_code == 200
+    assert response.headers.get("x-frame-options") == "SAMEORIGIN"
+    assert response.headers.get("content-type") == "application/pdf"

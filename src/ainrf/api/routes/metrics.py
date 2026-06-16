@@ -50,16 +50,23 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_ssh_connection_error_total", ["host", "error_type"], "SSH connection errors"),
     ("ainrf_db_slow_query_total", ["db"], "Slow database queries (>1s)"),
     ("ainrf_client_error_events_total", [], "Client-side error events ingested"),
+    ("ainrf_literature_fetch_total", ["subscription_id", "status"], "Literature fetch attempts"),
+    ("ainrf_literature_papers_fetched_total", ["subscription_id"], "Papers returned from arXiv queries"),
+    ("ainrf_literature_papers_new_total", ["subscription_id"], "New papers inserted (excludes duplicates)"),
+    ("ainrf_literature_summarize_total", ["status"], "LLM summarize calls for literature papers"),
 ]
 
 _HISTOGRAM_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_http_request_duration_seconds", ["method", "path"], "HTTP request latency"),
     ("ainrf_ssh_command_duration_seconds", ["host"], "SSH command execution latency"),
     ("ainrf_db_query_duration_seconds", ["db"], "Database query latency"),
+    ("ainrf_literature_fetch_duration_seconds", ["subscription_id"], "Literature fetch duration per subscription"),
+    ("ainrf_literature_summarize_duration_seconds", [], "Per-paper LLM summarize duration"),
 ]
 
 _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_terminal_ws_active", [], "Active WebSocket terminal sessions"),
+    ("ainrf_literature_last_fetch_timestamp_seconds", ["subscription_id"], "Unix timestamp of last successful literature fetch"),
 ]
 
 # Default histogram buckets (seconds): 5 ms → 10 s
@@ -138,13 +145,13 @@ def _get_or_create_gauge(name: str) -> Gauge:
 # Public mutation API (same signatures as the hand-rolled originals)
 # ---------------------------------------------------------------------------
 
-def inc_counter(name: str, labels: dict[str, str] | None = None) -> None:
-    """Increment a Prometheus counter."""
+def inc_counter(name: str, labels: dict[str, str] | None = None, amount: float = 1) -> None:
+    """Increment a Prometheus counter by *amount* (default 1)."""
     c = _get_or_create_counter(name)
     if labels:
-        c.labels(**labels).inc()
+        c.labels(**labels).inc(amount)
     else:
-        c.inc()
+        c.inc(amount)
 
 
 def observe_histogram(

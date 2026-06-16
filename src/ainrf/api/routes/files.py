@@ -179,6 +179,7 @@ async def stream_file(
         return FileResponse(
             resolved_path,
             media_type=media_type,
+            headers={"X-Frame-Options": "SAMEORIGIN"},
         )
 
     # Remote file: stream via SSH
@@ -223,6 +224,7 @@ async def stream_file(
     return StreamingResponse(
         _stream(),
         media_type=media_type,
+        headers={"X-Frame-Options": "SAMEORIGIN"},
     )
 
 
