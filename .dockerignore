@@ -44,6 +44,7 @@ deploy/*.service
 *.md
 !README.md
 !frontend/README.md
+!deploy/config/CLAUDE.md
 .editorconfig
 .pre-commit-config.yaml
 uv.lock

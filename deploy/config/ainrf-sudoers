@@ -2,3 +2,8 @@
 # without a password.  This is required for Phase 2 multi-tenant task execution:
 # the backend spawns agent processes (claude, codex) as the task owner's Linux user.
 ainrf ALL=(%ainrf_tenants) NOPASSWD: ALL
+
+# Registration provisions a new Linux tenant user, home directory and workspace.
+# The backend runs as the unprivileged ainrf user, so it needs passwordless sudo
+# for the specific commands used by provision_tenant_user().
+ainrf ALL=(root) NOPASSWD: /usr/sbin/groupadd, /usr/sbin/useradd, /usr/bin/mkdir, /usr/bin/chown

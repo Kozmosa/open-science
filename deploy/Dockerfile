@@ -125,6 +125,21 @@ RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debi
 # uv from official image (needed for runtime Python dev commands)
 COPY --from=ghcr.1ms.run/astral-sh/uv:0.11.20 /uv /usr/local/bin/uv
 
+# pixi package manager (used for agent/execution environments).
+# jsDelivr only serves files tracked in the Git repo, not release assets, so we
+# route the GitHub release download through gh-proxy.org for reliable builds.
+# Override with --build-arg PIXI_DOWNLOAD_PREFIX=https://github.com if your
+# network can reach GitHub Releases directly.
+ARG PIXI_VERSION=0.70.2
+ARG PIXI_DOWNLOAD_PREFIX=https://gh-proxy.org/https://github.com
+RUN python3 -c "import urllib.request, tarfile, os; \
+    url=f'${PIXI_DOWNLOAD_PREFIX}/prefix-dev/pixi/releases/download/v${PIXI_VERSION}/pixi-x86_64-unknown-linux-musl.tar.gz'; \
+    urllib.request.urlretrieve(url, '/tmp/pixi.tar.gz'); \
+    tarfile.open('/tmp/pixi.tar.gz', 'r:gz').extract('pixi', '/usr/local/bin'); \
+    os.chmod('/usr/local/bin/pixi', 0o755); \
+    os.unlink('/tmp/pixi.tar.gz')" && \
+    /usr/local/bin/pixi --version
+
 # Backend build provenance (own version, independent of frontend build)
 COPY --from=backend-build /build/backend-build-info.json /opt/ainrf/backend-build-info.json
 
