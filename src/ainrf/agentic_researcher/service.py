@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import shlex
 import subprocess
 import sqlite3
-from collections.abc import Callable
 import threading
+import time
+from collections.abc import Callable
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +45,21 @@ class TaskNotFoundError(LookupError):
 
 class TaskOperationError(RuntimeError):
     pass
+
+
+_DEFAULT_ENGINE_INACTIVITY_TIMEOUT_SECONDS = 600
+
+
+def _col(row: sqlite3.Row, name: str) -> str | None:
+    """Return *row[name]* or ``None`` when the column doesn't exist yet.
+
+    Used for backward-compatible reads of columns added by later migrations.
+    """
+    try:
+        val = row[name]
+    except IndexError:
+        return None
+    return val if val else None
 
 
 TOKEN_TOTAL_FIELDS = (
@@ -285,9 +302,11 @@ class AgenticResearcherService:
         prompt: str,
         owner_user_id: str,
         title: str | None = None,
+        profile_overrides: dict[str, str | None] | None = None,
     ) -> Task:
         task_id = self._new_id()
         now = self._now()
+        overrides = profile_overrides or {}
         task = Task(
             task_id=task_id,
             project_id=project_id,
@@ -303,6 +322,13 @@ class AgenticResearcherService:
             owner_user_id=owner_user_id,
             created_at=datetime.fromisoformat(now),
             updated_at=datetime.fromisoformat(now),
+            api_base_url=overrides.get("api_base_url"),
+            api_key=overrides.get("api_key"),
+            codex_base_url=overrides.get("codex_base_url"),
+            codex_api_key=overrides.get("codex_api_key"),
+            codex_model=overrides.get("codex_model"),
+            codex_app_server_command=overrides.get("codex_app_server_command"),
+            codex_approval_policy=overrides.get("codex_approval_policy"),
         )
         with closing(self._connect()) as conn:
             conn.execute(
@@ -310,8 +336,11 @@ class AgenticResearcherService:
                 INSERT INTO tasks (
                     task_id, project_id, workspace_id, environment_id,
                     researcher_type, harness_engine, user_skills, user_mcp_servers,
-                    status, title, prompt, created_at, updated_at, owner_user_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    status, title, prompt, created_at, updated_at, owner_user_id,
+                    api_base_url, api_key,
+                    codex_base_url, codex_api_key, codex_model,
+                    codex_app_server_command, codex_approval_policy
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task.task_id,
@@ -328,6 +357,13 @@ class AgenticResearcherService:
                     now,
                     now,
                     task.owner_user_id,
+                    task.api_base_url,
+                    task.api_key,
+                    task.codex_base_url,
+                    task.codex_api_key,
+                    task.codex_model,
+                    task.codex_app_server_command,
+                    task.codex_approval_policy,
                 ),
             )
             conn.commit()
@@ -389,6 +425,15 @@ class AgenticResearcherService:
             await self._set_status(task_id, TaskStatus.STARTING, started=True)
             context = self._build_execution_context(task)
             engine = self._get_engine(task.harness_engine)
+            timeout_seconds = (
+                context.engine_inactivity_timeout_seconds
+                or _DEFAULT_ENGINE_INACTIVITY_TIMEOUT_SECONDS
+            )
+            watchdog_task: asyncio.Task[None] | None = None
+            if timeout_seconds > 0:
+                watchdog_task = asyncio.create_task(
+                    self._task_watchdog(task_id, engine, timeout_seconds)
+                )
             await self._set_status(task_id, TaskStatus.RUNNING)
             _LOG.info("task_running", harness_engine=task.harness_engine.value)
             latest = self.get_task(task_id)
@@ -409,24 +454,46 @@ class AgenticResearcherService:
                 output={"status": "succeeded"},
             )
             from ainrf.api.routes.sla_metrics import record_task_completed
+
             record_task_completed(
-                task_id, "succeeded",
+                task_id,
+                "succeeded",
                 researcher_type=task.researcher_type.value,
                 harness_engine=task.harness_engine.value,
             )
         except asyncio.CancelledError:
-            await self._set_status(task_id, TaskStatus.CANCELLED, completed=True)
-            _LOG.warning("task_cancelled")
-            self._observability.end_trace(
-                trace_id=task_id,
-                output={"status": "cancelled"},
-            )
-            from ainrf.api.routes.sla_metrics import record_task_completed
-            record_task_completed(
-                task_id, "cancelled",
-                researcher_type=task.researcher_type.value,
-                harness_engine=task.harness_engine.value,
-            )
+            latest = self.get_task(task_id)
+            if latest.status == TaskStatus.FAILED:
+                # The watchdog already marked this task as failed; do not
+                # overwrite it to CANCELLED so the user can retry/resume.
+                _LOG.warning("task_cancelled_after_watchdog_failure", task_id=task_id)
+                self._observability.end_trace(
+                    trace_id=task_id,
+                    output={"status": "failed"},
+                )
+                from ainrf.api.routes.sla_metrics import record_task_completed
+
+                record_task_completed(
+                    task_id,
+                    "failed",
+                    researcher_type=task.researcher_type.value,
+                    harness_engine=task.harness_engine.value,
+                )
+            else:
+                await self._set_status(task_id, TaskStatus.CANCELLED, completed=True)
+                _LOG.warning("task_cancelled")
+                self._observability.end_trace(
+                    trace_id=task_id,
+                    output={"status": "cancelled"},
+                )
+                from ainrf.api.routes.sla_metrics import record_task_completed
+
+                record_task_completed(
+                    task_id,
+                    "cancelled",
+                    researcher_type=task.researcher_type.value,
+                    harness_engine=task.harness_engine.value,
+                )
             raise
         except Exception as exc:
             await self.append_output(task_id, "stderr", str(exc))
@@ -442,17 +509,84 @@ class AgenticResearcherService:
                 error=str(exc),
             )
             from ainrf.api.routes.sla_metrics import record_task_completed
+
             record_task_completed(
-                task_id, "failed",
+                task_id,
+                "failed",
                 researcher_type=task.researcher_type.value,
                 harness_engine=task.harness_engine.value,
             )
         finally:
+            if watchdog_task is not None:
+                watchdog_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await watchdog_task
             with self._task_lock:
                 self._running_tasks.pop(task_id, None)
             from ainrf.api.routes.sla_metrics import cleanup_task_state
+
             cleanup_task_state(task_id)
             structlog.contextvars.unbind_contextvars("task_id")
+
+    async def _task_watchdog(
+        self,
+        task_id: str,
+        engine: HarnessEngine,
+        timeout_seconds: float,
+    ) -> None:
+        """Monitor a running task for engine inactivity and liveness.
+
+        If the engine has not emitted any event for *timeout_seconds* and is
+        not alive, mark the task FAILED and cancel the running run_task
+        coroutine.  This prevents tasks from staying RUNNING forever when the
+        underlying CLI subprocess or SDK session has silently died.
+        """
+        poll_interval = min(30.0, timeout_seconds / 2.0)
+        while True:
+            await asyncio.sleep(poll_interval)
+            try:
+                task = self.get_task(task_id)
+            except TaskNotFoundError:
+                return
+            if task.status not in {TaskStatus.STARTING, TaskStatus.RUNNING}:
+                return
+
+            last_event_at = await engine.last_event_at(task_id)
+            if last_event_at is None:
+                continue
+
+            inactive_seconds = time.time() - last_event_at
+            engine_alive = await engine.is_alive(task_id)
+            if inactive_seconds > timeout_seconds and not engine_alive:
+                # Re-check status right before writing FAILED: the task may have
+                # naturally completed between the initial read and now.
+                try:
+                    task = self.get_task(task_id)
+                except TaskNotFoundError:
+                    return
+                if task.status not in {TaskStatus.STARTING, TaskStatus.RUNNING}:
+                    return
+
+                error_message = f"Engine became unresponsive after {int(inactive_seconds)}s"
+                _LOG.error(
+                    "task_watchdog_timeout",
+                    task_id=task_id,
+                    inactive_seconds=inactive_seconds,
+                    engine_alive=engine_alive,
+                )
+                await self.append_output(task_id, "stderr", error_message)
+                await self._set_status(
+                    task_id,
+                    TaskStatus.FAILED,
+                    completed=True,
+                    error_summary=error_message,
+                )
+                running_task = None
+                with self._task_lock:
+                    running_task = self._running_tasks.get(task_id)
+                if running_task is not None:
+                    running_task.cancel()
+                return
 
     async def pause_task(self, task_id: str) -> Task:
         task = self.get_task(task_id)
@@ -480,6 +614,7 @@ class AgenticResearcherService:
             TaskStatus.PAUSED,
             TaskStatus.SUCCEEDED,
             TaskStatus.FAILED,
+            TaskStatus.CANCELLED,
         }:
             raise TaskOperationError(f"Cannot send prompt to task with status: {task.status}")
         engine = self._get_engine(task.harness_engine)
@@ -492,7 +627,27 @@ class AgenticResearcherService:
             "message",
             json.dumps({"role": "user", "content": prompt}, ensure_ascii=True),
         )
-        if task.status in {TaskStatus.PAUSED, TaskStatus.SUCCEEDED, TaskStatus.FAILED}:
+        if task.status == TaskStatus.RUNNING:
+            # If the engine session/process is no longer alive, the current run
+            # cannot process the newly queued prompt. Fail the task and re-queue
+            # it so the next start() will resume from the checkpoint/session.
+            if not await engine.is_alive(task_id):
+                error_message = "Engine session lost before follow-up"
+                await self.append_output(task_id, "stderr", error_message)
+                await self._set_status(
+                    task_id,
+                    TaskStatus.FAILED,
+                    completed=True,
+                    error_summary=error_message,
+                )
+                self._mark_task_queued_for_rerun(task_id)
+                self.schedule_task(task_id)
+        elif task.status in {
+            TaskStatus.PAUSED,
+            TaskStatus.SUCCEEDED,
+            TaskStatus.FAILED,
+            TaskStatus.CANCELLED,
+        }:
             self._mark_task_queued_for_rerun(task_id)
             self.schedule_task(task_id)
         return event
@@ -600,10 +755,6 @@ class AgenticResearcherService:
         if user_id:
             query += " AND owner_user_id = ?"
             params.append(user_id)
-        if not include_archived:
-            # Exclude CANCELLED status as the closest equivalent to "archived"
-            query += " AND status != ?"
-            params.append(TaskStatus.CANCELLED.value)
 
         order_col = self._SORT_COLUMNS.get(sort, "updated_at")
         query += f" ORDER BY {order_col} DESC"
@@ -629,9 +780,6 @@ class AgenticResearcherService:
         if user_id:
             query += " AND owner_user_id = ?"
             params.append(user_id)
-        if not include_archived:
-            query += " AND status != ?"
-            params.append(TaskStatus.CANCELLED.value)
 
         summary = _empty_token_summary()
         with closing(self._connect()) as conn:
@@ -802,9 +950,13 @@ class AgenticResearcherService:
 
         engine = self._get_engine(old.harness_engine)
 
-        # Agent-SDK: resume the same session and resend the last user message.
-        # One task = one conversation session; retry replays the failed turn.
-        if old.harness_engine == HarnessEngineType.AGENT_SDK:
+        # Session-aware engines (Agent-SDK, Claude Code): resume the same
+        # session and resend the last user message.  One task = one
+        # conversation session; retry replays the failed turn.
+        if old.harness_engine in {
+            HarnessEngineType.AGENT_SDK,
+            HarnessEngineType.CLAUDE_CODE,
+        }:
             last_user_msg = self._find_last_user_message(task_id)
             if last_user_msg:
                 await engine.send_input(task_id, last_user_msg)
@@ -812,7 +964,7 @@ class AgenticResearcherService:
             self.schedule_task(task_id)
             return self.get_task(task_id)
 
-        # Other engines: create a brand-new task (existing behaviour).
+        # Other engines: create a brand-new task.
         researcher = AgenticResearcher(
             type=old.researcher_type,
             harness_engine=old.harness_engine,
@@ -990,7 +1142,6 @@ class AgenticResearcherService:
             return [
                 "claude",
                 "-p",
-                "--no-session-persistence",
                 "--permission-mode",
                 "bypassPermissions",
             ]
@@ -1073,6 +1224,10 @@ class AgenticResearcherService:
             self._engines[engine_type] = engine
         return engine
 
+    def get_engine_for_task(self, task: Task) -> HarnessEngine:
+        """Return the harness engine instance for *task*, creating it if needed."""
+        return self._get_engine(task.harness_engine)
+
     async def _handle_engine_event(self, task_id: str, event: EngineEvent) -> None:
         kind = "lifecycle" if event.event_type in {"status", "system"} else event.event_type
         content = self._event_content(event)
@@ -1122,6 +1277,7 @@ class AgenticResearcherService:
                 record_llm_first_token,
                 record_llm_first_token_latency,
             )
+
             record_llm_first_token(task_id, model=model or "")
             ttft = event.token_usage.get("time_to_first_token")
             if ttft is not None:
@@ -1376,4 +1532,11 @@ class AgenticResearcherService:
             exit_code=row["exit_code"],
             error_summary=row["error_summary"],
             token_usage_json=row["token_usage_json"],
+            api_base_url=_col(row, "api_base_url"),
+            api_key=_col(row, "api_key"),
+            codex_base_url=_col(row, "codex_base_url"),
+            codex_api_key=_col(row, "codex_api_key"),
+            codex_model=_col(row, "codex_model"),
+            codex_app_server_command=_col(row, "codex_app_server_command"),
+            codex_approval_policy=_col(row, "codex_approval_policy"),
         )

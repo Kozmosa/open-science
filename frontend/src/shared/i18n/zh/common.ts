@@ -9,6 +9,8 @@ const common = {
       webSearch: '联网搜索',
       reason: '深度思考',
       copy: '复制',
+      copySuccess: '已复制到剪贴板',
+      copyError: '复制失败',
       retry: '重试',
       collapseTools: '折叠工具',
       scrollToBottom: '滚动到底部',

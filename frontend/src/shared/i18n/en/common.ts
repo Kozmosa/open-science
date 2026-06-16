@@ -9,6 +9,8 @@ const common = {
       webSearch: 'Web search',
       reason: 'Reason',
       copy: 'Copy',
+      copySuccess: 'Copied to clipboard',
+      copyError: 'Failed to copy',
       retry: 'Retry',
       collapseTools: 'Collapse tools',
       scrollToBottom: 'Scroll to bottom',

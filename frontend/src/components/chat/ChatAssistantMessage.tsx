@@ -1,5 +1,8 @@
-import { Copy, RotateCcw } from 'lucide-react';
+import { Check, Copy, RotateCcw } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { useT } from '@/shared/i18n';
+import { copyText } from '@/shared/utils/clipboard';
+import { useToast } from '@/components/common/Toast';
 import SafeMarkdown from '../messages/SafeMarkdown';
 import ChatThinkingBlock from './ChatThinkingBlock';
 import ChatToolCallGroup from './ChatToolCallGroup';
@@ -12,18 +15,23 @@ interface ChatAssistantMessageProps {
 
 export default function ChatAssistantMessage({ message, onRetry }: ChatAssistantMessageProps) {
   const t = useT();
+  const { showToast } = useToast();
+  const [copied, setCopied] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     const text = message.content ?? '';
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Ignore copy failures.
+    const result = await copyText(text);
+    if (result.success) {
+      setCopied(true);
+      showToast(t('chat.copySuccess'), 'success');
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      showToast(t('chat.copyError'), 'error');
     }
-  };
+  }, [message.content, showToast, t]);
 
   return (
-    <div className="flex gap-4 max-w-full relative">
+    <div className="group flex gap-4 max-w-full relative">
       <div className="w-8 h-8 rounded-full border border-[var(--border)] bg-[var(--color-msg-assistant-fade)] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm transition-colors">
         <svg className="w-5 h-5 text-[var(--color-msg-assistant)]" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" />
@@ -52,28 +60,28 @@ export default function ChatAssistantMessage({ message, onRetry }: ChatAssistant
           </div>
         )}
 
-        {message.aborted && (
-          <div className="flex items-center space-x-[14px] text-[var(--text-tertiary)] mt-[-2px]">
+        <div className="flex items-center gap-1.5 text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="p-1 rounded-md hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+            title={copied ? '✓' : t('chat.copy')}
+            aria-label={t('chat.copy')}
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-[var(--success)]" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+          {message.aborted && onRetry && (
             <button
               type="button"
-              onClick={handleCopy}
-              className="hover:text-[var(--text-secondary)] transition-colors"
-              title={t('chat.copy')}
+              onClick={onRetry}
+              className="p-1 rounded-md hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+              title={t('chat.retry')}
+              aria-label={t('chat.retry')}
             >
-              <Copy className="w-[15px] h-[15px]" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
-            {onRetry && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="hover:text-[var(--text-secondary)] transition-colors"
-                title={t('chat.retry')}
-              >
-                <RotateCcw className="w-[15px] h-[15px]" />
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
