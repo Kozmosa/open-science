@@ -220,7 +220,18 @@ Follow the existing commit style: short, imperative, and scoped when useful, e.g
 
 ### Git Workflow & Worktree Hygiene
 
-`master` is protected; start branches from latest `master` (not `develop`). Use worktree-first development. Preferred prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`.
+`master` is protected; start branches from the **main workspace's** latest `master` (not `develop`). **All code changes must use the worktree-first flow** and merge back into the main workspace:
+
+1. In the **main workspace**, make `master` current:
+   - `git checkout master`
+   - `git pull` / `git fetch origin` and reset to the latest `master` as needed.
+2. Create a new branch in a worktree from that `master`:
+   - `git worktree add -b <prefix>/<topic> .claude/worktrees/<prefix>-<topic> master`
+   - Or use the Claude Code `EnterWorktree` tool, explicitly basing it on the main workspace's `master`.
+3. Do all implementation, testing, and committing inside the worktree. Keep the main workspace clean.
+4. When finished, switch back to the **main workspace**, merge the branch into `master`, then remove the worktree and delete the local branch.
+
+Preferred prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`.
 
 > **Full details (branch strategy, worktree conventions, PR expectations)**: [.rules/git-workflow.md](.rules/git-workflow.md)
 
