@@ -85,7 +85,7 @@ function SettingsPage() {
 
   return (
     <PageShell>
-      <div className="space-y-8 p-4">
+      <div className="space-y-6 p-3">
         <PageHeader
           eyebrow={t('pages.settings.eyebrow')}
           title={t('pages.settings.title')}

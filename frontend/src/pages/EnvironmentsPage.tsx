@@ -512,7 +512,8 @@ function EnvironmentsPage() {
 
   return (
     <PageShell>
-      <SectionStack>
+      <div className="p-3">
+        <SectionStack>
         <SectionCard
           header={
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -734,6 +735,7 @@ function EnvironmentsPage() {
           ) : null}
         </SectionCard>
       </SectionStack>
+      </div>
 
       <Modal
         isOpen={isEditorModalOpen}

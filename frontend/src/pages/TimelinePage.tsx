@@ -61,19 +61,21 @@ export default function TimelinePage() {
 
   return (
     <PageShell>
-      <SectionStack gap={4} className="flex min-h-0 flex-1 flex-col">
-        <TimelineControls
-          projectId={projectId}
-          onProjectChange={setProjectId}
-          fromDate={fromDate}
-          toDate={toDate}
-          onFromDateChange={setFromDate}
-          onToDateChange={setToDate}
-          tasks={tasks}
-          projects={projectsQuery.data?.items ?? []}
-        />
-        <GanttChart tasks={tasks} loading={tasksQuery.isLoading} />
-      </SectionStack>
+      <div className="p-3">
+        <SectionStack gap={4} className="flex min-h-0 flex-1 flex-col">
+          <TimelineControls
+            projectId={projectId}
+            onProjectChange={setProjectId}
+            fromDate={fromDate}
+            toDate={toDate}
+            onFromDateChange={setFromDate}
+            onToDateChange={setToDate}
+            tasks={tasks}
+            projects={projectsQuery.data?.items ?? []}
+          />
+          <GanttChart tasks={tasks} loading={tasksQuery.isLoading} />
+        </SectionStack>
+      </div>
     </PageShell>
   );
 }

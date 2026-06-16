@@ -118,7 +118,7 @@ export default function SplitPane({
     <div className={`flex min-h-0 w-full flex-1 ${className ?? ''}`}>
       {!leftCollapsed && (
         <aside
-          className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
+          className="flex shrink-0 flex-col overflow-hidden bg-[var(--sidebar)] relative z-0"
           style={{ width: sidebarWidth }}
           data-testid={sidebarTestId}
         >
@@ -138,7 +138,7 @@ export default function SplitPane({
         />
       )}
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[var(--bg)] p-4">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[var(--bg)] p-3 relative z-10">
         <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
           {children}
         </div>
@@ -157,7 +157,7 @@ export default function SplitPane({
 
       {rightSidebar && !rightCollapsed && (
         <aside
-          className="flex shrink-0 flex-col overflow-y-auto bg-[var(--sidebar)] p-3"
+          className="flex shrink-0 flex-col overflow-hidden bg-[var(--sidebar)] p-3 relative z-0"
           style={{ width: rightSidebarWidth }}
           data-testid={rightSidebarTestId}
         >

@@ -61,7 +61,7 @@ export default function ResourcesPage() {
 
   return (
     <PageShell>
-      <div className="flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-4 p-3">
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
             {t('pages.resources.eyebrow')}
@@ -86,6 +86,7 @@ export default function ResourcesPage() {
           cardOrder={layout.cardOrder}
           onCardOrderChange={(order) => setLayout({ cardOrder: order as CardKind[] })}
           storageKey="scholar-agent:resources-layout"
+          columns={3}
         />
       </div>
     </PageShell>

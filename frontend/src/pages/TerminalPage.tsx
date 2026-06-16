@@ -6,7 +6,9 @@ function TerminalPage() {
 
   return (
     <PageShell>
-      <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
+      <div className="p-3">
+        <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
+      </div>
     </PageShell>
   );
 }
