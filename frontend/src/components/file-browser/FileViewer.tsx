@@ -1,7 +1,13 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { FileReadResponse } from '@/shared/types';
 import { useT } from '@/shared/i18n';
 import { useEditorSettings } from '@features/settings';
+import { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
+
+// Use the locally-installed monaco-editor package instead of the jsDelivr CDN.
+// Without this, Monaco would never load when the frontend runs without internet.
+loader.config({ monaco });
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
@@ -29,9 +35,72 @@ function useSystemColorScheme(): 'light' | 'dark' {
 }
 
 function PdfViewer({ streamUrl, title }: { streamUrl: string; title: string }) {
+  const t = useT();
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPdf() {
+      try {
+        // Fetch with cookies so the backend can authenticate the iframe content.
+        // A blob URL is used to bypass X-Frame-Options / CSP on the stream endpoint.
+        const response = await fetch(streamUrl, { credentials: 'include' });
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        objectUrlRef.current = objectUrl;
+        if (!cancelled) {
+          setBlobUrl(objectUrl);
+          setError(null);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setBlobUrl(null);
+        }
+      }
+    }
+
+    loadPdf();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, [streamUrl]);
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
+        <div className="text-center">
+          <p className="font-medium">{t('pages.sessions.fileBrowser.pdfLoadError')}</p>
+          <p className="mt-1 text-xs text-[var(--text-tertiary)]">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!blobUrl) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
+        {t('pages.sessions.fileBrowser.loadingFile')}
+      </div>
+    );
+  }
+
   return (
     <iframe
-      src={streamUrl}
+      src={blobUrl}
       title={title}
       className="h-full w-full rounded-lg border border-[var(--border)]"
     />

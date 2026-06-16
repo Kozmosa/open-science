@@ -140,6 +140,19 @@ const pages = {
             fileCount: '{{count}} seed paper(s) uploaded',
             label: 'Seed Papers',
           },
+          papers: {
+            label: 'Paper Materials',
+          },
+          draftNotice: 'Restored unsaved content from your previous session.',
+          draftDiscard: 'Discard draft',
+          arxiv: {
+            label: 'arXiv Links',
+            placeholder: 'https://arxiv.org/abs/2301.12345',
+            add: 'Add',
+            remove: 'Remove {{url}}',
+            invalidUrl: 'Please enter a valid arXiv URL (e.g., https://arxiv.org/abs/...).',
+            duplicateUrl: 'This URL has already been added.',
+          },
         },
         noTaskSelected: 'No task selected',
         noTaskSelectedDescription:
@@ -489,6 +502,10 @@ const pages = {
         users: {
           title: 'User Management',
           count: '{{count}} users',
+          online: 'Online',
+          offline: 'Offline',
+          lastLogin: 'Last login:',
+          never: 'Never',
           approve: 'Approve',
           disable: 'Disable',
           reEnable: 'Re-enable',
@@ -689,6 +706,7 @@ const pages = {
           noFileSelected: 'No file selected',
           noFiles: 'No files',
           loadingFile: 'Loading file...',
+          pdfLoadError: 'Failed to load PDF',
           selectEnv: 'Select an environment to browse files',
           refresh: 'Refresh',
           selectFile: 'Select a file to view its contents',

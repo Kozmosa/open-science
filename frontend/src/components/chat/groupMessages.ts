@@ -140,6 +140,16 @@ function finalizeAssistantGroup(group: MutableAssistantGroup): ChatMessage {
   const hasAnyOutput = !!(group.content || group.thinking || group.toolCalls.length > 0);
   const aborted = !group.isStreaming && !group.content && hasAnyOutput;
 
+  // When streaming ends, resolve any tool calls that are still marked as
+  // running. This prevents the spinner from animating indefinitely after a
+  // task has completed but some tool_result events never arrived (e.g. agent
+  // terminated mid-call, or orphan tool calls without matching results).
+  const resolvedToolCalls = group.isStreaming
+    ? group.toolCalls
+    : group.toolCalls.map((tc) =>
+        tc.status === 'running' ? { ...tc, status: 'success' as ToolCallStatus } : tc,
+      );
+
   return {
     id: group.id,
     role: 'assistant',
@@ -147,7 +157,7 @@ function finalizeAssistantGroup(group: MutableAssistantGroup): ChatMessage {
     timestamp: group.timestamp,
     content: group.content || undefined,
     thinking: group.thinking || undefined,
-    toolCalls: group.toolCalls.length > 0 ? group.toolCalls : undefined,
+    toolCalls: resolvedToolCalls.length > 0 ? resolvedToolCalls : undefined,
     isStreaming: group.isStreaming,
     aborted,
   };

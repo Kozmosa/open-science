@@ -5,6 +5,23 @@ import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
 import { queryKeys } from '@/shared/api/queryKeys';
 
+/** Format an ISO-8601 timestamp as a human-readable relative time string. */
+function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return iso;
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30) return `${diffDay}d ago`;
+  return date.toLocaleDateString();
+}
+
 export function UsersTab() {
   const t = useT();
   const { user: currentUser } = useAuth();
@@ -65,13 +82,23 @@ export function UsersTab() {
       </div>
       {users.map((u) => (
         <div key={u.id} className={`flex items-center justify-between p-3 rounded-lg border text-sm ${getStatusCardClasses(u.status)}`}>
-          <div>
-            <span className="font-medium text-[var(--text)]">{u.username}</span>
-            <span className="ml-2 text-[var(--text-tertiary)]">{u.display_name}</span>
-            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClasses(u.status)}`}>{u.status}</span>
-            {u.role === 'admin' && <span className="ml-1 text-xs bg-[var(--apple-blue)]/10 text-[var(--apple-blue)] px-1.5 py-0.5 rounded">admin</span>}
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
+              <span className="font-medium text-[var(--text)]">{u.username}</span>
+              <span className="text-[var(--text-tertiary)]">{u.display_name}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClasses(u.status)}`}>{u.status}</span>
+              {u.role === 'admin' && <span className="text-xs bg-[var(--apple-blue)]/10 text-[var(--apple-blue)] px-1.5 py-0.5 rounded">admin</span>}
+              <span className="inline-flex items-center gap-1">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${u.is_online ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                <span className="text-xs text-[var(--text-tertiary)]">{u.is_online ? t('pages.settings.users.online') : t('pages.settings.users.offline')}</span>
+              </span>
+            </div>
+            <div className="text-xs text-[var(--text-tertiary)]">
+              {t('pages.settings.users.lastLogin')}{' '}
+              {u.last_login_at ? formatRelativeTime(u.last_login_at) : t('pages.settings.users.never')}
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-shrink-0">
             {u.status === 'pending' && (
               <button type="button" onClick={() => updateMutation.mutate({ id: u.id, status: 'active' })}
                 className="text-xs px-2 py-1 bg-[var(--apple-green)] text-white rounded hover:bg-[var(--apple-green)]/90">{t('pages.settings.users.approve')}</button>

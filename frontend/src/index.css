@@ -63,6 +63,20 @@ pre {
   --xy-node-background: var(--surface);
   --xy-node-border: var(--border);
   --xy-node-color: var(--foreground);
+
+  /* Controls (fit-view / zoom buttons) */
+  --xy-controls-button-background-color: var(--prism-glass-strong);
+  --xy-controls-button-background-color-hover: var(--surface-hover);
+  --xy-controls-button-color: var(--text-secondary);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: var(--shadow-sm);
+
+  /* MiniMap */
+  --xy-minimap-background-color: var(--surface);
+  --xy-minimap-mask-background-color: rgba(0, 0, 0, 0.35);
+  --xy-minimap-node-background-color: var(--prism-primary);
+  --xy-minimap-node-stroke-color: var(--border);
 }
 
 .react-flow__attribution {

@@ -227,22 +227,23 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
           style: { stroke: 'var(--prism-primary)', strokeWidth: 2 },
         }}
         attributionPosition="bottom-right"
+        colorMode="system"
       >
         <Background gap={16} size={1} color="var(--border)" />
         <Controls />
         <MiniMap
           nodeColor={() => 'var(--prism-primary)'}
-          maskColor="rgba(0,0,0,0.1)"
+          maskColor="var(--xy-minimap-mask-background-color, rgba(0,0,0,0.35))"
           className="rounded-lg"
           pannable
           zoomable
         />
+        <ProjectDropZone
+          projects={projects}
+          visible={dropZoneVisible}
+          currentProjectId={projectId}
+        />
       </ReactFlow>
-      <ProjectDropZone
-        projects={projects}
-        visible={dropZoneVisible}
-        currentProjectId={projectId}
-      />
     </div>
   );
 }

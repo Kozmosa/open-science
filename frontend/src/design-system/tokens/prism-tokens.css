@@ -84,6 +84,8 @@
 
   /* ── Glass (for sidebar / header translucency) ─────────────── */
   --prism-glass: rgba(255, 255, 255, 0.72);
+  --prism-glass-strong: rgba(255, 255, 255, 0.88);
+  --surface-hover: #f5f5f4;
 
   /* ── Semantic aliases (preserved — component code unchanged) ── */
   --text: var(--foreground);
@@ -186,6 +188,8 @@
     --shadow-toolbar: 0 2px 8px rgba(0, 0, 0, 0.40);
 
     --prism-glass: rgba(12, 10, 9, 0.72);
+    --prism-glass-strong: rgba(12, 10, 9, 0.88);
+    --surface-hover: #1c1917;
 
     /* ── Semantic aliases (dark) ──────────────────────────── */
     --text: var(--foreground);

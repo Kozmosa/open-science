@@ -25,7 +25,7 @@ export default function ProjectDropZone({
 
   return (
     <div
-      className={`pointer-events-auto absolute left-0 top-0 bottom-0 z-50 w-56 overflow-y-auto border-r border-[var(--border)] bg-[var(--prism-glass)] backdrop-blur-xl p-3 shadow-[var(--shadow-pane)] transition-transform duration-300 ease-out ${
+      className={`pointer-events-none absolute left-0 top-0 bottom-0 z-30 w-56 overflow-y-auto border-r border-[var(--border)] bg-[var(--prism-glass)] backdrop-blur-xl p-3 shadow-[var(--shadow-pane)] transition-transform duration-300 ease-out ${
         visible ? 'translate-x-0' : '-translate-x-full'
       }`}
       aria-hidden={!visible}

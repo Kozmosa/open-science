@@ -87,7 +87,16 @@ function writeOrder(storageKey: string, order: string[]): void {
 }
 
 const GAP_CLASSES: Record<number, string> = { 2: 'gap-2', 3: 'gap-3', 4: 'gap-4', 5: 'gap-5', 6: 'gap-6', 8: 'gap-8' };
-const COL_CLASSES: Record<number, string> = { 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' };
+
+function colClass(columns: number): string {
+  // Progressive: single column on mobile, 2 on medium screens,
+  // then the requested count on large screens.
+  if (columns < 1) columns = 1;
+  const parts: string[] = [];
+  if (columns >= 2) parts.push('md:grid-cols-2');
+  parts.push(`lg:grid-cols-${columns}`);
+  return parts.join(' ');
+}
 
 // ── CardGrid ──────────────────────────────────────────────────
 export default function CardGrid({
@@ -141,7 +150,7 @@ export default function CardGrid({
   );
 
   const gapClass = GAP_CLASSES[gap] ?? GAP_CLASSES[6];
-  const colClass = COL_CLASSES[columns] ?? COL_CLASSES[2];
+  const colClasses = colClass(columns);
 
   // Flatten all groups' cards into a single ordered list
   const allCards = cardOrder.flatMap((kind) =>
@@ -154,7 +163,7 @@ export default function CardGrid({
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className={`grid grid-cols-1 ${colClass} ${gapClass} ${className ?? ''}`}>
+      <div className={`grid grid-cols-1 ${colClasses} ${gapClass} ${className ?? ''}`}>
         {allCards.map((card) => (
           <DraggableCard
             key={card.key}

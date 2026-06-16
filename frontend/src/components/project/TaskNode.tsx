@@ -32,8 +32,12 @@ function TaskNode({ data, selected }: NodeProps<TaskNodeType>) {
   const locale = useLocale();
   return (
     <div
-      className={`rounded-xl border bg-[var(--surface)] p-3 min-w-[180px] shadow-[var(--shadow-sm)] transition
-        ${selected ? 'border-[var(--prism-primary)] ring-2 ring-[var(--prism-primary-border)]' : 'border-[var(--border)]'}`}
+      className={`rounded-xl border p-3 min-w-[180px] transition-all duration-200
+        backdrop-blur-xl bg-[var(--prism-glass-strong)]
+        shadow-[var(--shadow-card)] shadow-[0_1px_0_rgba(255,255,255,0.6)_inset]
+        ${selected
+          ? 'border-[var(--prism-primary)] ring-2 ring-[var(--prism-primary-border)] shadow-[0_0_16px_rgba(37,99,235,0.15)]'
+          : 'border-white/20 dark:border-white/10 hover:border-white/30 dark:hover:border-white/15'}`}
     >
       <Handle id="target" type="target" position={Position.Left} className="!bg-[var(--prism-primary)] !w-2 !h-2" />
       <div className="flex items-center gap-2 mb-1">
