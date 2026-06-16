@@ -23,11 +23,13 @@ import TaskCreateForm from '@features/tasks/components/TaskCreateForm';
 import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
 import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { useTaskConfiguration } from '@features/settings/contexts/TaskConfigurationContext';
 
 
 export default function ProjectsPage() {
   const t = useT();
   const queryClient = useQueryClient();
+  const { taskConfiguration } = useTaskConfiguration();
 
   const projectsQuery = useQuery({ queryKey: queryKeys.projects.all, queryFn: getProjects });
 
@@ -100,6 +102,12 @@ export default function ProjectsPage() {
     projectDetail?.default_environment_id ?? environmentsQuery.data?.items[0]?.id ?? '';
   const availableProjects = projects;
   const availableWorkspaces = workspacesQuery.data?.items ?? [];
+
+  const selectedResearchAgentProfile = useMemo(() => {
+    const profileId = taskConfiguration.defaultResearchAgentProfileId;
+    if (!profileId) return null;
+    return taskConfiguration.researchAgentProfiles.find(p => p.profileId === profileId) ?? null;
+  }, [taskConfiguration.defaultResearchAgentProfileId, taskConfiguration.researchAgentProfiles]);
   const availableEnvironments = environmentsQuery.data?.items ?? [];
   const handleResetLayout = useCallback(() => {
     if (effectiveProjectId) {
@@ -230,6 +238,7 @@ export default function ProjectsPage() {
           availableEnvironments={availableEnvironments}
           availableSkills={skillsQuery.data?.items ?? []}
           lockProject
+          researchAgentProfile={selectedResearchAgentProfile}
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
         />

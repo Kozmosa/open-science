@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Button, Select } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '@/shared/types';
+import type { ResearchAgentProfileSettings } from '@features/settings/types';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '@features/tasks/utils/taskPresets';
 
 const FIELD_IDS = {
@@ -79,6 +80,7 @@ interface Props {
   environments: EnvironmentRecord[];
   isOpen: boolean;
   isSubmitting: boolean;
+  researchAgentProfile?: ResearchAgentProfileSettings | null;
   onConfirm: (payload: TaskCreatePayload) => void;
   onCancel: () => void;
 }
@@ -91,6 +93,7 @@ export default function ConvertToTaskDialog({
   environments,
   isOpen,
   isSubmitting,
+  researchAgentProfile,
   onConfirm,
   onCancel,
 }: Props) {
@@ -122,6 +125,7 @@ export default function ConvertToTaskDialog({
   if (!isOpen) return null;
 
   const handleConfirm = () => {
+    const profile = researchAgentProfile;
     onConfirm({
       project_id: '',
       workspace_id: effectiveWorkspaceId,
@@ -132,6 +136,17 @@ export default function ConvertToTaskDialog({
       title: paperTitle.slice(0, 200),
       skills: [],
       mcp_servers: [],
+      research_agent_profile: profile ? {
+        profile_id: profile.profileId,
+        label: profile.label,
+        api_base_url: profile.apiBaseUrl || null,
+        api_key: profile.apiKey || null,
+        codex_base_url: profile.codexBaseUrl || null,
+        codex_api_key: profile.codexApiKey || null,
+        codex_model: profile.codexModel || null,
+        codex_app_server_command: profile.codexAppServerCommand || null,
+        codex_approval_policy: profile.codexApprovalPolicy || null,
+      } : null,
     });
   };
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, FormField, Input, Select, Textarea } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { EnvironmentRecord, ProjectRecord, SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine, WorkspaceRecord } from '@/shared/types';
+import type { ResearchAgentProfileSettings } from '@features/settings/types';
 import TaskSkillPicker from '../components/TaskSkillPicker';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../utils/taskPresets';
 import SeedFileUploader, { type SeedFileInfo } from '../components/SeedFileUploader';
@@ -18,6 +19,46 @@ const FIELD_IDS = {
   prompt: 'task-create-prompt',
 };
 
+const TASK_DRAFT_KEY = 'scholar-agent:task-draft';
+
+interface TaskDraft {
+  selectedTaskPresetId: TaskPresetId;
+  researcherType: ResearcherType;
+  harnessEngine: HarnessEngine;
+  prompt: string;
+  skills: string[];
+  title: string;
+  arxivUrls: string[];
+}
+
+function readDraft(): TaskDraft | null {
+  try {
+    const raw = localStorage.getItem(TASK_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as TaskDraft;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(draft: TaskDraft): void {
+  try {
+    localStorage.setItem(TASK_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // localStorage full or unavailable — silently ignore
+  }
+}
+
+function clearDraft(): void {
+  try {
+    localStorage.removeItem(TASK_DRAFT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 interface Props {
   projectId: string;
   workspaceId: string;
@@ -27,6 +68,7 @@ interface Props {
   availableEnvironments: EnvironmentRecord[];
   availableSkills: SkillItem[];
   lockProject?: boolean;
+  researchAgentProfile?: ResearchAgentProfileSettings | null;
   onSubmit: (payload: TaskCreatePayload) => void;
   onCancel: () => void;
 }
@@ -40,10 +82,12 @@ export default function TaskCreateForm({
   availableEnvironments,
   availableSkills,
   lockProject = false,
+  researchAgentProfile,
   onSubmit,
   onCancel,
 }: Props) {
   const t = useT();
+
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(workspaceId);
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(environmentId);
@@ -54,9 +98,62 @@ export default function TaskCreateForm({
   const [skills, setSkills] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [seedFiles, setSeedFiles] = useState<SeedFileInfo[]>([]);
+  const [arxivUrls, setArxivUrls] = useState<string[]>([]);
+  const [arxivInput, setArxivInput] = useState('');
+  const [arxivInputError, setArxivInputError] = useState<string | null>(null);
 
-  const SEED_FILE_PRESETS: TaskPresetId[] = ['reproduce-baseline-default', 'structured-research-default'];
+  // ── Draft persistence ─────────────────────────────────────────
+  const draftRestoredRef = useRef(false);
+  const [showDraftNotice, setShowDraftNotice] = useState(false);
+
+  // Restore draft on mount (must be after useState declarations for the lint rule)
+  useEffect(() => {
+    const saved = readDraft();
+    if (saved) {
+      setSelectedTaskPresetId(saved.selectedTaskPresetId ?? 'raw-prompt');
+      setResearcherType(saved.researcherType ?? 'vanilla');
+      setHarnessEngine(saved.harnessEngine ?? 'claude-code');
+      setPrompt(saved.prompt ?? '');
+      setSkills(saved.skills ?? []);
+      setTitle(saved.title ?? '');
+      setArxivUrls(saved.arxivUrls ?? []);
+      draftRestoredRef.current = true;
+      setShowDraftNotice(true);
+    }
+  }, []);
+
+  const handleDiscardDraft = useCallback(() => {
+    clearDraft();
+    setShowDraftNotice(false);
+  }, []);
+
+  // Sync form state → localStorage on changes
+  useEffect(() => {
+    const d: TaskDraft = {
+      selectedTaskPresetId,
+      researcherType,
+      harnessEngine,
+      prompt,
+      skills,
+      title,
+      arxivUrls,
+    };
+    writeDraft(d);
+  }, [
+    selectedTaskPresetId,
+    researcherType,
+    harnessEngine,
+    prompt,
+    skills,
+    title,
+    arxivUrls,
+  ]);
+
+  const ARXIV_URL_RE = /^https?:\/\/arxiv\.org\/(abs|pdf)\/[\w.-]+(\/)?(\.pdf)?$/;
+
+  const SEED_FILE_PRESETS: TaskPresetId[] = ['reproduce-baseline-default', 'structured-research-default', 'overview'];
   const showSeedUploader = SEED_FILE_PRESETS.includes(selectedTaskPresetId);
+  const showPaperInput = selectedTaskPresetId === 'overview';
 
   useEffect(() => {
     setSelectedProjectId(projectId);
@@ -87,14 +184,55 @@ export default function TaskCreateForm({
     setResearcherType(preset.researcherType);
     setHarnessEngine(preset.harnessEngine);
     setSeedFiles([]);
+    setArxivUrls([]);
+    setArxivInput('');
+    setArxivInputError(null);
   };
 
-  const buildPromptWithSeedFiles = (userPrompt: string, files: SeedFileInfo[]): string => {
+  const handleAddArxivUrl = () => {
+    const trimmed = arxivInput.trim();
+    if (!trimmed) return;
+
+    if (!ARXIV_URL_RE.test(trimmed)) {
+      setArxivInputError(t('pages.tasks.create.arxiv.invalidUrl'));
+      return;
+    }
+    if (arxivUrls.includes(trimmed)) {
+      setArxivInputError(t('pages.tasks.create.arxiv.duplicateUrl'));
+      return;
+    }
+
+    setArxivUrls((prev) => [...prev, trimmed]);
+    setArxivInput('');
+    setArxivInputError(null);
+  };
+
+  const handleRemoveArxivUrl = (index: number) => {
+    setArxivUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleArxivInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddArxivUrl();
+    }
+  };
+
+  const buildPromptWithPapers = (userPrompt: string, files: SeedFileInfo[], urls: string[]): string => {
     const uploaded = files.filter(f => f.status === 'uploaded');
-    if (uploaded.length === 0) return userPrompt;
-    const fileRefs = uploaded.map(f => `- ${f.serverPath}`).join('\n');
-    const header = `请参考以下种子论文文件作为研究和分析的参考材料：\n${fileRefs}\n\n`;
-    return header + userPrompt;
+    const parts: string[] = [];
+
+    if (urls.length > 0) {
+      const urlRefs = urls.map(u => `- ${u}`).join('\n');
+      parts.push(`请总结以下论文：\n${urlRefs}\n`);
+    }
+    if (uploaded.length > 0) {
+      const fileRefs = uploaded.map(f => `- ${f.serverPath}`).join('\n');
+      parts.push(`请参考以下论文文件作为研究和分析的参考材料：\n${fileRefs}\n`);
+    }
+
+    if (parts.length === 0) return userPrompt;
+    return parts.join('\n') + userPrompt;
   };
 
   const canSubmit = selectedProjectId !== '' && selectedWorkspaceId !== '' && selectedEnvironmentId !== '' && prompt.trim() !== '';
@@ -104,21 +242,46 @@ export default function TaskCreateForm({
     if (!canSubmit) {
       return;
     }
+    clearDraft();
+    const profile = researchAgentProfile;
     onSubmit({
       project_id: selectedProjectId,
       workspace_id: selectedWorkspaceId,
       environment_id: selectedEnvironmentId,
       researcher_type: researcherType,
       harness_engine: harnessEngine,
-      prompt: buildPromptWithSeedFiles(prompt, seedFiles),
+      prompt: buildPromptWithPapers(prompt, seedFiles, arxivUrls),
       skills: researcherType === 'vanilla' ? skills : [],
       mcp_servers: [],
       title: title || undefined,
+      research_agent_profile: profile ? {
+        profile_id: profile.profileId,
+        label: profile.label,
+        api_base_url: profile.apiBaseUrl || null,
+        api_key: profile.apiKey || null,
+        codex_base_url: profile.codexBaseUrl || null,
+        codex_api_key: profile.codexApiKey || null,
+        codex_model: profile.codexModel || null,
+        codex_app_server_command: profile.codexAppServerCommand || null,
+        codex_approval_policy: profile.codexApprovalPolicy || null,
+      } : null,
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 text-[var(--text)]">
+      {showDraftNotice && (
+        <div className="flex items-center justify-between rounded-lg border border-[var(--success-border)] bg-[var(--success-soft)] px-3 py-2 text-xs text-[var(--success-foreground)]">
+          <span>{t('pages.tasks.create.draftNotice')}</span>
+          <button
+            type="button"
+            onClick={handleDiscardDraft}
+            className="ml-2 shrink-0 rounded px-2 py-0.5 text-[var(--text-tertiary)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)] transition-colors"
+          >
+            {t('pages.tasks.create.draftDiscard')}
+          </button>
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-3">
         <FormField label={t('pages.tasks.projectLabel')}>
           <Select
@@ -183,7 +346,7 @@ export default function TaskCreateForm({
       {showSeedUploader && (
         <div className="space-y-2">
           <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
-            {t('pages.tasks.create.seedFiles.label')}
+            {showPaperInput ? t('pages.tasks.create.papers.label') : t('pages.tasks.create.seedFiles.label')}
           </span>
           <SeedFileUploader
             environmentId={selectedEnvironmentId}
@@ -195,6 +358,60 @@ export default function TaskCreateForm({
             <p className="text-xs text-[var(--text-secondary)]">
               {t('pages.tasks.create.seedFiles.fileCount', { count: String(seedFiles.filter(f => f.status === 'uploaded').length) })}
             </p>
+          )}
+        </div>
+      )}
+
+      {showPaperInput && (
+        <div className="space-y-2">
+          <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
+            {t('pages.tasks.create.arxiv.label')}
+          </span>
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              value={arxivInput}
+              onChange={(e) => {
+                setArxivInput(e.target.value);
+                if (arxivInputError) setArxivInputError(null);
+              }}
+              onKeyDown={handleArxivInputKeyDown}
+              placeholder={t('pages.tasks.create.arxiv.placeholder')}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleAddArxivUrl}
+            >
+              {t('pages.tasks.create.arxiv.add')}
+            </Button>
+          </div>
+          {arxivInputError && (
+            <p className="text-xs text-[var(--danger)]">{arxivInputError}</p>
+          )}
+          {arxivUrls.length > 0 && (
+            <ul className="space-y-1">
+              {arxivUrls.map((url, idx) => (
+                <li
+                  key={`${url}-${idx}`}
+                  className="flex items-center justify-between py-1 px-2 text-sm rounded bg-[var(--surface-2)]"
+                >
+                  <span className="truncate mr-2 font-mono text-xs text-[var(--text-secondary)]">
+                    {url}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveArxivUrl(idx)}
+                    className="shrink-0 text-[var(--text-secondary)] hover:text-[var(--danger)] transition-colors"
+                    aria-label={t('pages.tasks.create.arxiv.remove', { url })}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

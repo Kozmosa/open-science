@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """AINRF Docker entrypoint.
 
-- Generates ~/.claude/settings.json and ~/.codex/ config files
-  from templates, substituting environment variables.
+- Generates ~/.claude/settings.json, ~/.claude/CLAUDE.md and ~/.codex/ config files
+  from templates, substituting environment variables where needed.
 - Then execs the ainrf server.
 """
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -62,6 +63,25 @@ def _generate_codex_config() -> None:
         json.loads(text)  # validate
         (out_dir / "auth.json").write_text(text, encoding="utf-8")
         print(f"[entrypoint] Generated {out_dir / 'auth.json'}")
+
+
+def _generate_claude_md() -> None:
+    """Copy the operator CLAUDE.md guardrail into ~/.claude/CLAUDE.md.
+
+    This file is baked into the Docker image at ``/opt/ainrf/config/CLAUDE.md``
+    and is re-applied on every container restart.  Unlike ``settings.json``,
+    it does NOT use env-var substitution — it is a static document of behavioral
+    constraints (PDF chunking, large-file handling, JSON buffer limits, etc.).
+    """
+    src = Path("/opt/ainrf/config/CLAUDE.md")
+    if not src.is_file():
+        print("[entrypoint] CLAUDE.md template not found, skipping")
+        return
+
+    out_dir = HOME / ".claude"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, out_dir / "CLAUDE.md")
+    print(f"[entrypoint] Installed {out_dir / 'CLAUDE.md'}")
 
 
 def _start_sshd() -> None:
@@ -208,10 +228,30 @@ def _provision_tenant_users(state_root: str) -> None:
     if created:
         print(f"[entrypoint] Provisioned {created} tenant Linux user(s)", flush=True)
 
+    # 3. Sync default Codex credentials into every tenant home so that
+    #    sudo -u <tenant> codex app-server can read ~/.codex/config.toml
+    #    and ~/.codex/auth.json after sudo resets HOME.  Refreshed on
+    #    every container restart so credential rotation takes effect.
+    codex_src = Path("/opt/ainrf/.codex")
+    if codex_src.is_dir():
+        synced = 0
+        for (username,) in rows:
+            tenant_codex = HOME_ROOT / username / ".codex"
+            shutil.rmtree(tenant_codex, ignore_errors=True)
+            shutil.copytree(str(codex_src), str(tenant_codex), symlinks=True)
+            subprocess.run(
+                ["chown", "-R", f"ainrf_{username}:{TENANT_GROUP}", str(tenant_codex)],
+                check=False, capture_output=True, text=True,
+            )
+            synced += 1
+        if synced:
+            print(f"[entrypoint] Synced Codex credentials to {synced} tenant(s)", flush=True)
+
 
 def main() -> None:
     _start_sshd()
     _generate_claude_settings()
+    _generate_claude_md()
     _generate_codex_config()
     _sync_aris_skills()
 

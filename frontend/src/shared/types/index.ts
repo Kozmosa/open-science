@@ -358,6 +358,19 @@ export interface TaskCreatePayload {
   skills: string[];
   mcp_servers: string[];
   title?: string;
+  /** Per-task credential/profile overrides.  When omitted the engine
+   *  falls back to tenant home-directory defaults. */
+  research_agent_profile?: {
+    profile_id: string;
+    label: string;
+    api_base_url?: string | null;
+    api_key?: string | null;
+    codex_base_url?: string | null;
+    codex_api_key?: string | null;
+    codex_model?: string | null;
+    codex_app_server_command?: string | null;
+    codex_approval_policy?: string | null;
+  } | null;
 }
 
 export interface TaskOutputEvent {

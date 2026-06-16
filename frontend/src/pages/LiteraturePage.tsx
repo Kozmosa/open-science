@@ -9,6 +9,7 @@ import SubscriptionSidebar from '../components/literature/SubscriptionSidebar';
 import PaperFeed from '../components/literature/PaperFeed';
 import ConvertToTaskDialog from '../components/literature/ConvertToTaskDialog';
 import type { TaskCreatePayload } from '@/shared/types';
+import { useTaskConfiguration } from '@features/settings/contexts/TaskConfigurationContext';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 interface PendingConversion {
@@ -21,6 +22,7 @@ interface PendingConversion {
 export default function LiteraturePage() {
   const t = useT();
   const { showToast } = useToast();
+  const { taskConfiguration } = useTaskConfiguration();
   const environmentSelection = useEnvironmentSelection();
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | undefined>(undefined);
@@ -38,6 +40,11 @@ export default function LiteraturePage() {
   const subscriptions = subscriptionsQuery.data?.items ?? [];
   const workspaces = workspacesQuery.data?.items ?? [];
   const environments = environmentSelection.environments;
+
+  const selectedResearchAgentProfile =
+    taskConfiguration.researchAgentProfiles.find(
+      p => p.profileId === taskConfiguration.defaultResearchAgentProfileId
+    ) ?? null;
 
   const convertMutation = useMutation({
     mutationFn: async ({ paperId, subscriptionId, payload }: { paperId: string; subscriptionId: string; payload: TaskCreatePayload }) => {
@@ -103,6 +110,7 @@ export default function LiteraturePage() {
         paperAbstract={pendingConversion?.abstract ?? ''}
         workspaces={workspaces}
         environments={environments}
+        researchAgentProfile={selectedResearchAgentProfile}
         onConfirm={handleConfirmConversion}
         onCancel={() => setPendingConversion(null)}
       />
