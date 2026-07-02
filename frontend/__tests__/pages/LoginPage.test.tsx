@@ -18,6 +18,11 @@ describe('LoginPage', () => {
     expect(screen.getByPlaceholderText(/password/i)).toBeInTheDocument()
   })
 
+  it('renders OpenScience brand heading', () => {
+    renderWithProviders(<LoginPage />, { route: '/login' })
+    expect(screen.getByText('OpenScience')).toBeInTheDocument()
+  })
+
   it('renders login button', () => {
     renderWithProviders(<LoginPage />, { route: '/login' })
     expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument()

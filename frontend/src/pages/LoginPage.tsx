@@ -34,7 +34,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
       <form onSubmit={handleSubmit} className="bg-[var(--surface)] p-8 rounded-xl shadow-sm border border-[var(--border)] w-full max-w-sm">
-        <h1 className="text-xl font-semibold mb-6">AINRF</h1>
+        <h1 className="text-xl font-semibold mb-6">OpenScience</h1>
         {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
           <label className="text-xs text-[var(--text-secondary)]">{t('auth.username')}</label>

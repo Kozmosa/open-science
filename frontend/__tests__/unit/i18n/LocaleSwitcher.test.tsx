@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import LocaleSwitcher from '../../../src/components/common/LocaleSwitcher';
 import { LocaleProvider, useI18n, useT } from '@/shared/i18n';
+import { messages } from '../../../src/shared/i18n/catalog';
 
 function LocaleHarness() {
   const { locale } = useI18n();
@@ -21,6 +22,11 @@ function LocaleHarness() {
 describe('LocaleSwitcher', () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  it('uses OpenScience app names', () => {
+    expect(messages.en.common.appName).toBe('OpenScience Console');
+    expect(messages.zh.common.appName).toBe('OpenScience 控制台');
   });
 
   it('switches between English and Chinese and persists the selection', async () => {

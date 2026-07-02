@@ -133,7 +133,7 @@ import {
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 const DEFAULT_PROJECT_ID = 'default';
 const API_BASE = '/api';
-const API_KEY = import.meta.env.VITE_AINRF_API_KEY?.trim() ?? '';
+const API_KEY = import.meta.env.VITE_OPENSCIENCE_API_KEY?.trim() || import.meta.env.VITE_AINRF_API_KEY?.trim() || '';
 
 function withEnvironmentId(path: string, environmentId?: string): string {
   if (!environmentId) {
