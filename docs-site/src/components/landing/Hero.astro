@@ -1,0 +1,137 @@
+---
+// Hero — OpenScience landing page hero section
+// Inspired by Anthropic / Claude Science product page design language
+---
+
+<section class="os-hero">
+  <div class="os-hero__inner">
+    <div class="os-hero__badge">OpenScience v0.1</div>
+    <h1 class="os-hero__title">
+      研究智能体的<br />
+      <span class="os-hero__highlight">全栈运行时平台</span>
+    </h1>
+    <p class="os-hero__desc">
+      将 Agent 任务、远程环境、持久终端与工作区浏览器<br class="os-hero__br" />
+      汇入同一个可观察、可编排、可复现的运行时控制面。
+    </p>
+    <div class="os-hero__actions">
+      <a href="/scholar-agent/quickstart/" class="os-hero__btn os-hero__btn--primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        快速开始
+      </a>
+      <a href="/scholar-agent/cli/" class="os-hero__btn os-hero__btn--secondary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        CLI 参考
+      </a>
+    </div>
+  </div>
+</section>
+
+<style is:global>
+.os-hero {
+  position: relative;
+  padding: 5rem 2rem 4rem;
+  text-align: center;
+  overflow: hidden;
+}
+
+.os-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -20%, color-mix(in srgb, var(--sl-color-accent) 15%, transparent) 0%, transparent 100%),
+    radial-gradient(ellipse 50% 50% at 80% 80%, color-mix(in srgb, var(--sl-color-accent-low) 8%, transparent) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.os-hero__inner {
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.os-hero__badge {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--sl-color-accent) 12%, transparent);
+  color: var(--sl-color-accent);
+  border: 1px solid color-mix(in srgb, var(--sl-color-accent) 20%, transparent);
+  margin-bottom: 1.5rem;
+}
+
+.os-hero__title {
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 1.2rem;
+  color: var(--sl-color-text);
+}
+
+.os-hero__highlight {
+  background: linear-gradient(135deg, var(--sl-color-accent), var(--sl-color-accent-high));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.os-hero__desc {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--sl-color-text-muted);
+  margin: 0 0 2rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.os-hero__actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.os-hero__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.os-hero__btn--primary {
+  background: var(--sl-color-accent);
+  color: #fff;
+  border: 1px solid var(--sl-color-accent);
+}
+
+.os-hero__btn--primary:hover {
+  background: var(--sl-color-accent-high);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--sl-color-accent) 30%, transparent);
+}
+
+.os-hero__btn--secondary {
+  background: transparent;
+  color: var(--sl-color-text);
+  border: 1px solid var(--sl-color-bg-sidebar);
+  background: var(--sl-color-bg-sidebar);
+}
+
+.os-hero__btn--secondary:hover {
+  border-color: var(--sl-color-accent);
+  color: var(--sl-color-accent);
+  transform: translateY(-1px);
+}
+</style>
