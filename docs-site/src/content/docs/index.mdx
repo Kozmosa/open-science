@@ -1,54 +1,50 @@
 ---
-title: AINRF 文档
-description: "AINRF — 研究智能体的前后端运行时平台。CLI、REST API、WebUI、终端、工作区、多用户鉴权、性能监控，一站全包。"
+title: OpenScience 文档
+description: "OpenScience — 研究智能体的全栈运行时平台。CLI、REST API、WebUI、终端、工作区、多用户鉴权、性能监控，一站全包。"
 template: splash
-hero:
-  tagline: 研究智能体的全栈运行时平台
-  actions:
-    - text: 快速开始
-      link: /scholar-agent/quickstart/
-      icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.75.75 0 1 1 1.06-1.06l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0Z"/></svg>
-      variant: primary
-    - text: 部署指南
-      link: /scholar-agent/deployment/
-      icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.75.75 0 1 1 1.06-1.06l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0Z"/></svg>
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import Hero from '../../components/landing/Hero.astro';
+import FeatureGrid from '../../components/landing/FeatureGrid.astro';
+import FeatureCard from '../../components/landing/FeatureCard.astro';
+import WhyOpenScience from '../../components/landing/WhyOpenScience.astro';
+import Capabilities from '../../components/landing/Capabilities.astro';
+import TechStack from '../../components/landing/TechStack.astro';
+import CTA from '../../components/landing/CTA.astro';
 
-## 核心功能
+<Hero />
 
-<CardGrid>
-  <Card title="🚀 CLI" href="/scholar-agent/cli/">
-    命令行工具：onboard、serve、login、container 管理一站式操作。
-  </Card>
-  <Card title="🖥️ WebUI" href="/scholar-agent/webui/">
-    React 19 前端：项目管理 Canvas、终端、工作区、资源监控。
-  </Card>
-  <Card title="🔐 认证" href="/scholar-agent/auth/">
-    JWT 鉴权、多角色（admin/member）、环境授权与项目协作。
-  </Card>
-  <Card title="📦 部署" href="/scholar-agent/deployment/">
-    裸机、Docker Compose、Kubernetes 多种生产部署方式。
-  </Card>
-</CardGrid>
+<FeatureGrid title="核心能力">
+  <FeatureCard
+    title="CLI 工具链"
+    description="onboard、serve、login、container 管理一站式操作，从零到 running 只需一条命令。"
+    href="/scholar-agent/cli/"
+    icon="🖥️"
+  />
+  <FeatureCard
+    title="WebUI 控制台"
+    description="React 19 前端：项目管理 Canvas、终端面板、工作区浏览器、资源监控台。"
+    href="/scholar-agent/webui/"
+    icon="🌐"
+  />
+  <FeatureCard
+    title="认证与授权"
+    description="JWT 鉴权、多角色（admin/member）、环境授权与项目协作。"
+    href="/scholar-agent/auth/"
+    icon="🔐"
+  />
+  <FeatureCard
+    title="多环境部署"
+    description="裸机一键部署、Docker Compose、Kubernetes 三种生产部署方式。"
+    href="/scholar-agent/deployment/"
+    icon="📦"
+  />
+</FeatureGrid>
 
-## 功能一览
+<WhyOpenScience />
 
-| 功能 | 说明 |
-|------|------|
-| [项目管理](/scholar-agent/projects/) | ReactFlow Canvas DAG 可视化、任务创建与连线 |
-| [终端管理](/scholar-agent/terminal/) | Personal/Agent 会话、本地 bash、远程 SSH+tmux |
-| [工作区](/scholar-agent/workspace/) | 目录管理、文件浏览器、Monaco 编辑器 |
-| [会话追踪](/scholar-agent/sessions/) | Session/Attempt 链、成本与耗时统计 |
-| [时间线](/scholar-agent/timeline/) | Gantt 图可视化任务时间分布 |
-| [资源监控](/scholar-agent/resources/) | GPU/CPU/内存实时监控、进程树 |
-| [系统设置](/scholar-agent/settings/) | 用户偏好、LLM Provider、技能仓库、Admin 面板 |
+<Capabilities />
 
-## 运维与安全
+<TechStack />
 
-| 主题 | 说明 |
-|------|------|
-| [安全架构](/scholar-agent/security/) | 三层纵深防御、审计事件、敏感路径检测 |
-| [可观测性](/scholar-agent/observability/) | 审计日志、Prometheus 指标、Grafana 监控栈 |
-| [开发指南](/scholar-agent/development/) | 测试、lint、性能审计与文档构建 |
+<CTA />

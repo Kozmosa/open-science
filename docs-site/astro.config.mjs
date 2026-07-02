@@ -8,7 +8,7 @@ export default defineConfig({
   outDir: './dist',
   integrations: [
     starlight({
-      title: 'AINRF',
+      title: 'OpenScience',
       sidebar: [
         {
           label: '快速开始',

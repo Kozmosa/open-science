@@ -43,7 +43,7 @@ _NON_RETRYABLE_ASYNCSSH_ERRORS = tuple(
 
 
 class SSHExecutor:
-    """Async SSH executor for the AINRF execution layer."""
+    """Async SSH executor for the OpenScience execution layer."""
 
     def __init__(self, container: ContainerConfig) -> None:
         self._container = container

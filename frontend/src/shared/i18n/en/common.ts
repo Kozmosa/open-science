@@ -16,7 +16,7 @@ const common = {
       scrollToBottom: 'Scroll to bottom',
     },
     common: {
-      appName: 'AINRF Console',
+      appName: 'OpenScience Console',
       language: 'Language',
       english: 'English',
       chinese: '中文',

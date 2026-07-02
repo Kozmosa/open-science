@@ -1,4 +1,4 @@
-/* AINRF Docs — Custom Starlight Theme Overrides */
+/* OpenScience Docs — Custom Starlight Theme Overrides */
 
 :root {
   --sl-color-accent: #4f46e5;
@@ -20,16 +20,19 @@
   --sl-color-text-muted: #94a3b8;
 }
 
-/* Make the hero section on the splash page more spacious */
-.hero {
-  padding: 3rem 2rem;
+/* ── Splash layout overrides ── */
+
+/* Remove default Starlight splash hero padding (our Hero component handles it) */
+.splash .hero {
+  padding: 0;
 }
 
-/* Better table styling */
-main table {
-  font-size: 0.9rem;
+/* Remove default splash container max-width constraint */
+.splash .main-frame {
+  max-width: none;
 }
 
-main th {
-  background: var(--sl-color-bg-sidebar);
+/* Content area: full width for landing components */
+.content-panel + .content-panel {
+  border-top: none;
 }

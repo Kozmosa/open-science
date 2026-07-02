@@ -1,8 +1,8 @@
-# AINRF Prometheus Scrape Configuration
+# OpenScience Prometheus Scrape Configuration
 # ────────────────────────────────────────
 # Targets:
-#   ainrf:8000  — AINRF backend /metrics (Docker network mode)
-#   localhost:8192 — AINRF backend /metrics (host network mode)
+#   ainrf:8000  — OpenScience backend /metrics (Docker network mode)
+#   localhost:8192 — OpenScience backend /metrics (host network mode)
 #
 # In host-network deployments, Prometheus runs in host network too,
 # so it scrapes localhost:8192. In bridged deployments, it scrapes

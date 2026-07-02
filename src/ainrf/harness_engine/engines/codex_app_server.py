@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_APP_SERVER_COMMAND = "codex app-server --listen stdio://"
 _CLIENT_INFO = {
     "name": "ainrf",
-    "title": "AINRF Harness Engine",
+    "title": "OpenScience Harness Engine",
     "version": "0.1.0",
 }
 

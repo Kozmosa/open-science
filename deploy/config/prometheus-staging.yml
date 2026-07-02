@@ -1,4 +1,4 @@
-# AINRF Prometheus Scrape Configuration — Staging (Host Network)
+# OpenScience Prometheus Scrape Configuration — Staging (Host Network)
 # ────────────────────────────────────────────────────────────
 # Staging backend serves /metrics on port 17000.
 

@@ -18,6 +18,7 @@ import {
 } from '@xyflow/react';
 import { Button } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
+import { readMigratedLocalStorage, removeLocalStorage } from '@/shared/utils/storage';
 import { createTaskEdge } from '@/shared/api';
 import type { ProjectRecord, TaskEdge, TaskSummary } from '@/shared/types';
 import TaskNode from './TaskNode';
@@ -25,7 +26,8 @@ import ProjectDropZone from './ProjectDropZone';
 import { layoutDagre } from './layoutDagre';
 
 const nodeTypes = { taskNode: TaskNode };
-const LAYOUT_KEY = (projectId: string) => `ainrf:project-layout:${projectId}`;
+const LAYOUT_KEY = (projectId: string) => `openscience:project-layout:${projectId}`;
+const LEGACY_LAYOUT_KEY = (projectId: string) => `ainrf:project-layout:${projectId}`;
 
 interface CanvasInnerProps {
   projectId: string;
@@ -66,7 +68,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
 
   // Sync layout on mount so nodes don't stack at (0, 0) on first render
   const [nodes, setLocalNodes] = useState<Node[]>(() => {
-    const saved = localStorage.getItem(LAYOUT_KEY(projectId));
+    const saved = readMigratedLocalStorage(LAYOUT_KEY(projectId), [LEGACY_LAYOUT_KEY(projectId)]);
     if (saved) {
       try {
         const positions: Record<string, { x: number; y: number }> = JSON.parse(saved);
@@ -83,7 +85,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
   const manualEdgeIds = useRef<Set<string>>(new Set());
 
   const runLayout = useCallback(() => {
-    const saved = localStorage.getItem(LAYOUT_KEY(projectId));
+    const saved = readMigratedLocalStorage(LAYOUT_KEY(projectId), [LEGACY_LAYOUT_KEY(projectId)]);
     if (saved) {
       try {
         const positions: Record<string, { x: number; y: number }> = JSON.parse(saved);
@@ -282,7 +284,7 @@ export default function ProjectCanvas({
           <Button
             variant="ghost"
             onClick={() => {
-              localStorage.removeItem(LAYOUT_KEY(projectId));
+              removeLocalStorage(LAYOUT_KEY(projectId), [LEGACY_LAYOUT_KEY(projectId)]);
               onResetLayout();
             }}
             className="h-8 rounded-lg px-3 text-xs"

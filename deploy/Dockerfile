@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════════
-# AINRF multi-stage production Dockerfile
+# OpenScience multi-stage production Dockerfile
 # ══════════════════════════════════════════════════════════════════
 #
 # Stages:
@@ -9,10 +9,10 @@
 #   runtime         — minimal production image
 #
 # Build:
-#   docker build -f deploy/Dockerfile -t ainrf:latest .
+#   docker build -f deploy/Dockerfile -t openscience:latest .
 #
 # Run:
-#   docker run -e AINRF_JWT_SECRET=... -e AINRF_API_KEY_HASHES=... ainrf:latest
+#   docker run -e AINRF_JWT_SECRET=... -e AINRF_API_KEY_HASHES=... openscience:latest
 #
 # Agent tool config (set via environment):
 #   ANTHROPIC_API_KEY   — Anthropic API key
@@ -216,4 +216,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${AINRF_PORT:-8000}/health')"]
 
 ENTRYPOINT ["python", "/opt/ainrf/bin/entrypoint.py"]
-CMD ["sh", "-c", "python -m ainrf serve --host ${AINRF_HOST:-0.0.0.0} --port ${AINRF_PORT:-8000} --state-root /opt/ainrf/state"]
+CMD ["sh", "-c", "openscience serve --host ${AINRF_HOST:-0.0.0.0} --port ${AINRF_PORT:-8000} --state-root /opt/ainrf/state"]

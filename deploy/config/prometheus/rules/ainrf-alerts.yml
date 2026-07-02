@@ -1,7 +1,7 @@
-# AINRF Alerting Rules
+# OpenScience Alerting Rules
 # ────────────────────
 # Loaded by Prometheus via rule_files in prometheus.yml.
-# These rules assume the AINRF metrics endpoint is being scraped at /metrics.
+# These rules assume the OpenScience metrics endpoint is being scraped at /metrics.
 
 groups:
   - name: ainrf.http
@@ -17,9 +17,9 @@ groups:
           severity: critical
           component: api
         annotations:
-          summary: "AINRF 5xx error rate exceeds 5%"
+          summary: "OpenScience 5xx error rate exceeds 5%"
           description: >
-            The AINRF backend is returning 5xx errors for more than 5% of
+            The OpenScience backend is returning 5xx errors for more than 5% of
             requests over the last 5 minutes. Current rate:
             {{ $value | printf "%.2f" }}.
 
@@ -33,7 +33,7 @@ groups:
           severity: warning
           component: api
         annotations:
-          summary: "AINRF P95 latency exceeds 5 seconds"
+          summary: "OpenScience P95 latency exceeds 5 seconds"
           description: >
             The 95th percentile HTTP request latency has been above 5 seconds
             for 10 minutes. Current P95: {{ $value | printf "%.1f" }}s.
@@ -48,7 +48,7 @@ groups:
           severity: warning
           component: agentic_researcher
         annotations:
-          summary: "AINRF task failure spike detected"
+          summary: "OpenScience task failure spike detected"
           description: >
             {{ $value }} tasks have failed in the last 10 minutes.
             This may indicate a systemic issue with the task execution pipeline
@@ -64,7 +64,7 @@ groups:
           severity: warning
           component: execution
         annotations:
-          summary: "AINRF SSH connection errors detected"
+          summary: "OpenScience SSH connection errors detected"
           description: >
             SSH connection errors are occurring at {{ $value | printf "%.2f" }}
             per second on host {{ $labels.host }}.  Check container health and
@@ -80,7 +80,7 @@ groups:
           severity: warning
           component: database
         annotations:
-          summary: "AINRF database slow query spike"
+          summary: "OpenScience database slow query spike"
           description: >
             {{ $value }} slow queries (>1s) were recorded in the last 10
             minutes on database {{ $labels.db }}.  Consider adding indexes or
@@ -156,7 +156,7 @@ groups:
           severity: warning
           component: auth
         annotations:
-          summary: "High login failure rate on AINRF"
+          summary: "High login failure rate on OpenScience"
           description: >
             {{ $value }} login failures per second over the last 5 minutes.
             Possible brute-force attack. Check audit logs for details.
@@ -168,7 +168,7 @@ groups:
           severity: info
           component: auth
         annotations:
-          summary: "Account lockouts occurring on AINRF"
+          summary: "Account lockouts occurring on OpenScience"
           description: >
             {{ $value }} account lockout events per second. Users are being
             locked out due to repeated failed login attempts.
@@ -196,7 +196,7 @@ groups:
           severity: high
           component: security
         annotations:
-          summary: "Sensitive file access detected on AINRF"
+          summary: "Sensitive file access detected on OpenScience"
           description: >
             {{ $value }} sensitive file access attempts per second. Check
             audit logs for which paths and users are involved.
@@ -210,7 +210,7 @@ groups:
           severity: warning
           component: system
         annotations:
-          summary: "High HTTP request rate on AINRF"
+          summary: "High HTTP request rate on OpenScience"
           description: >
             {{ $value }} requests per second. May indicate abuse or
             misconfigured clients.

@@ -8,7 +8,8 @@ import type {
   WebUiSettingsDocument,
 } from '@features/settings/types';
 
-export const settingsStorageKey = 'scholar-agent:webui-settings';
+export const settingsStorageKey = 'openscience:webui-settings';
+export const legacySettingsStorageKeys = ['scholar-agent:webui-settings'];
 export const defaultTerminalFontSize = 13;
 export const minTerminalFontSize = 11;
 export const maxTerminalFontSize = 18;

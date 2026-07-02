@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ── AINRF Lab Deployment Script ──────────────────────────────────
+# ── OpenScience Lab Deployment Script ──────────────────────────────────
 #
 # Prerequisites:
 #   - Ubuntu 22.04+ / Debian 12+
@@ -16,7 +16,7 @@ INSTALL_DIR="${AINRF_INSTALL_DIR:-/opt/ainrf}"
 STATE_DIR="${AINRF_STATE_DIR:-${INSTALL_DIR}/state}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "=== AINRF Lab Deployment ==="
+echo "=== OpenScience Lab Deployment ==="
 echo "Install dir: ${INSTALL_DIR}"
 echo "State dir:   ${STATE_DIR}"
 echo "Repo root:   ${REPO_ROOT}"

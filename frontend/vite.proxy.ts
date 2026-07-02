@@ -1,8 +1,8 @@
 import type { ProxyOptions } from 'vite';
 
 const DEFAULT_BACKEND_TARGET = 'http://127.0.0.1:8000';
-const AINRF_WEBUI_API_KEY = process.env.AINRF_WEBUI_API_KEY?.trim() ?? '';
-const AINRF_WEBUI_BACKEND_TARGET = process.env.AINRF_WEBUI_BACKEND_TARGET?.trim() ?? DEFAULT_BACKEND_TARGET;
+const OPENSCIENCE_WEBUI_API_KEY = process.env.OPENSCIENCE_WEBUI_API_KEY?.trim() || process.env.AINRF_WEBUI_API_KEY?.trim() || '';
+const OPENSCIENCE_WEBUI_BACKEND_TARGET = process.env.OPENSCIENCE_WEBUI_BACKEND_TARGET?.trim() || process.env.AINRF_WEBUI_BACKEND_TARGET?.trim() || DEFAULT_BACKEND_TARGET;
 
 type ProxyHeaderTarget = {
   setHeader(name: string, value: string): void;
@@ -39,10 +39,10 @@ export function attachApiKeyProxyHooks(proxy: ProxyEventRegistrar, apiKey: strin
 
 function createProxyRule(pathPrefix: '/api' | '/code' | '/terminal'): ProxyOptions {
   const rule: ProxyOptions = {
-    target: AINRF_WEBUI_BACKEND_TARGET,
+    target: OPENSCIENCE_WEBUI_BACKEND_TARGET,
     changeOrigin: false,
     configure(proxy) {
-      attachApiKeyProxyHooks(proxy as ProxyEventRegistrar, AINRF_WEBUI_API_KEY);
+      attachApiKeyProxyHooks(proxy as ProxyEventRegistrar, OPENSCIENCE_WEBUI_API_KEY);
     },
   };
 

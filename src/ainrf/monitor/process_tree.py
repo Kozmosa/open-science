@@ -19,8 +19,8 @@ class ProcessTreeFilter:
 
     @staticmethod
     def find_ainrf_roots(processes: list[RawProcess]) -> list[int]:
-        """Return PIDs of processes whose command line contains 'ainrf'."""
-        return [p.pid for p in processes if "ainrf" in p.name]
+        """Return PIDs of processes whose command line contains 'ainrf' or 'openscience'."""
+        return [p.pid for p in processes if "ainrf" in p.name or "openscience" in p.name]
 
     def collect_descendants(self, all_processes: list[RawProcess]) -> list[RawProcess]:
         pid_to_ppid = {p.pid: p.ppid for p in all_processes}

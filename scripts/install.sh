@@ -24,12 +24,12 @@ usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [OPTIONS]
 
-Install AINRF development environment automatically.
+Install OpenScience development environment automatically.
 Detects and installs uv, fnm, and Node.js LTS if missing.
 
 Options:
   -y, --yes        Non-interactive mode: auto-install all missing tools
-  --no-start       Do not start AINRF services after installation
+  --no-start       Do not start OpenScience services after installation
   -h, --help       Show this help message
 
 Examples:
@@ -99,7 +99,7 @@ case "$OS" in
     ;;
   *)
     error "Unsupported operating system: $OS"
-    error "AINRF install script only supports Linux and macOS."
+    error "OpenScience install script only supports Linux and macOS."
     exit 1
     ;;
 esac
@@ -152,7 +152,7 @@ step "Checking Python ..."
 PYTHON_CMD=""
 if ! PYTHON_CMD="$(find_python)"; then
   error "Python is not installed or not on PATH."
-  error "AINRF requires Python 3.13 or later."
+  error "OpenScience requires Python 3.13 or later."
   error "Please install Python 3.13+ and re-run this script."
   exit 1
 fi
@@ -162,7 +162,7 @@ if ! PYTHON_VERSION="$(check_python_version "$PYTHON_CMD")"; then
   local current_version
   current_version="$($PYTHON_CMD --version 2>&1 | awk '{print $2}')"
   error "Python $current_version is too old."
-  error "AINRF requires Python 3.13 or later."
+  error "OpenScience requires Python 3.13 or later."
   error "Please upgrade Python and re-run this script."
   exit 1
 fi
@@ -449,12 +449,12 @@ fi
 if [[ "$NO_START" == true ]]; then
   echo ""
   info "Installation complete!"
-  info "To start AINRF services, run: scripts/webui.sh"
+  info "To start OpenScience services, run: scripts/webui.sh"
   exit 0
 fi
 
 if [[ "$AUTO_YES" == true ]]; then
-  step "Starting AINRF services ..."
+  step "Starting OpenScience services ..."
   exec "$REPO_ROOT/scripts/webui.sh"
 fi
 
@@ -463,11 +463,11 @@ info "Installation complete!"
 echo ""
 
 while true; do
-  read -rp "Start AINRF services now? [Y/n]: " start_choice
+  read -rp "Start OpenScience services now? [Y/n]: " start_choice
   start_choice="${start_choice:-Y}"
   case "${start_choice,,}" in
     y|yes)
-      step "Starting AINRF services ..."
+      step "Starting OpenScience services ..."
       exec "$REPO_ROOT/scripts/webui.sh"
       ;;
     n|no)

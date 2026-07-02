@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════
-# AINRF 生产环境一键启动脚本（模板）
+# OpenScience 生产环境一键启动脚本（模板）
 # ═══════════════════════════════════════════════════════════════════
 #
 # 使用方法：
@@ -15,7 +15,7 @@
 # 本脚本执行以下操作：
 #   - 健康检查（配置是否就绪）
 #   - 拉取最新代码并更新（可选）
-#   - 启动/重启 AINRF 后端和 Nginx
+#   - 启动/重启 OpenScience 后端和 Nginx
 #   - 验证服务可用性
 #   - 输出状态摘要
 #
@@ -61,7 +61,7 @@ step()  { echo -e "${CYAN}[STEP]${NC} $*"; }
 # ── 前置检查 ─────────────────────────────────────────────────────
 [[ $EUID -eq 0 ]] || error "请以 root 用户运行此脚本"
 
-info "=== AINRF 生产环境启动 ==="
+info "=== OpenScience 生产环境启动 ==="
 echo ""
 
 # ── 1. 检查配置是否就绪 ──────────────────────────────────────────
@@ -146,7 +146,7 @@ AINRF_VERSION=$("${INSTALL_DIR}/.venv/bin/python" -c "import ainrf; print(getatt
 AINRF_PORT=$(ss -tlnp | grep ainrf | awk '{print $4}' | grep -oP ':\K\d+' | head -1 || echo "unknown")
 
 echo "┌──────────────────────────────────────────────────────┐"
-echo "│              AINRF 生产环境状态                       │"
+echo "│              OpenScience 生产环境状态                       │"
 echo "├──────────────────────────────────────────────────────┤"
 echo "│  服务状态    ainrf: ${AINRF_STATUS}  nginx: ${NGINX_STATUS}"
 echo "│  版本        ${AINRF_VERSION}"

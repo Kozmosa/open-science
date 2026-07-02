@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: AINRF
+  - name: OpenScience
     orgId: 1
-    folder: "AINRF"
+    folder: "OpenScience"
     type: file
     disableDeletion: false
     editable: true

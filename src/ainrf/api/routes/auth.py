@@ -5,10 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response
-
-_LOG = logging.getLogger(__name__)
 from ainrf.api.routes.metrics import inc_counter
-
 from ainrf.api.config import ApiConfig
 from ainrf.api.schemas import (
     ChangePasswordRequest,
@@ -21,7 +18,13 @@ from ainrf.api.schemas import (
 )
 from ainrf.auth import AuthService
 
+_LOG = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+_ACCESS_COOKIE = "openscience_access_token"
+_LEGACY_ACCESS_COOKIE = "ainrf_access_token"
+
+
 
 
 def _get_service(request: Request) -> AuthService:
@@ -71,6 +74,24 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
     return {"message": "Registration submitted. Awaiting admin approval."}
 
 
+def _set_access_cookies(response: Response, access_token: str, *, secure: bool) -> None:
+    for cookie_name in (_ACCESS_COOKIE, _LEGACY_ACCESS_COOKIE):
+        response.set_cookie(
+            key=cookie_name,
+            value=access_token,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+            max_age=3600,
+            path="/",
+        )
+
+
+def _delete_access_cookies(response: Response) -> None:
+    for cookie_name in (_ACCESS_COOKIE, _LEGACY_ACCESS_COOKIE):
+        response.delete_cookie(key=cookie_name, path="/")
+
+
 @router.post("/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest, request: Request) -> Response:
     service = _get_service(request)
@@ -111,15 +132,7 @@ async def login(payload: LoginRequest, request: Request) -> Response:
     # Set session cookie so nginx auth_request on /grafana, /prometheus, /litefuse can authenticate.
     # HttpOnly for XSS protection; SameSite=Lax for CSRF; Secure in production.
     is_secure = request.url.scheme == "https"
-    response.set_cookie(
-        key="ainrf_access_token",
-        value=result["access_token"],
-        httponly=True,
-        secure=is_secure,
-        samesite="lax",
-        max_age=3600,  # 1 hour, matches typical JWT expiry
-        path="/",
-    )
+    _set_access_cookies(response, result["access_token"], secure=is_secure)
     return response
 
 
@@ -137,15 +150,7 @@ async def refresh(payload: RefreshRequest, request: Request) -> Response:
         status_code=200,
     )
     is_secure = request.url.scheme == "https"
-    response.set_cookie(
-        key="ainrf_access_token",
-        value=result["access_token"],
-        httponly=True,
-        secure=is_secure,
-        samesite="lax",
-        max_age=3600,
-        path="/",
-    )
+    _set_access_cookies(response, result["access_token"], secure=is_secure)
     return response
 
 
@@ -157,7 +162,7 @@ async def logout(payload: RefreshRequest, request: Request) -> Response:
     except Exception:
         pass
     response = Response(status_code=204)
-    response.delete_cookie(key="ainrf_access_token", path="/")
+    _delete_access_cookies(response)
     return response
 
 
@@ -174,7 +179,7 @@ async def check(request: Request) -> Response:
     """Auth check for nginx auth_request (Grafana reverse proxy).
 
 
-    Only AINRF admins are allowed. Returns 200 with identity headers
+    Only OpenScience admins are allowed. Returns 200 with identity headers
     for admins, 401 for unauthenticated, 403 for non-admin users.
     """
     user = getattr(request.state, "current_user", None)

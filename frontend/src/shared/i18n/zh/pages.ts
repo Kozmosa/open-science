@@ -20,7 +20,7 @@ const pages = {
       },
       dashboard: {
         eyebrow: '终端',
-        title: 'Scholar Agent 运行时外壳',
+        title: 'OpenScience 运行时外壳',
         description:
           '前端现在暴露了整理后的运行时外壳：健康检查、单会话终端工作台控制面、环境控制平面和托管工作区浏览面板。此页用于确认 API、SSH、工作区就绪状态、终端会话状态和环境就绪状态。',
         surfaceTitle: '当前后端面',
@@ -281,7 +281,7 @@ const pages = {
         eyebrow: 'SETTINGS',
         title: '设置',
         description:
-          '自定义 Scholar Agent 的使用体验：默认首页、终端字号、项目默认环境以及任务草稿模板。',
+          '自定义 OpenScience 的使用体验：默认首页、终端字号、项目默认环境以及任务草稿模板。',
         recoveryNotice:
           '本地设置文档缺字段、已损坏或版本不兼容，应用已回退到默认配置以继续运行。',
         routes: {
@@ -349,7 +349,7 @@ const pages = {
         },
         skillRepository: {
           title: 'Skill 仓库',
-          description: '管理 AINRF 技能：查看详情、预览设置并导入新技能。',
+          description: '管理 OpenScience 技能：查看详情、预览设置并导入新技能。',
           selectSkill: '选择一个技能以查看详情',
           version: '版本',
           author: '作者',
@@ -620,8 +620,8 @@ const pages = {
           noGpu: '未检测到 GPU',
         },
         processCard: {
-          title: 'AINRF 进程',
-          empty: '未检测到 AINRF 进程',
+          title: 'OpenScience 进程',
+          empty: '未检测到 OpenScience 进程',
           columns: {
             pid: 'PID',
             name: '进程名',

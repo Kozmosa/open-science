@@ -10,8 +10,10 @@ import {
 } from 'react';
 import { messages } from './catalog';
 import { type Locale, type MessageKey } from './messages';
+import { readMigratedLocalStorage } from '@/shared/utils/storage';
 
-const localeStorageKey = 'scholar-agent:locale';
+const localeStorageKey = 'openscience:locale';
+const legacyLocaleStorageKeys = ['scholar-agent:locale'];
 
 interface I18nContextValue {
   locale: Locale;
@@ -31,7 +33,7 @@ function isLocale(value: string | null | undefined): value is Locale {
 
 function readStoredLocale(): Locale | null {
   try {
-    const stored = window.localStorage.getItem(localeStorageKey);
+    const stored = readMigratedLocalStorage(localeStorageKey, legacyLocaleStorageKeys);
     return isLocale(stored) ? stored : null;
   } catch {
     return null;

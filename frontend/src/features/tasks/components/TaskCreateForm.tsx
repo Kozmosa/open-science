@@ -6,6 +6,7 @@ import type { ResearchAgentProfileSettings } from '@features/settings/types';
 import TaskSkillPicker from '../components/TaskSkillPicker';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../utils/taskPresets';
 import SeedFileUploader, { type SeedFileInfo } from '../components/SeedFileUploader';
+import { readMigratedLocalStorage, removeLocalStorage } from '@/shared/utils/storage';
 
 const FIELD_IDS = {
   project: 'task-create-project',
@@ -19,7 +20,8 @@ const FIELD_IDS = {
   prompt: 'task-create-prompt',
 };
 
-const TASK_DRAFT_KEY = 'scholar-agent:task-draft';
+const TASK_DRAFT_KEY = 'openscience:task-draft';
+const LEGACY_TASK_DRAFT_KEYS = ['scholar-agent:task-draft'];
 
 interface TaskDraft {
   selectedTaskPresetId: TaskPresetId;
@@ -33,7 +35,7 @@ interface TaskDraft {
 
 function readDraft(): TaskDraft | null {
   try {
-    const raw = localStorage.getItem(TASK_DRAFT_KEY);
+    const raw = readMigratedLocalStorage(TASK_DRAFT_KEY, LEGACY_TASK_DRAFT_KEYS);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
@@ -53,7 +55,7 @@ function writeDraft(draft: TaskDraft): void {
 
 function clearDraft(): void {
   try {
-    localStorage.removeItem(TASK_DRAFT_KEY);
+    removeLocalStorage(TASK_DRAFT_KEY, LEGACY_TASK_DRAFT_KEYS);
   } catch {
     // ignore
   }

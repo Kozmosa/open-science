@@ -16,7 +16,7 @@ const common = {
       scrollToBottom: '滚动到底部',
     },
     common: {
-      appName: 'AINRF 控制台',
+      appName: 'OpenScience 控制台',
       language: '语言',
       english: '英文',
       chinese: '中文',

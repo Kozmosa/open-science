@@ -1,12 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getStoredRefreshToken, setStoredRefreshToken } from '../../../src/shared/api/client';
 
 beforeEach(() => {
   vi.resetModules();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  window.localStorage.clear();
 });
 
 describe('api client', () => {
+  it('migrates the legacy refresh token storage key', () => {
+    window.localStorage.setItem('ainrf.refresh_token', 'legacy-refresh');
+
+    expect(getStoredRefreshToken()).toBe('legacy-refresh');
+    expect(window.localStorage.getItem('openscience.refresh_token')).toBe('legacy-refresh');
+  });
+
+  it('stores refresh tokens under the OpenScience key', () => {
+    setStoredRefreshToken('new-refresh');
+
+    expect(window.localStorage.getItem('openscience.refresh_token')).toBe('new-refresh');
+    expect(window.localStorage.getItem('ainrf.refresh_token')).toBeNull();
+  });
+
   it('injects the Bearer token when access token is set', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), {

@@ -41,7 +41,7 @@ def _build_fake_frontend(tmp_path: Path) -> Path:
     assets.mkdir(parents=True)
 
     (dist / "index.html").write_text(
-        "<!DOCTYPE html><html><body>AINRF SPA</body></html>"
+        "<!DOCTYPE html><html><body>OpenScience SPA</body></html>"
     )
     (assets / "main.js").write_text("console.log('ainrf');")
     (assets / "style.css").write_text("body{margin:0}")
@@ -114,6 +114,68 @@ async def test_api_prefix_login_round_trip(tmp_path: Path) -> None:
         assert "refresh_token" in data
 
 
+
+@pytest.mark.anyio
+async def test_login_sets_openscience_cookie(tmp_path: Path) -> None:
+    app, client = _make_production_app(tmp_path)
+    async with client:
+        auth_service = app.state.auth_service
+        auth_service.initialize()
+        auth_service.register(
+            username="cookieuser",
+            display_name="Cookie User",
+            password="Password123!",
+        )
+        _activate_user(app, "cookieuser")
+
+        response = await client.post(
+            "/api/auth/login",
+            json={"username": "cookieuser", "password": "Password123!"},
+        )
+
+    assert response.status_code == 200
+    assert "openscience_access_token" in response.cookies
+
+
+@pytest.mark.anyio
+async def test_auth_accepts_legacy_ainrf_cookie(tmp_path: Path) -> None:
+    app, client = _make_production_app(tmp_path)
+    async with client:
+        tokens = await _register_activate_login(
+            app,
+            client,
+            username="legacycookie",
+            password="Password123!",
+        )
+
+        response = await client.get(
+            "/api/auth/check",
+            cookies={"ainrf_access_token": tokens["access_token"]},
+        )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_logout_deletes_both_cookie_names(tmp_path: Path) -> None:
+    app, client = _make_production_app(tmp_path)
+    async with client:
+        tokens = await _register_activate_login(
+            app,
+            client,
+            username="logoutcookie",
+            password="Password123!",
+        )
+        response = await client.post(
+            "/api/auth/logout",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+
+    assert response.status_code == 204
+    set_cookie = ",".join(response.headers.get_list("set-cookie"))
+    assert "openscience_access_token=" in set_cookie
+    assert "ainrf_access_token=" in set_cookie
+
 @pytest.mark.anyio
 async def test_api_prefix_auth_endpoints(tmp_path: Path) -> None:
     """All auth endpoints respond under /api prefix."""
@@ -160,7 +222,7 @@ async def test_spa_root_returns_index_html(tmp_path: Path) -> None:
     async with client:
         resp = await client.get("/")
         assert resp.status_code == 200
-        assert "AINRF SPA" in resp.text
+        assert "OpenScience SPA" in resp.text
         assert "text/html" in resp.headers.get("content-type", "")
 
 
@@ -189,7 +251,7 @@ async def test_spa_client_routes_return_index_html(tmp_path: Path) -> None:
         for path in ["/dashboard", "/profile", "/about"]:
             resp = await client.get(path)
             assert resp.status_code == 200, f"GET {path} returned {resp.status_code}"
-            assert "AINRF SPA" in resp.text
+            assert "OpenScience SPA" in resp.text
 
 
 @pytest.mark.anyio

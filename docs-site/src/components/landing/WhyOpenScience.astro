@@ -1,0 +1,98 @@
+---
+const items = [
+  {
+    problem: "任务散落在终端、脚本和远程机器里",
+    solution: "Task Harness 统一任务创建、状态追踪、输出 replay/stream 与 runtime artifact",
+  },
+  {
+    problem: "本地/远程环境不透明",
+    solution: "Environment Control Plane 管理 SSH 目标、探测结果与运行时画像",
+  },
+  {
+    problem: "Agent 执行过程不可观察",
+    solution: "WebUI 提供任务列表、inspect 面板、输出时间线与错误摘要",
+  },
+  {
+    problem: "需要临时接管或观察终端",
+    solution: "Terminal Bench 提供持久 tmux 会话与浏览器终端连接",
+  },
+  {
+    problem: "代码工作区和运行时割裂",
+    solution: "Workspace Browser 通过文件浏览 API 暴露项目工作区内容",
+  },
+];
+---
+
+<section class="os-section os-why">
+  <h2 class="os-section__title">为什么需要 OpenScience？</h2>
+  <div class="os-why__grid">
+    {items.map((item) => (
+      <div class="os-why__card">
+        <div class="os-why__problem">{item.problem}</div>
+        <div class="os-why__arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+        <div class="os-why__solution">{item.solution}</div>
+      </div>
+    ))}
+  </div>
+</section>
+
+<style is:global>
+.os-why {
+  max-width: 800px;
+}
+
+.os-why__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.os-why__card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sl-color-text) 8%, transparent);
+  background: var(--sl-color-bg);
+  transition: border-color 0.2s;
+}
+
+.os-why__card:hover {
+  border-color: color-mix(in srgb, var(--sl-color-accent) 25%, transparent);
+}
+
+.os-why__problem {
+  flex: 2;
+  font-size: 0.88rem;
+  color: var(--sl-color-text);
+  font-weight: 500;
+}
+
+.os-why__arrow {
+  flex-shrink: 0;
+  color: var(--sl-color-accent);
+  display: flex;
+  align-items: center;
+}
+
+.os-why__solution {
+  flex: 3;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--sl-color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .os-why__card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .os-why__arrow {
+    transform: rotate(90deg);
+  }
+}
+</style>

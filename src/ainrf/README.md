@@ -1,6 +1,8 @@
-# AINRF Runtime README
+# OpenScience Runtime README
 
-本文档描述 `src/ainrf` 当前作为 AINRF 后端/runtime 半侧的职责、启动方式、环境变量和联调路径。与之配套的前端实现位于仓库根目录的 `frontend/`。
+本文档描述 `src/ainrf` 当前作为 OpenScience 后端/runtime 半侧的职责、启动方式、环境变量和联调路径。与之配套的前端实现位于仓库根目录的 `frontend/`。
+
+兼容性说明：`src/ainrf` 是 OpenScience 当前保留的兼容性 Python 包目录；本阶段旧 CLI `ainrf`、旧状态目录 `.ainrf`、旧环境变量 `AINRF_*` 仍可用，新入口优先使用 `openscience` 与 `OPENSCIENCE_*`。
 
 ## 0. 内网 WebUI 一键启动
 
@@ -17,9 +19,9 @@ scripts/webui.sh preview --backend-public
 默认模式是 `dev`。脚本会自动：
 
 - 使用 `UV_CACHE_DIR=/tmp/uv-cache`（若当前环境未显式设置）
-- 在当前 shell 会话中生成或复用 `AINRF_WEBUI_API_KEY`
-- 在当前 shell 会话中计算并导出 `AINRF_API_KEY_HASHES`
-- 启动后端 `uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root .ainrf`
+- 在当前 shell 会话中生成或复用 `OPENSCIENCE_WEBUI_API_KEY`，并同步兼容旧变量 `AINRF_WEBUI_API_KEY`
+- 在当前 shell 会话中计算并导出 `OPENSCIENCE_API_KEY_HASHES`，并同步兼容旧变量 `AINRF_API_KEY_HASHES`
+- 启动后端 `uv run openscience serve --host 127.0.0.1 --port 8000 --state-root .ainrf`
 - 启动前端 dev server（`0.0.0.0:5173`）或 preview server（`0.0.0.0:4173`）
 
 默认暴露策略是：
@@ -28,16 +30,16 @@ scripts/webui.sh preview --backend-public
 - 后端默认只监听 `127.0.0.1`
 
 此时浏览器统一通过前端代理访问 `/api`、`/code` 与 `/terminal`，不再需要手动设置
-`VITE_AINRF_API_KEY`，浏览器端也不会持有 service key。只有在明确需要让内网直接访问后端 API 时，再额外加 `--backend-public`。
+`VITE_OPENSCIENCE_API_KEY`（兼容 `VITE_AINRF_API_KEY`），浏览器端也不会持有 service key。只有在明确需要让内网直接访问后端 API 时，再额外加 `--backend-public`。
 
 ## 1. 目录定位
 
-`src/ainrf` 当前承载 AINRF 的后端与 runtime 主体，稳定能力包括：
+`src/ainrf` 当前承载 OpenScience 的后端与 runtime 主体，稳定能力包括：
 
-- CLI 入口（`ainrf` 命令）
+- CLI 入口（`openscience` 命令）
 - FastAPI 服务与 daemon 生命周期管理
 - onboarding 与本地 state root 配置
-- 容器连接配置持久化（`ainrf container add`）
+- 容器连接配置持久化（`openscience container add`）
 - environments 控制面（环境 CRUD、手动探测、最近结果展示）
 - SSH 容器健康探测与远端命令执行
 - terminal / tasks / workspace browser 的后端控制面与受管 runtime 能力
@@ -57,24 +59,24 @@ scripts/webui.sh preview --backend-public
 
 ### 2.1 启动 API 服务
 
-如果只是要启动当前 WebUI，优先回到上一节使用 `scripts/webui.sh`。本节的 `ainrf serve` 仍然保留，作为更底层的后端 API 入口。
+如果只是要启动当前 WebUI，优先回到上一节使用 `scripts/webui.sh`。本节的 `openscience serve` 仍然保留，作为更底层的后端 API 入口。
 
 前台模式：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf serve --host 127.0.0.1 --port 8000
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience serve --host 127.0.0.1 --port 8000
 ```
 
 daemon 模式：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf serve --daemon --host 127.0.0.1 --port 8000
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience serve --daemon --host 127.0.0.1 --port 8000
 ```
 
 首次无配置示例（会触发交互式 API key 初始化）：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf serve --host 127.0.0.1 --port 8000
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience serve --host 127.0.0.1 --port 8000
 ```
 
 ### 2.2 交互式添加 Container
@@ -82,7 +84,7 @@ UV_CACHE_DIR=/tmp/uv-cache uv run ainrf serve --host 127.0.0.1 --port 8000
 可以通过 CLI 交互方式，从 SSH 命令直接生成可复用的容器配置：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf container add --state-root .ainrf
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience container add --state-root .ainrf
 ```
 
 交互输入示例：
@@ -101,20 +103,20 @@ UV_CACHE_DIR=/tmp/uv-cache uv run ainrf container add --state-root .ainrf
 项目通过 `uv` 管理依赖，推荐直接使用：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf --help
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience --help
 ```
 
 ### 3.2 首次运行 Onboarding
 
-AINRF 默认使用当前工作目录下的 `./.ainrf/` 作为 state root；如果通过 `--state-root`
+OpenScience 默认使用当前工作目录下的 `./.ainrf/` 作为 state root；如果通过 `--state-root`
 显式指定，则改用指定目录。
 
 当目录内还不存在 `./.ainrf/config.json`，且也没有通过环境变量提供
-`AINRF_API_KEY_HASHES` 时，第一次执行底层 `ainrf serve` 会自动进入交互式 onboarding。
+`AINRF_API_KEY_HASHES` 时，第一次执行底层 `openscience serve` 会自动进入交互式 onboarding。
 如果希望显式执行同一流程，也可以直接运行：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf onboard
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience onboard
 ```
 
 onboarding 至少会创建 `./.ainrf/config.json`。最小可用配置只需要包含
@@ -123,7 +125,7 @@ profile，供后续容器连接配置复用。
 
 ### 3.3 API Key 配置（启动 API 必需）
 
-低层 API 中间件读取 `AINRF_API_KEY_HASHES`（SHA-256 哈希值，支持逗号分隔多个 key）。
+低层 API 中间件优先读取 `OPENSCIENCE_API_KEY_HASHES`，并兼容旧变量 `AINRF_API_KEY_HASHES`（SHA-256 哈希值，支持逗号分隔多个 key）。
 如果你走 `scripts/webui.sh`，则不需要手动设置这个环境变量；脚本会在当前 shell 会话中直接导出临时 token 与对应 hash，并由前端代理层代为注入 `X-API-Key`。
 
 生成哈希示例：
@@ -135,11 +137,11 @@ UV_CACHE_DIR=/tmp/uv-cache uv run python -c "from ainrf.api.config import hash_a
 设置环境变量：
 
 ```bash
-export AINRF_API_KEY_HASHES=<hash1>,<hash2>
+export OPENSCIENCE_API_KEY_HASHES=<hash1>,<hash2>
 ```
 
-首次启动时，如果既没有设置 `AINRF_API_KEY_HASHES`，也没有 `.ainrf/config.json` 中的
-`api_key_hashes`，`ainrf serve` 会自动进入交互式引导，要求输入 API key 并把其哈希
+首次启动时，如果既没有设置 `OPENSCIENCE_API_KEY_HASHES` / `AINRF_API_KEY_HASHES`，也没有 `.ainrf/config.json` 中的
+`api_key_hashes`，`openscience serve` 会自动进入交互式引导，要求输入 API key 并把其哈希
 写入 `.ainrf/config.json`。
 
 ### 3.3 容器连接配置
@@ -174,7 +176,7 @@ Terminal Slice 1-4 已经从“单全局 PTY”切换为“app user × environme
 - V1 多路复用后端固定为 `tmux`；如果 daemon 主机或远端 environment 缺少 `tmux`，terminal ensure/reset 会直接失败，不再回退到旧 PTY shell。
 - 每个 managed task 会在共享 agent tmux session 中创建独立 window，并通过 `/tasks` 控制面暴露只读附着、takeover、release 与 cancel。
 - task terminal attachment 严格区分 `observe` / `write`；`takeover` 会先向 embedded runtime 发 `pause`，`release` 或 grace 过期后再 `resume`。
-- write task attachment 断开后进入 backend-only `5 秒` reconnect grace；同一 `X-AINRF-User-Id` 可在宽限期内通过 `open` 或 `takeover` 直接 reclaim 原写权限。
+- write task attachment 断开后进入 backend-only `5 秒` reconnect grace；同一 `X-OpenScience-User-Id` 可在宽限期内通过 `open` 或 `takeover` 直接 reclaim 原写权限。
 - completed / failed / cancelled task 的 tmux window 默认保留 `60 分钟` 观察窗口，之后会主动 kill window 并把 terminal binding 标记为 `archived`；task 仍保留在列表和详情中，但不再允许 live attach。
 
 Workspace Browser 在本地环境下依赖本机可执行的 `code-server` 二进制；联调前请先确认：
@@ -188,7 +190,7 @@ code-server --version
 - 公共健康检查路径：
   - `GET /health`
   - `GET /v1/health`
-  - 容器健康摘要当前只暴露 SSH、Claude CLI、project dir、GPU/CUDA/disk 等探测结果；不再返回 `anthropic_api_key_ok`，也不由 AINRF 预检查 Claude 鉴权配置。
+  - 容器健康摘要当前只暴露 SSH、Claude CLI、project dir、GPU/CUDA/disk 等探测结果；不再返回 `anthropic_api_key_ok`，也不由 OpenScience 预检查 Claude 鉴权配置。
 - environment 控制面路径（均受 API key 中间件保护）：
   - `GET /environments`
   - `POST /environments`
@@ -256,7 +258,7 @@ code-server --version
 - personal terminal session：按 environment 绑定的 keepalive personal tmux session
 - managed task terminal：共享 agent session 中的 task window
 
-terminal 与 task 路由除 API key 外，还要求 `X-AINRF-User-Id`；当前 WebUI 会自动生成并持久化浏览器级 app user id，再随每次 REST 请求一起注入。
+terminal 与 task 路由除 API key 外，还要求 `X-OpenScience-User-Id`；当前 WebUI 会自动生成并持久化浏览器级 app user id，再随每次 REST 请求一起注入。
 
 personal terminal session 语义如下：
 
@@ -325,7 +327,7 @@ code-server 相关路径只暴露当前 daemon 受管的单实例 workspace brow
 
 ### 6.1 常见问题
 
-- API 启动报 `AINRF API key hashes are not configured`
+- API 启动报 `OpenScience API key hashes are not configured`
 - 原因：未设置 `AINRF_API_KEY_HASHES` 且 `.ainrf/config.json` 无哈希
 
 - 容器健康检查显示 `degraded`
@@ -343,7 +345,7 @@ python -m compileall src/ainrf
 
 ## 7. 对外说明
 
-`src/ainrf` 当前是 AINRF 产品的后端/runtime 主实现，而不是仅供临时验证的最小壳层。
+`src/ainrf` 当前是 OpenScience 产品的后端/runtime 主实现，而不是仅供临时验证的最小壳层。
 前端 WebUI 位于仓库根目录的 `frontend/`；研究笔记、外部项目调研和历史框架文档位于 `docs/` 与 `ref-repos/`，主要提供参考输入与历史追溯。
 如果你继续收缩或调整运行时行为，请同步更新：
 

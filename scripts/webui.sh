@@ -11,7 +11,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/webui.sh [dev|preview] [--backend-public]
 
-Start the AINRF backend and frontend together with a lightweight shell launcher.
+Start the OpenScience backend and frontend together with a lightweight shell launcher.
 
 Options:
   dev               Start the Vite dev server on 0.0.0.0:5173 (default)
@@ -50,27 +50,36 @@ fi
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
 
-if [[ -z "${AINRF_WEBUI_API_KEY:-}" ]]; then
-  AINRF_WEBUI_API_KEY="$("${PYTHON_BIN}" - <<'PY'
+if [[ -z "${OPENSCIENCE_WEBUI_API_KEY:-}" ]]; then
+  if [[ -n "${AINRF_WEBUI_API_KEY:-}" ]]; then
+    OPENSCIENCE_WEBUI_API_KEY="${AINRF_WEBUI_API_KEY}"
+  else
+    OPENSCIENCE_WEBUI_API_KEY="$("${PYTHON_BIN}" - <<'PY'
 import secrets
 
 print(secrets.token_urlsafe(32))
 PY
 )"
+  fi
 fi
 
-export AINRF_WEBUI_API_KEY
-export AINRF_API_KEY_HASHES="$("${PYTHON_BIN}" - <<'PY'
+export OPENSCIENCE_WEBUI_API_KEY
+export AINRF_WEBUI_API_KEY="${OPENSCIENCE_WEBUI_API_KEY}"
+export OPENSCIENCE_API_KEY_HASHES="$("${PYTHON_BIN}" - <<'PY'
 import hashlib
 import os
 
-print(hashlib.sha256(os.environ["AINRF_WEBUI_API_KEY"].encode("utf-8")).hexdigest())
+print(hashlib.sha256(os.environ["OPENSCIENCE_WEBUI_API_KEY"].encode("utf-8")).hexdigest())
 PY
 )"
+export AINRF_API_KEY_HASHES="${OPENSCIENCE_API_KEY_HASHES}"
 
 # Write API key to frontend .env.local so Vite can inject it into the build
 FRONTEND_ENV_FILE="${REPO_ROOT}/frontend/.env.local"
-printf 'VITE_AINRF_API_KEY=%s\n' "${AINRF_WEBUI_API_KEY}" > "${FRONTEND_ENV_FILE}"
+{
+  printf 'VITE_OPENSCIENCE_API_KEY=%s\n' "${OPENSCIENCE_WEBUI_API_KEY}"
+  printf 'VITE_AINRF_API_KEY=%s\n' "${OPENSCIENCE_WEBUI_API_KEY}"
+} > "${FRONTEND_ENV_FILE}"
 
 mkdir -p "${HOME}/.ainrf"
 
@@ -128,7 +137,7 @@ sleep 1
 BACKEND_COMMAND=(
   uv
   run
-  ainrf
+  openscience
   serve
   --host
   "${BACKEND_HOST}"
@@ -166,8 +175,8 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-echo "Starting AINRF backend on ${BACKEND_HOST}:8000"
-echo "Starting AINRF frontend in ${MODE} mode"
+echo "Starting OpenScience backend on ${BACKEND_HOST}:8000"
+echo "Starting OpenScience frontend in ${MODE} mode"
 
 (
   cd "${REPO_ROOT}"

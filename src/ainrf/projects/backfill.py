@@ -1,6 +1,6 @@
 """One-time, idempotent backfill of per-user default projects.
 
-Every AINRF user owns a default project named ``<username>_default``. New users
+Every OpenScience user owns a default project named ``<username>_default``. New users
 get one at registration time; this module provisions one for users that pre-date
 that behaviour (e.g. created before the feature shipped, or the bootstrap admin
 created directly during lifespan startup).

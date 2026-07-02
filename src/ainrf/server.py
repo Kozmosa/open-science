@@ -73,7 +73,7 @@ def run_server_daemon(
 
     _terminate_process(process.pid)
     pid_file.unlink(missing_ok=True)
-    raise RuntimeError(f"AINRF API daemon failed to become healthy on {host}:{port}")
+    raise RuntimeError(f"OpenScience API daemon failed to become healthy on {host}:{port}")
 
 
 def stop_server_daemon(pid_file: Path) -> bool:
@@ -117,7 +117,7 @@ def _ensure_not_running(pid_file: Path) -> None:
         return
     raw_value = pid_file.read_text(encoding="utf-8").strip()
     if raw_value.isdigit() and _process_exists(int(raw_value)):
-        raise RuntimeError(f"AINRF API daemon is already running with pid {raw_value}")
+        raise RuntimeError(f"OpenScience API daemon is already running with pid {raw_value}")
     pid_file.unlink(missing_ok=True)
 
 

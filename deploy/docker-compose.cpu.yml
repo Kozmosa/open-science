@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════════
-# AINRF CPU-only — Docker Compose (host network)
+# OpenScience CPU-only — Docker Compose (host network)
 # ══════════════════════════════════════════════════════════════════
 #
 # 适用于：无 GPU、宿主机 iptables FORWARD 受限（无法使用 Docker NAT 端口映射）。

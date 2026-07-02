@@ -8,9 +8,11 @@ import {
   defaultEditorFontFamily,
   defaultResearchAgentProfileId,
   isDefaultRoute,
+  legacySettingsStorageKeys,
   rawPromptTaskConfigurationId,
   settingsStorageKey,
 } from '@features/settings/utils/defaults';
+import { readMigratedLocalStorage } from '@/shared/utils/storage';
 import type {
   DefaultProjectSettings,
   EnvironmentTaskDefaults,
@@ -303,7 +305,7 @@ export function readStoredSettings(): SettingsLoadResult {
   let rawValue: string | null = null;
 
   try {
-    rawValue = window.localStorage.getItem(settingsStorageKey);
+    rawValue = readMigratedLocalStorage(settingsStorageKey, legacySettingsStorageKeys);
   } catch {
     return { settings: defaults, recoveryReason: null };
   }

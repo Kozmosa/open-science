@@ -1,16 +1,18 @@
 ---
 title: CLI 参考
-description: AINRF 命令行工具完整参考 — onboard、serve、stop、login、container 等所有命令及参数。
+description: OpenScience 命令行工具完整参考 — onboard、serve、stop、login、container 等所有命令及参数。
 ---
 
-所有命令通过 `uv run ainrf <command>` 执行。添加 `--help` 查看完整参数。
+所有命令通过 `uv run openscience <command>` 执行。添加 `--help` 查看完整参数。
+
+兼容性说明：旧命令 `ainrf` 本阶段仍可用；新文档优先展示 `openscience`。
 
 ## onboard
 
 初始化本地状态目录（`~/.ainrf`）、默认配置和工作区。
 
 ```bash
-uv run ainrf onboard
+uv run openscience onboard
 ```
 
 ## serve
@@ -18,9 +20,9 @@ uv run ainrf onboard
 启动后端 API 服务（FastAPI + Uvicorn）。
 
 ```bash
-uv run ainrf serve
-uv run ainrf serve --host 0.0.0.0 --port 8000
-uv run ainrf serve --state-root ~/.ainrf
+uv run openscience serve
+uv run openscience serve --host 0.0.0.0 --port 8000
+uv run openscience serve --state-root ~/.ainrf
 ```
 
 **参数：**
@@ -38,7 +40,7 @@ uv run ainrf serve --state-root ~/.ainrf
 停止由 `serve` 启动的后台 daemon 进程。
 
 ```bash
-uv run ainrf stop
+uv run openscience stop
 ```
 
 ## login
@@ -46,8 +48,8 @@ uv run ainrf stop
 通过 CLI 登录并缓存 JWT access token（交互式提示输入用户名和密码）。
 
 ```bash
-uv run ainrf login
-uv run ainrf login --server http://127.0.0.1:8000
+uv run openscience login
+uv run openscience login --server http://127.0.0.1:8000
 ```
 
 ## container
@@ -55,7 +57,7 @@ uv run ainrf login --server http://127.0.0.1:8000
 管理可复用的容器/环境配置 profile。
 
 ```bash
-uv run ainrf container add
+uv run openscience container add
 ```
 
 ## 相关文档

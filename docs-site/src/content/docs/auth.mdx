@@ -3,7 +3,7 @@ title: 认证与授权
 description: JWT Bearer Token 认证、用户角色（admin/member）、注册审批、环境授权与项目协作者管理。
 ---
 
-AINRF 使用 JWT Bearer Token 认证机制，支持用户注册审批、角色权限、环境授权与项目协作。
+OpenScience 使用 JWT Bearer Token 认证机制，支持用户注册审批、角色权限、环境授权与项目协作。
 
 ## JWT 令牌
 
@@ -72,7 +72,7 @@ pending → active / disabled
 
 ## 首次 Admin 创建
 
-服务首次启动（`ainrf serve`）时，若数据库中无用户，自动创建初始管理员：
+服务首次启动（`openscience serve`）时，若数据库中无用户，自动创建初始管理员：
 
 - 用户名：`admin` / 密码：`admin`
 - 标记 `must_change_password = true`
@@ -124,7 +124,7 @@ PUT /admin/environments/env-localhost/access
 ## CLI 登录
 
 ```bash
-ainrf login --server http://localhost:8000
+openscience login --server http://localhost:8000
 ```
 
 交互式输入用户名和密码，成功后缓存 token 到本地文件，后续 API 请求自动携带 Authorization 头。

@@ -1,4 +1,4 @@
-# AINRF Caddy Reverse Proxy Configuration (Example)
+# OpenScience Caddy Reverse Proxy Configuration (Example)
 # Save as /etc/caddy/Caddyfile or include from your main Caddyfile.
 # Replace YOUR.DOMAIN with your actual domain.
 
@@ -6,7 +6,7 @@ YOUR.DOMAIN {
     # TLS — automatic via Let's Encrypt
     # For internal-only: use tls internal
 
-    # Reverse proxy to AINRF backend
+    # Reverse proxy to OpenScience backend
     reverse_proxy localhost:8000 {
         # WebSocket support
         header_up Connection {>Connection}

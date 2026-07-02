@@ -1,4 +1,4 @@
-# ── AINRF Persistent Volumes ─────────────────────────────────
+# ── OpenScience Persistent Volumes ─────────────────────────────────
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

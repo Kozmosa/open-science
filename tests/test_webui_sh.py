@@ -95,7 +95,7 @@ def test_webui_sh_sets_default_cache_and_generates_session_token(tmp_path: Path)
     assert backend["AINRF_API_KEY_HASHES"] == expected_hash
     assert (
         backend["ARGS"]
-        == f"run ainrf serve --host 127.0.0.1 --port 8000 --state-root {Path.home()}/.ainrf"
+        == f"run openscience serve --host 127.0.0.1 --port 8000 --state-root {Path.home()}/.ainrf"
     )
     assert frontend["ARGS"] == "run dev -- --host 0.0.0.0 --port 5173"
 
@@ -124,6 +124,6 @@ def test_webui_sh_supports_preview_and_backend_public_with_explicit_token(
     assert backend["AINRF_API_KEY_HASHES"] == hashlib.sha256(b"fixed-test-token").hexdigest()
     assert (
         backend["ARGS"]
-        == f"run ainrf serve --host 0.0.0.0 --port 8000 --state-root {Path.home()}/.ainrf"
+        == f"run openscience serve --host 0.0.0.0 --port 8000 --state-root {Path.home()}/.ainrf"
     )
     assert frontend["ARGS"] == "run preview -- --host 0.0.0.0 --port 4173"

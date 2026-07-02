@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ainrf"
 version = "0.1.0"
-description = "AINRF frontend/backend runtime with CLI, API, WebUI, and workspace control surfaces."
+description = "OpenScience frontend/backend runtime with CLI, API, WebUI, and workspace control surfaces."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -37,6 +37,7 @@ dependencies = [
 
 [project.scripts]
 ainrf = "ainrf.cli:main"
+openscience = "ainrf.cli:main"
 
 [dependency-groups]
 dev = [

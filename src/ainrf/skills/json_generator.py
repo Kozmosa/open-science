@@ -52,7 +52,7 @@ def generate_skill_json(
         is_core: Whether this skill is in the core subset (enables inject_mode=auto).
 
     Returns:
-        A dict matching the AINRF skill.json schema.
+        A dict matching the OpenScience skill.json schema.
     """
     skill_id = skill_dir_name
     label = frontmatter.get("name", skill_dir_name)

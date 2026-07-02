@@ -26,14 +26,14 @@ from ainrf.backup.service import BackupService
 
 app = typer.Typer(
     add_completion=False,
-    help="AINRF daemon-oriented runtime CLI.",
+    help="OpenScience daemon-oriented runtime CLI.",
     no_args_is_help=True,
 )
 
 container_app = typer.Typer(help="Manage reusable container profiles.")
 app.add_typer(container_app, name="container")
 
-backup_app = typer.Typer(help="Backup and restore AINRF data.")
+backup_app = typer.Typer(help="Backup and restore OpenScience data.")
 app.add_typer(backup_app, name="backup")
 
 _TOKEN_FILE = Path.home() / ".ainrf" / "token"
@@ -65,7 +65,7 @@ def main_callback(
 def onboard(
     state_root: Annotated[
         Path,
-        typer.Option(help="State root where AINRF config will be initialized."),
+        typer.Option(help="State root where OpenScience config will be initialized."),
     ] = default_state_root(),
 ) -> None:
     run_onboarding(state_root)
@@ -96,7 +96,7 @@ def serve(
         resolved_pid_file = pid_file or runtime_dir / "ainrf-api.pid"
         resolved_log_file = log_file or runtime_dir / "ainrf-api.log"
         daemon_pid = run_server_daemon(host, port, state_root, resolved_pid_file, resolved_log_file)
-        typer.echo(f"AINRF API daemon started (pid={daemon_pid}, port={port})")
+        typer.echo(f"OpenScience API daemon started (pid={daemon_pid}, port={port})")
         return
     run_server(host, port, state_root, workers=workers)
 
@@ -115,9 +115,9 @@ def stop(
     runtime_dir = state_root / "runtime"
     resolved_pid_file = pid_file or runtime_dir / "ainrf-api.pid"
     if stop_server_daemon(resolved_pid_file):
-        typer.echo("AINRF API daemon stopped.")
+        typer.echo("OpenScience API daemon stopped.")
         return
-    typer.echo("AINRF API daemon is not running.")
+    typer.echo("OpenScience API daemon is not running.")
 
 
 @container_app.command("add")
@@ -141,7 +141,7 @@ def container_add(
     project_dir: Annotated[
         str,
         typer.Option(
-            help="Remote project directory used by AINRF.",
+            help="Remote project directory used by OpenScience.",
             prompt="Remote project directory",
         ),
     ] = "/workspace/projects",
@@ -197,10 +197,10 @@ def build_container_profile(
 @app.command()
 def login(
     server: Annotated[
-        str, typer.Option("--server", help="AINRF server URL")
+        str, typer.Option("--server", help="OpenScience server URL")
     ] = "http://localhost:8000",
 ) -> None:
-    """Log in to AINRF and cache the token locally."""
+    """Log in to OpenScience and cache the token locally."""
     import getpass
 
     import requests
@@ -260,7 +260,7 @@ def backup_create(
         typer.Option(help="Tenant home root (default: /home/ainrf_tenants)."),
     ] = None,
 ) -> None:
-    """Create a backup archive of AINRF databases and config."""
+    """Create a backup archive of OpenScience databases and config."""
     svc = BackupService(state_root)
     ws = workspace_root or (Path.home() / ".ainrf_workspaces") if include_workspaces else None
     tr = tenant_root or Path("/home/ainrf_tenants") if include_tenants else None
@@ -297,7 +297,7 @@ def backup_restore(
         typer.Option(help="Skip the automatic pre-restore safety backup."),
     ] = False,
 ) -> None:
-    """Restore AINRF state from a backup archive.
+    """Restore OpenScience state from a backup archive.
 
     A pre-restore safety backup is created automatically.  Stop the server
     before restoring to avoid database corruption.
@@ -403,7 +403,7 @@ def _ensure_api_key_hashes_configured(state_root: Path) -> None:
             ensure_interactive_onboarding_available()
         except typer.BadParameter:
             typer.echo(
-                "AINRF API key hashes are not configured. Run `ainrf onboard` interactively."
+                "OpenScience API key hashes are not configured. Run `openscience onboard` interactively."
             )
             raise typer.Exit(code=1) from None
         onboard_state_root(state_root)

@@ -99,7 +99,7 @@ function Layout({ children }: Props) {
   const pageTitle = pageTitleKey ? t(pageTitleKey) : '';
 
   useEffect(() => {
-    document.title = pageTitle ? `${pageTitle} - AINRF` : t('common.appName');
+    document.title = pageTitle ? `${pageTitle} - OpenScience` : t('common.appName');
   }, [pageTitle, t]);
 
   const asideWidth = useMemo(

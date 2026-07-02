@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import LocaleSwitcher from '../../../src/components/common/LocaleSwitcher';
 import { LocaleProvider, useI18n, useT } from '@/shared/i18n';
+import { messages } from '../../../src/shared/i18n/catalog';
 
 function LocaleHarness() {
   const { locale } = useI18n();
@@ -23,6 +24,11 @@ describe('LocaleSwitcher', () => {
     window.localStorage.clear();
   });
 
+  it('uses OpenScience app names', () => {
+    expect(messages.en.common.appName).toBe('OpenScience Console');
+    expect(messages.zh.common.appName).toBe('OpenScience 控制台');
+  });
+
   it('switches between English and Chinese and persists the selection', async () => {
     const user = userEvent.setup();
 
@@ -39,7 +45,7 @@ describe('LocaleSwitcher', () => {
 
     expect(screen.getByTestId('locale-value')).toHaveTextContent('zh');
     expect(screen.getByTestId('terminal-label')).toHaveTextContent('终端');
-    expect(window.localStorage.getItem('scholar-agent:locale')).toBe('zh');
+    expect(window.localStorage.getItem('openscience:locale')).toBe('zh');
   });
 
   it('uses semantic token colors so it remains visible in the app header', () => {
@@ -70,5 +76,18 @@ describe('LocaleSwitcher', () => {
 
     expect(screen.getByTestId('locale-value')).toHaveTextContent('zh');
     expect(screen.getByTestId('terminal-label')).toHaveTextContent('终端');
+  });
+
+  it('migrates the legacy stored locale on mount', () => {
+    window.localStorage.setItem('scholar-agent:locale', 'zh');
+
+    render(
+      <LocaleProvider>
+        <LocaleHarness />
+      </LocaleProvider>
+    );
+
+    expect(screen.getByTestId('locale-value')).toHaveTextContent('zh');
+    expect(window.localStorage.getItem('openscience:locale')).toBe('zh');
   });
 });

@@ -18,12 +18,12 @@ describe('useCardLayout', () => {
       result.current.swapCards('taskUsage', 'system');
     });
     expect(result.current.layout.cardOrder).toEqual(['system', 'taskUsage', 'processes']);
-    const stored = window.localStorage.getItem('scholar-agent:resources-layout');
+    const stored = window.localStorage.getItem('openscience:resources-layout');
     expect(JSON.parse(stored!).cardOrder).toEqual(['system', 'taskUsage', 'processes']);
   });
 
   it('falls back to default when localStorage is corrupted', () => {
-    window.localStorage.setItem('scholar-agent:resources-layout', 'not-json');
+    window.localStorage.setItem('openscience:resources-layout', 'not-json');
     const { result } = renderHook(() => useCardLayout());
     expect(result.current.layout.cardOrder).toEqual(['taskUsage', 'system', 'processes']);
   });
@@ -31,6 +31,7 @@ describe('useCardLayout', () => {
   it('migrates old stored layouts by appending missing task usage card', () => {
     window.localStorage.setItem('scholar-agent:resources-layout', JSON.stringify({ cardOrder: ['system', 'processes'] }));
     const { result } = renderHook(() => useCardLayout());
+    expect(window.localStorage.getItem('openscience:resources-layout')).not.toBeNull();
     expect(result.current.layout.cardOrder).toEqual(['system', 'processes', 'taskUsage']);
   });
 });

@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════════
-# AINRF Staging — Docker Compose (host network, hot-reload)
+# OpenScience Staging — Docker Compose (host network, hot-reload)
 # ══════════════════════════════════════════════════════════════════
 #
 # Mirrors the production docker-compose.cpu.yml topology with offset
@@ -81,7 +81,7 @@ services:
       # Hot-reload: mount host source over the installed package.
       # uvicorn --reload watches this directory for changes.
       - ../src/ainrf/:/usr/local/lib/python3.13/site-packages/ainrf/:ro
-    # Override CMD: uvicorn with --reload instead of the default `ainrf serve`.
+    # Override CMD: uvicorn with --reload instead of the default OpenScience server command.
     # ENTRYPOINT (entrypoint.py) still runs — provisions tenants, generates
     # agent configs, starts sshd, drops privileges — then execs this CMD.
     command:

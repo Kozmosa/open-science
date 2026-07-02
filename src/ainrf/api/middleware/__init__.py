@@ -172,7 +172,7 @@ def build_jwt_auth_middleware(
             return await call_next(request)
 
         # Fallback: session cookie (needed for nginx auth_request on /grafana, /prometheus, /litefuse)
-        cookie_token = request.cookies.get("ainrf_access_token")
+        cookie_token = request.cookies.get("openscience_access_token") or request.cookies.get("ainrf_access_token")
         if cookie_token:
             try:
                 user = auth_service.get_user_by_token(cookie_token)

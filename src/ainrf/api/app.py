@@ -201,7 +201,7 @@ def create_app(
     redoc_url = None if api_config.production else "/redoc"
     openapi_url = None if api_config.production else "/openapi.json"
     app = FastAPI(
-        title="AINRF API",
+        title="OpenScience API",
         version="0.1.0",
         lifespan=lifespan,
         docs_url=docs_url,

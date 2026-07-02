@@ -20,7 +20,7 @@ const pages = {
       },
       dashboard: {
         eyebrow: 'Terminal',
-        title: 'Scholar Agent runtime shell',
+        title: 'OpenScience runtime shell',
         description:
           'The frontend now exposes the cleaned runtime shell: health checks, the keepalive personal terminal bench control surface, the environment control plane, and the managed workspace browser panel. Use this page to confirm API, SSH, workspace readiness, terminal session state, and environment readiness.',
         surfaceTitle: 'Current backend surface',
@@ -287,7 +287,7 @@ const pages = {
         eyebrow: '设置',
         title: 'Settings',
         description:
-          'Customize your Scholar Agent experience: default landing page, terminal font size, project environment, and task draft templates.',
+          'Customize your OpenScience experience: default landing page, terminal font size, project environment, and task draft templates.',
         recoveryNotice:
           'The local settings document was missing fields, invalid, or no longer compatible. Defaults were restored so the app can keep running.',
         routes: {
@@ -359,7 +359,7 @@ const pages = {
         },
         skillRepository: {
           title: 'Skill Repository',
-          description: 'Manage AINRF skills: view details, preview settings, and import new skills.',
+          description: 'Manage OpenScience skills: view details, preview settings, and import new skills.',
           selectSkill: 'Select a skill to view details',
           version: 'Version',
           author: 'Author',
@@ -632,8 +632,8 @@ const pages = {
           noGpu: 'No GPU detected',
         },
         processCard: {
-          title: 'AINRF Processes',
-          empty: 'No AINRF processes detected',
+          title: 'OpenScience Processes',
+          empty: 'No OpenScience processes detected',
           columns: {
             pid: 'PID',
             name: 'Name',

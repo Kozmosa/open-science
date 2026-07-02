@@ -1,4 +1,4 @@
-"""AINRF data backup and restore."""
+"""OpenScience data backup and restore."""
 
 from __future__ import annotations
 

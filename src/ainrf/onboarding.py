@@ -39,13 +39,13 @@ def ensure_interactive_onboarding_available() -> None:
     stdout = click.get_text_stream("stdout")
     if not stdin.isatty() or not stdout.isatty():
         raise typer.BadParameter(
-            "AINRF runtime config is not configured. Run onboarding interactively."
+            "OpenScience runtime config is not configured. Run onboarding interactively."
         )
 
 
 def prompt_api_key() -> str:
     api_key = typer.prompt(
-        "API key for AINRF clients",
+        "API key for OpenScience clients",
         hide_input=True,
         confirmation_prompt=True,
     ).strip()
@@ -122,10 +122,10 @@ def run_onboarding(state_root: Path) -> Path | None:
     config_path = config_path_for(state_root)
     reset_existing = False
     if config_path.exists() and not typer.confirm(
-        f"AINRF config already exists at `{config_path}`. Overwrite it?",
+        f"OpenScience config already exists at `{config_path}`. Overwrite it?",
         default=False,
     ):
-        typer.echo("Keeping existing AINRF config.")
+        typer.echo("Keeping existing OpenScience config.")
         return None
     if config_path.exists():
         reset_existing = True

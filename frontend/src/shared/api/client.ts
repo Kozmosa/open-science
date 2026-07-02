@@ -1,4 +1,9 @@
+import { readMigratedLocalStorage, removeLocalStorage } from '@/shared/utils/storage';
+
 const API_BASE = '/api';
+const REFRESH_TOKEN_STORAGE_KEY = 'openscience.refresh_token';
+const LEGACY_REFRESH_TOKEN_STORAGE_KEYS = ['ainrf.refresh_token'];
+
 
 let _accessToken: string | null = null;
 let _refreshPromise: Promise<string | null> | null = null;
@@ -20,14 +25,17 @@ export function setAccessToken(token: string | null) {
 // serve the frontend with a strict Content-Security-Policy header.
 // Access token is memory-only.
 export function getStoredRefreshToken(): string | null {
-  return localStorage.getItem('ainrf.refresh_token');
+  return readMigratedLocalStorage(REFRESH_TOKEN_STORAGE_KEY, LEGACY_REFRESH_TOKEN_STORAGE_KEYS);
 }
 
 export function setStoredRefreshToken(token: string | null) {
   if (token) {
-    localStorage.setItem('ainrf.refresh_token', token);
+    for (const legacyKey of LEGACY_REFRESH_TOKEN_STORAGE_KEYS) {
+      localStorage.removeItem(legacyKey);
+    }
+    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
   } else {
-    localStorage.removeItem('ainrf.refresh_token');
+    removeLocalStorage(REFRESH_TOKEN_STORAGE_KEY, LEGACY_REFRESH_TOKEN_STORAGE_KEYS);
   }
 }
 
