@@ -114,6 +114,68 @@ async def test_api_prefix_login_round_trip(tmp_path: Path) -> None:
         assert "refresh_token" in data
 
 
+
+@pytest.mark.anyio
+async def test_login_sets_openscience_cookie(tmp_path: Path) -> None:
+    app, client = _make_production_app(tmp_path)
+    async with client:
+        auth_service = app.state.auth_service
+        auth_service.initialize()
+        auth_service.register(
+            username="cookieuser",
+            display_name="Cookie User",
+            password="Password123!",
+        )
+        _activate_user(app, "cookieuser")
+
+        response = await client.post(
+            "/api/auth/login",
+            json={"username": "cookieuser", "password": "Password123!"},
+        )
+
+    assert response.status_code == 200
+    assert "openscience_access_token" in response.cookies
+
+
+@pytest.mark.anyio
+async def test_auth_accepts_legacy_ainrf_cookie(tmp_path: Path) -> None:
+    app, client = _make_production_app(tmp_path)
+    async with client:
+        tokens = await _register_activate_login(
+            app,
+            client,
+            username="legacycookie",
+            password="Password123!",
+        )
+
+        response = await client.get(
+            "/api/auth/check",
+            cookies={"ainrf_access_token": tokens["access_token"]},
+        )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_logout_deletes_both_cookie_names(tmp_path: Path) -> None:
+    app, client = _make_production_app(tmp_path)
+    async with client:
+        tokens = await _register_activate_login(
+            app,
+            client,
+            username="logoutcookie",
+            password="Password123!",
+        )
+        response = await client.post(
+            "/api/auth/logout",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+
+    assert response.status_code == 204
+    set_cookie = ",".join(response.headers.get_list("set-cookie"))
+    assert "openscience_access_token=" in set_cookie
+    assert "ainrf_access_token=" in set_cookie
+
 @pytest.mark.anyio
 async def test_api_prefix_auth_endpoints(tmp_path: Path) -> None:
     """All auth endpoints respond under /api prefix."""
