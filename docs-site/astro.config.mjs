@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://kozmosa.github.io',
-  base: '/scholar-agent/',
+  base: '/open-science/',
   outDir: './dist',
   integrations: [
     starlight({
@@ -70,7 +70,7 @@ export default defineConfig({
       customCss: ['./src/custom.css'],
       editLink: {
         baseUrl:
-          'https://github.com/Kozmosa/scholar-agent/edit/master/docs-site/',
+          'https://github.com/Kozmosa/open-science/edit/master/docs-site/',
       },
       lastUpdated: true,
       head: [
