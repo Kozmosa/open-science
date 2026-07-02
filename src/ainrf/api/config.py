@@ -17,6 +17,12 @@ from ainrf.state import default_state_root
 def hash_api_key(value: str) -> str:
     return sha256(value.encode("utf-8")).hexdigest()
 
+def _env_value(name: str, legacy_name: str, default: str = "") -> str:
+    value = os.environ.get(name)
+    if value is not None:
+        return value
+    return os.environ.get(legacy_name, default)
+
 
 def _parse_api_key_hashes(raw: str) -> frozenset[str]:
     hashes = {item.strip() for item in raw.split(",") if item.strip()}
@@ -68,10 +74,10 @@ class ApiConfig:
         startup_cwd = Path.cwd().resolve()
         resolved_state_root = (
             state_root
-            or Path(os.environ.get("AINRF_STATE_ROOT", ""))
+            or Path(_env_value("OPENSCIENCE_STATE_ROOT", "AINRF_STATE_ROOT"))
             or default_state_root()
         )
-        env_hashes = os.environ.get("AINRF_API_KEY_HASHES")
+        env_hashes = _env_value("OPENSCIENCE_API_KEY_HASHES", "AINRF_API_KEY_HASHES")
         api_key_hashes = _parse_api_key_hashes(env_hashes) if env_hashes else frozenset()
 
         payload: object | None = None
@@ -90,34 +96,60 @@ class ApiConfig:
         except ValueError:
             container_config = parse_container_config_from_runtime_config(payload)
 
-        production = os.environ.get("AINRF_PRODUCTION", "").lower() in ("1", "true", "yes")
-        raw_cidrs = os.environ.get("AINRF_ALLOWED_CIDRS", "")
+        production = _env_value("OPENSCIENCE_PRODUCTION", "AINRF_PRODUCTION").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        raw_cidrs = _env_value("OPENSCIENCE_ALLOWED_CIDRS", "AINRF_ALLOWED_CIDRS")
         allowed_cidrs = tuple(c.strip() for c in raw_cidrs.split(",") if c.strip())
-        max_concurrent = int(os.environ.get("AINRF_MAX_CONCURRENT_REQUESTS", "0"))
-        login_max_failures = int(os.environ.get("AINRF_LOGIN_MAX_FAILURES", "10"))
-        login_lockout_hours = int(os.environ.get("AINRF_LOGIN_LOCKOUT_HOURS", "24"))
-        metrics_enabled = os.environ.get("AINRF_METRICS_ENABLED", "").lower() in (
+        max_concurrent = int(
+            _env_value("OPENSCIENCE_MAX_CONCURRENT_REQUESTS", "AINRF_MAX_CONCURRENT_REQUESTS", "0")
+        )
+        login_max_failures = int(
+            _env_value("OPENSCIENCE_LOGIN_MAX_FAILURES", "AINRF_LOGIN_MAX_FAILURES", "10")
+        )
+        login_lockout_hours = int(
+            _env_value("OPENSCIENCE_LOGIN_LOCKOUT_HOURS", "AINRF_LOGIN_LOCKOUT_HOURS", "24")
+        )
+        metrics_enabled = _env_value(
+            "OPENSCIENCE_METRICS_ENABLED", "AINRF_METRICS_ENABLED"
+        ).lower() in (
             "1",
             "true",
             "yes",
         )
-        metrics_path = os.environ.get("AINRF_METRICS_PATH", "/metrics")
+        metrics_path = _env_value("OPENSCIENCE_METRICS_PATH", "AINRF_METRICS_PATH", "/metrics")
         slow_request_threshold = float(
-            os.environ.get("AINRF_SLOW_REQUEST_THRESHOLD_SECONDS", "5.0")
+            _env_value(
+                "OPENSCIENCE_SLOW_REQUEST_THRESHOLD_SECONDS",
+                "AINRF_SLOW_REQUEST_THRESHOLD_SECONDS",
+                "5.0",
+            )
         )
-        public_registration_enabled = os.environ.get(
-            "AINRF_PUBLIC_REGISTRATION_ENABLED", "true"
+        public_registration_enabled = _env_value(
+            "OPENSCIENCE_PUBLIC_REGISTRATION_ENABLED",
+            "AINRF_PUBLIC_REGISTRATION_ENABLED",
+            "true",
         ).lower() in ("1", "true", "yes")
-        trusted_raw = os.environ.get("AINRF_TRUSTED_PROXY_CIDRS", "")
+        trusted_raw = _env_value("OPENSCIENCE_TRUSTED_PROXY_CIDRS", "AINRF_TRUSTED_PROXY_CIDRS")
         trusted_proxy_cidrs = tuple(c.strip() for c in trusted_raw.split(",") if c.strip())
-        observability_enabled = os.environ.get("AINRF_OBSERVABILITY_ENABLED", "").lower() in (
+        observability_enabled = _env_value(
+            "OPENSCIENCE_OBSERVABILITY_ENABLED", "AINRF_OBSERVABILITY_ENABLED"
+        ).lower() in (
             "1",
             "true",
             "yes",
         )
-        observability_base_url = os.environ.get("AINRF_OBSERVABILITY_BASE_URL", "")
-        observability_secret_key = os.environ.get("AINRF_OBSERVABILITY_SECRET_KEY", "")
-        observability_public_key = os.environ.get("AINRF_OBSERVABILITY_PUBLIC_KEY", "")
+        observability_base_url = _env_value(
+            "OPENSCIENCE_OBSERVABILITY_BASE_URL", "AINRF_OBSERVABILITY_BASE_URL"
+        )
+        observability_secret_key = _env_value(
+            "OPENSCIENCE_OBSERVABILITY_SECRET_KEY", "AINRF_OBSERVABILITY_SECRET_KEY"
+        )
+        observability_public_key = _env_value(
+            "OPENSCIENCE_OBSERVABILITY_PUBLIC_KEY", "AINRF_OBSERVABILITY_PUBLIC_KEY"
+        )
         return cls(
             api_key_hashes=api_key_hashes,
             state_root=resolved_state_root,

@@ -63,6 +63,20 @@ def test_help_shows_onboard_command() -> None:
     assert "onboard" in result.stdout
 
 
+
+def test_openscience_cli_alias_exposes_help() -> None:
+    result = subprocess.run(
+        ["uv", "run", "openscience", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0
+    assert "OpenScience" in result.stdout
+    assert "serve" in result.stdout
+
 def test_version_outputs_package_version() -> None:
     result = runner.invoke(app, ["--version"])
 

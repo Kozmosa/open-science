@@ -146,6 +146,34 @@ def test_api_config_seeds_localhost_container_profile_when_config_is_minimal(
     assert config.container_config.ssh_key_path == "/opt/ainrf/.ssh/ainrf_local"
 
 
+
+def test_api_config_prefers_openscience_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPENSCIENCE_STATE_ROOT", str(tmp_path / "open"))
+    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "legacy"))
+    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", "b" * 64)
+
+    config = ApiConfig.from_env()
+
+    assert config.state_root == tmp_path / "open"
+    assert config.api_key_hashes == frozenset({"a" * 64})
+
+
+def test_api_config_falls_back_to_ainrf_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSCIENCE_STATE_ROOT", raising=False)
+    monkeypatch.delenv("OPENSCIENCE_API_KEY_HASHES", raising=False)
+    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "legacy"))
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", "b" * 64)
+
+    config = ApiConfig.from_env()
+
+    assert config.state_root == tmp_path / "legacy"
+    assert config.api_key_hashes == frozenset({"b" * 64})
+
 def test_api_config_uses_login_shell_by_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
