@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { readMigratedLocalStorage } from '@/shared/utils/storage';
 
 export type CardKind = 'taskUsage' | 'system' | 'processes';
 
@@ -29,11 +30,12 @@ function normalizeCardOrder(value: unknown): CardKind[] | null {
   return [...order, ...defaultCardOrder.filter((kind) => !seen.has(kind))];
 }
 
-const storageKey = 'scholar-agent:resources-layout';
+const storageKey = 'openscience:resources-layout';
+const legacyStorageKeys = ['scholar-agent:resources-layout'];
 
 function readLayout(): CardLayout {
   try {
-    const raw = window.localStorage.getItem(storageKey);
+    const raw = readMigratedLocalStorage(storageKey, legacyStorageKeys);
     if (raw) {
       const parsed = JSON.parse(raw) as unknown;
       const order = typeof parsed === 'object' && parsed !== null ? normalizeCardOrder((parsed as CardLayout).cardOrder) : null;

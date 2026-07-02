@@ -13,6 +13,17 @@ describe('settings storage v2 task configuration', () => {
     window.localStorage.clear();
   });
 
+  it('migrates legacy settings storage to the OpenScience key', () => {
+    const settings = createDefaultWebUiSettings();
+    settings.general.defaultRoute = 'tasks';
+    window.localStorage.setItem('scholar-agent:webui-settings', JSON.stringify(settings));
+
+    const result = readStoredSettings();
+
+    expect(result.settings.general.defaultRoute).toBe('tasks');
+    expect(window.localStorage.getItem(settingsStorageKey)).not.toBeNull();
+  });
+
   it('creates default task configuration catalog', () => {
     const settings = createDefaultWebUiSettings();
 

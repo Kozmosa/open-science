@@ -45,7 +45,7 @@ describe('LocaleSwitcher', () => {
 
     expect(screen.getByTestId('locale-value')).toHaveTextContent('zh');
     expect(screen.getByTestId('terminal-label')).toHaveTextContent('终端');
-    expect(window.localStorage.getItem('scholar-agent:locale')).toBe('zh');
+    expect(window.localStorage.getItem('openscience:locale')).toBe('zh');
   });
 
   it('uses semantic token colors so it remains visible in the app header', () => {
@@ -76,5 +76,18 @@ describe('LocaleSwitcher', () => {
 
     expect(screen.getByTestId('locale-value')).toHaveTextContent('zh');
     expect(screen.getByTestId('terminal-label')).toHaveTextContent('终端');
+  });
+
+  it('migrates the legacy stored locale on mount', () => {
+    window.localStorage.setItem('scholar-agent:locale', 'zh');
+
+    render(
+      <LocaleProvider>
+        <LocaleHarness />
+      </LocaleProvider>
+    );
+
+    expect(screen.getByTestId('locale-value')).toHaveTextContent('zh');
+    expect(window.localStorage.getItem('openscience:locale')).toBe('zh');
   });
 });
