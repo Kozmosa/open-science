@@ -1,9 +1,9 @@
 <p align="center">
-  <h1 align="center">AINRF</h1>
+  <h1 align="center">OpenScience</h1>
 </p>
 
 <p align="center">
-  <strong>AI-Native Research Framework 的研究控制面</strong><br />
+  <strong>OpenScience 的研究控制面</strong><br />
   让 Agent 任务、远程环境、持久终端与工作区浏览器进入同一个可观察、可编排、可复现的运行时界面。
 </p>
 
@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="#-why-ainrf">Why</a> ·
+  <a href="#-why-openscience">Why</a> ·
   <a href="#-core-capabilities">Capabilities</a> ·
   <a href="#-architecture">Architecture</a> ·
   <a href="#-quick-start">Quick Start</a> ·
@@ -25,16 +25,16 @@
 
 ---
 
-## ✨ What is AINRF?
+## ✨ What is OpenScience?
 
-**AINRF** 将 AI-native research workflow 从“脚本 + 远程机器 + 临时终端 + 手工记录”收敛成一个工程化控制面：
+**OpenScience** 将 AI-native research workflow 从“脚本 + 远程机器 + 临时终端 + 手工记录”收敛成一个工程化控制面：
 
-- 用 `ainrf` CLI 启动和管理本地 runtime；
+- 用 `openscience` CLI 启动和管理本地 runtime；
 - 用 FastAPI 暴露环境、任务、终端和工作区 API；
 - 用 React WebUI 观察任务状态、输出流、远程环境和持久终端；
 - 用版本化 docs / ref-repos 保存研究设计、参考项目和历史决策输入。
 
-它不是一个普通笔记仓库，也不是单一 Web 控制台。AINRF 的目标是成为研究开发者操作 Agent runtime 的 **control surface**：任务可追踪、环境可探测、终端可接管、工作区可打开、artifact 可回放。
+它不是一个普通笔记仓库，也不是单一 Web 控制台。OpenScience 的目标是成为研究开发者操作 Agent runtime 的 **control surface**：任务可追踪、环境可探测、终端可接管、工作区可打开、artifact 可回放。
 
 ---
 
@@ -42,7 +42,7 @@
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ AINRF Console                                           Task | Running: 1    │
+│ OpenScience Console                                           Task | Running: 1    │
 ├──────────────┬───────────────────────────────────────────────────────────────┤
 │  Terminal    │  Task Workspace                                               │
 │  Tasks       │  ┌─ Task runs ──────────────────────────────────────────────┐  │
@@ -59,11 +59,11 @@
 
 ---
 
-## 🚀 Why AINRF?
+## 🚀 Why OpenScience?
 
 研究型 Agent 项目通常会同时面对几类复杂度：
 
-| 问题 | AINRF 的处理方式 |
+| 问题 | OpenScience 的处理方式 |
 | --- | --- |
 | 任务散落在终端、脚本和远程机器里 | Task Harness 统一任务创建、状态、输出 replay / stream 与 runtime artifact |
 | 本地/远程环境不透明 | Environment Control Plane 管理 SSH 目标、探测结果、默认环境与运行时画像 |
@@ -98,7 +98,7 @@
 
 ### CLI / API / WebUI
 
-- `ainrf` CLI 作为本地 runtime 入口。
+- `openscience` CLI 作为本地 runtime 入口。
 - FastAPI backend 提供 `/v1` API surface。
 - React + Vite + Tailwind WebUI 提供统一控制台。
 - `scripts/webui.sh` 串联前后端本地开发体验。
@@ -120,7 +120,7 @@
 └───────────┬──────────┘
             │
 ┌───────────▼──────────────────────────────────────────────┐
-│                    AINRF Runtime                          │
+│                    OpenScience Runtime                          │
 │  environments │ tasks │ terminal │ workspace │ artifacts  │
 └───────────┬───────────────────────────────┬──────────────┘
             │                               │
@@ -134,18 +134,20 @@
 
 ## ⚡ Quick Start
 
-> AINRF 使用 `uv` 管理 Python 运行环境。建议在命令前显式设置 `UV_CACHE_DIR`，避免污染项目目录或共享环境。
+> OpenScience 使用 `uv` 管理 Python 运行环境。建议在命令前显式设置 `UV_CACHE_DIR`，避免污染项目目录或共享环境。
 
 ```bash
 # 查看 CLI 入口
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf --help
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience --help
 
 # 启动后端 API
-UV_CACHE_DIR=/tmp/uv-cache uv run ainrf serve
+UV_CACHE_DIR=/tmp/uv-cache uv run openscience serve
 
 # 启动 WebUI 本地联调入口
 scripts/webui.sh
 ```
+
+兼容性说明：本阶段 Python 包名、部分状态目录和旧 CLI `ainrf` 仍保留，便于现有部署平滑迁移；新增对外入口优先使用 `openscience` 与 `OPENSCIENCE_*`。
 
 前端单独开发：
 
@@ -167,12 +169,12 @@ cd docs-site && npm run build
 
 ```text
 .
-├── src/ainrf/        # Python package: CLI, API, runtime services
+├── src/ainrf/        # Python package: CLI, API, runtime services（兼容性内部包名）
 ├── frontend/         # React + Vite WebUI
 ├── tests/            # Python test suite
 ├── scripts/          # 本地开发、WebUI、docs 构建辅助脚本
 ├── docs/             # 研究笔记、设计笔记和知识资产
-├── docs-site/        # AINRF 产品文档站点（Astro + Starlight）
+├── docs-site/        # OpenScience 产品文档站点（Astro + Starlight）
 ├── ref-repos/        # 只读参考仓库，用于产品设计与对照研究
 └── PROJECT_BASIS.md  # 长期工程约束与协作规则
 ```
@@ -221,7 +223,7 @@ cd docs-site && npm run build
 
 ## 📚 Documentation
 
-- [AINRF 产品文档](https://kozmosa.github.io/scholar-agent/)（Astro + Starlight）
+- [OpenScience 产品文档](https://kozmosa.github.io/scholar-agent/)（Astro + Starlight）
 - [项目长期工程约束](PROJECT_BASIS.md)
 - [框架设计与 RFC](docs/framework/)
 - [参考项目调研](docs/projects/)
@@ -231,7 +233,7 @@ cd docs-site && npm run build
 
 ## 🧭 Status
 
-AINRF 已具备可安装 CLI、FastAPI backend、React WebUI，以及围绕 environment / terminal / task / workspace browser 的核心运行时表面。项目处于持续维护和产品化收敛阶段，适合用于本地 AI-native research workflow 的运行控制、观察和工程验证。
+OpenScience 已具备可安装 CLI、FastAPI backend、React WebUI，以及围绕 environment / terminal / task / workspace browser 的核心运行时表面。项目处于持续维护和产品化收敛阶段，适合用于本地 AI-native research workflow 的运行控制、观察和工程验证。
 
 ---
 

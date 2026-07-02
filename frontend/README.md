@@ -1,6 +1,6 @@
-# AINRF WebUI
+# OpenScience WebUI
 
-`frontend/` 是 AINRF 的 React + Vite WebUI，而不是默认模板工程。
+`frontend/` 是 OpenScience 的 React + Vite WebUI，而不是默认模板工程。
 
 当前前端主要负责：
 
@@ -33,7 +33,7 @@ scripts/webui.sh preview
 
 这个入口会同时启动：
 
-- `uv run ainrf serve`
+- `uv run openscience serve`
 - Vite dev server 或 preview server
 
 并自动处理：

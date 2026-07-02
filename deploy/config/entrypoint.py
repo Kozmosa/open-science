@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""AINRF Docker entrypoint.
+"""OpenScience Docker entrypoint.
 
 - Generates ~/.claude/settings.json, ~/.claude/CLAUDE.md and ~/.codex/ config files
   from templates, substituting environment variables where needed.
-- Then execs the ainrf server.
+- Then execs the OpenScience server.
 """
 
 import json

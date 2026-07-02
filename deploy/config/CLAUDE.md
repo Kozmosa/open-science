@@ -1,6 +1,6 @@
 # Container Operator Guardrails
 
-These guardrails apply to ALL Claude Code sessions spawned by the AINRF
+These guardrails apply to ALL Claude Code sessions spawned by the OpenScience
 platform (both `claude` CLI and Agent SDK engines). They are injected via
 `~/.claude/CLAUDE.md` at container startup so they survive image rebuilds.
 
@@ -24,7 +24,7 @@ platform (both `claude` CLI and Agent SDK engines). They are injected via
 - Tool outputs (especially from `Read` on PDFs, `Bash` commands producing
   large stdout, or `Grep` over large codebases) may be truncated at the
   transport layer. The JSON message buffer between the SDK and the CLI is
-  30 MB (1 MB by default — raised by AINRF).
+  30 MB (1 MB by default — raised by OpenScience).
 - Prefer redirecting large `Bash` command output to a file, then reading
   the file in chunks with `Read` (using `limit` or page ranges).
 - Use `--head` / `--tail` / `head` / `tail` to preview large files rather
@@ -45,7 +45,7 @@ platform (both `claude` CLI and Agent SDK engines). They are injected via
 
 ## Claude Code CLI Behavior
 
-- The AINRF platform spawns the Claude Code CLI via the Agent SDK's
+- The OpenScience platform spawns the Claude Code CLI via the Agent SDK's
   `--input-format stream-json --output-format stream-json` protocol.
 - Always produce valid JSON on stdout — non-JSON lines (e.g. raw
   stderr mixed into stdout) may be dropped by the SDK parser.

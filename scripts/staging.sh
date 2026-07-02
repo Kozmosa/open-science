@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════
-# AINRF Staging Environment — Lifecycle Manager
+# OpenScience Staging Environment — Lifecycle Manager
 # ══════════════════════════════════════════════════════════════════
 #
 # Usage:
@@ -78,7 +78,7 @@ cmd_down() {
 }
 
 cmd_status() {
-  echo -e "${BOLD}AINRF Staging Environment Status${NC}"
+  echo -e "${BOLD}OpenScience Staging Environment Status${NC}"
   echo
   "${COMPOSE_CMD[@]}" ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
   echo

@@ -1,11 +1,11 @@
 ---
 title: 可观测性概览
-description: AINRF 审计日志架构、审计事件目录与请求 ID 关联机制。
+description: OpenScience 审计日志架构、审计事件目录与请求 ID 关联机制。
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-AINRF 提供完整的可观测性能力：结构化审计日志、Prometheus 指标和 Grafana 监控栈。
+OpenScience 提供完整的可观测性能力：结构化审计日志、Prometheus 指标和 Grafana 监控栈。
 
 <CardGrid>
   <Card title="审计日志" href="/scholar-agent/observability/audit-logs/">
@@ -21,7 +21,7 @@ AINRF 提供完整的可观测性能力：结构化审计日志、Prometheus 指
 
 ## 审计日志架构
 
-AINRF 通过 `structlog` 输出结构化 JSON 审计事件。每个事件包含：
+OpenScience 通过 `structlog` 输出结构化 JSON 审计事件。每个事件包含：
 
 | 字段 | 说明 |
 |------|------|

@@ -1,4 +1,4 @@
-# AINRF Loki Configuration
+# OpenScience Loki Configuration
 # ────────────────────────
 # Single-binary mode for log aggregation of all Docker containers.
 # Retention: 30 days, 2 GB max.

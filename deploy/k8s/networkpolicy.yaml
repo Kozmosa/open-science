@@ -1,4 +1,4 @@
-# ── AINRF Network Policy ─────────────────────────────────────
+# ── OpenScience Network Policy ─────────────────────────────────────
 # Deny all ingress to ainrf pods except from the Ingress controller
 # and same-namespace traffic.
 apiVersion: networking.k8s.io/v1

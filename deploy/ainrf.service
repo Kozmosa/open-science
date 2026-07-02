@@ -1,4 +1,4 @@
-# ── AINRF API systemd service ──────────────────────────────────────
+# ── OpenScience API systemd service ──────────────────────────────────────
 #
 # Usage:
 #   1. Copy to /etc/systemd/system/ainrf.service
@@ -10,7 +10,7 @@
 # ──────────────────────────────────────────────────────────────────
 
 [Unit]
-Description=AINRF Research Agent API
+Description=OpenScience Research Agent API
 After=network.target
 Wants=network-online.target
 
@@ -20,7 +20,7 @@ User=ainrf
 Group=ainrf
 
 WorkingDirectory=/opt/ainrf
-ExecStart=/opt/ainrf/.venv/bin/python -m ainrf serve \
+ExecStart=/opt/ainrf/.venv/bin/openscience serve \
     --host 127.0.0.1 \
     --port 8000 \
     --workers 2 \

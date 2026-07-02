@@ -1,9 +1,9 @@
 ---
 title: 审计日志
-description: AINRF 审计日志架构、事件目录与日志查询方法。
+description: OpenScience 审计日志架构、事件目录与日志查询方法。
 ---
 
-AINRF 通过 `structlog` 输出结构化 JSON 审计事件。每个事件包含 `event`（事件名）、`severity`（级别）、`timestamp`、`component`（固定为 `audit`）和 `request_id` 等字段。所有敏感值（token、密码、API key）自动脱敏。
+OpenScience 通过 `structlog` 输出结构化 JSON 审计事件。每个事件包含 `event`（事件名）、`severity`（级别）、`timestamp`、`component`（固定为 `audit`）和 `request_id` 等字段。所有敏感值（token、密码、API key）自动脱敏。
 
 ## 认证事件
 

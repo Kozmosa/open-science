@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════
-# AINRF K8s one-shot deploy script
+# OpenScience K8s one-shot deploy script
 # ══════════════════════════════════════════════════════════════════
 #
 # Prerequisites:
@@ -26,13 +26,13 @@ NAMESPACE="ainrf"
 usage() {
     echo "Usage: $0 [--image REGISTRY/IMAGE:TAG] [--destroy] [--dry-run]"
     echo ""
-    echo "  --image   Set container image (default: ainrf:latest)"
-    echo "  --destroy Delete all AINRF K8s resources"
+    echo "  --image   Set container image (default: openscience:latest)"
+    echo "  --destroy Delete all OpenScience K8s resources"
     echo "  --dry-run Print kubectl commands without executing"
     exit 1
 }
 
-IMAGE="ainrf:latest"
+IMAGE="openscience:latest"
 DESTROY=false
 DRY_RUN=""
 
@@ -49,7 +49,7 @@ done
 K="kubectl ${DRY_RUN}"
 
 if [[ "${DESTROY}" == "true" ]]; then
-    echo "=== Destroying AINRF K8s resources ==="
+    echo "=== Destroying OpenScience K8s resources ==="
     $K delete --ignore-not-found=true -f "${SCRIPT_DIR}/networkpolicy.yaml"
     $K delete --ignore-not-found=true -f "${SCRIPT_DIR}/ingress.yaml"
     $K delete --ignore-not-found=true -f "${SCRIPT_DIR}/service.yaml"
@@ -61,7 +61,7 @@ if [[ "${DESTROY}" == "true" ]]; then
     exit 0
 fi
 
-echo "=== Deploying AINRF to Kubernetes ==="
+echo "=== Deploying OpenScience to Kubernetes ==="
 echo "Image: ${IMAGE}"
 echo ""
 
@@ -87,7 +87,7 @@ else
 fi
 
 echo "[4/6] Deployment..."
-if [[ "${IMAGE}" != "ainrf:latest" ]]; then
+if [[ "${IMAGE}" != "openscience:latest" ]]; then
     # Patch image if custom registry provided
     $K apply -f "${SCRIPT_DIR}/deployment.yaml"
     $K set image deployment/ainrf ainrf="${IMAGE}" -n "${NAMESPACE}"

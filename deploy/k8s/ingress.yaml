@@ -1,4 +1,4 @@
-# ── AINRF Ingress (Nginx Ingress Controller) ──────────────────
+# ── OpenScience Ingress (Nginx Ingress Controller) ──────────────────
 #
 # Adjust host, TLS secret, and annotations to match your cluster.
 # If you use a different ingress controller (Traefik, Kong, etc.),

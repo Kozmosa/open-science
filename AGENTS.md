@@ -12,9 +12,9 @@ Agents working in this repository must treat [`PROJECT_BASIS.md`](PROJECT_BASIS.
 
 ## Project Structure & Module Organization
 
-This repository's active product surface is the AINRF runtime plus WebUI, while the docs tree remains the long-lived product/reference knowledge base:
+This repository's active product surface is the OpenScience runtime plus WebUI, while the docs tree remains the long-lived product/reference knowledge base:
 
-- `frontend/`: React + Vite WebUI for AINRF.
+- `frontend/`: React + Vite WebUI for OpenScience.
 - `src/ainrf/`: Python package, CLI, backend API, and runtime code.
 - `docs/`: Obsidian-style research notes and design docs. Key areas are `docs/framework/`, `docs/projects/`, and `docs/summary/`.
 - `docs-site/`: Astro + Starlight product documentation site (deployed to GitHub Pages).
@@ -25,7 +25,7 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 
 ## Project Overview
 
-`scholar-agent` currently centers on the AINRF frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities, while `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with Astro + Starlight in `docs-site/` and deployed to GitHub Pages.
+`scholar-agent` currently centers on the OpenScience frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities; `src/ainrf/` remains the compatibility Python package name during the OpenScience transition. The legacy `ainrf` CLI remains available during the OpenScience compatibility phase. `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with Astro + Starlight in `docs-site/` and deployed to GitHub Pages.
 
 ## LLM Working Log
 
@@ -42,7 +42,8 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 - `cd docs-site && npm run dev`: start the docs site dev server with hot reload.
 - `cd docs-site && npm run build`: build the static docs site for production.
 - `cd docs-site && npm run preview`: preview the production build locally.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run ainrf --help`: inspect the CLI scaffold.
+- `UV_CACHE_DIR=/tmp/uv-cache uv run openscience --help`: inspect the CLI scaffold.
+  The legacy `ainrf` CLI remains available during the OpenScience compatibility phase.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto`: run the Python test suite in parallel across CPU cores via pytest-xdist (the `addopts` default is serial, so pass `-n auto` explicitly). Use `-n 0` or drop `-n` for serial execution when debugging an ordered failure.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests`: run lint checks.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests`: verify formatting.
@@ -102,7 +103,7 @@ Formatting and linting are enforced with `ruff`; static type checking must pass 
 
 ### Multi-Tenant Permission Model
 
-AINRF uses Linux user isolation for multi-tenancy (`ainrf` backend user, `ainrf_<tenant>` per tenant, `sudo -u` execution). Any code creating files/dirs in tenant paths must use the tenant user. Never assume the `ainrf` user can write to `/home/ainrf_tenants/`.
+OpenScience uses Linux user isolation for multi-tenancy (`ainrf` backend user, `ainrf_<tenant>` per tenant, `sudo -u` execution). Any code creating files/dirs in tenant paths must use the tenant user. Never assume the `ainrf` user can write to `/home/ainrf_tenants/`.
 
 > **Full details including code-path audit table**: [.rules/multi-tenant-permissions.md](.rules/multi-tenant-permissions.md)
 
@@ -121,7 +122,7 @@ Internal research notes in `docs/` use Obsidian-style Markdown with wikilinks an
 
 - `docs/index.md`: top-level docs/research index.
 - `docs/projects/`: per-project research reports.
-- `docs/framework/`: AI-Native Research Framework design notes.
+- `docs/framework/`: OpenScience design notes.
 - `docs/summary/`: cross-project comparison and synthesis.
 - `.codex-skill-staging/`: Codex skill definitions and staging assets.
 
@@ -186,13 +187,13 @@ Before submitting changes to Python code, run both runtime and static checks:
 ### Command Reference
 - Backend tests must run from the repo root: `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto` (parallel; add `-n 0` for serial). Backend tests must not rely on the process working directory for output — write to `tmp_path` so parallel workers never collide.
 - Frontend tests and type-check must run from `frontend/`.
-- Start manual service testing with `uv run ainrf serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`.
+- Start manual service testing with `uv run openscience serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`.
 - Selective runs (also parallel by default): `pytest -m api -n auto`, `pytest -m unit -n auto`, `pytest -m 'not slow' -n auto`.
 - Frontend test command: `cd frontend && npm run test:run`.
 
 ### Agent E2E Testing
 
-AINRF uses coding-agent-driven E2E testing with Playwright MCP against a production-like Docker container. Test infrastructure lives in `testing/e2e/`.
+OpenScience uses coding-agent-driven E2E testing with Playwright MCP against a production-like Docker container. Test infrastructure lives in `testing/e2e/`.
 
 > **Full details (environment, scripts, MCP config, ports)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)
 

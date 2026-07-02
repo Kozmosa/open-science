@@ -5,7 +5,7 @@ description: 三层纵深防御架构、IP 白名单、JWT 认证、敏感路径
 
 ## 三层纵深防御
 
-AINRF 采用三层纵深防御架构：
+OpenScience 采用三层纵深防御架构：
 
 1. **IP 白名单** — 在请求到达应用前拒绝未知网络来源。通过 `AINRF_ALLOWED_CIDRS` 配置。
 2. **请求大小限制** — 阻断超大载荷。默认 50 MB，通过 `AINRF_MAX_REQUEST_BODY_BYTES` 配置。

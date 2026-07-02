@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Migrate existing AINRF users to per-tenant Linux users and workspaces.
+"""Migrate existing OpenScience users to per-tenant Linux users and workspaces.
 
 Creates ``ainrf_<username>`` Linux users (group ``ainrf_tenants``, GID 2000),
 home directories under ``/home/ainrf_tenants/<username>/``,
@@ -187,12 +187,12 @@ def main(state_root: Path) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Migrate AINRF users to tenant isolation")
+    parser = argparse.ArgumentParser(description="Migrate OpenScience users to tenant isolation")
     parser.add_argument(
         "--state-root",
         type=Path,
         default=Path("/opt/ainrf/state"),
-        help="AINRF state root directory (default: /opt/ainrf/state)",
+        help="OpenScience state root directory (default: /opt/ainrf/state)",
     )
     args = parser.parse_args()
     main(args.state_root)

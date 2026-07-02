@@ -4,7 +4,7 @@ Usage:
   uv run pytest scripts/perf/backend/benchmark_api.py --benchmark-only
   uv run pytest scripts/perf/backend/benchmark_api.py --benchmark-only --benchmark-min-rounds=10 --benchmark-max-time=0.5 --benchmark-json=.cache/perf-report/YYYY-MM-DD/api-benchmark.json
 
-Requires a running AINRF server at http://127.0.0.1:8000 with a test admin user.
+Requires a running OpenScience server at http://127.0.0.1:8000 with a test admin user.
 """
 
 from __future__ import annotations

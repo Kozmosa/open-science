@@ -1,10 +1,10 @@
 """py-spy hotspot profiler helper.
 
-Attaches py-spy to the running AINRF server process and triggers a
+Attaches py-spy to the running OpenScience server process and triggers a
 representative workload, producing a flamegraph SVG.
 
 Requires: py-spy (pip install py-spy)
-Requires: A running AINRF server with a known PID.
+Requires: A running OpenScience server with a known PID.
 """
 
 from __future__ import annotations
@@ -49,19 +49,19 @@ for i in range(10):
 
 
 def find_pid() -> int:
-    """Find the AINRF server PID from PID file or process search."""
+    """Find the OpenScience server PID from PID file or process search."""
     if PID_FILE.exists():
         return int(PID_FILE.read_text().strip())
 
     # Fallback: find the uvicorn process
     result = subprocess.run(
-        ["pgrep", "-f", "ainrf serve"],
+        ["pgrep", "-f", "openscience serve"],
         capture_output=True, text=True,
     )
     if result.returncode == 0:
         return int(result.stdout.strip().split('\n')[0])
 
-    print("ERROR: Cannot find AINRF server process. Start the server first or set AINRF_STATE_ROOT.", file=sys.stderr)
+    print("ERROR: Cannot find OpenScience server process. Start the server first or set AINRF_STATE_ROOT.", file=sys.stderr)
     sys.exit(1)
 
 

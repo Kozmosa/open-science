@@ -1,4 +1,4 @@
-# AINRF Prometheus Alerting Rules (Example)
+# OpenScience Prometheus Alerting Rules (Example)
 # Copy to /etc/prometheus/rules/ainrf.yml and adjust thresholds.
 # These are starting points — tune based on your traffic patterns.
 
@@ -12,7 +12,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High login failure rate on AINRF"
+          summary: "High login failure rate on OpenScience"
           description: >-
             {{ $value }} login failures per second over the last 5 minutes.
             Possible brute-force attack. Check audit logs for details.
@@ -23,7 +23,7 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: "Account lockouts occurring on AINRF"
+          summary: "Account lockouts occurring on OpenScience"
           description: >-
             {{ $value }} account lockout events per second. Users are being
             locked out due to repeated failed login attempts.
@@ -51,7 +51,7 @@ groups:
         labels:
           severity: high
         annotations:
-          summary: "Sensitive file access detected on AINRF"
+          summary: "Sensitive file access detected on OpenScience"
           description: >-
             {{ $value }} sensitive file access attempts per second. Check
             audit logs for which paths and users are involved.
@@ -65,7 +65,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High HTTP request rate on AINRF"
+          summary: "High HTTP request rate on OpenScience"
           description: >-
             {{ $value }} requests per second. May indicate abuse or
             misconfigured clients.
@@ -78,7 +78,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "High error rate on AINRF"
+          summary: "High error rate on OpenScience"
           description: >-
             {{ $value | humanizePercentage }} of requests returning 5xx errors.
             Check backend logs for stack traces.

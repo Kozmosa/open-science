@@ -1,7 +1,7 @@
-# AINRF Prometheus Scrape Configuration — Host Network
+# OpenScience Prometheus Scrape Configuration — Host Network
 # ────────────────────────────────────────────────────
 # For docker-compose.cpu.yml where network_mode: host is used.
-# Both Prometheus and AINRF share the host network namespace.
+# Both Prometheus and OpenScience share the host network namespace.
 # Backend serves /metrics on port 18000; Prometheus scrapes directly.
 
 global:

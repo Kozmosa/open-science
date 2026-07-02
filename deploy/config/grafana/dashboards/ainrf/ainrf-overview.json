@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "AINRF platform overview — HTTP, auth, terminal, sessions",
+  "description": "OpenScience platform overview — HTTP, auth, terminal, sessions",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -446,7 +446,7 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "AINRF Overview",
+  "title": "OpenScience Overview",
   "uid": "ainrf-overview",
   "version": 1
 }
