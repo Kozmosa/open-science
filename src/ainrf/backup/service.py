@@ -1,4 +1,4 @@
-"""Backup and restore service for AINRF persistent state.
+"""Backup and restore service for OpenScience persistent state.
 
 Creates self-describing tar.gz archives containing SQLite database dumps,
 JSON config, and optionally workspace/tenant data.  Every archive carries a
@@ -119,7 +119,7 @@ class BackupManifest:
 
 
 class BackupService:
-    """Create, verify, and restore AINRF data backups."""
+    """Create, verify, and restore OpenScience data backups."""
 
     def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
@@ -223,7 +223,7 @@ class BackupService:
         if manifest.version > _BACKUP_VERSION:
             raise ValueError(
                 f"Backup version {manifest.version} > supported {_BACKUP_VERSION}. "
-                "Upgrade AINRF first."
+                "Upgrade OpenScience first."
             )
 
         errors: list[str] = []
@@ -276,7 +276,7 @@ class BackupService:
         if manifest.version > _BACKUP_VERSION:
             raise ValueError(
                 f"Backup version {manifest.version} > supported {_BACKUP_VERSION}. "
-                "Upgrade AINRF first."
+                "Upgrade OpenScience first."
             )
 
         _LOG.info(

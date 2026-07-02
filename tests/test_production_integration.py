@@ -41,7 +41,7 @@ def _build_fake_frontend(tmp_path: Path) -> Path:
     assets.mkdir(parents=True)
 
     (dist / "index.html").write_text(
-        "<!DOCTYPE html><html><body>AINRF SPA</body></html>"
+        "<!DOCTYPE html><html><body>OpenScience SPA</body></html>"
     )
     (assets / "main.js").write_text("console.log('ainrf');")
     (assets / "style.css").write_text("body{margin:0}")
@@ -222,7 +222,7 @@ async def test_spa_root_returns_index_html(tmp_path: Path) -> None:
     async with client:
         resp = await client.get("/")
         assert resp.status_code == 200
-        assert "AINRF SPA" in resp.text
+        assert "OpenScience SPA" in resp.text
         assert "text/html" in resp.headers.get("content-type", "")
 
 
@@ -251,7 +251,7 @@ async def test_spa_client_routes_return_index_html(tmp_path: Path) -> None:
         for path in ["/dashboard", "/profile", "/about"]:
             resp = await client.get(path)
             assert resp.status_code == 200, f"GET {path} returned {resp.status_code}"
-            assert "AINRF SPA" in resp.text
+            assert "OpenScience SPA" in resp.text
 
 
 @pytest.mark.anyio

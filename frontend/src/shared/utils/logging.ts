@@ -1,5 +1,5 @@
 /**
- * Structured client-side error logging for AINRF.
+ * Structured client-side error logging for OpenScience.
  *
  * Errors are buffered and flushed to the backend ``/api/client-logs``
  * endpoint periodically via ``navigator.sendBeacon`` (fire-and-forget).

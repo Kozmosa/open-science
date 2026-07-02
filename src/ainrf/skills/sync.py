@@ -17,7 +17,7 @@ def write_managed_marker(claude_dir: Path | str) -> None:
 
 
 def sync_ainrf_to_claude(ainrf_skills: Path | str, claude_skills: Path | str) -> None:
-    """Sync the AINRF skills directory to the Claude skills directory.
+    """Sync the OpenScience skills directory to the Claude skills directory.
 
     Strategy (in order):
     1. **Symlink** (preferred): If `claude_skills` doesn't exist or is a symlink
@@ -38,7 +38,7 @@ def sync_ainrf_to_claude(ainrf_skills: Path | str, claude_skills: Path | str) ->
     claude_skills = Path(claude_skills)
 
     if not ainrf_skills.exists():
-        raise FileNotFoundError(f"AINRF skills directory not found: {ainrf_skills}")
+        raise FileNotFoundError(f"OpenScience skills directory not found: {ainrf_skills}")
 
     # If already a symlink pointing to the correct target, do nothing
     if claude_skills.is_symlink() and claude_skills.resolve() == ainrf_skills.resolve():

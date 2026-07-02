@@ -106,7 +106,7 @@ def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     result = runner.invoke(app, ["stop", "--state-root", str(tmp_path)])
 
     assert result.exit_code == 0
-    assert "AINRF API daemon stopped" in result.stdout
+    assert "OpenScience API daemon stopped" in result.stdout
     assert captured["pid_file"] == tmp_path / "runtime" / "ainrf-api.pid"
 
 
@@ -216,7 +216,7 @@ def test_serve_auto_onboarding_preserves_validation_errors(
 
     assert result.exit_code != 0
     assert "API key cannot be empty" in result.output
-    assert "Run `ainrf onboard` interactively" not in result.output
+    assert "Run `openscience onboard` interactively" not in result.output
 
 
 def test_serve_fails_fast_without_interactive_input(
@@ -241,7 +241,7 @@ def test_serve_fails_fast_without_interactive_input(
     result = runner.invoke(app, ["serve", "--state-root", str(tmp_path)])
 
     assert result.exit_code != 0
-    assert "Run `ainrf onboard` interactively" in result.stdout
+    assert "Run `openscience onboard` interactively" in result.stdout
 
 
 def test_serve_rejects_malformed_config_with_validation_error(tmp_path: Path) -> None:
@@ -503,7 +503,7 @@ def test_onboard_command_rejects_non_tty_use(
     result = runner.invoke(app, ["onboard", "--state-root", str(tmp_path)])
 
     assert result.exit_code != 0
-    assert "AINRF runtime config is not configured" in result.output
+    assert "OpenScience runtime config is not configured" in result.output
     assert "Run onboarding" in result.output
     assert "interactively" in result.output
 

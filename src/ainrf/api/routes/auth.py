@@ -5,10 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response
-
-_LOG = logging.getLogger(__name__)
 from ainrf.api.routes.metrics import inc_counter
-
 from ainrf.api.config import ApiConfig
 from ainrf.api.schemas import (
     ChangePasswordRequest,
@@ -20,6 +17,8 @@ from ainrf.api.schemas import (
     UserInfoResponse,
 )
 from ainrf.auth import AuthService
+
+_LOG = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _ACCESS_COOKIE = "openscience_access_token"
@@ -180,7 +179,7 @@ async def check(request: Request) -> Response:
     """Auth check for nginx auth_request (Grafana reverse proxy).
 
 
-    Only AINRF admins are allowed. Returns 200 with identity headers
+    Only OpenScience admins are allowed. Returns 200 with identity headers
     for admins, 401 for unauthenticated, 403 for non-admin users.
     """
     user = getattr(request.state, "current_user", None)

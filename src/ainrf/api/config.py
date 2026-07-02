@@ -89,7 +89,7 @@ class ApiConfig:
             api_key_hashes = cls._parse_config_hashes(payload)
 
         if not api_key_hashes:
-            raise ValueError("AINRF API key hashes are not configured")
+            raise ValueError("OpenScience API key hashes are not configured")
 
         try:
             container_config = ContainerConfig.from_env()

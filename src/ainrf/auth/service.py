@@ -28,7 +28,7 @@ from ainrf.auth.models import (
 _LOG = logging.getLogger(__name__)
 
 # Linux usernames: lowercase ASCII + digits + hyphen + underscore, start with
-# a letter or digit, 2–31 chars.  The AINRF prefix ``ainrf_`` is added
+# a letter or digit, 2–31 chars.  The OpenScience prefix ``ainrf_`` is added
 # automatically, so the final Linux username will be ``ainrf_<username>``.
 _USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}$")
 
@@ -59,12 +59,12 @@ def _run_privileged(cmd: list[str]) -> None:
 
 
 def tenant_linux_username(ainrf_username: str) -> str:
-    """Return the Linux username for an AINRF user, e.g. ``aaa`` → ``ainrf_aaa``."""
+    """Return the Linux username for an OpenScience user, e.g. ``aaa`` → ``ainrf_aaa``."""
     return f"ainrf_{ainrf_username}"
 
 
 def tenant_home_dir(ainrf_username: str) -> Path:
-    """Return the home directory for an AINRF tenant user."""
+    """Return the home directory for an OpenScience tenant user."""
     return _TENANT_HOME_ROOT / ainrf_username
 
 

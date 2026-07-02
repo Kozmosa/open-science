@@ -64,7 +64,7 @@ class TestProcessTreeFilter:
             RawProcess(
                 pid=100,
                 ppid=1,
-                name="uv run ainrf monitor",
+                name="uv run openscience monitor",
                 cpu_percent=5.0,
                 memory_mb=100,
                 runtime_seconds=50,
@@ -94,7 +94,7 @@ class TestProcessTreeFilter:
             RawProcess(
                 pid=100,
                 ppid=1,
-                name="uv run ainrf monitor",
+                name="uv run openscience monitor",
                 cpu_percent=5.0,
                 memory_mb=100,
                 runtime_seconds=50,

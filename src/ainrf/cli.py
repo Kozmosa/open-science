@@ -297,7 +297,7 @@ def backup_restore(
         typer.Option(help="Skip the automatic pre-restore safety backup."),
     ] = False,
 ) -> None:
-    """Restore AINRF state from a backup archive.
+    """Restore OpenScience state from a backup archive.
 
     A pre-restore safety backup is created automatically.  Stop the server
     before restoring to avoid database corruption.
@@ -403,7 +403,7 @@ def _ensure_api_key_hashes_configured(state_root: Path) -> None:
             ensure_interactive_onboarding_available()
         except typer.BadParameter:
             typer.echo(
-                "AINRF API key hashes are not configured. Run `ainrf onboard` interactively."
+                "OpenScience API key hashes are not configured. Run `openscience onboard` interactively."
             )
             raise typer.Exit(code=1) from None
         onboard_state_root(state_root)

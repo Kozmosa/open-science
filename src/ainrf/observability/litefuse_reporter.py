@@ -40,7 +40,7 @@ class LitefuseReporter(ObservabilityReporter):
             host=config.base_url,
         )
         self._config = config
-        # Map AINRF trace_id → active Langfuse trace context manager.
+        # Map OpenScience trace_id → active Langfuse trace context manager.
         self._active_traces: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
