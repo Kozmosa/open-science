@@ -43,6 +43,28 @@ export const handlers = [
     return HttpResponse.json({ items: [] })
   }),
 
+  http.get('/api/projects/:projectId', ({ params }) => {
+    const projectId = String(params.projectId)
+    return HttpResponse.json({
+      project_id: projectId,
+      name: projectId === 'default' ? 'Default Project' : 'Created Project',
+      description: '',
+      default_workspace_id: null,
+      default_environment_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      owner_user_id: 'u1',
+    })
+  }),
+
+  http.get('/api/projects/:projectId/tasks', () => {
+    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
+  }),
+
+  http.get('/api/projects/:projectId/task-edges', () => {
+    return HttpResponse.json({ items: [] })
+  }),
+
   // Environments
   http.get('/api/environments', () => {
     return HttpResponse.json({ items: [] })

@@ -19,6 +19,11 @@ interface VitalMetric {
   timestamp: number;
 }
 
+interface LayoutShiftPerformanceEntry extends PerformanceEntry {
+  hadRecentInput: boolean;
+  value: number;
+}
+
 const BUFFER: VitalMetric[] = [];
 const FLUSH_INTERVAL_MS = 30_000; // flush every 30 seconds
 
@@ -130,8 +135,9 @@ function observeCLS(): void {
     let cls = 0;
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (!(entry as any).hadRecentInput) {
-          cls += (entry as any).value;
+        const layoutShift = entry as LayoutShiftPerformanceEntry;
+        if (!layoutShift.hadRecentInput) {
+          cls += layoutShift.value;
         }
       }
       sendToBackend({

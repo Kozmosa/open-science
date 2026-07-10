@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalSessionConsole from '../../../src/components/terminal/TerminalSessionConsole';
 import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
@@ -295,7 +295,9 @@ describe('TerminalSessionConsole', () => {
     expect(socket.url).toBe(
       'ws://127.0.0.1:8000/terminal/attachments/attach-1/ws?token=test-token'
     );
-    socket.onopen?.(new Event('open'));
+    act(() => {
+      socket.onopen?.(new Event('open'));
+    });
     await waitFor(() => expect(screen.getByText('Connection: connected')).toBeInTheDocument());
     await waitFor(() =>
       expect(
@@ -311,7 +313,9 @@ describe('TerminalSessionConsole', () => {
     socket.emitMessage({ type: 'output', data: 'hello\n' });
     expect(terminal.writeCalls).toContain('hello\n');
 
-    socket.emitMessage({ type: 'status', status: 'exited', return_code: 0 });
+    act(() => {
+      socket.emitMessage({ type: 'status', status: 'exited', return_code: 0 });
+    });
     expect(terminal.writelnCalls).toContain('Session exited with code 0');
     expect(onDisconnected).toHaveBeenCalledTimes(1);
   });

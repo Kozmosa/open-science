@@ -10,6 +10,13 @@ if (typeof document !== 'undefined' && typeof document.queryCommandSupported !==
   })
 }
 
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'scrollTo', {
+    configurable: true,
+    value: vi.fn(),
+  })
+}
+
 if (typeof HTMLCanvasElement !== 'undefined') {
   const gradientStub = {
     addColorStop: vi.fn(),

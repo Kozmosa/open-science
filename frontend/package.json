@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:perf": "vitest run --config vitest.perf.config.ts",
     "preview": "vite preview",
     "verify:styles": "npm run build && node scripts/verify-tailwind-build.mjs"
   },

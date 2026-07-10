@@ -1,14 +1,7 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
-
-const workerSetting = process.env.OPENSCIENCE_VITEST_WORKERS ?? '4'
-if (!/^[1-9][0-9]*$/.test(workerSetting)) {
-  throw new Error(
-    `OPENSCIENCE_VITEST_WORKERS must be a positive integer, got: ${workerSetting}`
-  )
-}
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react({ jsxRuntime: 'automatic' }), tailwindcss()],
@@ -28,8 +21,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./__tests__/setup.ts'],
-    include: ['__tests__/**/*.test.{ts,tsx}', 'src/**/*.test.{ts,tsx}'],
-    maxWorkers: Number(workerSetting),
+    include: ['__tests__/**/*.perf.{ts,tsx}'],
+    maxWorkers: 1,
     css: true,
     restoreMocks: true,
     clearMocks: true,
