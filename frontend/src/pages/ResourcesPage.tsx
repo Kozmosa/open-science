@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getResources, getTaskTokenUsageSummary } from '@/shared/api';
-import { SystemResourceCard, AinrfProcessCard, TaskUsageCard } from '../components/resources';
+import { SystemResourceCard, OpenScienceProcessCard, TaskUsageCard } from '../components/resources';
 import { useT } from '@/shared/i18n';
 import { useCardLayout } from '../hooks/useCardLayout';
 import type { CardKind } from '../hooks/useCardLayout';
@@ -53,7 +53,7 @@ export default function ResourcesPage() {
       return kind === 'system' ? (
         <SystemResourceCard snapshot={snapshot} />
       ) : (
-        <AinrfProcessCard processes={snapshot.ainrf_processes} environment_name={snapshot.environment_name} />
+        <OpenScienceProcessCard processes={snapshot.ainrf_processes} environment_name={snapshot.environment_name} />
       );
     },
     [snapshots, tokenUsageQuery.data, tokenUsageQuery.isLoading]

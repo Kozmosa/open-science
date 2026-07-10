@@ -34,7 +34,7 @@ function flush(): void {
   }
   // Also log to console for development.
   for (const event of events) {
-    console.error('[ainrf]', event.message, event.metadata ?? '');
+    console.error('[openscience]', event.message, event.metadata ?? '');
   }
 }
 
@@ -67,5 +67,5 @@ export function logError(error: unknown, context?: Record<string, unknown>): voi
   };
   BUFFER.push(event);
   // Immediate console output for development.
-  console.error('[ainrf]', event.message, context ?? '');
+  console.error('[openscience]', event.message, context ?? '');
 }

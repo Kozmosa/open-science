@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
-import { sharedAinrfProxyConfig } from './vite.proxy'
+import { sharedOpenScienceProxyConfig } from './vite.proxy'
 
 // https://vite.dev/config/
 const ANALYZE = process.env.VITE_BUNDLE_ANALYZE === 'true'
@@ -52,12 +52,12 @@ const config = defineConfig({
     },
   },
   server: {
-    proxy: sharedAinrfProxyConfig,
+    proxy: sharedOpenScienceProxyConfig,
     host: '0.0.0.0', // 监听所有地址，使开发服务器可被外部访问
     port: 5173, // 可选，指定端口
   },
   preview: {
-    proxy: sharedAinrfProxyConfig,
+    proxy: sharedOpenScienceProxyConfig,
     host: '0.0.0.0', // 使预览服务器也可被外部访问
     port: 4173, // 预览服务器默认端口为4173，可根据需要修改
   }

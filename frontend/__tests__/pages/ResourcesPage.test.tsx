@@ -41,7 +41,7 @@ const mockResponse: ResourcesResponse = {
       ainrf_processes: [
         {
           pid: 12345,
-          name: 'ainrf',
+          name: 'openscience',
           cpu_percent: 5.2,
           memory_mb: 512,
           runtime_seconds: 3600,
@@ -114,7 +114,7 @@ describe('ResourcesPage', () => {
     expect(screen.getByText('32 cores')).toBeInTheDocument();
     expect(screen.getByText('16.0 GB / 64.0 GB (25%)')).toBeInTheDocument();
     expect(screen.getByText('12345')).toBeInTheDocument();
-    expect(screen.getByText('ainrf')).toBeInTheDocument();
+    expect(screen.getByText('openscience')).toBeInTheDocument();
   });
 
   it('renders total task token usage and duration summary', async () => {

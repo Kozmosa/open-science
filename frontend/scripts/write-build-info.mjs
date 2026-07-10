@@ -36,8 +36,16 @@ function readExistingInfo() {
 }
 
 const existing = readExistingInfo()
-const envCommit = process.env.AINRF_BUILD_COMMIT?.trim() || process.env.VITE_AINRF_BUILD_COMMIT?.trim() || null
-const envCommittedAt = process.env.AINRF_BUILD_COMMITTED_AT?.trim() || process.env.VITE_AINRF_BUILD_COMMITTED_AT?.trim() || null
+const envCommit = process.env.OPENSCIENCE_BUILD_COMMIT?.trim()
+  || process.env.VITE_OPENSCIENCE_BUILD_COMMIT?.trim()
+  || process.env.AINRF_BUILD_COMMIT?.trim()
+  || process.env.VITE_AINRF_BUILD_COMMIT?.trim()
+  || null
+const envCommittedAt = process.env.OPENSCIENCE_BUILD_COMMITTED_AT?.trim()
+  || process.env.VITE_OPENSCIENCE_BUILD_COMMITTED_AT?.trim()
+  || process.env.AINRF_BUILD_COMMITTED_AT?.trim()
+  || process.env.VITE_AINRF_BUILD_COMMITTED_AT?.trim()
+  || null
 
 const payload = {
   short_commit: (envCommit ? envCommit.slice(0, 6) : null) || readGitValue(['rev-parse', '--short=6', 'HEAD']) || existing.short_commit,

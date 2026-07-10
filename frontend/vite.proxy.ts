@@ -55,7 +55,7 @@ function createProxyRule(pathPrefix: '/api' | '/code' | '/terminal'): ProxyOptio
   return rule;
 }
 
-export const sharedAinrfProxyConfig: Record<string, ProxyOptions> = {
+export const sharedOpenScienceProxyConfig: Record<string, ProxyOptions> = {
   '/api': createProxyRule('/api'),
   '/code': createProxyRule('/code'),
   '/terminal': createProxyRule('/terminal'),

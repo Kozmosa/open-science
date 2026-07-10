@@ -36,7 +36,7 @@ pre {
   font-family: var(--font-mono);
 }
 
-.ainrf-terminal .xterm {
+.openscience-terminal .xterm {
   display: block;
   height: 100%;
   max-height: 100%;
@@ -44,7 +44,7 @@ pre {
   width: 100%;
 }
 
-.ainrf-terminal .xterm-viewport {
+.openscience-terminal .xterm-viewport {
   background: #0b1020;
   height: 100% !important;
   overflow-y: auto;

@@ -1077,7 +1077,7 @@ export function mockGetResources(): ResourcesResponse {
         cpu: { percent: 23.5, core_count: 32 },
         memory: { used_mb: 16384, total_mb: 65536, percent: 25.0 },
         ainrf_processes: [
-          { pid: 12345, name: 'ainrf', cpu_percent: 5.2, memory_mb: 512, runtime_seconds: 3600 },
+          { pid: 12345, name: 'openscience', cpu_percent: 5.2, memory_mb: 512, runtime_seconds: 3600 },
           { pid: 12346, name: 'python', cpu_percent: 3.1, memory_mb: 256, runtime_seconds: 1800 },
         ],
       },
@@ -1141,7 +1141,7 @@ export function mockGetSkillDetail(skillId: string): SkillDetail {
     label: skill?.label ?? skillId,
     description: skill?.description ?? null,
     version: '1.0.0',
-    author: 'ainrf',
+    author: 'openscience',
     dependencies: [],
     inject_mode: 'auto',
     settings_fragment: {},

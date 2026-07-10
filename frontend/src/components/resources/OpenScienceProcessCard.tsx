@@ -1,7 +1,7 @@
 import type { ProcessInfo } from '@/shared/types';
 import { useT } from '@/shared/i18n';
 
-interface AinrfProcessCardProps {
+interface OpenScienceProcessCardProps {
   processes: ProcessInfo[];
   environment_name: string;
 }
@@ -19,7 +19,7 @@ function formatRuntime(seconds: number): string {
   return `${secs}s`;
 }
 
-export default function AinrfProcessCard({ processes, environment_name }: AinrfProcessCardProps) {
+export default function OpenScienceProcessCard({ processes, environment_name }: OpenScienceProcessCardProps) {
   const t = useT();
 
   return (

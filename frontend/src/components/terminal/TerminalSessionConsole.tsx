@@ -318,7 +318,7 @@ function TerminalSessionConsole({
 
       <div
         ref={containerRef}
-        className="ainrf-terminal h-[480px] w-full overflow-hidden rounded-lg border border-[#1a1a2e] bg-[#0b1020]"
+        className="openscience-terminal h-[480px] w-full overflow-hidden rounded-lg border border-[#1a1a2e] bg-[#0b1020]"
       />
     </section>
   );

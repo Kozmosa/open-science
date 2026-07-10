@@ -2,6 +2,8 @@
 
 `frontend/` 是 OpenScience 的 React + Vite WebUI，而不是默认模板工程。
 
+OpenScience 的官方缩写为 `osci`。
+
 当前前端主要负责：
 
 - 与后端同源联调的 WebUI 壳层
@@ -39,8 +41,8 @@ scripts/webui.sh preview
 并自动处理：
 
 - `UV_CACHE_DIR=/tmp/uv-cache` 的默认值
-- 当前 shell 会话内的 `AINRF_WEBUI_API_KEY`
-- 对应的 `AINRF_API_KEY_HASHES`
+- 当前 shell 会话内的 `OPENSCIENCE_WEBUI_API_KEY`
+- 对应的 `OPENSCIENCE_API_KEY_HASHES`
 - 同源代理需要的 API key 头注入
 
 ## 边界
