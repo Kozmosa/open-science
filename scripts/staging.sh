@@ -10,7 +10,7 @@
 #   bash scripts/staging.sh logs      # tail ainrf-staging logs
 #   bash scripts/staging.sh rebuild   # rebuild image, keep data
 #   bash scripts/staging.sh creds     # print admin initial password
-#   bash scripts/staging.sh test      # run integration tests against staging
+#   bash scripts/staging.sh smoke     # non-destructive GET smoke against running staging
 #
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -127,17 +127,95 @@ cmd_creds() {
   "${COMPOSE_CMD[@]}" exec ainrf-staging cat /opt/ainrf/state/admin_initial_password.txt 2>/dev/null || _warn "Not available yet. Is the staging environment running?"
 }
 
-cmd_test() {
-  local base_url="http://localhost:17000"
-  if ! wait_for_url "${base_url}/health" 1 0 >/dev/null 2>&1; then
-    _error "Staging backend is not healthy at ${base_url}"
-    _error "Run: bash scripts/staging.sh up"
+cmd_smoke() {
+  local app_url="${OPENSCIENCE_STAGING_APP_URL:-http://localhost:7192}"
+  local backend_url="${OPENSCIENCE_STAGING_BACKEND_URL:-${AINRF_STAGING_URL:-http://localhost:17000}}"
+  local build_info_payload
+  local expected_commit="${OPENSCIENCE_EXPECTED_BUILD_COMMIT:-}"
+  local health_payload
+  local http_status
+  local identity_payload
+  local python_bin
+  local -a curl_cmd=(curl --connect-timeout 3 --max-time 10 --silent --show-error)
+
+  if ! command -v curl >/dev/null 2>&1; then
+    _error "curl is required for staging smoke checks"
+    exit 2
+  fi
+  python_bin="$(command -v python3 || command -v python || true)"
+  if [[ -z "${python_bin}" ]]; then
+    _error "python3 or python is required to validate staging JSON responses"
+    exit 2
+  fi
+
+  _info "Running non-destructive staging smoke"
+  _info "App: ${app_url}"
+  _info "Backend: ${backend_url}"
+
+  identity_payload="$("${curl_cmd[@]}" --fail "${app_url}/staging-identity.json")"
+  "${python_bin}" -c '
+import json
+import sys
+
+if json.loads(sys.argv[1]).get("environment") != "staging":
+    raise SystemExit("target does not identify itself as staging")
+' "${identity_payload}"
+
+  health_payload="$("${curl_cmd[@]}" --fail "${backend_url}/health")"
+  "${python_bin}" -c '
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+checks = payload.get("checks", {})
+if payload.get("status") != "ok":
+    raise SystemExit("health status is not ok")
+for name in ("database", "filesystem"):
+    if checks.get(name, {}).get("status") != "ok":
+        raise SystemExit(f"health check {name} is not ok")
+' "${health_payload}"
+
+  "${curl_cmd[@]}" --fail "${app_url}/" >/dev/null
+  health_payload="$("${curl_cmd[@]}" --fail "${app_url}/api/health")"
+  "${python_bin}" -c '
+import json
+import sys
+
+if json.loads(sys.argv[1]).get("status") != "ok":
+    raise SystemExit("nginx-proxied health status is not ok")
+' "${health_payload}"
+
+  build_info_payload="$("${curl_cmd[@]}" --fail "${app_url}/build-info.json")"
+  "${python_bin}" -c '
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+expected = sys.argv[2].strip()
+for key in ("short_commit", "committed_at"):
+    if not isinstance(payload.get(key), str) or not payload[key].strip():
+        raise SystemExit(f"build-info field {key} is missing")
+if expected and payload["short_commit"] != expected[:6]:
+    raise SystemExit(
+        f"frontend commit {payload['short_commit']} does not match expected {expected[:6]}"
+    )
+' "${build_info_payload}" "${expected_commit}"
+
+  http_status="$("${curl_cmd[@]}" --output /dev/null --write-out '%{http_code}' "${backend_url}/v1/models")"
+  if [[ "${http_status}" != "401" ]]; then
+    _error "Expected production-mode /v1/models to return 401, got ${http_status}"
     exit 1
   fi
 
-  _info "Running integration tests against staging at ${base_url}"
-  cd "${REPO_ROOT}"
-  AINRF_STAGING_URL="${base_url}" uv run pytest -m integration -q --timeout=180
+  for path in docs openapi.json; do
+    http_status="$("${curl_cmd[@]}" --output /dev/null --write-out '%{http_code}' "${app_url}/${path}")"
+    if [[ "${http_status}" != "404" ]]; then
+      _error "Expected nginx /${path} to return 404, got ${http_status}"
+      exit 1
+    fi
+  done
+
+  _info "Staging smoke passed"
 }
 
 # ── Main ───────────────────────────────────────────────────────────
@@ -153,7 +231,8 @@ Commands:
   logs      Tail ainrf-staging container logs
   rebuild   Rebuild backend image (keep data volumes)
   creds     Print the admin initial password
-  test      Run integration tests against the running staging backend
+  smoke     Run non-destructive GET checks against the running staging environment
+  test      Deprecated alias for smoke; does not start or destroy staging
 EOF
 }
 
@@ -164,7 +243,12 @@ case "${1:-}" in
   logs)     shift || true; cmd_logs "$@" ;;
   rebuild)  shift || true; cmd_rebuild "$@" ;;
   creds)    shift || true; cmd_creds "$@" ;;
-  test)     shift || true; cmd_test "$@" ;;
+  smoke)    shift || true; cmd_smoke "$@" ;;
+  test)
+    shift || true
+    _warn "'test' is deprecated; running the non-destructive 'smoke' command"
+    cmd_smoke "$@"
+    ;;
   -h|--help|help)
     usage
     ;;

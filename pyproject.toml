@@ -44,8 +44,6 @@ dev = [
   "pre-commit>=4.3.0",
   "pytest>=8.4.2",
   "pytest-asyncio>=0.24.0",
-  "pytest-benchmark>=5.1",
-  "pytest-rerunfailures>=14.0",
   "pytest-timeout>=2.3.1",
   "pytest-xdist>=3.8.0",
   "freezegun>=1.5.0",
@@ -53,12 +51,15 @@ dev = [
   "ruff>=0.12.11",
   "ty>=0.0.1a19",
 ]
+perf = [
+  "pytest-benchmark>=5.1",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ainrf"]
 
 [tool.pytest.ini_options]
-addopts = "-q -n auto --timeout=30 --reruns=1 --reruns-delay=0.5"
+addopts = "-q --timeout=30"
 testpaths = ["tests"]
 markers = [
     "api: HTTP API route integration tests",
@@ -75,8 +76,6 @@ markers = [
     "token: token usage aggregation edge cases",
 ]
 filterwarnings = [
-    # xdist incompatibility — expected, not actionable
-    "ignore:Benchmarks are automatically disabled because xdist plugin is active:pytest_benchmark.logger.PytestBenchmarkWarning",
     # FastAPI testclient uses deprecated starlette httpx path — upstream issue
     "ignore:Using httpx with starlette.testclient is deprecated:DeprecationWarning",
     # pytest-asyncio internals

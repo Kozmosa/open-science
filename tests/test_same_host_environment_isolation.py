@@ -50,12 +50,28 @@ def test_staging_uses_separate_cookie_and_observability_configuration() -> None:
     deploy = _mapping(backend["deploy"])
     resources = _mapping(deploy["resources"])
     limits = _mapping(resources["limits"])
+    nginx = _mapping(services["nginx-staging"])
+    nginx_healthcheck = _mapping(nginx["healthcheck"])
+    nginx_health_command = nginx_healthcheck["test"]
 
     assert limits["cpus"] == "8.0"
+    assert environment["OPENSCIENCE_PRODUCTION"] == "1"
     assert environment["OPENSCIENCE_AUTH_COOKIE_NAMESPACE"] == "staging"
+    assert isinstance(nginx_health_command, list)
+    assert "http://127.0.0.1:7192/api/health" in nginx_health_command
     observability_enabled = environment["AINRF_OBSERVABILITY_ENABLED"]
     assert isinstance(observability_enabled, str)
     assert "STAGING_AINRF_OBSERVABILITY_ENABLED" in observability_enabled
+
+
+def test_staging_nginx_exposes_machine_readable_identity() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    nginx_config = (repo_root / "deploy" / "config" / "nginx-staging.conf").read_text(
+        encoding="utf-8"
+    )
+
+    assert "location = /staging-identity.json" in nginx_config
+    assert '\'{"environment":"staging"}\'' in nginx_config
 
 
 def test_runtime_image_contains_primary_and_compatibility_cli_entrypoints() -> None:

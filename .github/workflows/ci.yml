@@ -1,0 +1,96 @@
+name: L1 Deterministic Gate
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l1-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend deterministic gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "1"
+      OPENSCIENCE_PYTEST_WORKERS: "4"
+      UV_CACHE_DIR: /tmp/uv-cache
+      UV_LOCKED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.7"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Run backend L1 gate
+        run: bash scripts/ci.sh l1-backend
+
+  frontend:
+    name: Frontend deterministic gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm --prefix frontend ci
+
+      - name: Run frontend L1 gate
+        run: bash scripts/ci.sh l1-frontend
+
+  docs:
+    name: Documentation deterministic gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm --prefix docs-site ci
+
+      - name: Run docs L1 gate
+        run: bash scripts/ci.sh l1-docs
