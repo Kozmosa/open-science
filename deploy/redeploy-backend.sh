@@ -43,6 +43,7 @@ case "$TARGET" in
     BACKEND_HEALTH_URL="http://localhost:18000/health"
     NGINX_HEALTH_URL="http://localhost:8192/health"
     FRONTEND_OUT_DIR="dist/production"
+    RUNTIME_CONTAINER="ainrf"
     ;;
   staging)
     COMPOSE_FILE="docker-compose.staging.yml"
@@ -51,6 +52,7 @@ case "$TARGET" in
     BACKEND_HEALTH_URL="http://localhost:17000/health"
     NGINX_HEALTH_URL="http://localhost:7192/health"
     FRONTEND_OUT_DIR="dist/staging"
+    RUNTIME_CONTAINER="ainrf-staging"
     ;;
   gpu)
     COMPOSE_FILE="docker-compose.gpu.yml"
@@ -60,12 +62,15 @@ case "$TARGET" in
     BACKEND_HEALTH_URL="http://localhost:8192/health"
     NGINX_HEALTH_URL="http://localhost:8192/health"
     FRONTEND_OUT_DIR="dist/gpu"
+    RUNTIME_CONTAINER="ainrf"
     ;;
   *)
     _ainrf_error "Unknown target: $TARGET (use 'production' or 'staging')"
     exit 1
     ;;
 esac
+
+load_runtime_env_from_container "${RUNTIME_CONTAINER}"
 
 export AINRF_BUILD_COMMIT
 export AINRF_BUILD_COMMITTED_AT
@@ -98,6 +103,7 @@ echo "=== Building frontend on host ==="
 cd "${REPO_ROOT}/frontend"
 VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
   OPENSCIENCE_FRONTEND_OUT_DIR="${FRONTEND_OUT_DIR}" npm run build
+chmod -R a+rX "${REPO_ROOT}/frontend/${FRONTEND_OUT_DIR}"
 cd "${REPO_ROOT}/deploy"
 
 # Propagate nginx config changes too.  A plain 'docker compose up --build ainrf'

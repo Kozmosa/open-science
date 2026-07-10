@@ -24,6 +24,29 @@ _ainrf_info()  { echo -e "${AINRF_GREEN}[deploy]${AINRF_NC} $*"; }
 _ainrf_warn()  { echo -e "${AINRF_YELLOW}[deploy]${AINRF_NC} $*"; }
 _ainrf_error() { echo -e "${AINRF_RED}[deploy]${AINRF_NC} $*" >&2; }
 
+# Reuse non-empty runtime configuration from an existing container when the
+# deploy shell does not already provide it. Values remain process-local and
+# are never printed or written to disk.
+load_runtime_env_from_container() {
+    local container_name="$1"
+    local entry key
+
+    if ! docker inspect "${container_name}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    while IFS= read -r entry; do
+        case "${entry}" in
+          AINRF_*=*|OPENSCIENCE_*=*|ANTHROPIC_*=*|CODEX_*=*)
+            key="${entry%%=*}"
+            if [[ -z "${!key:-}" ]]; then
+                export "${entry}"
+            fi
+            ;;
+        esac
+    done < <(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${container_name}")
+}
+
 # Return 0 if <url> responds with HTTP 2xx/3xx.
 _url_is_healthy() {
     local url="$1"

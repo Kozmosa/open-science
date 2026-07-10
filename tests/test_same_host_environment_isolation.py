@@ -67,3 +67,12 @@ def test_runtime_image_contains_primary_and_compatibility_cli_entrypoints() -> N
         "COPY --from=backend-build /usr/local/bin/openscience /usr/local/bin/openscience"
         in dockerfile
     )
+
+
+def test_deploy_scripts_reuse_runtime_env_and_publish_readable_assets() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+
+    for script_name in ("redeploy-backend.sh", "redeploy-frontend.sh"):
+        script = (repo_root / "deploy" / script_name).read_text(encoding="utf-8")
+        assert 'load_runtime_env_from_container "${RUNTIME_CONTAINER}"' in script
+        assert 'chmod -R a+rX "${REPO_ROOT}/frontend/${FRONTEND_OUT_DIR}"' in script

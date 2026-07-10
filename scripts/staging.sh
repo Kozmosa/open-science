@@ -48,6 +48,7 @@ cmd_up() {
     VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
       OPENSCIENCE_FRONTEND_OUT_DIR="${STAGING_FRONTEND_OUT_DIR}" \
       npm --prefix "${REPO_ROOT}/frontend" run build
+    chmod -R a+rX "${REPO_ROOT}/frontend/${STAGING_FRONTEND_OUT_DIR}"
   fi
 
   # Stamp git provenance (same as redeploy-backend.sh)
