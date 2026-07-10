@@ -106,12 +106,14 @@
 - 安装依赖：`UV_CACHE_DIR=/tmp/uv-cache uv sync --dev`
 - 本地开发：`UV_CACHE_DIR=/tmp/uv-cache uv run openscience --help`
 - 生产构建：`cd docs-site && npm run build`
-- 测试：`UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/`
+- 快速开发反馈：`bash scripts/ci.sh l0`
+- 完整确定性门禁：`bash scripts/ci.sh l1`
+- 后端全量测试：`bash scripts/test.sh all`（默认最多 8 个 worker，并将 race/contention 测试串行运行）
 - 预览：`cd docs-site && npm run dev`
 - 其他关键命令：
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests`
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests scripts`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
-  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests`
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests scripts`
 
 ## 本地调试与环境约定
 

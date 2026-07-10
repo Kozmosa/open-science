@@ -44,9 +44,11 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 - `cd docs-site && npm run preview`: preview the production build locally.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run openscience --help`: inspect the CLI scaffold.
   The legacy `ainrf` CLI remains available during the OpenScience compatibility phase.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto`: run the Python test suite in parallel across CPU cores via pytest-xdist (the `addopts` default is serial, so pass `-n auto` explicitly). Use `-n 0` or drop `-n` for serial execution when debugging an ordered failure.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests`: run lint checks.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests`: verify formatting.
+- `bash scripts/ci.sh l0`: run the bounded agent/developer inner loop.
+- `bash scripts/ci.sh l1`: run the complete deterministic backend/frontend/docs gate without Docker or external services.
+- `bash scripts/test.sh all`: run the backend suite with a bounded parallel lane and a separate serial race/contention lane. The default worker limit is 8; lower it with `OPENSCIENCE_PYTEST_WORKERS`. Do not use `-n auto` on the shared production/development host.
+- `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests scripts`: run lint checks.
+- `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests scripts`: verify formatting.
 
 ### Build & Serve Shortcuts
 
@@ -54,6 +56,17 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 - `cd docs-site && npm run dev`: run the local docs dev server with hot reload.
 
 Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activation so execution stays aligned with the lockfile.
+
+### Five-Layer Hybrid CI
+
+- `L0` agent/developer inner loop: `bash scripts/ci.sh l0`.
+- `L1` deterministic gate: `bash scripts/ci.sh l1`; GitHub-hosted jobs run backend, frontend, and docs lanes separately.
+- `L2` isolated container integration: reserved for per-SHA local CI cells; never reuse shared staging.
+- `L3` deep system verification: trusted, serialized local tests for tenant permissions, SSH/tmux, backup/restore, full runtime, and performance.
+- `L4` release acceptance: immutable artifacts promoted through release staging, manual production approval, read-only post-smoke, and rollback.
+- Public pull-request code must never execute on a self-hosted runner attached to the production machine or its Docker daemon.
+- Backend pytest defaults to at most 8 workers and frontend Vitest defaults to at most 4; lower them with `OPENSCIENCE_PYTEST_WORKERS` and `OPENSCIENCE_VITEST_WORKERS` when the shared host is under load.
+- The long-lived design is documented in [`docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md`](docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md).
 
 ### Frontend Command Constraints
 
@@ -165,15 +178,15 @@ Use shared layout primitives (`PageShell`, `SplitPane`, `SectionStack`, `CardGri
 Tests use `pytest`. Place new tests under `tests/` and name files `test_*.py`. Match function names to behavior, for example `test_serve_stub_runs`. Add or update smoke tests for every new CLI surface, parser behavior, or build-script contract you change.
 ### Test Markers
 Every test file must declare a module-level `pytestmark` to categorize its tests:
-| Marker | Scope | Count | Run |
-|--------|-------|-------|-----|
-| `api` | HTTP API route integration tests (full request/response) | 76 | `pytest -m api` |
-| `unit` | Pure unit tests (no HTTP server, isolated logic) | 156 | `pytest -m unit` |
-| `middleware` | Security, auth, audit, and request middleware | 72 | `pytest -m middleware` |
-| `engine` | Execution engine, SSH, terminal, harness | 70 | `pytest -m engine` |
-| `cli` | CLI commands, build scripts, server lifecycle | 61 | `pytest -m cli` |
-| `integration` | Production-like integration tests (SPA, /api prefix) | 12 | `pytest -m integration` |
-| `slow` | Tests that take >1s (opt-in marker for slow tests) | — | `pytest -m 'not slow'` |
+| Marker | Scope | Run |
+|--------|-------|-----|
+| `api` | HTTP API route integration tests (full request/response) | `bash scripts/test.sh api` |
+| `unit` | Pure unit tests (no HTTP server, isolated logic) | `bash scripts/test.sh unit` |
+| `middleware` | Security, auth, audit, and request middleware | `bash scripts/test.sh middleware` |
+| `engine` | Execution engine, SSH, terminal, harness | `bash scripts/test.sh engine` |
+| `cli` | CLI commands, build scripts, server lifecycle | `pytest -m cli -n 4` |
+| `integration` | In-process production-mode API/SPA contracts | `bash scripts/test.sh production-contract` |
+| `slow` | Tests that take >1s (opt-in marker for slow tests) | `pytest -m 'not slow' -n 4` |
 When adding a new test file, add the appropriate marker:
 ```python
 import pytest
@@ -182,18 +195,17 @@ pytestmark = [pytest.mark.api]  # or unit, middleware, engine, cli, integration
 ```
 ### Before Submitting
 Before submitting changes to Python code, run both runtime and static checks:
-- `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto`
-- `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
+- `bash scripts/ci.sh l1`
 ### Command Reference
-- Backend tests must run from the repo root: `UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/ -n auto` (parallel; add `-n 0` for serial). Backend tests must not rely on the process working directory for output — write to `tmp_path` so parallel workers never collide.
+- Backend tests must run from the repo root through `bash scripts/test.sh <lane>` or `bash scripts/ci.sh <layer>`. Backend tests must not rely on the process working directory for output — write to `tmp_path` so parallel workers never collide.
 - Frontend tests and type-check must run from `frontend/`.
 - Start manual service testing with `uv run openscience serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`.
-- Selective runs (also parallel by default): `pytest -m api -n auto`, `pytest -m unit -n auto`, `pytest -m 'not slow' -n auto`.
+- Selective runs: `bash scripts/test.sh api`, `bash scripts/test.sh unit`, or explicit pytest commands with a bounded numeric `-n` value.
 - Frontend test command: `cd frontend && npm run test:run`.
 
 ### Agent E2E Testing
 
-OpenScience uses coding-agent-driven E2E testing with Playwright MCP against a production-like Docker container. Test infrastructure lives in `testing/e2e/`.
+`testing/e2e/` is a legacy exploratory Playwright-MCP harness, not a reproducible merge gate. It currently uses a mutable local image and fixed shared resources; do not run it for untrusted pull requests or cite it as L2 evidence. The future isolated container integration layer is defined by the five-layer CI design.
 
 > **Full details (environment, scripts, MCP config, ports)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)
 
