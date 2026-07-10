@@ -42,6 +42,7 @@ case "$TARGET" in
     NGINX_SERVICE="nginx"
     BACKEND_HEALTH_URL="http://localhost:18000/health"
     NGINX_HEALTH_URL="http://localhost:8192/health"
+    FRONTEND_OUT_DIR="dist/production"
     ;;
   staging)
     COMPOSE_FILE="docker-compose.staging.yml"
@@ -49,6 +50,7 @@ case "$TARGET" in
     NGINX_SERVICE="nginx-staging"
     BACKEND_HEALTH_URL="http://localhost:17000/health"
     NGINX_HEALTH_URL="http://localhost:7192/health"
+    FRONTEND_OUT_DIR="dist/staging"
     ;;
   gpu)
     COMPOSE_FILE="docker-compose.gpu.yml"
@@ -57,6 +59,7 @@ case "$TARGET" in
     # GPU compose uses bridge networking; only nginx exposes port 8192.
     BACKEND_HEALTH_URL="http://localhost:8192/health"
     NGINX_HEALTH_URL="http://localhost:8192/health"
+    FRONTEND_OUT_DIR="dist/gpu"
     ;;
   *)
     _ainrf_error "Unknown target: $TARGET (use 'production' or 'staging')"
@@ -89,12 +92,12 @@ fi
 
 docker compose -f "${COMPOSE_FILE}" up -d --build "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
 
-# Production nginx serves the host frontend/dist, not the dist baked into the
-# backend image. Rebuild it here so the frontend build-info matches the backend
-# commit and the user sees a consistent deployment version.
+# nginx serves a target-specific host frontend bundle, not the dist baked into
+# the backend image. Rebuild it here so frontend and backend versions match.
 echo "=== Building frontend on host ==="
 cd "${REPO_ROOT}/frontend"
-npm run build
+VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
+  OPENSCIENCE_FRONTEND_OUT_DIR="${FRONTEND_OUT_DIR}" npm run build
 cd "${REPO_ROOT}/deploy"
 
 # Propagate nginx config changes too.  A plain 'docker compose up --build ainrf'

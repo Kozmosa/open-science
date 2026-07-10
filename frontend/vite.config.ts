@@ -7,6 +7,7 @@ import { sharedAinrfProxyConfig } from './vite.proxy'
 
 // https://vite.dev/config/
 const ANALYZE = process.env.VITE_BUNDLE_ANALYZE === 'true'
+const FRONTEND_OUT_DIR = process.env.OPENSCIENCE_FRONTEND_OUT_DIR?.trim() || 'dist'
 
 const config = defineConfig({
   plugins: [react(), tailwindcss(),
@@ -19,6 +20,7 @@ const config = defineConfig({
     })] : []),
   ],
   build: {
+    outDir: FRONTEND_OUT_DIR,
     rollupOptions: {
       output: {
         manualChunks(id) {

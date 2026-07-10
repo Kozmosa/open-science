@@ -149,7 +149,7 @@ services:
       - "8192:8192"
     volumes:
       - ./config/nginx-bridge.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../frontend/dist:/usr/share/nginx/html:ro
+      - ../frontend/dist/gpu:/usr/share/nginx/html:ro
     depends_on:
       ainrf:
         condition: service_healthy

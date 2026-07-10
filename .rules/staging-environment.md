@@ -7,6 +7,19 @@ before production deploy.
 
 Production deployment details: [deployment.md](deployment.md)
 
+Staging uses its own Compose project (`openscience-staging`), frontend bundle
+(`frontend/dist/staging`), authentication cookie namespace, and opt-in
+observability variables. `down --remove-orphans` therefore cannot classify
+production services as staging orphans.
+
+The staging backend is capped at 8 CPUs and 4 GiB memory. On the current
+112-thread host this leaves production and unrelated workloads ample CPU
+headroom even when staging is under load.
+
+The Compose project-name change intentionally starts staging with a new set of
+project-scoped volumes. Previous `deploy_staging-*` volumes are not attached;
+staging is treated as disposable test state as documented by `staging.sh down`.
+
 ## Quick Start
 
 ```bash

@@ -73,13 +73,7 @@ print(hashlib.sha256(os.environ["OPENSCIENCE_WEBUI_API_KEY"].encode("utf-8")).he
 PY
 )"
 export AINRF_API_KEY_HASHES="${OPENSCIENCE_API_KEY_HASHES}"
-
-# Write API key to frontend .env.local so Vite can inject it into the build
-FRONTEND_ENV_FILE="${REPO_ROOT}/frontend/.env.local"
-{
-  printf 'VITE_OPENSCIENCE_API_KEY=%s\n' "${OPENSCIENCE_WEBUI_API_KEY}"
-  printf 'VITE_AINRF_API_KEY=%s\n' "${OPENSCIENCE_WEBUI_API_KEY}"
-} > "${FRONTEND_ENV_FILE}"
+export OPENSCIENCE_AUTH_COOKIE_NAMESPACE="${OPENSCIENCE_AUTH_COOKIE_NAMESPACE:-development}"
 
 mkdir -p "${HOME}/.ainrf"
 
@@ -166,10 +160,6 @@ cleanup() {
     kill "${backend_pid}" 2>/dev/null || true
   fi
   wait || true
-  # Clean up injected env file
-  if [[ -f "${FRONTEND_ENV_FILE}" ]]; then
-    rm -f "${FRONTEND_ENV_FILE}"
-  fi
   exit "${exit_code}"
 }
 

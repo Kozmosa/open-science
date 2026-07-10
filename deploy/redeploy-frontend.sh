@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ── Rebuild + redeploy the FRONTEND (nginx static) ───────────────
 #
-# The frontend ships its own build-info (frontend/dist/build-info.json),
-# captured at `npm run build` time. nginx bind-mounts the host
-# frontend/dist, so a rebuild + nginx recreate is enough — no image
+# The frontend ships its own build-info, captured at `npm run build` time.
+# Each deployment target has a separate host output directory, so rebuilding
+# staging cannot replace the assets served by production nginx.
 # rebuild needed.
 #
 # Usage:
@@ -41,16 +41,19 @@ case "$TARGET" in
     COMPOSE_FILE="docker-compose.cpu.yml"
     SERVICE="nginx"
     NGINX_HEALTH_URL="http://localhost:8192/health"
+    FRONTEND_OUT_DIR="dist/production"
     ;;
   staging)
     COMPOSE_FILE="docker-compose.staging.yml"
     SERVICE="nginx-staging"
     NGINX_HEALTH_URL="http://localhost:7192/health"
+    FRONTEND_OUT_DIR="dist/staging"
     ;;
   gpu)
     COMPOSE_FILE="docker-compose.gpu.yml"
     SERVICE="nginx"
     NGINX_HEALTH_URL="http://localhost:8192/health"
+    FRONTEND_OUT_DIR="dist/gpu"
     ;;
   *)
     _ainrf_error "Unknown target: $TARGET (use 'production' or 'staging')"
@@ -80,13 +83,14 @@ if [ "${TARGET}" = "gpu" ]; then
 fi
 
 cd "${REPO_ROOT}/frontend"
-npm run build
+VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
+  OPENSCIENCE_FRONTEND_OUT_DIR="${FRONTEND_OUT_DIR}" npm run build
 
 echo
 echo "=== Recreating ${SERVICE} (${TARGET}) ==="
 cd "${REPO_ROOT}/deploy"
 # Use --force-recreate so nginx picks up any changes to nginx-host.conf or
-# nginx-staging.conf, not just the updated frontend/dist.
+# nginx-staging.conf, not just the updated target-specific frontend bundle.
 docker compose -f "${COMPOSE_FILE}" up -d --no-deps --force-recreate "${SERVICE}" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
 
 # Verify nginx serves traffic through the reverse proxy.

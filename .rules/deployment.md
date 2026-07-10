@@ -28,7 +28,7 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 
 - All services use `network_mode: host` (no Docker NAT).
 - External access: `http://<host>:8192` → nginx → backend on 18000.
-- Frontend static files served by nginx from `frontend/dist` (host-mounted, read-only).
+- Frontend static files are served from `frontend/dist/production` (host-mounted, read-only).
 - Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
 - Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
 
@@ -86,7 +86,7 @@ docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up 
 # into the image (otherwise the backend reports "Unavailable" for its version).
 bash deploy/redeploy-backend.sh
 
-# Frontend-only changes — rebuilds host frontend/dist, then restarts nginx.
+# Frontend-only changes — rebuilds the target-specific host bundle, then restarts nginx.
 bash deploy/redeploy-frontend.sh
 
 # Staging targets (same scripts, different target):
@@ -99,11 +99,16 @@ bash deploy/redeploy-frontend.sh --target staging
 
 **Version provenance is split**: the backend bakes its OWN commit into
 `/opt/ainrf/backend-build-info.json` (via `redeploy-backend.sh` build-args),
-and the frontend ships its OWN `frontend/dist/build-info.json` (built on the
+and the frontend ships its OWN target-specific `build-info.json` (built on the
 host). Because the two build at different times, they may differ — the
 Settings page shows both and flags a mismatch.
 
-**Why host build is required**: nginx serves frontend from a **host-mounted** volume (`frontend/dist:/usr/share/nginx/html:ro`), not from the container's built-in `/opt/ainrf/frontend/dist`. After frontend changes, the host `frontend/dist` must be rebuilt or nginx will serve stale files. Verify by checking the `index-*.js` hash in `frontend/dist/index.html` matches what the browser requests.
+**Why host build is required**: nginx serves frontend from a **host-mounted** target directory, not from the container's built-in `/opt/ainrf/frontend/dist`. Production uses `frontend/dist/production`, staging uses `frontend/dist/staging`, and GPU deployment uses `frontend/dist/gpu`; rebuilding one environment therefore cannot replace another environment's assets. Verify the `index-*.js` hash in the target directory matches what the browser requests.
+
+Deployment wrappers explicitly clear `VITE_OPENSCIENCE_API_KEY` and
+`VITE_AINRF_API_KEY` while building. Local WebUI credentials belong only to
+the Vite proxy process and must never be embedded into a deployed browser
+bundle through a lingering `.env.local` file.
 
 ## First-Time Admin Password
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import re
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -16,6 +17,7 @@ from ainrf.state import default_state_root
 
 def hash_api_key(value: str) -> str:
     return sha256(value.encode("utf-8")).hexdigest()
+
 
 def _env_value(name: str, legacy_name: str, default: str = "") -> str:
     value = os.environ.get(name)
@@ -64,6 +66,15 @@ class ApiConfig:
     observability_base_url: str = ""
     observability_secret_key: str = ""
     observability_public_key: str = ""
+    auth_cookie_namespace: str = ""
+
+    @property
+    def access_cookie_names(self) -> tuple[str, str]:
+        suffix = f"_{self.auth_cookie_namespace}" if self.auth_cookie_namespace else ""
+        return (
+            f"openscience{suffix}_access_token",
+            f"ainrf{suffix}_access_token",
+        )
 
     @property
     def runtime_paths(self) -> RuntimePathConfig:
@@ -150,6 +161,17 @@ class ApiConfig:
         observability_public_key = _env_value(
             "OPENSCIENCE_OBSERVABILITY_PUBLIC_KEY", "AINRF_OBSERVABILITY_PUBLIC_KEY"
         )
+        auth_cookie_namespace = _env_value(
+            "OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "AINRF_AUTH_COOKIE_NAMESPACE"
+        ).strip()
+        if (
+            auth_cookie_namespace
+            and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", auth_cookie_namespace) is None
+        ):
+            raise ValueError(
+                "OpenScience auth cookie namespace must contain only lowercase "
+                "letters, digits, underscores, or hyphens"
+            )
         return cls(
             api_key_hashes=api_key_hashes,
             state_root=resolved_state_root,
@@ -169,6 +191,7 @@ class ApiConfig:
             observability_base_url=observability_base_url,
             observability_secret_key=observability_secret_key,
             observability_public_key=observability_public_key,
+            auth_cookie_namespace=auth_cookie_namespace,
         )
 
     @staticmethod

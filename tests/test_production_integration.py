@@ -22,11 +22,12 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig, ContainerHealth
+
 pytestmark = [pytest.mark.integration]
+
 
 async def _noop_async(self: object, **kwargs: object) -> None:
     """No-op for mocking SSHExecutor connect/close."""
-
 
 
 # ---------------------------------------------------------------------------
@@ -40,9 +41,7 @@ def _build_fake_frontend(tmp_path: Path) -> Path:
     assets = dist / "assets"
     assets.mkdir(parents=True)
 
-    (dist / "index.html").write_text(
-        "<!DOCTYPE html><html><body>OpenScience SPA</body></html>"
-    )
+    (dist / "index.html").write_text("<!DOCTYPE html><html><body>OpenScience SPA</body></html>")
     (assets / "main.js").write_text("console.log('ainrf');")
     (assets / "style.css").write_text("body{margin:0}")
     (dist / "favicon.ico").write_bytes(b"\x00\x00\x01\x00")
@@ -54,12 +53,14 @@ def _make_production_app(
     tmp_path: Path,
     *,
     frontend_dist: Path | None = None,
+    auth_cookie_namespace: str = "",
 ) -> tuple[FastAPI, httpx.AsyncClient]:
     """Create an app in production mode, optionally with frontend dist."""
     api_config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("test-key")}),
         state_root=tmp_path,
         production=True,
+        auth_cookie_namespace=auth_cookie_namespace,
     )
     if frontend_dist is not None:
         os.environ["AINRF_FRONTEND_DIR"] = str(frontend_dist)
@@ -87,7 +88,11 @@ def _activate_user(app: FastAPI, username: str) -> None:
 
 
 async def _register_activate_login(
-    app: FastAPI, client: httpx.AsyncClient, *, username: str = "testadmin", password: str = "TestPassword123!"
+    app: FastAPI,
+    client: httpx.AsyncClient,
+    *,
+    username: str = "testadmin",
+    password: str = "TestPassword123!",
 ) -> dict[str, str]:
     """Register, activate, and login — returns tokens."""
     auth_service = app.state.auth_service
@@ -96,7 +101,7 @@ async def _register_activate_login(
     _activate_user(app, username)
     resp = await client.post("/api/auth/login", json={"username": username, "password": password})
     assert resp.status_code == 200, f"Login failed: {resp.status_code} {resp.text}"
-    return resp.json()  # type: ignore[no-any-return]
+    return resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +117,6 @@ async def test_api_prefix_login_round_trip(tmp_path: Path) -> None:
         data = await _register_activate_login(app, client)
         assert "access_token" in data
         assert "refresh_token" in data
-
 
 
 @pytest.mark.anyio
@@ -135,6 +139,28 @@ async def test_login_sets_openscience_cookie(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert "openscience_access_token" in response.cookies
+
+
+@pytest.mark.anyio
+async def test_namespaced_cookie_does_not_overwrite_production_cookie(
+    tmp_path: Path,
+) -> None:
+    app, client = _make_production_app(tmp_path, auth_cookie_namespace="staging")
+    async with client:
+        tokens = await _register_activate_login(
+            app,
+            client,
+            username="stagingcookie",
+            password="Password123!",
+        )
+        response = await client.get(
+            "/api/auth/check",
+            cookies={"ainrf_staging_access_token": tokens["access_token"]},
+        )
+
+    assert response.status_code == 200
+    assert "openscience_staging_access_token" in client.cookies
+    assert "openscience_access_token" not in client.cookies
 
 
 @pytest.mark.anyio
@@ -176,13 +202,16 @@ async def test_logout_deletes_both_cookie_names(tmp_path: Path) -> None:
     assert "openscience_access_token=" in set_cookie
     assert "ainrf_access_token=" in set_cookie
 
+
 @pytest.mark.anyio
 async def test_api_prefix_auth_endpoints(tmp_path: Path) -> None:
     """All auth endpoints respond under /api prefix."""
     app, client = _make_production_app(tmp_path)
     async with client:
         # Register + activate + login
-        tokens = await _register_activate_login(app, client, username="newuser", password="Password123!")
+        tokens = await _register_activate_login(
+            app, client, username="newuser", password="Password123!"
+        )
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
 
         # Me
@@ -366,7 +395,9 @@ async def test_full_auth_flow_with_api_prefix(tmp_path: Path) -> None:
     app, client = _make_production_app(tmp_path)
     async with client:
         # Register + activate + login
-        tokens = await _register_activate_login(app, client, username="flowuser", password="InitialPass1!")
+        tokens = await _register_activate_login(
+            app, client, username="flowuser", password="InitialPass1!"
+        )
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
 
         # Access protected endpoint

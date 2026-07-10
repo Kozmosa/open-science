@@ -36,6 +36,7 @@ log_path="${AINRF_TEST_LOG_DIR}/backend.log"
   printf 'UV_CACHE_DIR=%s\n' "${UV_CACHE_DIR:-}"
   printf 'AINRF_API_KEY_HASHES=%s\n' "${AINRF_API_KEY_HASHES:-}"
   printf 'AINRF_WEBUI_API_KEY=%s\n' "${AINRF_WEBUI_API_KEY:-}"
+  printf 'OPENSCIENCE_AUTH_COOKIE_NAMESPACE=%s\n' "${OPENSCIENCE_AUTH_COOKIE_NAMESPACE:-}"
   printf 'ARGS=%s\n' "$*"
 } > "${log_path}"
 sleep 0.1
@@ -93,6 +94,7 @@ def test_webui_sh_sets_default_cache_and_generates_session_token(tmp_path: Path)
     assert frontend["UV_CACHE_DIR"] == "/tmp/uv-cache"
     assert frontend["AINRF_WEBUI_API_KEY"] != ""
     assert backend["AINRF_API_KEY_HASHES"] == expected_hash
+    assert backend["OPENSCIENCE_AUTH_COOKIE_NAMESPACE"] == "development"
     assert (
         backend["ARGS"]
         == f"run openscience serve --host 127.0.0.1 --port 8000 --state-root {Path.home()}/.ainrf"

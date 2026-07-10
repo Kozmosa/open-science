@@ -21,10 +21,6 @@ from ainrf.auth import AuthService
 _LOG = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-_ACCESS_COOKIE = "openscience_access_token"
-_LEGACY_ACCESS_COOKIE = "ainrf_access_token"
-
-
 
 
 def _get_service(request: Request) -> AuthService:
@@ -66,16 +62,20 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
         from ainrf.projects import ProjectRegistryService
 
         assert isinstance(project_service, ProjectRegistryService)
-        project_service.get_or_create_user_default(
-            username=payload.username, owner_user_id=user.id
-        )
+        project_service.get_or_create_user_default(username=payload.username, owner_user_id=user.id)
 
     _ = user  # user created; admin approval is still required for login
     return {"message": "Registration submitted. Awaiting admin approval."}
 
 
-def _set_access_cookies(response: Response, access_token: str, *, secure: bool) -> None:
-    for cookie_name in (_ACCESS_COOKIE, _LEGACY_ACCESS_COOKIE):
+def _set_access_cookies(
+    response: Response,
+    access_token: str,
+    *,
+    cookie_names: tuple[str, str],
+    secure: bool,
+) -> None:
+    for cookie_name in cookie_names:
         response.set_cookie(
             key=cookie_name,
             value=access_token,
@@ -87,8 +87,8 @@ def _set_access_cookies(response: Response, access_token: str, *, secure: bool) 
         )
 
 
-def _delete_access_cookies(response: Response) -> None:
-    for cookie_name in (_ACCESS_COOKIE, _LEGACY_ACCESS_COOKIE):
+def _delete_access_cookies(response: Response, *, cookie_names: tuple[str, str]) -> None:
+    for cookie_name in cookie_names:
         response.delete_cookie(key=cookie_name, path="/")
 
 
@@ -132,7 +132,13 @@ async def login(payload: LoginRequest, request: Request) -> Response:
     # Set session cookie so nginx auth_request on /grafana, /prometheus, /litefuse can authenticate.
     # HttpOnly for XSS protection; SameSite=Lax for CSRF; Secure in production.
     is_secure = request.url.scheme == "https"
-    _set_access_cookies(response, result["access_token"], secure=is_secure)
+    api_config: ApiConfig = request.app.state.api_config
+    _set_access_cookies(
+        response,
+        result["access_token"],
+        cookie_names=api_config.access_cookie_names,
+        secure=is_secure,
+    )
     return response
 
 
@@ -150,7 +156,13 @@ async def refresh(payload: RefreshRequest, request: Request) -> Response:
         status_code=200,
     )
     is_secure = request.url.scheme == "https"
-    _set_access_cookies(response, result["access_token"], secure=is_secure)
+    api_config: ApiConfig = request.app.state.api_config
+    _set_access_cookies(
+        response,
+        result["access_token"],
+        cookie_names=api_config.access_cookie_names,
+        secure=is_secure,
+    )
     return response
 
 
@@ -162,7 +174,8 @@ async def logout(payload: RefreshRequest, request: Request) -> Response:
     except Exception:
         pass
     response = Response(status_code=204)
-    _delete_access_cookies(response)
+    api_config: ApiConfig = request.app.state.api_config
+    _delete_access_cookies(response, cookie_names=api_config.access_cookie_names)
     return response
 
 
@@ -194,6 +207,7 @@ async def check(request: Request) -> Response:
             "X-Remote-User-Role": "admin",
         },
     )
+
 
 @router.post("/change-password", status_code=204)
 async def change_password(payload: ChangePasswordRequest, request: Request):

@@ -18,6 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/deploy/docker-compose.staging.yml"
+STAGING_FRONTEND_OUT_DIR="dist/staging"
 
 # shellcheck source=../deploy/lib/health.sh
 source "${REPO_ROOT}/deploy/lib/health.sh"
@@ -40,10 +41,13 @@ _error() { echo -e "${RED}[staging]${NC} $*" >&2; }
 cmd_up() {
   _info "Building and starting staging environment..."
 
-  # Ensure frontend dist exists
-  if [[ ! -d "${REPO_ROOT}/frontend/dist" ]]; then
-    _warn "frontend/dist not found — building frontend first..."
-    (cd "${REPO_ROOT}/frontend" && npm run build)
+  # Ensure the staging-only frontend bundle exists. Production mounts a
+  # different directory, so this build cannot replace production assets.
+  if [[ ! -d "${REPO_ROOT}/frontend/${STAGING_FRONTEND_OUT_DIR}" ]]; then
+    _warn "frontend/${STAGING_FRONTEND_OUT_DIR} not found — building staging frontend first..."
+    VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
+      OPENSCIENCE_FRONTEND_OUT_DIR="${STAGING_FRONTEND_OUT_DIR}" \
+      npm --prefix "${REPO_ROOT}/frontend" run build
   fi
 
   # Stamp git provenance (same as redeploy-backend.sh)

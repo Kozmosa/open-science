@@ -146,7 +146,6 @@ def test_api_config_seeds_localhost_container_profile_when_config_is_minimal(
     assert config.container_config.ssh_key_path == "/opt/ainrf/.ssh/ainrf_local"
 
 
-
 def test_api_config_prefers_openscience_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -173,6 +172,31 @@ def test_api_config_falls_back_to_ainrf_env(
 
     assert config.state_root == tmp_path / "legacy"
     assert config.api_key_hashes == frozenset({"b" * 64})
+
+
+def test_api_config_builds_namespaced_auth_cookie_names(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
+    monkeypatch.setenv("OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "staging")
+
+    config = ApiConfig.from_env(tmp_path)
+
+    assert config.access_cookie_names == (
+        "openscience_staging_access_token",
+        "ainrf_staging_access_token",
+    )
+
+
+def test_api_config_rejects_invalid_auth_cookie_namespace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
+    monkeypatch.setenv("OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "Staging Unsafe")
+
+    with pytest.raises(ValueError, match="cookie namespace"):
+        ApiConfig.from_env(tmp_path)
+
 
 def test_api_config_uses_login_shell_by_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

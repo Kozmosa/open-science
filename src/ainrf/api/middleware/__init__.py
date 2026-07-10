@@ -79,6 +79,7 @@ def _is_exempt(path: str, production: bool) -> bool:
         return False
     return any(path.startswith(p) for p in _DEV_EXEMPT_PATH_PREFIXES)
 
+
 def _parse_cidrs(raw: tuple[str, ...]) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
     """Parse CIDR strings into network objects. Invalid entries are silently skipped."""
     networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
@@ -172,7 +173,14 @@ def build_jwt_auth_middleware(
             return await call_next(request)
 
         # Fallback: session cookie (needed for nginx auth_request on /grafana, /prometheus, /litefuse)
-        cookie_token = request.cookies.get("openscience_access_token") or request.cookies.get("ainrf_access_token")
+        cookie_token = next(
+            (
+                request.cookies[cookie_name]
+                for cookie_name in api_config.access_cookie_names
+                if cookie_name in request.cookies
+            ),
+            None,
+        )
         if cookie_token:
             try:
                 user = auth_service.get_user_by_token(cookie_token)
@@ -249,6 +257,7 @@ def build_concurrency_limit_middleware(
             await asyncio.wait_for(semaphore.acquire(), timeout=5.0)
         except TimeoutError:
             from ainrf.api.routes.sla_metrics import rate_limited
+
             rate_limited("concurrency", request.url.path)
             return JSONResponse(
                 {"detail": "Server is busy. Please retry later."},

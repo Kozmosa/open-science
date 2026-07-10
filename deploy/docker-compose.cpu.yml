@@ -1,3 +1,5 @@
+name: deploy
+
 # ══════════════════════════════════════════════════════════════════
 # OpenScience CPU-only — Docker Compose (host network)
 # ══════════════════════════════════════════════════════════════════
@@ -157,7 +159,7 @@ services:
     network_mode: host
     volumes:
       - ./config/nginx-host.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../frontend/dist:/usr/share/nginx/html:ro
+      - ../frontend/dist/production:/usr/share/nginx/html:ro
     depends_on:
       ainrf:
         condition: service_healthy
