@@ -154,6 +154,7 @@ RUN ln -s /usr/local/lib/node_modules /usr/local/bin/node_modules
 # Copy installed Python packages from build stage
 COPY --from=backend-build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=backend-build /usr/local/bin/ainrf /usr/local/bin/ainrf
+COPY --from=backend-build /usr/local/bin/openscience /usr/local/bin/openscience
 
 # Copy frontend build output
 COPY --from=frontend-build /build/frontend/dist /opt/ainrf/frontend/dist

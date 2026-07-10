@@ -56,3 +56,14 @@ def test_staging_uses_separate_cookie_and_observability_configuration() -> None:
     observability_enabled = environment["AINRF_OBSERVABILITY_ENABLED"]
     assert isinstance(observability_enabled, str)
     assert "STAGING_AINRF_OBSERVABILITY_ENABLED" in observability_enabled
+
+
+def test_runtime_image_contains_primary_and_compatibility_cli_entrypoints() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    dockerfile = (repo_root / "deploy" / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "COPY --from=backend-build /usr/local/bin/ainrf /usr/local/bin/ainrf" in dockerfile
+    assert (
+        "COPY --from=backend-build /usr/local/bin/openscience /usr/local/bin/openscience"
+        in dockerfile
+    )
