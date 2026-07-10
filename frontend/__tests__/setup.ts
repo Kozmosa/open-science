@@ -3,6 +3,13 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
+if (typeof document !== 'undefined' && typeof document.queryCommandSupported !== 'function') {
+  Object.defineProperty(document, 'queryCommandSupported', {
+    configurable: true,
+    value: vi.fn(() => false),
+  })
+}
+
 if (typeof HTMLCanvasElement !== 'undefined') {
   const gradientStub = {
     addColorStop: vi.fn(),
