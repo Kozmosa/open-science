@@ -155,7 +155,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     + "=" * 60
                     + "\n"
                 )
-                _LOG.info("initial_admin_created", username="admin", password_file=str(password_file))
+                _LOG.info(
+                    "initial_admin_created",
+                    extra={"username": "admin", "password_file": str(password_file)},
+                )
             # Admin role fix is handled by auth migration_003_admin_role_fix
         except Exception:
             _LOG.exception("Failed to create initial admin user")
@@ -276,6 +279,7 @@ def create_app(
 
     # Initialize OpenTelemetry auto-instrumentation (disabled by default).
     from ainrf.telemetry import init_telemetry
+
     init_telemetry(app)
 
     # Middleware order (outermost first):
@@ -297,11 +301,13 @@ def create_app(
         )
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
     from ainrf.api.middleware.rate_limit import build_rate_limit_middleware
+
     app.middleware("http")(build_rate_limit_middleware())
     # Innermost: exception handler must be registered after other middleware
     # so it can catch exceptions from route handlers (and from upstream
     # middleware that re-raises).
     from ainrf.api.middleware.exception_handler import build_exception_handler_middleware
+
     app.middleware("http")(build_exception_handler_middleware())
     for router in ROUTERS:
         app.include_router(router)

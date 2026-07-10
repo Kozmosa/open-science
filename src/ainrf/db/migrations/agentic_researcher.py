@@ -51,23 +51,17 @@ def migration_001_baseline(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id)")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_tasks_environment ON tasks(environment_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_environment ON tasks(environment_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_outputs_kind ON task_outputs(kind)")
 
 
 @registry.register(_DATABASE)
 def migration_002_latest_output_seq(conn: sqlite3.Connection) -> None:
     try:
-        conn.execute(
-            "ALTER TABLE tasks ADD COLUMN latest_output_seq INTEGER NOT NULL DEFAULT 0"
-        )
+        conn.execute("ALTER TABLE tasks ADD COLUMN latest_output_seq INTEGER NOT NULL DEFAULT 0")
     except sqlite3.OperationalError:
         pass  # column already exists
 
@@ -134,8 +128,6 @@ def migration_006_task_profile_overrides(conn: sqlite3.Connection) -> None:
     ]
     for col_name, col_type in columns:
         try:
-            conn.execute(
-                f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"
-            )
+            conn.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}")
         except sqlite3.OperationalError:
             pass  # column already exists

@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from contextlib import suppress
-from typing import Any
+from typing import Any, cast
 
 from anyio import create_task_group, to_thread
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -473,11 +473,13 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
     try:
         attachment, runtime = broker.open_runtime(attachment_id, token)
     except Exception as exc:
-        logger.warning("terminal WebSocket open failed for %s: %s: %s", attachment_id, type(exc).__name__, exc)
+        logger.warning(
+            "terminal WebSocket open failed for %s: %s: %s", attachment_id, type(exc).__name__, exc
+        )
         await websocket.close(code=_close_code_for_attachment_error(exc))
         return
     await websocket.accept()
-    client_ip = _client_ip(websocket)
+    client_ip = _client_ip(cast(Request, websocket))
     audit_event(
         "terminal.websocket.opened",
         severity="info",

@@ -11,10 +11,26 @@ STATE_ROOT = Path.home() / ".ainrf" / "runtime"
 # Column names frequently used in WHERE / JOIN / ORDER BY clauses that should be indexed
 WATCH_COLUMNS: dict[str, list[str]] = {
     # Active database (agentic_researcher.sqlite3)
-    "tasks": ["project_id", "status", "environment_id", "workspace_id", "owner_user_id", "created_at", "updated_at"],
+    "tasks": [
+        "project_id",
+        "status",
+        "environment_id",
+        "workspace_id",
+        "owner_user_id",
+        "created_at",
+        "updated_at",
+    ],
     "task_outputs": ["kind"],
     # Legacy database (task_harness.sqlite3) — may still exist in production
-    "task_harness_tasks": ["project_id", "status", "environment_id", "workspace_id", "session_id", "owner_user_id", "created_at"],
+    "task_harness_tasks": [
+        "project_id",
+        "status",
+        "environment_id",
+        "workspace_id",
+        "session_id",
+        "owner_user_id",
+        "created_at",
+    ],
     "task_harness_output_events": ["kind"],
     "task_harness_edges": ["project_id", "source_task_id", "target_task_id"],
     "managed_tasks": ["environment_id", "status", "task_id"],
@@ -29,28 +45,45 @@ WATCH_COLUMNS: dict[str, list[str]] = {
 
 EXPLAIN_QUERIES: dict[str, list[tuple[str, str]]] = {
     "agentic_researcher.sqlite3": [
-        ("list_tasks_by_project",
-         "SELECT * FROM tasks WHERE project_id = ? AND status != 'CANCELLED' ORDER BY updated_at DESC"),
-        ("list_task_output_after_seq",
-         "SELECT seq, kind, content FROM task_outputs WHERE task_id = ? AND seq > ? ORDER BY seq"),
+        (
+            "list_tasks_by_project",
+            "SELECT * FROM tasks WHERE project_id = ? AND status != 'CANCELLED' ORDER BY updated_at DESC",
+        ),
+        (
+            "list_task_output_after_seq",
+            "SELECT seq, kind, content FROM task_outputs WHERE task_id = ? AND seq > ? ORDER BY seq",
+        ),
     ],
     "task_harness.sqlite3": [
-        ("list_tasks_by_project",
-         "SELECT task_id FROM task_harness_tasks WHERE project_id = ? AND status != 'archived'"),
-        ("list_output_by_task",
-         "SELECT seq, kind, content FROM task_harness_output_events WHERE task_id = ? AND seq > ?"),
-        ("list_edges_by_project",
-         "SELECT edge_id, source_task_id, target_task_id FROM task_harness_edges WHERE project_id = ?"),
+        (
+            "list_tasks_by_project",
+            "SELECT task_id FROM task_harness_tasks WHERE project_id = ? AND status != 'archived'",
+        ),
+        (
+            "list_output_by_task",
+            "SELECT seq, kind, content FROM task_harness_output_events WHERE task_id = ? AND seq > ?",
+        ),
+        (
+            "list_edges_by_project",
+            "SELECT edge_id, source_task_id, target_task_id FROM task_harness_edges WHERE project_id = ?",
+        ),
     ],
     "auth.sqlite3": [
         ("login_lookup", "SELECT id, password_hash, role, status FROM users WHERE username = ?"),
-        ("list_collaborators", "SELECT user_id, role FROM project_collaborators WHERE project_id = ?"),
+        (
+            "list_collaborators",
+            "SELECT user_id, role FROM project_collaborators WHERE project_id = ?",
+        ),
     ],
     "sessions.sqlite3": [
-        ("list_sessions",
-         "SELECT session_id, title, status FROM task_sessions WHERE project_id = ? ORDER BY created_at DESC"),
-        ("list_attempts",
-         "SELECT attempt_id, status, started_at FROM task_attempts WHERE session_id = ? ORDER BY started_at DESC"),
+        (
+            "list_sessions",
+            "SELECT session_id, title, status FROM task_sessions WHERE project_id = ? ORDER BY created_at DESC",
+        ),
+        (
+            "list_attempts",
+            "SELECT attempt_id, status, started_at FROM task_attempts WHERE session_id = ? ORDER BY started_at DESC",
+        ),
     ],
 }
 
@@ -119,10 +152,7 @@ def analyze_db(db_path: Path) -> dict:
                     placeholders = query.count("?")
                     params = ("?",) * placeholders if placeholders else ()
                     plan_rows = conn.execute(f"EXPLAIN QUERY PLAN {query}", params).fetchall()
-                    plan_text = "\n".join(
-                        f"  {r[0]}|{r[1]}|{r[2]}|{r[3]}"
-                        for r in plan_rows
-                    )
+                    plan_text = "\n".join(f"  {r[0]}|{r[1]}|{r[2]}|{r[3]}" for r in plan_rows)
                     if "SCAN TABLE" in plan_text:
                         findings["full_scans"].append(f"{db_key}:{label}\n{plan_text}")
                 except Exception as exc:
@@ -154,7 +184,9 @@ def render_report(all_findings: dict[str, dict]) -> str:
             lines.append("### Missing Indexes")
             for m in sorted(missing):
                 parts = m.split(":")
-                lines.append(f"- `{parts[0]}` — `{parts[1]}` (missing index on `{parts[1].split('.')[1]}`)")
+                lines.append(
+                    f"- `{parts[0]}` — `{parts[1]}` (missing index on `{parts[1].split('.')[1]}`)"
+                )
             lines.append("")
 
         scans = findings.get("full_scans", [])
@@ -175,7 +207,13 @@ def main() -> None:
     report_dir = today_dir()
     all_findings: dict[str, dict] = {}
 
-    for db_name in ["agentic_researcher.sqlite3", "auth.sqlite3", "sessions.sqlite3", "task_harness.sqlite3", "terminal_state.sqlite3"]:
+    for db_name in [
+        "agentic_researcher.sqlite3",
+        "auth.sqlite3",
+        "sessions.sqlite3",
+        "task_harness.sqlite3",
+        "terminal_state.sqlite3",
+    ]:
         db_path = STATE_ROOT / db_name
         all_findings[db_name] = analyze_db(db_path)
 
@@ -185,13 +223,18 @@ def main() -> None:
     print(f"Database index report written to {out_path}")
 
     # Also write JSON summary for the master summary
-    (report_dir / "db-summary.json").write_text(json.dumps({
-        db: {
-            "missing_index_count": len(f.get("missing_indexes", [])),
-            "full_scan_count": len(f.get("full_scans", [])),
-        }
-        for db, f in all_findings.items()
-    }, indent=2))
+    (report_dir / "db-summary.json").write_text(
+        json.dumps(
+            {
+                db: {
+                    "missing_index_count": len(f.get("missing_indexes", [])),
+                    "full_scan_count": len(f.get("full_scans", [])),
+                }
+                for db, f in all_findings.items()
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

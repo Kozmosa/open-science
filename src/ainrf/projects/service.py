@@ -290,9 +290,7 @@ class ProjectRegistryService:
         This is a one-shot migration for projects created before the
         permission system was fully wired.
         """
-        null_owner_projects = [
-            p for p in self._projects.values() if p.owner_user_id is None
-        ]
+        null_owner_projects = [p for p in self._projects.values() if p.owner_user_id is None]
         if not null_owner_projects:
             return
         logger.warning(

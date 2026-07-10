@@ -5,6 +5,7 @@ and reporting to external observability backends (e.g. Litefuse).
 
 When no backend is configured, all operations are no-ops via NullReporter.
 """
+
 from __future__ import annotations
 
 from ainrf.observability.protocol import (

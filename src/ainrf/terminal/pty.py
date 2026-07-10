@@ -82,8 +82,13 @@ def start_terminal_bridge(
         spawn_dir = shlex.quote(str(spawn_working_directory))
         inner_cmd = " ".join(shlex.quote(a) for a in shell_command)
         effective_command = [
-            "sudo", "-u", run_as_user, "-H",
-            "bash", "-c", f"cd {spawn_dir} && exec {inner_cmd}",
+            "sudo",
+            "-u",
+            run_as_user,
+            "-H",
+            "bash",
+            "-c",
+            f"cd {spawn_dir} && exec {inner_cmd}",
         ]
     else:
         if not spawn_working_directory.exists():
@@ -96,6 +101,7 @@ def start_terminal_bridge(
     child_env.setdefault("COLUMNS", "80")
     child_env.setdefault("LINES", "24")
     try:
+
         def _set_controlling_tty() -> None:
             """Make stdin the controlling terminal (runs in child after setsid)."""
             fcntl.ioctl(0, termios.TIOCSCTTY, 0)

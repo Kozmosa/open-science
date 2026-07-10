@@ -69,6 +69,7 @@ class TestDbSessionStoreBasics:
 
 
 class TestDbSessionStoreConcurrency:
+    @pytest.mark.concurrent
     def test_concurrent_append_does_not_corrupt(self, store):
         key = {"project_key": "proj-1", "session_id": "sess-race"}
 

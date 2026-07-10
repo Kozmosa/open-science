@@ -5,13 +5,10 @@ log file (``<state_root>/logs/frontend-YYYYMMDD.log``) via structlog.
 The endpoint is **unauthenticated** (frontend errors may occur before
 login) but rate-limited to prevent abuse.
 """
+
 from __future__ import annotations
 
-import datetime
 import logging
-import sqlite3
-from collections.abc import Awaitable, Callable
-from typing import Any
 
 from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
@@ -49,6 +46,7 @@ async def ingest_client_logs(request: Request) -> Response:
 
     if _is_rate_limited(client_ip):
         from ainrf.api.routes.sla_metrics import rate_limited
+
         rate_limited("ip_quota", "/client-logs")
         return PlainTextResponse("rate limited", status_code=429)
 

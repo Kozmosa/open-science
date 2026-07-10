@@ -76,7 +76,7 @@ sla_rate_limited_total = Counter(
 
 _start_time: float = _time.monotonic()
 _first_token_times: dict[str, float] = {}  # task_id → timestamp of first LLM token
-_task_start_times: dict[str, float] = {}   # task_id → timestamp when task started
+_task_start_times: dict[str, float] = {}  # task_id → timestamp when task started
 
 
 def record_uptime() -> None:

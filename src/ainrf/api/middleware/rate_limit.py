@@ -81,9 +81,13 @@ def _cleanup_expired() -> None:
 def _read_config() -> tuple[bool, int, int]:
     """Read rate-limit configuration from env vars."""
     enabled = os.environ.get("AINRF_RATE_LIMIT_ENABLED", "").lower() in (
-        "1", "true", "yes",
+        "1",
+        "true",
+        "yes",
     )
-    rpm = int(os.environ.get("AINRF_RATE_LIMIT_REQUESTS_PER_MINUTE", str(_DEFAULT_REQUESTS_PER_MINUTE)))
+    rpm = int(
+        os.environ.get("AINRF_RATE_LIMIT_REQUESTS_PER_MINUTE", str(_DEFAULT_REQUESTS_PER_MINUTE))
+    )
     burst = int(os.environ.get("AINRF_RATE_LIMIT_BURST_SIZE", str(_DEFAULT_BURST_SIZE)))
     return enabled, rpm, burst
 
@@ -99,19 +103,23 @@ def build_rate_limit_middleware() -> Callable[
     enabled, rpm, burst = _read_config()
 
     if not enabled:
+
         async def _passthrough(
             request: Request,
             call_next: Callable[[Request], Awaitable[Response]],
         ) -> Response:
             return await call_next(request)
+
         return _passthrough
 
     rate_per_second = rpm / 60.0
     _LOG.info(
         "rate_limit_enabled",
-        requests_per_minute=rpm,
-        burst_size=burst,
-        rate_per_second=round(rate_per_second, 2),
+        extra={
+            "requests_per_minute": rpm,
+            "burst_size": burst,
+            "rate_per_second": round(rate_per_second, 2),
+        },
     )
 
     async def rate_limit_middleware(
@@ -137,13 +145,16 @@ def build_rate_limit_middleware() -> Callable[
             return await call_next(request)
 
         from ainrf.api.routes.sla_metrics import rate_limited
+
         rate_limited("user_quota", request.url.path)
 
         _LOG.warning(
             "rate_limited",
-            client_key=client_key,
-            path=request.url.path,
-            method=request.method,
+            extra={
+                "client_key": client_key,
+                "path": request.url.path,
+                "method": request.method,
+            },
         )
         return JSONResponse(
             status_code=429,

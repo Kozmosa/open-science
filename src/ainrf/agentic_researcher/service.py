@@ -12,7 +12,7 @@ from collections.abc import Callable
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 import structlog
@@ -1226,8 +1226,10 @@ class AgenticResearcherService:
             # persistence survives container restarts.
             if engine_type == HarnessEngineType.AGENT_SDK:
                 from ainrf.harness_engine.db_session_store import DbSessionStore
+                from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine
 
-                engine._session_store = DbSessionStore(str(self._db_path))
+                agent_sdk_engine = cast(AgentSdkEngine, engine)
+                agent_sdk_engine._session_store = DbSessionStore(str(self._db_path))
             self._engines[engine_type] = engine
         return engine
 

@@ -304,7 +304,9 @@ class LiteratureService:
         return row is not None
 
     @staticmethod
-    def _fetch_paper_with_state(conn: sqlite3.Connection, paper_id: str, subscription_id: str | None):
+    def _fetch_paper_with_state(
+        conn: sqlite3.Connection, paper_id: str, subscription_id: str | None
+    ):
         if subscription_id:
             return conn.execute(
                 """

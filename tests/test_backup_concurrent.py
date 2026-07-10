@@ -35,9 +35,9 @@ def populated_db(state_root: Path) -> Path:
 
 
 class TestBackupService:
-    def test_create_backup_contains_manifest(self, state_root, populated_db):
+    def test_create_backup_contains_manifest(self, state_root: Path, populated_db: Path) -> None:
         svc = BackupService(state_root)
-        archive = svc.create_backup()
+        archive = svc.create_backup(output_path=state_root.parent / "manifest-backup.tar.gz")
 
         assert archive.exists()
         with tarfile.open(str(archive), "r:gz") as tar:
@@ -48,19 +48,25 @@ class TestBackupService:
         assert manifest.version == 1
         assert "sessions.sqlite3" in manifest.databases
 
-    def test_backup_during_concurrent_writes_is_consistent(self, state_root, populated_db):
+    @pytest.mark.concurrent
+    def test_backup_during_concurrent_writes_is_consistent(
+        self, state_root: Path, populated_db: Path
+    ) -> None:
         """SQLite backup() should yield a transactionally consistent snapshot."""
         svc = BackupService(state_root)
         db_path = populated_db
 
-        def writer(_i: int):
+        def writer(_i: int) -> None:
             c = connect(str(db_path))
             c.execute("UPDATE counters SET val = val + 1 WHERE id = 1")
             c.commit()
             c.close()
 
         with ThreadPoolExecutor(max_workers=8) as pool:
-            future = pool.submit(svc.create_backup)
+            future = pool.submit(
+                svc.create_backup,
+                output_path=state_root.parent / "concurrent-backup.tar.gz",
+            )
             list(pool.map(writer, range(100)))
             archive = future.result()
 
@@ -89,9 +95,9 @@ class TestBackupService:
         assert 0 <= restored_val <= live_val
         assert isinstance(restored_val, int)
 
-    def test_restore_rejects_corrupted_database(self, state_root, populated_db):
+    def test_restore_rejects_corrupted_database(self, state_root: Path, populated_db: Path) -> None:
         svc = BackupService(state_root)
-        archive = svc.create_backup()
+        archive = svc.create_backup(output_path=state_root.parent / "source-backup.tar.gz")
 
         # Tamper with the database inside the archive by appending a second
         # member with the same name so extraction yields corrupted bytes.

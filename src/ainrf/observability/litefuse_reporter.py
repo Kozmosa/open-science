@@ -6,7 +6,7 @@ the application can start even when the package is missing — the factory
 falls back to :class:`NullReporter` in that case.
 
 Trace hierarchy:
-  - ``start_trace()`` creates a **trace**-type observation (the root).
+  - ``start_trace()`` creates a root span for the Langfuse trace.
   - ``record_generation()`` and ``record_span()`` each create observations
     nested under the trace via ``trace_context={\"trace_id\": trace_id}``.
   - ``end_trace()`` finalizes and exits the trace context manager.
@@ -15,9 +15,12 @@ Trace hierarchy:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ainrf.observability.protocol import ObservabilityConfig, ObservabilityReporter
+
+if TYPE_CHECKING:
+    from langfuse.types import TraceContext
 
 _LOG = logging.getLogger(__name__)
 
@@ -40,8 +43,18 @@ class LitefuseReporter(ObservabilityReporter):
             host=config.base_url,
         )
         self._config = config
-        # Map OpenScience trace_id → active Langfuse trace context manager.
-        self._active_traces: dict[str, Any] = {}
+        # Map OpenScience trace_id → active root context, span, and attributes context.
+        self._active_traces: dict[str, tuple[Any, Any, Any | None]] = {}
+
+    def _trace_context(self, trace_id: str) -> TraceContext:
+        active_trace = self._active_traces.get(trace_id)
+        if active_trace is not None:
+            root_span = active_trace[1]
+            return {
+                "trace_id": root_span.trace_id,
+                "parent_span_id": root_span.id,
+            }
+        return {"trace_id": self._client.create_trace_id(seed=trace_id)}
 
     # ------------------------------------------------------------------
     # Health check (used by the factory to verify connectivity)
@@ -68,27 +81,30 @@ class LitefuseReporter(ObservabilityReporter):
         metadata: dict[str, Any] | None = None,
         input: Any = None,
     ) -> None:
-        # Create a trace-type observation as the root of the trace hierarchy.
+        # Langfuse represents a trace as a hierarchy of observations; the first
+        # span is the root observation and supplies the SDK-generated trace ID.
         ctx = self._client.start_as_current_observation(
-            as_type="trace",
+            as_type="span",
             name=name,
             input=input,
             metadata=metadata,
         )
         span = ctx.__enter__()
+        attributes_ctx: Any | None = None
         if user_id or session_id:
             try:
                 from langfuse import propagate_attributes
 
-                attrs: dict[str, Any] = {}
-                if user_id:
-                    attrs["user_id"] = user_id
-                if session_id:
-                    attrs["session_id"] = session_id
-                propagate_attributes(**attrs)
+                attributes_ctx = propagate_attributes(
+                    user_id=user_id,
+                    session_id=session_id,
+                    trace_name=name,
+                )
+                attributes_ctx.__enter__()
             except Exception:
+                attributes_ctx = None
                 pass  # non-critical
-        self._active_traces[trace_id] = (ctx, span)
+        self._active_traces[trace_id] = (ctx, span, attributes_ctx)
 
     def end_trace(
         self,
@@ -100,12 +116,16 @@ class LitefuseReporter(ObservabilityReporter):
         entry = self._active_traces.pop(trace_id, None)
         if entry is None:
             return
-        ctx, span = entry
-        if output is not None:
-            span.update(output=output)
-        if error is not None:
-            span.update(metadata={"error": error})
-        ctx.__exit__(None, None, None)
+        ctx, span, attributes_ctx = entry
+        try:
+            if output is not None:
+                span.update(output=output)
+            if error is not None:
+                span.update(metadata={"error": error})
+        finally:
+            if attributes_ctx is not None:
+                attributes_ctx.__exit__(None, None, None)
+            ctx.__exit__(None, None, None)
 
     def record_generation(
         self,
@@ -136,7 +156,7 @@ class LitefuseReporter(ObservabilityReporter):
             name=name,
             model=model,
             input=input,
-            trace_context={"trace_id": trace_id},
+            trace_context=self._trace_context(trace_id),
         )
         gen = ctx.__enter__()
         if update_kwargs:
@@ -163,7 +183,7 @@ class LitefuseReporter(ObservabilityReporter):
             as_type="span",
             name=name,
             input=input,
-            trace_context={"trace_id": trace_id},
+            trace_context=self._trace_context(trace_id),
         )
         span = ctx.__enter__()
         if update_kwargs:

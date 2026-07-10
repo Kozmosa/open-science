@@ -14,6 +14,8 @@ from ainrf.skills.registry_sync import (
 
 
 pytestmark = [pytest.mark.unit]
+
+
 class TestSkillRegistrySyncService:
     @pytest.fixture
     def registry(self):
@@ -70,7 +72,9 @@ class TestSkillRegistrySyncService:
             "---\nname: my-skill\ndescription: A test skill\n---\n\n# My Skill"
         )
 
-        service._sync_skill_dir(source, tmp_path / "skills", "my-skill", is_core=False, timestamp="20240101000000")
+        service._sync_skill_dir(
+            source, tmp_path / "skills", "my-skill", is_core=False, timestamp="20240101000000"
+        )
 
         skill_json_path = tmp_path / "skills" / "my-skill" / "skill.json"
         assert skill_json_path.exists()
@@ -83,7 +87,9 @@ class TestSkillRegistrySyncService:
         source.mkdir(parents=True)
         source.joinpath("SKILL.md").write_text("---\nname: core-skill\n---\n\n# Core")
 
-        service._sync_skill_dir(source, tmp_path / "skills", "core-skill", is_core=True, timestamp="20240101000000")
+        service._sync_skill_dir(
+            source, tmp_path / "skills", "core-skill", is_core=True, timestamp="20240101000000"
+        )
 
         data = json.loads((tmp_path / "skills" / "core-skill" / "skill.json").read_text())
         assert data["inject_mode"] == "auto"
@@ -93,7 +99,9 @@ class TestSkillRegistrySyncService:
         source.mkdir(parents=True)
         source.joinpath("SKILL.md").write_text("# Content")
 
-        service._sync_skill_dir(source, tmp_path / "skills", "my-skill", is_core=False, timestamp="20240101000000")
+        service._sync_skill_dir(
+            source, tmp_path / "skills", "my-skill", is_core=False, timestamp="20240101000000"
+        )
 
         md_path = tmp_path / "skills" / "my-skill" / "SKILL.md"
         assert md_path.exists()
@@ -339,7 +347,9 @@ class TestSkillRegistrySyncService:
         fp = service.source_skill_fingerprint(source)
         assert fp == "alpha,beta"
 
-    def test_source_skill_fingerprint_empty(self, service: SkillRegistrySyncService, tmp_path: Path):
+    def test_source_skill_fingerprint_empty(
+        self, service: SkillRegistrySyncService, tmp_path: Path
+    ):
         source = tmp_path / "empty-source"
         source.mkdir()
         fp = service.source_skill_fingerprint(source)
@@ -473,9 +483,7 @@ class TestSkillRegistrySyncService:
         assert len(backups) == 1
         assert backups[0].joinpath("SKILL.md").read_text() == "# Old A"
 
-    def test_rollback_restores_backups(
-        self, service: SkillRegistrySyncService, tmp_path: Path
-    ):
+    def test_rollback_restores_backups(self, service: SkillRegistrySyncService, tmp_path: Path):
         load_dir = tmp_path / "skills"
         load_dir.mkdir(parents=True)
 
@@ -547,4 +555,3 @@ class TestSkillRegistrySyncService:
 
         status = service._build_status()
         assert status.backup_available is True
-

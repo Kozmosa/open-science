@@ -47,12 +47,8 @@ def migration_001_baseline(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_papers_sub ON literature_papers(subscription_id)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_subs_user ON literature_subscriptions(user_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_papers_sub ON literature_papers(subscription_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_subs_user ON literature_subscriptions(user_id)")
 
 
 @registry.register(_DATABASE)

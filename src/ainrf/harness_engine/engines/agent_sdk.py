@@ -35,6 +35,7 @@ from claude_agent_sdk.types import (
     McpStdioServerConfig,
     PermissionResultAllow,
     SandboxSettings,
+    SessionStore,
     ToolPermissionContext,
 )
 
@@ -125,7 +126,7 @@ class AgentSession:
 
 
 class AgentSdkEngine(HarnessEngine):
-    def __init__(self, session_store: object | None = None) -> None:
+    def __init__(self, session_store: SessionStore | None = None) -> None:
         self._sessions: dict[str, AgentSession] = {}
         self._lock = asyncio.Lock()
         self._run_lock = asyncio.Lock()
@@ -201,7 +202,7 @@ class AgentSdkEngine(HarnessEngine):
                 # user's new follow-up already. Prepend any prompts that were
                 # still pending when the checkpoint was written (older), then
                 # the freshly-queued message (newer).
-                restored = list(checkpoint.pending_prompts)
+                restored = list(checkpoint.pending_prompts or [])
                 if restored:
                     existing = list(session.pending_prompts)
                     session.pending_prompts = deque(restored + existing)
@@ -213,7 +214,7 @@ class AgentSdkEngine(HarnessEngine):
             | None,
             context.permission_mode or "bypassPermissions",
         )
-        mcp_servers: dict[str, McpServerConfig] | str | Path = context.mcp_servers or {}
+        mcp_servers = cast(dict[str, McpServerConfig], context.mcp_servers or {})
         # Skills go to the `skills` parameter; allowed_tools includes skills
         # plus built-in tools (WebSearch, Fetch) so agents can search the web.
         skills = context.skills or []

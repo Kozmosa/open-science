@@ -10,7 +10,6 @@ but rate-limited to prevent abuse.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
@@ -90,8 +89,6 @@ async def ingest_client_metrics(request: Request) -> Response:
 def _record_web_vital(name: str, value: float, rating: str, _url: str) -> None:
     """Record a web vital metric to the appropriate Prometheus histogram."""
     try:
-        from prometheus_client import REGISTRY
-
         metric_name = f"ainrf_client_{name.lower()}_seconds"
         # Metrics are created lazily via observe_histogram in sla_metrics.
         from ainrf.api.routes.metrics import observe_histogram

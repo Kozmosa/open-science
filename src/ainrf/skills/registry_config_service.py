@@ -111,7 +111,9 @@ class SkillRegistryConfigService:
                 source_skills_path=source_skills_path
                 if source_skills_path is not None
                 else existing.source_skills_path,
-                core_skill_ids=core_skill_ids if core_skill_ids is not None else existing.core_skill_ids,
+                core_skill_ids=core_skill_ids
+                if core_skill_ids is not None
+                else existing.core_skill_ids,
                 install_mode=install_mode if install_mode is not None else existing.install_mode,
                 enabled=enabled if enabled is not None else existing.enabled,
             )

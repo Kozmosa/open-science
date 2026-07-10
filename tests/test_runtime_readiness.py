@@ -6,6 +6,7 @@ from ainrf.runtime.readiness import check_runtime_readiness
 
 pytestmark = [pytest.mark.unit]
 
+
 def test_runtime_readiness_reports_missing_binaries(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("ainrf.runtime.readiness.shutil.which", lambda name: None)
 

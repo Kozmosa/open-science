@@ -16,7 +16,9 @@ Usage::
 from __future__ import annotations
 
 import sqlite3
+from os import PathLike
 from pathlib import Path
+from typing import Literal
 
 # Milliseconds SQLite will wait when a write conflict is detected before
 # raising ``OperationalError: database is locked``.  5000 ms is a pragmatic
@@ -33,9 +35,9 @@ DEFAULT_CACHE_SIZE_KB = -2000
 
 
 def connect(
-    db_path: str,
+    db_path: str | PathLike[str],
     *,
-    isolation_level: str = "IMMEDIATE",
+    isolation_level: Literal["DEFERRED", "EXCLUSIVE", "IMMEDIATE"] | None = "IMMEDIATE",
     busy_timeout_ms: int = BUSY_TIMEOUT_MS,
     cache_size_kb: int = DEFAULT_CACHE_SIZE_KB,
     row_factory: type[sqlite3.Row] | None = sqlite3.Row,

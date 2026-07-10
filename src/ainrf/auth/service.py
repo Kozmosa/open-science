@@ -477,9 +477,7 @@ def _ensure_tenant_group() -> None:
 
 
 def _linux_user_exists(username: str) -> bool:
-    return subprocess.run(
-        ["id", username], capture_output=True
-    ).returncode == 0
+    return subprocess.run(["id", username], capture_output=True).returncode == 0
 
 
 def _chown_recursive(path: Path, user: str, group: str) -> None:
@@ -527,10 +525,13 @@ def provision_tenant_user(username: str) -> None:
             _run_privileged(
                 [
                     "useradd",
-                    "--gid", str(_TENANT_GID),
-                    "--home-dir", str(home),
+                    "--gid",
+                    str(_TENANT_GID),
+                    "--home-dir",
+                    str(home),
                     "--create-home",
-                    "--shell", "/bin/bash",
+                    "--shell",
+                    "/bin/bash",
                     linux_user,
                 ]
             )
@@ -543,8 +544,7 @@ def provision_tenant_user(username: str) -> None:
             workspace_dir.mkdir(parents=True, exist_ok=True)
         except PermissionError:
             _LOG.debug(
-                "provision_tenant_user: cannot create %s (non-container), "
-                "using /tmp fallback",
+                "provision_tenant_user: cannot create %s (non-container), using /tmp fallback",
                 workspace_dir,
             )
             fallback = Path("/tmp/ainrf_tenants") / username / "workspaces" / "default"

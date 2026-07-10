@@ -106,9 +106,7 @@ def fetch_papers_sync(
         raise
 
     papers = [_to_literature_paper(r) for r in results]
-    logger.info(
-        "arxiv fetch ok: subscription=%s returned=%d", sub.subscription_id, len(papers)
-    )
+    logger.info("arxiv fetch ok: subscription=%s returned=%d", sub.subscription_id, len(papers))
     return papers
 
 

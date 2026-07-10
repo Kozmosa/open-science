@@ -25,9 +25,7 @@ from starlette.responses import Response
 
 # W3C Trace Context: traceparent = version-trace_id-parent_id-flags
 # https://www.w3.org/TR/trace-context/#traceparent-header
-_TRACEPARENT_RE = re.compile(
-    r"^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$"
-)
+_TRACEPARENT_RE = re.compile(r"^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
 
 
 def build_request_context_middleware() -> Callable[

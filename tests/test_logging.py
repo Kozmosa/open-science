@@ -11,6 +11,7 @@ import pytest
 
 pytestmark = [pytest.mark.unit]
 
+
 @pytest.fixture(autouse=True)
 def _clean_root_handlers() -> Generator[None]:
     """Remove FileHandlers added by configure_logging so pytest teardown

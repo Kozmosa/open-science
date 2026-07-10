@@ -20,9 +20,7 @@ def _slow_empty_fetch_sync(*args, **kwargs) -> list:  # noqa: ARG001
 async def test_fetch_for_subscription_does_not_block_event_loop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "ainrf.literature.arxiv_client.fetch_papers_sync", _slow_empty_fetch_sync
-    )
+    monkeypatch.setattr("ainrf.literature.arxiv_client.fetch_papers_sync", _slow_empty_fetch_sync)
     subscription = LiteratureSubscription(
         subscription_id="sub-1",
         user_id="user-1",

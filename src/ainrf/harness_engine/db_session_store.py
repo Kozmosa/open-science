@@ -75,9 +75,7 @@ class DbSessionStore:
 
     # ── Required by SessionStore ──────────────────────────────────────────
 
-    async def append(
-        self, key: SessionKey, entries: list[SessionStoreEntry]
-    ) -> None:
+    async def append(self, key: SessionKey, entries: list[SessionStoreEntry]) -> None:
         """Mirror a batch of transcript entries to the DB."""
         subpath = key.get("subpath") or ""
         now = _utc_now()
@@ -102,9 +100,7 @@ class DbSessionStore:
             )
             conn.commit()
 
-    async def load(
-        self, key: SessionKey
-    ) -> list[SessionStoreEntry] | None:
+    async def load(self, key: SessionKey) -> list[SessionStoreEntry] | None:
         """Load a full session transcript for resume.
 
         Returns ``None`` when no entries exist for this key.
@@ -147,9 +143,7 @@ class DbSessionStore:
                 )
             conn.commit()
 
-    async def list_sessions(
-        self, project_key: str
-    ) -> list[SessionStoreListEntry]:
+    async def list_sessions(self, project_key: str) -> list[SessionStoreListEntry]:
         """List main sessions under a project_key."""
         with closing(self._connect()) as conn:
             rows = conn.execute(
@@ -173,9 +167,7 @@ class DbSessionStore:
             result.append({"session_id": row[0], "mtime": mtime})
         return result
 
-    async def list_subkeys(
-        self, key: SessionListSubkeysKey
-    ) -> list[str]:
+    async def list_subkeys(self, key: SessionListSubkeysKey) -> list[str]:
         """List subagent transcript keys under a session."""
         with closing(self._connect()) as conn:
             rows = conn.execute(

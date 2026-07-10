@@ -85,19 +85,11 @@ def test_list_projects(benchmark, client, auth_headers):
 
 
 def test_list_tasks(benchmark, client, auth_headers):
-    benchmark(
-        lambda: client.get(
-            f"{BASE_URL}/projects/default/tasks", headers=auth_headers
-        )
-    )
+    benchmark(lambda: client.get(f"{BASE_URL}/projects/default/tasks", headers=auth_headers))
 
 
 def test_list_task_edges(benchmark, client, auth_headers):
-    benchmark(
-        lambda: client.get(
-            f"{BASE_URL}/projects/default/task-edges", headers=auth_headers
-        )
-    )
+    benchmark(lambda: client.get(f"{BASE_URL}/projects/default/task-edges", headers=auth_headers))
 
 
 # --- File endpoints ---
@@ -131,8 +123,4 @@ def test_create_task_minimal(benchmark, client, auth_headers):
         "task_input": "benchmark",
         "title": "perf-bench-task",
     }
-    benchmark(
-        lambda: client.post(
-            f"{BASE_URL}/tasks", json=payload, headers=auth_headers
-        )
-    )
+    benchmark(lambda: client.post(f"{BASE_URL}/tasks", json=payload, headers=auth_headers))

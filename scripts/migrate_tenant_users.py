@@ -64,10 +64,13 @@ def _create_user(username: str) -> Path:
         _run(
             [
                 "useradd",
-                "--gid", str(_TENANT_GID),
-                "--home-dir", str(home),
+                "--gid",
+                str(_TENANT_GID),
+                "--home-dir",
+                str(home),
                 "--create-home",
-                "--shell", "/bin/bash",
+                "--shell",
+                "/bin/bash",
                 linux_user,
             ]
         )
@@ -136,7 +139,9 @@ def _update_workspace_registry(
         changed = True
 
     if changed:
-        registry_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        registry_path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
         _LOG.info("Workspace registry updated")
 
 

@@ -16,7 +16,7 @@ from ainrf.api.schemas import (
     FileReadResponse,
     FileUploadResponse,
 )
-from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
+from ainrf.auth.permissions import check_resource_ownership, get_current_user
 from ainrf.execution.ssh import SSHExecutor
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
 from ainrf.files.service import _build_container_config
@@ -68,7 +68,11 @@ def _resolve_tenant_user(request: Request) -> str | None:
     auth_service = getattr(request.app.state, "auth_service", None)
     if auth_service is None:
         return None
-    from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
+    from ainrf.auth.service import (
+        _is_container_environment,
+        _linux_user_exists,
+        tenant_linux_username,
+    )
 
     if not _is_container_environment():
         return None

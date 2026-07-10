@@ -121,5 +121,6 @@ class TerminalAttachment:
     task_id: str | None = None
     binding_status: str | None = None
 
+
 def utc_now() -> datetime:
     return datetime.now(UTC)

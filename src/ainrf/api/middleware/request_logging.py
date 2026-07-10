@@ -4,6 +4,7 @@ Logs every request with method, path, status, duration, and the request_id
 set by ``request_context`` middleware.  Slow requests and 5xx responses are
 elevated to WARNING / ERROR so they stand out in production logs.
 """
+
 from __future__ import annotations
 
 import time
@@ -23,9 +24,9 @@ _SKIP_PATHS: frozenset[str] = frozenset(
 )
 
 
-def build_request_logging_middleware(config: ApiConfig) -> Callable[
-    [Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]
-]:
+def build_request_logging_middleware(
+    config: ApiConfig,
+) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
     """Return middleware that logs HTTP request/response details."""
     logger = structlog.get_logger("request_logging")
     slow_threshold = config.slow_request_threshold_seconds

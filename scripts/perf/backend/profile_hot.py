@@ -20,7 +20,7 @@ STATE_ROOT = Path(os.environ.get("AINRF_STATE_ROOT", Path.home() / ".ainrf"))
 PID_FILE = STATE_ROOT / "server.pid"
 DURATION = int(os.environ.get("AINRF_PERF_PROFILE_DURATION", "30"))
 
-WORKLOAD_SCRIPT = r'''
+WORKLOAD_SCRIPT = r"""
 import httpx, os, sys, json
 BASE = os.environ.get("AINRF_PERF_BASE_URL", "http://127.0.0.1:8000")
 
@@ -45,7 +45,7 @@ for i in range(10):
         "environment_id": "env-localhost", "task_profile": "claude-code",
         "task_input": "perf profile", "title": f"perf-profile-{i}",
     }, headers=h)
-'''
+"""
 
 
 def find_pid() -> int:
@@ -56,12 +56,16 @@ def find_pid() -> int:
     # Fallback: find the uvicorn process
     result = subprocess.run(
         ["pgrep", "-f", "openscience serve"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode == 0:
-        return int(result.stdout.strip().split('\n')[0])
+        return int(result.stdout.strip().split("\n")[0])
 
-    print("ERROR: Cannot find OpenScience server process. Start the server first or set AINRF_STATE_ROOT.", file=sys.stderr)
+    print(
+        "ERROR: Cannot find OpenScience server process. Start the server first or set AINRF_STATE_ROOT.",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 
@@ -83,13 +87,19 @@ def main() -> None:
     print(f"Profiling PID {pid} for {DURATION}s...")
 
     # Start py-spy in background
-    py_spy = subprocess.Popen([
-        "py-spy", "record",
-        "-o", str(flamegraph_path),
-        "--pid", str(pid),
-        "--duration", str(DURATION),
-        "--native",
-    ])
+    py_spy = subprocess.Popen(
+        [
+            "py-spy",
+            "record",
+            "-o",
+            str(flamegraph_path),
+            "--pid",
+            str(pid),
+            "--duration",
+            str(DURATION),
+            "--native",
+        ]
+    )
 
     # Give py-spy a moment to attach, then trigger workload
     time.sleep(1)

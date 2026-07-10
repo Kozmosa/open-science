@@ -27,6 +27,8 @@ from ainrf.terminal.pty import (
 
 
 pytestmark = [pytest.mark.engine]
+
+
 class DummyProcess:
     def __init__(self, returncode: int | None = None) -> None:
         self.pid = 4321
@@ -95,7 +97,7 @@ def test_start_terminal_bridge_launches_process(
 
     runtime = start_terminal_bridge(("/bin/sh",), tmp_path)
     assert captured["args"] == (["/bin/sh"],)
-    kwargs = captured["kwargs"]
+    kwargs = cast(dict[str, Any], captured["kwargs"])
     assert kwargs["stdin"] == 998
     assert kwargs["stdout"] == 998
     assert kwargs["stderr"] == 998

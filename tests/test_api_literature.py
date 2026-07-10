@@ -17,6 +17,7 @@ from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
 
+
 def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
     app = create_app(
         ApiConfig(
@@ -34,7 +35,9 @@ def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
     )
 
 
-async def fake_fetch_for_subscription(sub: LiteratureSubscription, reporter=None) -> list[LiteraturePaper]:
+async def fake_fetch_for_subscription(
+    sub: LiteratureSubscription, reporter=None
+) -> list[LiteraturePaper]:
     await asyncio.sleep(0.02)
     return [
         LiteraturePaper(

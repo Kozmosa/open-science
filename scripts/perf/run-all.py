@@ -16,9 +16,14 @@ _repo_root = Path(__file__).resolve().parent.parent.parent
 if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
-from scripts.perf._common import (
-    today_dir, write_summary, read_summary, delta_table,
-    check_thresholds, fail, REPORT_BASE,
+from scripts.perf._common import (  # noqa: E402 - direct script execution needs repo root first
+    today_dir,
+    write_summary,
+    read_summary,
+    delta_table,
+    check_thresholds,
+    fail,
+    REPORT_BASE,
 )
 
 BACKEND_TOOLS = ["db", "api-benchmark", "profile-hot"]
@@ -30,8 +35,12 @@ PERF_DIR = Path(__file__).resolve().parent
 TOOL_MAP: dict[str, list[str]] = {
     "db": [sys.executable, str(PERF_DIR / "backend" / "analyze_db.py")],
     "api-benchmark": [
-        sys.executable, "-m", "pytest", str(PERF_DIR / "backend" / "benchmark_api.py"),
-        "--benchmark-only", "--benchmark-min-rounds=10",
+        sys.executable,
+        "-m",
+        "pytest",
+        str(PERF_DIR / "backend" / "benchmark_api.py"),
+        "--benchmark-only",
+        "--benchmark-min-rounds=10",
     ],
     "profile-hot": [sys.executable, str(PERF_DIR / "backend" / "profile_hot.py")],
     "bundle-report": ["node", str(PERF_DIR / "frontend" / "bundle_report.mjs")],
@@ -53,9 +62,9 @@ def run_tool(name: str, report_dir: Path) -> bool:
     elif name == "profiler":
         cmd = cmd + [str(report_dir / "react-render.json")]
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running: {' '.join(cmd)}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     env = dict(os.environ)
     env.setdefault("PYTHONPATH", "")
     repo_root = str(Path(__file__).resolve().parent.parent.parent)
@@ -149,12 +158,16 @@ def do_diff() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scholar-Agent Performance Audit")
     parser.add_argument("--target", choices=["backend", "frontend", "db", "all"], default="all")
-    parser.add_argument("--ci", action="store_true",
-                        help="JSON summary output, exit non-zero on threshold violation")
-    parser.add_argument("--diff", action="store_true",
-                        help="Compare two most recent reports")
-    parser.add_argument("--threshold",
-                        help="Comma-separated threshold rules, e.g. 'api.create_task_minimal.p95=800'")
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help="JSON summary output, exit non-zero on threshold violation",
+    )
+    parser.add_argument("--diff", action="store_true", help="Compare two most recent reports")
+    parser.add_argument(
+        "--threshold",
+        help="Comma-separated threshold rules, e.g. 'api.create_task_minimal.p95=800'",
+    )
     args = parser.parse_args()
 
     if args.diff:
@@ -185,7 +198,7 @@ def main() -> None:
     else:
         success = sum(1 for v in results.values() if v)
         total = len(results)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Performance audit complete: {success}/{total} tools passed")
         print(f"Report directory: {report_dir}")
 

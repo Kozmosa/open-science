@@ -16,6 +16,7 @@ from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
 
+
 def _make_app(tmp_path: Path, scan_roots: list[Path] | None = None) -> FastAPI:
     api_config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("secret-key")}),

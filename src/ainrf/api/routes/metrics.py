@@ -51,8 +51,16 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_db_slow_query_total", ["db"], "Slow database queries (>1s)"),
     ("ainrf_client_error_events_total", [], "Client-side error events ingested"),
     ("ainrf_literature_fetch_total", ["subscription_id", "status"], "Literature fetch attempts"),
-    ("ainrf_literature_papers_fetched_total", ["subscription_id"], "Papers returned from arXiv queries"),
-    ("ainrf_literature_papers_new_total", ["subscription_id"], "New papers inserted (excludes duplicates)"),
+    (
+        "ainrf_literature_papers_fetched_total",
+        ["subscription_id"],
+        "Papers returned from arXiv queries",
+    ),
+    (
+        "ainrf_literature_papers_new_total",
+        ["subscription_id"],
+        "New papers inserted (excludes duplicates)",
+    ),
     ("ainrf_literature_summarize_total", ["status"], "LLM summarize calls for literature papers"),
 ]
 
@@ -60,18 +68,36 @@ _HISTOGRAM_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_http_request_duration_seconds", ["method", "path"], "HTTP request latency"),
     ("ainrf_ssh_command_duration_seconds", ["host"], "SSH command execution latency"),
     ("ainrf_db_query_duration_seconds", ["db"], "Database query latency"),
-    ("ainrf_literature_fetch_duration_seconds", ["subscription_id"], "Literature fetch duration per subscription"),
+    (
+        "ainrf_literature_fetch_duration_seconds",
+        ["subscription_id"],
+        "Literature fetch duration per subscription",
+    ),
     ("ainrf_literature_summarize_duration_seconds", [], "Per-paper LLM summarize duration"),
 ]
 
 _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_terminal_ws_active", [], "Active WebSocket terminal sessions"),
-    ("ainrf_literature_last_fetch_timestamp_seconds", ["subscription_id"], "Unix timestamp of last successful literature fetch"),
+    (
+        "ainrf_literature_last_fetch_timestamp_seconds",
+        ["subscription_id"],
+        "Unix timestamp of last successful literature fetch",
+    ),
 ]
 
 # Default histogram buckets (seconds): 5 ms → 10 s
 _DEFAULT_BUCKETS = (
-    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
 )
 
 # Set of metric names we own (for selective reset).
@@ -95,7 +121,11 @@ def _init_all() -> None:
     for name, labelnames, doc in _HISTOGRAM_SPECS:
         if name not in _HISTOGRAMS:
             _HISTOGRAMS[name] = Histogram(
-                name, doc, labelnames=labelnames, buckets=_DEFAULT_BUCKETS, registry=REGISTRY,
+                name,
+                doc,
+                labelnames=labelnames,
+                buckets=_DEFAULT_BUCKETS,
+                registry=REGISTRY,
             )
             _OWN_METRIC_NAMES.add(name)
     for name, labelnames, doc in _GAUGE_SPECS:
@@ -145,6 +175,7 @@ def _get_or_create_gauge(name: str) -> Gauge:
 # Public mutation API (same signatures as the hand-rolled originals)
 # ---------------------------------------------------------------------------
 
+
 def inc_counter(name: str, labels: dict[str, str] | None = None, amount: float = 1) -> None:
     """Increment a Prometheus counter by *amount* (default 1)."""
     c = _get_or_create_counter(name)
@@ -155,7 +186,9 @@ def inc_counter(name: str, labels: dict[str, str] | None = None, amount: float =
 
 
 def observe_histogram(
-    name: str, value: float, labels: dict[str, str] | None = None,
+    name: str,
+    value: float,
+    labels: dict[str, str] | None = None,
 ) -> None:
     """Record an observation on a Prometheus histogram."""
     h = _get_or_create_histogram(name)
@@ -196,6 +229,7 @@ def dec_gauge(name: str, labels: dict[str, str] | None = None) -> None:
 # Exposition
 # ---------------------------------------------------------------------------
 
+
 def get_metrics_text() -> str:
     """Render all registered metrics in Prometheus text exposition format."""
     return generate_latest(REGISTRY).decode("utf-8")
@@ -228,6 +262,7 @@ def reset_metrics() -> None:
 # ---------------------------------------------------------------------------
 # Router factory
 # ---------------------------------------------------------------------------
+
 
 def create_metrics_router(config: ApiConfig) -> APIRouter:
     """Return a router with a GET /metrics endpoint.

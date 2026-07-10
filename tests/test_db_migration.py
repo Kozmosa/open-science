@@ -27,10 +27,22 @@ class TestBaselineCreatesTables:
     @pytest.mark.parametrize(
         "db_name,expected_tables",
         [
-            ("auth", {"users", "refresh_tokens", "project_collaborators", "environment_access", "login_attempts"}),
+            (
+                "auth",
+                {
+                    "users",
+                    "refresh_tokens",
+                    "project_collaborators",
+                    "environment_access",
+                    "login_attempts",
+                },
+            ),
             ("sessions", {"task_sessions", "task_attempts"}),
             ("agentic_researcher", {"tasks", "task_outputs"}),
-            ("literature", {"literature_subscriptions", "literature_papers", "literature_subscription_papers"}),
+            (
+                "literature",
+                {"literature_subscriptions", "literature_papers", "literature_subscription_papers"},
+            ),
             ("terminal", {"user_environment_bindings", "user_session_pairs"}),
         ],
     )
@@ -161,9 +173,7 @@ class TestMigrationRollbackOnFailure:
 
         @reg.register("testdb")
         def migration_001_ok(conn: sqlite3.Connection) -> None:
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS foo (id TEXT PRIMARY KEY)"
-            )
+            conn.execute("CREATE TABLE IF NOT EXISTS foo (id TEXT PRIMARY KEY)")
 
         @reg.register("testdb")
         def migration_002_bad(conn: sqlite3.Connection) -> None:

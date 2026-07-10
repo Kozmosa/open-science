@@ -10,6 +10,7 @@ import pytest
 
 pytestmark = [pytest.mark.unit]
 
+
 class TestSessionService:
     @pytest.fixture
     def service(self):

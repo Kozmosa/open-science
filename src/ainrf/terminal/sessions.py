@@ -37,13 +37,14 @@ def current_daemon_user() -> str:
     except Exception:
         return "root"
     return resolved or "root"
+
+
 def _tenant_home_directory(username: str) -> Path | None:
     """Resolve the Linux home directory for a tenant user."""
     try:
         return Path(pwd.getpwnam(username).pw_dir)
     except KeyError:
         return None
-
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -99,7 +100,11 @@ class SessionManager:
             user = self._auth_service.get_user(app_user_id)
         except Exception:
             return None
-        from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
+        from ainrf.auth.service import (
+            _is_container_environment,
+            _linux_user_exists,
+            tenant_linux_username,
+        )
 
         if not _is_container_environment():
             return None
@@ -248,7 +253,10 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        with self._as_tenant(app_user_id), self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
+        with (
+            self._as_tenant(app_user_id),
+            self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"),
+        ):
             binding = self._upsert_binding(app_user_id, environment, working_directory)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
             try:
@@ -320,7 +328,10 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        with self._as_tenant(app_user_id), self._session_lifecycle_guard(app_user_id, environment.id, kind="agent"):
+        with (
+            self._as_tenant(app_user_id),
+            self._session_lifecycle_guard(app_user_id, environment.id, kind="agent"),
+        ):
             binding = self._upsert_binding(app_user_id, environment, working_directory)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
             agent_session_name = pair.agent_session_name or self.agent_session_name_for(
@@ -372,7 +383,10 @@ class SessionManager:
             environment = app_user_id
             app_user_id = self._legacy_user_id
         assert isinstance(environment, EnvironmentRegistryEntry)
-        with self._as_tenant(app_user_id), self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"):
+        with (
+            self._as_tenant(app_user_id),
+            self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"),
+        ):
             binding = self._upsert_binding(app_user_id, environment, working_directory)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
             try:

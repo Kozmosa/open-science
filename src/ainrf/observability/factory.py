@@ -1,4 +1,5 @@
 """Singleton factory for the observability reporter."""
+
 from __future__ import annotations
 
 import logging
@@ -42,7 +43,10 @@ def get_reporter(config: ObservabilityConfig | None = None) -> ObservabilityRepo
         if not inner.is_healthy():
             raise ConnectionError("Litefuse health check failed")
         _reporter = SafeReporter(inner)
-        _LOG.info("observability.connected", base_url=config.base_url)
+        _LOG.info(
+            "observability.connected",
+            extra={"base_url": config.base_url},
+        )
     except ImportError:
         _LOG.warning(
             "observability.langfuse_not_installed",

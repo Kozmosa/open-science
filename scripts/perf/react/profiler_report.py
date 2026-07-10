@@ -100,7 +100,9 @@ def main() -> None:
         data = json.loads(path.read_text())
         report = generate_report(data)
     elif path:
-        print(f"No data file at {path}. Run with --collect first and browse the app with VITE_PROFILE=true.")
+        print(
+            f"No data file at {path}. Run with --collect first and browse the app with VITE_PROFILE=true."
+        )
         sys.exit(1)
     else:
         print("No data file specified.")
@@ -109,7 +111,7 @@ def main() -> None:
     out_path = path.parent / "react-render.json" if path.suffix != ".json" else path
     out_path.write_text(json.dumps(report, indent=2))
 
-    print(f"\nReact Render Performance (sorted by total render time)")
+    print("\nReact Render Performance (sorted by total render time)")
     print(f"{'Component':<40} {'Calls':>7} {'Total(ms)':>11} {'Max(ms)':>9}")
     print("-" * 68)
     for c in report["components"][:15]:

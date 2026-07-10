@@ -180,10 +180,7 @@ async def list_mcp_servers() -> McpServersResponse:
     """List available MCP-capable search servers."""
     servers = available_mcp_servers()
     return McpServersResponse(
-        servers=[
-            McpServerSummary(name=name, description=desc)
-            for name, desc in servers.items()
-        ],
+        servers=[McpServerSummary(name=name, description=desc) for name, desc in servers.items()],
     )
 
 

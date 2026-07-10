@@ -9,7 +9,7 @@ import time
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict, Unpack
 
 import httpx
 from fastapi import FastAPI
@@ -253,17 +253,23 @@ class HangingEngine(FakeEngine):
 # ---------------------------------------------------------------------------
 # Service factories
 # ---------------------------------------------------------------------------
-def make_researcher(**kwargs) -> AgenticResearcher:
+class ResearcherOverrides(TypedDict, total=False):
+    type: AgenticResearcherType
+    harness_engine: HarnessEngineType
+    skills: list[str]
+    mcp_servers: list[str]
+    system_prompt: str | None
+
+
+def make_researcher(**kwargs: Unpack[ResearcherOverrides]) -> AgenticResearcher:
     """Return a default AgenticResearcher for task creation tests."""
-    defaults = {
-        "type": AgenticResearcherType.VANILLA,
-        "harness_engine": HarnessEngineType.CLAUDE_CODE,
-        "skills": [],
-        "mcp_servers": [],
-        "system_prompt": None,
-    }
-    defaults.update(kwargs)
-    return AgenticResearcher(**defaults)
+    return AgenticResearcher(
+        type=kwargs.get("type", AgenticResearcherType.VANILLA),
+        harness_engine=kwargs.get("harness_engine", HarnessEngineType.CLAUDE_CODE),
+        skills=kwargs.get("skills", []),
+        mcp_servers=kwargs.get("mcp_servers", []),
+        system_prompt=kwargs.get("system_prompt"),
+    )
 
 
 # ---------------------------------------------------------------------------

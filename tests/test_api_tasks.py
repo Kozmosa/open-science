@@ -29,7 +29,7 @@ from tests.testutil import FakeEngine, TokenEngine, get_jwt_headers
 pytestmark = [pytest.mark.api]
 
 
-def make_app(tmp_path: Path, engine: FakeEngine) -> FastAPI:
+def make_app(tmp_path: Path, engine: HarnessEngine) -> FastAPI:
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),

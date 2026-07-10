@@ -300,6 +300,7 @@ class SSHExecutor:
                 try:
                     self._logger.info("connect_attempt", attempt=attempt)
                     from ainrf.api.routes.metrics import inc_counter as _inc
+
                     _inc("ainrf_ssh_connection_attempt_total", {"host": self._container.host})
                     self._connection = await self._open_connection()
                     return self._connection

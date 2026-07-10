@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -94,7 +95,7 @@ class TestTokenUsageEdgeCases:
                 content=json.dumps(
                     {"role": "assistant", "content": "a", "is_delta": True, "block_id": "b1"}
                 ),
-                created_at=None,
+                created_at=datetime.now(timezone.utc),
             ),
             TaskOutputEvent(
                 task_id=task.task_id,
@@ -103,7 +104,7 @@ class TestTokenUsageEdgeCases:
                 content=json.dumps(
                     {"role": "assistant", "content": "b", "is_delta": True, "block_id": "b1"}
                 ),
-                created_at=None,
+                created_at=datetime.now(timezone.utc),
             ),
         ]
         for d in deltas:

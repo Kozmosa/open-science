@@ -143,19 +143,31 @@ class TestSchedulerFetchSuccess:
             await scheduler._fetch_all()
 
         text = get_metrics_text()
-        assert _counter_value(
-            "ainrf_literature_fetch_total", text,
-            label_filter=f'subscription_id="{sub.subscription_id}"',
-        ) == 1.0
-        assert _counter_value(
-            "ainrf_literature_papers_fetched_total", text,
-            label_filter=f'subscription_id="{sub.subscription_id}"',
-        ) == 1.0
+        assert (
+            _counter_value(
+                "ainrf_literature_fetch_total",
+                text,
+                label_filter=f'subscription_id="{sub.subscription_id}"',
+            )
+            == 1.0
+        )
+        assert (
+            _counter_value(
+                "ainrf_literature_papers_fetched_total",
+                text,
+                label_filter=f'subscription_id="{sub.subscription_id}"',
+            )
+            == 1.0
+        )
         # One new paper inserted.
-        assert _counter_value(
-            "ainrf_literature_papers_new_total", text,
-            label_filter=f'subscription_id="{sub.subscription_id}"',
-        ) == 1.0
+        assert (
+            _counter_value(
+                "ainrf_literature_papers_new_total",
+                text,
+                label_filter=f'subscription_id="{sub.subscription_id}"',
+            )
+            == 1.0
+        )
         # Histogram should have at least one observation.
         assert _histogram_count("ainrf_literature_fetch_duration_seconds", text) >= 1.0
 
@@ -247,14 +259,20 @@ class TestSummarizeMetrics:
         )
 
         paper = _paper()
-        with patch("anthropic.resources.messages.messages.AsyncMessages.create", new_callable=AsyncMock) as mock_create:
+        with patch(
+            "anthropic.resources.messages.messages.AsyncMessages.create", new_callable=AsyncMock
+        ) as mock_create:
             mock_create.return_value = _anthropic_message(text)
             async with AnthropicSummarizer() as summarizer:
                 await summarizer.summarize([paper])
 
         text = get_metrics_text()
-        assert _counter_value("ainrf_literature_summarize_total", text,
-                              label_filter='status="success"') == 1.0
+        assert (
+            _counter_value(
+                "ainrf_literature_summarize_total", text, label_filter='status="success"'
+            )
+            == 1.0
+        )
         assert _histogram_count("ainrf_literature_summarize_duration_seconds", text) >= 1.0
         # Paper fields should be populated.
         assert paper.title_zh == "测试标题"
@@ -263,7 +281,8 @@ class TestSummarizeMetrics:
 
     @pytest.mark.anyio
     async def test_summarize_failure_counter_on_http_error(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Count failed summarize calls when LLM returns an error."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
@@ -277,12 +296,15 @@ class TestSummarizeMetrics:
                 await summarizer.summarize([paper])
 
         text = get_metrics_text()
-        assert _counter_value("ainrf_literature_summarize_total", text,
-                              label_filter='status="failed"') == 1.0
+        assert (
+            _counter_value("ainrf_literature_summarize_total", text, label_filter='status="failed"')
+            == 1.0
+        )
 
     @pytest.mark.anyio
     async def test_summarize_failure_counter_on_exception(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Count failed summarize calls when an exception is raised."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
@@ -295,12 +317,15 @@ class TestSummarizeMetrics:
                 await summarizer.summarize([_paper()])
 
         text = get_metrics_text()
-        assert _counter_value("ainrf_literature_summarize_total", text,
-                              label_filter='status="failed"') == 1.0
+        assert (
+            _counter_value("ainrf_literature_summarize_total", text, label_filter='status="failed"')
+            == 1.0
+        )
 
     @pytest.mark.anyio
     async def test_no_summarize_counter_when_no_api_key(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """When no API key is configured, summarize is skipped — no data lines emitted."""
         # Ensure all API key env vars are unset.
@@ -312,10 +337,16 @@ class TestSummarizeMetrics:
 
         text = get_metrics_text()
         # HELP/TYPE lines exist for pre-declared metrics; the data value must be 0.
-        assert _counter_value("ainrf_literature_summarize_total", text,
-                              label_filter='status="success"') == 0.0
-        assert _counter_value("ainrf_literature_summarize_total", text,
-                              label_filter='status="failed"') == 0.0
+        assert (
+            _counter_value(
+                "ainrf_literature_summarize_total", text, label_filter='status="success"'
+            )
+            == 0.0
+        )
+        assert (
+            _counter_value("ainrf_literature_summarize_total", text, label_filter='status="failed"')
+            == 0.0
+        )
         assert _histogram_count("ainrf_literature_summarize_duration_seconds", text) == 0.0
 
 
@@ -327,7 +358,9 @@ class TestSummarizeMetrics:
 class TestFetchForSubscriptionMetrics:
     @pytest.mark.anyio
     async def test_fetch_records_metrics_through_pipeline(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """A full fetch_for_subscription call triggers both fetch and summarize metrics."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
@@ -356,13 +389,19 @@ class TestFetchForSubscriptionMetrics:
         assert len(papers) == 1
 
         text = get_metrics_text()
-        assert _counter_value("ainrf_literature_summarize_total", text,
-                              label_filter='status="success"') == 1.0
+        assert (
+            _counter_value(
+                "ainrf_literature_summarize_total", text, label_filter='status="success"'
+            )
+            == 1.0
+        )
         assert _histogram_count("ainrf_literature_summarize_duration_seconds", text) >= 1.0
 
     @pytest.mark.anyio
     async def test_fetch_handles_duplicate_papers_correctly(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Duplicate papers are not double-counted in papers_new_total."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")

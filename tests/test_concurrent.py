@@ -143,7 +143,9 @@ class TestAgenticResearcherConcurrency:
             await task
             return
         # The other thread won the race; wait for the shared engine to finish.
-        engine.completion_event.wait(timeout=10)
+        completion_event = engine.completion_event
+        assert completion_event is not None
+        completion_event.wait(timeout=10)
         latest = service.get_task(task_id)
         assert latest.status in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}
 

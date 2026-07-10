@@ -158,7 +158,9 @@ class AnthropicSummarizer:
         await self.aclose()
 
     def _need_summary(self, paper: LiteraturePaper) -> bool:
-        return not (paper.title_zh and paper.ai_summary and paper.summary_version == self._summary_version)
+        return not (
+            paper.title_zh and paper.ai_summary and paper.summary_version == self._summary_version
+        )
 
     async def summarize(self, papers: list[LiteraturePaper]) -> None:
         """Summarize all papers that are not already cached."""
@@ -277,7 +279,9 @@ class AnthropicSummarizer:
             else:
                 self._record_failed()
         except Exception as exc:
-            logger.error("single-paper summarization failed: paper_id=%s error=%s", paper.paper_id, exc)
+            logger.error(
+                "single-paper summarization failed: paper_id=%s error=%s", paper.paper_id, exc
+            )
             self._record_failed()
         finally:
             self._observe_duration(time.monotonic() - t_start)
@@ -311,7 +315,12 @@ class AnthropicSummarizer:
 
         usage_details: dict[str, int] = {}
         if usage is not None:
-            for attr in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"):
+            for attr in (
+                "input_tokens",
+                "output_tokens",
+                "cache_creation_input_tokens",
+                "cache_read_input_tokens",
+            ):
                 value = getattr(usage, attr, None)
                 if isinstance(value, int):
                     usage_details[attr] = value

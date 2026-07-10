@@ -254,7 +254,6 @@ class SkillRegistrySyncService:
         invalid frontmatter. Validation happens before the load directory is
         modified so a bad source never leaves the install in a half-written state.
         """
-        import yaml
 
         errors: list[str] = []
         for rel_path in skill_dirs:

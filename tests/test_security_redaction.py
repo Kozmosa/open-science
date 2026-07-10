@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from ainrf.security.redaction import REDACTED_KEYS, redact_dict, redact_headers, redact_query_string
 import pytest
-pytestmark = [pytest.mark.middleware]
 
+pytestmark = [pytest.mark.middleware]
 
 
 class TestRedactHeaders:

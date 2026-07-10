@@ -9,6 +9,8 @@ import pytest
 
 
 pytestmark = [pytest.mark.unit]
+
+
 class TestAuthService:
     @pytest.fixture
     def service(self):

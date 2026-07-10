@@ -153,10 +153,8 @@ async def test_namespaced_cookie_does_not_overwrite_production_cookie(
             username="stagingcookie",
             password="Password123!",
         )
-        response = await client.get(
-            "/api/auth/check",
-            cookies={"ainrf_staging_access_token": tokens["access_token"]},
-        )
+        client.cookies.set("ainrf_staging_access_token", tokens["access_token"])
+        response = await client.get("/api/auth/check")
 
     assert response.status_code == 200
     assert "openscience_staging_access_token" in client.cookies
@@ -173,11 +171,8 @@ async def test_auth_accepts_legacy_ainrf_cookie(tmp_path: Path) -> None:
             username="legacycookie",
             password="Password123!",
         )
-
-        response = await client.get(
-            "/api/auth/check",
-            cookies={"ainrf_access_token": tokens["access_token"]},
-        )
+        client.cookies.set("ainrf_access_token", tokens["access_token"])
+        response = await client.get("/api/auth/check")
 
     assert response.status_code == 200
 

@@ -1,7 +1,7 @@
 """Database edge-case and SQLite contention tests.
 
 These tests exercise the shared connection factory and persistence primitives
-that underpin every service.  Run with ``-n1`` so worker isolation does not
+that underpin every service. Run with ``-n0`` so worker isolation does not
 mask real lock contention.
 """
 

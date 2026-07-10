@@ -42,11 +42,11 @@ class TelemetryConfig:
     def from_env(cls) -> TelemetryConfig:
         """Read configuration from ``AINRF_OTEL_*`` environment variables."""
         return cls(
-            enabled=os.environ.get("AINRF_OTEL_ENABLED", "").lower()
-            in ("1", "true", "yes"),
+            enabled=os.environ.get("AINRF_OTEL_ENABLED", "").lower() in ("1", "true", "yes"),
             service_name=os.environ.get("AINRF_OTEL_SERVICE_NAME", "ainrf"),
             deployment_environment=os.environ.get(
-                "AINRF_OTEL_DEPLOYMENT_ENV", "production",
+                "AINRF_OTEL_DEPLOYMENT_ENV",
+                "production",
             ),
             exporter_endpoint=os.environ.get("AINRF_OTEL_EXPORTER_ENDPOINT", ""),
             sample_rate=float(
@@ -74,8 +74,10 @@ def init_telemetry(app: FastAPI, config: TelemetryConfig | None = None) -> None:
 
     _LOG.info(
         "otel_init",
-        service_name=config.service_name,
-        exporter_endpoint=config.exporter_endpoint or "(none — local only)",
+        extra={
+            "service_name": config.service_name,
+            "exporter_endpoint": config.exporter_endpoint or "(none — local only)",
+        },
     )
 
     try:
@@ -89,10 +91,12 @@ def init_telemetry(app: FastAPI, config: TelemetryConfig | None = None) -> None:
         return
 
     # Resource identifies this service in the trace backend.
-    resource = Resource(attributes={
-        SERVICE_NAME: config.service_name,
-        "deployment.environment": config.deployment_environment,
-    })
+    resource = Resource(
+        attributes={
+            SERVICE_NAME: config.service_name,
+            "deployment.environment": config.deployment_environment,
+        }
+    )
 
     # Tracer provider with optional sampling.
     provider = TracerProvider(
@@ -107,6 +111,7 @@ def init_telemetry(app: FastAPI, config: TelemetryConfig | None = None) -> None:
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                 OTLPSpanExporter,
             )
+
             exporter = OTLPSpanExporter(endpoint=config.exporter_endpoint)
             provider.add_span_processor(BatchSpanProcessor(exporter))
             _LOG.info("otel_exporter_configured endpoint=%s", config.exporter_endpoint)
@@ -118,6 +123,7 @@ def init_telemetry(app: FastAPI, config: TelemetryConfig | None = None) -> None:
     # ── Auto-instrumentation ──────────────────────────────────────
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
         FastAPIInstrumentor.instrument_app(
             app,
             excluded_urls=",".join(["/health", "/metrics"]),
@@ -128,14 +134,16 @@ def init_telemetry(app: FastAPI, config: TelemetryConfig | None = None) -> None:
 
     try:
         from opentelemetry.instrumentation.sqlite3 import SQLite3Instrumentor
+
         SQLite3Instrumentor().instrument()
         _LOG.info("otel_sqlite3_instrumented")
     except Exception as exc:
         _LOG.warning("otel_sqlite3_instrumentation_failed error=%s", exc)
 
     try:
-        from opentelemetry.instrumentation.httpx import HTTPXInstrumentor
-        HTTPXInstrumentor().instrument()
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        HTTPXClientInstrumentor().instrument()
         _LOG.info("otel_httpx_instrumented")
     except Exception as exc:
         _LOG.warning("otel_httpx_instrumentation_failed error=%s", exc)

@@ -8,6 +8,7 @@ from ainrf.runtime.paths import build_runtime_path_config
 
 pytestmark = [pytest.mark.unit]
 
+
 def test_runtime_path_config_workspace_root_uses_startup_cwd() -> None:
     startup_cwd = Path("/tmp/ainrf-project")
 

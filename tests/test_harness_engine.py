@@ -3,10 +3,17 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
-from unittest.mock import patch
+from typing import cast
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from claude_agent_sdk import ResultMessage, StreamEvent, SystemMessage
+from claude_agent_sdk import (
+    ResultMessage,
+    SessionKey,
+    SessionStoreEntry,
+    StreamEvent,
+    SystemMessage,
+)
 
 from ainrf.harness_engine import (
     EngineEvent,
@@ -14,7 +21,6 @@ from ainrf.harness_engine import (
     HarnessEngine,
     HarnessEngineNotSupportedError,
     HarnessEngineType,
-    OutputEvent,
     get_engine,
 )
 from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine, AgentSession
@@ -55,7 +61,7 @@ def test_execution_context_creation() -> None:
         working_directory="/tmp",
         rendered_prompt="test prompt",
         skills=["skill1"],
-        mcp_servers=[],
+        mcp_servers={},
     )
     assert ctx.task_id == "task-001"
     assert ctx.prompt == "test prompt"
@@ -333,23 +339,6 @@ async def test_codex_app_server_starts_with_yolo_sandbox_defaults() -> None:
     )
 
 
-def test_engine_event_creation() -> None:
-    event = EngineEvent(
-        event_type="system",
-        payload={"subtype": "task_started"},
-        token_usage={"total": {"input_tokens": 1}},
-    )
-    assert event.event_type == "system"
-    assert event.payload["subtype"] == "task_started"
-    assert event.token_usage == {"total": {"input_tokens": 1}}
-
-
-def test_output_event_creation() -> None:
-    event = OutputEvent(kind="stdout", content="hello", seq=1, created_at="2026-01-01")
-    assert event.kind == "stdout"
-    assert event.content == "hello"
-
-
 def test_harness_engine_abstract() -> None:
     with pytest.raises(TypeError, match="abstract"):
         HarnessEngine()
@@ -515,8 +504,8 @@ def test_db_session_store_append_and_load(tmp_path: Path) -> None:
 
     import asyncio
 
-    key: dict = {"project_key": "pkey", "session_id": "s1"}
-    entries: list[dict] = [
+    key: SessionKey = {"project_key": "pkey", "session_id": "s1"}
+    entries: list[SessionStoreEntry] = [
         {"type": "user", "uuid": "a", "timestamp": "2026-01-01T00:00:00Z"},
         {"type": "assistant", "uuid": "b", "timestamp": "2026-01-01T00:01:00Z"},
     ]
@@ -550,8 +539,8 @@ def test_db_session_store_delete_cascades(tmp_path: Path) -> None:
 
     store = DbSessionStore(str(tmp_path / "test.db"))
 
-    main_key: dict = {"project_key": "pkey", "session_id": "s1"}
-    sub_key: dict = {
+    main_key: SessionKey = {"project_key": "pkey", "session_id": "s1"}
+    sub_key: SessionKey = {
         "project_key": "pkey",
         "session_id": "s1",
         "subpath": "subagents/agent-1",
@@ -597,7 +586,7 @@ async def test_codex_start_restores_thread_id_when_send_input_precreated_session
         encoding="utf-8",
     )
 
-    _ = ExecutionContext(
+    context = ExecutionContext(
         task_id="task-codex",
         working_directory="/tmp",
         rendered_prompt="ignored",
@@ -607,19 +596,32 @@ async def test_codex_start_restores_thread_id_when_send_input_precreated_session
     # Simulate the timing: send_input pre-creates session (thread_id=None)
     await engine.send_input("task-codex", "follow-up question")
 
-    # Check that thread_id was restored from checkpoint despite pre-created session
-    async with engine._lock:
-        sess = engine._sessions["task-codex"]
-        assert sess.thread_id is None  # not restored yet — happens in start()
+    ensure_connection = AsyncMock()
+    start_thread = AsyncMock()
+    resume_thread = AsyncMock()
+    start_turn = AsyncMock()
+    await_turn = AsyncMock()
 
-    # The fix: start() should restore thread_id because needs_checkpoint=True
-    # (thread_id is None), not skipped because is_new_session=False.
-    # We verify this indirectly by checking the conditions match.
+    async def emit(_event: EngineEvent) -> None:
+        return None
 
-    # After the fix, the gate is "session.thread_id is None" instead of
-    # "is_new_session". Send_input created a session with thread_id=None,
-    # so the gate is open — the checkpoint WILL be restored in start().
-    assert sess.thread_id is None  # needs_checkpoint would be True
+    with (
+        patch.object(engine, "_ensure_connection", ensure_connection),
+        patch.object(engine, "_start_thread", start_thread),
+        patch.object(engine, "_resume_thread", resume_thread),
+        patch.object(engine, "_start_turn", start_turn),
+        patch.object(engine, "_await_turn", await_turn),
+    ):
+        await engine.start(context, emit)
+
+    session = engine._sessions["task-codex"]
+    assert session.thread_id == "thread-xyz"
+    assert list(session.pending_prompts) == []
+    ensure_connection.assert_awaited_once()
+    resume_thread.assert_awaited_once_with(context, session)
+    start_thread.assert_not_awaited()
+    start_turn.assert_awaited_once_with(context, session, "follow-up question")
+    await_turn.assert_awaited_once_with(context, session)
 
 
 # ── Context reconstruction fallback tests ────────────────────────────
@@ -777,8 +779,10 @@ def test_claude_code_is_alive_reflects_process_returncode() -> None:
         def __init__(self, returncode: int | None) -> None:
             self.returncode = returncode
 
-    engine._processes["task-running"] = FakeProcess(returncode=None)
-    engine._processes["task-done"] = FakeProcess(returncode=0)
+    engine._processes["task-running"] = cast(
+        asyncio.subprocess.Process, FakeProcess(returncode=None)
+    )
+    engine._processes["task-done"] = cast(asyncio.subprocess.Process, FakeProcess(returncode=0))
 
     assert asyncio.run(engine.is_alive("task-running")) is True
     assert asyncio.run(engine.is_alive("task-done")) is False
@@ -791,7 +795,7 @@ def test_claude_code_last_event_at_updated_on_emit() -> None:
     async def emit(event: EngineEvent) -> None:
         _ = event
 
-    async def run() -> None:
+    async def run() -> float | None:
         context = ExecutionContext(
             task_id="task-events",
             working_directory="/tmp",
@@ -817,7 +821,7 @@ def test_codex_is_alive_reflects_initialized_process() -> None:
             self.returncode = returncode
 
     session = CodexSession(task_id="task-running")
-    session.process = FakeProcess(returncode=None)
+    session.process = cast(asyncio.subprocess.Process, FakeProcess(returncode=None))
     session.initialized = True
     engine._sessions["task-running"] = session
 
@@ -827,7 +831,7 @@ def test_codex_is_alive_reflects_initialized_process() -> None:
     assert asyncio.run(engine.is_alive("task-running")) is False
 
     session.initialized = True
-    session.process = FakeProcess(returncode=1)
+    session.process = cast(asyncio.subprocess.Process, FakeProcess(returncode=1))
     assert asyncio.run(engine.is_alive("task-running")) is False
 
     assert asyncio.run(engine.is_alive("missing")) is False

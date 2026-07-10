@@ -13,6 +13,7 @@ from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
 
+
 def _make_app(tmp_path: Path, scan_roots: list[Path] | None = None) -> FastAPI:
     api_config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -165,4 +166,7 @@ async def test_delete_builtin_registry_returns_403(tmp_path: Path) -> None:
         response = await client.delete("/skill-registries/aris")
 
     assert response.status_code == 403
-    assert "default" in response.json()["detail"].lower() or "built-in" in response.json()["detail"].lower()
+    assert (
+        "default" in response.json()["detail"].lower()
+        or "built-in" in response.json()["detail"].lower()
+    )

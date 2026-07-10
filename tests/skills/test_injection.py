@@ -9,6 +9,7 @@ from ainrf.skills.injection import SkillInjectionService
 
 pytestmark = [pytest.mark.unit]
 
+
 def _make_skill(
     root: Path,
     skill_id: str,
