@@ -196,22 +196,28 @@ cd docs-site && npm run build
 
 ## ✅ Development
 
-Python checks:
+统一 CI 入口：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/
-UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests
-UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests
-UV_CACHE_DIR=/tmp/uv-cache uv run ty check
+# L0：agent / 开发内循环
+bash scripts/ci.sh l0
+
+# L1：完整确定性门禁（后端 + 前端 + 文档，不启动 Docker）
+bash scripts/ci.sh l1
+
+# 查看五层混合 CI 边界
+bash scripts/ci.sh describe
 ```
 
-Frontend checks:
+后端选择性测试仍可通过统一 runner 执行：
 
 ```bash
-cd frontend
-npm run test:run
-npm run build
+bash scripts/test.sh unit
+bash scripts/test.sh api
+bash scripts/test.sh production-contract
 ```
+
+pytest 与 Vitest 默认不再根据整机 CPU 自动扩张。可用 `OPENSCIENCE_PYTEST_WORKERS` 和 `OPENSCIENCE_VITEST_WORKERS` 调低并行度，仓库安全默认值分别为 8 和 4。
 
 Docs build:
 

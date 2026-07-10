@@ -1,5 +1,8 @@
 # Performance Audit Toolchain Design
 
+> [!warning] Status: experimental / retired from CI
+> 该文档记录历史性能工具链设计，不再代表当前 CI contract。2026-07-11 审计确认 Lighthouse、API benchmark、DB analyzer 与 profiler 存在目标、认证、状态断言和运行环境漂移；对应 GitHub workflow 已退役。工具脚本暂保留为本地实验输入，待五层混合 CI 的 L3 deep verification 重新建立可运行 harness、版本化基线与阻塞阈值后再恢复自动化。当前架构以 [[2026-07-11-five-layer-hybrid-ci-design]] 为准。
+
 ## 目标
 
 为 scholar-agent 项目建立可持续的全栈性能审计工具链，覆盖后端 API、数据库、前端 bundle、React 渲染四个维度。支持手动一键执行和 CI 调用，每次运行产出版本化报告，支持历史对比。

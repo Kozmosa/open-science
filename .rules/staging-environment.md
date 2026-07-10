@@ -29,6 +29,9 @@ bash scripts/staging.sh up
 # Tail backend logs (shows uvicorn reload events)
 bash scripts/staging.sh logs
 
+# Run non-destructive GET smoke checks against the already-running staging
+bash scripts/staging.sh smoke
+
 # Stop and destroy everything (including data)
 bash scripts/staging.sh down
 ```
@@ -37,10 +40,10 @@ bash scripts/staging.sh down
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| App | `http://<host>:7192/` | Full AINRF WebUI |
-| Grafana | `http://<host>:7192/grafana` | Auth-gated via AINRF session |
+| App | `http://<host>:7192/` | Full OpenScience WebUI |
+| Grafana | `http://<host>:7192/grafana` | Auth-gated via OpenScience session |
 | Backend direct | `http://<host>:17000/health` | Bypasses nginx |
-| Prometheus | `localhost:9090` | Internal only, no nginx proxy |
+| Prometheus | `localhost:9092` | Internal only, no nginx proxy |
 
 ## Port Mapping (staging ↔ production)
 
@@ -78,6 +81,7 @@ bash scripts/staging.sh status    # show running state and URLs
 bash scripts/staging.sh logs      # tail backend logs
 bash scripts/staging.sh rebuild   # rebuild image, keep data
 bash scripts/staging.sh creds     # print admin initial password
+bash scripts/staging.sh smoke     # non-destructive GET smoke; never manages lifecycle
 bash scripts/staging.sh down      # stop + remove all containers and volumes
 ```
 
@@ -87,10 +91,10 @@ bash scripts/staging.sh down      # stop + remove all containers and volumes
 2. **Iterate on backend code**: edit files under `src/ainrf/` — uvicorn auto-reloads within seconds; watch reload events in `bash scripts/staging.sh logs`
 3. **Test API changes**: `curl http://localhost:7192/api/...` or open `http://<host>:7192/` in browser
 4. **Check metrics**: `curl http://localhost:7192/metrics` or Grafana at `/grafana`
-5. **Verify health**: `curl http://localhost:17000/health` — shows SSH status, Claude version, runtime readiness
+5. **Verify identity, health, and production mode**: `OPENSCIENCE_EXPECTED_BUILD_COMMIT=<sha> bash scripts/test.sh staging` — validates staging identity, backend/nginx health JSON, frontend build metadata, production auth behavior, and blocked docs without changing business data or container lifecycle
 6. **Compare with production**: both stacks run simultaneously — test the same API on `:7192` (staging) vs `:8192` (production) to confirm behavior parity
 7. **View container logs**: `docker logs ainrf-staging` (backend), `docker logs ainrf-staging-nginx` (nginx), `docker logs ainrf-staging-prometheus` (metrics)
 8. **Reset state**: `bash scripts/staging.sh down && bash scripts/staging.sh up` — destroys all data and starts fresh
 9. **Deploy to production**: once verified on staging, run `bash deploy/redeploy-backend.sh` (production target) and `bash deploy/redeploy-frontend.sh`
 
-**Important**: staging runs `AINRF_PRODUCTION=1` (same as production) so middleware, auth, and security behavior match exactly. The only differences are ports and data volumes.
+**Important**: staging runs `OPENSCIENCE_PRODUCTION=1` (same effective mode as production) so middleware, auth, and security behavior match. `smoke` assumes staging is already running and deliberately never calls `up`, `down`, Docker, user registration, or mutating business APIs. Health probes may update request metrics and perform temporary filesystem/SSH readiness checks, so the command is non-destructive rather than strictly read-only.

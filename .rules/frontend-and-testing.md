@@ -45,16 +45,20 @@ This is configured via:
 
 **Note**: OMP config `env` vars only take effect at session start. Mid-session changes require a session restart.
 
-## Agent E2E Testing
+## Legacy Agent E2E Testing (Exploratory, Non-Gating)
 
-AINRF uses a coding-agent-driven E2E testing approach. A coding agent (Claude Code, Codex, etc.) uses Playwright MCP to drive a browser against a production-like Docker container, executing the test scenarios defined in `testing/e2e/CHECKLIST.md`.
+`testing/e2e/` is a legacy coding-agent exploration harness. It is not part of L0/L1, is not a merge gate, and must not be treated as reproducible E2E evidence until L2 replaces its fixed project/container names, mutable image tag, shared frontend bundle, direct DB seeding, and natural-language-only result contract.
 
 - **Test environment**: `testing/e2e/` — isolated Docker Compose with ephemeral tmpfs volumes, seeded test users, no TLS.
-- **Start**: `testing/e2e/run.sh up` — builds image, starts containers, seeds users, prints credentials.
+- **Start**: `testing/e2e/run.sh up` — starts the existing local `ainrf:latest` image, seeds users, and prints credentials. It does **not** build the image or frontend bundle.
 - **Stop**: `testing/e2e/run.sh down` — removes all containers and volumes.
 - **Prerequisites**: `testing/e2e/check-prereqs.sh` — verifies Docker, Node.js, Playwright MCP, curl.
 - **Agent prompt**: `testing/e2e/AGENT_PROMPT.md` — system prompt for the test agent.
 - **MCP config**: `testing/e2e/config/mcp-servers.json` — Playwright MCP server configuration.
 - **Results**: Agent writes reports to `testing/e2e/results/` (gitignored).
+
+Do not run this harness from untrusted pull requests or on a self-hosted GitHub runner attached to the production Docker daemon. The five-layer replacement is specified in [`docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md`](../docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md).
+
+The deterministic L0/L1 Vitest lane is capped at 4 workers by default. Lower it on the shared host with `OPENSCIENCE_VITEST_WORKERS=<n>`; do not let Vitest infer concurrency from the full machine CPU count.
 
 Ports: frontend on 8198, backend on 8199 (configurable via `AIWebPort`/`AITestPort`).
