@@ -86,9 +86,16 @@ export const queryKeys = {
   },
 
   literature: {
-    papers: (subscriptionId: string | null | undefined, unreadOnly: boolean) =>
-      ['literature-papers', subscriptionId, unreadOnly] as const,
-    subscriptions: ['literature-subscriptions'] as const,
+    all: ['literature'] as const,
+    overview: ['literature', 'overview'] as const,
+    topics: ['literature', 'topics'] as const,
+    topic: (topicId: string | null) => ['literature', 'topics', topicId] as const,
+    papers: (filters: Record<string, string | number | undefined>) =>
+      ['literature', 'papers', filters] as const,
+    paper: (paperId: string | null) => ['literature', 'papers', paperId] as const,
+    summary: (paperId: string | null) => ['literature', 'papers', paperId, 'summary'] as const,
+    checks: ['literature', 'checks'] as const,
+    check: (checkId: string | null) => ['literature', 'checks', checkId] as const,
   },
 
   admin: {

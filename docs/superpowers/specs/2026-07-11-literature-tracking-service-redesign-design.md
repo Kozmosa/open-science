@@ -1,6 +1,6 @@
 # OpenScience 文献追踪服务重设计
 
-**Status:** Accepted product and service design; execution framework selection pending
+**Status:** Accepted product and service design; Dramatiq + dedicated Redis execution selected
 **Date:** 2026-07-11
 **Scope:** 文献追踪用户体验、持久化数据、每日检查、按需摘要、研究任务转化、统一后端 API 与迁移边界
 **Supersedes:** 当本文与 [`2026-05-21-literature-tracking-design.md`](2026-05-21-literature-tracking-design.md) 或 [`docs/proposals/literature-fetch-refactor.md`](../../proposals/literature-fetch-refactor.md) 冲突时，以本文为准
@@ -31,6 +31,14 @@
   → 精读或转成研究任务
 ```
 
+## 1.1 已落实的执行边界
+
+- SQLite 是论文、检查、工作项、outbox、调用尝试和用户状态的唯一权威；Redis/Dramatiq 只传递可重建的工作 ID。
+- arXiv RSS 是默认的分类公告发现源。RSS 与 Search API 共用一个全局限流域：同一时刻一个连接、请求间隔至少三秒。
+- RSS 的 `new`、`cross`、`replace` 与 `replace-cross` 事件分别记录为论文、分类或版本变化；单条 RSS feed 达到 2,000 项时只能标记为部分覆盖，不能推进完整水位。
+- Search API 只用于首次回补、遗漏窗口、RSS 截断、复杂条件和低频版本核对，不能因为解析、匹配或摘要失败而被重试触发。
+- 每日 planner 按 `America/New_York` 的 arXiv 更新日运行，避免将夏令时写死为固定北京时间；production 与 staging 的 Redis 实例、密码、卷、端口和命名空间完全隔离。
+
 ## 2. 设计目标
 
 ### 2.1 用户体验目标
@@ -53,7 +61,7 @@
 
 ### 2.3 非目标
 
-本文不决定 Redis Streams、Dramatiq、Celery、SQLite 工作队列或其他具体执行框架。后续选型必须服从本文定义的产品流程、数据边界和恢复语义。
+首版执行层采用 Dramatiq 与 OpenScience 专用 Redis；SQLite 持久化工作项和 outbox 是恢复依据。不会引入 Celery、RabbitMQ 或复用 Litefuse Redis。
 
 首轮也不包含：
 

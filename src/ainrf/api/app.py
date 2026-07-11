@@ -40,8 +40,8 @@ from ainrf.api.routes.client_metrics import router as client_metrics_router
 from ainrf.auth import AuthService
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.files import FileBrowserService
-from ainrf.literature.scheduler import LiteratureScheduler
 from ainrf.literature.service import LiteratureService
+from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.monitor.service import ResourceMonitorService
 from ainrf.projects import ProjectRegistryService
 from ainrf.runtime.readiness import check_runtime_readiness
@@ -108,12 +108,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         auth_service = app.state.auth_service
         await _run_sync_in_lifespan(auth_service.initialize)
         await _run_sync_in_lifespan(app.state.literature_service.initialize)
-        literature_scheduler = LiteratureScheduler(
-            app.state.literature_service,
-            reporter=app.state.observability_reporter,
-        )
-        literature_scheduler.start()
-        app.state.literature_scheduler = literature_scheduler
+        await _run_sync_in_lifespan(app.state.literature_tracking_service.initialize)
         # Create initial admin if no users exist
         try:
             with auth_service._connect() as conn:
@@ -182,8 +177,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
         await resource_monitor_service.stop()
-        if hasattr(app.state, "literature_scheduler"):
-            await app.state.literature_scheduler.shutdown()
 
 
 def create_app(
@@ -276,6 +269,9 @@ def create_app(
     agentic_researcher_service.initialize()
     app.state.agentic_researcher_service = agentic_researcher_service
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
+    app.state.literature_tracking_service = LiteratureTrackingService(
+        state_root=api_config.state_root
+    )
 
     # Initialize OpenTelemetry auto-instrumentation (disabled by default).
     from ainrf.telemetry import init_telemetry

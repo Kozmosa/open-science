@@ -117,6 +117,87 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  literature-redis-staging:
+    image: docker.1ms.run/redis:7-alpine
+    restart: unless-stopped
+    container_name: openscience-staging-literature-redis
+    network_mode: host
+    environment:
+      OPENSCIENCE_LITERATURE_REDIS_PASSWORD: ${STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}
+    command:
+      - redis-server
+      - --bind
+      - 127.0.0.1
+      - --port
+      - "17379"
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory-policy
+      - noeviction
+      - --requirepass
+      - ${STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}
+    volumes:
+      - staging-literature-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$OPENSCIENCE_LITERATURE_REDIS_PASSWORD\" ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  literature-worker-staging:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    container_name: openscience-staging-literature-worker
+    network_mode: host
+    environment:
+      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:17379/0
+      OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:staging:literature
+      OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS: "3"
+      OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET: "24"
+      OPENSCIENCE_LITERATURE_DAILY_SEARCH_BUDGET: "8"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+    volumes:
+      - staging-ainrf-state:/opt/ainrf/state
+      - ../src/ainrf/:/usr/local/lib/python3.13/site-packages/ainrf/:ro
+    command: ["dramatiq", "ainrf.literature.tasks", "--processes", "1", "--threads", "2"]
+    depends_on:
+      ainrf-staging:
+        condition: service_healthy
+      literature-redis-staging:
+        condition: service_healthy
+
+  literature-planner-staging:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    container_name: openscience-staging-literature-planner
+    network_mode: host
+    environment:
+      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:17379/0
+      OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:staging:literature
+    volumes:
+      - staging-ainrf-state:/opt/ainrf/state
+      - ../src/ainrf/:/usr/local/lib/python3.13/site-packages/ainrf/:ro
+    command: ["python", "-m", "ainrf.literature.planner"]
+    depends_on:
+      ainrf-staging:
+        condition: service_healthy
+      literature-redis-staging:
+        condition: service_healthy
+
   nginx-staging:
     image: docker.1ms.run/nginx:1.27-alpine
     restart: unless-stopped
@@ -197,3 +278,4 @@ volumes:
   staging-ainrf-tenants:
   staging-prometheus-data:
   staging-grafana-data:
+  staging-literature-redis-data:

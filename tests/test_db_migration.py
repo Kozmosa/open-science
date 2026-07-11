@@ -41,7 +41,17 @@ class TestBaselineCreatesTables:
             ("agentic_researcher", {"tasks", "task_outputs"}),
             (
                 "literature",
-                {"literature_subscriptions", "literature_papers", "literature_subscription_papers"},
+                {
+                    "literature_subscriptions",
+                    "literature_papers",
+                    "literature_subscription_papers",
+                    "literature_topics",
+                    "literature_catalog_papers",
+                    "literature_paper_versions",
+                    "literature_work_items",
+                    "literature_outbox",
+                    "literature_source_snapshots",
+                },
             ),
             ("terminal", {"user_environment_bindings", "user_session_pairs"}),
         ],
@@ -67,7 +77,7 @@ class TestBaselineCreatesTables:
             ("auth", 4),
             ("sessions", 3),
             ("agentic_researcher", 6),
-            ("literature", 3),
+            ("literature", 4),
             ("terminal", 1),
         ],
     )
@@ -162,6 +172,51 @@ class TestUpgradeFromV0:
             run_pending(conn, "sessions")
             cols = [r[1] for r in conn.execute("PRAGMA table_info(task_sessions)")]
             assert "owner_user_id" in cols
+
+    def test_literature_v3_data_becomes_topics_and_user_states(self, tmp_path: Path) -> None:
+        db_file = tmp_path / "literature.sqlite3"
+        import ainrf.db.migrations  # noqa: F401
+        from ainrf.db.migrations.literature import (
+            migration_001_baseline,
+            migration_002_summary_cache_fields,
+            migration_003_global_papers_and_scheduler_fields,
+        )
+
+        with _connect(db_file) as conn:
+            migration_001_baseline(conn)
+            migration_002_summary_cache_fields(conn)
+            migration_003_global_papers_and_scheduler_fields(conn)
+            conn.execute(
+                """INSERT INTO literature_subscriptions (
+                    subscription_id, user_id, label, keywords_json, arxiv_categories_json, created_at
+                ) VALUES ('sub-ai', 'user-1', 'AI', '[\"agent\"]', '[\"cs.AI\"]', '2026-01-01T00:00:00+00:00')"""
+            )
+            conn.execute(
+                """INSERT INTO literature_papers (
+                    paper_id, title, authors_json, abstract, published_at, arxiv_category, created_at
+                ) VALUES ('2401.00001', 'Agent paper', '[]', 'agent', '', 'cs.AI', '2026-01-01T00:00:00+00:00')"""
+            )
+            conn.execute(
+                """INSERT INTO literature_subscription_papers (
+                    subscription_id, paper_id, is_read, is_converted_to_task, created_at
+                ) VALUES ('sub-ai', '2401.00001', 1, 0, '2026-01-01T00:00:00+00:00')"""
+            )
+            ensure_schema_table(conn)
+            from ainrf.db.migration import set_version
+
+            set_version(conn, "literature", 3)
+            conn.commit()
+
+        with _connect(db_file) as conn:
+            assert run_pending(conn, "literature") == 1
+            topic = conn.execute(
+                "SELECT status, is_active FROM literature_topics WHERE topic_id = 'sub-ai'"
+            ).fetchone()
+            state = conn.execute(
+                "SELECT is_read FROM literature_user_paper_states WHERE user_id = 'user-1' AND paper_id = 'arxiv:2401.00001'"
+            ).fetchone()
+        assert tuple(topic) == ("active", 1)
+        assert state[0] == 1
 
 
 class TestMigrationRollbackOnFailure:
