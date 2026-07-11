@@ -1,0 +1,65 @@
+---
+title: 安全架构
+description: 三层纵深防御架构、IP 白名单、JWT 认证、敏感路径检测、受信代理与 Token 安全。
+---
+
+## 三层纵深防御
+
+OpenScience 采用三层纵深防御架构：
+
+1. **IP 白名单** — 在请求到达应用前拒绝未知网络来源。通过 `AINRF_ALLOWED_CIDRS` 配置。
+2. **请求大小限制** — 阻断超大载荷。默认 50 MB，通过 `AINRF_MAX_REQUEST_BODY_BYTES` 配置。
+3. **JWT 认证** — 所有非豁免路由均需有效 JWT token。生产模式下豁免范围更严格。
+
+## 配置参考
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `AINRF_PRODUCTION` | `false` | 启用生产模式 |
+| `AINRF_ALLOWED_CIDRS` | _(空)_ | 允许连接的 CIDR 列表（逗号分隔） |
+| `AINRF_TRUSTED_PROXY_CIDRS` | _(空)_ | 受信反向代理的 CIDR |
+| `AINRF_PUBLIC_REGISTRATION_ENABLED` | `true` | 是否允许公开注册 |
+| `AINRF_LOGIN_MAX_FAILURES` | `10` | 锁定前的登录失败次数 |
+| `AINRF_LOGIN_LOCKOUT_HOURS` | `24` | 锁定时长（小时） |
+| `AINRF_MAX_REQUEST_BODY_BYTES` | `52428800` | 请求体上限（50 MB） |
+| `AINRF_MAX_CONCURRENT_REQUESTS` | `0` | 最大并发请求数（0 = 无限） |
+| `AINRF_METRICS_ENABLED` | `false` | 启用 Prometheus `/metrics` 端点 |
+
+## 敏感路径检测
+
+以下路径模式会触发级别为 `high` 的 `files.sensitive_path_access` 审计事件：
+
+| 模式 | 示例 |
+|------|------|
+| `.env` 文件 | `.env`、`.env.production` |
+| 证书文件 | `*.pem`、`*.key` |
+| SSH 密钥 | `id_rsa`、`id_ed25519`、`authorized_keys` |
+| 数据库文件 | `*.sqlite`、`*.db` |
+| 系统文件 | `/etc/passwd`、`/etc/shadow` |
+| SSH 目录 | `~/.ssh/*` |
+| 特权路径 | `/root/*`、`/proc/*` |
+| 管理员密钥 | `admin_initial_password.txt` |
+
+## 受信代理配置
+
+在反向代理后运行时，`X-Forwarded-For` 头让应用看到真实客户端 IP。但必须显式配置以防止 IP 伪造：
+
+```bash
+# 仅信任本地反向代理
+AINRF_TRUSTED_PROXY_CIDRS=127.0.0.1/32
+```
+
+不设置 `AINRF_TRUSTED_PROXY_CIDRS` 时，应用信任来自任何来源的 `X-Forwarded-For`（开发模式行为）。
+
+## Token 安全
+
+- 访问令牌为短有效期 JWT
+- 刷新令牌允许免重新认证续期
+- **两者都不会被记录** — 脱敏层从所有日志输出中剥离 `Authorization` 头、`api_key` 参数和 `token` 查询字符串
+- 审计日志仅记录认证发生的事实，永远不记录凭据本身
+
+## 相关文档
+
+- [生产检查清单](/security/checklist) — 部署前安全检查项
+- [审计日志](/observability/audit-logs) — 完整审计事件目录
+- [部署概览](/deployment/) — 生产部署方式

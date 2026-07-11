@@ -1,0 +1,61 @@
+---
+title: Prometheus 指标
+description: OpenScience Prometheus 指标参考 — 计数器、直方图、仪表盘与 PromQL 查询示例。
+---
+
+通过 `AINRF_METRICS_ENABLED=true` 启用，端点：`GET /metrics`。
+
+## 计数器（Counters）
+
+| 指标 | 标签 | 说明 |
+|------|------|------|
+| `ainrf_http_requests_total` | method, path, status | HTTP 请求总数 |
+| `ainrf_auth_login_success_total` | — | 登录成功次数 |
+| `ainrf_auth_login_failed_total` | reason | 按原因分类的登录失败次数 |
+| `ainrf_terminal_exec_total` | environment_id | 终端命令执行次数 |
+| `ainrf_terminal_exec_denied_total` | — | 被拒绝的终端命令次数 |
+| `ainrf_code_session_created_total` | — | Code-Server 会话创建次数 |
+| `ainrf_files_sensitive_path_access_total` | pattern | 敏感路径访问次数 |
+| `ainrf_environment_update_total` | — | 环境更新次数 |
+
+## 直方图（Histograms）
+
+| 指标 | 说明 |
+|------|------|
+| `ainrf_http_request_duration_seconds` | 请求延迟分布 |
+
+## 仪表盘（Gauges）
+
+| 指标 | 说明 |
+|------|------|
+| `ainrf_terminal_ws_active` | 当前活跃的终端 WebSocket 连接数 |
+
+## PromQL 查询示例
+
+```promql
+# 登录失败速率（每秒，5 分钟窗口）
+rate(ainrf_auth_login_failed_total[5m])
+
+# 99 分位请求延迟
+histogram_quantile(0.99, rate(ainrf_http_request_duration_seconds_bucket[5m]))
+
+# 活跃终端会话数
+ainrf_terminal_ws_active
+
+# 按模式的敏感文件访问
+sum by (pattern) (rate(ainrf_files_sensitive_path_access_total[1h]))
+
+# HTTP 请求速率（按状态码）
+sum by (status) (rate(ainrf_http_requests_total[5m]))
+
+# 登录成功率
+rate(ainrf_auth_login_success_total[5m])
+/
+(rate(ainrf_auth_login_success_total[5m]) + rate(ainrf_auth_login_failed_total[5m]))
+```
+
+## 相关文档
+
+- [可观测性概览](/observability/) — 审计事件目录
+- [监控栈](/observability/monitoring-stack) — Grafana Dashboard 与告警
+- [安全架构](/security/) — 安全配置参考

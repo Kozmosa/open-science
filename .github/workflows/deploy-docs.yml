@@ -34,7 +34,7 @@ jobs:
         working-directory: docs-site
         run: npm ci
 
-      - name: Build Astro docs
+      - name: Build VitePress docs
         working-directory: docs-site
         run: npm run build
 
