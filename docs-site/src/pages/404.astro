@@ -1,0 +1,20 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+export const prerender = true;
+const homeUrl = import.meta.env.BASE_URL;
+---
+
+<StarlightPage
+  hasSidebar={false}
+  frontmatter={{
+    title: '页面未找到',
+    description: '请求的 OpenScience 文档页面不存在。',
+    template: 'splash',
+    editUrl: false,
+    pagefind: false,
+  }}
+>
+  <p>请求的文档页面不存在，请返回文档首页继续浏览。</p>
+  <p><a href={homeUrl}>返回 OpenScience 文档首页</a></p>
+</StarlightPage>

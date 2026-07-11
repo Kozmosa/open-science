@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import promqlLanguage from './src/languages/promql.mjs';
 
 // https://astro.build/config
 export default defineConfig({
@@ -9,6 +10,12 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'OpenScience',
+      disable404Route: true,
+      expressiveCode: {
+        shiki: {
+          langs: [promqlLanguage],
+        },
+      },
       sidebar: [
         {
           label: '快速开始',
