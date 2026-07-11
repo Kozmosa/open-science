@@ -1,5 +1,8 @@
 # AINRF Session Chain — Design Spec
 
+> [!warning] Historical design
+> 本文把 Session/Attempt 建成独立于 Task 的第二套用户会话模型，已被 [`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 的唯一 Task → Attempt → Runtime Session 权威模型取代。本文仅用于解释现有 legacy 表来源。
+
 Date: 2026-05-17 | Session: `ainrf-h2` | Status: draft
 
 ## Motivation

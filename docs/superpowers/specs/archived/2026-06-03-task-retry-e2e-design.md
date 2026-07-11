@@ -1,5 +1,8 @@
 # Task Retry E2E Test Design
 
+> [!warning] Historical design
+> 本文测试的是已废弃的“Retry 产生新 Task”交互，已被 [`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 的 Task/Attempt 契约取代。新的测试必须验证同一 Task 身份、Attempt 历史和归档门禁。
+
 ## Goal
 
 Verify the task retry UI flow end-to-end using Playwright with `page.route()` API mocks — no real backend required.
