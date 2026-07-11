@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 from types import SimpleNamespace
 import sys
@@ -28,6 +29,10 @@ pytestmark = [pytest.mark.cli]
 
 
 runner = CliRunner()
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
 
 
 def test_default_state_root_uses_home_directory(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -88,10 +93,11 @@ def test_serve_help_lists_expected_flags() -> None:
     result = runner.invoke(app, ["serve", "--help"])
 
     assert result.exit_code == 0
-    assert "--host" in result.stdout
-    assert "--port" in result.stdout
-    assert "--daemon" in result.stdout
-    assert "--state-root" in result.stdout
+    output = _strip_ansi(result.stdout)
+    assert "--host" in output
+    assert "--port" in output
+    assert "--daemon" in output
+    assert "--state-root" in output
 
 
 def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -254,7 +260,7 @@ def test_serve_rejects_malformed_config_with_validation_error(tmp_path: Path) ->
     assert result.exit_code != 0
     assert "Invalid runtime config" in result.output
     compact_output = "".join(
-        char for char in result.output if not char.isspace() and char not in "│╭╮╰╯─"
+        char for char in _strip_ansi(result.output) if not char.isspace() and char not in "│╭╮╰╯─"
     )
     assert str(config_path) in compact_output
 
