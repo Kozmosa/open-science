@@ -78,8 +78,11 @@ def _run_webui_script(
     )
 
 
-def test_webui_sh_sets_default_cache_and_generates_session_token(tmp_path: Path) -> None:
+def test_webui_sh_sets_default_cache_and_generates_session_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     repo_root = Path(__file__).resolve().parent.parent
+    monkeypatch.delenv("UV_CACHE_DIR", raising=False)
 
     result = _run_webui_script(repo_root, tmp_path, [])
 
