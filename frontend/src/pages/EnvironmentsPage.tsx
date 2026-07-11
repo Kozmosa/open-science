@@ -30,7 +30,7 @@ import type {
 } from '@/shared/types';
 import { useLocale, useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
-import { useEnvironmentSelection } from '../components';
+import { useEnvironmentSelection } from '../components/environment';
 import { useToast } from '../components/common';
 import { EnvironmentDetectionModal } from '../components/environment';
 import {

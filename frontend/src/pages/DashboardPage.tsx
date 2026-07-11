@@ -1,14 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { getHealth } from '@/shared/api';
+import { HealthStatusBar } from '../components/dashboard';
 import {
   EnvironmentSelectorPanel,
-  HealthStatusBar,
-  PageHeader,
-  SectionCard,
-  SectionHeader,
-  TerminalBenchCard,
   useEnvironmentSelection,
-} from '../components';
+} from '../components/environment';
+import { TerminalBenchCard } from '../components/terminal';
+import { PageHeader, SectionCard, SectionHeader } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 

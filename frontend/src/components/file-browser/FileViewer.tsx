@@ -1,38 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { FileReadResponse } from '@/shared/types';
 import { useT } from '@/shared/i18n';
-import { useEditorSettings } from '@features/settings';
-import { loader } from '@monaco-editor/react';
-import * as monaco from 'monaco-editor';
 
-// Use the locally-installed monaco-editor package instead of the jsDelivr CDN.
-// Without this, Monaco would never load when the frontend runs without internet.
-loader.config({ monaco });
-
-const MonacoEditor = lazy(() => import('@monaco-editor/react'));
-
-function useSystemColorScheme(): 'light' | 'dark' {
-  const [scheme, setScheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      return 'light';
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      return;
-    }
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (event: MediaQueryListEvent) => {
-      setScheme(event.matches ? 'dark' : 'light');
-    };
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  return scheme;
-}
+const MonacoTextViewer = lazy(() => import('./MonacoTextViewer'));
 
 function PdfViewer({ streamUrl, title }: { streamUrl: string; title: string }) {
   const t = useT();
@@ -115,8 +85,6 @@ interface Props {
 
 export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
   const t = useT();
-  const colorScheme = useSystemColorScheme();
-  const editorSettings = useEditorSettings();
 
   if (isLoading) {
     return (
@@ -172,20 +140,7 @@ export default function FileViewer({ file, isLoading, pdfStreamUrl }: Props) {
           </div>
         }
       >
-        <MonacoEditor
-          height="100%"
-          language={file.language || 'plaintext'}
-          value={file.content}
-          theme={colorScheme === 'dark' ? 'vs-dark' : 'vs'}
-          options={{
-            readOnly: true,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            fontSize: editorSettings.fontSize,
-            fontFamily: editorSettings.fontFamily,
-            wordWrap: 'on',
-          }}
-        />
+        <MonacoTextViewer content={file.content} language={file.language || 'plaintext'} />
       </Suspense>
     </div>
   );

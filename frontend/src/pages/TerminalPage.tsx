@@ -1,4 +1,5 @@
-import { TerminalBenchCard, useEnvironmentSelection } from '../components';
+import { useEnvironmentSelection } from '../components/environment';
+import { TerminalBenchCard } from '../components/terminal';
 import { PageShell } from '@design-system/layout';
 
 function TerminalPage() {

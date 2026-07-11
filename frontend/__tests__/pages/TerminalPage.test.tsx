@@ -30,8 +30,11 @@ const selectedEnvironment: EnvironmentRecord = {
   latest_detection: null,
 };
 
-vi.mock('../../src/components', () => ({
+vi.mock('../../src/components/terminal', () => ({
   TerminalBenchCard: () => <div data-testid="terminal-bench-card" />,
+}));
+
+vi.mock('../../src/components/environment', () => ({
   useEnvironmentSelection: () => ({
     selectedEnvironment,
     selectedEnvironmentId: selectedEnvironment.id,

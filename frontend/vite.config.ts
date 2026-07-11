@@ -21,6 +21,10 @@ const config = defineConfig({
   ],
   build: {
     outDir: FRONTEND_OUT_DIR,
+    manifest: true,
+    // Monaco remains a deliberately lazy, full-featured editor. The stricter
+    // manifest and asset budgets run after every production build.
+    chunkSizeWarningLimit: 3700,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -38,7 +42,7 @@ const config = defineConfig({
           ) {
             return 'app-vendor'
           }
-          return 'vendor'
+          return undefined
         },
       },
     },

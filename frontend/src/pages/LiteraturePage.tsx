@@ -4,7 +4,7 @@ import { getLiteratureSubscriptions, getWorkspaces, createTask, convertPaperToTa
 import { SplitPane, PageShell } from '@design-system/layout';
 import { useT } from '@/shared/i18n';
 import { useToast } from '../components/common/Toast';
-import { useEnvironmentSelection } from '../components';
+import { useEnvironmentSelection } from '../components/environment';
 import SubscriptionSidebar from '../components/literature/SubscriptionSidebar';
 import PaperFeed from '../components/literature/PaperFeed';
 import ConvertToTaskDialog from '../components/literature/ConvertToTaskDialog';

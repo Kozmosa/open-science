@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FolderOpen, RefreshCw } from 'lucide-react';
 import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '@/shared/api';
 import { FileTree, FileViewer } from '../components/file-browser';
-import { useEnvironmentSelection } from '../components';
+import { useEnvironmentSelection } from '../components/environment';
 import { PageShell, SplitPane } from '@design-system/layout';
 import { Select } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
