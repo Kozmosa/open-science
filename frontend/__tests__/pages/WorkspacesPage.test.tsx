@@ -70,11 +70,12 @@ beforeEach(() => {
 
 describe('WorkspacesPage', () => {
   it('renders the workspace list in the sidebar', async () => {
-    renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
+    const { container } = renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
     expect(await screen.findByRole('button', { name: 'Repository Default' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Paper Experiments' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New workspace' })).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass('p-3');
   });
 
   it('creates a workspace from the form', async () => {

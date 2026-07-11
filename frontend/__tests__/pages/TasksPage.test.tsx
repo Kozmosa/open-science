@@ -399,6 +399,13 @@ describe('task output helpers', () => {
 });
 
 describe('TasksPage', () => {
+  it('applies the standard page inset around the split layout', async () => {
+    const { container } = renderWithProviders(<TasksPage />);
+
+    expect(await screen.findByTestId('task-sidebar')).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass('p-3');
+  });
+
   it('creates a task with derived title semantics and keeps it selected after list refresh', async () => {
     const createdSummary: TaskSummary = {
       ...taskSummary,

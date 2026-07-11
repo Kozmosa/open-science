@@ -117,7 +117,7 @@ function WorkspacesPage() {
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   return (
-    <PageShell>
+    <PageShell className="p-3">
       <SplitPane
       sidebarWidth={sidebarWidth}
       onSidebarWidthChange={setSidebarWidth}

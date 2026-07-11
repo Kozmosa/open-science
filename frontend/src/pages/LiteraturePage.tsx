@@ -75,7 +75,7 @@ export default function LiteraturePage() {
   }, [pendingConversion, convertMutation]);
 
   return (
-    <PageShell>
+    <PageShell className="p-3">
       {subscriptionsQuery.isLoading && (
         <p className="text-sm text-[var(--text-secondary)]">{t('common.loading')}</p>
       )}

@@ -293,7 +293,7 @@ function TasksPage() {
 
   return (
     <>
-      <PageShell>
+      <PageShell className="p-3">
         <SplitPane
           sidebar={taskSidebarContent}
           sidebarWidth={effectiveTaskSidebarWidth}
