@@ -4,40 +4,32 @@ import LiteraturePage from '../../src/pages/LiteraturePage';
 import { renderWithProviders } from '@/shared/test/render';
 
 vi.mock('@/shared/api', () => ({
-  createTask: vi.fn(),
-  convertPaperToTask: vi.fn(),
-  getCodexDefaults: vi.fn(() =>
-    Promise.resolve({ codex_config_toml: null, codex_auth_json: null })
-  ),
-  getLiteratureSubscriptions: vi.fn(() => Promise.resolve({ items: [] })),
-  getWorkspaces: vi.fn(() => Promise.resolve({ items: [] })),
+  createLiteratureCheck: vi.fn(() => Promise.resolve({ check_id: 'check-1', status: 'planned' })),
+  createLiteratureTopic: vi.fn(),
+  deleteLiteratureTopic: vi.fn(),
+  getLiteratureOverview: vi.fn(() => Promise.resolve({
+    last_successful_check_at: null,
+    next_scheduled_check_at: null,
+    active_check: null,
+    counts: { today: 0, unread: 0, saved: 0, updated: 0 },
+  })),
+  getLiteraturePapers: vi.fn(() => Promise.resolve({ items: [], next_cursor: null, total: 0 })),
+  getLiteratureTopics: vi.fn(() => Promise.resolve({ items: [] })),
+  previewLiteratureTopic: vi.fn(),
+  updateLiteratureTopic: vi.fn(),
 }));
 
-vi.mock('../../src/components/environment', () => ({
-  useEnvironmentSelection: () => ({ environments: [] }),
-}));
-
-vi.mock('../../src/components/literature/SubscriptionSidebar', () => ({
-  default: () => <div>Subscription sidebar</div>,
-}));
-
-vi.mock('../../src/components/literature/PaperFeed', () => ({
-  default: () => <div>Paper feed</div>,
-}));
-
-vi.mock('../../src/components/literature/ConvertToTaskDialog', () => ({
-  default: () => null,
+vi.mock('../../src/components/literature/PaperCard', () => ({
+  default: () => <div>Paper card</div>,
 }));
 
 describe('LiteraturePage', () => {
-  it('applies the standard page inset around the split layout', async () => {
-    const { container } = renderWithProviders(<LiteraturePage />, {
-      route: '/literature',
-    });
+  it('renders the inbox with the standard page inset and a single source-check action', async () => {
+    const { container } = renderWithProviders(<LiteraturePage />, { route: '/literature' });
 
-    expect(await screen.findByText('Paper feed')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: "Today's literature inbox" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check latest literature' })).toBeInTheDocument();
     expect(container.firstElementChild).toHaveClass('p-3');
-    expect(container.firstElementChild?.querySelector('aside')).toHaveClass('bg-[var(--surface)]');
-    expect(container.firstElementChild?.querySelector('main')).toHaveClass('bg-[var(--surface)]');
+    expect(screen.queryByText('My Subscriptions')).not.toBeInTheDocument();
   });
 });

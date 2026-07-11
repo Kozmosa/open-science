@@ -23,8 +23,15 @@ import type { ChangePasswordRequest,
   FileListResponse,
   FileReadResponse,
   FileUploadResponse,
-  LiteratureSubscription,
-  LiteraturePaper,
+  LiteratureCheck,
+  LiteratureOverview,
+  LiteraturePaperDetail,
+  LiteraturePaperListParams,
+  LiteraturePaperListResponse,
+  LiteratureSummary,
+  LiteratureTopic,
+  LiteratureTopicInput,
+  LiteratureTopicPreview,
   ProjectCostSummary,
   ProjectCreateRequest,
   ProjectEnvironmentReference,
@@ -652,54 +659,94 @@ export const logoutApi = (refreshTokenValue: string): Promise<void> => api.post<
 export const getMe = (): Promise<UserInfo> => api.get<UserInfo>('/auth/me');
 export const changePassword = (payload: ChangePasswordRequest): Promise<void> => api.post<void>('/auth/change-password', payload);
 
-// ── Literature endpoints ──────────────────────────────────
+// ── Literature tracking endpoints ──────────────────────────
 
-export const getLiteratureSubscriptions = (): Promise<{ items: LiteratureSubscription[] }> =>
-  USE_MOCK
-    ? Promise.resolve({ items: [] })
-    : api.get('/literature/subscriptions');
+function literatureQuery(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
 
-export const createLiteratureSubscription = (payload: Partial<LiteratureSubscription>): Promise<LiteratureSubscription> =>
+export const getLiteratureOverview = (): Promise<LiteratureOverview> =>
   USE_MOCK
-    ? Promise.resolve({} as LiteratureSubscription)
-    : api.post('/literature/subscriptions', payload);
+    ? Promise.resolve({
+        last_successful_check_at: null,
+        next_scheduled_check_at: null,
+        active_check: null,
+        counts: { today: 0, unread: 0, saved: 0, updated: 0 },
+      })
+    : api.get('/literature/overview');
 
-export const updateLiteratureSubscription = (id: string, payload: Partial<LiteratureSubscription>): Promise<LiteratureSubscription> =>
-  USE_MOCK
-    ? Promise.resolve({} as LiteratureSubscription)
-    : api.put(`/literature/subscriptions/${id}`, payload);
+export const getLiteratureTopics = (): Promise<{ items: LiteratureTopic[] }> =>
+  USE_MOCK ? Promise.resolve({ items: [] }) : api.get('/literature/topics');
 
-export const deleteLiteratureSubscription = (id: string): Promise<void> =>
-  USE_MOCK
-    ? Promise.resolve()
-    : api.delete(`/literature/subscriptions/${id}`);
+export const createLiteratureTopic = (payload: LiteratureTopicInput): Promise<LiteratureTopic> =>
+  USE_MOCK ? Promise.resolve({} as LiteratureTopic) : api.post('/literature/topics', payload);
 
-export const getLiteraturePapers = (params: { subscription_id?: string; unread_only?: boolean; limit?: number; offset?: number }): Promise<{ items: LiteraturePaper[] }> =>
-  USE_MOCK
-    ? Promise.resolve({ items: [] })
-    : api.get(`/literature/papers?` + new URLSearchParams(
-        Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined)) as Record<string, string>
-      ).toString());
+export const updateLiteratureTopic = (
+  topicId: string,
+  payload: Partial<LiteratureTopicInput & Pick<LiteratureTopic, 'is_active'>>,
+): Promise<LiteratureTopic> =>
+  USE_MOCK ? Promise.resolve({} as LiteratureTopic) : api.patch(`/literature/topics/${topicId}`, payload);
 
-export const markPaperRead = (paperId: string, subscriptionId?: string): Promise<void> =>
-  USE_MOCK
-    ? Promise.resolve()
-    : api.post(`/literature/papers/${paperId}/read`, { subscription_id: subscriptionId });
+export const deleteLiteratureTopic = (topicId: string): Promise<void> =>
+  USE_MOCK ? Promise.resolve() : api.delete(`/literature/topics/${topicId}`);
 
-export const convertPaperToTask = (paperId: string, taskId: string, subscriptionId?: string): Promise<LiteraturePaper> =>
+export const previewLiteratureTopic = (payload: LiteratureTopicInput): Promise<LiteratureTopicPreview> =>
   USE_MOCK
-    ? Promise.resolve({} as LiteraturePaper)
-    : api.post(`/literature/papers/${paperId}/convert`, { task_id: taskId, subscription_id: subscriptionId });
+    ? Promise.resolve({
+        matched_count: 0,
+        samples: [],
+        local_coverage: { paper_count: 0, complete: false },
+        needs_check: false,
+      })
+    : api.post('/literature/topics/preview', payload);
 
-export const triggerLiteratureFetch = (subscriptionId: string): Promise<{ status: string }> =>
+export const getLiteraturePapers = (
+  params: LiteraturePaperListParams = {},
+): Promise<LiteraturePaperListResponse> =>
   USE_MOCK
-    ? Promise.resolve({ status: 'fetch_started' })
-    : api.post(`/literature/subscriptions/${subscriptionId}/fetch`, {});
+    ? Promise.resolve({ items: [], next_cursor: null, total: 0 })
+    : api.get(`/literature/papers${literatureQuery({
+        view: params.view,
+        topic_id: params.topic_id,
+        category: params.category,
+        cursor: params.cursor,
+        limit: params.limit,
+      })}`);
 
-export const getLiteratureFetchStatus = (subscriptionId: string): Promise<{ status: string; error: string | null }> =>
-  USE_MOCK
-    ? Promise.resolve({ status: 'completed', error: null })
-    : api.get(`/literature/subscriptions/${subscriptionId}/fetch-status`);
+export const getLiteraturePaper = (paperId: string): Promise<LiteraturePaperDetail> =>
+  api.get(`/literature/papers/${paperId}`);
+
+export const updateLiteraturePaperState = (
+  paperId: string,
+  payload: Partial<Pick<LiteraturePaperDetail['user_state'], 'is_read' | 'is_saved' | 'is_ignored'>>,
+): Promise<LiteraturePaperDetail> =>
+  api.patch(`/literature/papers/${paperId}/state`, payload);
+
+export const getLiteratureSummary = (paperId: string): Promise<LiteratureSummary> =>
+  api.get(`/literature/papers/${paperId}/summary`);
+
+export const requestLiteratureSummary = (
+  paperId: string,
+  language = 'zh',
+): Promise<LiteratureSummary> =>
+  api.post(`/literature/papers/${paperId}/summary`, { language });
+
+export const createLiteratureCheck = (topicIds?: string[]): Promise<LiteratureCheck> =>
+  api.post('/literature/checks', topicIds ? { topic_ids: topicIds } : {});
+
+export const getCurrentLiteratureCheck = (): Promise<LiteratureCheck | null> =>
+  api.get('/literature/checks/current');
+
+export const getLiteratureChecks = (limit = 30): Promise<{ items: LiteratureCheck[] }> =>
+  api.get(`/literature/checks${literatureQuery({ limit })}`);
+
+export const getLiteratureCheck = (checkId: string): Promise<LiteratureCheck> =>
+  api.get(`/literature/checks/${checkId}`);
 
 export const getSearchSettings = (): Promise<SearchSettingsResponse> =>
   api.get<SearchSettingsResponse>('/settings/search');

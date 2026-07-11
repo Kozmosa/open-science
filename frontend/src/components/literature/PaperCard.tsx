@@ -1,117 +1,165 @@
-import { useState } from 'react';
-import { useT } from '@/shared/i18n';
-import type { LiteraturePaper } from '@/shared/types';
-import { markPaperRead } from '@/shared/api';
-import { Button } from '@design-system/primitives';
+import { Bookmark, ExternalLink, FileText, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  getLiteratureSummary,
+  requestLiteratureSummary,
+  updateLiteraturePaperState,
+} from '@/shared/api';
+import { Badge, Button } from '@design-system/primitives';
+import { queryKeys } from '@/shared/api/queryKeys';
+import type { LiteraturePaperListItem, LiteratureSummaryStatus } from '@/shared/types';
+import { useLocale, useT } from '@/shared/i18n';
 
 interface Props {
-  paper: LiteraturePaper;
-  onConvertToTask: (paperId: string, subscriptionId: string, title: string, abstract: string) => void;
-  onReadChange: () => void;
+  paper: LiteraturePaperListItem;
 }
 
-export default function PaperCard({ paper, onConvertToTask, onReadChange }: Props) {
-  const t = useT();
-  const [summaryOpen, setSummaryOpen] = useState(false);
+const activeSummaryStatuses = new Set<LiteratureSummaryStatus>(['queued', 'generating']);
 
-  const handleMarkRead = async () => {
-    try {
-      await markPaperRead(paper.paper_id, paper.subscription_id);
-      onReadChange();
-    } catch {
-      // Silently handle error
-    }
+function formatDate(value: string | null, locale: 'en' | 'zh'): string {
+  if (!value) return '';
+  return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+export default function PaperCard({ paper }: Props) {
+  const t = useT();
+  const locale = useLocale();
+  const queryClient = useQueryClient();
+  const summaryQuery = useQuery({
+    queryKey: queryKeys.literature.summary(paper.paper_id),
+    queryFn: () => getLiteratureSummary(paper.paper_id),
+    refetchInterval: (query) =>
+      activeSummaryStatuses.has(query.state.data?.status ?? 'not_requested') ? 5000 : false,
+  });
+  const summary = summaryQuery.data;
+
+  const invalidatePaperData = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.literature.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.literature.overview });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.literature.paper(paper.paper_id) });
   };
 
+  const stateMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof updateLiteraturePaperState>[1]) =>
+      updateLiteraturePaperState(paper.paper_id, payload),
+    onSuccess: () => invalidatePaperData(),
+  });
+  const summaryMutation = useMutation({
+    mutationFn: () => requestLiteratureSummary(paper.paper_id, locale === 'zh' ? 'zh' : 'en'),
+    onSuccess: (nextSummary) => {
+      queryClient.setQueryData(queryKeys.literature.summary(paper.paper_id), nextSummary);
+    },
+  });
+
+  const isSummaryActive = activeSummaryStatuses.has(summary?.status ?? 'not_requested');
+  const summaryLabel = summary?.status === 'completed'
+    ? t('literature.summaryReady')
+    : summary?.status === 'failed'
+      ? t('literature.summaryFailed')
+      : isSummaryActive
+        ? t('literature.summaryInProgress')
+        : t('literature.generateSummary');
+
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:shadow-sm">
-      {/* Top row: category badge + published date */}
-      <div className="mb-2 flex items-center justify-between">
-        <span className="inline-block rounded-full bg-[var(--apple-blue)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--apple-blue)]">
-          {paper.arxiv_category}
-        </span>
-        <span className="text-[11px] text-[var(--text-tertiary)]">
-          {paper.published_at ? new Date(paper.published_at).toLocaleDateString() : ''}
-        </span>
-      </div>
-
-      {/* Title: dual-line (zh + en) */}
-      <h3 className="text-sm font-semibold leading-snug text-[var(--text)]">
-        {paper.title_zh ?? paper.title}
-      </h3>
-      {paper.title_zh && (
-        <h3 className="mt-0.5 text-sm font-medium leading-snug text-[var(--text-secondary)]">
-          {paper.title}
-        </h3>
-      )}
-
-      {/* Abstract snippet */}
-      <p className="mt-1 text-xs text-[var(--text-secondary)] line-clamp-3">
-        {paper.abstract}
-      </p>
-
-      {/* Authors and journal */}
-      <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">
-        {paper.authors.join(', ')}
-        {paper.journal && <span className="ml-1 italic">{paper.journal}</span>}
-      </p>
-
-      {/* AI Practice Note */}
-      {paper.ai_practice_note && (
-        <div className="mt-3 border-l-4 border-[var(--apple-blue)] bg-[var(--apple-blue)]/5 pl-3">
-          <p className="text-xs font-medium text-[var(--apple-blue)]">{t('literature.aiPracticeNote')}</p>
-          <p className="mt-0.5 text-xs italic text-[var(--text-secondary)]">{paper.ai_practice_note}</p>
+    <article className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <Badge>{paper.primary_category}</Badge>
+            {!paper.user_state.is_read && <Badge variant="secondary">{t('literature.newPaper')}</Badge>}
+            {paper.user_state.is_saved && <Badge variant="outline">{t('literature.saved')}</Badge>}
+          </div>
+          <h3 className="text-base font-semibold leading-snug text-[var(--text)]">{paper.title}</h3>
+          <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+            {paper.authors.join(', ')}
+            {paper.published_at && ` · ${t('literature.published')} ${formatDate(paper.published_at, locale)}`}
+            {paper.updated_at && paper.updated_at !== paper.published_at && ` · ${t('literature.updated')} ${formatDate(paper.updated_at, locale)}`}
+          </p>
         </div>
-      )}
-
-      {/* AI Summary (collapsible) */}
-      {paper.ai_summary && (
-        <div className="mt-3">
+        <div className="flex shrink-0 gap-1">
           <button
             type="button"
-            onClick={() => setSummaryOpen(!summaryOpen)}
-            className="flex items-center gap-1 text-xs font-medium text-[var(--apple-blue)] hover:underline"
+            aria-label={paper.user_state.is_read ? t('literature.markUnread') : t('literature.markRead')}
+            title={paper.user_state.is_read ? t('literature.markUnread') : t('literature.markRead')}
+            onClick={() => stateMutation.mutate({ is_read: !paper.user_state.is_read })}
+            className="rounded-lg p-2 text-[var(--text-tertiary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
           >
-            <span className={summaryOpen ? 'rotate-90' : ''}>&#9654;</span>
-            {t('literature.aiSummary')}
+            {paper.user_state.is_read ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
-          {summaryOpen && (
-            <ul className="mt-2 space-y-1 pl-3">
-              {paper.ai_summary.split('\n').filter(Boolean).map((line, i) => (
-                <li key={i} className="text-xs leading-relaxed text-[var(--text-secondary)]">
-                  {line.startsWith('- ') ? line : `- ${line}`}
-                </li>
-              ))}
-            </ul>
-          )}
+          <button
+            type="button"
+            aria-label={paper.user_state.is_saved ? t('literature.unsave') : t('literature.savePaper')}
+            title={paper.user_state.is_saved ? t('literature.unsave') : t('literature.savePaper')}
+            onClick={() => stateMutation.mutate({ is_saved: !paper.user_state.is_saved })}
+            className={`rounded-lg p-2 transition hover:bg-[var(--bg-secondary)] ${paper.user_state.is_saved ? 'text-[var(--apple-blue)]' : 'text-[var(--text-tertiary)] hover:text-[var(--text)]'}`}
+          >
+            <Bookmark size={16} fill={paper.user_state.is_saved ? 'currentColor' : 'none'} />
+          </button>
+        </div>
+      </div>
+
+      <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)] line-clamp-3">{paper.abstract}</p>
+
+      {paper.matched_topics.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {paper.matched_topics.map((topic) => (
+            <span key={topic.topic_id} title={topic.reasons.join('，')}>
+              <Badge variant="outline">{topic.label}</Badge>
+            </span>
+          ))}
         </div>
       )}
 
-      {/* Action bar */}
-      <div className="mt-3 flex items-center gap-2 border-t border-[var(--border)] pt-3">
-        {!paper.is_read && (
-          <Button variant="secondary" size="sm" onClick={handleMarkRead}>
-            {t('literature.markRead')}
-          </Button>
-        )}
+      {summary?.status === 'completed' && summary.text && (
+        <div className="mt-3 rounded-lg bg-[var(--bg-secondary)] p-3">
+          <p className="text-xs font-medium text-[var(--text)]">{t('literature.summary')}</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)] line-clamp-4">{summary.text}</p>
+        </div>
+      )}
+      {summary?.status === 'failed' && summary.error && (
+        <p className="mt-3 text-xs text-[var(--danger)]">{summary.error}</p>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          isLoading={summaryMutation.isPending || isSummaryActive}
+          disabled={summary?.status === 'completed'}
+          onClick={() => summaryMutation.mutate()}
+        >
+          <Sparkles className="mr-1 h-3.5 w-3.5" />
+          {summaryLabel}
+        </Button>
         <a
-          href={`https://arxiv.org/abs/${paper.paper_id}`}
+          href={paper.source_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
         >
-          {t('literature.viewarXiv')}
+          <ExternalLink size={14} /> {t('literature.viewSource')}
+        </a>
+        <a
+          href={paper.pdf_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
+        >
+          <FileText size={14} /> PDF
         </a>
         <Button
-          variant="primary"
+          variant="ghost"
           size="sm"
-          onClick={() => onConvertToTask(paper.paper_id, paper.subscription_id, paper.title, paper.abstract)}
-          disabled={paper.is_converted_to_task}
           className="ml-auto"
+          onClick={() => stateMutation.mutate({ is_ignored: true })}
         >
-          {t('literature.convertToTask')}
+          {t('literature.ignore')}
         </Button>
       </div>
-    </div>
+    </article>
   );
 }

@@ -22,6 +22,8 @@ from ainrf.server import run_server, run_server_daemon, stop_server_daemon
 from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
+from ainrf.literature.planner import dispatch_outbox
+from ainrf.literature.tracking import LiteratureTrackingService
 
 
 app = typer.Typer(
@@ -99,6 +101,28 @@ def serve(
         typer.echo(f"OpenScience API daemon started (pid={daemon_pid}, port={port})")
         return
     run_server(host, port, state_root, workers=workers)
+
+
+@app.command("literature-planner")
+def literature_planner(
+    state_root: Annotated[
+        Path,
+        typer.Option(help="State root shared by the API, literature planner, and worker."),
+    ] = default_state_root(),
+    once: Annotated[
+        bool,
+        typer.Option(help="Publish pending durable literature work once and exit."),
+    ] = False,
+) -> None:
+    """Run the durable literature planner/outbox dispatcher."""
+    service = LiteratureTrackingService(state_root)
+    service.initialize()
+    if once:
+        typer.echo(f"Published {dispatch_outbox(service)} literature work item(s).")
+        return
+    from ainrf.literature.planner import run_forever
+
+    run_forever(service)
 
 
 @app.command()

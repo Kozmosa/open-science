@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import cast
 
@@ -11,8 +10,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
-from ainrf.literature.scheduler import LiteratureScheduler
+from ainrf.literature.tracking import DiscoveredPaper
 from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
@@ -26,7 +24,7 @@ def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
         )
     )
     app.state.literature_service.initialize()
-    app.state.literature_scheduler = LiteratureScheduler(app.state.literature_service)
+    app.state.literature_tracking_service.initialize()
     headers = get_jwt_headers(app, username="admin", password="test-admin-password")
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -35,31 +33,10 @@ def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
     )
 
 
-async def fake_fetch_for_subscription(
-    sub: LiteratureSubscription, reporter=None
-) -> list[LiteraturePaper]:
-    await asyncio.sleep(0.02)
-    return [
-        LiteraturePaper(
-            paper_id="2401.00001",
-            title="Async Literature Fetch",
-            authors=["Ada Lovelace"],
-            abstract="A test paper.",
-            published_at="2026-01-01T00:00:00+00:00",
-            arxiv_category="cs.AI",
-        )
-    ]
-
-
 @pytest.mark.anyio
-async def test_literature_fetch_status_reports_background_completion(
+async def test_legacy_fetch_routes_create_a_durable_check(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "ainrf.literature.fetcher.fetch_for_subscription",
-        fake_fetch_for_subscription,
-    )
     async with make_auth_client(tmp_path) as client:
         create_response = await client.post(
             "/literature/subscriptions",
@@ -70,29 +47,64 @@ async def test_literature_fetch_status_reports_background_completion(
         trigger_response = await client.post(f"/literature/subscriptions/{subscription_id}/fetch")
         assert trigger_response.status_code == 202
         assert trigger_response.json()["status"] == "fetch_started"
+        assert trigger_response.json()["check_id"]
 
-        running_response = await client.get(
+        status_response = await client.get(
             f"/literature/subscriptions/{subscription_id}/fetch-status"
         )
-        assert running_response.status_code == 200
-        assert running_response.json()["status"] in {"running", "completed"}
+        assert status_response.status_code == 200
+        assert status_response.json()["status"] == "running"
 
-        for _ in range(10):
-            status_response = await client.get(
-                f"/literature/subscriptions/{subscription_id}/fetch-status"
-            )
-            if status_response.json()["status"] == "completed":
-                break
-            await asyncio.sleep(0.01)
 
-        assert status_response.json() == {"status": "completed", "error": None}
-        papers_response = await client.get(
-            f"/literature/papers?subscription_id={subscription_id}&limit=50"
+@pytest.mark.anyio
+async def test_tracking_api_uses_topics_user_states_and_durable_checks(tmp_path: Path) -> None:
+    async with make_auth_client(tmp_path) as client:
+        created = await client.post(
+            "/literature/topics",
+            json={
+                "label": "Agents",
+                "include_terms": ["agent"],
+                "exclude_terms": [],
+                "categories": ["cs.AI"],
+            },
         )
-        assert papers_response.status_code == 200
-        assert [paper["paper_id"] for paper in papers_response.json()["items"]] == ["2401.00001"]
+        assert created.status_code == 201
+        topic_id = created.json()["topic_id"]
 
-        # Ensure the background task finishes before the client (and loop) closes.
         app = cast(FastAPI, cast(httpx.ASGITransport, client._transport).app)
-        task, _ = app.state._literature_tasks[subscription_id]
-        await task
+        app.state.literature_tracking_service.store_discovered_papers(
+            "seed",
+            [
+                DiscoveredPaper(
+                    provider="arxiv",
+                    external_id="2401.99999",
+                    provider_version="v1",
+                    title="Agent work",
+                    authors=["Ada"],
+                    abstract="An agent paper",
+                    primary_category="cs.AI",
+                    categories=["cs.AI"],
+                    published_at=None,
+                    updated_at=None,
+                    source_url="https://arxiv.org/abs/2401.99999",
+                    pdf_url="https://arxiv.org/pdf/2401.99999",
+                )
+            ],
+        )
+
+        papers = await client.get("/literature/papers?view=all")
+        assert papers.status_code == 200
+        item = papers.json()["items"][0]
+        assert item["paper_id"] == "arxiv:2401.99999"
+        assert item["matched_topics"][0]["topic_id"] == topic_id
+
+        updated = await client.patch(
+            f"/literature/papers/{item['paper_id']}/state", json={"is_saved": True}
+        )
+        assert updated.status_code == 200
+        assert updated.json()["user_state"]["is_saved"] is True
+
+        first_check = await client.post("/literature/checks", json={"topic_ids": [topic_id]})
+        second_check = await client.post("/literature/checks", json={"topic_ids": [topic_id]})
+        assert first_check.status_code == 202
+        assert second_check.json()["check_id"] == first_check.json()["check_id"]

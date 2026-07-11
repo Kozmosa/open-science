@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-import logging
-
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ainrf.auth.permissions import get_current_user
 from ainrf.literature.models import LiteratureSubscription
-from ainrf.literature.scheduler import LiteratureScheduler
 from ainrf.literature.service import LiteratureService
+from ainrf.literature.tracking import LiteratureTrackingService
 
 router = APIRouter(prefix="/literature", tags=["literature"])
-
-logger = logging.getLogger(__name__)
 
 
 def _get_service(request: Request) -> LiteratureService:
@@ -24,15 +19,117 @@ def _get_service(request: Request) -> LiteratureService:
     return service
 
 
-def _get_scheduler(request: Request) -> LiteratureScheduler:
-    scheduler = getattr(request.app.state, "literature_scheduler", None)
-    if scheduler is None:
-        raise HTTPException(status_code=500, detail="Literature scheduler not initialized")
-    return scheduler
+def _get_tracking_service(request: Request) -> LiteratureTrackingService:
+    service = getattr(request.app.state, "literature_tracking_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="Literature tracking service not initialized")
+    service.initialize()
+    return service
 
 
 def _get_user_id(request: Request) -> str:
     return get_current_user(request)["id"]
+
+
+def _tracking_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, KeyError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=400, detail=str(exc))
+    raise exc
+
+
+@router.get("/overview")
+async def literature_overview(request: Request):
+    return _get_tracking_service(request).overview(_get_user_id(request))
+
+
+@router.get("/topics")
+async def list_topics(request: Request):
+    return {"items": _get_tracking_service(request).list_topics(_get_user_id(request))}
+
+
+@router.post("/topics", status_code=201)
+async def create_topic(request: Request):
+    body = await request.json()
+    try:
+        return _get_tracking_service(request).create_topic(
+            user_id=_get_user_id(request),
+            label=str(body.get("label", "")),
+            include_terms=body.get("include_terms", []),
+            exclude_terms=body.get("exclude_terms", []),
+            categories=body.get("categories", []),
+        )
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.get("/topics/{topic_id}")
+async def get_topic(topic_id: str, request: Request):
+    try:
+        return _get_tracking_service(request).get_topic(_get_user_id(request), topic_id)
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.patch("/topics/{topic_id}")
+async def patch_topic(topic_id: str, request: Request):
+    try:
+        return _get_tracking_service(request).update_topic(
+            _get_user_id(request), topic_id, await request.json()
+        )
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.delete("/topics/{topic_id}", status_code=204)
+async def remove_topic(topic_id: str, request: Request):
+    try:
+        _get_tracking_service(request).delete_topic(_get_user_id(request), topic_id)
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.post("/topics/preview")
+async def preview_topic(request: Request):
+    try:
+        return _get_tracking_service(request).preview_topic(
+            _get_user_id(request), await request.json()
+        )
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.post("/checks", status_code=202)
+async def create_literature_check(request: Request):
+    body = await request.json()
+    topic_ids = body.get("topic_ids")
+    if topic_ids is not None and not isinstance(topic_ids, list):
+        raise HTTPException(status_code=400, detail="topic_ids must be a list")
+    try:
+        return _get_tracking_service(request).create_check(
+            user_id=_get_user_id(request), topic_ids=topic_ids, trigger="manual"
+        )
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.get("/checks/current")
+async def current_literature_check(request: Request):
+    return _get_tracking_service(request).overview(_get_user_id(request))["active_check"]
+
+
+@router.get("/checks")
+async def list_literature_checks(request: Request, limit: int = Query(default=30, le=100)):
+    return {"items": _get_tracking_service(request).list_checks(_get_user_id(request), limit)}
+
+
+@router.get("/checks/{check_id}")
+async def get_literature_check(check_id: str, request: Request):
+    try:
+        return _get_tracking_service(request).get_check(_get_user_id(request), check_id)
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
 
 
 def _validate_max_results(value) -> int:
@@ -43,12 +140,6 @@ def _validate_max_results(value) -> int:
     if not 1 <= max_results <= 100:
         raise HTTPException(status_code=400, detail="max_results must be between 1 and 100")
     return max_results
-
-
-def _get_fetch_tasks(request: Request) -> dict[str, tuple[asyncio.Task, dict[str, str | None]]]:
-    if not hasattr(request.app.state, "_literature_tasks"):
-        request.app.state._literature_tasks = {}
-    return request.app.state._literature_tasks
 
 
 def _get_user_subscription(
@@ -82,10 +173,14 @@ async def create_subscription(request: Request):
         frequency=body.get("frequency", "daily"),
         max_results=_validate_max_results(body.get("max_results", 50)),
     )
-    try:
-        _get_scheduler(request).schedule_subscription(sub)
-    except Exception:
-        logger.exception("failed to schedule subscription=%s", sub.subscription_id)
+    _get_tracking_service(request).sync_legacy_topic(
+        topic_id=sub.subscription_id,
+        user_id=user_id,
+        label=sub.label,
+        include_terms=sub.keywords,
+        categories=sub.arxiv_categories,
+        is_active=sub.is_active,
+    )
     return sub.to_dict()
 
 
@@ -108,10 +203,14 @@ async def update_subscription(subscription_id: str, request: Request):
         max_results=max_results,
         is_active=body.get("is_active"),
     )
-    try:
-        _get_scheduler(request).reschedule_subscription(updated)
-    except Exception:
-        logger.exception("failed to reschedule subscription=%s", subscription_id)
+    _get_tracking_service(request).sync_legacy_topic(
+        topic_id=updated.subscription_id,
+        user_id=user_id,
+        label=updated.label,
+        include_terms=updated.keywords,
+        categories=updated.arxiv_categories,
+        is_active=updated.is_active,
+    )
     return updated.to_dict()
 
 
@@ -123,9 +222,9 @@ async def delete_subscription(subscription_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Subscription not found")
     _get_service(request).delete_subscription(subscription_id)
     try:
-        _get_scheduler(request).remove_subscription(subscription_id)
-    except Exception:
-        logger.exception("failed to remove subscription schedule=%s", subscription_id)
+        _get_tracking_service(request).delete_topic(user_id, subscription_id)
+    except KeyError:
+        pass
 
 
 @router.get("/papers")
@@ -133,12 +232,65 @@ async def list_papers(
     request: Request,
     subscription_id: str | None = None,
     unread_only: bool = False,
+    view: str | None = None,
+    topic_id: str | None = None,
+    category: str | None = None,
+    cursor: str | None = None,
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0),
 ):
     user_id = _get_user_id(request)
+    if view is not None:
+        try:
+            return _get_tracking_service(request).list_papers(
+                user_id,
+                view=view,
+                topic_id=topic_id,
+                category=category,
+                cursor=cursor,
+                limit=limit,
+            )
+        except (KeyError, ValueError) as exc:
+            raise _tracking_error(exc) from exc
     papers = _get_service(request).list_papers(user_id, subscription_id, unread_only, limit, offset)
     return {"items": [p.to_dict() for p in papers]}
+
+
+@router.get("/papers/{paper_id}")
+async def get_literature_paper(paper_id: str, request: Request):
+    try:
+        return _get_tracking_service(request).get_paper(_get_user_id(request), paper_id)
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.patch("/papers/{paper_id}/state")
+async def patch_literature_paper_state(paper_id: str, request: Request):
+    try:
+        return _get_tracking_service(request).update_paper_state(
+            _get_user_id(request), paper_id, await request.json()
+        )
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.get("/papers/{paper_id}/summary")
+async def get_literature_summary(paper_id: str, request: Request):
+    try:
+        return _get_tracking_service(request).get_summary(_get_user_id(request), paper_id)
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+
+
+@router.post("/papers/{paper_id}/summary", status_code=202)
+async def request_literature_summary(paper_id: str, request: Request):
+    body = await request.json()
+    try:
+        return _get_tracking_service(request).request_summary(
+            _get_user_id(request), paper_id, str(body.get("language", "zh"))
+        )
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
 
 
 @router.post("/papers/{paper_id}/read", status_code=204)
@@ -176,46 +328,31 @@ async def convert_to_task(paper_id: str, request: Request):
 async def get_fetch_status(subscription_id: str, request: Request):
     """Return manual fetch status for a subscription."""
     _service, _sub = _get_user_subscription(request, subscription_id)
-    task_entry = _get_fetch_tasks(request).get(subscription_id)
-    if task_entry is None:
+    checks = _get_tracking_service(request).list_checks(_get_user_id(request), limit=1)
+    if not checks:
         return {"status": "idle", "error": None}
-    _task, task_status = task_entry
-    return {"status": task_status["status"], "error": task_status["error"]}
+    check = checks[0]
+    legacy_status = {
+        "planned": "running",
+        "checking": "running",
+        "completed": "completed",
+        "failed": "failed",
+    }
+    return {"status": legacy_status.get(check["status"], check["status"]), "error": check["error"]}
 
 
 @router.post("/subscriptions/{subscription_id}/fetch", status_code=202)
 async def trigger_fetch(subscription_id: str, request: Request):
     """Manually trigger paper fetching for a subscription."""
-    svc, sub = _get_user_subscription(request, subscription_id)
-    scheduler = _get_scheduler(request)
-
-    existing = _get_fetch_tasks(request).get(subscription_id)
-    if existing is not None and existing[1]["status"] == "running":
-        return {"status": "fetch_running", "subscription_id": subscription_id}
-
-    task_status = {"status": "running", "error": None}
-
-    async def _fetch_and_store():
-        try:
-            result = await scheduler.fetch_subscription(sub.subscription_id)
-            task_status["status"] = "completed"
-            logger.info(
-                "manual fetch complete: subscription=%s papers=%d new=%d",
-                subscription_id,
-                result.get("paper_count", 0),
-                result.get("new_count", 0),
-            )
-        except RuntimeError as exc:
-            # Lock already held by another fetch.
-            task_status["status"] = "fetch_running"
-            task_status["error"] = str(exc)
-            logger.warning("manual fetch already running: subscription=%s", subscription_id)
-        except Exception as exc:
-            task_status["status"] = "failed"
-            task_status["error"] = str(exc)
-            logger.error("manual fetch failed: subscription=%s error=%s", subscription_id, exc)
-
-    task = asyncio.create_task(_fetch_and_store())
-    _get_fetch_tasks(request)[subscription_id] = (task, task_status)
-
-    return {"status": "fetch_started", "subscription_id": subscription_id}
+    _service, _sub = _get_user_subscription(request, subscription_id)
+    try:
+        check = _get_tracking_service(request).create_check(
+            user_id=_get_user_id(request), topic_ids=[subscription_id], trigger="manual"
+        )
+    except (KeyError, ValueError) as exc:
+        raise _tracking_error(exc) from exc
+    return {
+        "status": "fetch_started",
+        "subscription_id": subscription_id,
+        "check_id": check["check_id"],
+    }
