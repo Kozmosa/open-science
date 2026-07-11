@@ -23,6 +23,7 @@ from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
 from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
+from ainrf.domain_migration import capture_source_manifest
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -41,6 +42,9 @@ app.add_typer(backup_app, name="backup")
 
 domain_maintenance_app = typer.Typer(help="Manage the persistent domain migration write barrier.")
 app.add_typer(domain_maintenance_app, name="domain-maintenance")
+
+domain_migration_app = typer.Typer(help="Inspect legacy sources before domain-model migration.")
+app.add_typer(domain_migration_app, name="domain-migration")
 
 _TOKEN_FILE = Path.home() / ".ainrf" / "token"
 
@@ -414,6 +418,16 @@ def domain_maintenance_exit(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     typer.echo(f"maintenance exited at epoch {status.maintenance_epoch}")
+
+
+@domain_migration_app.command("dry-run")
+def domain_migration_dry_run(
+    state_root: Annotated[
+        Path, typer.Option(help="Legacy state root to inspect.")
+    ] = default_state_root(),
+) -> None:
+    """Print an immutable source manifest without modifying legacy state."""
+    typer.echo(json_mod.dumps(capture_source_manifest(state_root).as_dict(), indent=2))
 
 
 def main() -> None:
