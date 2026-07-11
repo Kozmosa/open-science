@@ -309,6 +309,7 @@ function TasksPage() {
           onRightSidebarWidthChange={setMetadataSidebarWidth}
           sidebarTestId="task-sidebar"
           rightSidebarTestId="task-metadata-sidebar"
+          uniformSurface
         >
           <TaskDetailPage
             key={effectiveSelectedTaskId ?? 'none'}

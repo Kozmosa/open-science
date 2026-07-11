@@ -92,6 +92,7 @@ export default function LiteraturePage() {
           onSidebarWidthChange={setSidebarWidth}
           sidebarMinWidth={220}
           sidebarMaxWidth={400}
+          uniformSurface
         >
           <PaperFeed
             subscriptions={subscriptions}

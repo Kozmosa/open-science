@@ -122,6 +122,7 @@ function WorkspacesPage() {
       sidebarWidth={sidebarWidth}
       onSidebarWidthChange={setSidebarWidth}
       sidebarMinWidth={220}
+      uniformSurface
       sidebar={
         <div className="flex h-full flex-col">
           <div className="mb-3 flex items-center justify-between border-b border-[var(--sidebar-border)] pb-3">

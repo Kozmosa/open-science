@@ -37,5 +37,7 @@ describe('LiteraturePage', () => {
 
     expect(await screen.findByText('Paper feed')).toBeInTheDocument();
     expect(container.firstElementChild).toHaveClass('p-3');
+    expect(container.firstElementChild?.querySelector('aside')).toHaveClass('bg-[var(--surface)]');
+    expect(container.firstElementChild?.querySelector('main')).toHaveClass('bg-[var(--surface)]');
   });
 });

@@ -402,7 +402,10 @@ describe('TasksPage', () => {
   it('applies the standard page inset around the split layout', async () => {
     const { container } = renderWithProviders(<TasksPage />);
 
-    expect(await screen.findByTestId('task-sidebar')).toBeInTheDocument();
+    const sidebar = await screen.findByTestId('task-sidebar');
+    expect(sidebar).toHaveClass('bg-[var(--surface)]');
+    expect(sidebar.parentElement?.querySelector('main')).toHaveClass('bg-[var(--surface)]');
+    expect(await screen.findByTestId('task-metadata-sidebar')).toHaveClass('bg-[var(--surface)]');
     expect(container.firstElementChild).toHaveClass('p-3');
   });
 

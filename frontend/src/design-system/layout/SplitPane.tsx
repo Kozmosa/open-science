@@ -16,6 +16,7 @@ interface SplitPaneProps {
   className?: string;
   sidebarTestId?: string;
   rightSidebarTestId?: string;
+  uniformSurface?: boolean;
 }
 
 function clampWidth(width: number, min: number, max: number): number {
@@ -108,17 +109,24 @@ export default function SplitPane({
   className,
   sidebarTestId,
   rightSidebarTestId,
+  uniformSurface = false,
 }: SplitPaneProps) {
   const t = useT();
 
   const leftCollapsed = sidebarWidth <= 0;
   const rightCollapsed = (rightSidebarWidth ?? 0) <= 0;
+  const sidebarBackgroundClass = uniformSurface
+    ? 'bg-[var(--surface)]'
+    : 'bg-[var(--sidebar)]';
+  const mainBackgroundClass = uniformSurface
+    ? 'bg-[var(--surface)]'
+    : 'bg-[var(--bg)]';
 
   return (
     <div className={`flex min-h-0 w-full flex-1 ${className ?? ''}`}>
       {!leftCollapsed && (
         <aside
-          className="flex shrink-0 flex-col overflow-hidden bg-[var(--sidebar)] relative z-0"
+          className={`relative z-0 flex shrink-0 flex-col overflow-hidden ${sidebarBackgroundClass}`}
           style={{ width: sidebarWidth }}
           data-testid={sidebarTestId}
         >
@@ -138,7 +146,7 @@ export default function SplitPane({
         />
       )}
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[var(--bg)] p-3 relative z-10">
+      <main className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto p-3 ${mainBackgroundClass}`}>
         <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
           {children}
         </div>
@@ -157,7 +165,7 @@ export default function SplitPane({
 
       {rightSidebar && !rightCollapsed && (
         <aside
-          className="flex shrink-0 flex-col overflow-hidden bg-[var(--sidebar)] p-3 relative z-0"
+          className={`relative z-0 flex shrink-0 flex-col overflow-hidden p-3 ${sidebarBackgroundClass}`}
           style={{ width: rightSidebarWidth }}
           data-testid={rightSidebarTestId}
         >
