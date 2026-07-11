@@ -1,5 +1,8 @@
 # Project / Workspace / Task 三层权限与可见性管理规范
 
+> [!warning] Historical design
+> 本文基于旧 Workspace 单 owner/单 Project 结构和早期 Project collaborator 规则，当前权限能力表、Workspace 暂不共享及 Project–Workspace 关联权限以 [`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 为准。本文仅保留旧实现审计背景。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` to implement this plan task-by-task.
 
 **Goal:** 系统化梳理并补齐整个系统中 Project、Workspace、Task 三层抽象的所有权绑定、访问控制和可见性过滤，消除当前实现中的不一致和漏洞。
