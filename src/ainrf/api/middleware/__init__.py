@@ -13,6 +13,9 @@ from starlette.responses import JSONResponse, Response
 from ainrf.api.config import ApiConfig
 from ainrf.auth.presence import record_activity
 from ainrf.auth.service import AuthService
+from ainrf.api.middleware.domain_maintenance import (
+    build_domain_maintenance_middleware as build_domain_maintenance_middleware,
+)
 
 _EXEMPT_PATH_PREFIXES = (
     "/health",

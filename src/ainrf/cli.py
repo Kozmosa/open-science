@@ -22,6 +22,7 @@ from ainrf.server import run_server, run_server_daemon, stop_server_daemon
 from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -37,6 +38,9 @@ app.add_typer(container_app, name="container")
 
 backup_app = typer.Typer(help="Backup and restore OpenScience data.")
 app.add_typer(backup_app, name="backup")
+
+domain_maintenance_app = typer.Typer(help="Manage the persistent domain migration write barrier.")
+app.add_typer(domain_maintenance_app, name="domain-maintenance")
 
 _TOKEN_FILE = Path.home() / ".ainrf" / "token"
 
@@ -354,6 +358,62 @@ def backup_verify(
         typer.echo("  Includes: workspaces")
     if manifest.includes_tenants:
         typer.echo("  Includes: tenants")
+
+
+def _maintenance_service(state_root: Path) -> DomainMaintenanceService:
+    service = DomainMaintenanceService(state_root)
+    service.initialize()
+    return service
+
+
+@domain_maintenance_app.command("status")
+def domain_maintenance_status(
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the control database.")
+    ] = default_state_root(),
+) -> None:
+    status = _maintenance_service(state_root).status()
+    typer.echo(
+        f"epoch={status.maintenance_epoch} active={status.is_active} "
+        f"in_flight={status.in_flight_mutations}"
+    )
+
+
+@domain_maintenance_app.command("enter")
+def domain_maintenance_enter(
+    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in the maintenance state.")],
+    reason: Annotated[str, typer.Option(help="Reason recorded in the maintenance audit state.")],
+    timeout_seconds: Annotated[
+        float, typer.Option(min=0.0, help="Seconds to wait for in-flight writes.")
+    ] = 30.0,
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the control database.")
+    ] = default_state_root(),
+) -> None:
+    service = _maintenance_service(state_root)
+    try:
+        status = service.enter(actor_id=actor_id, reason=reason)
+        if not service.wait_for_drain(timeout_seconds=timeout_seconds):
+            raise typer.Exit(code=2)
+    except MaintenanceModeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(f"maintenance entered at epoch {status.maintenance_epoch}")
+
+
+@domain_maintenance_app.command("exit")
+def domain_maintenance_exit(
+    actor_id: Annotated[str, typer.Option(help="Operator ID recorded when maintenance ends.")],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the control database.")
+    ] = default_state_root(),
+) -> None:
+    try:
+        status = _maintenance_service(state_root).exit(actor_id=actor_id)
+    except MaintenanceModeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(f"maintenance exited at epoch {status.maintenance_epoch}")
 
 
 def main() -> None:

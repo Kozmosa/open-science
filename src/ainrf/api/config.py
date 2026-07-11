@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ainrf.execution import ContainerConfig
+from ainrf.domain_control import DomainModelMode
 from ainrf.runtime import parse_container_config_from_runtime_config
 from ainrf.runtime.paths import RuntimePathConfig, build_runtime_path_config
 from ainrf.state import default_state_root
@@ -67,6 +68,7 @@ class ApiConfig:
     observability_secret_key: str = ""
     observability_public_key: str = ""
     auth_cookie_namespace: str = ""
+    domain_model_mode: DomainModelMode = DomainModelMode.LEGACY
 
     @property
     def access_cookie_names(self) -> tuple[str, str]:
@@ -164,6 +166,14 @@ class ApiConfig:
         auth_cookie_namespace = _env_value(
             "OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "AINRF_AUTH_COOKIE_NAMESPACE"
         ).strip()
+        raw_domain_model_mode = _env_value(
+            "OPENSCIENCE_DOMAIN_MODEL_MODE", "AINRF_DOMAIN_MODEL_MODE", "legacy"
+        ).lower()
+        try:
+            domain_model_mode = DomainModelMode(raw_domain_model_mode)
+        except ValueError as exc:
+            allowed = ", ".join(mode.value for mode in DomainModelMode)
+            raise ValueError(f"OPENSCIENCE_DOMAIN_MODEL_MODE must be one of: {allowed}") from exc
         if (
             auth_cookie_namespace
             and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", auth_cookie_namespace) is None
@@ -192,6 +202,7 @@ class ApiConfig:
             observability_secret_key=observability_secret_key,
             observability_public_key=observability_public_key,
             auth_cookie_namespace=auth_cookie_namespace,
+            domain_model_mode=domain_model_mode,
         )
 
     @staticmethod

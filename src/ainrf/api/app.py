@@ -14,6 +14,7 @@ from starlette.responses import Response
 from ainrf.api.config import ApiConfig
 from ainrf.api.middleware import (
     build_concurrency_limit_middleware,
+    build_domain_maintenance_middleware,
     build_ip_allowlist_middleware,
     build_jwt_auth_middleware,
     build_request_size_middleware,
@@ -53,6 +54,7 @@ from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
 from ainrf.workspaces import WorkspaceRegistryService
+from ainrf.domain_control import DomainMaintenanceService
 
 
 T = TypeVar("T")
@@ -205,6 +207,8 @@ def create_app(
         openapi_url=openapi_url,
     )
     app.state.api_config = api_config
+    app.state.domain_maintenance_service = DomainMaintenanceService(api_config.state_root)
+    app.state.domain_maintenance_service.initialize()
     # Service initialization order:
     # 1. project/workspace (no deps)
     # 2. terminal (no deps)
@@ -296,6 +300,9 @@ def create_app(
             build_concurrency_limit_middleware(api_config.max_concurrent_requests)
         )
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
+    app.middleware("http")(
+        build_domain_maintenance_middleware(app.state.domain_maintenance_service)
+    )
     from ainrf.api.middleware.rate_limit import build_rate_limit_middleware
 
     app.middleware("http")(build_rate_limit_middleware())

@@ -131,3 +131,43 @@ def migration_006_task_profile_overrides(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}")
         except sqlite3.OperationalError:
             pass  # column already exists
+
+
+@registry.register(_DATABASE)
+def migration_007_domain_maintenance_barrier(conn: sqlite3.Connection) -> None:
+    """Persist the migration write barrier before v2 domain tables exist."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS domain_maintenance_state (
+            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+            maintenance_epoch INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 0 CHECK (is_active IN (0, 1)),
+            actor_id TEXT,
+            reason TEXT,
+            entered_at TEXT,
+            exited_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO domain_maintenance_state (singleton)
+        VALUES (1)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS domain_maintenance_mutations (
+            mutation_id TEXT PRIMARY KEY,
+            maintenance_epoch INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            source TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_domain_maintenance_mutations_epoch
+        ON domain_maintenance_mutations(maintenance_epoch)
+        """
+    )
