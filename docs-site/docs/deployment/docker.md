@@ -1,0 +1,144 @@
+---
+title: Docker Compose 部署
+description: 标准版（Nginx+TLS）、GPU 实验室版、CPU-only 版三种 Docker Compose 部署方案。
+---
+
+适用于没有 systemd 的容器环境。提供三种 Compose 文件覆盖不同场景。
+
+## 方式 A：标准版（Nginx + TLS）
+
+使用 `docker-compose.yml`，包含 Nginx 反向代理和 TLS。
+
+### 1. 准备配置
+
+```bash
+cp deploy/.env.example deploy/.env
+vim deploy/.env  # 填入 JWT_SECRET 和 API_KEY_HASHES
+```
+
+### 2. 生成 TLS 证书
+
+```bash
+# 实验室自签名（测试用）
+bash deploy/tls/generate-self-signed.sh
+
+# 生产环境使用真实证书
+cp /path/to/cert.pem deploy/tls/cert.pem
+cp /path/to/key.pem  deploy/tls/key.pem
+```
+
+### 3. 构建并启动
+
+```bash
+cd deploy
+docker compose up -d --build
+```
+
+多阶段构建自动完成：前端 Node 构建 → Python 包安装 → Claude Code + Codex CLI → 精简运行时镜像。可通过 `--build-arg CLAUDE_CODE_VERSION=2.1.167` 锁定版本。
+
+### 4. 常用操作
+
+```bash
+docker compose logs -f ainrf       # 查看日志
+docker compose restart ainrf       # 重启后端
+docker compose down                # 停止服务
+docker compose up -d --build       # 更新代码后重建
+```
+
+:::note
+OpenScience 容器仅 expose 8000 端口给 Nginx 容器，不直接对外。Nginx 容器处理 TLS、IP allowlist、静态文件和 WebSocket 反向代理。
+:::
+
+---
+
+## 方式 B：GPU 实验室版
+
+适用于：没有 root 权限但能创建 Docker 容器、需要 GPU 透传的实验室机器。使用 `docker-compose.gpu.yml`，无需 Nginx/TLS，直接暴露 HTTP。
+
+### 1. 生成密钥
+
+```bash
+# JWT 密钥
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+
+# API Key
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# 保存好这个值，这就是你的 API key
+
+# API Key 哈希（写入 compose 文件）
+python3 -c "from hashlib import sha256; print(sha256(b'上一步的API_KEY').hexdigest())"
+```
+
+### 2. 编辑 compose 文件
+
+```bash
+vim deploy/docker-compose.gpu.yml
+# 把两个 <CHANGE_ME> 替换为上面生成的值
+```
+
+### 3. 构建并启动
+
+```bash
+cd deploy
+docker compose -f docker-compose.gpu.yml up -d --build
+```
+
+### 4. 获取 admin 密码
+
+```bash
+docker compose -f docker-compose.gpu.yml exec ainrf \
+  cat /opt/ainrf/state/admin_initial_password.txt
+```
+
+### 5. 访问
+
+浏览器打开 `http://<机器IP>:8192/`，用 admin 密码登录。
+
+:::caution
+此模式不使用 TLS，仅适用于内网/VPN 环境。如需公网暴露，在前面加一层 Nginx 反向代理。
+:::
+
+:::note
+GPU 透传要求宿主机已安装 NVIDIA 驱动和 [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)。可用 `docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi` 验证。
+:::
+
+---
+
+## 方式 C：CPU-only 版
+
+适用于：不需要 GPU、宿主机未装 NVIDIA 驱动的服务器。使用 `docker-compose.cpu.yml`，与 GPU 版相同但无 GPU 设备透传。
+
+密钥生成步骤与 GPU 版相同，然后：
+
+```bash
+cd deploy
+# 编辑密钥
+vim docker-compose.cpu.yml
+# 构建并启动
+docker compose -f docker-compose.cpu.yml up -d --build
+# 获取 admin 密码
+docker compose -f docker-compose.cpu.yml exec ainrf \
+  cat /opt/ainrf/state/admin_initial_password.txt
+# 查看日志
+docker compose -f docker-compose.cpu.yml logs -f ainrf
+```
+
+访问 `http://<机器IP>:8192/`。
+
+---
+
+## 监控栈
+
+三种 Docker Compose 文件均已内置 Prometheus + Grafana，详见 [监控栈](/observability/monitoring-stack)。
+
+| 部署方式 | Grafana 地址 | 默认账号 |
+|---------|-------------|---------|
+| 标准版（nginx） | `https://<host>/monitoring/` | `admin` / `ainrf-grafana` |
+| CPU-only（host 网络） | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
+| GPU 版 | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
+
+## 相关文档
+
+- [部署概览](/deployment/) — 前置条件与安全检查清单
+- [Kubernetes](/deployment/kubernetes) — 生产集群部署
+- [可观测性概览](/observability/) — 监控与审计

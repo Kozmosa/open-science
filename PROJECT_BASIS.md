@@ -34,9 +34,9 @@
 ### 语言与工具
 
 - 主要语言：`Python 3.13` 与 `Markdown`
-- 运行时与构建：`uv run` 驱动的 Python CLI 与脚本执行，文档侧由 `docs-site/` 中的 Astro + Starlight 构建
+- 运行时与构建：`uv run` 驱动的 Python CLI 与脚本执行，文档侧由 `docs-site/` 中的 VitePress 构建
 - 包管理：`uv`（后端）、`npm`（docs-site）
-- 主要框架或库：`Typer`、`structlog`、`PyYAML`、`FastAPI`、`Astro`、`Starlight`、`pytest`、`ruff`
+- 主要框架或库：`Typer`、`structlog`、`PyYAML`、`FastAPI`、`VitePress`、`pytest`、`ruff`
 
 ### 编译器 / 类型系统约束
 
@@ -75,7 +75,7 @@
 ## 目录约定
 
 - `docs/`：研究知识库与历史设计材料（Obsidian 笔记）。
-- `docs-site/`：OpenScience 产品文档站点（Astro + Starlight，部署至 GitHub Pages）。
+- `docs-site/`：OpenScience 产品文档站点（VitePress，部署至 GitHub Pages）。
 - `frontend/`：OpenScience WebUI 前端。
 - `src/ainrf/`：OpenScience Python 包兼容性内部目录、CLI 入口、后端 API、日志与运行时代码。
 - `src/ainrf/agentic_researcher/`：OpenScience 任务管理门面，提供统一的任务 CRUD 和研究员预设
@@ -92,10 +92,8 @@
   - reference: `https://docs.astral.sh/uv/`
 - Typer
   - reference: `https://typer.tiangolo.com/`
-- Astro
-  - reference: `https://docs.astro.build/`
-- Starlight
-  - reference: `https://starlight.astro.build/`
+- VitePress
+  - reference: `https://vitepress.dev/`
 - Ruff
   - reference: `https://docs.astral.sh/ruff/`
 - pytest
@@ -119,7 +117,7 @@
 
 - 本地标准入口优先使用 `uv run`，避免手工维护与锁文件不一致的虚拟环境。
 - 本仓库不在标准文档中记录开发机私有绝对路径、账号信息或密钥路径。
-- 本地辅助脚本纳入版本控制；产品文档使用 `docs-site/` 下的 Astro + Starlight 构建。
+- 本地辅助脚本纳入版本控制；产品文档使用 `docs-site/` 下的 VitePress 构建。
 - 日志输出当前以标准输出为主；CLI 运行时日志统一经 `structlog` 配置，后续服务化时应继续沿用统一日志入口。
 - 排障优先级：
   - 先检查 `uv` 环境、依赖安装与 Python 版本是否满足 `>=3.13`

@@ -17,7 +17,7 @@ This repository's active product surface is the OpenScience runtime plus WebUI, 
 - `frontend/`: React + Vite WebUI for OpenScience.
 - `src/ainrf/`: Python package, CLI, backend API, and runtime code.
 - `docs/`: Obsidian-style research notes and design docs. Key areas are `docs/framework/`, `docs/projects/`, and `docs/summary/`.
-- `docs-site/`: Astro + Starlight product documentation site (deployed to GitHub Pages).
+- `docs-site/`: VitePress product documentation site (deployed to GitHub Pages).
 - `tests/`: CLI smoke tests for the Python package.
 - `scripts/`: local build helpers.
 
@@ -25,7 +25,7 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 
 ## Project Overview
 
-`scholar-agent` currently centers on the OpenScience frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities; `src/ainrf/` remains the compatibility Python package name during the OpenScience transition. The legacy `ainrf` CLI remains available during the OpenScience compatibility phase. `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with Astro + Starlight in `docs-site/` and deployed to GitHub Pages.
+`scholar-agent` currently centers on the OpenScience frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities; `src/ainrf/` remains the compatibility Python package name during the OpenScience transition. The legacy `ainrf` CLI remains available during the OpenScience compatibility phase. `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with VitePress in `docs-site/` and deployed to GitHub Pages.
 
 ## LLM Working Log
 
@@ -122,10 +122,10 @@ OpenScience uses Linux user isolation for multi-tenancy (`ainrf` backend user, `
 
 ### Docs Build Pipeline
 
-Product documentation lives in `docs-site/` and is built with Astro + Starlight:
+Product documentation lives in `docs-site/` and is built with VitePress:
 
-1. Content files are in `docs-site/src/content/docs/` (MDX format).
-2. Sidebar and navigation configured in `docs-site/astro.config.mjs`.
+1. Content files are in `docs-site/docs/` (Markdown format).
+2. Sidebar and navigation configured in `docs-site/docs/.vitepress/config.mts`.
 3. `npm run build` generates static HTML to `docs-site/dist/`.
 4. CI deploys `docs-site/dist/` to GitHub Pages on push to master.
 

@@ -174,7 +174,7 @@ cd docs-site && npm run build
 ├── tests/            # Python test suite
 ├── scripts/          # 本地开发、WebUI、docs 构建辅助脚本
 ├── docs/             # 研究笔记、设计笔记和知识资产
-├── docs-site/        # OpenScience 产品文档站点（Astro + Starlight）
+├── docs-site/        # OpenScience 产品文档站点（VitePress）
 ├── ref-repos/        # 只读参考仓库，用于产品设计与对照研究
 └── PROJECT_BASIS.md  # 长期工程约束与协作规则
 ```
@@ -229,7 +229,7 @@ cd docs-site && npm run build
 
 ## 📚 Documentation
 
-- [OpenScience 产品文档](https://kozmosa.github.io/scholar-agent/)（Astro + Starlight）
+- [OpenScience 产品文档](https://kozmosa.github.io/open-science/)（VitePress）
 - [项目长期工程约束](PROJECT_BASIS.md)
 - [框架设计与 RFC](docs/framework/)
 - [参考项目调研](docs/projects/)
