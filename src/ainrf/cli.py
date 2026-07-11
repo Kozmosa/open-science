@@ -304,10 +304,10 @@ def backup_restore(
         Path,
         typer.Argument(help="Backup archive to restore."),
     ],
-    state_root: Annotated[
+    staged_state_root: Annotated[
         Path,
-        typer.Option(help="Target state root."),
-    ] = default_state_root(),
+        typer.Option(help="New staged state root. It must not already exist."),
+    ],
     workspace_root: Annotated[
         Path | None,
         typer.Option(help="Target workspace root (required if archive includes workspaces)."),
@@ -321,20 +321,20 @@ def backup_restore(
         typer.Option(help="Skip the automatic pre-restore safety backup."),
     ] = False,
 ) -> None:
-    """Restore OpenScience state from a backup archive.
+    """Restore OpenScience state into a new staged root.
 
-    A pre-restore safety backup is created automatically.  Stop the server
-    before restoring to avoid database corruption.
+    The active state root is not overwritten. Verify and promote the staged
+    root through the deployment's explicit directory/volume switch procedure.
     """
-    svc = BackupService(state_root)
-    svc.restore_backup(
+    svc = BackupService(default_state_root())
+    restored_root = svc.restore_backup(
         archive,
-        target_state_root=state_root,
+        target_state_root=staged_state_root,
         target_workspace_root=workspace_root,
         target_tenant_root=tenant_root,
         skip_pre_backup=skip_pre_backup,
     )
-    typer.echo("Restore complete.")
+    typer.echo(f"Restore staged and verified: {restored_root}")
 
 
 @backup_app.command("verify")

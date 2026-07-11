@@ -45,7 +45,7 @@ class TestBackupService:
             assert "databases/sessions.sqlite3" in tar.getnames()
 
         manifest = svc.verify_backup(archive)
-        assert manifest.version == 1
+        assert manifest.version == 2
         assert "sessions.sqlite3" in manifest.databases
 
     @pytest.mark.concurrent
@@ -76,10 +76,7 @@ class TestBackupService:
 
         # Restore to a fresh directory and inspect the counter value.
         restore_root = state_root.parent / "restored"
-        restore_root.mkdir(parents=True, exist_ok=True)
-        (restore_root / "runtime").mkdir(parents=True, exist_ok=True)
-        restore_svc = BackupService(restore_root)
-        restore_svc.restore_backup(archive)
+        svc.restore_backup(archive, target_state_root=restore_root)
 
         restored_conn = sqlite3.connect(str(restore_root / "runtime" / "sessions.sqlite3"))
         cur = restored_conn.execute("SELECT val FROM counters WHERE id = 1")
@@ -113,10 +110,6 @@ class TestBackupService:
                         dst.addfile(junk, BytesIO(b"\x00\x00\x00\x00"))
 
         restore_root = state_root.parent / "restored2"
-        restore_root.mkdir(parents=True, exist_ok=True)
-        (restore_root / "runtime").mkdir(parents=True, exist_ok=True)
-        restore_svc = BackupService(restore_root)
-
-        # Restore uses manifest checksums, so size mismatch triggers verification.
-        with pytest.raises(ValueError, match="checksum mismatch"):
-            restore_svc.restore_backup(tampered)
+        # Restore verifies all members before staging, so duplicate members are rejected.
+        with pytest.raises(ValueError, match="duplicated"):
+            svc.restore_backup(tampered, target_state_root=restore_root)

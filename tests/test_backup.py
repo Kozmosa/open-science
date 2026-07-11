@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+import tarfile
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -36,6 +38,7 @@ def _seed_state(state_root: Path) -> None:
 
     # Runtime config
     (runtime / "projects.json").write_text('{"default": {}}', encoding="utf-8")
+    (runtime / "workspaces.json").write_text('{"default": {}}', encoding="utf-8")
 
     # State subdirectory
     ss = state_root / "session-states" / "task-abc"
@@ -57,11 +60,13 @@ def test_create_backup_captures_databases(tmp_path: Path) -> None:
     assert archive.suffix == ".gz"
     # Archive should be readable
     manifest = svc.verify_backup(archive)
-    assert manifest.version == 1
+    assert manifest.version == 2
     assert "auth.sqlite3" in manifest.databases
     assert "sessions.sqlite3" in manifest.databases
     assert "config.json" in manifest.config_files
     assert "projects.json" in manifest.config_files
+    assert "workspaces.json" in manifest.config_files
+    assert manifest.config_files["workspaces.json"].source_path == "runtime/workspaces.json"
     assert not manifest.includes_workspaces
 
 
@@ -107,7 +112,7 @@ def test_restore_roundtrip(tmp_path: Path) -> None:
     # Restore into a fresh directory
     dst_root = tmp_path / "dst-state"
     dst_svc = BackupService(dst_root)
-    dst_svc.restore_backup(archive, skip_pre_backup=True)
+    dst_svc.restore_backup(archive, target_state_root=dst_root, skip_pre_backup=True)
 
     # Verify databases restored
     for db_name in ("auth.sqlite3", "sessions.sqlite3"):
@@ -139,11 +144,13 @@ def test_restore_creates_pre_backup(tmp_path: Path) -> None:
     _seed_state(dst_root)  # existing data
 
     dst_svc = BackupService(dst_root)
-    dst_svc.restore_backup(archive)  # skip_pre_backup defaults to False
+    staged_root = tmp_path / "staged-state"
+    dst_svc.restore_backup(archive, target_state_root=staged_root)  # pre-backup defaults to True
 
     # A pre-restore backup should exist alongside the archive
     pre_backups = list(archive.parent.glob("pre-restore-*.tar.gz"))
     assert len(pre_backups) == 1
+    assert (dst_root / "runtime" / "projects.json").exists()
 
 
 def test_backup_includes_workspaces(tmp_path: Path) -> None:
@@ -186,3 +193,35 @@ def test_restore_missing_archive(tmp_path: Path) -> None:
     svc = BackupService(tmp_path)
     with pytest.raises(FileNotFoundError):
         svc.restore_backup(tmp_path / "nonexistent.tar.gz")
+
+
+def test_restore_requires_new_staged_root(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+
+    existing_root = tmp_path / "existing"
+    existing_root.mkdir()
+    with pytest.raises(ValueError, match="must not exist"):
+        BackupService(source_root).restore_backup(archive, target_state_root=existing_root)
+
+
+def test_verify_rejects_checksum_tampering(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+
+    tampered = tmp_path / "tampered.tar.gz"
+    with tarfile.open(archive, "r:gz") as source, tarfile.open(tampered, "w:gz") as dest:
+        for member in source.getmembers():
+            data = source.extractfile(member)
+            if member.name == "config/projects.json":
+                replacement = b'{"changed": {}}'
+                copy = tarfile.TarInfo(member.name)
+                copy.size = len(replacement)
+                dest.addfile(copy, BytesIO(replacement))
+            else:
+                dest.addfile(member, data)
+
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        BackupService(source_root).verify_backup(tampered)
