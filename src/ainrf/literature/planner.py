@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from ainrf.domain_control import DomainMaintenanceService, DomainWriteParticipant
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
@@ -29,14 +30,27 @@ def dispatch_outbox(service: LiteratureTrackingService) -> int:
 
 
 def run_forever(service: LiteratureTrackingService, interval_seconds: int = 30) -> None:
-    while True:
-        # arXiv publishes RSS at Eastern midnight.  Waiting ten minutes avoids
-        # assuming a fixed UTC offset and naturally follows daylight saving.
-        eastern_now = datetime.now(ZoneInfo("America/New_York"))
-        if eastern_now.hour == 0 and eastern_now.minute >= 10:
-            service.plan_daily_check()
-        dispatch_outbox(service)
-        time.sleep(interval_seconds)
+    """Run the planner while observing the shared domain maintenance epoch."""
+    participant = DomainWriteParticipant(
+        DomainMaintenanceService(service.state_root),
+        "literature-planner",
+        details={"component": "literature-planner"},
+    )
+    participant.start()
+    try:
+        while True:
+            state = participant.heartbeat()
+            if state.status != "drained":
+                # arXiv publishes RSS at Eastern midnight.  Waiting ten
+                # minutes avoids assuming a fixed UTC offset and naturally
+                # follows daylight saving.
+                eastern_now = datetime.now(ZoneInfo("America/New_York"))
+                if eastern_now.hour == 0 and eastern_now.minute >= 10:
+                    service.plan_daily_check()
+                dispatch_outbox(service)
+            time.sleep(interval_seconds)
+    finally:
+        participant.stop()
 
 
 def main() -> None:
@@ -48,7 +62,17 @@ def main() -> None:
     service = LiteratureTrackingService(Path(arguments.state_root))
     service.initialize()
     if arguments.once:
-        dispatch_outbox(service)
+        participant = DomainWriteParticipant(
+            DomainMaintenanceService(Path(arguments.state_root)),
+            "literature-planner",
+            details={"component": "literature-planner-once"},
+        )
+        participant.start()
+        try:
+            if participant.heartbeat().status != "drained":
+                dispatch_outbox(service)
+        finally:
+            participant.stop()
         return
     run_forever(service, arguments.interval_seconds)
 

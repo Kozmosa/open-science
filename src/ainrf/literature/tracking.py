@@ -80,6 +80,11 @@ class LiteratureTrackingService:
         self._state_root = Path(state_root)
         self._db_path = self._state_root / "runtime" / "literature.sqlite3"
 
+    @property
+    def state_root(self) -> Path:
+        """Shared runtime root used by planners and durable worker helpers."""
+        return self._state_root
+
     def initialize(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:

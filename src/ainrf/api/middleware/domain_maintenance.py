@@ -43,7 +43,11 @@ def build_domain_maintenance_middleware(
         if not _is_domain_mutation(request):
             return await call_next(request)
         try:
-            lease = service.begin_mutation(source=f"http:{request.method}:{request.url.path}")
+            lease = service.begin_mutation(
+                source=f"http:{request.method}:{request.url.path}",
+                participant_id=getattr(request.app.state, "domain_api_participant_id", None),
+            )
+            service.check_lease(lease)
         except MaintenanceModeError:
             return JSONResponse(
                 status_code=503,

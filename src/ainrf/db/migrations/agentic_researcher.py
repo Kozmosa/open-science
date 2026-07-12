@@ -442,3 +442,34 @@ def migration_010_overview_snapshots(conn: sqlite3.Connection) -> None:
         )
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_011_domain_write_participants(conn: sqlite3.Connection) -> None:
+    """Track every process that can originate a domain write during maintenance."""
+    try:
+        conn.execute("ALTER TABLE domain_maintenance_mutations ADD COLUMN participant_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS domain_write_participants (
+            participant_id TEXT PRIMARY KEY,
+            participant_type TEXT NOT NULL,
+            process_id INTEGER,
+            observed_epoch INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('active', 'draining', 'drained', 'stopped')),
+            in_flight_mutations INTEGER NOT NULL DEFAULT 0 CHECK (in_flight_mutations >= 0),
+            unflushed_output_count INTEGER NOT NULL DEFAULT 0 CHECK (unflushed_output_count >= 0),
+            details_json TEXT NOT NULL DEFAULT '{}',
+            registered_at TEXT NOT NULL,
+            heartbeat_at TEXT NOT NULL,
+            drained_at TEXT,
+            stopped_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_write_participants_type
+        ON domain_write_participants(participant_type, heartbeat_at);
+        CREATE INDEX IF NOT EXISTS idx_domain_maintenance_mutations_participant
+        ON domain_maintenance_mutations(participant_id);
+        """
+    )

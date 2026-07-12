@@ -76,7 +76,7 @@ class TestBaselineCreatesTables:
         [
             ("auth", 5),
             ("sessions", 3),
-            ("agentic_researcher", 10),
+            ("agentic_researcher", 11),
             ("literature", 5),
             ("terminal", 1),
         ],

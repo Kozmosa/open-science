@@ -3,7 +3,7 @@ from __future__ import annotations
 import json as json_mod
 import os
 import shlex
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Annotated
 
@@ -22,7 +22,11 @@ from ainrf.server import run_server, run_server_daemon, stop_server_daemon
 from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
-from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
+from ainrf.domain_control import (
+    DomainMaintenanceService,
+    DomainWriteParticipant,
+    MaintenanceModeError,
+)
 from ainrf.domain_migration import DomainImporter, capture_source_manifest
 from ainrf.domain import OverviewSnapshotService
 from ainrf.literature.planner import dispatch_outbox
@@ -422,6 +426,44 @@ def domain_maintenance_exit(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     typer.echo(f"maintenance exited at epoch {status.maintenance_epoch}")
+
+
+@domain_maintenance_app.command("preflight")
+def domain_maintenance_preflight(
+    required_participant_type: Annotated[
+        list[str],
+        typer.Option(
+            "--require-participant",
+            help="Participant type that must be freshly heartbeating and drained.",
+        ),
+    ] = [],
+    stability_window_seconds: Annotated[
+        float,
+        typer.Option(min=0.0, help="Seconds during which source content must remain stable."),
+    ] = 5.0,
+    stale_after_seconds: Annotated[
+        float,
+        typer.Option(min=0.1, help="Maximum age of a required participant heartbeat."),
+    ] = 30.0,
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the control database.")
+    ] = default_state_root(),
+) -> None:
+    """Report the hard migration/cutover safety gates without changing state."""
+    service = _maintenance_service(state_root)
+    participant = DomainWriteParticipant(service, "admin-cli", details={"command": "preflight"})
+    participant.start()
+    try:
+        report = service.preflight(
+            required_participant_types=tuple(required_participant_type),
+            stability_window_seconds=stability_window_seconds,
+            stale_after_seconds=stale_after_seconds,
+        )
+    finally:
+        participant.stop()
+    typer.echo(json_mod.dumps(asdict(report), indent=2))
+    if not report.ready:
+        raise typer.Exit(code=2)
 
 
 @domain_migration_app.command("dry-run")

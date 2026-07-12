@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -56,7 +57,11 @@ from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
 from ainrf.workspaces import WorkspaceRegistryService
-from ainrf.domain_control import DomainMaintenanceService
+from ainrf.domain_control import (
+    DomainMaintenanceService,
+    DomainWriteParticipant,
+    MaintenanceModeError,
+)
 from ainrf.domain import (
     DomainService,
     OverviewSnapshotService,
@@ -109,11 +114,43 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     resource_monitor_service = ResourceMonitorService(environment_service)
     app.state.resource_monitor_service = resource_monitor_service
     await resource_monitor_service.start()
+    api_participant = DomainWriteParticipant(
+        app.state.domain_maintenance_service,
+        "api",
+        details={"component": "fastapi"},
+    )
+    api_participant.start()
+    app.state.domain_api_participant_id = api_participant.participant_id
+
+    async def heartbeat_api_participant() -> None:
+        while True:
+            await _run_sync_in_lifespan(api_participant.heartbeat)
+            await asyncio.sleep(5)
+
+    heartbeat_task = asyncio.create_task(heartbeat_api_participant())
     try:
         await _run_sync_in_lifespan(project_service.initialize)
         await _run_sync_in_lifespan(workspace_service.initialize)
         app.state.runtime_readiness = check_runtime_readiness().as_public_payload()
-        await _run_sync_in_lifespan(terminal_session_manager.reconcile)
+        terminal_participant = DomainWriteParticipant(
+            app.state.domain_maintenance_service,
+            "terminal-reconciler",
+            details={"component": "api-lifespan"},
+        )
+        terminal_participant.start()
+        try:
+            terminal_lease = terminal_participant.begin_mutation(source="terminal-reconcile")
+        except MaintenanceModeError:
+            terminal_participant.drain()
+            _LOG.info("terminal_reconcile_skipped_for_domain_maintenance")
+        else:
+            try:
+                await _run_sync_in_lifespan(terminal_session_manager.reconcile)
+                app.state.domain_maintenance_service.check_lease(terminal_lease)
+            finally:
+                terminal_participant.finish_mutation(terminal_lease)
+        finally:
+            terminal_participant.stop()
         session_service = app.state.session_service
         await _run_sync_in_lifespan(session_service.initialize)
         auth_service = app.state.auth_service
@@ -186,6 +223,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             _LOG.exception("Failed to backfill per-user default projects")
         yield
     finally:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        api_participant.stop()
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
         await resource_monitor_service.stop()
 
