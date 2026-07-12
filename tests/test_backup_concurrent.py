@@ -45,7 +45,7 @@ class TestBackupService:
             assert "databases/sessions.sqlite3" in tar.getnames()
 
         manifest = svc.verify_backup(archive)
-        assert manifest.version == 2
+        assert manifest.version == 3
         assert "sessions.sqlite3" in manifest.databases
 
     @pytest.mark.concurrent

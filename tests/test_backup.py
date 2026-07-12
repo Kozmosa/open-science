@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 import tarfile
 from io import BytesIO
+import json
 from pathlib import Path
 
 import pytest
 
-from ainrf.backup.service import BackupService
+from ainrf.backup.service import BackupManifest, BackupService, FileMeta
 
 pytestmark = [pytest.mark.unit]
 
@@ -60,7 +62,7 @@ def test_create_backup_captures_databases(tmp_path: Path) -> None:
     assert archive.suffix == ".gz"
     # Archive should be readable
     manifest = svc.verify_backup(archive)
-    assert manifest.version == 2
+    assert manifest.version == 3
     assert "auth.sqlite3" in manifest.databases
     assert "sessions.sqlite3" in manifest.databases
     assert "config.json" in manifest.config_files
@@ -225,3 +227,134 @@ def test_verify_rejects_checksum_tampering(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="checksum mismatch"):
         BackupService(source_root).verify_backup(tampered)
+
+
+def test_manifest_v3_inventories_every_nested_state_member(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    _seed_state(state_root)
+    (state_root / "detections" / "env-host").mkdir(parents=True)
+    (state_root / "detections" / "env-host" / "snapshot.json").write_text(
+        '{"status": "ok"}', encoding="utf-8"
+    )
+    workspace_root = tmp_path / "workspaces"
+    (workspace_root / "project" / "nested").mkdir(parents=True)
+    (workspace_root / "project" / "nested" / "note.txt").write_text("note", encoding="utf-8")
+    tenant_root = tmp_path / "tenants"
+    (tenant_root / "alice" / ".config").mkdir(parents=True)
+    (tenant_root / "alice" / ".config" / "settings.json").write_text("{}", encoding="utf-8")
+
+    archive = BackupService(state_root).create_backup(
+        tmp_path / "archive.tar.gz",
+        include_workspaces=True,
+        workspace_root=workspace_root,
+        include_tenants=True,
+        tenant_root=tenant_root,
+    )
+
+    manifest = BackupService(state_root).verify_backup(archive)
+    assert manifest.version == 3
+    assert manifest.includes_workspaces
+    assert manifest.includes_tenants
+    assert manifest.tree_sha256
+    assert {
+        "session-states/task-abc/checkpoint.json",
+        "detections/env-host/snapshot.json",
+        "workspaces/project/nested/note.txt",
+        "tenants/alice/.config/settings.json",
+    } <= set(manifest.files)
+    assert manifest.files["workspaces/project/nested/note.txt"].mode is not None
+    assert manifest.files["workspaces/project/nested/note.txt"].uid is not None
+
+
+def test_verify_rejects_tampered_nested_state_member(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    _seed_state(state_root)
+    archive = BackupService(state_root).create_backup(tmp_path / "archive.tar.gz")
+    tampered = tmp_path / "tampered.tar.gz"
+    with tarfile.open(archive, "r:gz") as source, tarfile.open(tampered, "w:gz") as dest:
+        for member in source.getmembers():
+            data = source.extractfile(member)
+            if member.name == "session-states/task-abc/checkpoint.json":
+                replacement = b'{"step": 9}'
+                copy = tarfile.TarInfo(member.name)
+                copy.size = len(replacement)
+                dest.addfile(copy, BytesIO(replacement))
+            else:
+                dest.addfile(member, data)
+
+    with pytest.raises(
+        ValueError, match="session-states/task-abc/checkpoint.json: checksum mismatch"
+    ):
+        BackupService(state_root).verify_backup(tampered)
+
+
+def test_verify_rejects_include_flag_mismatch(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    _seed_state(state_root)
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+    (workspace_root / "README.md").write_text("workspace", encoding="utf-8")
+    archive = BackupService(state_root).create_backup(
+        tmp_path / "archive.tar.gz", include_workspaces=True, workspace_root=workspace_root
+    )
+    tampered = tmp_path / "flag-mismatch.tar.gz"
+    with tarfile.open(archive, "r:gz") as source, tarfile.open(tampered, "w:gz") as dest:
+        for member in source.getmembers():
+            data = source.extractfile(member)
+            if member.name == "manifest.json":
+                assert data is not None
+                payload = json.loads(data.read().decode("utf-8"))
+                payload["includes_workspaces"] = False
+                replacement = json.dumps(payload).encode("utf-8")
+                copy = tarfile.TarInfo(member.name)
+                copy.size = len(replacement)
+                dest.addfile(copy, BytesIO(replacement))
+            else:
+                dest.addfile(member, data)
+
+    with pytest.raises(
+        ValueError, match="workspaces: include flag does not match archive contents"
+    ):
+        BackupService(state_root).verify_backup(tampered)
+
+
+def test_v2_archive_remains_verifiable_and_restorable(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    database = source_root / "runtime" / "auth.sqlite3"
+    config = source_root / "config.json"
+    manifest = BackupManifest(
+        version=2,
+        created_at="2026-07-12T00:00:00+00:00",
+        databases={
+            "auth.sqlite3": FileMeta(
+                size=database.stat().st_size,
+                sha256=hashlib.sha256(database.read_bytes()).hexdigest(),
+                source_path="runtime/auth.sqlite3",
+            )
+        },
+        config_files={
+            "config.json": FileMeta(
+                size=config.stat().st_size,
+                sha256=hashlib.sha256(config.read_bytes()).hexdigest(),
+                source_path="config.json",
+            )
+        },
+    )
+    archive = tmp_path / "v2.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(database, arcname="databases/auth.sqlite3")
+        tar.add(config, arcname="config/config.json")
+        manifest_bytes = manifest.to_json().encode("utf-8")
+        info = tarfile.TarInfo("manifest.json")
+        info.size = len(manifest_bytes)
+        tar.addfile(info, BytesIO(manifest_bytes))
+
+    service = BackupService(source_root)
+    assert service.verify_backup(archive).version == 2
+    target = tmp_path / "restored"
+    service.restore_backup(archive, target_state_root=target, skip_pre_backup=True)
+    assert (target / "runtime" / "auth.sqlite3").exists()
+    assert (target / "config.json").read_text(encoding="utf-8") == config.read_text(
+        encoding="utf-8"
+    )

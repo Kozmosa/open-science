@@ -28,7 +28,7 @@ from uuid import uuid4
 
 _LOG = logging.getLogger(__name__)
 
-_BACKUP_VERSION = 2
+_BACKUP_VERSION = 3
 
 # Known SQLite databases relative to <state_root>/runtime/
 _SQLITE_DATABASES: tuple[str, ...] = (
@@ -93,6 +93,11 @@ def _dump_sqlite_safe(source: Path, dest: Path) -> None:
     finally:
         dst.close()
         src.close()
+    # A point-in-time SQLite backup is a single main database file.  Some
+    # connection configurations leave transient sidecars beside the staged
+    # destination; they must never become independent archive members.
+    for suffix in ("-wal", "-shm", "-journal"):
+        dest.with_name(f"{dest.name}{suffix}").unlink(missing_ok=True)
 
 
 def _ts() -> str:
@@ -108,6 +113,9 @@ class FileMeta:
     sha256: str
     source_path: str = ""
     schema_version: int | None = None
+    mode: int | None = None
+    uid: int | None = None
+    gid: int | None = None
 
 
 @dataclass(slots=True)
@@ -116,6 +124,11 @@ class BackupManifest:
     created_at: str = ""
     databases: dict[str, FileMeta] = field(default_factory=dict)
     config_files: dict[str, FileMeta] = field(default_factory=dict)
+    # Version 3 inventories every regular archive member, including nested
+    # state, workspace, and tenant files.  The old database/config maps are
+    # retained so existing callers and version-2 archives remain compatible.
+    files: dict[str, FileMeta] = field(default_factory=dict)
+    tree_sha256: str | None = None
     includes_workspaces: bool = False
     includes_tenants: bool = False
 
@@ -127,10 +140,42 @@ class BackupManifest:
     @classmethod
     def from_json(cls, text: str) -> BackupManifest:
         d = json.loads(text)
-        for key in ("databases", "config_files"):
+        for key in ("databases", "config_files", "files"):
             if key in d and isinstance(d[key], dict):
                 d[key] = {k: FileMeta(**v) for k, v in d[key].items()}
         return cls(**d)
+
+
+def _file_meta(path: Path, *, source_path: str, schema_version: int | None = None) -> FileMeta:
+    """Return manifest metadata for a staged regular file."""
+    stat = path.stat()
+    return FileMeta(
+        size=stat.st_size,
+        sha256=_sha256_of(path),
+        source_path=source_path,
+        schema_version=schema_version,
+        mode=stat.st_mode & 0o7777,
+        uid=stat.st_uid,
+        gid=stat.st_gid,
+    )
+
+
+def _tree_sha256(files: dict[str, FileMeta]) -> str:
+    """Hash a manifest's stable member identity, independent of tar metadata."""
+    digest = hashlib.sha256()
+    for relative_path, meta in sorted(files.items()):
+        digest.update(relative_path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(meta.size).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(meta.sha256.encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def _is_relative_path(path: str) -> bool:
+    candidate = Path(path)
+    return not candidate.is_absolute() and ".." not in candidate.parts
 
 
 def _database_schema_version(path: Path, database_name: str) -> int | None:
@@ -196,11 +241,7 @@ class BackupService:
         else:
             archive = output_path / default_name
 
-        manifest = BackupManifest(
-            created_at=datetime.now(timezone.utc).isoformat(),
-            includes_workspaces=include_workspaces,
-            includes_tenants=include_tenants,
-        )
+        manifest = BackupManifest(created_at=datetime.now(timezone.utc).isoformat())
 
         with tempfile.TemporaryDirectory(prefix="ainrf-backup-") as tmp:
             stage = Path(tmp) / "stage"
@@ -215,13 +256,15 @@ class BackupService:
                     continue
                 dst = db_dir / name
                 _dump_sqlite_safe(src, dst)
-                manifest.databases[name] = FileMeta(
-                    size=dst.stat().st_size,
-                    sha256=_sha256_of(dst),
+                schema_version = _database_schema_version(dst, _database_name_from_filename(name))
+                # The read-only schema probe can itself create transient WAL
+                # bookkeeping files on some SQLite builds.
+                for suffix in ("-wal", "-shm", "-journal"):
+                    dst.with_name(f"{dst.name}{suffix}").unlink(missing_ok=True)
+                manifest.databases[name] = _file_meta(
+                    dst,
                     source_path=f"runtime/{name}",
-                    schema_version=_database_schema_version(
-                        dst, _database_name_from_filename(name)
-                    ),
+                    schema_version=schema_version,
                 )
                 _LOG.info("backed up database %s (%d bytes)", name, dst.stat().st_size)
 
@@ -234,9 +277,8 @@ class BackupService:
                     continue
                 dst = cfg_dir / name
                 shutil.copy2(src, dst)
-                manifest.config_files[name] = FileMeta(
-                    size=dst.stat().st_size,
-                    sha256=_sha256_of(dst),
+                manifest.config_files[name] = _file_meta(
+                    dst,
                     source_path=f"runtime/{name}" if name in _RUNTIME_CONFIGS else name,
                 )
                 _LOG.info("backed up config %s", name)
@@ -257,6 +299,29 @@ class BackupService:
             if include_tenants and tenant_root and tenant_root.is_dir():
                 shutil.copytree(tenant_root, stage / "tenants")
                 _LOG.info("backed up tenants")
+
+            # Version 3 inventories every regular archive member, not merely
+            # the databases and top-level config files.  That makes state-dir,
+            # workspace, and tenant tampering detectable before restore.
+            for item in sorted(path for path in stage.rglob("*") if path.is_file()):
+                relative_path = item.relative_to(stage).as_posix()
+                if relative_path.startswith("databases/"):
+                    database_name = relative_path.removeprefix("databases/")
+                    meta = manifest.databases.get(database_name)
+                    if meta is None:
+                        raise RuntimeError(f"Unexpected staged database member: {relative_path}")
+                elif relative_path.startswith("config/"):
+                    config_name = relative_path.removeprefix("config/")
+                    meta = manifest.config_files.get(config_name)
+                    if meta is None:
+                        raise RuntimeError(f"Unexpected staged config member: {relative_path}")
+                else:
+                    meta = _file_meta(item, source_path=relative_path)
+                manifest.files[relative_path] = meta
+
+            manifest.includes_workspaces = (stage / "workspaces").is_dir()
+            manifest.includes_tenants = (stage / "tenants").is_dir()
+            manifest.tree_sha256 = _tree_sha256(manifest.files)
 
             # 6. Manifest
             (stage / "manifest.json").write_text(manifest.to_json(), encoding="utf-8")
@@ -289,17 +354,54 @@ class BackupService:
 
         errors: list[str] = []
         with tarfile.open(str(archive_path), "r:gz") as tar:
-            members_to_verify = [
-                *((f"databases/{name}", meta) for name, meta in manifest.databases.items()),
-                *((f"config/{name}", meta) for name, meta in manifest.config_files.items()),
-            ]
+            members = tar.getmembers()
+            members_by_name: dict[str, list[tarfile.TarInfo]] = {}
+            for member in members:
+                if not _is_relative_path(member.name):
+                    errors.append(f"{member.name}: unsafe archive path")
+                    continue
+                members_by_name.setdefault(member.name, []).append(member)
+
+            if manifest.version >= 3:
+                members_to_verify = list(manifest.files.items())
+                actual_files = {
+                    member.name
+                    for member in members
+                    if member.isfile() and member.name != "manifest.json"
+                }
+                expected_files = set(manifest.files)
+                for member_name in sorted(actual_files - expected_files):
+                    errors.append(f"{member_name}: not listed in manifest")
+                for root_name, enabled in (
+                    ("workspaces", manifest.includes_workspaces),
+                    ("tenants", manifest.includes_tenants),
+                ):
+                    present = any(
+                        member.name == root_name or member.name.startswith(f"{root_name}/")
+                        for member in members
+                    )
+                    if present != enabled:
+                        errors.append(f"{root_name}: include flag does not match archive contents")
+                if manifest.tree_sha256 is None:
+                    errors.append("manifest: missing tree_sha256")
+                elif _tree_sha256(manifest.files) != manifest.tree_sha256:
+                    errors.append("manifest: tree checksum mismatch")
+            else:
+                members_to_verify = [
+                    *((f"databases/{name}", meta) for name, meta in manifest.databases.items()),
+                    *((f"config/{name}", meta) for name, meta in manifest.config_files.items()),
+                ]
+
             for member_name, meta in members_to_verify:
-                members = [member for member in tar.getmembers() if member.name == member_name]
-                if len(members) != 1:
-                    state = "missing" if not members else "duplicated"
+                named_members = members_by_name.get(member_name, [])
+                if len(named_members) != 1:
+                    state = "missing" if not named_members else "duplicated"
                     errors.append(f"{member_name}: {state}")
                     continue
-                member = members[0]
+                member = named_members[0]
+                if not member.isfile():
+                    errors.append(f"{member_name}: not a regular file")
+                    continue
                 if member.size != meta.size:
                     errors.append(f"{member_name}: size mismatch")
                     continue
@@ -310,6 +412,9 @@ class BackupService:
                 with stream:
                     if _sha256_stream(stream) != meta.sha256:
                         errors.append(f"{member_name}: checksum mismatch")
+                        continue
+                if manifest.version >= 3 and meta.mode is not None and member.mode != meta.mode:
+                    errors.append(f"{member_name}: mode mismatch")
 
         if errors:
             raise ValueError("Backup verification failed:\n  " + "\n  ".join(errors))
