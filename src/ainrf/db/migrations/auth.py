@@ -104,3 +104,21 @@ def migration_004_login_attempts_cleanup_index(conn: sqlite3.Connection) -> None
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_login_attempts_attempted_at ON login_attempts(attempted_at)"
     )
+
+
+@registry.register(_DATABASE)
+def migration_005_environment_grant_versioning(conn: sqlite3.Connection) -> None:
+    for name, definition in (
+        ("grant_version", "INTEGER NOT NULL DEFAULT 1"),
+        ("status", "TEXT NOT NULL DEFAULT 'active'"),
+        ("updated_at", "TEXT"),
+        ("revoked_at", "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE environment_access ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute("UPDATE environment_access SET updated_at = granted_at WHERE updated_at IS NULL")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_env_access_active ON environment_access(user_id, status)"
+    )
