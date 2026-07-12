@@ -57,6 +57,16 @@ def _translate_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=500, detail="Unexpected session error")
 
 
+def _v2_sessions_read_only() -> HTTPException:
+    """Sessions are retained as an API projection, never a v2 write model."""
+
+    return HTTPException(
+        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        detail="Sessions are a read-only Task Attempt projection in v2",
+        headers={"Allow": "GET"},
+    )
+
+
 def _serialize_session(s) -> dict[str, Any]:
     return {
         "id": s.id,
@@ -99,17 +109,19 @@ async def list_sessions(
     user = get_current_user(request)
     projection = _projection(request)
     if projection is not None:
-        items, total = projection.list_sessions(
+        items, total, has_more, next_cursor = projection.list_sessions(
             project_id=project_id,
             owner_user_id=None if is_admin(user) else str(user["id"]),
+            status=status,
+            cursor=cursor,
             limit=limit,
         )
         return SessionListResponse.model_validate(
             {
                 "items": items,
                 "total": total if cursor is None else None,
-                "has_more": False,
-                "next_cursor": None,
+                "has_more": has_more,
+                "next_cursor": next_cursor,
             }
         )
     service = _get_service(request)
@@ -144,7 +156,7 @@ async def list_sessions(
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(payload: SessionCreateRequest, request: Request) -> SessionResponse:
     if _projection(request) is not None:
-        raise HTTPException(status_code=409, detail="Sessions are Task projections in v2")
+        raise _v2_sessions_read_only()
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -154,6 +166,28 @@ async def create_session(payload: SessionCreateRequest, request: Request) -> Ses
     except Exception as exc:
         raise _translate_error(exc) from exc
     return SessionResponse.model_validate(_serialize_session(s))
+
+
+@router.get("/batch-detail")
+async def get_sessions_batch_detail(
+    request: Request,
+    ids: str = Query(..., description="Comma-separated session IDs"),
+):
+    session_ids = [sid.strip() for sid in ids.split(",") if sid.strip()]
+    if not session_ids:
+        return {"items": {}}
+    if len(session_ids) > 200:
+        raise HTTPException(status_code=400, detail="Too many IDs (max 200)")
+    user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        return {"items": projection.batch_details(session_ids, user)}
+    service = _get_service(request)
+    if is_admin(user):
+        details = service.get_sessions_batch_detail(session_ids)
+    else:
+        details = service.get_sessions_batch_detail(session_ids, owner_user_id=user["id"])
+    return {"items": details}
 
 
 @router.get("/{session_id}", response_model=SessionDetailResponse)
@@ -186,7 +220,7 @@ async def update_session(
     session_id: str, payload: SessionUpdateRequest, request: Request
 ) -> SessionResponse:
     if _projection(request) is not None:
-        raise HTTPException(status_code=409, detail="Sessions are Task projections in v2")
+        raise _v2_sessions_read_only()
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -201,7 +235,7 @@ async def update_session(
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, request: Request) -> Response:
     if _projection(request) is not None:
-        raise HTTPException(status_code=409, detail="Sessions are Task projections in v2")
+        raise _v2_sessions_read_only()
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -235,22 +269,3 @@ async def list_attempts(session_id: str, request: Request) -> AttemptListRespons
             "items": [_serialize_attempt(a) for a in attempts],
         }
     )
-
-
-@router.get("/batch-detail")
-async def get_sessions_batch_detail(
-    request: Request,
-    ids: str = Query(..., description="Comma-separated session IDs"),
-):
-    session_ids = [sid.strip() for sid in ids.split(",") if sid.strip()]
-    if not session_ids:
-        return {"items": {}}
-    if len(session_ids) > 200:
-        raise HTTPException(status_code=400, detail="Too many IDs (max 200)")
-    user = get_current_user(request)
-    service = _get_service(request)
-    if is_admin(user):
-        details = service.get_sessions_batch_detail(session_ids)
-    else:
-        details = service.get_sessions_batch_detail(session_ids, owner_user_id=user["id"])
-    return {"items": details}

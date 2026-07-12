@@ -499,6 +499,17 @@ async def get_task_token_usage_summary(
     include_archived: bool = Query(True),
 ) -> TaskTokenUsageSummaryResponse:
     user = get_current_user(request)
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        try:
+            return TaskTokenUsageSummaryResponse.model_validate(
+                projection.token_usage_summary(
+                    user,
+                    include_archived=include_archived,
+                )
+            )
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
     service = _get_service(request)
     summary = service.token_usage_summary(
         user_id=_task_list_owner_filter(user),

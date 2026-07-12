@@ -720,6 +720,7 @@ class TaskAttemptResponse(BaseModel):
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
+    duration_ms: int | None = None
     message_start_seq: int | None = None
     message_end_seq: int | None = None
     output_start_seq: int | None = None

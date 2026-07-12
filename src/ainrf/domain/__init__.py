@@ -10,6 +10,7 @@ from ainrf.domain.context import (
     ProjectContextService,
 )
 from ainrf.domain.attempts import AttemptService, DispatchClaim
+from ainrf.domain.attempt_projection import AttemptProjectionService
 from ainrf.domain.tasks import TaskApplicationService
 from ainrf.domain.task_projection import TaskProjectionService
 from ainrf.domain.session_projection import SessionProjectionService
@@ -27,6 +28,7 @@ __all__ = [
     "ContextSource",
     "ProjectContextService",
     "AttemptService",
+    "AttemptProjectionService",
     "DispatchClaim",
     "DispatchRunResult",
     "TaskDispatcher",

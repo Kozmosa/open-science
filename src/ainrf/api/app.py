@@ -66,6 +66,7 @@ from ainrf.domain_control import (
     MaintenanceModeError,
 )
 from ainrf.domain import (
+    AttemptProjectionService,
     DomainService,
     OverviewSnapshotService,
     PersistentEnvironmentFacade,
@@ -344,8 +345,18 @@ def create_app(
     app.state.task_application_service = TaskApplicationService(
         api_config.state_root, artifact_sha=artifact_sha
     )
-    app.state.task_projection_service = TaskProjectionService(api_config.state_root)
-    app.state.session_projection_service = SessionProjectionService(api_config.state_root)
+    attempt_projection = AttemptProjectionService(api_config.state_root)
+    app.state.attempt_projection_service = attempt_projection
+    app.state.task_projection_service = TaskProjectionService(
+        api_config.state_root,
+        attempt_projection=attempt_projection,
+    )
+    app.state.session_projection_service = SessionProjectionService(
+        api_config.state_root,
+        attempt_projection=attempt_projection,
+    )
+    # Project costs are another read-only view over the same Attempt rows.
+    app.state.project_cost_projection_service = attempt_projection
     app.state.overview_snapshot_service = OverviewSnapshotService(api_config.state_root)
     # Service initialization order:
     # 1. project/workspace (no deps)
