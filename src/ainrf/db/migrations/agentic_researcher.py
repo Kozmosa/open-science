@@ -707,3 +707,53 @@ def migration_012_harden_domain_control_plane(conn: sqlite3.Connection) -> None:
         BEGIN SELECT RAISE(ABORT, 'v2 task requires a domain project and workspace'); END
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_013_domain_migration_record_audit(conn: sqlite3.Connection) -> None:
+    """Persist an auditable terminal result for every imported source record."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS domain_migration_record_results (
+            record_result_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL
+                REFERENCES domain_migration_runs(run_id) ON DELETE RESTRICT,
+            source_path TEXT NOT NULL,
+            record_type TEXT NOT NULL,
+            source_record_id TEXT NOT NULL,
+            source_payload_sha256 TEXT NOT NULL,
+            status TEXT NOT NULL
+                CHECK (status IN ('imported', 'skipped', 'attention_needed')),
+            target_id TEXT,
+            detail TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(run_id, source_path, record_type, source_record_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_migration_record_results_run_status
+        ON domain_migration_record_results(run_id, status);
+        CREATE INDEX IF NOT EXISTS idx_domain_migration_record_results_target
+        ON domain_migration_record_results(target_id) WHERE target_id IS NOT NULL;
+        """
+    )
+
+    # Keep old, already-archived records truthful: a missing source identity is
+    # represented as NULL rather than an invented value.  New importer writes
+    # supply these fields and are protected by the partial unique index below.
+    for name, definition in (
+        ("source_path", "TEXT"),
+        ("source_record_id", "TEXT"),
+        ("source_payload_sha256", "TEXT"),
+        ("reason", "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE legacy_domain_records ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_legacy_domain_records_source_identity
+        ON legacy_domain_records(run_id, source_path, record_type, source_record_id)
+        WHERE source_path IS NOT NULL AND source_record_id IS NOT NULL
+        """
+    )

@@ -482,9 +482,59 @@ def domain_migration_apply(
         Path, typer.Option(help="State root containing legacy sources and v2 shadow tables.")
     ] = default_state_root(),
     mode: Annotated[str, typer.Option(help="Importer mode: validate or apply.")] = "validate",
+    artifact_sha: Annotated[
+        str | None,
+        typer.Option(help="Immutable artifact SHA recorded with this migration run."),
+    ] = None,
 ) -> None:
     """Run the application-level shadow importer; this never performs cutover."""
-    typer.echo(json_mod.dumps(DomainImporter(state_root).run(mode=mode).as_dict(), indent=2))
+    typer.echo(
+        json_mod.dumps(
+            DomainImporter(state_root).run(mode=mode, artifact_sha=artifact_sha).as_dict(), indent=2
+        )
+    )
+
+
+@domain_migration_app.command("resume")
+def domain_migration_resume(
+    run_id: Annotated[str, typer.Argument(help="Interrupted migration run ID to resume.")],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the fixed legacy sources and v2 tables.")
+    ] = default_state_root(),
+    artifact_sha: Annotated[
+        str | None,
+        typer.Option(help="Artifact SHA; it must equal the interrupted run's artifact."),
+    ] = None,
+) -> None:
+    """Resume only an interrupted run whose source manifest and artifact still match."""
+    typer.echo(
+        json_mod.dumps(
+            DomainImporter(state_root).resume(run_id, artifact_sha=artifact_sha).as_dict(), indent=2
+        )
+    )
+
+
+@domain_migration_app.command("inspect")
+def domain_migration_inspect(
+    run_id: Annotated[str, typer.Argument(help="Migration run ID to inspect.")],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing v2 shadow tables.")
+    ] = default_state_root(),
+) -> None:
+    """Inspect persisted phase, checkpoint, heartbeat, and resume metadata."""
+    typer.echo(json_mod.dumps(DomainImporter(state_root).inspect(run_id).as_dict(), indent=2))
+
+
+@domain_migration_app.command("records")
+def domain_migration_records(
+    run_id: Annotated[str, typer.Argument(help="Migration run ID whose source outcomes to list.")],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing v2 shadow tables.")
+    ] = default_state_root(),
+) -> None:
+    """List the durable imported/skipped/attention-needed result for each source record."""
+    results = [item.as_dict() for item in DomainImporter(state_root).record_results(run_id)]
+    typer.echo(json_mod.dumps(results, indent=2))
 
 
 @domain_migration_app.command("reconcile")

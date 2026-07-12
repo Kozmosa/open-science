@@ -1,12 +1,29 @@
-"""Read-only source snapshots used by the domain migration CLI."""
+"""Resumable source snapshots and importer support for domain migration."""
 
-from ainrf.domain_migration.sources import SourceManifest, capture_source_manifest
-from ainrf.domain_migration.importer import DomainImporter, MigrationReport, ReconciliationReport
+from ainrf.domain_migration.importer import (
+    DomainImporter,
+    MigrationInspection,
+    MigrationInterruptedError,
+    MigrationRecordResult,
+    MigrationReport,
+    ReconciliationReport,
+)
+from ainrf.domain_migration.sources import (
+    SourceManifest,
+    SourceSnapshotSet,
+    SourceStaleError,
+    capture_source_manifest,
+)
 
 __all__ = [
     "DomainImporter",
+    "MigrationInspection",
+    "MigrationInterruptedError",
+    "MigrationRecordResult",
     "MigrationReport",
     "ReconciliationReport",
     "SourceManifest",
+    "SourceSnapshotSet",
+    "SourceStaleError",
     "capture_source_manifest",
 ]
