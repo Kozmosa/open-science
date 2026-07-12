@@ -18,6 +18,8 @@ from ainrf.api.schemas import (
     SessionUpdateRequest,
 )
 from ainrf.sessions import SessionService
+from ainrf.domain import DomainPermissionError, SessionProjectionService
+from ainrf.domain_control import DomainModelMode
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,19 @@ def _get_service(request: Request) -> SessionService:
     service = getattr(request.app.state, "session_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="session service not initialized")
+    return service
+
+
+def _projection(request: Request) -> SessionProjectionService | None:
+    domain = getattr(request.app.state, "domain_service", None)
+    service = getattr(request.app.state, "session_projection_service", None)
+    if (
+        domain is None
+        or service is None
+        or request.app.state.api_config.domain_model_mode is not DomainModelMode.V2
+        or not domain.v2_ready()
+    ):
+        return None
     return service
 
 
@@ -82,6 +97,21 @@ async def list_sessions(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> SessionListResponse:
     user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        items, total = projection.list_sessions(
+            project_id=project_id,
+            owner_user_id=None if is_admin(user) else str(user["id"]),
+            limit=limit,
+        )
+        return SessionListResponse.model_validate(
+            {
+                "items": items,
+                "total": total if cursor is None else None,
+                "has_more": False,
+                "next_cursor": None,
+            }
+        )
     service = _get_service(request)
     try:
         if is_admin(user):
@@ -113,6 +143,8 @@ async def list_sessions(
 
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(payload: SessionCreateRequest, request: Request) -> SessionResponse:
+    if _projection(request) is not None:
+        raise HTTPException(status_code=409, detail="Sessions are Task projections in v2")
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -127,6 +159,13 @@ async def create_session(payload: SessionCreateRequest, request: Request) -> Ses
 @router.get("/{session_id}", response_model=SessionDetailResponse)
 async def get_session(session_id: str, request: Request) -> SessionDetailResponse:
     user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        try:
+            session, attempts = projection.get_session(session_id, user)
+        except (DomainPermissionError, LookupError) as exc:
+            raise HTTPException(status_code=404, detail="Session not found") from exc
+        return SessionDetailResponse.model_validate({**session, "attempts": attempts})
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
@@ -146,6 +185,8 @@ async def get_session(session_id: str, request: Request) -> SessionDetailRespons
 async def update_session(
     session_id: str, payload: SessionUpdateRequest, request: Request
 ) -> SessionResponse:
+    if _projection(request) is not None:
+        raise HTTPException(status_code=409, detail="Sessions are Task projections in v2")
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -159,6 +200,8 @@ async def update_session(
 
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, request: Request) -> Response:
+    if _projection(request) is not None:
+        raise HTTPException(status_code=409, detail="Sessions are Task projections in v2")
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -173,6 +216,13 @@ async def delete_session(session_id: str, request: Request) -> Response:
 @router.get("/{session_id}/attempts", response_model=AttemptListResponse)
 async def list_attempts(session_id: str, request: Request) -> AttemptListResponse:
     user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        try:
+            _session, attempts = projection.get_session(session_id, user)
+        except (DomainPermissionError, LookupError) as exc:
+            raise HTTPException(status_code=404, detail="Session not found") from exc
+        return AttemptListResponse.model_validate({"items": attempts})
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
