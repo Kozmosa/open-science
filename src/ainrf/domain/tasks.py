@@ -201,6 +201,31 @@ class TaskApplicationService:
             conn.commit()
             return cancelled
 
+    def archive_task(self, task_id: str, user: dict[str, object], *, reason: str) -> None:
+        with closing(self._connect()) as conn:
+            task = conn.execute(
+                "SELECT owner_user_id FROM tasks WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            if task is None:
+                raise DomainNotFoundError(task_id)
+            if task["owner_user_id"] != user.get("id"):
+                raise DomainPermissionError("Only the Task owner can archive a Task")
+            now = _now()
+            conn.execute(
+                "UPDATE task_dispatch_outbox SET status = 'cancelled', cancel_reason = ? WHERE task_id = ? AND status IN ('pending', 'claimed')",
+                (reason, task_id),
+            )
+            conn.execute(
+                "UPDATE agent_task_attempts SET status = 'cancelled', finished_at = ? WHERE task_id = ? AND status = 'queued'",
+                (now, task_id),
+            )
+            conn.execute(
+                "UPDATE tasks SET status = 'cancelled', archived_at = ?, archive_reason = ?, updated_at = ? WHERE task_id = ?",
+                (now, reason, now, task_id),
+            )
+            self._audit(conn, self._user_id(user), "task.archived", "task", task_id)
+            conn.commit()
+
     @staticmethod
     def _cached(conn: sqlite3.Connection, scope: str, key: str) -> dict[str, str] | None:
         if not key:

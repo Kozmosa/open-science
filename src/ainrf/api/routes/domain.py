@@ -11,6 +11,21 @@ from ainrf.domain_control import DomainModelMode
 router = APIRouter(prefix="/domain", tags=["domain-v2"])
 
 
+@router.get("/capabilities")
+async def capabilities(request: Request) -> dict[str, object]:
+    service = getattr(request.app.state, "domain_service", None)
+    mode = request.app.state.api_config.domain_model_mode
+    ready = service is not None and service.v2_ready()
+    return {
+        "domain_contract_version": 2 if ready else 1,
+        "mode": mode.value,
+        "standard_task_create": ready,
+        "project_context": ready,
+        "workspace_links": ready,
+        "task_attempts": ready,
+    }
+
+
 def _service(request: Request) -> DomainService:
     service = getattr(request.app.state, "domain_service", None)
     if service is None or request.app.state.api_config.domain_model_mode is not DomainModelMode.V2:

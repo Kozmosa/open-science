@@ -41,6 +41,8 @@ from ainrf.auth.permissions import (
     check_resource_ownership,
     get_current_user,
 )
+from ainrf.domain import DomainPermissionError, TaskApplicationService
+from ainrf.domain_control import DomainModelMode
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,19 @@ def _get_project_service(request: Request) -> ProjectRegistryService:
     service = getattr(request.app.state, "project_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="Project service not initialized")
+    return service
+
+
+def _get_task_application_service(request: Request) -> TaskApplicationService | None:
+    service = getattr(request.app.state, "task_application_service", None)
+    domain = getattr(request.app.state, "domain_service", None)
+    if (
+        service is None
+        or domain is None
+        or request.app.state.api_config.domain_model_mode is not DomainModelMode.V2
+        or not domain.v2_ready()
+    ):
+        return None
     return service
 
 
@@ -246,6 +261,27 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
     user = get_current_user(request)
     service = _get_service(request)
 
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        if not payload.project_id:
+            raise HTTPException(
+                status_code=409, detail="v2 Task creation requires an explicit Project"
+            )
+        try:
+            created = task_application.create_task(
+                user,
+                project_id=payload.project_id,
+                workspace_id=payload.workspace_id,
+                title=payload.title or "Task",
+                prompt=payload.prompt,
+                researcher_type=payload.researcher_type,
+                harness_engine=payload.harness_engine,
+                idempotency_key=request.headers.get("Idempotency-Key", ""),
+            )
+            return _task_to_response(service.get_task(created["task_id"]), service)
+        except (DomainPermissionError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     engine_type = HarnessEngineType(payload.harness_engine)
     if payload.researcher_type == "vanilla":
         researcher = vanilla(engine=engine_type, user_skills=payload.skills)
@@ -421,6 +457,15 @@ async def send_task_prompt(
 async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
     """Archive (cancel) a task."""
     service, _ = _assert_task_owner(request, task_id)
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        try:
+            task_application.archive_task(
+                task_id, get_current_user(request), reason="user_archived"
+            )
+            return _task_to_response(service.get_task(task_id), service)
+        except (DomainPermissionError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     task = service.get_task(task_id)
     try:
@@ -489,6 +534,19 @@ async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
         raise HTTPException(status_code=404, detail="Task not found")
 
     check_resource_ownership(user, old_task.owner_user_id)
+
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        try:
+            retried = task_application.retry_task(
+                task_id, user, idempotency_key=request.headers.get("Idempotency-Key", "")
+            )
+            new_task = service.get_task(retried["task_id"])
+            return TaskRetryResponse(
+                new_task=_task_to_response(new_task, service), archived_task_id=None, edge_id=""
+            )
+        except (DomainPermissionError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     try:
         new_task = await service.retry_task(task_id)
