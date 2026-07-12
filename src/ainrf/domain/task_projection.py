@@ -190,6 +190,11 @@ class TaskProjectionService:
         row: sqlite3.Row,
         attempts: Sequence[Mapping[str, object]],
     ) -> dict[str, object]:
+        # The legacy Task timestamps are compatibility caches and can be stale
+        # after an Attempt is recovered or adopted by another dispatcher.  The
+        # Timeline and every v2 Task response must therefore expose execution
+        # bounds derived from the authoritative Attempt/Runtime projection.
+        started_at, completed_at = TaskProjectionService._attempt_time_bounds(attempts)
         return {
             "task_id": str(row["task_id"]),
             "project_id": str(row["project_id"]),
@@ -202,8 +207,8 @@ class TaskProjectionService:
             "prompt": str(row["prompt"]),
             "created_at": str(row["created_at"]),
             "updated_at": str(row["updated_at"]),
-            "started_at": TaskProjectionService._optional_str(row["started_at"]),
-            "completed_at": TaskProjectionService._optional_str(row["completed_at"]),
+            "started_at": started_at,
+            "completed_at": completed_at,
             "owner_user_id": str(row["owner_user_id"]),
             "latest_output_seq": int(row["latest_output_seq"] or 0),
             "exit_code": int(row["exit_code"]) if row["exit_code"] is not None else None,
@@ -216,3 +221,30 @@ class TaskProjectionService:
     @staticmethod
     def _optional_str(value: object) -> str | None:
         return value if isinstance(value, str) else None
+
+    @staticmethod
+    def _attempt_time_bounds(
+        attempts: Sequence[Mapping[str, object]],
+    ) -> tuple[str | None, str | None]:
+        """Return Task execution bounds solely from durable Attempt facts.
+
+        An Attempt can derive its timestamps from an adopted RuntimeSession,
+        so the already-normalized projection is deliberately used instead of
+        reading Task cache columns.  A queued Task has no execution bounds;
+        callers retain ``created_at``/``updated_at`` only as display fallbacks.
+        """
+
+        started_values = [
+            value
+            for attempt in attempts
+            if isinstance((value := attempt.get("started_at")), str) and value
+        ]
+        completed_values = [
+            value
+            for attempt in attempts
+            if isinstance((value := attempt.get("finished_at")), str) and value
+        ]
+        return (
+            min(started_values) if started_values else None,
+            max(completed_values) if completed_values else None,
+        )

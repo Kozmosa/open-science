@@ -15,6 +15,7 @@ from ainrf.api.schemas import (
 )
 from ainrf.auth.permissions import get_current_user, require_admin
 from ainrf.auth.presence import is_online
+from ainrf.domain_migration import LegacyDomainRecordAuditService
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,10 @@ def _get_service(request: Request):
     if service is None:
         raise HTTPException(status_code=500, detail="auth service not initialized")
     return service
+
+
+def _legacy_domain_audit(request: Request) -> LegacyDomainRecordAuditService:
+    return LegacyDomainRecordAuditService(request.app.state.api_config.state_root)
 
 
 def _serialize_admin_user(u) -> dict:
@@ -52,6 +57,42 @@ async def list_users(request: Request) -> AdminUserListResponse:
             "items": [_serialize_admin_user(u) for u in users],
         }
     )
+
+
+@router.get("/domain/legacy-records")
+async def list_legacy_domain_records(
+    request: Request,
+    run_id: str | None = None,
+    record_type: str | None = None,
+    cursor: str | None = None,
+    limit: int = 50,
+) -> dict[str, object]:
+    """List unmapped legacy records without exposing a write operation."""
+
+    require_admin(get_current_user(request))
+    if not 1 <= limit <= 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+    items, has_more, next_cursor = _legacy_domain_audit(request).list_records(
+        run_id=run_id,
+        record_type=record_type,
+        cursor=cursor,
+        limit=limit,
+    )
+    return {"items": items, "has_more": has_more, "next_cursor": next_cursor}
+
+
+@router.get("/domain/legacy-records/{legacy_record_id}")
+async def inspect_legacy_domain_record(
+    legacy_record_id: str,
+    request: Request,
+) -> dict[str, object]:
+    """Inspect a single archived record through the admin-only audit surface."""
+
+    require_admin(get_current_user(request))
+    try:
+        return _legacy_domain_audit(request).inspect_record(legacy_record_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Legacy domain record not found") from exc
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserResponse)

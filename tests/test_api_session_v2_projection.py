@@ -199,7 +199,13 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
 
         task_detail = await client.get(f"/tasks/{task_id}?api_key={_API_KEY}")
         assert task_detail.status_code == 200
-        task_usage = json.loads(str(_body(task_detail)["token_usage_json"]))
+        task_detail_payload = _body(task_detail)
+        # Timeline consumes Task summaries for compatibility, but v2 Task
+        # timestamps must come from the Attempt/Runtime projection rather
+        # than the stale ``tasks`` cache columns.
+        assert task_detail_payload["started_at"] == "2026-07-12T00:00:02+00:00"
+        assert task_detail_payload["completed_at"] == "2026-07-12T00:00:05+00:00"
+        task_usage = json.loads(str(task_detail_payload["token_usage_json"]))
         assert task_usage["total"] == {
             "cache_creation_input_tokens": 0,
             "cache_read_input_tokens": 1,
@@ -246,8 +252,17 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
                 },
             )
         ).status_code == 405
+        # A v2 Session write is rejected before body validation, so a client
+        # cannot observe a different contract merely by sending malformed
+        # historical request data.
+        assert (
+            await client.post(f"/sessions?api_key={_API_KEY}", content=b"not-json")
+        ).status_code == 405
         assert (
             await client.patch(f"/sessions/{task_id}?api_key={_API_KEY}", json={})
+        ).status_code == 405
+        assert (
+            await client.patch(f"/sessions/{task_id}?api_key={_API_KEY}", content=b"not-json")
         ).status_code == 405
         assert (await client.delete(f"/sessions/{task_id}?api_key={_API_KEY}")).status_code == 405
 

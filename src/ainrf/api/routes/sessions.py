@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from pydantic import ValidationError
 
 from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
 from ainrf.api.schemas import (
@@ -65,6 +67,31 @@ def _v2_sessions_read_only() -> HTTPException:
         detail="Sessions are a read-only Task Attempt projection in v2",
         headers={"Allow": "GET"},
     )
+
+
+async def _legacy_request_payload(
+    request: Request, model: type[SessionCreateRequest]
+) -> SessionCreateRequest:
+    """Parse a legacy write payload only after the v2 write fence ran.
+
+    FastAPI validates typed body parameters before calling a route handler.
+    Sessions must instead return the fixed v2 ``405`` for *every* body,
+    including malformed JSON, before a legacy request schema is considered.
+    """
+
+    try:
+        payload = await request.json()
+        return model.model_validate(payload)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid Session request") from exc
+
+
+async def _legacy_update_payload(request: Request) -> SessionUpdateRequest:
+    try:
+        payload = await request.json()
+        return SessionUpdateRequest.model_validate(payload)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid Session request") from exc
 
 
 def _serialize_session(s) -> dict[str, Any]:
@@ -154,9 +181,10 @@ async def list_sessions(
 
 
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(payload: SessionCreateRequest, request: Request) -> SessionResponse:
+async def create_session(request: Request) -> SessionResponse:
     if _projection(request) is not None:
         raise _v2_sessions_read_only()
+    payload = await _legacy_request_payload(request, SessionCreateRequest)
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -216,11 +244,10 @@ async def get_session(session_id: str, request: Request) -> SessionDetailRespons
 
 
 @router.patch("/{session_id}", response_model=SessionResponse)
-async def update_session(
-    session_id: str, payload: SessionUpdateRequest, request: Request
-) -> SessionResponse:
+async def update_session(session_id: str, request: Request) -> SessionResponse:
     if _projection(request) is not None:
         raise _v2_sessions_read_only()
+    payload = await _legacy_update_payload(request)
     user = get_current_user(request)
     service = _get_service(request)
     try:

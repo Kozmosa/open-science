@@ -1,5 +1,6 @@
 """Resumable source snapshots and importer support for domain migration."""
 
+from ainrf.domain_migration.audit import LegacyDomainRecordAuditService
 from ainrf.domain_migration.importer import (
     DomainImporter,
     MigrationInspection,
@@ -23,6 +24,7 @@ from ainrf.domain_migration.sources import (
 __all__ = [
     "DomainImporter",
     "DomainReconciliationService",
+    "LegacyDomainRecordAuditService",
     "MigrationFinalization",
     "MigrationInspection",
     "MigrationInterruptedError",
