@@ -38,6 +38,7 @@ from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.api.routes.client_logs import router as client_logs_router
 from ainrf.api.routes.client_metrics import router as client_metrics_router
+from ainrf.api.routes.domain import router as domain_router
 from ainrf.auth import AuthService
 from ainrf.environments import InMemoryEnvironmentService
 from ainrf.files import FileBrowserService
@@ -55,6 +56,7 @@ from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
 from ainrf.workspaces import WorkspaceRegistryService
 from ainrf.domain_control import DomainMaintenanceService
+from ainrf.domain import DomainService
 
 
 T = TypeVar("T")
@@ -87,6 +89,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     settings_router,
     client_logs_router,
     client_metrics_router,
+    domain_router,
 )
 
 
@@ -209,6 +212,7 @@ def create_app(
     app.state.api_config = api_config
     app.state.domain_maintenance_service = DomainMaintenanceService(api_config.state_root)
     app.state.domain_maintenance_service.initialize()
+    app.state.domain_service = DomainService(api_config.state_root)
     # Service initialization order:
     # 1. project/workspace (no deps)
     # 2. terminal (no deps)

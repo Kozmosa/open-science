@@ -59,6 +59,7 @@ _API_PATH_PREFIXES = (
     "/metrics",
     "/token-usage",
     "/task-edges",
+    "/domain",
 )
 
 # Paths exempt in dev mode only (never in production).
