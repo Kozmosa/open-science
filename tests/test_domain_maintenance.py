@@ -10,6 +10,7 @@ import pytest
 from fastapi import FastAPI
 
 from ainrf.api.middleware.domain_maintenance import build_domain_maintenance_middleware
+from ainrf.db import connect
 from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 
 pytestmark = [pytest.mark.unit, pytest.mark.concurrent]
@@ -60,3 +61,66 @@ async def test_http_domain_mutations_are_rejected_during_maintenance(state_root:
 
     assert response.status_code == 503
     assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
+
+
+def test_preflight_treats_unknown_or_dispatched_runtime_work_as_a_cutover_blocker(
+    state_root: Path,
+) -> None:
+    service = DomainMaintenanceService(state_root)
+    service.initialize()
+    with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+        conn.execute(
+            """INSERT INTO tasks (
+                   task_id, project_id, workspace_id, environment_id, researcher_type,
+                   harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "task-unknown",
+                "legacy-project",
+                "legacy-workspace",
+                "legacy-environment",
+                "vanilla",
+                "claude-code",
+                "launch_unknown",
+                "Unknown",
+                "prompt",
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:00+00:00",
+                "owner",
+            ),
+        )
+        conn.execute(
+            """INSERT INTO agent_task_attempts (
+                   attempt_id, task_id, attempt_seq, trigger, status, created_at
+               ) VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                "attempt-unknown",
+                "task-unknown",
+                1,
+                "initial",
+                "launch_unknown",
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            """INSERT INTO task_dispatch_outbox (
+                   dispatch_id, task_id, attempt_id, status, launch_state, created_at, updated_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "dispatch-unknown",
+                "task-unknown",
+                "attempt-unknown",
+                "launch_unknown",
+                "unknown",
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    service.enter(actor_id="operator", reason="cutover")
+
+    preflight = service.preflight(stability_window_seconds=0)
+
+    assert not preflight.ready
+    assert preflight.active_attempt_count == 1
+    assert preflight.pending_runtime_launch_count == 1

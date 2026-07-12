@@ -65,13 +65,13 @@ class ClaudeCodeEngine(HarnessEngine):
     Session lifecycle::
 
         ┌──────────────────────────────────────────────────────┐
-        │  _pending_messages[task_id]  ←  send_input() enqueues│
-        │  _session_ids[task_id]       ←  stored after success │
+        │  _pending_messages[runtime_identity]  ← input queues │
+        │  _session_ids[runtime_identity]       ← stored success│
         └──────────────────────────────────────────────────────┘
 
     Fresh start (no stored session_id)::
 
-        claude -p --session-id <task_id> "prompt"
+        claude -p --session-id <runtime_identity> "prompt"
 
     Resume (stored session_id + pending message)::
 
@@ -79,7 +79,7 @@ class ClaudeCodeEngine(HarnessEngine):
 
     Resume failure → fall back to fresh session with prior context::
 
-        claude -p --session-id <task_id> "[context] ↵ message"
+        claude -p --session-id <runtime_identity> "[context] ↵ message"
     """
 
     def __init__(self) -> None:
@@ -118,9 +118,12 @@ class ClaudeCodeEngine(HarnessEngine):
         started_at: float,
         mcp_path: str | None,
     ) -> None:
-        # Determine run mode
-        session_id = self._session_ids.get(context.task_id)
-        pending = self._drain_pending(context.task_id)
+        # A durable Task can have more than one Attempt.  The launch key is
+        # therefore the only safe identity for engine-local maps and Claude's
+        # transcript id.  Legacy callers omit it and retain task-scoped maps.
+        runtime_identity = context.runtime_identity
+        session_id = self._session_ids.get(runtime_identity)
+        pending = self._drain_pending(runtime_identity)
 
         if session_id is not None:
             # → Resume path
@@ -138,7 +141,7 @@ class ClaudeCodeEngine(HarnessEngine):
                     started_at=started_at,
                 )
                 # Session still valid after successful resume
-                self._session_ids[context.task_id] = session_id
+                self._session_ids[runtime_identity] = session_id
                 return
             except Exception:
                 logger.warning(
@@ -147,7 +150,7 @@ class ClaudeCodeEngine(HarnessEngine):
                     context.task_id,
                     session_id,
                 )
-                self._session_ids.pop(context.task_id, None)
+                self._session_ids.pop(runtime_identity, None)
 
         # → Fresh path (or resume-failure fallback)
         prompt = self._build_prompt(context, pending)
@@ -164,14 +167,22 @@ class ClaudeCodeEngine(HarnessEngine):
             emit=emit,
             started_at=started_at,
         )
-        self._session_ids[context.task_id] = session_id
+        self._session_ids[runtime_identity] = session_id
 
-    async def send_input(self, task_id: str, text: str) -> None:
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
         """Enqueue a follow-up message for the next :meth:`start` call."""
-        self._pending_messages.setdefault(task_id, deque()).append(text)
+        runtime_identity = runtime_launch_key or task_id
+        self._pending_messages.setdefault(runtime_identity, deque()).append(text)
 
-    async def cancel(self, task_id: str) -> None:
-        process = self._processes.get(task_id)
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
+        process = self._processes.get(runtime_identity)
         if process is None:
             return
         if process.returncode is None:
@@ -182,14 +193,19 @@ class ClaudeCodeEngine(HarnessEngine):
                 process.kill()
                 await process.wait()
 
-    async def is_alive(self, task_id: str) -> bool:
-        process = self._processes.get(task_id)
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        runtime_identity = runtime_launch_key or task_id
+        process = self._processes.get(runtime_identity)
         return process is not None and process.returncode is None
 
-    async def last_event_at(self, task_id: str) -> float | None:
-        return self._last_event_at.get(task_id)
+    async def last_event_at(
+        self, task_id: str, *, runtime_launch_key: str | None = None
+    ) -> float | None:
+        runtime_identity = runtime_launch_key or task_id
+        return self._last_event_at.get(runtime_identity)
 
-    async def pause(self, task_id: str) -> None:
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        _ = task_id, runtime_launch_key
         raise HarnessEngineNotSupportedError("Claude Code engine does not support pause")
 
     async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
@@ -199,12 +215,12 @@ class ClaudeCodeEngine(HarnessEngine):
 
     @staticmethod
     def _make_session_id(context: ExecutionContext) -> str:
-        """Derive a deterministic session id from the task id.
+        """Derive a deterministic session id from the runtime identity.
 
         The CLI uses this as a filename component under
         ``~/.claude/projects/<key>/<session_id>.jsonl``.
         """
-        return context.task_id
+        return context.runtime_identity
 
     def _build_command(
         self,
@@ -248,7 +264,7 @@ class ClaudeCodeEngine(HarnessEngine):
         """Spawn the CLI, stream stdout/stderr, and emit lifecycle events."""
 
         async def _emit(event: EngineEvent) -> None:
-            self._last_event_at[context.task_id] = time.time()
+            self._last_event_at[context.runtime_identity] = time.time()
             await emit(event)
 
         env = os.environ.copy()
@@ -275,7 +291,7 @@ class ClaudeCodeEngine(HarnessEngine):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        self._processes[context.task_id] = process
+        self._processes[context.runtime_identity] = process
         stdin = process.stdin
         stdout = process.stdout
         stderr = process.stderr
@@ -347,7 +363,7 @@ class ClaudeCodeEngine(HarnessEngine):
             if process.returncode != 0:
                 raise RuntimeError(f"claude exited with code {process.returncode}")
         finally:
-            self._processes.pop(context.task_id, None)
+            self._processes.pop(context.runtime_identity, None)
             if process.returncode is None:
                 process.terminate()
                 try:
@@ -358,9 +374,9 @@ class ClaudeCodeEngine(HarnessEngine):
 
     # ── helpers ────────────────────────────────────────────────────────
 
-    def _drain_pending(self, task_id: str) -> list[str]:
-        """Return and clear all pending messages for *task_id*."""
-        q = self._pending_messages.pop(task_id, None)
+    def _drain_pending(self, runtime_identity: str) -> list[str]:
+        """Return and clear pending messages for one runtime identity."""
+        q = self._pending_messages.pop(runtime_identity, None)
         return list(q) if q else []
 
     def _build_prompt(

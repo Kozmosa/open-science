@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json as json_mod
 import os
 import shlex
@@ -32,7 +33,7 @@ from ainrf.domain_migration import (
     DomainReconciliationService,
     capture_source_manifest,
 )
-from ainrf.domain import OverviewSnapshotService
+from ainrf.domain import OverviewSnapshotService, TaskDispatcher
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -143,6 +144,29 @@ def literature_planner(
     from ainrf.literature.planner import run_forever
 
     run_forever(service)
+
+
+@app.command("domain-worker")
+def domain_worker(
+    state_root: Annotated[
+        Path,
+        typer.Option(help="State root shared by the API and durable domain worker."),
+    ] = default_state_root(),
+    once: Annotated[
+        bool,
+        typer.Option(help="Claim and dispatch at most one durable Task, then exit."),
+    ] = False,
+) -> None:
+    """Run the no-port durable Task dispatcher."""
+    dispatcher = TaskDispatcher(state_root)
+    try:
+        if once:
+            result = asyncio.run(dispatcher.run_once())
+            typer.echo(json_mod.dumps(asdict(result), indent=2))
+            return
+        asyncio.run(dispatcher.run_forever())
+    finally:
+        dispatcher.stop()
 
 
 @app.command()

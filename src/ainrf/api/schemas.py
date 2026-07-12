@@ -37,6 +37,8 @@ class TaskStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    LAUNCH_UNKNOWN = "launch_unknown"
+    STOPPED_PERMISSION_REVOKED = "stopped_permission_revoked"
 
 
 class TaskTerminalBindingStatus(StrEnum):

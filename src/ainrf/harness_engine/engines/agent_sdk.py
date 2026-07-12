@@ -109,6 +109,9 @@ def _build_token_usage(sdk_msg: object) -> dict[str, Any] | None:
 @dataclass(slots=True)
 class AgentSession:
     task_id: str
+    # ``task_id`` remains the logical Task correlation id used in events.
+    # The engine map itself is keyed by this per-Attempt identity.
+    runtime_identity: str | None = None
     abort_event: asyncio.Event = field(default_factory=asyncio.Event)
     should_pause_after_turn: bool = False
     pending_prompts: deque[str] = field(default_factory=deque)
@@ -174,11 +177,17 @@ class AgentSdkEngine(HarnessEngine):
         return _ANTHROPIC_PROVIDER_ENV_KEYS if has_explicit_provider else ()
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        runtime_identity = context.runtime_identity
         async with self._lock:
-            session = self._sessions.get(context.task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = AgentSession(task_id=context.task_id)
-                self._sessions[context.task_id] = session
+                session = AgentSession(
+                    task_id=context.task_id,
+                    runtime_identity=runtime_identity,
+                )
+                self._sessions[runtime_identity] = session
+            elif session.task_id != context.task_id:
+                raise RuntimeError("Runtime identity is already associated with another Task")
             # Restore from checkpoint whenever the session lacks a session_id,
             # not only when the session object is brand-new. send_input() runs
             # before start() on follow-up messages and retry, pre-creating a
@@ -195,6 +204,11 @@ class AgentSdkEngine(HarnessEngine):
             if checkpoint_path.exists():
                 data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
                 checkpoint = SessionCheckpoint(**data)
+                checkpoint.assert_matches_runtime(
+                    task_id=context.task_id,
+                    attempt_id=context.attempt_id,
+                    runtime_launch_key=context.runtime_launch_key,
+                )
                 session.session_id = checkpoint.session_id
                 session.turn_count = checkpoint.turn_count
                 session.total_cost_usd = checkpoint.total_cost_usd
@@ -571,41 +585,54 @@ class AgentSdkEngine(HarnessEngine):
             await self._save_checkpoint(context, session)
             if session.abort_event.is_set():
                 async with self._lock:
-                    self._sessions.pop(context.task_id, None)
+                    self._sessions.pop(context.runtime_identity, None)
 
-    async def pause(self, task_id: str) -> None:
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = AgentSession(task_id=task_id)
-                self._sessions[task_id] = session
+                session = AgentSession(task_id=task_id, runtime_identity=runtime_identity)
+                self._sessions[runtime_identity] = session
             session.should_pause_after_turn = True
 
     async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
         await self.start(context, emit)
 
-    async def send_input(self, task_id: str, text: str) -> None:
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = AgentSession(task_id=task_id)
-                self._sessions[task_id] = session
+                session = AgentSession(task_id=task_id, runtime_identity=runtime_identity)
+                self._sessions[runtime_identity] = session
             session.pending_prompts.append(text)
 
-    async def cancel(self, task_id: str) -> None:
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             if session is not None:
                 session.abort_event.set()
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             return session is not None and session.active and not session.abort_event.is_set()
 
-    async def last_event_at(self, task_id: str) -> float | None:
+    async def last_event_at(
+        self, task_id: str, *, runtime_launch_key: str | None = None
+    ) -> float | None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             return session.last_event_at if session is not None else None
 
     def _convert_sdk_message(self, sdk_msg: object, session: AgentSession) -> list[EngineEvent]:
@@ -866,6 +893,8 @@ class AgentSdkEngine(HarnessEngine):
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint = SessionCheckpoint(
             task_id=session.task_id,
+            attempt_id=context.attempt_id,
+            runtime_launch_key=context.runtime_launch_key,
             session_id=session.session_id,
             cwd=context.working_directory,
             created_at=utc_now().isoformat(),

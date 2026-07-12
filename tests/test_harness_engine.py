@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 from typing import cast
@@ -26,6 +27,7 @@ from ainrf.harness_engine import (
 from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine, AgentSession
 from ainrf.harness_engine.engines.claude_code import ClaudeCodeEngine
 from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, CodexSession
+from ainrf.harness_engine.session_state import SessionCheckpoint, SessionStateStore
 from ainrf.skills.mount import prepare_workspace_skills
 
 
@@ -66,6 +68,80 @@ def test_execution_context_creation() -> None:
     assert ctx.task_id == "task-001"
     assert ctx.prompt == "test prompt"
     assert ctx.system_prompt is None
+
+
+def test_session_state_store_scopes_durable_checkpoint_by_attempt(tmp_path: Path) -> None:
+    store = SessionStateStore(tmp_path)
+    checkpoint = SessionCheckpoint(
+        task_id="task-identity",
+        attempt_id="attempt-identity",
+        runtime_launch_key="launch-attempt-identity",
+        session_id="sdk-session-identity",
+    )
+
+    store.save(checkpoint)
+
+    assert store.checkpoint_path("task-identity", attempt_id="attempt-identity") == (
+        tmp_path / "session-states" / "attempt-identity" / "checkpoint.json"
+    )
+    restored = store.load("task-identity", attempt_id="attempt-identity")
+    assert restored is not None
+    assert restored.runtime_launch_key == "launch-attempt-identity"
+    assert store.load("task-identity") is None
+
+
+@pytest.mark.anyio
+async def test_claude_code_scopes_maps_and_session_ids_by_runtime_identity() -> None:
+    engine = ClaudeCodeEngine()
+    first = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="first prompt",
+        attempt_id="attempt-1",
+        runtime_launch_key="launch-attempt-1",
+    )
+    second = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="second prompt",
+        attempt_id="attempt-2",
+        runtime_launch_key="launch-attempt-2",
+    )
+    commands: list[list[str]] = []
+    prompts: list[str] = []
+
+    async def fake_run(
+        *,
+        command: list[str],
+        prompt: str,
+        context: ExecutionContext,
+        emit: object,
+        started_at: float,
+    ) -> None:
+        _ = context, emit, started_at
+        commands.append(command)
+        prompts.append(prompt)
+
+    await engine.send_input(
+        "task-shared", "first follow-up", runtime_launch_key=first.runtime_launch_key
+    )
+    await engine.send_input(
+        "task-shared", "second follow-up", runtime_launch_key=second.runtime_launch_key
+    )
+    with patch.object(engine, "_run", fake_run):
+        await engine.start(first, lambda _event: None)
+        await engine.start(second, lambda _event: None)
+
+    assert prompts == ["first follow-up", "second follow-up"]
+    assert engine._session_ids == {
+        "launch-attempt-1": "launch-attempt-1",
+        "launch-attempt-2": "launch-attempt-2",
+    }
+    assert "task-shared" not in engine._session_ids
+    assert [command[command.index("--session-id") + 1] for command in commands] == [
+        "launch-attempt-1",
+        "launch-attempt-2",
+    ]
 
 
 def test_claude_code_engine_scrubs_implicit_anthropic_env() -> None:
@@ -211,6 +287,95 @@ async def test_agent_sdk_start_restores_session_id_when_send_input_precreated_se
     # The follow-up message queued by send_input was consumed by _resolve_prompt,
     # not lost to the checkpoint overwrite.
     assert captured["pending_prompts_after"] == []
+
+
+@pytest.mark.anyio
+async def test_agent_sdk_scopes_sessions_by_durable_runtime_identity() -> None:
+    engine = AgentSdkEngine()
+    first = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="first prompt",
+        attempt_id="attempt-1",
+        runtime_launch_key="launch-attempt-1",
+    )
+    second = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="second prompt",
+        attempt_id="attempt-2",
+        runtime_launch_key="launch-attempt-2",
+    )
+    seen: list[AgentSession] = []
+
+    async def fake_run_query(ctx, session, prompt_stream, options, emit, stderr_lines=None):
+        _ = ctx, prompt_stream, options, emit, stderr_lines
+        seen.append(session)
+
+    await engine.send_input(
+        "task-shared", "first follow-up", runtime_launch_key=first.runtime_launch_key
+    )
+    await engine.send_input(
+        "task-shared", "second follow-up", runtime_launch_key=second.runtime_launch_key
+    )
+    with patch.object(engine, "_run_query", fake_run_query):
+        await engine.start(first, lambda _event: None)
+        await engine.start(second, lambda _event: None)
+
+    assert set(engine._sessions) == {"launch-attempt-1", "launch-attempt-2"}
+    assert [session.task_id for session in seen] == ["task-shared", "task-shared"]
+    assert [session.runtime_identity for session in seen] == [
+        "launch-attempt-1",
+        "launch-attempt-2",
+    ]
+
+
+@pytest.mark.anyio
+async def test_agent_sdk_rejects_checkpoint_for_another_durable_attempt(tmp_path: Path) -> None:
+    checkpoint_path = tmp_path / "checkpoint.json"
+    checkpoint_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "task_id": "task-shared",
+                "attempt_id": "attempt-old",
+                "runtime_launch_key": "launch-attempt-old",
+                "session_id": "sdk-session-old",
+            }
+        ),
+        encoding="utf-8",
+    )
+    context = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="new attempt",
+        attempt_id="attempt-new",
+        runtime_launch_key="launch-attempt-new",
+        session_state_path=str(checkpoint_path),
+    )
+
+    with pytest.raises(ValueError, match="Checkpoint runtime identity"):
+        await AgentSdkEngine().start(context, lambda _event: None)
+
+
+@pytest.mark.anyio
+async def test_agent_sdk_checkpoint_records_durable_runtime_identity(tmp_path: Path) -> None:
+    checkpoint_path = tmp_path / "checkpoint.json"
+    context = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="prompt",
+        attempt_id="attempt-current",
+        runtime_launch_key="launch-attempt-current",
+        session_state_path=str(checkpoint_path),
+    )
+    session = AgentSession(task_id="task-shared", session_id="sdk-session-current")
+
+    await AgentSdkEngine()._save_checkpoint(context, session)
+
+    saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    assert saved["attempt_id"] == "attempt-current"
+    assert saved["runtime_launch_key"] == "launch-attempt-current"
 
 
 @pytest.mark.anyio
@@ -622,6 +787,105 @@ async def test_codex_start_restores_thread_id_when_send_input_precreated_session
     start_thread.assert_not_awaited()
     start_turn.assert_awaited_once_with(context, session, "follow-up question")
     await_turn.assert_awaited_once_with(context, session)
+
+
+@pytest.mark.anyio
+async def test_codex_scopes_sessions_by_durable_runtime_identity() -> None:
+    engine = CodexAppServerEngine()
+    first = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="first prompt",
+        attempt_id="attempt-1",
+        runtime_launch_key="launch-attempt-1",
+    )
+    second = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="second prompt",
+        attempt_id="attempt-2",
+        runtime_launch_key="launch-attempt-2",
+    )
+    ensure_connection = AsyncMock()
+    start_thread = AsyncMock()
+    start_turn = AsyncMock()
+    await_turn = AsyncMock()
+
+    await engine.send_input(
+        "task-shared", "first follow-up", runtime_launch_key=first.runtime_launch_key
+    )
+    await engine.send_input(
+        "task-shared", "second follow-up", runtime_launch_key=second.runtime_launch_key
+    )
+    with (
+        patch.object(engine, "_ensure_connection", ensure_connection),
+        patch.object(engine, "_start_thread", start_thread),
+        patch.object(engine, "_start_turn", start_turn),
+        patch.object(engine, "_await_turn", await_turn),
+    ):
+        await engine.start(first, lambda _event: None)
+        await engine.start(second, lambda _event: None)
+
+    assert set(engine._sessions) == {"launch-attempt-1", "launch-attempt-2"}
+    assert [session.task_id for session in engine._sessions.values()] == [
+        "task-shared",
+        "task-shared",
+    ]
+    assert [session.runtime_identity for session in engine._sessions.values()] == [
+        "launch-attempt-1",
+        "launch-attempt-2",
+    ]
+    assert [call.args[2] for call in start_turn.await_args_list] == [
+        "first follow-up",
+        "second follow-up",
+    ]
+
+
+def test_codex_rejects_checkpoint_for_another_durable_attempt(tmp_path: Path) -> None:
+    checkpoint_path = tmp_path / "checkpoint.json"
+    checkpoint_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "task_id": "task-shared",
+                "attempt_id": "attempt-old",
+                "runtime_launch_key": "launch-attempt-old",
+                "metadata": {"thread_id": "thread-old"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    context = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="new attempt",
+        attempt_id="attempt-new",
+        runtime_launch_key="launch-attempt-new",
+        session_state_path=str(checkpoint_path),
+    )
+
+    with pytest.raises(ValueError, match="Checkpoint runtime identity"):
+        CodexAppServerEngine()._restore_checkpoint(context, CodexSession(task_id="task-shared"))
+
+
+@pytest.mark.anyio
+async def test_codex_checkpoint_records_durable_runtime_identity(tmp_path: Path) -> None:
+    checkpoint_path = tmp_path / "checkpoint.json"
+    context = ExecutionContext(
+        task_id="task-shared",
+        working_directory="/tmp",
+        rendered_prompt="prompt",
+        attempt_id="attempt-current",
+        runtime_launch_key="launch-attempt-current",
+        session_state_path=str(checkpoint_path),
+    )
+    session = CodexSession(task_id="task-shared", thread_id="thread-current")
+
+    await CodexAppServerEngine()._save_checkpoint(context, session)
+
+    saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    assert saved["attempt_id"] == "attempt-current"
+    assert saved["runtime_launch_key"] == "launch-attempt-current"
 
 
 # ── Context reconstruction fallback tests ────────────────────────────

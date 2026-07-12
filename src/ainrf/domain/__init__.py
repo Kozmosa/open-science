@@ -12,6 +12,7 @@ from ainrf.domain.attempts import AttemptService, DispatchClaim
 from ainrf.domain.tasks import TaskApplicationService
 from ainrf.domain.session_projection import SessionProjectionService
 from ainrf.domain.overview import OverviewSnapshotService
+from ainrf.domain.worker import DispatchRunResult, TaskDispatcher
 
 __all__ = [
     "DomainAuthorizationService",
@@ -24,6 +25,8 @@ __all__ = [
     "ProjectContextService",
     "AttemptService",
     "DispatchClaim",
+    "DispatchRunResult",
+    "TaskDispatcher",
     "TaskApplicationService",
     "SessionProjectionService",
     "OverviewSnapshotService",

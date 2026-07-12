@@ -35,6 +35,9 @@ _CLIENT_INFO = {
 @dataclass(slots=True)
 class CodexSession:
     task_id: str
+    # The logical Task id remains available for user-visible events while the
+    # enclosing engine map uses this Attempt/launch-key identity.
+    runtime_identity: str | None = None
     abort_event: asyncio.Event = field(default_factory=asyncio.Event)
     pause_requested: bool = False
     pending_prompts: deque[str] = field(default_factory=deque)
@@ -68,11 +71,17 @@ class CodexAppServerEngine(HarnessEngine):
         return HarnessEngineType.CODEX_APP_SERVER
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        runtime_identity = context.runtime_identity
         async with self._lock:
-            session = self._sessions.get(context.task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = CodexSession(task_id=context.task_id)
-                self._sessions[context.task_id] = session
+                session = CodexSession(
+                    task_id=context.task_id,
+                    runtime_identity=runtime_identity,
+                )
+                self._sessions[runtime_identity] = session
+            elif session.task_id != context.task_id:
+                raise RuntimeError("Runtime identity is already associated with another Task")
             # Restore from checkpoint whenever we lack a thread_id, not just
             # when the session is brand-new. send_input() pre-creates sessions
             # before start() runs on follow-up / retry, masking the persisted
@@ -98,12 +107,13 @@ class CodexAppServerEngine(HarnessEngine):
             await self._interrupt_turn(session)
         await self._await_turn(context, session)
 
-    async def pause(self, task_id: str) -> None:
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = CodexSession(task_id=task_id)
-                self._sessions[task_id] = session
+                session = CodexSession(task_id=task_id, runtime_identity=runtime_identity)
+                self._sessions[runtime_identity] = session
             session.pause_requested = True
             should_interrupt = session.thread_id is not None and session.turn_id is not None
         if should_interrupt:
@@ -112,17 +122,25 @@ class CodexAppServerEngine(HarnessEngine):
     async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
         await self.start(context, emit)
 
-    async def send_input(self, task_id: str, text: str) -> None:
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = CodexSession(task_id=task_id)
-                self._sessions[task_id] = session
+                session = CodexSession(task_id=task_id, runtime_identity=runtime_identity)
+                self._sessions[runtime_identity] = session
             session.pending_prompts.append(text)
 
-    async def cancel(self, task_id: str) -> None:
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.pop(task_id, None)
+            session = self._sessions.pop(runtime_identity, None)
             if session is not None:
                 session.abort_event.set()
         if session is None:
@@ -132,9 +150,10 @@ class CodexAppServerEngine(HarnessEngine):
                 await self._interrupt_turn(session)
         await self._cleanup_session(session)
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             return (
                 session is not None
                 and session.process is not None
@@ -142,9 +161,12 @@ class CodexAppServerEngine(HarnessEngine):
                 and session.initialized
             )
 
-    async def last_event_at(self, task_id: str) -> float | None:
+    async def last_event_at(
+        self, task_id: str, *, runtime_launch_key: str | None = None
+    ) -> float | None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             return session.last_event_at if session is not None else None
 
     def _restore_checkpoint(self, context: ExecutionContext, session: CodexSession) -> None:
@@ -153,6 +175,11 @@ class CodexAppServerEngine(HarnessEngine):
             return
         data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
         checkpoint = SessionCheckpoint(**data)
+        checkpoint.assert_matches_runtime(
+            task_id=context.task_id,
+            attempt_id=context.attempt_id,
+            runtime_launch_key=context.runtime_launch_key,
+        )
         metadata = checkpoint.metadata or {}
         thread_id = metadata.get("thread_id")
         if isinstance(thread_id, str) and thread_id:
@@ -603,6 +630,8 @@ class CodexAppServerEngine(HarnessEngine):
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint = SessionCheckpoint(
             task_id=session.task_id,
+            attempt_id=context.attempt_id,
+            runtime_launch_key=context.runtime_launch_key,
             session_id=session.thread_id,
             cwd=context.working_directory,
             created_at=utc_now().isoformat(),

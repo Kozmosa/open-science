@@ -529,14 +529,16 @@ class DomainMaintenanceService:
                 conn,
                 """
                 SELECT COUNT(*) FROM agent_task_attempts
-                WHERE status IN ('starting', 'running', 'pausing', 'cancelling')
+                WHERE status IN (
+                    'starting', 'running', 'pausing', 'cancelling', 'launch_unknown'
+                )
                 """,
             )
             pending_runtime_launch_count = self._count_optional(
                 conn,
                 """
                 SELECT COUNT(*) FROM task_dispatch_outbox
-                WHERE status IN ('pending', 'claimed')
+                WHERE status IN ('pending', 'claimed', 'dispatched', 'launch_unknown')
                 """,
             )
         unflushed_output_count = sum(item.unflushed_output_count for item in active_participants)

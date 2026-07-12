@@ -1016,3 +1016,115 @@ def migration_015_project_context_closure(conn: sqlite3.Connection) -> None:
         BEGIN SELECT RAISE(ABORT, 'started Attempts keep their Context snapshot'); END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_016_durable_dispatch_recovery(conn: sqlite3.Connection) -> None:
+    """Make dispatch ownership and uncertain runtime launch states durable.
+
+    ``task_dispatch_outbox`` originally used a small status CHECK that could
+    not represent a launch whose external side effect was no longer knowable.
+    Rebuild only that additive control table: Tasks, Attempts, and Runtime
+    Sessions retain their stable IDs and RESTRICT relationships.
+    """
+
+    for name, definition in (
+        ("authorization_environment_id", "TEXT"),
+        ("authorization_grant_version", "INTEGER"),
+        ("authorization_checked_at", "TEXT"),
+        ("stop_requested_at", "TEXT"),
+        ("stop_requested_reason", "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE agent_task_attempts ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.executescript(
+        """
+        DROP TRIGGER IF EXISTS task_dispatch_launch_state_valid_insert;
+        DROP TRIGGER IF EXISTS task_dispatch_launch_state_valid_update;
+
+        CREATE TABLE task_dispatch_outbox_recovery (
+            dispatch_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            attempt_id TEXT NOT NULL REFERENCES agent_task_attempts(attempt_id) ON DELETE RESTRICT,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (
+                status IN (
+                    'pending', 'claimed', 'dispatched', 'launch_unknown',
+                    'cancelled', 'completed', 'failed'
+                )
+            ),
+            created_at TEXT NOT NULL,
+            claim_token TEXT,
+            dispatcher_id TEXT,
+            claim_expires_at TEXT,
+            runtime_launch_key TEXT,
+            cancel_reason TEXT,
+            claimed_at TEXT,
+            claim_heartbeat_at TEXT,
+            launch_state TEXT NOT NULL DEFAULT 'none' CHECK (
+                launch_state IN ('none', 'starting', 'launched', 'unknown')
+            ),
+            launch_started_at TEXT,
+            launch_unknown_at TEXT,
+            dispatch_attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_attempt_count >= 0),
+            last_error TEXT,
+            next_attempt_at TEXT,
+            authorization_environment_id TEXT,
+            authorization_grant_version INTEGER,
+            authorization_checked_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT '',
+            completed_at TEXT,
+            cancelled_at TEXT
+        );
+        INSERT INTO task_dispatch_outbox_recovery (
+            dispatch_id, task_id, attempt_id, status, created_at, claim_token,
+            dispatcher_id, claim_expires_at, runtime_launch_key, cancel_reason,
+            claimed_at, claim_heartbeat_at, launch_state, dispatch_attempt_count,
+            last_error, next_attempt_at, updated_at
+        ) SELECT
+            dispatch_id, task_id, attempt_id, status, created_at, claim_token,
+            dispatcher_id, claim_expires_at, runtime_launch_key, cancel_reason,
+            claimed_at, claim_heartbeat_at, launch_state, dispatch_attempt_count,
+            last_error, next_attempt_at, COALESCE(updated_at, created_at)
+        FROM task_dispatch_outbox;
+        DROP TABLE task_dispatch_outbox;
+        ALTER TABLE task_dispatch_outbox_recovery RENAME TO task_dispatch_outbox;
+
+        CREATE UNIQUE INDEX idx_dispatch_launch_key
+        ON task_dispatch_outbox(runtime_launch_key) WHERE runtime_launch_key IS NOT NULL;
+        CREATE UNIQUE INDEX idx_dispatch_one_open_attempt
+        ON task_dispatch_outbox(attempt_id)
+        WHERE status IN ('pending', 'claimed', 'dispatched', 'launch_unknown');
+        CREATE INDEX idx_dispatch_claimable
+        ON task_dispatch_outbox(status, next_attempt_at, claim_expires_at, created_at);
+        CREATE INDEX idx_dispatch_project_task
+        ON task_dispatch_outbox(task_id, attempt_id, status);
+
+        CREATE TRIGGER task_dispatch_claim_requires_lease
+        BEFORE UPDATE OF status ON task_dispatch_outbox
+        WHEN NEW.status = 'claimed'
+          AND (
+              NEW.claim_token IS NULL
+              OR NEW.dispatcher_id IS NULL
+              OR NEW.claim_expires_at IS NULL
+              OR NEW.runtime_launch_key IS NULL
+          )
+        BEGIN SELECT RAISE(ABORT, 'claimed dispatch requires token, dispatcher, lease, and launch key'); END;
+
+        CREATE TRIGGER task_dispatch_unknown_requires_unknown_launch_state
+        BEFORE UPDATE OF status, launch_state ON task_dispatch_outbox
+        WHEN NEW.status = 'launch_unknown' AND NEW.launch_state != 'unknown'
+        BEGIN SELECT RAISE(ABORT, 'launch_unknown dispatch requires unknown launch state'); END;
+
+        CREATE TRIGGER task_dispatch_launch_state_valid_insert
+        BEFORE INSERT ON task_dispatch_outbox
+        WHEN NEW.launch_state NOT IN ('none', 'starting', 'launched', 'unknown')
+        BEGIN SELECT RAISE(ABORT, 'invalid dispatch launch state'); END;
+        CREATE TRIGGER task_dispatch_launch_state_valid_update
+        BEFORE UPDATE OF launch_state ON task_dispatch_outbox
+        WHEN NEW.launch_state NOT IN ('none', 'starting', 'launched', 'unknown')
+        BEGIN SELECT RAISE(ABORT, 'invalid dispatch launch state'); END;
+        """
+    )

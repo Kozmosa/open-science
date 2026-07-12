@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 from ainrf import __version__
 from ainrf.api.config import hash_api_key
 from ainrf.cli import _parse_ssh_command, app
+from ainrf.domain import DispatchRunResult
 from ainrf.onboarding import (
     config_path_for,
     ensure_onboarded,
@@ -109,6 +110,40 @@ def test_serve_help_lists_expected_flags() -> None:
     assert "--port" in output
     assert "--daemon" in output
     assert "--state-root" in output
+
+
+def test_domain_worker_once_runs_one_dispatch_and_stops(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[str] = []
+
+    class FakeDispatcher:
+        def __init__(self, state_root: Path) -> None:
+            assert state_root == tmp_path
+            calls.append("init")
+
+        async def run_once(self) -> DispatchRunResult:
+            calls.append("once")
+            return DispatchRunResult(outcome="idle")
+
+        async def run_forever(self) -> None:
+            pytest.fail("--once must not start the long-running dispatcher")
+
+        def stop(self) -> None:
+            calls.append("stop")
+
+    monkeypatch.setattr("ainrf.cli.TaskDispatcher", FakeDispatcher)
+
+    result = runner.invoke(app, ["domain-worker", "--once", "--state-root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "attempt_id": None,
+        "detail": None,
+        "dispatch_id": None,
+        "outcome": "idle",
+    }
+    assert calls == ["init", "once", "stop"]
 
 
 def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
