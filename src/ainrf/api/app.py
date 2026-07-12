@@ -65,6 +65,7 @@ from ainrf.domain_control import (
 from ainrf.domain import (
     DomainService,
     OverviewSnapshotService,
+    PersistentEnvironmentFacade,
     SessionProjectionService,
     TaskApplicationService,
 )
@@ -262,6 +263,7 @@ def create_app(
     app.state.domain_maintenance_service = DomainMaintenanceService(api_config.state_root)
     app.state.domain_maintenance_service.initialize()
     app.state.domain_service = DomainService(api_config.state_root)
+    app.state.persistent_environment_facade = PersistentEnvironmentFacade(api_config.state_root)
     app.state.task_application_service = TaskApplicationService(api_config.state_root)
     app.state.session_projection_service = SessionProjectionService(api_config.state_root)
     app.state.overview_snapshot_service = OverviewSnapshotService(api_config.state_root)

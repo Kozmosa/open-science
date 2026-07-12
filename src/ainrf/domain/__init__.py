@@ -1,6 +1,7 @@
 """V2 Project, Workspace, Environment, and authorization application services."""
 
 from ainrf.domain.service import DomainAuthorizationService, DomainService, DomainPermissionError
+from ainrf.domain.environment_facade import PersistentEnvironmentFacade
 from ainrf.domain.context import ProjectContextService
 from ainrf.domain.attempts import AttemptService, DispatchClaim
 from ainrf.domain.tasks import TaskApplicationService
@@ -11,6 +12,7 @@ __all__ = [
     "DomainAuthorizationService",
     "DomainPermissionError",
     "DomainService",
+    "PersistentEnvironmentFacade",
     "ProjectContextService",
     "AttemptService",
     "DispatchClaim",

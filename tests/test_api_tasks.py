@@ -403,7 +403,7 @@ async def test_task_messages_normalize_wrapped_codex_events_and_drop_user_echo(
 
 
 @pytest.mark.anyio
-async def test_task_stream_allows_query_api_key_for_eventsource(tmp_path: Path) -> None:
+async def test_task_stream_rejects_unscoped_query_api_key_for_eventsource(tmp_path: Path) -> None:
     app = make_app(tmp_path, FakeEngine())
     headers = get_jwt_headers(app)
     async with httpx.AsyncClient(
@@ -446,12 +446,7 @@ async def test_task_stream_allows_query_api_key_for_eventsource(tmp_path: Path) 
             "GET",
             f"/tasks/{task_id}/stream?after_seq=1&api_key=secret-key",
         ) as stream:
-            assert stream.status_code == 200
-            stream_text = await stream.aread()
-
-    decoded_stream = stream_text.decode("utf-8")
-    assert "event: output" in decoded_stream
-    assert "event: done" in decoded_stream
+            assert stream.status_code == 404
 
 
 def test_agentic_researcher_initialization_migrates_legacy_pending_status(

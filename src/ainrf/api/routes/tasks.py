@@ -139,11 +139,12 @@ def _assert_task_stream_access(
     except TaskNotFoundError:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if getattr(request.state, "auth_scheme", None) == "api_key":
-        return service, task
-
     user = get_current_user(request)
-    check_resource_ownership(user, task.owner_user_id)
+    # An API key authenticates a principal; it is not a global task-stream
+    # capability.  Treat a non-owner stream lookup as non-existent so a key
+    # cannot enumerate or subscribe to another tenant's output.
+    if user.get("role") != "admin" and user.get("id") != task.owner_user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
     return service, task
 
 

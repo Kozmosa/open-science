@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.auth.service import AuthService
 from ainrf.db import connect
 from ainrf.domain_control import DomainModelMode
 
@@ -54,6 +55,15 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path) -> No
     user: dict[str, object] = {"id": "api-key-user", "role": "user"}
     domain = app.state.domain_service
     environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id=str(environment["environment_id"]),
+        user_id="api-key-user",
+        max_tasks=None,
+        granted_by="admin",
+        reason="v2 task adapter test",
+    )
     project = domain.create_project(user, name="Project")
     workspace = domain.create_workspace(
         user,
