@@ -118,6 +118,11 @@ class TaskDispatcher:
             self._participant.drain()
             return DispatchRunResult(outcome="maintenance_drained")
         try:
+            try:
+                self._recover_v2_literature_intents(lease)
+            except MaintenanceModeError:
+                self._participant.drain()
+                return DispatchRunResult(outcome="maintenance_drained")
             claim = self._attempts.claim_next(self.dispatcher_id, lease_seconds=self._lease_seconds)
             if claim is None:
                 self._participant.heartbeat()
@@ -301,6 +306,38 @@ class TaskDispatcher:
         if not self._artifact_sha:
             raise DomainCutoverError("domain worker requires the committed v2 artifact SHA")
         self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
+
+    def _recover_v2_literature_intents(self, lease: MaintenanceLease) -> None:
+        """Resume durable Literature research intents before dispatching Tasks.
+
+        Literature keeps its outbox and intent checkpoint in a separate
+        SQLite database.  This is intentionally a sequence of durable
+        operations, rather than a cross-database transaction: the saga's
+        deterministic Task idempotency key and its Literature-side lease make
+        a crash at every boundary recoverable.  Only a committed v2 worker can
+        run this path, and the exact artifact SHA is passed to the Task writer
+        used by the saga.
+        """
+
+        status = self._cutover.status()
+        if status.state == "legacy":
+            return
+        if status.state != "v2":
+            raise DomainCutoverError(
+                "domain worker cannot recover Literature intents while cutover is prepared"
+            )
+        if not self._artifact_sha:
+            raise DomainCutoverError("domain worker requires the committed v2 artifact SHA")
+        self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
+        self._maintenance.check_lease(lease)
+
+        # Import lazily to avoid the domain package's public worker export
+        # participating in Literature's own domain-service import cycle.
+        from ainrf.literature.task_saga import LiteratureTaskSagaService
+
+        saga = LiteratureTaskSagaService(self._state_root, artifact_sha=self._artifact_sha)
+        saga.recover_pending(worker_id=f"{self.dispatcher_id}:literature")
+        self._maintenance.check_lease(lease)
 
     async def _recover_existing_runtime(
         self,

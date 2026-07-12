@@ -426,7 +426,10 @@ def create_app(
     app.state.literature_tracking_service = LiteratureTrackingService(
         state_root=api_config.state_root
     )
-    app.state.literature_task_saga_service = LiteratureTaskSagaService(api_config.state_root)
+    app.state.literature_task_saga_service = LiteratureTaskSagaService(
+        api_config.state_root,
+        artifact_sha=artifact_sha,
+    )
 
     # Initialize OpenTelemetry auto-instrumentation (disabled by default).
     from ainrf.telemetry import init_telemetry

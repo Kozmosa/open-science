@@ -8,19 +8,29 @@ import os
 import socket
 from pathlib import Path
 
+from ainrf.domain_control import DomainCutoverController, DomainCutoverError
 from ainrf.literature.models import LiteraturePaper
 from ainrf.literature.limits import ArxivRequestLimiter
 from ainrf.literature.providers import ArxivRssProvider
 from ainrf.literature.summarizer import AnthropicSummarizer
+from ainrf.literature.task_saga import LiteratureTaskSagaService
 from ainrf.literature.tracking import LiteratureTrackingService, WorkItem
 
 
-async def execute_work_item(service: LiteratureTrackingService, item: WorkItem) -> None:
+async def execute_work_item(
+    service: LiteratureTrackingService,
+    item: WorkItem,
+    *,
+    artifact_sha: str | None = None,
+) -> None:
     if item.kind == "fetch_rss":
         await _fetch_rss(service, item)
         return
     if item.kind == "summarize":
         await _summarize(service, item)
+        return
+    if item.kind == "research_task":
+        await _recover_research_task(service, item, artifact_sha=artifact_sha)
         return
     raise ValueError(f"Unsupported literature work kind: {item.kind}")
 
@@ -77,6 +87,67 @@ async def _summarize(service: LiteratureTrackingService, item: WorkItem) -> None
     except Exception as exc:
         service.fail_summary(str(item.payload["summary_id"]), str(exc))
         raise
+
+
+def _research_task_artifact_sha(state_root: Path, supplied: str | None) -> str | None:
+    """Return a verified v2 artifact SHA before crossing the Task-write boundary.
+
+    The historical Literature worker may still drain legacy records while the
+    domain is in legacy mode.  Once cutover is prepared or committed, however,
+    it must never create a Task with an unverified or process-local artifact.
+    """
+
+    controller = DomainCutoverController(state_root)
+    status = controller.status()
+    if status.state == "legacy":
+        return None
+    if status.state != "v2":
+        raise DomainCutoverError(
+            "Literature research Task work is unavailable while domain cutover is prepared"
+        )
+    artifact_sha = (
+        supplied
+        or os.environ.get(
+            "OPENSCIENCE_DOMAIN_ARTIFACT_SHA", os.environ.get("AINRF_DOMAIN_ARTIFACT_SHA", "")
+        ).strip()
+    )
+    if not artifact_sha:
+        raise DomainCutoverError(
+            "OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required for v2 Literature research Task work"
+        )
+    controller.assert_v2_writable(artifact_sha=artifact_sha)
+    return artifact_sha
+
+
+async def _recover_research_task(
+    service: LiteratureTrackingService,
+    item: WorkItem,
+    *,
+    artifact_sha: str | None,
+) -> None:
+    """Resume a persisted Literature intent from its existing outbox record.
+
+    This runner is the legacy Literature planner's recovery path.  The v2
+    domain worker calls the same saga API with its committed artifact SHA.  A
+    retryable saga result deliberately raises so ``process_durable_work_item``
+    cannot overwrite its durable retry state with ``completed`` in the common
+    worker footer.
+    """
+
+    verified_artifact_sha = _research_task_artifact_sha(service.state_root, artifact_sha)
+    saga = LiteratureTaskSagaService(service.state_root, artifact_sha=verified_artifact_sha)
+    result = await asyncio.to_thread(
+        saga.recover_work_item,
+        item.work_item_id,
+        worker_id=f"literature-worker:{socket.gethostname()}",
+    )
+    if result is None:
+        raise RuntimeError("research Task work item has no durable intent")
+    if result.get("status") == "completed":
+        return
+    error = result.get("last_error")
+    detail = str(error) if isinstance(error, str) and error else "research Task intent is retryable"
+    raise RuntimeError(detail)
 
 
 def process_durable_work_item(work_item_id: str) -> None:

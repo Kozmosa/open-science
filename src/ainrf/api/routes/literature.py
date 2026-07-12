@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request
+import json
 
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+
+from ainrf.api.deprecation import deprecation_headers
 from ainrf.auth.permissions import get_current_user
+from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
+from ainrf.domain_control import DomainCutoverError, DomainModelMode, MaintenanceModeError
 from ainrf.literature.models import LiteratureSubscription
 from ainrf.literature.service import LiteratureService
+from ainrf.literature.task_saga import (
+    LiteratureTaskSagaService,
+    ResearchTaskIdempotencyConflictError,
+    ResearchTaskPaperNotFoundError,
+    ResearchTaskPresetError,
+    ResearchTaskWorkspaceRequiredError,
+)
 from ainrf.literature.tracking import LiteratureTrackingService
 
 router = APIRouter(prefix="/literature", tags=["literature"])
@@ -27,6 +39,25 @@ def _get_tracking_service(request: Request) -> LiteratureTrackingService:
     return service
 
 
+def _get_research_task_saga(request: Request) -> LiteratureTaskSagaService:
+    """Return the formal saga only after the committed v2 fuse is live."""
+
+    service = getattr(request.app.state, "literature_task_saga_service", None)
+    domain = getattr(request.app.state, "domain_service", None)
+    if (
+        request.app.state.api_config.domain_model_mode is not DomainModelMode.V2
+        or domain is None
+        or not domain.v2_ready()
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Literature research Tasks require a committed domain v2 cutover",
+        )
+    if not isinstance(service, LiteratureTaskSagaService):
+        raise HTTPException(status_code=500, detail="Literature Task saga service not initialized")
+    return service
+
+
 def _get_user_id(request: Request) -> str:
     return get_current_user(request)["id"]
 
@@ -37,6 +68,114 @@ def _tracking_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
     raise exc
+
+
+def _research_task_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, (ResearchTaskPaperNotFoundError, DomainNotFoundError)):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, DomainPermissionError):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, DomainCutoverError):
+        return HTTPException(status_code=503, detail="Domain cutover fuse is not writable")
+    if isinstance(exc, MaintenanceModeError):
+        return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
+    if isinstance(
+        exc,
+        (
+            DomainConflictError,
+            ResearchTaskWorkspaceRequiredError,
+            ResearchTaskIdempotencyConflictError,
+        ),
+    ):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, (ResearchTaskPresetError, ValueError)):
+        return HTTPException(status_code=400, detail=str(exc))
+    raise exc
+
+
+def _text_field(
+    body: dict[str, object],
+    name: str,
+    *,
+    required: bool = False,
+) -> str | None:
+    value = body.get(name)
+    if value is None:
+        if required:
+            raise HTTPException(status_code=400, detail=f"{name} is required")
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(status_code=400, detail=f"{name} must be a string")
+    return value
+
+
+async def _json_object(request: Request, *, label: str) -> dict[str, object]:
+    try:
+        payload: object = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"{label} must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail=f"{label} must be an object")
+    return {str(key): value for key, value in payload.items()}
+
+
+def _research_task_idempotency_key(request: Request, body: dict[str, object]) -> str:
+    header_key = request.headers.get("Idempotency-Key")
+    body_key = _text_field(body, "idempotency_key")
+    if header_key and body_key and header_key != body_key:
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency-Key header and body field must match",
+        )
+    key = header_key or body_key
+    if key is None or not key.strip():
+        raise HTTPException(status_code=409, detail="Idempotency-Key is required")
+    return key
+
+
+def _research_task_request(body: dict[str, object]) -> dict[str, str | None]:
+    """Validate the constrained Literature subset of Task create input."""
+
+    if "environment_id" in body:
+        raise HTTPException(
+            status_code=400,
+            detail="environment_id is derived from workspace_id and is not accepted",
+        )
+    return {
+        "project_id": _text_field(body, "project_id", required=True),
+        "workspace_id": _text_field(body, "workspace_id"),
+        "task_preset": _text_field(body, "task_preset") or "structured-research-default",
+        "title": _text_field(body, "title"),
+    }
+
+
+def _new_research_task(
+    request: Request,
+    *,
+    paper_id: str,
+    body: dict[str, object],
+    subscription_id: str | None = None,
+) -> dict[str, object]:
+    payload = _research_task_request(body)
+    saga = _get_research_task_saga(request)
+    user = get_current_user(request)
+    try:
+        return saga.create_research_task(
+            user,
+            paper_id=paper_id,
+            subscription_id=subscription_id,
+            project_id=str(payload["project_id"]),
+            workspace_id=payload["workspace_id"],
+            task_preset=str(payload["task_preset"]),
+            title=payload["title"],
+            idempotency_key=_research_task_idempotency_key(request, body),
+        )
+    except Exception as exc:
+        raise _research_task_error(exc) from exc
+
+
+def _research_task_response_status(result: dict[str, object]) -> int:
+    return 201 if result.get("status") == "completed" else 202
 
 
 @router.get("/overview")
@@ -307,50 +446,78 @@ async def mark_read(paper_id: str, request: Request):
     svc.mark_read(paper_id, subscription_id)
 
 
-@router.post("/papers/{paper_id}/convert", status_code=201)
-async def convert_to_task(paper_id: str, request: Request):
-    user_id = _get_user_id(request)
-    body = await request.json()
-    task_id = body.get("task_id")
-    subscription_id = body.get("subscription_id")
-    svc = _get_service(request)
-    if not svc.user_owns_paper(user_id, paper_id):
-        raise HTTPException(status_code=404, detail="Paper not found")
-    if not task_id:
-        project_id = body.get("project_id")
-        workspace_id = body.get("workspace_id")
-        if (
-            not isinstance(subscription_id, str)
-            or not isinstance(project_id, str)
-            or not isinstance(workspace_id, str)
-        ):
+@router.post("/papers/{paper_id}/research-task", status_code=202)
+async def create_research_task(paper_id: str, request: Request, response: Response):
+    """Create/recover a constrained standard Task through the durable saga."""
+
+    body = await _json_object(request, label="Research Task request")
+    result = _new_research_task(request, paper_id=paper_id, body=body)
+    response.status_code = _research_task_response_status(result)
+    return result
+
+
+@router.get("/papers/{paper_id}/research-tasks")
+async def list_research_tasks(paper_id: str, request: Request):
+    saga = _get_research_task_saga(request)
+    try:
+        return {"items": saga.list_research_tasks(get_current_user(request), paper_id=paper_id)}
+    except Exception as exc:
+        raise _research_task_error(exc) from exc
+
+
+@router.get("/papers/{paper_id}/research-task")
+async def get_research_task(
+    paper_id: str,
+    request: Request,
+    idempotency_key: str = Query(..., min_length=1),
+):
+    saga = _get_research_task_saga(request)
+    try:
+        return saga.get_research_task(
+            get_current_user(request),
+            paper_id=paper_id,
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        raise _research_task_error(exc) from exc
+
+
+@router.post("/papers/{paper_id}/convert", status_code=202)
+async def convert_to_task(paper_id: str, request: Request, response: Response):
+    """Deprecated proxy for the validated research-task intent API.
+
+    A legacy caller can retain its path during the compatibility window, but
+    it cannot attach a paper to an arbitrary external Task ID anymore.
+    """
+
+    replacement = f"/literature/papers/{paper_id}/research-task"
+    headers = deprecation_headers(route="literature.convert", replacement=replacement)
+    try:
+        body = await _json_object(request, label="Convert request")
+        if "task_id" in body:
             raise HTTPException(
-                status_code=400, detail="subscription_id, project_id, and workspace_id are required"
+                status_code=400,
+                detail="task_id is no longer accepted; use the research-task intent contract",
             )
-        saga = getattr(request.app.state, "literature_task_saga_service", None)
-        if saga is None:
-            raise HTTPException(
-                status_code=500, detail="Literature Task saga service not initialized"
-            )
-        try:
-            return saga.convert(
-                {
-                    "id": user_id,
-                    "role": getattr(request.state, "current_user", {}).get("role", "member"),
-                },
-                paper_id=paper_id,
-                subscription_id=subscription_id,
-                project_id=project_id,
-                workspace_id=workspace_id,
-            )
-        except LookupError as exc:
-            raise HTTPException(status_code=404, detail="Paper not found") from exc
-        except (PermissionError, ValueError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-    paper = svc.convert_to_task(paper_id, task_id, subscription_id)
-    if paper is None:
-        raise HTTPException(status_code=404, detail="Paper not found for this subscription")
-    return paper.to_dict()
+        subscription_id = _text_field(body, "subscription_id")
+        result = _new_research_task(
+            request,
+            paper_id=paper_id,
+            body=body,
+            subscription_id=subscription_id,
+        )
+    except HTTPException as exc:
+        merged_headers = dict(headers)
+        if exc.headers is not None:
+            merged_headers.update(exc.headers)
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail,
+            headers=merged_headers,
+        ) from exc
+    response.headers.update(headers)
+    response.status_code = _research_task_response_status(result)
+    return result
 
 
 @router.get("/subscriptions/{subscription_id}/fetch-status")
