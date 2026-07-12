@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from ainrf.backup.service import BackupManifest, BackupService, FileMeta
+from ainrf.backup.service import BackupManifest, BackupService
 
 pytestmark = [pytest.mark.unit]
 
@@ -46,6 +46,58 @@ def _seed_state(state_root: Path) -> None:
     ss = state_root / "session-states" / "task-abc"
     ss.mkdir(parents=True)
     (ss / "checkpoint.json").write_text('{"step": 1}', encoding="utf-8")
+
+
+def _write_v2_archive(
+    archive: Path,
+    *,
+    database: Path,
+    config: Path,
+    auth_schema_version: int | None = None,
+) -> Path:
+    """Write the on-disk manifest format emitted by backup manifest v2."""
+    manifest = {
+        "version": 2,
+        "created_at": "2026-07-12T00:00:00+00:00",
+        "databases": {
+            "auth.sqlite3": {
+                "size": database.stat().st_size,
+                "sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
+                "source_path": "runtime/auth.sqlite3",
+                "schema_version": auth_schema_version,
+            }
+        },
+        "config_files": {
+            "config.json": {
+                "size": config.stat().st_size,
+                "sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+                "source_path": "config.json",
+                "schema_version": None,
+            }
+        },
+        "includes_workspaces": False,
+        "includes_tenants": False,
+    }
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(database, arcname="databases/auth.sqlite3")
+        tar.add(config, arcname="config/config.json")
+        manifest_bytes = json.dumps(manifest).encode("utf-8")
+        info = tarfile.TarInfo("manifest.json")
+        info.size = len(manifest_bytes)
+        tar.addfile(info, BytesIO(manifest_bytes))
+    return archive
+
+
+class _RejectingRestoreValidator:
+    def __init__(self, candidates: list[Path]) -> None:
+        self._candidates = candidates
+
+    def __call__(self, candidate_root: Path, manifest: BackupManifest) -> None:
+        self._candidates.append(candidate_root)
+        assert candidate_root.exists()
+        assert (candidate_root / "runtime" / "auth.sqlite3").exists()
+        assert manifest.version == 3
+        raise ValueError("reconciliation rejected staged restore")
 
 
 # ── tests ─────────────────────────────────────────────────────────
@@ -323,32 +375,7 @@ def test_v2_archive_remains_verifiable_and_restorable(tmp_path: Path) -> None:
     _seed_state(source_root)
     database = source_root / "runtime" / "auth.sqlite3"
     config = source_root / "config.json"
-    manifest = BackupManifest(
-        version=2,
-        created_at="2026-07-12T00:00:00+00:00",
-        databases={
-            "auth.sqlite3": FileMeta(
-                size=database.stat().st_size,
-                sha256=hashlib.sha256(database.read_bytes()).hexdigest(),
-                source_path="runtime/auth.sqlite3",
-            )
-        },
-        config_files={
-            "config.json": FileMeta(
-                size=config.stat().st_size,
-                sha256=hashlib.sha256(config.read_bytes()).hexdigest(),
-                source_path="config.json",
-            )
-        },
-    )
-    archive = tmp_path / "v2.tar.gz"
-    with tarfile.open(archive, "w:gz") as tar:
-        tar.add(database, arcname="databases/auth.sqlite3")
-        tar.add(config, arcname="config/config.json")
-        manifest_bytes = manifest.to_json().encode("utf-8")
-        info = tarfile.TarInfo("manifest.json")
-        info.size = len(manifest_bytes)
-        tar.addfile(info, BytesIO(manifest_bytes))
+    archive = _write_v2_archive(tmp_path / "v2.tar.gz", database=database, config=config)
 
     service = BackupService(source_root)
     assert service.verify_backup(archive).version == 2
@@ -358,3 +385,76 @@ def test_v2_archive_remains_verifiable_and_restorable(tmp_path: Path) -> None:
     assert (target / "config.json").read_text(encoding="utf-8") == config.read_text(
         encoding="utf-8"
     )
+
+
+def test_restore_rejects_manifest_schema_version_before_promotion(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    database = source_root / "runtime" / "auth.sqlite3"
+    conn = sqlite3.connect(str(database))
+    conn.execute(
+        "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+    )
+    conn.execute("INSERT INTO _schema_version (database, version) VALUES ('auth', 7)")
+    conn.commit()
+    conn.close()
+
+    target = tmp_path / "schema-mismatch"
+    archive = _write_v2_archive(
+        tmp_path / "schema-mismatch.tar.gz",
+        database=database,
+        config=source_root / "config.json",
+        auth_schema_version=8,
+    )
+
+    with pytest.raises(ValueError, match="schema version mismatch"):
+        BackupService(source_root).restore_backup(
+            archive,
+            target_state_root=target,
+            skip_pre_backup=True,
+        )
+
+    assert not target.exists()
+    assert not list(target.parent.glob(f".{target.name}.restore-*"))
+
+
+def test_restore_runs_custom_validator_before_promotion_and_cleans_candidate(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    target = tmp_path / "restored"
+    candidates: list[Path] = []
+    validator = _RejectingRestoreValidator(candidates)
+
+    with pytest.raises(ValueError, match="reconciliation rejected staged restore"):
+        BackupService(source_root).restore_backup(
+            archive,
+            target_state_root=target,
+            skip_pre_backup=True,
+            validators=(validator,),
+        )
+
+    assert not target.exists()
+    assert candidates
+    assert all(not candidate.exists() for candidate in candidates)
+    assert not list(target.parent.glob(f".{target.name}.restore-*"))
+
+
+def test_restore_removes_promotion_journal_after_success(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    target = tmp_path / "restored"
+    journal = target.parent / f".{target.name}.restore-promotion.json"
+
+    restored = BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=target,
+        skip_pre_backup=True,
+    )
+
+    assert restored == target
+    assert (target / "runtime" / "auth.sqlite3").exists()
+    assert not journal.exists()

@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from ainrf.backup.service import BackupManifest, BackupService
+from ainrf.backup.service import BackupManifest, BackupService, StagedRestoreValidator
 
-__all__ = ["BackupManifest", "BackupService"]
+__all__ = ["BackupManifest", "BackupService", "StagedRestoreValidator"]

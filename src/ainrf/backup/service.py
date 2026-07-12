@@ -19,6 +19,7 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
+from collections.abc import Callable, Sequence
 from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -146,6 +147,10 @@ class BackupManifest:
         return cls(**d)
 
 
+StagedRestoreValidator = Callable[[Path, BackupManifest], None]
+"""A read/validate hook invoked before a staged restore is promoted."""
+
+
 def _file_meta(path: Path, *, source_path: str, schema_version: int | None = None) -> FileMeta:
     """Return manifest metadata for a staged regular file."""
     stat = path.stat()
@@ -208,6 +213,18 @@ def _validate_sqlite_database(path: Path) -> None:
         foreign_key_rows = conn.execute("PRAGMA foreign_key_check").fetchall()
         if foreign_key_rows:
             raise ValueError(f"{path.name}: SQLite foreign_key_check failed: {foreign_key_rows[0]}")
+
+
+def _validate_database_schema_version(path: Path, meta: FileMeta) -> None:
+    """Ensure the restored snapshot still has the schema version in its manifest."""
+    if meta.schema_version is None:
+        return
+    actual = _database_schema_version(path, _database_name_from_filename(path.name))
+    if actual != meta.schema_version:
+        raise ValueError(
+            f"{path.name}: schema version mismatch "
+            f"(manifest={meta.schema_version}, restored={actual})"
+        )
 
 
 # ── service ───────────────────────────────────────────────────────
@@ -432,14 +449,16 @@ class BackupService:
         target_workspace_root: Path | None = None,
         target_tenant_root: Path | None = None,
         skip_pre_backup: bool = False,
+        validators: Sequence[StagedRestoreValidator] = (),
     ) -> Path:
         """Restore a backup into a *new* state root and return that path.
 
         The active state root is never overwritten.  The caller must provide a
         previously non-existent ``target_state_root``; all archive checks and
-        SQLite integrity checks finish in a sibling candidate directory before
-        it is atomically renamed into place.  A pre-restore snapshot of this
-        service's state root is still created unless *skip_pre_backup* is true.
+        SQLite integrity checks and *validators* finish in a sibling candidate
+        directory before it is atomically renamed into place.  A pre-restore
+        snapshot of this service's state root is still created unless
+        *skip_pre_backup* is true.
         """
         if not archive_path.exists():
             raise FileNotFoundError(f"Backup not found: {archive_path}")
@@ -499,77 +518,115 @@ class BackupService:
                 f".{target_tenant_root.name}.restore-{uuid4().hex}"
             )
 
-        with tempfile.TemporaryDirectory(prefix="ainrf-restore-") as tmp:
-            stage = Path(tmp) / "archive"
-            with tarfile.open(str(archive_path), "r:gz") as tar:
-                tar.extractall(str(stage), filter="data")
+        journal_path = state_root.parent / f".{state_root.name}.restore-promotion.json"
+        promoted_pairs: list[tuple[Path, Path]] = []
+        candidate_paths = [candidate_root]
+        if candidate_workspace_root is not None:
+            candidate_paths.append(candidate_workspace_root)
+        if candidate_tenant_root is not None:
+            candidate_paths.append(candidate_tenant_root)
+        try:
+            with tempfile.TemporaryDirectory(prefix="ainrf-restore-") as tmp:
+                stage = Path(tmp) / "archive"
+                with tarfile.open(str(archive_path), "r:gz") as tar:
+                    tar.extractall(str(stage), filter="data")
 
-            candidate_root.mkdir(parents=True)
-            runtime_root = candidate_root / "runtime"
+                candidate_root.mkdir(parents=True)
+                runtime_root = candidate_root / "runtime"
 
-            # 1. Databases
-            for db_name, meta in manifest.databases.items():
-                src = stage / "databases" / db_name
-                if not src.exists():
-                    raise ValueError(
-                        f"database {db_name} listed in manifest but absent from archive"
+                # 1. Databases
+                for db_name, meta in manifest.databases.items():
+                    src = stage / "databases" / db_name
+                    if not src.exists():
+                        raise ValueError(
+                            f"database {db_name} listed in manifest but absent from archive"
+                        )
+                    actual = _sha256_of(src)
+                    if actual != meta.sha256:
+                        raise ValueError(f"{db_name}: checksum mismatch (archive corrupted)")
+                    dest = runtime_root / db_name
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dest)
+                    _LOG.info("restored database %s", db_name)
+
+                # 2. Config files
+                for cfg_name, meta in manifest.config_files.items():
+                    src = stage / "config" / cfg_name
+                    if not src.exists():
+                        raise ValueError(
+                            f"config {cfg_name} listed in manifest but absent from archive"
+                        )
+                    actual = _sha256_of(src)
+                    if actual != meta.sha256:
+                        raise ValueError(f"{cfg_name}: checksum mismatch (archive corrupted)")
+                    dest = (
+                        runtime_root if cfg_name in _RUNTIME_CONFIGS else candidate_root
+                    ) / cfg_name
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dest)
+                    _LOG.info("restored config %s", cfg_name)
+
+                # 3. State subdirectories
+                for dirname in _STATE_DIRS:
+                    src = stage / dirname
+                    if src.is_dir():
+                        shutil.copytree(src, candidate_root / dirname)
+                        _LOG.info("restored state dir %s", dirname)
+
+                # 4. Optional high-risk workspace/tenant data only activates
+                # when the caller supplied an explicit target root.
+                promotion_pairs = [(candidate_root, state_root)]
+                if target_workspace_root and manifest.includes_workspaces:
+                    ws_src = stage / "workspaces"
+                    if ws_src.is_dir():
+                        assert candidate_workspace_root is not None
+                        shutil.copytree(ws_src, candidate_workspace_root)
+                        promotion_pairs.append((candidate_workspace_root, target_workspace_root))
+                        _LOG.info("staged workspaces → %s", candidate_workspace_root)
+                if target_tenant_root and manifest.includes_tenants:
+                    t_src = stage / "tenants"
+                    if t_src.is_dir():
+                        assert candidate_tenant_root is not None
+                        shutil.copytree(t_src, candidate_tenant_root)
+                        promotion_pairs.append((candidate_tenant_root, target_tenant_root))
+                        _LOG.info("staged tenants → %s", candidate_tenant_root)
+
+                for db_name, meta in manifest.databases.items():
+                    database_path = runtime_root / db_name
+                    _validate_sqlite_database(database_path)
+                    _validate_database_schema_version(database_path, meta)
+                for validator in validators:
+                    validator(candidate_root, manifest)
+
+                journal_path.write_text(
+                    json.dumps(
+                        {
+                            "archive": str(archive_path),
+                            "targets": [str(target) for _, target in promotion_pairs],
+                            "created_at": _ts(),
+                        },
+                        sort_keys=True,
                     )
-                actual = _sha256_of(src)
-                if actual != meta.sha256:
-                    raise ValueError(f"{db_name}: checksum mismatch (archive corrupted)")
-                dest = runtime_root / db_name
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
-                _LOG.info("restored database %s", db_name)
-
-            # 2. Config files
-            for cfg_name, meta in manifest.config_files.items():
-                src = stage / "config" / cfg_name
-                if not src.exists():
-                    raise ValueError(
-                        f"config {cfg_name} listed in manifest but absent from archive"
-                    )
-                actual = _sha256_of(src)
-                if actual != meta.sha256:
-                    raise ValueError(f"{cfg_name}: checksum mismatch (archive corrupted)")
-                dest = (runtime_root if cfg_name in _RUNTIME_CONFIGS else candidate_root) / cfg_name
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
-                _LOG.info("restored config %s", cfg_name)
-
-            # 3. State subdirectories
-            for dirname in _STATE_DIRS:
-                src = stage / dirname
-                if src.is_dir():
-                    shutil.copytree(src, candidate_root / dirname)
-                    _LOG.info("restored state dir %s", dirname)
-
-            # 4. Optional: workspaces
-            if target_workspace_root and manifest.includes_workspaces:
-                ws_src = stage / "workspaces"
-                if ws_src.is_dir():
-                    assert candidate_workspace_root is not None
-                    shutil.copytree(ws_src, candidate_workspace_root)
-                    _LOG.info("staged workspaces → %s", candidate_workspace_root)
-
-            # 5. Optional: tenants
-            if target_tenant_root and manifest.includes_tenants:
-                t_src = stage / "tenants"
-                if t_src.is_dir():
-                    assert candidate_tenant_root is not None
-                    shutil.copytree(t_src, candidate_tenant_root)
-                    _LOG.info("staged tenants → %s", candidate_tenant_root)
-
-            for db_name in manifest.databases:
-                _validate_sqlite_database(runtime_root / db_name)
-
-            os.replace(candidate_root, state_root)
-            if candidate_workspace_root is not None:
-                assert target_workspace_root is not None
-                os.replace(candidate_workspace_root, target_workspace_root)
-            if candidate_tenant_root is not None:
-                assert target_tenant_root is not None
-                os.replace(candidate_tenant_root, target_tenant_root)
+                    + "\n",
+                    encoding="utf-8",
+                )
+                for candidate, target in promotion_pairs:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(candidate, target)
+                    promoted_pairs.append((candidate, target))
+                journal_path.unlink(missing_ok=True)
+        except Exception:
+            # A multi-root promotion either completes as a unit or restores
+            # every target back to its private candidate path.  The active
+            # source root was never used as a target here.
+            for candidate, target in reversed(promoted_pairs):
+                if target.exists() and not candidate.exists():
+                    os.replace(target, candidate)
+            for candidate in candidate_paths:
+                if candidate.exists():
+                    shutil.rmtree(candidate, ignore_errors=True)
+            journal_path.unlink(missing_ok=True)
+            raise
 
         _LOG.info("restore staged and published to %s", state_root)
         return state_root
@@ -579,7 +636,11 @@ class BackupService:
     @staticmethod
     def _read_manifest(archive_path: Path) -> BackupManifest:
         with tarfile.open(str(archive_path), "r:gz") as tar:
-            member = tar.extractfile("manifest.json")
-            if member is None:
+            matches = [member for member in tar.getmembers() if member.name == "manifest.json"]
+            if len(matches) != 1 or not matches[0].isfile():
                 raise ValueError("Invalid backup: missing manifest.json")
-            return BackupManifest.from_json(member.read().decode("utf-8"))
+            stream = tar.extractfile(matches[0])
+            if stream is None:
+                raise ValueError("Invalid backup: unreadable manifest.json")
+            with stream:
+                return BackupManifest.from_json(stream.read().decode("utf-8"))
