@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 import tempfile
 from dataclasses import asdict, dataclass
@@ -61,6 +62,32 @@ def _snapshot_sqlite(source: Path) -> Path:
     return snapshot
 
 
+def _fingerprint_legacy_tasks(source: Path) -> SourceFile:
+    """Hash only legacy Task columns so shadow writes do not stale their source."""
+    columns = (
+        "task_id, project_id, workspace_id, environment_id, researcher_type, harness_engine, "
+        "user_skills, user_mcp_servers, status, title, prompt, created_at, updated_at, "
+        "started_at, completed_at, latest_output_seq, owner_user_id, exit_code, error_summary, "
+        "token_usage_json"
+    )
+    with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as conn:
+        try:
+            rows = conn.execute(f"SELECT {columns} FROM tasks ORDER BY task_id").fetchall()
+        except sqlite3.Error:
+            rows = []
+    encoded = json.dumps(rows, separators=(",", ":"), ensure_ascii=True).encode()
+    stat = source.stat()
+    return SourceFile(
+        relative_path="runtime/agentic_researcher.sqlite3#legacy_tasks",
+        sha256=hashlib.sha256(encoded).hexdigest(),
+        size=len(encoded),
+        inode=stat.st_ino,
+        # The same file is also the v2 target database. Its file mtime changes
+        # on shadow writes, so it cannot participate in source equivalence.
+        mtime_ns=0,
+    )
+
+
 def capture_source_manifest(state_root: Path) -> SourceManifest:
     """Fingerprint legacy JSON and consistent SQLite snapshots without source writes."""
     runtime_root = state_root / "runtime"
@@ -72,6 +99,9 @@ def capture_source_manifest(state_root: Path) -> SourceManifest:
     for name in _SQLITE_SOURCES:
         source = runtime_root / name
         if not source.exists():
+            continue
+        if name == "agentic_researcher.sqlite3":
+            files.append(_fingerprint_legacy_tasks(source))
             continue
         snapshot = _snapshot_sqlite(source)
         try:

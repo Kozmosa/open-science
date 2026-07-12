@@ -23,7 +23,7 @@ from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
 from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
-from ainrf.domain_migration import capture_source_manifest
+from ainrf.domain_migration import DomainImporter, capture_source_manifest
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -428,6 +428,28 @@ def domain_migration_dry_run(
 ) -> None:
     """Print an immutable source manifest without modifying legacy state."""
     typer.echo(json_mod.dumps(capture_source_manifest(state_root).as_dict(), indent=2))
+
+
+@domain_migration_app.command("apply")
+def domain_migration_apply(
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing legacy sources and v2 shadow tables.")
+    ] = default_state_root(),
+    mode: Annotated[str, typer.Option(help="Importer mode: validate or apply.")] = "validate",
+) -> None:
+    """Run the application-level shadow importer; this never performs cutover."""
+    typer.echo(json_mod.dumps(DomainImporter(state_root).run(mode=mode).as_dict(), indent=2))
+
+
+@domain_migration_app.command("reconcile")
+def domain_migration_reconcile(
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing v2 shadow tables.")
+    ] = default_state_root(),
+    run_id: Annotated[str | None, typer.Option(help="Optional migration run ID.")] = None,
+) -> None:
+    """Report migration counts and blocking issues without cutover."""
+    typer.echo(json_mod.dumps(DomainImporter(state_root).reconcile(run_id).as_dict(), indent=2))
 
 
 def main() -> None:
