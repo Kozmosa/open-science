@@ -74,9 +74,9 @@ class TestBaselineCreatesTables:
     @pytest.mark.parametrize(
         "db_name,expected_count",
         [
-            ("auth", 5),
+            ("auth", 6),
             ("sessions", 3),
-            ("agentic_researcher", 11),
+            ("agentic_researcher", 12),
             ("literature", 5),
             ("terminal", 1),
         ],
@@ -152,7 +152,7 @@ class TestUpgradeFromV0:
             from ainrf.db.migration import registry
 
             pending = registry.get_pending("auth", 1)
-            assert len(pending) == 4  # migration_002 through migration_005
+            assert len(pending) == 5  # migration_002 through migration_006
             run_pending(conn, "auth")
             cols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
             assert "must_change_password" in cols
@@ -283,3 +283,100 @@ class TestSchemaVersionTable:
         with _connect(db_file) as conn:
             ensure_schema_table(conn)
             assert current_version(conn, "nonexistent") == 0
+
+
+class TestEnvironmentGrantVersioning:
+    def test_legacy_grants_upgrade_to_active_versioned_records(self, tmp_path: Path) -> None:
+        db_file = tmp_path / "auth.sqlite3"
+        import ainrf.db.migrations  # noqa: F401
+        from ainrf.db.migration import set_version
+        from ainrf.db.migrations.auth import migration_001_baseline
+
+        granted_at = "2026-07-12T00:00:00+00:00"
+        with _connect(db_file) as conn:
+            migration_001_baseline(conn)
+            conn.execute(
+                """
+                INSERT INTO environment_access (
+                    environment_id, user_id, max_concurrent_tasks, granted_by_user_id, granted_at
+                ) VALUES ('environment-1', 'user-1', 2, 'admin-1', ?)
+                """,
+                (granted_at,),
+            )
+            ensure_schema_table(conn)
+            set_version(conn, "auth", 1)
+            conn.commit()
+
+        with _connect(db_file) as conn:
+            assert run_pending(conn, "auth") == 5
+            columns = {
+                row[1]: row
+                for row in conn.execute("PRAGMA table_info(environment_access)").fetchall()
+            }
+            assert {"grant_version", "status", "updated_at", "revoked_at"} <= columns.keys()
+            assert columns["grant_version"][3] == 1
+            assert columns["status"][3] == 1
+            grant = conn.execute(
+                """
+                SELECT grant_version, status, updated_at, revoked_at
+                FROM environment_access
+                WHERE environment_id = 'environment-1' AND user_id = 'user-1'
+                """
+            ).fetchone()
+            assert tuple(grant) == (1, "active", granted_at, None)
+            audit = conn.execute(
+                """
+                SELECT grant_version, event_type, actor_user_id
+                FROM environment_access_audit_events
+                WHERE environment_id = 'environment-1' AND user_id = 'user-1'
+                """
+            ).fetchone()
+            assert audit is not None
+            assert tuple(audit) == (1, "granted", "admin-1")
+
+            conn.execute(
+                """
+                UPDATE environment_access
+                SET grant_version = grant_version + 1,
+                    status = 'revoked',
+                    updated_at = '2026-07-12T01:00:00+00:00',
+                    revoked_at = '2026-07-12T01:00:00+00:00'
+                WHERE environment_id = 'environment-1' AND user_id = 'user-1'
+                """
+            )
+            revoked = conn.execute(
+                """
+                SELECT grant_version, status, revoked_at
+                FROM environment_access
+                WHERE environment_id = 'environment-1' AND user_id = 'user-1'
+                """
+            ).fetchone()
+            active = conn.execute(
+                """
+                SELECT 1 FROM environment_access
+                WHERE environment_id = 'environment-1' AND user_id = 'user-1' AND status = 'active'
+                """
+            ).fetchone()
+            with pytest.raises(sqlite3.IntegrityError, match="grant_version must increase"):
+                conn.execute(
+                    """
+                    UPDATE environment_access SET grant_version = 2
+                    WHERE environment_id = 'environment-1' AND user_id = 'user-1'
+                    """
+                )
+            with pytest.raises(sqlite3.IntegrityError, match="status must be active or revoked"):
+                conn.execute(
+                    """
+                    UPDATE environment_access SET status = 'disabled'
+                    WHERE environment_id = 'environment-1' AND user_id = 'user-1'
+                    """
+                )
+            with pytest.raises(sqlite3.IntegrityError, match="retained for audit history"):
+                conn.execute(
+                    """
+                    DELETE FROM environment_access
+                    WHERE environment_id = 'environment-1' AND user_id = 'user-1'
+                    """
+                )
+        assert tuple(revoked) == (2, "revoked", "2026-07-12T01:00:00+00:00")
+        assert active is None

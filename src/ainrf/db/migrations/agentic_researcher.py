@@ -473,3 +473,237 @@ def migration_011_domain_write_participants(conn: sqlite3.Connection) -> None:
         ON domain_maintenance_mutations(participant_id);
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_012_harden_domain_control_plane(conn: sqlite3.Connection) -> None:
+    """Add the durable metadata and guards required by the final v2 contract."""
+
+    def add_columns(table: str, columns: tuple[tuple[str, str], ...]) -> None:
+        for name, definition in columns:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+            except sqlite3.OperationalError:
+                pass
+
+    add_columns(
+        "environments",
+        (
+            ("connection_fingerprint", "TEXT"),
+            ("disabled_at", "TEXT"),
+            ("disabled_reason", "TEXT"),
+        ),
+    )
+    add_columns(
+        "workspaces",
+        (
+            ("workspace_context", "TEXT"),
+            ("canonical_path_fingerprint", "TEXT"),
+            ("unregistered_at", "TEXT"),
+            ("unregistered_reason", "TEXT"),
+            ("last_seen_at", "TEXT"),
+        ),
+    )
+    add_columns(
+        "project_context_candidates",
+        (
+            ("created_by_user_id", "TEXT"),
+            ("source_metadata_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("accepted_by_user_id", "TEXT"),
+            ("accepted_at", "TEXT"),
+            ("rejected_by_user_id", "TEXT"),
+            ("rejected_at", "TEXT"),
+            ("rejection_reason", "TEXT"),
+        ),
+    )
+    add_columns(
+        "project_context_fragments",
+        (
+            ("source_version", "TEXT"),
+            ("source_fingerprint", "TEXT"),
+            ("sort_order", "INTEGER NOT NULL DEFAULT 0"),
+            ("byte_budget", "INTEGER"),
+        ),
+    )
+    add_columns(
+        "context_snapshots",
+        (
+            ("source_manifest_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("byte_budget", "INTEGER"),
+            ("truncated", "INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0, 1))"),
+        ),
+    )
+    add_columns(
+        "task_relationships",
+        (("relationship_id", "TEXT"), ("metadata_json", "TEXT NOT NULL DEFAULT '{}'")),
+    )
+    conn.execute(
+        """
+        UPDATE task_relationships
+        SET relationship_id = printf(
+            '%d:%s%d:%s%d:%s',
+            length(source_task_id), source_task_id,
+            length(target_task_id), target_task_id,
+            length(relationship_type), relationship_type
+        )
+        WHERE relationship_id IS NULL
+        """
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_task_relationship_stable_id "
+        "ON task_relationships(relationship_id) WHERE relationship_id IS NOT NULL"
+    )
+    add_columns(
+        "agent_task_attempts",
+        (
+            ("message_start_seq", "INTEGER"),
+            ("message_end_seq", "INTEGER"),
+            ("output_start_seq", "INTEGER"),
+            ("output_end_seq", "INTEGER"),
+            ("artifact_refs_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("code_refs_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("data_refs_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("token_usage_json", "TEXT"),
+            ("cost_usd", "REAL"),
+            ("failure_reason", "TEXT"),
+            ("stop_reason", "TEXT"),
+        ),
+    )
+    add_columns(
+        "agent_runtime_sessions",
+        (
+            ("engine_name", "TEXT"),
+            ("engine_session_key", "TEXT"),
+            ("runtime_metadata_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("started_at", "TEXT"),
+            ("finished_at", "TEXT"),
+            ("last_probe_at", "TEXT"),
+            ("adopted_at", "TEXT"),
+            ("failure_reason", "TEXT"),
+        ),
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_active_attempt "
+        "ON agent_runtime_sessions(attempt_id) WHERE status IN ('starting', 'running', 'paused')"
+    )
+    add_columns(
+        "task_dispatch_outbox",
+        (
+            ("claimed_at", "TEXT"),
+            ("claim_heartbeat_at", "TEXT"),
+            ("launch_state", "TEXT NOT NULL DEFAULT 'none'"),
+            ("dispatch_attempt_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("last_error", "TEXT"),
+            ("next_attempt_at", "TEXT"),
+            ("updated_at", "TEXT"),
+        ),
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS task_dispatch_launch_state_valid_insert
+        BEFORE INSERT ON task_dispatch_outbox
+        WHEN NEW.launch_state NOT IN ('none', 'starting', 'launched', 'unknown')
+        BEGIN SELECT RAISE(ABORT, 'invalid dispatch launch state'); END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS task_dispatch_launch_state_valid_update
+        BEFORE UPDATE OF launch_state ON task_dispatch_outbox
+        WHEN NEW.launch_state NOT IN ('none', 'starting', 'launched', 'unknown')
+        BEGIN SELECT RAISE(ABORT, 'invalid dispatch launch state'); END
+        """
+    )
+
+    # The original primary key did not include the calling user.  Rebuild this
+    # additive control table before v2 writes begin so client idempotency keys
+    # cannot collide across tenants.
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS domain_idempotency_requests_v2 (
+            actor_user_id TEXT NOT NULL DEFAULT '',
+            scope TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            response_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(actor_user_id, scope, idempotency_key)
+        );
+        INSERT OR IGNORE INTO domain_idempotency_requests_v2 (
+            actor_user_id, scope, idempotency_key, request_hash, response_json, created_at
+        ) SELECT '', scope, idempotency_key, request_hash, response_json, created_at
+          FROM domain_idempotency_requests;
+        DROP TABLE domain_idempotency_requests;
+        ALTER TABLE domain_idempotency_requests_v2 RENAME TO domain_idempotency_requests;
+        """
+    )
+
+    add_columns(
+        "domain_migration_runs",
+        (
+            ("phase", "TEXT NOT NULL DEFAULT 'initial'"),
+            ("checkpoint_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("source_manifest_sha256", "TEXT"),
+            ("artifact_sha", "TEXT"),
+            ("heartbeat_at", "TEXT"),
+            ("resume_metadata_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ),
+    )
+    add_columns(
+        "domain_migration_issues",
+        (
+            ("resolution_status", "TEXT NOT NULL DEFAULT 'open'"),
+            ("resolution_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("resolved_by_user_id", "TEXT"),
+            ("resolved_at", "TEXT"),
+        ),
+    )
+    add_columns(
+        "domain_cutover_state",
+        (
+            ("state", "TEXT NOT NULL DEFAULT 'legacy'"),
+            ("prepared_at", "TEXT"),
+            ("prepared_by_user_id", "TEXT"),
+            ("committed_at", "TEXT"),
+            ("artifact_sha", "TEXT"),
+            ("artifact_contract_min", "INTEGER"),
+            ("artifact_contract_max", "INTEGER"),
+            ("backup_manifest_sha256", "TEXT"),
+            ("maintenance_epoch", "INTEGER"),
+        ),
+    )
+    conn.executescript(
+        """
+        DROP TRIGGER IF EXISTS domain_cutover_state_valid_update;
+        CREATE TRIGGER domain_cutover_state_valid_update
+        BEFORE UPDATE OF state ON domain_cutover_state
+        WHEN NEW.state NOT IN ('legacy', 'prepared', 'v2')
+          OR (OLD.state = 'legacy' AND NEW.state = 'v2')
+          OR (OLD.state = 'v2' AND NEW.state != 'v2')
+        BEGIN SELECT RAISE(ABORT, 'invalid domain cutover state transition'); END;
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS domain_v2_task_reference_guard_insert
+        BEFORE INSERT ON tasks
+        WHEN (SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1) = 1
+          AND (
+            NOT EXISTS (SELECT 1 FROM projects WHERE project_id = NEW.project_id)
+            OR NOT EXISTS (SELECT 1 FROM workspaces WHERE workspace_id = NEW.workspace_id)
+          )
+        BEGIN SELECT RAISE(ABORT, 'v2 task requires a domain project and workspace'); END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS domain_v2_task_reference_guard_update
+        BEFORE UPDATE OF project_id, workspace_id ON tasks
+        WHEN (SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1) = 1
+          AND (
+            NOT EXISTS (SELECT 1 FROM projects WHERE project_id = NEW.project_id)
+            OR NOT EXISTS (SELECT 1 FROM workspaces WHERE workspace_id = NEW.workspace_id)
+          )
+        BEGIN SELECT RAISE(ABORT, 'v2 task requires a domain project and workspace'); END
+        """
+    )

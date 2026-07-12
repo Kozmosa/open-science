@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -178,9 +179,45 @@ class TestEnvironmentAccessCrud:
     def test_revoke(self):
         svc = self._make_service()
         uid = _ensure_user(svc, "bob", "bob123")
-        svc.grant_environment(env_id="env1", user_id=uid, max_tasks=2, granted_by="admin")
-        svc.revoke_environment("env1", uid)
+        svc.grant_environment(
+            env_id="env1",
+            user_id=uid,
+            max_tasks=2,
+            granted_by="admin",
+            reason="initial access",
+        )
+        svc.revoke_environment("env1", uid, revoked_by="admin", reason="access expired")
         assert "env1" not in svc.get_user_environment_ids(uid)
+        with svc._connect() as conn:
+            revoked = conn.execute(
+                "SELECT grant_version, status, revoked_by_user_id, revocation_reason "
+                "FROM environment_access WHERE environment_id = 'env1' AND user_id = ?",
+                (uid,),
+            ).fetchone()
+            assert revoked is not None
+            assert tuple(revoked) == (2, "revoked", "admin", "access expired")
+            events = conn.execute(
+                "SELECT grant_version, event_type FROM environment_access_audit_events "
+                "WHERE environment_id = 'env1' AND user_id = ? ORDER BY grant_version",
+                (uid,),
+            ).fetchall()
+            assert [tuple(event) for event in events] == [(1, "granted"), (2, "revoked")]
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "DELETE FROM environment_access WHERE environment_id = 'env1' AND user_id = ?",
+                    (uid,),
+                )
+
+        svc.grant_environment(env_id="env1", user_id=uid, max_tasks=1, granted_by="admin")
+        assert "env1" in svc.get_user_environment_ids(uid)
+        with svc._connect() as conn:
+            regranted = conn.execute(
+                "SELECT grant_version, status, revoked_at FROM environment_access "
+                "WHERE environment_id = 'env1' AND user_id = ?",
+                (uid,),
+            ).fetchone()
+            assert regranted is not None
+            assert tuple(regranted) == (3, "active", None)
 
     def test_grant_unlimited_tasks(self):
         svc = self._make_service()
