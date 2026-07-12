@@ -3,6 +3,7 @@
 from ainrf.domain.service import DomainAuthorizationService, DomainService, DomainPermissionError
 from ainrf.domain.context import ProjectContextService
 from ainrf.domain.attempts import AttemptService, DispatchClaim
+from ainrf.domain.tasks import TaskApplicationService
 
 __all__ = [
     "DomainAuthorizationService",
@@ -11,4 +12,5 @@ __all__ = [
     "ProjectContextService",
     "AttemptService",
     "DispatchClaim",
+    "TaskApplicationService",
 ]
