@@ -59,3 +59,23 @@ def test_importer_marks_unmapped_owner_blocking(state_root: Path) -> None:
 
     assert report.blocking_issue_count == 1
     assert report.attention_needed_count == 1
+
+
+def test_reconciliation_refuses_cutover_when_constraints_or_default_are_missing(
+    state_root: Path,
+) -> None:
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    user = auth.register(username="alice", display_name="Alice", password="secret-password")
+    _write_json(
+        state_root / "runtime" / "projects.json",
+        [{"project_id": "p1", "name": "Project", "owner_user_id": user.id}],
+    )
+
+    importer = DomainImporter(state_root)
+    run = importer.run()
+    reconciliation = importer.reconcile(run.run_id)
+
+    assert not reconciliation.cutover_allowed
+    assert "default_project_missing" in reconciliation.blocking_issues
+    assert "constraints_not_ready" in reconciliation.blocking_issues

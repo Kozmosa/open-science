@@ -28,6 +28,18 @@ class MigrationReport:
         return asdict(self)
 
 
+@dataclass(frozen=True, slots=True)
+class ReconciliationReport:
+    run_id: str
+    counts: dict[str, int]
+    blocking_issues: tuple[str, ...]
+    non_blocking_issues: tuple[str, ...]
+    cutover_allowed: bool
+
+    def as_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -133,7 +145,7 @@ class DomainImporter:
 
         return content_set(current) == content_set(previous)
 
-    def reconcile(self, run_id: str | None = None) -> MigrationReport:
+    def reconcile(self, run_id: str | None = None) -> ReconciliationReport:
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
             if run_id is None:
@@ -143,7 +155,104 @@ class DomainImporter:
                 if row is None:
                     raise ValueError("No domain migration run exists")
                 run_id = str(row["run_id"])
-            return self._report(conn, run_id)
+            run = conn.execute(
+                "SELECT source_manifest_json FROM domain_migration_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if run is None:
+                raise ValueError(f"Unknown domain migration run: {run_id}")
+            blocking = self._reconciliation_blockers(conn, str(run["source_manifest_json"]))
+            counts = {
+                "projects": int(conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]),
+                "workspaces": int(conn.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]),
+                "tasks": int(conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]),
+                "attempts": int(
+                    conn.execute("SELECT COUNT(*) FROM agent_task_attempts").fetchone()[0]
+                ),
+                "migration_issues": int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM domain_migration_issues WHERE run_id = ?", (run_id,)
+                    ).fetchone()[0]
+                ),
+            }
+            state = conn.execute(
+                "SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1"
+            ).fetchone()
+            cutover_allowed = (
+                not blocking and state is not None and bool(state["constraints_ready"])
+            )
+            conn.execute(
+                "UPDATE domain_migration_runs SET cutover_allowed = ? WHERE run_id = ?",
+                (int(cutover_allowed), run_id),
+            )
+            conn.commit()
+            non_blocking = tuple(
+                str(row[0])
+                for row in conn.execute(
+                    "SELECT category FROM domain_migration_issues WHERE run_id = ? AND severity = 'non_blocking'",
+                    (run_id,),
+                )
+            )
+            return ReconciliationReport(
+                run_id=run_id,
+                counts=counts,
+                blocking_issues=tuple(blocking),
+                non_blocking_issues=non_blocking,
+                cutover_allowed=cutover_allowed,
+            )
+
+    def _reconciliation_blockers(self, conn: sqlite3.Connection, stored_manifest: str) -> list[str]:
+        blockers = [
+            str(row[0])
+            for row in conn.execute(
+                "SELECT DISTINCT category FROM domain_migration_issues WHERE severity = 'blocking'"
+            )
+        ]
+        current = json.dumps(capture_source_manifest(self._state_root).as_dict(), sort_keys=True)
+        if not self._same_source_content(current, stored_manifest):
+            blockers.append("source_manifest_changed")
+        if (
+            conn.execute(
+                "SELECT COUNT(*) FROM projects WHERE is_default = 1 AND status = 'active'"
+            ).fetchone()[0]
+            == 0
+        ):
+            blockers.append("default_project_missing")
+        if conn.execute(
+            """SELECT COUNT(*) FROM project_workspace_links
+               WHERE is_primary = 1 AND status != 'active'"""
+        ).fetchone()[0]:
+            blockers.append("primary_link_inactive")
+        if conn.execute(
+            """SELECT COUNT(*) FROM tasks t
+               LEFT JOIN projects p ON p.project_id = t.project_id
+               LEFT JOIN workspaces w ON w.workspace_id = t.workspace_id
+               WHERE p.project_id IS NULL OR w.workspace_id IS NULL"""
+        ).fetchone()[0]:
+            blockers.append("task_project_or_workspace_missing")
+        if conn.execute(
+            """SELECT COUNT(*) FROM tasks
+               WHERE status IN ('queued', 'starting', 'running')
+                 AND (project_context_version_id IS NULL
+                      OR NOT EXISTS (SELECT 1 FROM agent_task_attempts a WHERE a.task_id = tasks.task_id))"""
+        ).fetchone()[0]:
+            blockers.append("active_task_missing_context_or_attempt")
+        if conn.execute(
+            """SELECT COUNT(*) FROM workspaces w
+               LEFT JOIN environments e ON e.environment_id = w.environment_id
+               WHERE w.status = 'active' AND (e.environment_id IS NULL OR e.status != 'active')"""
+        ).fetchone()[0]:
+            blockers.append("workspace_environment_invalid")
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()
+        if integrity is None or integrity[0] != "ok":
+            blockers.append("sqlite_integrity_check_failed")
+        if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            blockers.append("sqlite_foreign_key_check_failed")
+        state = conn.execute(
+            "SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1"
+        ).fetchone()
+        if state is None or not bool(state["constraints_ready"]):
+            blockers.append("constraints_not_ready")
+        return sorted(set(blockers))
 
     def _legacy_users(self) -> dict[str, str]:
         if not self._auth_path.exists():
