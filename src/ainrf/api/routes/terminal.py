@@ -6,12 +6,17 @@ import json
 import logging
 import os
 from contextlib import suppress
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 from anyio import create_task_group, to_thread
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from ainrf.api.domain_access import (
+    require_v2_active_environment,
+    require_v2_workspace_execution_owner,
+    v2_domain_service,
+)
 from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     TerminalExecRequest,
@@ -23,8 +28,10 @@ from ainrf.api.schemas import (
     UserSessionPairListResponse,
     UserSessionPairResponse,
 )
-from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
+from ainrf.environments import EnvironmentNotFoundError
 from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.environments.protocols import EnvironmentRuntimeReader
+from ainrf.domain.service import DomainNotFoundError
 from ainrf.terminal.attachments import (
     TerminalAttachmentAuthorizationError,
     TerminalAttachmentBroker,
@@ -33,6 +40,7 @@ from ainrf.terminal.attachments import (
     TerminalAttachmentNotFoundError,
 )
 from ainrf.terminal.models import (
+    TerminalAttachment,
     TerminalAttachmentMode,
     TerminalSessionRecord,
     UserEnvironmentBinding,
@@ -112,7 +120,7 @@ def _serialize_session_pair(
     }
 
 
-def _get_environment_service(request: Request | WebSocket) -> InMemoryEnvironmentService:
+def _get_environment_service(request: Request | WebSocket) -> EnvironmentRuntimeReader:
     service = getattr(request.app.state, "environment_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="environment service not initialized")
@@ -141,6 +149,8 @@ def _require_app_user_id(request: Request) -> str:
 
 
 def _translate_environment_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
     if isinstance(exc, EnvironmentNotFoundError):
         return HTTPException(status_code=404, detail="Environment not found")
     return HTTPException(status_code=500, detail="Unexpected terminal environment error")
@@ -172,14 +182,41 @@ def _close_code_for_attachment_error(exc: Exception) -> int:
     return 4503
 
 
+def _require_v2_attachment_environment_access(
+    websocket: WebSocket,
+    attachment: TerminalAttachment,
+) -> None:
+    """Revalidate the attachment owner's durable grant before starting a PTY."""
+
+    if v2_domain_service(websocket) is None:
+        return
+    auth_service = getattr(websocket.app.state, "auth_service", None)
+    if auth_service is None:
+        raise HTTPException(status_code=503, detail="authentication service not initialized")
+    try:
+        user_record = auth_service.get_user(attachment.user_id)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Environment not found") from exc
+    if user_record.status.value != "active":
+        raise HTTPException(status_code=404, detail="Environment not found")
+    require_v2_active_environment(
+        websocket,
+        {"id": user_record.id, "role": user_record.role.value},
+        attachment.environment_id,
+    )
+
+
 def _get_environment_context(
-    service: InMemoryEnvironmentService,
+    request: Request,
+    service: EnvironmentRuntimeReader,
     environment_id: str | None,
+    user: dict[str, object],
     state_root: Any,
     project_id: str = "default",
 ) -> tuple[EnvironmentRegistryEntry | None, str | None]:
     if environment_id is None:
         return None, None
+    require_v2_active_environment(request, user, environment_id)
     environment = service.get_environment(environment_id)
     working_directory = service.resolve_effective_workdir(
         project_id,
@@ -205,8 +242,10 @@ async def read_terminal_session(
     manager = _get_session_manager(request)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -232,13 +271,30 @@ async def read_terminal_session_pairs(
     app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
+    domain = v2_domain_service(request)
     if environment_id is not None:
         try:
+            require_v2_active_environment(request, user, environment_id)
             service.get_environment(environment_id)
         except Exception as exc:
             raise _translate_environment_error(exc) from exc
 
-    items = await to_thread.run_sync(manager.list_session_pairs, app_user_id, environment_id)
+    environment_visible: Callable[[str], bool] | None = None
+    if domain is not None:
+
+        def environment_visible(candidate_environment_id: str) -> bool:
+            try:
+                domain.environment(candidate_environment_id, user, include_disabled=False)
+            except DomainNotFoundError:
+                return False
+            return True
+
+    items = await to_thread.run_sync(
+        manager.list_session_pairs,
+        app_user_id,
+        environment_id,
+        environment_visible,
+    )
     return UserSessionPairListResponse(
         items=[
             UserSessionPairResponse.model_validate(
@@ -262,8 +318,10 @@ async def create_terminal_session(
     broker = _get_attachment_broker(request)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             payload.environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -313,8 +371,10 @@ async def delete_terminal_session(
     )
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             resolved_environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -344,8 +404,10 @@ async def reset_terminal_session(
     broker.detach_attachment(payload.attachment_id)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             payload.environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -383,11 +445,14 @@ async def terminal_session_exec(
     request: Request,
     project_id: str = Query(default="default"),
 ) -> TerminalExecResponse:
+    user = get_current_user(request)
     service = _get_environment_service(request)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             payload.environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -396,13 +461,22 @@ async def terminal_session_exec(
     assert environment is not None
 
     if payload.workspace_id is not None:
-        workspace_service = getattr(request.app.state, "workspace_service", None)
-        if workspace_service is not None:
-            try:
-                workspace = workspace_service.get_workspace(payload.workspace_id)
-            except Exception as exc:
-                raise _translate_environment_error(exc) from exc
-            working_directory = workspace.default_workdir or working_directory or "/"
+        v2_workspace = require_v2_workspace_execution_owner(request, user, payload.workspace_id)
+        if v2_workspace is not None:
+            canonical_path = v2_workspace.get("canonical_path")
+            if isinstance(canonical_path, str) and canonical_path:
+                working_directory = canonical_path
+        else:
+            workspace_service = getattr(request.app.state, "workspace_service", None)
+            if workspace_service is None:
+                workspace = None
+            else:
+                try:
+                    workspace = workspace_service.get_workspace(payload.workspace_id)
+                except Exception as exc:
+                    raise _translate_environment_error(exc) from exc
+            if workspace is not None:
+                working_directory = workspace.default_workdir or working_directory or "/"
 
     try:
         # Validate command against allowlist for security
@@ -471,7 +545,12 @@ async def terminal_session_exec(
 async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebSocket) -> None:
     broker = _get_attachment_broker(websocket)
     try:
+        attachment = broker.validate_attachment(attachment_id, token)
+        _require_v2_attachment_environment_access(websocket, attachment)
         attachment, runtime = broker.open_runtime(attachment_id, token)
+    except HTTPException as exc:
+        await websocket.close(code=_close_code_for_http_status(exc.status_code))
+        return
     except Exception as exc:
         logger.warning(
             "terminal WebSocket open failed for %s: %s: %s", attachment_id, type(exc).__name__, exc

@@ -227,18 +227,8 @@ def test_domain_cutover_state_requires_prepare_and_cannot_rollback_v2(tmp_path: 
         with pytest.raises(sqlite3.IntegrityError, match="invalid domain cutover state transition"):
             conn.execute("UPDATE domain_cutover_state SET state = 'v2' WHERE singleton = 1")
 
-        conn.execute("UPDATE domain_cutover_state SET state = 'prepared' WHERE singleton = 1")
-        conn.execute("UPDATE domain_cutover_state SET state = 'legacy' WHERE singleton = 1")
-        conn.execute("UPDATE domain_cutover_state SET state = 'prepared' WHERE singleton = 1")
-        conn.execute("UPDATE domain_cutover_state SET state = 'v2' WHERE singleton = 1")
-        for target_state in ("legacy", "prepared"):
-            with pytest.raises(
-                sqlite3.IntegrityError, match="invalid domain cutover state transition"
-            ):
-                conn.execute(
-                    "UPDATE domain_cutover_state SET state = ? WHERE singleton = 1",
-                    (target_state,),
-                )
+        with pytest.raises(sqlite3.IntegrityError, match="invalid domain cutover state transition"):
+            conn.execute("UPDATE domain_cutover_state SET state = 'prepared' WHERE singleton = 1")
 
 
 def test_domain_control_plane_uses_unique_and_restrict_constraints(tmp_path: Path) -> None:

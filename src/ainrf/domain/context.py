@@ -20,6 +20,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 
 DEFAULT_CONTEXT_BYTE_BUDGET = 32 * 1024
@@ -206,6 +207,7 @@ class ProjectContextService:
         *,
         context_byte_budget: int = DEFAULT_CONTEXT_BYTE_BUDGET,
         platform_constraints: str = DEFAULT_PLATFORM_CONSTRAINTS,
+        artifact_sha: str | None = None,
     ) -> None:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
@@ -216,6 +218,7 @@ class ProjectContextService:
         )
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
+        self._write_fence = DomainWriteFence(state_root, artifact_sha=artifact_sha)
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
@@ -649,6 +652,11 @@ class ProjectContextService:
                    WHERE task_id = ?""",
                 (version_id, snapshot_id, _now(), task_id),
             )
+            # This compatibility entry point updates a Task without producing
+            # a domain audit event.  It must still cross the exact same v2
+            # fuse in the caller-owned transaction as normal lifecycle
+            # writes, so an unsafe source drift rolls back the new pin.
+            self._write_fence.record_first_v2_write(conn, actor_id=str(task["owner_user_id"]))
             conn.commit()
             return snapshot_id
 
@@ -713,7 +721,7 @@ class ProjectContextService:
 
         task = conn.execute(
             """SELECT task_id, project_id, workspace_id, prompt, project_context_version_id,
-                      project_context_snapshot_id
+                      project_context_snapshot_id, owner_user_id
                FROM tasks WHERE task_id = ?""",
             (task_id,),
         ).fetchone()
@@ -748,6 +756,10 @@ class ProjectContextService:
                WHERE task_id = ?""",
             (version_id, snapshot_id, _now(), task_id),
         )
+        # This helper is reachable from compatibility services as well as
+        # TaskApplicationService.  Record the first v2 write before control
+        # returns to either caller so every persisted Task pin is fuse-bound.
+        self._write_fence.record_first_v2_write(conn, actor_id=str(task["owner_user_id"]))
         return snapshot_id
 
     def preview_task_context_update(
@@ -787,6 +799,11 @@ class ProjectContextService:
                     _future(DEFAULT_PREVIEW_TTL_SECONDS),
                 ),
             )
+            # A preview is durable state even though it does not create an
+            # audit row.  Bind it to the committed v2 fuse in this same
+            # transaction instead of allowing it to become an unguarded first
+            # domain write.
+            self._write_fence.record_first_v2_write(conn, actor_id=self._user_id(user))
             current = self._task_snapshot_payload(conn, task)
             conn.commit()
             proposed = self._assembly_payload(
@@ -1324,14 +1341,15 @@ class ProjectContextService:
             ),
         )
 
-    @staticmethod
     def _audit(
+        self,
         conn: sqlite3.Connection,
         actor_id: str,
         event_type: str,
         subject_type: str,
         subject_id: str,
     ) -> None:
+        self._write_fence.record_first_v2_write(conn, actor_id=actor_id)
         conn.execute(
             """INSERT INTO domain_audit_events
                (event_id, actor_id, event_type, subject_type, subject_id, created_at)

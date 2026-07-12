@@ -12,7 +12,12 @@ from ainrf.api.schemas import (
     TaskContextConfirmRequest,
 )
 from ainrf.auth.permissions import get_current_user
-from ainrf.domain import DomainPermissionError, DomainService, ProjectContextService
+from ainrf.domain import (
+    DomainPermissionError,
+    DomainService,
+    ProjectContextService,
+    TaskApplicationService,
+)
 from ainrf.domain_control import DomainModelMode
 
 router = APIRouter(prefix="/domain", tags=["domain-v2"])
@@ -22,19 +27,29 @@ router = APIRouter(prefix="/domain", tags=["domain-v2"])
 async def capabilities(request: Request) -> dict[str, object]:
     service = getattr(request.app.state, "domain_service", None)
     mode = request.app.state.api_config.domain_model_mode
-    ready = service is not None and service.v2_ready()
-    context_ready = (
-        ready and getattr(request.app.state, "project_context_service", None) is not None
+    ready = mode is DomainModelMode.V2 and isinstance(service, DomainService) and service.v2_ready()
+    context_ready = ready and isinstance(
+        getattr(request.app.state, "project_context_service", None), ProjectContextService
+    )
+    task_ready = ready and isinstance(
+        getattr(request.app.state, "task_application_service", None), TaskApplicationService
+    )
+    workspace_links_ready = ready and all(
+        callable(getattr(service, name, None))
+        for name in ("attach_workspace", "detach_workspace", "set_primary_workspace")
     )
     return {
         "domain_contract_version": 2 if ready else 1,
         "mode": mode.value,
-        "standard_task_create": ready,
+        "standard_task_create": task_ready,
         "project_context": context_ready,
-        "workspace_links": ready,
-        "task_attempts": ready,
-        "literature_research_task": ready,
-        "overview_snapshot": ready,
+        "workspace_links": workspace_links_ready,
+        "task_attempts": task_ready,
+        # B9/B10 have not yet established their durable saga/scheduler
+        # contracts.  Existing read helpers do not make those capabilities
+        # ready for the frontend.
+        "literature_research_task": False,
+        "overview_snapshot": False,
     }
 
 
@@ -69,6 +84,27 @@ def _context_service(request: Request) -> ProjectContextService:
     if service is None:
         raise HTTPException(status_code=503, detail="Project Context service is not initialized")
     return service
+
+
+def _task_application_service(request: Request) -> TaskApplicationService:
+    _service(request)
+    service = getattr(request.app.state, "task_application_service", None)
+    if not isinstance(service, TaskApplicationService):
+        raise HTTPException(status_code=503, detail="Task application service is not initialized")
+    return service
+
+
+def _idempotency_key(request: Request, body_key: str | None = None) -> str:
+    header_key = request.headers.get("Idempotency-Key")
+    if header_key and body_key and header_key != body_key:
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency-Key header and body field must match",
+        )
+    key = header_key or body_key
+    if not key:
+        raise HTTPException(status_code=409, detail="Idempotency-Key is required")
+    return key
 
 
 def _translate(exc: Exception) -> HTTPException:
@@ -322,7 +358,7 @@ async def preview_task_context_update(task_id: str, request: Request) -> dict[st
     if not project_id:
         raise HTTPException(status_code=422, detail="project_id is required")
     try:
-        return _context_service(request).preview_task_context_update(
+        return _task_application_service(request).preview_task_context_update(
             task_id, project_id, get_current_user(request)
         )
     except Exception as exc:
@@ -339,12 +375,12 @@ async def confirm_task_context_update(
     if not project_id:
         raise HTTPException(status_code=422, detail="project_id is required")
     try:
-        return _context_service(request).confirm_task_context_update(
+        return _task_application_service(request).confirm_task_context_update(
             task_id,
             project_id,
             payload.preview_id,
             get_current_user(request),
-            idempotency_key=request.headers.get("Idempotency-Key", ""),
+            idempotency_key=_idempotency_key(request, payload.idempotency_key),
         )
     except Exception as exc:
         raise _translate(exc) from exc

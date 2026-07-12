@@ -18,7 +18,7 @@ from ainrf.domain import (
 )
 from ainrf.domain.attempts import DispatchClaim, DispatchClaimError
 from ainrf.domain.worker import DispatchRunResult, TaskDispatcher
-from ainrf.domain_control import DomainMaintenanceService
+from ainrf.domain_control import DomainCutoverError, DomainMaintenanceService
 from ainrf.harness_engine import (
     EngineEvent,
     ExecutionContext,
@@ -26,6 +26,7 @@ from ainrf.harness_engine import (
     RuntimeProbeStatus,
 )
 from ainrf.harness_engine.base import EngineEmit
+from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 from tests.testutil import FakeEngine, HangingEngine, TokenEngine, seed_user
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
@@ -125,6 +126,38 @@ async def test_domain_worker_runs_durable_attempt_and_projects_event_data(
     assert (dispatch["status"], dispatch["launch_state"]) == ("completed", "launched")
     assert [output["kind"] for output in outputs] == ["message", "lifecycle"]
     assert "## Task Request\nInvestigate this" in str(outputs[0]["content"])
+
+
+@pytest.mark.anyio
+async def test_domain_worker_requires_the_committed_v2_artifact(
+    state_root: Path, tmp_path: Path
+) -> None:
+    prepare_committed_v2_cutover(state_root, tmp_path)
+
+    missing = TaskDispatcher(state_root, dispatcher_id="missing-artifact", lease_seconds=3)
+    with pytest.raises(DomainCutoverError, match="requires the committed v2 artifact SHA"):
+        await missing.run_once()
+    missing.stop()
+
+    mismatched = TaskDispatcher(
+        state_root,
+        dispatcher_id="wrong-artifact",
+        lease_seconds=3,
+        artifact_sha="c" * 64,
+    )
+    with pytest.raises(DomainCutoverError, match="does not match"):
+        await mismatched.run_once()
+    mismatched.stop()
+
+    matching = TaskDispatcher(
+        state_root,
+        dispatcher_id="matching-artifact",
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+    )
+    result = await matching.run_once()
+    matching.stop()
+    assert result.outcome == "idle"
 
 
 @pytest.mark.anyio

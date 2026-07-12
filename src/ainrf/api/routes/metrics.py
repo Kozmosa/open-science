@@ -46,6 +46,11 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_task_created_total", [], "Tasks created"),
     ("ainrf_task_completed_total", [], "Tasks completed"),
     ("ainrf_task_failed_total", [], "Tasks failed"),
+    (
+        "ainrf_deprecated_route_calls_total",
+        ["route"],
+        "Deprecated compatibility route or field uses",
+    ),
     ("ainrf_ssh_connection_attempt_total", ["host"], "SSH connection attempts"),
     ("ainrf_ssh_connection_error_total", ["host", "error_type"], "SSH connection errors"),
     ("ainrf_db_slow_query_total", ["db"], "Slow database queries (>1s)"),

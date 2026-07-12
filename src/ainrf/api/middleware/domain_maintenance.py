@@ -11,6 +11,7 @@ from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 
 _MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _DOMAIN_PREFIXES = (
+    "/domain",
     "/projects",
     "/task-edges",
     "/workspaces",

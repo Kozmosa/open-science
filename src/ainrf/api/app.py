@@ -58,7 +58,10 @@ from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
 from ainrf.workspaces import WorkspaceRegistryService
 from ainrf.domain_control import (
+    DomainCutoverController,
+    DomainCutoverError,
     DomainMaintenanceService,
+    DomainModelMode,
     DomainWriteParticipant,
     MaintenanceModeError,
 )
@@ -66,9 +69,11 @@ from ainrf.domain import (
     DomainService,
     OverviewSnapshotService,
     PersistentEnvironmentFacade,
+    PersistentWorkspaceFacade,
     ProjectContextService,
     SessionProjectionService,
     TaskApplicationService,
+    TaskProjectionService,
 )
 
 
@@ -81,6 +86,27 @@ def _run_sync_in_lifespan(callback: Callable[[], T]) -> Awaitable[T]:
 
 
 _LOG = logging.getLogger(__name__)
+
+
+def _assert_domain_runtime_fuse(config: ApiConfig, controller: DomainCutoverController) -> None:
+    """Reject binaries whose configured mode disagrees with the DB fuse.
+
+    This deliberately runs before construction of legacy registries.  A
+    legacy/validate process must never reach a previously committed v2 state,
+    and a v2 process needs the exact immutable artifact it was prepared for.
+    """
+
+    status = controller.status()
+    if config.domain_model_mode is DomainModelMode.V2:
+        artifact_sha = config.domain_artifact_sha
+        if not artifact_sha:
+            raise ValueError("OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required in v2 mode")
+        controller.assert_v2_writable(artifact_sha=artifact_sha)
+        return
+    if status.state != "legacy":
+        raise DomainCutoverError(
+            "legacy/validate binary cannot open a prepared or committed domain cutover database"
+        )
 
 
 ROUTERS: tuple[APIRouter, ...] = (
@@ -113,9 +139,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     terminal_session_manager = app.state.terminal_session_manager
     terminal_attachment_broker = app.state.terminal_attachment_broker
     project_service = app.state.project_service
-    resource_monitor_service = ResourceMonitorService(environment_service)
-    app.state.resource_monitor_service = resource_monitor_service
-    await resource_monitor_service.start()
+    is_v2 = app.state.api_config.domain_model_mode is DomainModelMode.V2
+    resource_monitor_service: ResourceMonitorService | None = None
+    if not is_v2:
+        resource_monitor_service = ResourceMonitorService(environment_service)
+        app.state.resource_monitor_service = resource_monitor_service
+        await resource_monitor_service.start()
+    else:
+        # Resource observation remains an independent persisted source.  Do
+        # not start the legacy in-memory monitor in a v2 process, where it
+        # could initiate detection or reach a legacy registry.
+        app.state.resource_monitor_service = None
     api_participant = DomainWriteParticipant(
         app.state.domain_maintenance_service,
         "api",
@@ -131,30 +165,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     heartbeat_task = asyncio.create_task(heartbeat_api_participant())
     try:
-        await _run_sync_in_lifespan(project_service.initialize)
+        if project_service is not None:
+            await _run_sync_in_lifespan(project_service.initialize)
         await _run_sync_in_lifespan(workspace_service.initialize)
         app.state.runtime_readiness = check_runtime_readiness().as_public_payload()
-        terminal_participant = DomainWriteParticipant(
-            app.state.domain_maintenance_service,
-            "terminal-reconciler",
-            details={"component": "api-lifespan"},
-        )
-        terminal_participant.start()
-        try:
-            terminal_lease = terminal_participant.begin_mutation(source="terminal-reconcile")
-        except MaintenanceModeError:
-            terminal_participant.drain()
-            _LOG.info("terminal_reconcile_skipped_for_domain_maintenance")
-        else:
+        if not is_v2:
+            terminal_participant = DomainWriteParticipant(
+                app.state.domain_maintenance_service,
+                "terminal-reconciler",
+                details={"component": "api-lifespan"},
+            )
+            terminal_participant.start()
             try:
-                await _run_sync_in_lifespan(terminal_session_manager.reconcile)
-                app.state.domain_maintenance_service.check_lease(terminal_lease)
+                terminal_lease = terminal_participant.begin_mutation(source="terminal-reconcile")
+            except MaintenanceModeError:
+                terminal_participant.drain()
+                _LOG.info("terminal_reconcile_skipped_for_domain_maintenance")
+            else:
+                try:
+                    await _run_sync_in_lifespan(terminal_session_manager.reconcile)
+                    app.state.domain_maintenance_service.check_lease(terminal_lease)
+                finally:
+                    terminal_participant.finish_mutation(terminal_lease)
             finally:
-                terminal_participant.finish_mutation(terminal_lease)
-        finally:
-            terminal_participant.stop()
+                terminal_participant.stop()
         session_service = app.state.session_service
-        await _run_sync_in_lifespan(session_service.initialize)
+        if session_service is not None:
+            await _run_sync_in_lifespan(session_service.initialize)
         auth_service = app.state.auth_service
         await _run_sync_in_lifespan(auth_service.initialize)
         await _run_sync_in_lifespan(app.state.literature_service.initialize)
@@ -210,19 +247,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Backfill per-user default projects for any user lacking one (idempotent).
         # Covers pre-existing users and the bootstrap admin created directly above,
         # which bypasses the HTTP registration hook that normally provisions it.
-        try:
-            from ainrf.projects.backfill import backfill_user_default_projects
+        if project_service is not None:
+            try:
+                from ainrf.projects.backfill import backfill_user_default_projects
 
-            created, _skipped = await _run_sync_in_lifespan(
-                lambda: backfill_user_default_projects(
-                    project_service=project_service,
-                    users=auth_service.list_users(),
+                created, _skipped = await _run_sync_in_lifespan(
+                    lambda: backfill_user_default_projects(
+                        project_service=project_service,
+                        users=auth_service.list_users(),
+                    )
                 )
-            )
-            if created:
-                _LOG.info("Backfilled %d per-user default project(s)", created)
-        except Exception:
-            _LOG.exception("Failed to backfill per-user default projects")
+                if created:
+                    _LOG.info("Backfilled %d per-user default project(s)", created)
+            except Exception:
+                _LOG.exception("Failed to backfill per-user default projects")
         yield
     finally:
         heartbeat_task.cancel()
@@ -232,7 +270,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pass
         api_participant.stop()
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
-        await resource_monitor_service.stop()
+        if resource_monitor_service is not None:
+            await resource_monitor_service.stop()
 
 
 def create_app(
@@ -241,12 +280,34 @@ def create_app(
     max_file_size_bytes: int | None = None,
 ) -> FastAPI:
     api_config = config or ApiConfig.from_env()
+    domain_cutover_controller = DomainCutoverController(api_config.state_root)
+    _assert_domain_runtime_fuse(api_config, domain_cutover_controller)
+    is_v2 = api_config.domain_model_mode is DomainModelMode.V2
     runtime_paths = api_config.runtime_paths
-    default_workspace_dir = runtime_paths.ensure_default_workspace_dir()
-    project_service = ProjectRegistryService(api_config.state_root)
-    environment_service = InMemoryEnvironmentService(
-        str(default_workspace_dir),
-        project_service=project_service,
+    default_workspace_dir = (
+        runtime_paths.default_workspace_dir
+        if is_v2
+        else runtime_paths.ensure_default_workspace_dir()
+    )
+    project_service = None if is_v2 else ProjectRegistryService(api_config.state_root)
+    environment_service = (
+        PersistentEnvironmentFacade(api_config.state_root)
+        if is_v2
+        else InMemoryEnvironmentService(
+            str(default_workspace_dir),
+            project_service=project_service,
+        )
+    )
+    legacy_workspace_service = (
+        None
+        if is_v2
+        else WorkspaceRegistryService(
+            api_config.state_root,
+            default_workspace_dir=default_workspace_dir,
+        )
+    )
+    workspace_service = (
+        PersistentWorkspaceFacade(api_config.state_root) if is_v2 else legacy_workspace_service
     )
     # Disable interactive API docs in production.
     docs_url = None if api_config.production else "/docs"
@@ -261,12 +322,29 @@ def create_app(
         openapi_url=openapi_url,
     )
     app.state.api_config = api_config
+    app.state.domain_cutover_controller = domain_cutover_controller
+
+    def mark_deprecated_route(route_name: str) -> None:
+        """Emit route-level compatibility telemetry without resource labels."""
+
+        from ainrf.api.routes.metrics import inc_counter
+
+        inc_counter("ainrf_deprecated_route_calls_total", {"route": route_name})
+        _LOG.info("domain_deprecated_route", extra={"route": route_name})
+
+    app.state.mark_deprecated_route = mark_deprecated_route
     app.state.domain_maintenance_service = DomainMaintenanceService(api_config.state_root)
     app.state.domain_maintenance_service.initialize()
-    app.state.domain_service = DomainService(api_config.state_root)
-    app.state.project_context_service = ProjectContextService(api_config.state_root)
+    artifact_sha = api_config.domain_artifact_sha if is_v2 else None
+    app.state.domain_service = DomainService(api_config.state_root, artifact_sha=artifact_sha)
+    app.state.project_context_service = ProjectContextService(
+        api_config.state_root, artifact_sha=artifact_sha
+    )
     app.state.persistent_environment_facade = PersistentEnvironmentFacade(api_config.state_root)
-    app.state.task_application_service = TaskApplicationService(api_config.state_root)
+    app.state.task_application_service = TaskApplicationService(
+        api_config.state_root, artifact_sha=artifact_sha
+    )
+    app.state.task_projection_service = TaskProjectionService(api_config.state_root)
     app.state.session_projection_service = SessionProjectionService(api_config.state_root)
     app.state.overview_snapshot_service = OverviewSnapshotService(api_config.state_root)
     # Service initialization order:
@@ -282,10 +360,7 @@ def create_app(
     app.state.auth_service = auth_service
     app.state.project_service = project_service
     app.state.environment_service = environment_service
-    app.state.workspace_service = WorkspaceRegistryService(
-        api_config.state_root,
-        default_workspace_dir=default_workspace_dir,
-    )
+    app.state.workspace_service = workspace_service
     app.state.terminal_session_manager = SessionManager(
         state_root=api_config.state_root,
         environment_service=environment_service,
@@ -308,9 +383,7 @@ def create_app(
         state_root=api_config.state_root,
     )
     app.state.skill_registry_config_service.initialize()
-    app.state.session_service = SessionService(
-        state_root=api_config.state_root,
-    )
+    app.state.session_service = None if is_v2 else SessionService(state_root=api_config.state_root)
     # Initialize LLM observability reporter (singleton).
     from ainrf.observability.factory import get_reporter
     from ainrf.observability.protocol import ObservabilityConfig
@@ -324,14 +397,20 @@ def create_app(
     reporter = get_reporter(obs_config)
     app.state.observability_reporter = reporter
 
-    agentic_researcher_service = AgenticResearcherService(
-        state_root=api_config.state_root,
-        workspace_service=app.state.workspace_service,
-        auth_service=auth_service,
-        observability_reporter=reporter,
-    )
-    agentic_researcher_service.initialize()
-    app.state.agentic_researcher_service = agentic_researcher_service
+    if is_v2:
+        # A v2 API has one durable Task writer/reader pair; constructing the
+        # legacy in-process scheduler would recreate a second write path.
+        app.state.agentic_researcher_service = None
+    else:
+        assert legacy_workspace_service is not None
+        agentic_researcher_service = AgenticResearcherService(
+            state_root=api_config.state_root,
+            workspace_service=legacy_workspace_service,
+            auth_service=auth_service,
+            observability_reporter=reporter,
+        )
+        agentic_researcher_service.initialize()
+        app.state.agentic_researcher_service = agentic_researcher_service
     app.state.literature_service = LiteratureService(state_root=api_config.state_root)
     app.state.literature_tracking_service = LiteratureTrackingService(
         state_root=api_config.state_root

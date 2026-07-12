@@ -458,6 +458,7 @@ class TaskContextConfirmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     preview_id: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskCreateRequest(BaseModel):
@@ -465,7 +466,10 @@ class TaskCreateRequest(BaseModel):
 
     project_id: str = ""
     workspace_id: str
-    environment_id: str
+    # ``environment_id`` is retained during the v2 compatibility window.  The
+    # authoritative v2 service derives it from the Workspace and rejects a
+    # mismatching compatibility value.
+    environment_id: str | None = None
     researcher_type: Literal["vanilla", "aris-researcher"]
     harness_engine: Literal["claude-code", "agent-sdk", "codex-app-server"]
     prompt: str = Field(min_length=1)
@@ -473,18 +477,44 @@ class TaskCreateRequest(BaseModel):
     mcp_servers: list[str] = []
     title: str | None = None
     research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskUpdateProjectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     project_id: str = Field(min_length=1)
+    context_version_id: str | None = Field(default=None, min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class TaskMoveRequest(BaseModel):
+    """Move a not-yet-started Task to a Project Context selected by the caller."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=1)
+    context_version_id: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class TaskForkRequest(BaseModel):
+    """Fork a Task when changing its Workspace is required."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: str = Field(min_length=1)
+    project_id: str | None = Field(default=None, min_length=1)
+    prompt: str | None = Field(default=None, min_length=1)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class WorkspaceResponse(BaseModel):
@@ -635,6 +665,95 @@ class TaskTokenUsageSummaryResponse(BaseModel):
     by_engine: dict[str, dict[str, int | float]] = Field(default_factory=dict)
 
 
+class TaskRuntimeSessionResponse(BaseModel):
+    """Read-only runtime identity associated with one durable Attempt."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    runtime_session_id: str
+    attempt_id: str
+    status: str
+    engine_name: str | None = None
+    engine_session_key: str | None = None
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    last_probe_at: str | None = None
+    adopted_at: str | None = None
+    failure_reason: str | None = None
+
+
+class TaskDispatchResponse(BaseModel):
+    """Durable dispatcher state for a Task Attempt."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dispatch_id: str
+    task_id: str
+    attempt_id: str
+    status: str
+    launch_state: str
+    runtime_launch_key: str | None = None
+    dispatcher_id: str | None = None
+    claimed_at: str | None = None
+    claim_expires_at: str | None = None
+    claim_heartbeat_at: str | None = None
+    created_at: str
+    updated_at: str | None = None
+    completed_at: str | None = None
+    cancelled_at: str | None = None
+    cancel_reason: str | None = None
+    last_error: str | None = None
+
+
+class TaskAttemptResponse(BaseModel):
+    """Authoritative v2 TaskAttempt projection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    attempt_id: str
+    task_id: str
+    attempt_seq: int
+    trigger: str
+    status: str
+    context_snapshot_id: str | None = None
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    message_start_seq: int | None = None
+    message_end_seq: int | None = None
+    output_start_seq: int | None = None
+    output_end_seq: int | None = None
+    artifact_refs: list[str] = Field(default_factory=list)
+    code_refs: list[str] = Field(default_factory=list)
+    data_refs: list[str] = Field(default_factory=list)
+    token_usage_json: str | None = None
+    cost_usd: float | None = None
+    failure_reason: str | None = None
+    stop_reason: str | None = None
+    authorization_environment_id: str | None = None
+    authorization_grant_version: int | None = None
+    authorization_checked_at: str | None = None
+    stop_requested_at: str | None = None
+    stop_requested_reason: str | None = None
+    runtime_sessions: list[TaskRuntimeSessionResponse] = Field(default_factory=list)
+    dispatch: TaskDispatchResponse | None = None
+
+
+class TaskAttemptListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TaskAttemptResponse]
+
+
+class TaskMutationResponse(TaskSummaryResponse):
+    """v2 Task write result with legacy flat Task fields kept for old clients."""
+
+    task: TaskSummaryResponse
+    attempt: TaskAttemptResponse
+    dispatch: TaskDispatchResponse
+
+
 class TaskEdgeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -663,6 +782,7 @@ class TaskRetryRequest(BaseModel):
 
     task_input: str | None = None
     environment_id: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskRetryResponse(BaseModel):
@@ -671,6 +791,11 @@ class TaskRetryResponse(BaseModel):
     new_task: TaskSummaryResponse
     archived_task_id: str | None
     edge_id: str
+    # v2 preserves the legacy ``new_task`` field, but it is the same Task.
+    # The durable Attempt and dispatcher summary are the authoritative result.
+    task: TaskSummaryResponse | None = None
+    attempt: TaskAttemptResponse | None = None
+    dispatch: TaskDispatchResponse | None = None
 
 
 class ResearchAgentProfileSnapshotResponse(BaseModel):
@@ -870,6 +995,7 @@ class TaskResumeResponse(BaseModel):
 class TaskPromptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskPromptSendResponse(BaseModel):

@@ -3,9 +3,11 @@ from __future__ import annotations
 import json as json_mod
 import logging
 from dataclasses import asdict
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
+from ainrf.api.deprecation import deprecation_headers, mark_deprecated
 from ainrf.api.schemas import (
     CollaboratorListResponse,
     CollaboratorRequest,
@@ -26,6 +28,9 @@ from ainrf.api.schemas import (
 )
 from ainrf.api.routes.tasks import _task_to_response
 from ainrf.auth.permissions import get_current_user, is_admin
+from ainrf.domain import DomainPermissionError, DomainService
+from ainrf.domain.service import DomainNotFoundError
+from ainrf.domain_control import DomainModelMode, MaintenanceModeError
 from ainrf.environments import (
     EnvironmentNotFoundError,
     InMemoryEnvironmentService,
@@ -47,6 +52,76 @@ def _get_project_service(request: Request) -> ProjectRegistryService:
     if service is None:
         raise HTTPException(status_code=500, detail="project service not initialized")
     return service
+
+
+def _v2_domain_service(request: Request) -> DomainService | None:
+    service = getattr(request.app.state, "domain_service", None)
+    config = getattr(request.app.state, "api_config", None)
+    if (
+        service is None
+        or config is None
+        or config.domain_model_mode is not DomainModelMode.V2
+        or not service.v2_ready()
+    ):
+        return None
+    return service
+
+
+def _compatibility_idempotency_key(request: Request, scope: str) -> str:
+    key = request.headers.get("Idempotency-Key")
+    return key if key else f"compat-{scope}-{uuid4().hex}"
+
+
+def _mark_v2_compatibility_route(
+    response: Response,
+    *,
+    route_name: str,
+    replacement: str,
+) -> None:
+    mark_deprecated(response, route=route_name, replacement=replacement)
+
+
+def _primary_link(
+    domain: DomainService,
+    project_id: str,
+    user: dict[str, object],
+) -> dict[str, object] | None:
+    for link in domain.workspace_links(project_id, user):
+        if link.get("status") == "active" and link.get("is_primary") is True:
+            return link
+    return None
+
+
+def _serialize_domain_project(
+    domain: DomainService,
+    project: dict[str, object],
+    user: dict[str, object],
+) -> ProjectResponse:
+    project_id = str(project["project_id"])
+    primary = _primary_link(domain, project_id, user)
+    return ProjectResponse.model_validate(
+        {
+            "project_id": project_id,
+            "name": str(project["name"]),
+            "description": project.get("description"),
+            "default_workspace_id": primary.get("workspace_id") if primary else None,
+            "default_environment_id": primary.get("environment_id") if primary else None,
+            "created_at": str(project["created_at"]),
+            "updated_at": str(project["updated_at"]),
+            "owner_user_id": project.get("owner_user_id"),
+        }
+    )
+
+
+def _active_domain_project(
+    domain: DomainService,
+    project_id: str,
+    user: dict[str, object],
+) -> dict[str, object]:
+    project = domain.project(project_id, user)
+    if project.get("status") != "active":
+        raise DomainNotFoundError(project_id)
+    return project
 
 
 def _get_environment_service(request: Request) -> InMemoryEnvironmentService:
@@ -148,8 +223,46 @@ def _serialize_task_edge(edge: TaskEdgeRecord) -> TaskEdgeResponse:
     )
 
 
+def _serialize_domain_task_edge(edge: dict[str, object]) -> TaskEdgeResponse:
+    return TaskEdgeResponse.model_validate(edge)
+
+
+def _serialize_domain_collaborator(
+    member: dict[str, object], auth_service: object
+) -> CollaboratorResponse:
+    user_id = str(member["user_id"])
+    username = ""
+    display_name = ""
+    get_user = getattr(auth_service, "get_user", None)
+    if callable(get_user):
+        try:
+            auth_user = get_user(user_id)
+            username_value = getattr(auth_user, "username", "")
+            display_name_value = getattr(auth_user, "display_name", "")
+            username = username_value if isinstance(username_value, str) else ""
+            display_name = display_name_value if isinstance(display_name_value, str) else ""
+        except Exception:
+            # Imported historical member IDs can outlive an auth record.  The
+            # v2 relationship remains auditable without exposing a lookup error.
+            pass
+    return CollaboratorResponse(
+        user_id=user_id,
+        username=username,
+        display_name=display_name,
+        role=str(member["role"]),
+    )
+
+
 def _translate_project_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
+    if isinstance(exc, MaintenanceModeError):
+        return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
+    if isinstance(exc, DomainPermissionError):
+        return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, ProjectNotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if isinstance(exc, LookupError):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     if isinstance(exc, ValueError):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -160,10 +273,20 @@ def _translate_project_error(exc: Exception) -> HTTPException:
 
 
 def _translate_task_edge_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
+    if isinstance(exc, MaintenanceModeError):
+        return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
+    if isinstance(exc, DomainPermissionError):
+        return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, ProjectNotFoundError):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     if isinstance(exc, TaskEdgeNotFoundError):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task edge not found")
+    if isinstance(exc, LookupError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task edge not found")
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unexpected task edge error",
@@ -171,6 +294,10 @@ def _translate_task_edge_error(exc: Exception) -> HTTPException:
 
 
 def _translate_reference_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
+    if isinstance(exc, DomainPermissionError):
+        return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, EnvironmentNotFoundError):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found")
     if isinstance(exc, ProjectReferenceNotFoundError):
@@ -183,6 +310,10 @@ def _translate_reference_error(exc: Exception) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail="Environment is already referenced by this project",
         )
+    if isinstance(exc, LookupError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unexpected project environment reference error",
@@ -190,8 +321,24 @@ def _translate_reference_error(exc: Exception) -> HTTPException:
 
 
 @router.get("", response_model=ProjectListResponse)
-async def list_projects(request: Request) -> ProjectListResponse:
+async def list_projects(request: Request, response: Response) -> ProjectListResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.list",
+            replacement="GET /projects",
+        )
+        try:
+            return ProjectListResponse(
+                items=[
+                    _serialize_domain_project(domain, project, user)
+                    for project in domain.list_projects(user)
+                ]
+            )
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     service = _get_project_service(request)
     auth_svc = _get_auth_service(request)
     try:
@@ -207,8 +354,28 @@ async def list_projects(request: Request) -> ProjectListResponse:
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
-async def create_project(payload: ProjectCreateRequest, request: Request) -> ProjectResponse:
+async def create_project(
+    payload: ProjectCreateRequest,
+    request: Request,
+    response: Response,
+) -> ProjectResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.create",
+            replacement="POST /projects",
+        )
+        try:
+            project = domain.create_project(
+                user,
+                name=payload.name,
+                description=payload.description,
+            )
+            return _serialize_domain_project(domain, project, user)
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     service = _get_project_service(request)
     try:
         project = service.create_project(
@@ -222,8 +389,27 @@ async def create_project(payload: ProjectCreateRequest, request: Request) -> Pro
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def read_project(project_id: str, request: Request) -> ProjectResponse:
+async def read_project(
+    project_id: str,
+    request: Request,
+    response: Response,
+) -> ProjectResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.read",
+            replacement=f"/projects/{project_id}/workspaces",
+        )
+        try:
+            return _serialize_domain_project(
+                domain,
+                _active_domain_project(domain, project_id, user),
+                user,
+            )
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     service = _get_project_service(request)
     auth_svc = _get_auth_service(request)
     try:
@@ -239,8 +425,52 @@ async def update_project(
     project_id: str,
     payload: ProjectUpdateRequest,
     request: Request,
+    response: Response,
 ) -> ProjectResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.update",
+            replacement=f"/projects/{project_id}/primary-workspace/{{workspace_id}}",
+        )
+        try:
+            project = _active_domain_project(domain, project_id, user)
+            changes = payload.model_dump(exclude_unset=True)
+            default_workspace_id = changes.get("default_workspace_id")
+            if "default_workspace_id" in changes:
+                if not isinstance(default_workspace_id, str) or not default_workspace_id:
+                    raise ValueError("A Primary Workspace cannot be cleared through this endpoint")
+                domain.set_primary_workspace(
+                    project_id,
+                    default_workspace_id,
+                    user,
+                    idempotency_key=_compatibility_idempotency_key(request, "project-primary"),
+                )
+            if "default_environment_id" in changes:
+                primary = _primary_link(domain, project_id, user)
+                if primary is None or changes["default_environment_id"] != primary.get(
+                    "environment_id"
+                ):
+                    raise ValueError("default_environment_id is derived from the Primary Workspace")
+            if "name" in changes or "description" in changes:
+                if "description" in changes:
+                    project = domain.update_project(
+                        project_id,
+                        user,
+                        name=changes.get("name"),
+                        description=changes["description"],
+                    )
+                else:
+                    project = domain.update_project(
+                        project_id,
+                        user,
+                        name=changes.get("name"),
+                    )
+            return _serialize_domain_project(domain, project, user)
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     service = _get_project_service(request)
     auth_svc = _get_auth_service(request)
     try:
@@ -260,8 +490,25 @@ async def update_project(
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_project(project_id: str, request: Request) -> None:
+async def delete_project(project_id: str, request: Request, response: Response) -> None:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.delete",
+            replacement=f"POST /projects/{project_id}/archive",
+        )
+        try:
+            domain.archive_project(
+                project_id,
+                user,
+                reason="deprecated project DELETE",
+                idempotency_key=_compatibility_idempotency_key(request, "project-delete"),
+            )
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
+        return None
     service = _get_project_service(request)
     auth_svc = _get_auth_service(request)
     try:
@@ -273,6 +520,122 @@ async def delete_project(project_id: str, request: Request) -> None:
     return None
 
 
+@router.post("/{project_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_project(project_id: str, request: Request) -> None:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project archive is unavailable")
+    try:
+        domain.archive_project(
+            project_id,
+            get_current_user(request),
+            reason="user archived project",
+            idempotency_key=_compatibility_idempotency_key(request, "project-archive"),
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return None
+
+
+@router.post("/{project_id}/unarchive", status_code=status.HTTP_204_NO_CONTENT)
+async def unarchive_project(project_id: str, request: Request) -> None:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project unarchive is unavailable")
+    try:
+        domain.unarchive_project(
+            project_id,
+            get_current_user(request),
+            idempotency_key=_compatibility_idempotency_key(request, "project-unarchive"),
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return None
+
+
+@router.get("/{project_id}/workspaces")
+async def list_project_workspace_links(project_id: str, request: Request) -> dict[str, object]:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project Workspace links are unavailable")
+    try:
+        return {"items": domain.workspace_links(project_id, get_current_user(request))}
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+
+@router.post("/{project_id}/workspaces/{workspace_id}")
+async def attach_project_workspace(
+    project_id: str,
+    workspace_id: str,
+    request: Request,
+) -> dict[str, object]:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project Workspace links are unavailable")
+    try:
+        return domain.attach_workspace(
+            project_id,
+            workspace_id,
+            get_current_user(request),
+            idempotency_key=_compatibility_idempotency_key(request, "project-workspace-attach"),
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+
+@router.delete("/{project_id}/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def detach_project_workspace(
+    project_id: str,
+    workspace_id: str,
+    request: Request,
+    allow_no_primary: bool = Query(False),
+) -> None:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project Workspace links are unavailable")
+    try:
+        domain.detach_workspace(
+            project_id,
+            workspace_id,
+            get_current_user(request),
+            idempotency_key=_compatibility_idempotency_key(request, "project-workspace-detach"),
+            allow_no_primary=allow_no_primary,
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return None
+
+
+@router.put("/{project_id}/primary-workspace/{workspace_id}")
+async def set_primary_project_workspace(
+    project_id: str,
+    workspace_id: str,
+    request: Request,
+    previous_workspace_id: str | None = Query(None),
+) -> dict[str, object]:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project Workspace links are unavailable")
+    try:
+        if previous_workspace_id is not None:
+            return domain.replace_primary_workspace(
+                project_id,
+                previous_workspace_id,
+                workspace_id,
+                get_current_user(request),
+                idempotency_key=_compatibility_idempotency_key(request, "project-primary-replace"),
+            )
+        return domain.set_primary_workspace(
+            project_id,
+            workspace_id,
+            get_current_user(request),
+            idempotency_key=_compatibility_idempotency_key(request, "project-primary"),
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+
 @router.get(
     "/{project_id}/environment-refs",
     response_model=ProjectEnvironmentReferenceListResponse,
@@ -280,8 +643,34 @@ async def delete_project(project_id: str, request: Request) -> None:
 async def list_project_environment_refs(
     project_id: str,
     request: Request,
+    response: Response,
 ) -> ProjectEnvironmentReferenceListResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.environment_refs.list",
+            replacement=f"/projects/{project_id}/workspaces",
+        )
+        try:
+            _active_domain_project(domain, project_id, user)
+            primary = _primary_link(domain, project_id, user)
+            if primary is None:
+                return ProjectEnvironmentReferenceListResponse(items=[])
+            environment_id = primary.get("environment_id")
+            if not isinstance(environment_id, str):
+                return ProjectEnvironmentReferenceListResponse(items=[])
+            return ProjectEnvironmentReferenceListResponse(
+                items=[
+                    ProjectEnvironmentReferenceResponse(
+                        environment_id=environment_id,
+                        is_default=True,
+                    )
+                ]
+            )
+        except Exception as exc:
+            raise _translate_reference_error(exc) from exc
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request))
     service = _get_environment_service(request)
@@ -302,6 +691,21 @@ async def create_project_environment_ref(
     request: Request,
 ) -> ProjectEnvironmentReferenceResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        try:
+            _active_domain_project(domain, project_id, user)
+            domain.require_project_editor(project_id, user)
+        except Exception as exc:
+            raise _translate_reference_error(exc) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Project environment references are replaced by explicit Workspace links",
+            headers=deprecation_headers(
+                route="projects.environment_refs.create",
+                replacement=f"POST /projects/{project_id}/workspaces/{{workspace_id}}",
+            ),
+        )
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     service = _get_environment_service(request)
@@ -331,6 +735,21 @@ async def update_project_environment_ref(
     request: Request,
 ) -> ProjectEnvironmentReferenceResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        try:
+            _active_domain_project(domain, project_id, user)
+            domain.require_project_editor(project_id, user)
+        except Exception as exc:
+            raise _translate_reference_error(exc) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Project environment references are replaced by explicit Workspace links",
+            headers=deprecation_headers(
+                route="projects.environment_refs.update",
+                replacement=f"PUT /projects/{project_id}/primary-workspace/{{workspace_id}}",
+            ),
+        )
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     service = _get_environment_service(request)
@@ -364,6 +783,21 @@ async def delete_project_environment_ref(
     request: Request,
 ) -> None:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        try:
+            _active_domain_project(domain, project_id, user)
+            domain.require_project_editor(project_id, user)
+        except Exception as exc:
+            raise _translate_reference_error(exc) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Project environment references are replaced by explicit Workspace links",
+            headers=deprecation_headers(
+                route="projects.environment_refs.delete",
+                replacement=f"DELETE /projects/{project_id}/workspaces/{{workspace_id}}",
+            ),
+        )
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     service = _get_environment_service(request)
@@ -375,8 +809,31 @@ async def delete_project_environment_ref(
 
 
 @router.get("/{project_id}/cost-summary", response_model=ProjectCostSummaryResponse)
-async def get_project_cost_summary(project_id: str, request: Request) -> ProjectCostSummaryResponse:
+async def get_project_cost_summary(
+    project_id: str,
+    request: Request,
+    response: Response,
+) -> ProjectCostSummaryResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        try:
+            _active_domain_project(domain, project_id, user)
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
+        projection = getattr(request.app.state, "project_cost_projection_service", None)
+        summary = getattr(projection, "project_cost_summary", None)
+        if not callable(summary):
+            raise HTTPException(status_code=503, detail="Project cost projection is unavailable")
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.cost_summary",
+            replacement="Attempt cost projection",
+        )
+        try:
+            return ProjectCostSummaryResponse.model_validate(summary(project_id, user))
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request))
     session_service = _get_session_service(request)
@@ -429,8 +886,25 @@ async def get_project_cost_summary(project_id: str, request: Request) -> Project
 async def list_project_task_edges(
     project_id: str,
     request: Request,
+    response: Response,
 ) -> TaskEdgeListResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.task_edges.list",
+            replacement=f"GET /projects/{project_id}/tasks",
+        )
+        try:
+            return TaskEdgeListResponse(
+                items=[
+                    _serialize_domain_task_edge(edge)
+                    for edge in domain.list_task_relationships(project_id, user)
+                ]
+            )
+        except Exception as exc:
+            raise _translate_task_edge_error(exc) from exc
     service = _get_project_service(request)
     auth_svc = _get_auth_service(request)
     try:
@@ -451,8 +925,27 @@ async def create_project_task_edge(
     project_id: str,
     payload: TaskEdgeCreateRequest,
     request: Request,
+    response: Response,
 ) -> TaskEdgeResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.task_edges.create",
+            replacement="Task relationship API",
+        )
+        try:
+            return _serialize_domain_task_edge(
+                domain.create_task_relationship(
+                    project_id,
+                    user,
+                    source_task_id=payload.source_task_id,
+                    target_task_id=payload.target_task_id,
+                )
+            )
+        except Exception as exc:
+            raise _translate_task_edge_error(exc) from exc
     service = _get_project_service(request)
     auth_svc = _get_auth_service(request)
     try:
@@ -469,8 +962,20 @@ async def create_project_task_edge(
 
 
 @task_edges_router.delete("/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task_edge(edge_id: str, request: Request) -> None:
+async def delete_task_edge(edge_id: str, request: Request, response: Response) -> None:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="task_edges.delete",
+            replacement="Task relationship API",
+        )
+        try:
+            domain.delete_task_relationship(edge_id, user)
+        except Exception as exc:
+            raise _translate_task_edge_error(exc) from exc
+        return None
     service = _get_project_service(request)
     auth_svc = _get_auth_service(request)
     try:
@@ -496,6 +1001,28 @@ async def list_project_tasks(
     their own), matching the "project as a collaboration unit" model.
     """
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        try:
+            _active_domain_project(domain, project_id, user)
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
+        projection = getattr(request.app.state, "project_task_projection_service", None)
+        list_project = getattr(projection, "list_project_tasks", None)
+        if not callable(list_project):
+            raise HTTPException(status_code=503, detail="Project Task projection is unavailable")
+        try:
+            return TaskListResponse.model_validate(
+                list_project(
+                    project_id,
+                    user,
+                    include_archived=include_archived,
+                    limit=limit,
+                    sort=sort,
+                )
+            )
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     service = _get_agentic_researcher_service(request)
     auth_svc = _get_auth_service(request)
     proj_svc = _get_project_service(request)
@@ -522,8 +1049,29 @@ async def list_project_tasks(
 
 
 @router.get("/{project_id}/collaborators", response_model=CollaboratorListResponse)
-async def list_collaborators(project_id: str, request: Request) -> CollaboratorListResponse:
+async def list_collaborators(
+    project_id: str,
+    request: Request,
+    response: Response,
+) -> CollaboratorListResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.collaborators.list",
+            replacement="Project member API",
+        )
+        try:
+            auth_service = _get_auth_service(request)
+            return CollaboratorListResponse(
+                items=[
+                    _serialize_domain_collaborator(member, auth_service)
+                    for member in domain.list_project_members(project_id, user)
+                ]
+            )
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request))
     auth_svc = _get_auth_service(request)
@@ -537,9 +1085,28 @@ async def list_collaborators(project_id: str, request: Request) -> CollaboratorL
     status_code=status.HTTP_201_CREATED,
 )
 async def add_collaborator(
-    project_id: str, payload: CollaboratorRequest, request: Request
+    project_id: str,
+    payload: CollaboratorRequest,
+    request: Request,
+    response: Response,
 ) -> CollaboratorResponse:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.collaborators.add",
+            replacement="Project member API",
+        )
+        role = payload.role if payload.role in {"viewer", "editor"} else "viewer"
+        try:
+            domain.add_member(project_id, payload.user_id, role, False, user)
+            return _serialize_domain_collaborator(
+                {"user_id": payload.user_id, "role": role},
+                _get_auth_service(request),
+            )
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     auth_svc = _get_auth_service(request)
@@ -554,6 +1121,19 @@ async def add_collaborator(
 @router.delete("/{project_id}/collaborators/{user_id}", status_code=204)
 async def remove_collaborator(project_id: str, user_id: str, request: Request) -> Response:
     user = get_current_user(request)
+    domain = _v2_domain_service(request)
+    if domain is not None:
+        try:
+            domain.remove_member(project_id, user_id, user)
+        except Exception as exc:
+            raise _translate_project_error(exc) from exc
+        response = Response(status_code=204)
+        _mark_v2_compatibility_route(
+            response,
+            route_name="projects.collaborators.remove",
+            replacement="Project member API",
+        )
+        return response
     proj = _get_project_service(request).get_project(project_id)
     _check_project_visible(user, proj, _get_auth_service(request), require_owner=True)
     auth_svc = _get_auth_service(request)

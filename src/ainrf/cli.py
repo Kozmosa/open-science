@@ -24,7 +24,10 @@ from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
 from ainrf.domain_control import (
+    DomainCutoverController,
+    DomainCutoverError,
     DomainMaintenanceService,
+    DomainModelMode,
     DomainWriteParticipant,
     MaintenanceModeError,
 )
@@ -55,6 +58,9 @@ app.add_typer(domain_maintenance_app, name="domain-maintenance")
 
 domain_migration_app = typer.Typer(help="Inspect legacy sources before domain-model migration.")
 app.add_typer(domain_migration_app, name="domain-migration")
+
+domain_cutover_app = typer.Typer(help="Prepare and commit the durable domain v2 cutover fuse.")
+app.add_typer(domain_cutover_app, name="domain-cutover")
 
 overview_snapshot_app = typer.Typer(help="Refresh persisted control-plane overview snapshots.")
 app.add_typer(overview_snapshot_app, name="overview-snapshot")
@@ -136,6 +142,7 @@ def literature_planner(
     ] = False,
 ) -> None:
     """Run the durable literature planner/outbox dispatcher."""
+    _require_legacy_literature_planner(state_root)
     service = LiteratureTrackingService(state_root)
     service.initialize()
     if once:
@@ -158,7 +165,16 @@ def domain_worker(
     ] = False,
 ) -> None:
     """Run the no-port durable Task dispatcher."""
-    dispatcher = TaskDispatcher(state_root)
+    try:
+        artifact_sha = _domain_worker_artifact_sha(state_root)
+    except DomainCutoverError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    dispatcher = (
+        TaskDispatcher(state_root, artifact_sha=artifact_sha)
+        if artifact_sha is not None
+        else TaskDispatcher(state_root)
+    )
     try:
         if once:
             result = asyncio.run(dispatcher.run_once())
@@ -167,6 +183,54 @@ def domain_worker(
         asyncio.run(dispatcher.run_forever())
     finally:
         dispatcher.stop()
+
+
+def _configured_domain_mode() -> DomainModelMode:
+    raw = (
+        os.environ.get(
+            "OPENSCIENCE_DOMAIN_MODEL_MODE",
+            os.environ.get("AINRF_DOMAIN_MODEL_MODE", DomainModelMode.LEGACY.value),
+        )
+        .strip()
+        .lower()
+    )
+    try:
+        return DomainModelMode(raw)
+    except ValueError as exc:
+        raise DomainCutoverError("invalid OPENSCIENCE_DOMAIN_MODEL_MODE for domain worker") from exc
+
+
+def _domain_worker_artifact_sha(state_root: Path) -> str | None:
+    """Return the exact v2 artifact only when both config and DB fuse agree."""
+
+    controller = _cutover_controller(state_root)
+    status = controller.status()
+    mode = _configured_domain_mode()
+    if status.state == "legacy":
+        if mode is DomainModelMode.V2:
+            raise DomainCutoverError("v2 domain worker cannot start before cutover commit")
+        return None
+    if status.state != "v2":
+        raise DomainCutoverError("domain worker cannot start while cutover is prepared")
+    if mode is not DomainModelMode.V2:
+        raise DomainCutoverError("legacy/validate domain worker cannot open committed v2 state")
+    artifact_sha = os.environ.get(
+        "OPENSCIENCE_DOMAIN_ARTIFACT_SHA", os.environ.get("AINRF_DOMAIN_ARTIFACT_SHA", "")
+    ).strip()
+    if not artifact_sha:
+        raise DomainCutoverError("OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required for v2 domain worker")
+    controller.assert_v2_writable(artifact_sha=artifact_sha)
+    return artifact_sha
+
+
+def _require_legacy_literature_planner(state_root: Path) -> None:
+    """Prevent the pre-B9 legacy planner from writing after the v2 cutover."""
+
+    status = _cutover_controller(state_root).status()
+    if status.state != "legacy":
+        raise DomainCutoverError(
+            "legacy literature planner is unavailable after prepare; use the B9 domain worker planner"
+        )
 
 
 @app.command()
@@ -404,6 +468,133 @@ def _maintenance_service(state_root: Path) -> DomainMaintenanceService:
     service = DomainMaintenanceService(state_root)
     service.initialize()
     return service
+
+
+def _cutover_controller(state_root: Path) -> DomainCutoverController:
+    return DomainCutoverController(state_root)
+
+
+@domain_cutover_app.command("status")
+def domain_cutover_status(
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the authoritative cutover fuse.")
+    ] = default_state_root(),
+) -> None:
+    """Report persisted cutover evidence and the legacy-source monitor."""
+
+    try:
+        typer.echo(json_mod.dumps(_cutover_controller(state_root).status().as_dict(), indent=2))
+    except DomainCutoverError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+
+
+@domain_cutover_app.command("prepare")
+def domain_cutover_prepare(
+    run_id: Annotated[str, typer.Argument(help="Finalized migration run to bind to cutover.")],
+    backup_archive: Annotated[Path, typer.Argument(help="Verified v3 backup archive.")],
+    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in cutover audit events.")],
+    artifact_sha: Annotated[str, typer.Option(help="Exact immutable backend artifact SHA-256.")],
+    artifact_contract_min: Annotated[
+        int, typer.Option(help="Lowest domain contract version supported by the artifact.")
+    ],
+    artifact_contract_max: Annotated[
+        int, typer.Option(help="Highest domain contract version supported by the artifact.")
+    ],
+    artifact_schema_min: Annotated[
+        int, typer.Option(help="Lowest domain schema migration version supported by the artifact.")
+    ],
+    artifact_schema_max: Annotated[
+        int, typer.Option(help="Highest domain schema migration version supported by the artifact.")
+    ],
+    stability_window_seconds: Annotated[
+        float, typer.Option(min=0.0, help="Required stable source window before preparing.")
+    ] = 5.0,
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing migration and maintenance state.")
+    ] = default_state_root(),
+) -> None:
+    """Prepare but do not yet enable the irreversible v2 cutover."""
+
+    try:
+        result = _cutover_controller(state_root).prepare(
+            actor_id=actor_id,
+            run_id=run_id,
+            backup_archive=backup_archive,
+            artifact_sha=artifact_sha,
+            artifact_contract_min=artifact_contract_min,
+            artifact_contract_max=artifact_contract_max,
+            artifact_schema_min=artifact_schema_min,
+            artifact_schema_max=artifact_schema_max,
+            stability_window_seconds=stability_window_seconds,
+        )
+    except (DomainCutoverError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+
+
+@domain_cutover_app.command("commit")
+def domain_cutover_commit(
+    run_id: Annotated[str, typer.Argument(help="Prepared migration run ID.")],
+    backup_archive: Annotated[Path, typer.Argument(help="Verified v3 backup archive.")],
+    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in cutover audit events.")],
+    artifact_sha: Annotated[str, typer.Option(help="Exact immutable backend artifact SHA-256.")],
+    artifact_contract_min: Annotated[
+        int, typer.Option(help="Lowest domain contract version supported by the artifact.")
+    ],
+    artifact_contract_max: Annotated[
+        int, typer.Option(help="Highest domain contract version supported by the artifact.")
+    ],
+    artifact_schema_min: Annotated[
+        int, typer.Option(help="Lowest domain schema migration version supported by the artifact.")
+    ],
+    artifact_schema_max: Annotated[
+        int, typer.Option(help="Highest domain schema migration version supported by the artifact.")
+    ],
+    stability_window_seconds: Annotated[
+        float, typer.Option(min=0.0, help="Required stable source window before committing.")
+    ] = 5.0,
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing migration and maintenance state.")
+    ] = default_state_root(),
+) -> None:
+    """Commit the prepared v2 fuse after repeating all safety gates."""
+
+    try:
+        result = _cutover_controller(state_root).commit(
+            actor_id=actor_id,
+            run_id=run_id,
+            backup_archive=backup_archive,
+            artifact_sha=artifact_sha,
+            artifact_contract_min=artifact_contract_min,
+            artifact_contract_max=artifact_contract_max,
+            artifact_schema_min=artifact_schema_min,
+            artifact_schema_max=artifact_schema_max,
+            stability_window_seconds=stability_window_seconds,
+        )
+    except (DomainCutoverError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+
+
+@domain_cutover_app.command("abort")
+def domain_cutover_abort(
+    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in cutover audit events.")],
+    reason: Annotated[str, typer.Option(help="Required reason for abandoning prepared cutover.")],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the authoritative cutover fuse.")
+    ] = default_state_root(),
+) -> None:
+    """Abort only a prepared cutover before the first v2 write exists."""
+
+    try:
+        result = _cutover_controller(state_root).abort(actor_id=actor_id, reason=reason)
+    except (DomainCutoverError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
 @domain_maintenance_app.command("status")

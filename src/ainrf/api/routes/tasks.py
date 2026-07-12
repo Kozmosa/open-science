@@ -6,7 +6,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from starlette.responses import StreamingResponse
 
 from ainrf.agentic_researcher import (
@@ -19,17 +19,24 @@ from ainrf.agentic_researcher import (
 from ainrf.agentic_researcher.models import Task, TaskOutputEvent
 from ainrf.agentic_researcher.service import TaskNotFoundError, TaskOperationError
 from ainrf.projects import ProjectNotFoundError, ProjectRegistryService
+from ainrf.api.deprecation import deprecation_headers, mark_deprecated
 from ainrf.api.schemas import (
     MessageItemResponse,
+    TaskAttemptListResponse,
+    TaskAttemptResponse,
     TaskCreateRequest,
+    TaskForkRequest,
     TaskListResponse,
     TaskHealthResponse,
     TaskMessagesResponse,
+    TaskMoveRequest,
+    TaskMutationResponse,
     TaskOutputItemResponse,
     TaskOutputResponse,
     TaskPauseResponse,
     TaskPromptRequest,
     TaskPromptSendResponse,
+    TaskRetryRequest,
     TaskResumeResponse,
     TaskRetryResponse,
     TaskSummaryResponse,
@@ -41,8 +48,9 @@ from ainrf.auth.permissions import (
     check_resource_ownership,
     get_current_user,
 )
-from ainrf.domain import DomainPermissionError, TaskApplicationService
-from ainrf.domain_control import DomainModelMode
+from ainrf.domain import DomainPermissionError, TaskApplicationService, TaskProjectionService
+from ainrf.domain.service import DomainNotFoundError
+from ainrf.domain_control import DomainModelMode, MaintenanceModeError
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +82,77 @@ def _get_task_application_service(request: Request) -> TaskApplicationService | 
     ):
         return None
     return service
+
+
+def _get_task_projection_service(request: Request) -> TaskProjectionService | None:
+    """Return the v2 SQLite projection only when Task writes are v2-gated."""
+
+    if _get_task_application_service(request) is None:
+        return None
+    service = getattr(request.app.state, "task_projection_service", None)
+    if service is None:
+        service = TaskProjectionService(request.app.state.api_config.state_root)
+        request.app.state.task_projection_service = service
+    if not isinstance(service, TaskProjectionService):
+        raise HTTPException(status_code=500, detail="Task projection service is invalid")
+    return service
+
+
+def _idempotency_key(request: Request, body_key: str | None = None) -> str:
+    """Prefer the formal header while accepting the legacy body field safely."""
+
+    header_key = request.headers.get("Idempotency-Key")
+    if header_key and body_key and header_key != body_key:
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency-Key header and body field must match",
+        )
+    key = header_key or body_key
+    if not key:
+        raise HTTPException(status_code=409, detail="Idempotency-Key is required")
+    return key
+
+
+def _translate_v2_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, MaintenanceModeError):
+        return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
+    if isinstance(exc, DomainPermissionError):
+        return HTTPException(status_code=403, detail="Task permission denied")
+    if isinstance(exc, (DomainNotFoundError, TaskNotFoundError)):
+        return HTTPException(status_code=404, detail="Task not found")
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=409, detail=str(exc))
+    return HTTPException(status_code=500, detail="Unexpected Task domain error")
+
+
+def _v2_task_summary(
+    projection: TaskProjectionService,
+    task_id: str,
+    user: dict[str, object],
+) -> TaskSummaryResponse:
+    return TaskSummaryResponse.model_validate(projection.task(task_id, user))
+
+
+def _v2_task_mutation_response(
+    projection: TaskProjectionService,
+    user: dict[str, object],
+    result: dict[str, object] | dict[str, str],
+) -> TaskMutationResponse:
+    task_id = result.get("task_id")
+    attempt_id = result.get("attempt_id")
+    if not isinstance(task_id, str) or not isinstance(attempt_id, str):
+        raise HTTPException(status_code=500, detail="Task mutation result is incomplete")
+    task = _v2_task_summary(projection, task_id, user)
+    attempt = TaskAttemptResponse.model_validate(projection.attempt(attempt_id, user))
+    dispatch = attempt.dispatch
+    if dispatch is None:
+        raise HTTPException(status_code=500, detail="Task Attempt has no dispatch summary")
+    return TaskMutationResponse(
+        **task.model_dump(),
+        task=task,
+        attempt=attempt,
+        dispatch=dispatch,
+    )
 
 
 def _task_list_owner_filter(user: dict) -> str | None:
@@ -240,7 +319,7 @@ def _output_item_to_message(
 
 def _output_items_to_messages(
     items: list[TaskOutputEvent],
-    task: Task,
+    task: Task | TaskSummaryResponse,
 ) -> list[MessageItemResponse]:
     messages: list[MessageItemResponse] = []
     seen_user_content: set[str] = set()
@@ -258,15 +337,23 @@ def _output_items_to_messages(
 
 
 @router.post("", status_code=201)
-async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSummaryResponse:
+async def create_task(
+    request: Request,
+    payload: TaskCreateRequest,
+    response: Response,
+) -> TaskSummaryResponse | TaskMutationResponse:
     user = get_current_user(request)
-    service = _get_service(request)
 
     task_application = _get_task_application_service(request)
     if task_application is not None:
         if not payload.project_id:
             raise HTTPException(
                 status_code=409, detail="v2 Task creation requires an explicit Project"
+            )
+        if payload.research_agent_profile is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="v2 Task creation does not accept legacy research_agent_profile overrides",
             )
         try:
             created = task_application.create_task(
@@ -277,11 +364,30 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskSumma
                 prompt=payload.prompt,
                 researcher_type=payload.researcher_type,
                 harness_engine=payload.harness_engine,
-                idempotency_key=request.headers.get("Idempotency-Key", ""),
+                environment_id=payload.environment_id,
+                user_skills=payload.skills,
+                user_mcp_servers=payload.mcp_servers,
+                idempotency_key=_idempotency_key(request, payload.idempotency_key),
             )
-            return _task_to_response(service.get_task(created["task_id"]), service)
-        except (DomainPermissionError, ValueError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+            projection = _get_task_projection_service(request)
+            if projection is None:
+                raise HTTPException(status_code=503, detail="Task projection is unavailable")
+            result = _v2_task_mutation_response(projection, user, created)
+            if payload.environment_id is not None:
+                mark_deprecated(
+                    response,
+                    route="tasks.create.environment_id",
+                    replacement="POST /tasks without environment_id",
+                )
+            return result
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
+    service = _get_service(request)
+    if payload.environment_id is None:
+        raise HTTPException(status_code=422, detail="environment_id is required before v2 cutover")
 
     engine_type = HarnessEngineType(payload.harness_engine)
     if payload.researcher_type == "vanilla":
@@ -355,6 +461,23 @@ async def list_tasks(
     sort: str = Query("updated"),
 ) -> TaskListResponse:
     user = get_current_user(request)
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        try:
+            tasks = projection.list_tasks(
+                user,
+                project_id=project_id,
+                include_archived=include_archived,
+                limit=limit,
+                sort=sort,
+            )
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+        return TaskListResponse(
+            items=[TaskSummaryResponse.model_validate(task) for task in tasks],
+            total=len(tasks),
+        )
+
     service = _get_service(request)
 
     tasks = service.list_tasks(
@@ -386,8 +509,29 @@ async def get_task_token_usage_summary(
 
 @router.get("/{task_id}")
 async def get_task(request: Request, task_id: str) -> TaskSummaryResponse:
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        try:
+            return _v2_task_summary(projection, task_id, get_current_user(request))
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
     _, task = _assert_task_owner(request, task_id)
     return _task_to_response(task, _get_service(request))
+
+
+@router.get("/{task_id}/attempts", response_model=TaskAttemptListResponse)
+async def list_task_attempts(request: Request, task_id: str) -> TaskAttemptListResponse:
+    """Return the durable Attempt history for a Task in v2 mode."""
+
+    projection = _get_task_projection_service(request)
+    if projection is None:
+        raise HTTPException(status_code=404, detail="Task Attempt projection is unavailable")
+    try:
+        return TaskAttemptListResponse.model_validate(
+            {"items": projection.attempts(task_id, get_current_user(request))}
+        )
+    except Exception as exc:
+        raise _translate_v2_error(exc) from exc
 
 
 @router.get("/{task_id}/health", response_model=TaskHealthResponse)
@@ -412,6 +556,21 @@ async def get_task_health(request: Request, task_id: str) -> TaskHealthResponse:
 
 @router.post("/{task_id}/cancel", status_code=204)
 async def cancel_task(request: Request, task_id: str) -> None:
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        try:
+            task_application.cancel_task(
+                task_id,
+                get_current_user(request),
+                reason="user_cancelled",
+                idempotency_key=_idempotency_key(request),
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
     service, _ = _assert_task_owner(request, task_id)
 
     try:
@@ -422,6 +581,25 @@ async def cancel_task(request: Request, task_id: str) -> None:
 
 @router.post("/{task_id}/pause")
 async def pause_task(request: Request, task_id: str) -> TaskPauseResponse:
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        user = get_current_user(request)
+        try:
+            task_application.pause_task(
+                task_id,
+                user,
+                idempotency_key=_idempotency_key(request),
+            )
+            projection = _get_task_projection_service(request)
+            if projection is None:
+                raise HTTPException(status_code=503, detail="Task projection is unavailable")
+            task = _v2_task_summary(projection, task_id, user)
+            return TaskPauseResponse(task_id=task_id, status=task.status)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
     service, _ = _assert_task_owner(request, task_id)
     try:
         task = await service.pause_task(task_id)
@@ -432,6 +610,25 @@ async def pause_task(request: Request, task_id: str) -> TaskPauseResponse:
 
 @router.post("/{task_id}/resume")
 async def resume_task(request: Request, task_id: str) -> TaskResumeResponse:
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        user = get_current_user(request)
+        try:
+            task_application.resume_task(
+                task_id,
+                user,
+                idempotency_key=_idempotency_key(request),
+            )
+            projection = _get_task_projection_service(request)
+            if projection is None:
+                raise HTTPException(status_code=503, detail="Task projection is unavailable")
+            task = _v2_task_summary(projection, task_id, user)
+            return TaskResumeResponse(task_id=task_id, status=task.status)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
     service, _ = _assert_task_owner(request, task_id)
     try:
         task = await service.resume_task(task_id)
@@ -440,12 +637,31 @@ async def resume_task(request: Request, task_id: str) -> TaskResumeResponse:
     return TaskResumeResponse(task_id=task.task_id, status=task.status.value)
 
 
-@router.post("/{task_id}/prompt")
-async def send_task_prompt(
+async def _continue_task(
     request: Request,
     task_id: str,
     payload: TaskPromptRequest,
 ) -> TaskPromptSendResponse:
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        try:
+            result = task_application.continue_task(
+                task_id,
+                get_current_user(request),
+                prompt=payload.prompt,
+                idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            )
+            sequence = result.get("message_sequence")
+            if not isinstance(sequence, int):
+                raise HTTPException(
+                    status_code=500, detail="Task continuation result is incomplete"
+                )
+            return TaskPromptSendResponse(task_id=task_id, sequence=sequence)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
     service, _ = _assert_task_owner(request, task_id)
     try:
         event = await service.send_prompt(task_id, payload.prompt)
@@ -454,23 +670,60 @@ async def send_task_prompt(
     return TaskPromptSendResponse(task_id=task_id, sequence=event.seq)
 
 
-@router.delete("/{task_id}", status_code=200)
-async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
-    """Archive (cancel) a task."""
-    service, _ = _assert_task_owner(request, task_id)
+@router.post("/{task_id}/continue")
+async def continue_task(
+    request: Request,
+    task_id: str,
+    payload: TaskPromptRequest,
+) -> TaskPromptSendResponse:
+    """Append a Task input or create a durable continuation Attempt."""
+
+    return await _continue_task(request, task_id, payload)
+
+
+@router.post("/{task_id}/prompt")
+async def send_task_prompt(
+    request: Request,
+    task_id: str,
+    payload: TaskPromptRequest,
+    response: Response,
+) -> TaskPromptSendResponse:
+    result = await _continue_task(request, task_id, payload)
+    if _get_task_application_service(request) is not None:
+        mark_deprecated(
+            response,
+            route="tasks.prompt",
+            replacement=f"POST /tasks/{task_id}/continue",
+        )
+    return result
+
+
+async def _archive_task(
+    request: Request,
+    task_id: str,
+) -> TaskSummaryResponse:
+    """Archive a Task through the v2 application service when enabled."""
+
     task_application = _get_task_application_service(request)
     if task_application is not None:
+        user = get_current_user(request)
         try:
             task_application.archive_task(
                 task_id,
-                get_current_user(request),
+                user,
                 reason="user_archived",
-                idempotency_key=request.headers.get("Idempotency-Key", ""),
+                idempotency_key=_idempotency_key(request),
             )
-            return _task_to_response(service.get_task(task_id), service)
-        except (DomainPermissionError, ValueError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+            projection = _get_task_projection_service(request)
+            if projection is None:
+                raise HTTPException(status_code=503, detail="Task projection is unavailable")
+            return _v2_task_summary(projection, task_id, user)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
 
+    service, _ = _assert_task_owner(request, task_id)
     task = service.get_task(task_id)
     try:
         if task.status in {TaskStatus.QUEUED, TaskStatus.STARTING, TaskStatus.RUNNING}:
@@ -483,9 +736,72 @@ async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
     return _task_to_response(archived, service)
 
 
+@router.post("/{task_id}/archive", status_code=200)
+async def archive_task_v2(request: Request, task_id: str) -> TaskSummaryResponse:
+    """Standard explicit Task archive endpoint."""
+
+    return await _archive_task(request, task_id)
+
+
+@router.post("/{task_id}/unarchive", status_code=200)
+async def unarchive_task(request: Request, task_id: str) -> TaskSummaryResponse:
+    task_application = _get_task_application_service(request)
+    if task_application is None:
+        raise HTTPException(
+            status_code=404, detail="Task unarchive is unavailable before v2 cutover"
+        )
+    user = get_current_user(request)
+    try:
+        task_application.unarchive_task(
+            task_id,
+            user,
+            idempotency_key=_idempotency_key(request),
+        )
+        projection = _get_task_projection_service(request)
+        if projection is None:
+            raise HTTPException(status_code=503, detail="Task projection is unavailable")
+        return _v2_task_summary(projection, task_id, user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _translate_v2_error(exc) from exc
+
+
+@router.delete("/{task_id}", status_code=200)
+async def archive_task(
+    request: Request,
+    task_id: str,
+    response: Response,
+) -> TaskSummaryResponse:
+    """Compatibility alias for ``POST /tasks/{task_id}/archive``."""
+
+    result = await _archive_task(request, task_id)
+    if _get_task_application_service(request) is not None:
+        mark_deprecated(
+            response,
+            route="tasks.archive.delete",
+            replacement=f"POST /tasks/{task_id}/archive",
+        )
+    return result
+
+
 @router.delete("/{task_id}/permanent", status_code=204)
 async def delete_task(request: Request, task_id: str) -> None:
     """Permanently delete a task."""
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        try:
+            projection.task(task_id, get_current_user(request))
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+        raise HTTPException(
+            status_code=410,
+            detail="Permanent Task deletion is unavailable; archive the Task instead",
+            headers=deprecation_headers(
+                route="tasks.permanent_delete",
+                replacement=f"POST /tasks/{task_id}/archive",
+            ),
+        )
     service, _ = _assert_task_owner(request, task_id)
     service.delete_task(task_id)
 
@@ -495,8 +811,41 @@ async def update_task_project(
     task_id: str,
     payload: TaskUpdateProjectRequest,
     request: Request,
+    response: Response,
 ) -> TaskSummaryResponse:
-    """Move a task to a different project."""
+    """Compatibility alias for the explicit v2 Task move contract."""
+
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        if payload.context_version_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail="context_version_id is required when moving a v2 Task",
+            )
+        user = get_current_user(request)
+        try:
+            task_application.move_task(
+                task_id,
+                user,
+                project_id=payload.project_id,
+                context_version_id=payload.context_version_id,
+                idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            )
+            projection = _get_task_projection_service(request)
+            if projection is None:
+                raise HTTPException(status_code=503, detail="Task projection is unavailable")
+            result = _v2_task_summary(projection, task_id, user)
+            mark_deprecated(
+                response,
+                route="tasks.update_project",
+                replacement=f"POST /tasks/{task_id}/move",
+            )
+            return result
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
     _assert_task_owner(request, task_id)
     service = _get_service(request)
     project_svc = _get_project_service(request)
@@ -510,6 +859,34 @@ async def update_task_project(
     return _task_to_response(updated, service)
 
 
+@router.post("/{task_id}/move", response_model=TaskSummaryResponse)
+async def move_task(
+    task_id: str,
+    payload: TaskMoveRequest,
+    request: Request,
+) -> TaskSummaryResponse:
+    task_application = _get_task_application_service(request)
+    if task_application is None:
+        raise HTTPException(status_code=404, detail="Task move is unavailable before v2 cutover")
+    user = get_current_user(request)
+    try:
+        task_application.move_task(
+            task_id,
+            user,
+            project_id=payload.project_id,
+            context_version_id=payload.context_version_id,
+            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+        )
+        projection = _get_task_projection_service(request)
+        if projection is None:
+            raise HTTPException(status_code=503, detail="Task projection is unavailable")
+        return _v2_task_summary(projection, task_id, user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _translate_v2_error(exc) from exc
+
+
 @router.patch("/{task_id}", response_model=TaskSummaryResponse)
 async def update_task(
     task_id: str,
@@ -517,41 +894,125 @@ async def update_task(
     request: Request,
 ) -> TaskSummaryResponse:
     """Update mutable task fields (title, etc.)."""
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        user = get_current_user(request)
+        try:
+            if payload.title is not None:
+                task_application.update_task_title(
+                    task_id,
+                    user,
+                    title=payload.title,
+                    idempotency_key=_idempotency_key(request, payload.idempotency_key),
+                )
+            projection = _get_task_projection_service(request)
+            if projection is None:
+                raise HTTPException(status_code=503, detail="Task projection is unavailable")
+            return _v2_task_summary(projection, task_id, user)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
     service, _ = _assert_task_owner(request, task_id)
     updated = service.update_task(task_id, title=payload.title)
     return _task_to_response(updated, service)
 
 
-@router.post("/{task_id}/retry", status_code=201)
-async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
-    """Retry a failed or cancelled task.
-
-    For agent-sdk tasks, this resumes the same session and resends the last
-    user message. For other engines, a new task is created.
-    """
+@router.post("/{task_id}/fork", status_code=201)
+async def fork_task(
+    task_id: str,
+    payload: TaskForkRequest,
+    request: Request,
+) -> TaskMutationResponse:
+    task_application = _get_task_application_service(request)
+    if task_application is None:
+        raise HTTPException(status_code=404, detail="Task fork is unavailable before v2 cutover")
     user = get_current_user(request)
-    service = _get_service(request)
+    try:
+        created = task_application.fork_task(
+            task_id,
+            user,
+            workspace_id=payload.workspace_id,
+            project_id=payload.project_id,
+            prompt=payload.prompt,
+            title=payload.title,
+            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+        )
+        projection = _get_task_projection_service(request)
+        if projection is None:
+            raise HTTPException(status_code=503, detail="Task projection is unavailable")
+        return _v2_task_mutation_response(projection, user, created)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _translate_v2_error(exc) from exc
 
+
+@router.post("/{task_id}/retry", status_code=201)
+async def retry_task(
+    request: Request,
+    task_id: str,
+    response: Response,
+    payload: TaskRetryRequest | None = None,
+) -> TaskRetryResponse:
+    """Retry through a new Attempt under the existing Task identity."""
+    user = get_current_user(request)
+
+    task_application = _get_task_application_service(request)
+    if task_application is not None:
+        body = payload or TaskRetryRequest()
+        try:
+            projection = _get_task_projection_service(request)
+            if projection is None:
+                raise HTTPException(status_code=503, detail="Task projection is unavailable")
+            original = _v2_task_summary(projection, task_id, user)
+            if body.task_input is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Retry does not accept task_input; use Task continue instead",
+                )
+            if body.environment_id is not None and body.environment_id != original.environment_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="environment_id must equal the Task Workspace derived Environment",
+                )
+            retried = task_application.retry_task(
+                task_id,
+                user,
+                idempotency_key=_idempotency_key(request, body.idempotency_key),
+            )
+            mutation = _v2_task_mutation_response(projection, user, retried)
+            mark_deprecated(
+                response,
+                route="tasks.retry.new_task",
+                replacement=f"GET /tasks/{task_id}/attempts",
+            )
+            if body.environment_id is not None:
+                mark_deprecated(
+                    response,
+                    route="tasks.retry.environment_id",
+                    replacement="POST /tasks/{task_id}/retry without environment_id",
+                )
+            return TaskRetryResponse(
+                new_task=mutation.task,
+                archived_task_id=None,
+                edge_id="",
+                task=mutation.task,
+                attempt=mutation.attempt,
+                dispatch=mutation.dispatch,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
+    service = _get_service(request)
     try:
         old_task = service.get_task(task_id)
     except TaskNotFoundError:
         raise HTTPException(status_code=404, detail="Task not found")
-
     check_resource_ownership(user, old_task.owner_user_id)
-
-    task_application = _get_task_application_service(request)
-    if task_application is not None:
-        try:
-            retried = task_application.retry_task(
-                task_id, user, idempotency_key=request.headers.get("Idempotency-Key", "")
-            )
-            new_task = service.get_task(retried["task_id"])
-            return TaskRetryResponse(
-                new_task=_task_to_response(new_task, service), archived_task_id=None, edge_id=""
-            )
-        except (DomainPermissionError, ValueError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
     try:
         new_task = await service.retry_task(task_id)
     except TaskOperationError as exc:
@@ -559,10 +1020,8 @@ async def retry_task(request: Request, task_id: str) -> TaskRetryResponse:
 
     # Agent-sdk retry returns the same task; other engines create a new one.
     same_task = new_task.task_id == task_id
-
     if not same_task:
         service.schedule_task(new_task.task_id)
-
     return TaskRetryResponse(
         new_task=_task_to_response(new_task, service),
         archived_task_id=task_id if not same_task else None,
@@ -578,15 +1037,46 @@ async def get_task_output(
     limit: int = Query(0, ge=0, le=1000, description="Max items to return; 0 means unlimited"),
 ) -> TaskOutputResponse:
     user = get_current_user(request)
-    service = _get_service(request)
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        try:
+            fetch_limit = limit + 1 if limit > 0 else 1000
+            items = projection.outputs(
+                task_id,
+                user,
+                after_seq=after_seq,
+                limit=fetch_limit,
+            )
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+        if limit > 0:
+            has_more = len(items) > limit
+            visible = items[:limit]
+        else:
+            has_more = False
+            visible = items
+        next_seq = visible[-1].seq if visible else after_seq
+        return TaskOutputResponse(
+            items=[
+                TaskOutputItemResponse(
+                    task_id=item.task_id,
+                    kind=item.kind,
+                    content=item.content,
+                    seq=item.seq,
+                    created_at=item.created_at.isoformat(),
+                )
+                for item in visible
+            ],
+            has_more=has_more,
+            next_seq=next_seq,
+        )
 
+    service = _get_service(request)
     try:
         task = service.get_task(task_id)
     except TaskNotFoundError:
         raise HTTPException(status_code=404, detail="Task not found")
-
     check_resource_ownership(user, task.owner_user_id)
-
     items = service.get_output(task_id, after_seq=after_seq)
     if limit > 0:
         has_more = len(items) > limit
@@ -618,12 +1108,26 @@ async def get_task_messages(
     after_seq: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=1000),
 ) -> TaskMessagesResponse:
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        user = get_current_user(request)
+        try:
+            task = _v2_task_summary(projection, task_id, user)
+            items = projection.outputs(task_id, user, after_seq=after_seq, limit=limit + 1)
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+        visible_items = items[:limit]
+        return TaskMessagesResponse(
+            messages=_output_items_to_messages(visible_items, task),
+            has_more=len(items) > limit,
+            next_sequence=visible_items[-1].seq if len(items) > limit and visible_items else None,
+        )
+
     service, task = _assert_task_owner(request, task_id)
     items = service.get_output(task_id, after_seq=after_seq, limit=limit + 1)
     visible_items = items[:limit]
-    messages = _output_items_to_messages(visible_items, task)
     return TaskMessagesResponse(
-        messages=messages,
+        messages=_output_items_to_messages(visible_items, task),
         has_more=len(items) > limit,
         next_sequence=visible_items[-1].seq if len(items) > limit and visible_items else None,
     )
@@ -635,6 +1139,54 @@ async def stream_task_output(
     task_id: str,
     after_seq: int = Query(0, ge=0),
 ) -> StreamingResponse:
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        user = get_current_user(request)
+        try:
+            projection.task(task_id, user)
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
+        async def v2_event_stream():
+            cursor = after_seq
+            terminal_statuses = {
+                "succeeded",
+                "failed",
+                "cancelled",
+                "stopped",
+                "stopped_by_project_archive",
+                "stopped_permission_revoked",
+            }
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    items = projection.outputs(task_id, user, after_seq=cursor, limit=1000)
+                    task = _v2_task_summary(projection, task_id, user)
+                except (DomainNotFoundError, DomainPermissionError):
+                    break
+                for item in items:
+                    cursor = item.seq
+                    event_payload = TaskOutputItemResponse(
+                        task_id=item.task_id,
+                        kind=item.kind,
+                        content=item.content,
+                        seq=item.seq,
+                        created_at=item.created_at.isoformat(),
+                    ).model_dump()
+                    yield (
+                        f"event: output\ndata: {json.dumps(event_payload, ensure_ascii=True)}\n\n"
+                    )
+                if not items and task.status in terminal_statuses:
+                    yield (
+                        "event: done\n"
+                        f"data: {json.dumps({'task_id': task_id, 'status': task.status})}\n\n"
+                    )
+                    break
+                await asyncio.sleep(0.25)
+
+        return StreamingResponse(v2_event_stream(), media_type="text/event-stream")
+
     service, _ = _assert_task_stream_access(request, task_id)
 
     async def event_stream():
@@ -645,14 +1197,14 @@ async def stream_task_output(
             items = service.get_output(task_id, after_seq=cursor)
             for item in items:
                 cursor = item.seq
-                payload = TaskOutputItemResponse(
+                event_payload = TaskOutputItemResponse(
                     task_id=item.task_id,
                     kind=item.kind,
                     content=item.content,
                     seq=item.seq,
                     created_at=item.created_at.isoformat(),
                 ).model_dump()
-                yield f"event: output\ndata: {json.dumps(payload, ensure_ascii=True)}\n\n"
+                yield f"event: output\ndata: {json.dumps(event_payload, ensure_ascii=True)}\n\n"
             task = service.get_task(task_id)
             if not items and task.status in {
                 TaskStatus.SUCCEEDED,

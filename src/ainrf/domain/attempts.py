@@ -107,11 +107,11 @@ class AttemptService:
     is intentionally never selected for another blind start.
     """
 
-    def __init__(self, state_root: Path) -> None:
+    def __init__(self, state_root: Path, *, artifact_sha: str | None = None) -> None:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._context_service = ProjectContextService(state_root)
+        self._context_service = ProjectContextService(state_root, artifact_sha=artifact_sha)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
 

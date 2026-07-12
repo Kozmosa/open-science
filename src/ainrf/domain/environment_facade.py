@@ -92,6 +92,23 @@ class PersistentEnvironmentFacade:
             raise EnvironmentNotFoundError(environment_id)
         return self._entry_from_row(row)
 
+    def resolve_effective_workdir(
+        self,
+        project_id: str,
+        environment_id: str,
+        state_root: Path,
+    ) -> str | None:
+        """Return the v2 derived Environment workdir without legacy overrides.
+
+        Project-specific Environment overrides lived in the JSON registry and
+        are deliberately not recreated in the v2 authority.  Callers keep
+        their compatibility signature but receive the durable Environment's
+        configured workdir only.
+        """
+
+        _ = project_id, state_root
+        return self.get_environment(environment_id).default_workdir
+
     @staticmethod
     def _entry_from_row(row: sqlite3.Row) -> EnvironmentRegistryEntry:
         connection = _connection_object(row["connection_json"])

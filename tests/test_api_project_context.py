@@ -13,8 +13,8 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.db import connect
 from ainrf.domain_control import DomainModelMode
+from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 
 pytestmark = [pytest.mark.api]
 
@@ -24,20 +24,16 @@ _ADMIN: dict[str, object] = {"id": "context-admin", "role": "admin"}
 _OWNER: dict[str, object] = {"id": "context-owner", "role": "member"}
 
 
-def _v2_app(state_root: Path) -> FastAPI:
+def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
+    prepare_committed_v2_cutover(state_root, tmp_path)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(_API_KEY)}),
             state_root=state_root,
             domain_model_mode=DomainModelMode.V2,
+            domain_artifact_sha=V2_ARTIFACT_SHA,
         )
     )
-    with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
-        conn.execute(
-            "UPDATE domain_cutover_state SET constraints_ready = 1, cutover_ready = 1 "
-            "WHERE singleton = 1"
-        )
-        conn.commit()
     return app
 
 
@@ -92,8 +88,10 @@ def _prepare_attached_workspace(app: FastAPI, state_root: Path, project_id: str)
 
 
 @pytest.mark.anyio
-async def test_api_key_context_publish_candidate_and_task_confirmation(state_root: Path) -> None:
-    app = _v2_app(state_root)
+async def test_api_key_context_publish_candidate_and_task_confirmation(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
@@ -227,9 +225,9 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(state_roo
 
 @pytest.mark.anyio
 async def test_api_key_context_permissions_for_viewer_editor_and_publisher(
-    state_root: Path,
+    state_root: Path, tmp_path: Path
 ) -> None:
-    app = _v2_app(state_root)
+    app = _v2_app(state_root, tmp_path)
     domain = app.state.domain_service
     context = app.state.project_context_service
     project = domain.create_project(_OWNER, name="Permission Project")

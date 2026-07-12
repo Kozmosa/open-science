@@ -51,6 +51,7 @@ class TestBaselineCreatesTables:
                     "literature_work_items",
                     "literature_outbox",
                     "literature_source_snapshots",
+                    "literature_research_task_intents",
                 },
             ),
             ("terminal", {"user_environment_bindings", "user_session_pairs"}),
@@ -76,8 +77,8 @@ class TestBaselineCreatesTables:
         [
             ("auth", 6),
             ("sessions", 3),
-            ("agentic_researcher", 17),
-            ("literature", 5),
+            ("agentic_researcher", 19),
+            ("literature", 6),
             ("terminal", 1),
         ],
     )
@@ -208,7 +209,7 @@ class TestUpgradeFromV0:
             conn.commit()
 
         with _connect(db_file) as conn:
-            assert run_pending(conn, "literature") == 2
+            assert run_pending(conn, "literature") == 3
             topic = conn.execute(
                 "SELECT status, is_active FROM literature_topics WHERE topic_id = 'sub-ai'"
             ).fetchone()

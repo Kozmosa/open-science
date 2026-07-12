@@ -9,25 +9,27 @@ from pathlib import Path
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.db import connect
-from ainrf.domain_control import DomainModelMode
+from ainrf.domain_control import DomainCutoverError, DomainModelMode
+from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 
 pytestmark = [pytest.mark.api]
 
 
 @pytest.mark.anyio
-async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(state_root: Path) -> None:
+async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(
+    state_root: Path, tmp_path: Path
+) -> None:
     config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("domain-key")}),
         state_root=state_root,
         domain_model_mode=DomainModelMode.V2,
+        domain_artifact_sha=V2_ARTIFACT_SHA,
     )
+    with pytest.raises(DomainCutoverError, match="fuse is not committed and ready"):
+        create_app(config)
+
+    prepare_committed_v2_cutover(state_root, tmp_path)
     app = create_app(config)
-    with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
-        conn.execute(
-            "UPDATE domain_cutover_state SET constraints_ready = 1, cutover_ready = 1 WHERE singleton = 1"
-        )
-        conn.commit()
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
@@ -36,21 +38,19 @@ async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(state_root: Path
 
     assert response.status_code == 200
     assert response.json()["name"] == "V2"
+    assert app.state.domain_cutover_controller.status().first_v2_write_actor_id == "api-key-user"
 
 
 @pytest.mark.anyio
-async def test_v2_task_adapter_uses_standard_task_create(state_root: Path) -> None:
+async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_path: Path) -> None:
+    prepare_committed_v2_cutover(state_root, tmp_path)
     config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("domain-key")}),
         state_root=state_root,
         domain_model_mode=DomainModelMode.V2,
+        domain_artifact_sha=V2_ARTIFACT_SHA,
     )
     app = create_app(config)
-    with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
-        conn.execute(
-            "UPDATE domain_cutover_state SET constraints_ready = 1, cutover_ready = 1 WHERE singleton = 1"
-        )
-        conn.commit()
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
     user: dict[str, object] = {"id": "api-key-user", "role": "user"}
     domain = app.state.domain_service
@@ -74,9 +74,7 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path) -> No
     domain.attach_workspace(
         str(project["project_id"]), str(workspace["workspace_id"]), user, idempotency_key="link"
     )
-    from ainrf.domain import ProjectContextService
-
-    context = ProjectContextService(state_root)
+    context = app.state.project_context_service
     context.save_draft(str(project["project_id"]), "context", user)
     context.publish(str(project["project_id"]), user)
 

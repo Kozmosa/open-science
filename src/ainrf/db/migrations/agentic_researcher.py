@@ -1233,3 +1233,367 @@ def migration_017_task_lifecycle_controls(conn: sqlite3.Connection) -> None:
         BEGIN SELECT RAISE(ABORT, 'archived Task or Project cannot create a dispatch'); END;
         """
     )
+
+
+def _install_domain_cutover_state_guards(conn: sqlite3.Connection) -> None:
+    """Install the one-way state machine for fresh and already-migrated DBs."""
+
+    conn.executescript(
+        """
+        DROP TRIGGER IF EXISTS domain_cutover_state_valid_update;
+        DROP TRIGGER IF EXISTS domain_cutover_first_v2_write_pair;
+        DROP TRIGGER IF EXISTS domain_cutover_state_prepared_immutable;
+        DROP TRIGGER IF EXISTS domain_cutover_state_v2_immutable;
+        DROP TRIGGER IF EXISTS domain_cutover_state_delete_forbidden;
+        DROP TRIGGER IF EXISTS domain_cutover_state_v2_delete_forbidden;
+
+        CREATE TRIGGER domain_cutover_state_valid_update
+        BEFORE UPDATE OF state ON domain_cutover_state
+        WHEN NEW.state NOT IN ('legacy', 'prepared', 'v2')
+          OR (OLD.state = 'legacy' AND NEW.state = 'v2')
+          OR (OLD.state = 'v2' AND NEW.state != 'v2')
+          OR (
+              OLD.state = 'legacy' AND NEW.state = 'prepared'
+              AND NOT (
+                  NEW.cutover_epoch > OLD.cutover_epoch
+                  AND NEW.cutover_run_id IS NOT NULL
+                  AND NEW.source_manifest_json IS NOT NULL
+                  AND NEW.reconciled_at IS NOT NULL
+                  AND NEW.blocking_issue_count = 0
+                  AND NEW.constraints_ready = 1
+                  AND NEW.cutover_ready = 0
+                  AND NEW.prepared_at IS NOT NULL
+                  AND NEW.prepared_by_user_id IS NOT NULL
+                  AND NEW.committed_at IS NULL
+                  AND NEW.committed_by_user_id IS NULL
+                  AND NEW.first_v2_write_at IS NULL
+                  AND NEW.first_v2_write_actor_id IS NULL
+                  AND NEW.artifact_sha IS NOT NULL
+                  AND NEW.artifact_contract_min IS NOT NULL
+                  AND NEW.artifact_contract_max IS NOT NULL
+                  AND NEW.artifact_contract_min <= NEW.contract_version
+                  AND NEW.contract_version <= NEW.artifact_contract_max
+                  AND NEW.artifact_schema_min IS NOT NULL
+                  AND NEW.artifact_schema_max IS NOT NULL
+                  AND NEW.artifact_schema_min <= NEW.schema_version
+                  AND NEW.schema_version <= NEW.artifact_schema_max
+                  AND NEW.backup_manifest_sha256 IS NOT NULL
+                  AND NEW.backup_tree_sha256 IS NOT NULL
+                  AND NEW.backup_created_at IS NOT NULL
+                  AND NEW.backup_version >= 3
+                  AND NEW.maintenance_epoch IS NOT NULL
+                  AND NEW.source_inventory_json IS NOT NULL
+                  AND NEW.source_inventory_sha256 IS NOT NULL
+                  AND NEW.restore_evidence_sha256 IS NOT NULL
+                  AND NEW.preparation_digest IS NOT NULL
+                  AND NEW.prepared_blocking_issue_count = 0
+              )
+          )
+          OR (
+              OLD.state = 'prepared' AND NEW.state = 'v2'
+              AND NOT (
+                  NEW.contract_version IS OLD.contract_version
+                  AND NEW.schema_version IS OLD.schema_version
+                  AND NEW.cutover_epoch IS OLD.cutover_epoch
+                  AND NEW.cutover_run_id IS OLD.cutover_run_id
+                  AND NEW.source_manifest_json IS OLD.source_manifest_json
+                  AND NEW.reconciled_at IS OLD.reconciled_at
+                  AND NEW.blocking_issue_count IS OLD.blocking_issue_count
+                  AND NEW.constraints_ready = 1
+                  AND OLD.cutover_ready = 0
+                  AND NEW.cutover_ready = 1
+                  AND NEW.prepared_at IS OLD.prepared_at
+                  AND NEW.prepared_by_user_id IS OLD.prepared_by_user_id
+                  AND OLD.committed_at IS NULL
+                  AND NEW.committed_at IS NOT NULL
+                  AND OLD.committed_by_user_id IS NULL
+                  AND NEW.committed_by_user_id IS NOT NULL
+                  AND NEW.first_v2_write_at IS NULL
+                  AND NEW.first_v2_write_actor_id IS NULL
+                  AND NEW.artifact_sha IS OLD.artifact_sha
+                  AND NEW.artifact_contract_min IS OLD.artifact_contract_min
+                  AND NEW.artifact_contract_max IS OLD.artifact_contract_max
+                  AND NEW.artifact_schema_min IS OLD.artifact_schema_min
+                  AND NEW.artifact_schema_max IS OLD.artifact_schema_max
+                  AND NEW.backup_manifest_sha256 IS OLD.backup_manifest_sha256
+                  AND NEW.backup_tree_sha256 IS OLD.backup_tree_sha256
+                  AND NEW.backup_created_at IS OLD.backup_created_at
+                  AND NEW.backup_version IS OLD.backup_version
+                  AND NEW.maintenance_epoch IS OLD.maintenance_epoch
+                  AND NEW.source_inventory_json IS OLD.source_inventory_json
+                  AND NEW.source_inventory_sha256 IS OLD.source_inventory_sha256
+                  AND NEW.restore_evidence_sha256 IS OLD.restore_evidence_sha256
+                  AND NEW.preparation_digest IS OLD.preparation_digest
+                  AND NEW.prepared_blocking_issue_count = 0
+              )
+          )
+          OR (
+              OLD.state = 'prepared' AND NEW.state = 'legacy'
+              AND NOT (
+                  NEW.contract_version IS OLD.contract_version
+                  AND NEW.schema_version IS OLD.schema_version
+                  AND NEW.cutover_epoch IS OLD.cutover_epoch
+                  AND NEW.cutover_run_id IS NULL
+                  AND NEW.source_manifest_json IS NULL
+                  AND NEW.reconciled_at IS NULL
+                  AND NEW.blocking_issue_count = 0
+                  AND NEW.constraints_ready IS OLD.constraints_ready
+                  AND NEW.cutover_ready = 0
+                  AND NEW.prepared_at IS NULL
+                  AND NEW.prepared_by_user_id IS NULL
+                  AND NEW.committed_at IS NULL
+                  AND NEW.committed_by_user_id IS NULL
+                  AND NEW.first_v2_write_at IS NULL
+                  AND NEW.first_v2_write_actor_id IS NULL
+                  AND NEW.artifact_sha IS NULL
+                  AND NEW.artifact_contract_min IS NULL
+                  AND NEW.artifact_contract_max IS NULL
+                  AND NEW.artifact_schema_min IS NULL
+                  AND NEW.artifact_schema_max IS NULL
+                  AND NEW.backup_manifest_sha256 IS NULL
+                  AND NEW.backup_tree_sha256 IS NULL
+                  AND NEW.backup_created_at IS NULL
+                  AND NEW.backup_version IS NULL
+                  AND NEW.maintenance_epoch IS NULL
+                  AND NEW.source_inventory_json IS NULL
+                  AND NEW.source_inventory_sha256 IS NULL
+                  AND NEW.restore_evidence_sha256 IS NULL
+                  AND NEW.preparation_digest IS NULL
+                  AND NEW.prepared_blocking_issue_count = 0
+              )
+          )
+        BEGIN SELECT RAISE(ABORT, 'invalid domain cutover state transition'); END;
+
+        CREATE TRIGGER domain_cutover_state_prepared_immutable
+        BEFORE UPDATE ON domain_cutover_state
+        WHEN OLD.state = 'prepared' AND NEW.state = 'prepared'
+          AND NOT (
+              NEW.singleton IS OLD.singleton
+              AND NEW.contract_version IS OLD.contract_version
+              AND NEW.schema_version IS OLD.schema_version
+              AND NEW.cutover_epoch IS OLD.cutover_epoch
+              AND NEW.first_v2_write_at IS OLD.first_v2_write_at
+              AND NEW.first_v2_write_actor_id IS OLD.first_v2_write_actor_id
+              AND NEW.cutover_run_id IS OLD.cutover_run_id
+              AND NEW.source_manifest_json IS OLD.source_manifest_json
+              AND NEW.reconciled_at IS OLD.reconciled_at
+              AND NEW.blocking_issue_count IS OLD.blocking_issue_count
+              AND NEW.constraints_ready IS OLD.constraints_ready
+              AND NEW.cutover_ready IS OLD.cutover_ready
+              AND NEW.prepared_at IS OLD.prepared_at
+              AND NEW.prepared_by_user_id IS OLD.prepared_by_user_id
+              AND NEW.committed_at IS OLD.committed_at
+              AND NEW.committed_by_user_id IS OLD.committed_by_user_id
+              AND NEW.artifact_sha IS OLD.artifact_sha
+              AND NEW.artifact_contract_min IS OLD.artifact_contract_min
+              AND NEW.artifact_contract_max IS OLD.artifact_contract_max
+              AND NEW.artifact_schema_min IS OLD.artifact_schema_min
+              AND NEW.artifact_schema_max IS OLD.artifact_schema_max
+              AND NEW.backup_manifest_sha256 IS OLD.backup_manifest_sha256
+              AND NEW.backup_tree_sha256 IS OLD.backup_tree_sha256
+              AND NEW.backup_created_at IS OLD.backup_created_at
+              AND NEW.backup_version IS OLD.backup_version
+              AND NEW.maintenance_epoch IS OLD.maintenance_epoch
+              AND NEW.source_inventory_json IS OLD.source_inventory_json
+              AND NEW.source_inventory_sha256 IS OLD.source_inventory_sha256
+              AND NEW.restore_evidence_sha256 IS OLD.restore_evidence_sha256
+              AND NEW.preparation_digest IS OLD.preparation_digest
+              AND NEW.prepared_blocking_issue_count IS OLD.prepared_blocking_issue_count
+          )
+        BEGIN SELECT RAISE(ABORT, 'prepared domain cutover evidence is immutable'); END;
+
+        CREATE TRIGGER domain_cutover_first_v2_write_pair
+        BEFORE UPDATE OF first_v2_write_at, first_v2_write_actor_id ON domain_cutover_state
+        WHEN (NEW.first_v2_write_at IS NULL) != (NEW.first_v2_write_actor_id IS NULL)
+          OR (
+              NEW.state != 'v2'
+              AND (NEW.first_v2_write_at IS NOT NULL OR NEW.first_v2_write_actor_id IS NOT NULL)
+          )
+        BEGIN SELECT RAISE(ABORT, 'first v2 write metadata requires committed v2 state'); END;
+
+        CREATE TRIGGER domain_cutover_state_v2_immutable
+        BEFORE UPDATE ON domain_cutover_state
+        WHEN OLD.state = 'v2'
+          AND NOT (
+              NEW.singleton IS OLD.singleton
+              AND NEW.state IS OLD.state
+              AND NEW.contract_version IS OLD.contract_version
+              AND NEW.schema_version IS OLD.schema_version
+              AND NEW.cutover_epoch IS OLD.cutover_epoch
+              AND NEW.cutover_run_id IS OLD.cutover_run_id
+              AND NEW.source_manifest_json IS OLD.source_manifest_json
+              AND NEW.reconciled_at IS OLD.reconciled_at
+              AND NEW.blocking_issue_count IS OLD.blocking_issue_count
+              AND NEW.constraints_ready IS OLD.constraints_ready
+              AND NEW.cutover_ready IS OLD.cutover_ready
+              AND NEW.prepared_at IS OLD.prepared_at
+              AND NEW.prepared_by_user_id IS OLD.prepared_by_user_id
+              AND NEW.committed_at IS OLD.committed_at
+              AND NEW.committed_by_user_id IS OLD.committed_by_user_id
+              AND NEW.artifact_sha IS OLD.artifact_sha
+              AND NEW.artifact_contract_min IS OLD.artifact_contract_min
+              AND NEW.artifact_contract_max IS OLD.artifact_contract_max
+              AND NEW.artifact_schema_min IS OLD.artifact_schema_min
+              AND NEW.artifact_schema_max IS OLD.artifact_schema_max
+              AND NEW.backup_manifest_sha256 IS OLD.backup_manifest_sha256
+              AND NEW.backup_tree_sha256 IS OLD.backup_tree_sha256
+              AND NEW.backup_created_at IS OLD.backup_created_at
+              AND NEW.backup_version IS OLD.backup_version
+              AND NEW.maintenance_epoch IS OLD.maintenance_epoch
+              AND NEW.source_inventory_json IS OLD.source_inventory_json
+              AND NEW.source_inventory_sha256 IS OLD.source_inventory_sha256
+              AND NEW.restore_evidence_sha256 IS OLD.restore_evidence_sha256
+              AND NEW.preparation_digest IS OLD.preparation_digest
+              AND NEW.prepared_blocking_issue_count IS OLD.prepared_blocking_issue_count
+              AND (
+                  (
+                      NEW.first_v2_write_at IS OLD.first_v2_write_at
+                      AND NEW.first_v2_write_actor_id IS OLD.first_v2_write_actor_id
+                  )
+                  OR (
+                      OLD.first_v2_write_at IS NULL
+                      AND OLD.first_v2_write_actor_id IS NULL
+                      AND NEW.first_v2_write_at IS NOT NULL
+                      AND NEW.first_v2_write_actor_id IS NOT NULL
+                  )
+              )
+          )
+        BEGIN SELECT RAISE(ABORT, 'invalid domain cutover state transition: committed state is immutable'); END;
+
+        CREATE TRIGGER domain_cutover_state_delete_forbidden
+        BEFORE DELETE ON domain_cutover_state
+        BEGIN SELECT RAISE(ABORT, 'domain cutover state cannot be deleted'); END;
+        """
+    )
+
+
+@registry.register(_DATABASE)
+def migration_018_domain_cutover_controller(conn: sqlite3.Connection) -> None:
+    """Persist the transactional fuse used to prepare and commit domain v2.
+
+    A completed shadow import is not itself permission to enable v2 writes.
+    The controller records the exact migration, backup, artifact, schema, and
+    maintenance facts in one row before it can transition to ``v2``.  Once v2
+    is committed that row is immutable except for recording the actor and time
+    of the first v2 write; rolling back requires a separate full restore.
+    """
+
+    for name, definition in (
+        ("first_v2_write_actor_id", "TEXT"),
+        ("committed_by_user_id", "TEXT"),
+        ("backup_tree_sha256", "TEXT"),
+        ("backup_created_at", "TEXT"),
+        ("backup_version", "INTEGER"),
+        ("artifact_schema_min", "INTEGER"),
+        ("artifact_schema_max", "INTEGER"),
+        ("source_inventory_json", "TEXT"),
+        ("source_inventory_sha256", "TEXT"),
+        ("restore_evidence_sha256", "TEXT"),
+        ("preparation_digest", "TEXT"),
+        ("prepared_blocking_issue_count", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE domain_cutover_state ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS domain_cutover_events (
+            event_id TEXT PRIMARY KEY,
+            cutover_epoch INTEGER NOT NULL,
+            event_type TEXT NOT NULL CHECK (
+                event_type IN ('prepared', 'committed', 'aborted', 'first_v2_write')
+            ),
+            actor_user_id TEXT NOT NULL,
+            migration_run_id TEXT,
+            preparation_digest TEXT,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_cutover_events_epoch
+        ON domain_cutover_events(cutover_epoch, created_at, event_id);
+        CREATE INDEX IF NOT EXISTS idx_domain_cutover_events_run
+        ON domain_cutover_events(migration_run_id, created_at, event_id)
+        WHERE migration_run_id IS NOT NULL;
+
+        CREATE TRIGGER IF NOT EXISTS domain_cutover_events_append_only_update
+        BEFORE UPDATE ON domain_cutover_events
+        BEGIN SELECT RAISE(ABORT, 'domain cutover events are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_cutover_events_append_only_delete
+        BEFORE DELETE ON domain_cutover_events
+        BEGIN SELECT RAISE(ABORT, 'domain cutover events are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_cutover_first_v2_write_pair
+        BEFORE UPDATE OF first_v2_write_at, first_v2_write_actor_id ON domain_cutover_state
+        WHEN (NEW.first_v2_write_at IS NULL) != (NEW.first_v2_write_actor_id IS NULL)
+          OR (
+              NEW.state != 'v2'
+              AND (NEW.first_v2_write_at IS NOT NULL OR NEW.first_v2_write_actor_id IS NOT NULL)
+          )
+        BEGIN SELECT RAISE(ABORT, 'first v2 write metadata requires committed v2 state'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_cutover_state_v2_immutable
+        BEFORE UPDATE ON domain_cutover_state
+        WHEN OLD.state = 'v2'
+          AND NOT (
+              NEW.singleton IS OLD.singleton
+              AND NEW.state IS OLD.state
+              AND NEW.contract_version IS OLD.contract_version
+              AND NEW.schema_version IS OLD.schema_version
+              AND NEW.cutover_epoch IS OLD.cutover_epoch
+              AND NEW.cutover_run_id IS OLD.cutover_run_id
+              AND NEW.source_manifest_json IS OLD.source_manifest_json
+              AND NEW.reconciled_at IS OLD.reconciled_at
+              AND NEW.blocking_issue_count IS OLD.blocking_issue_count
+              AND NEW.constraints_ready IS OLD.constraints_ready
+              AND NEW.cutover_ready IS OLD.cutover_ready
+              AND NEW.prepared_at IS OLD.prepared_at
+              AND NEW.prepared_by_user_id IS OLD.prepared_by_user_id
+              AND NEW.committed_at IS OLD.committed_at
+              AND NEW.committed_by_user_id IS OLD.committed_by_user_id
+              AND NEW.artifact_sha IS OLD.artifact_sha
+              AND NEW.artifact_contract_min IS OLD.artifact_contract_min
+              AND NEW.artifact_contract_max IS OLD.artifact_contract_max
+              AND NEW.artifact_schema_min IS OLD.artifact_schema_min
+              AND NEW.artifact_schema_max IS OLD.artifact_schema_max
+              AND NEW.backup_manifest_sha256 IS OLD.backup_manifest_sha256
+              AND NEW.backup_tree_sha256 IS OLD.backup_tree_sha256
+              AND NEW.backup_created_at IS OLD.backup_created_at
+              AND NEW.backup_version IS OLD.backup_version
+              AND NEW.maintenance_epoch IS OLD.maintenance_epoch
+              AND NEW.source_inventory_json IS OLD.source_inventory_json
+              AND NEW.source_inventory_sha256 IS OLD.source_inventory_sha256
+              AND NEW.restore_evidence_sha256 IS OLD.restore_evidence_sha256
+              AND NEW.preparation_digest IS OLD.preparation_digest
+              AND NEW.prepared_blocking_issue_count IS OLD.prepared_blocking_issue_count
+              AND (
+                  (
+                      NEW.first_v2_write_at IS OLD.first_v2_write_at
+                      AND NEW.first_v2_write_actor_id IS OLD.first_v2_write_actor_id
+                  )
+                  OR (
+                      OLD.first_v2_write_at IS NULL
+                      AND OLD.first_v2_write_actor_id IS NULL
+                      AND NEW.first_v2_write_at IS NOT NULL
+                      AND NEW.first_v2_write_actor_id IS NOT NULL
+                  )
+              )
+          )
+        BEGIN SELECT RAISE(ABORT, 'invalid domain cutover state transition: committed state is immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_cutover_state_v2_delete_forbidden
+        BEFORE DELETE ON domain_cutover_state
+        WHEN OLD.state = 'v2'
+        BEGIN SELECT RAISE(ABORT, 'committed domain cutover state cannot be deleted'); END;
+        """
+    )
+    _install_domain_cutover_state_guards(conn)
+
+
+@registry.register(_DATABASE)
+def migration_019_harden_domain_cutover_state_machine(conn: sqlite3.Connection) -> None:
+    """Apply B7 transition guards to databases that already ran migration 018."""
+
+    _install_domain_cutover_state_guards(conn)

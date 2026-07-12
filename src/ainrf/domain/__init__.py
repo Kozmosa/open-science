@@ -2,6 +2,7 @@
 
 from ainrf.domain.service import DomainAuthorizationService, DomainService, DomainPermissionError
 from ainrf.domain.environment_facade import PersistentEnvironmentFacade
+from ainrf.domain.workspace_facade import PersistentWorkspaceFacade
 from ainrf.domain.context import (
     ContextAssembler,
     ContextAssembly,
@@ -10,6 +11,7 @@ from ainrf.domain.context import (
 )
 from ainrf.domain.attempts import AttemptService, DispatchClaim
 from ainrf.domain.tasks import TaskApplicationService
+from ainrf.domain.task_projection import TaskProjectionService
 from ainrf.domain.session_projection import SessionProjectionService
 from ainrf.domain.overview import OverviewSnapshotService
 from ainrf.domain.worker import DispatchRunResult, TaskDispatcher
@@ -19,6 +21,7 @@ __all__ = [
     "DomainPermissionError",
     "DomainService",
     "PersistentEnvironmentFacade",
+    "PersistentWorkspaceFacade",
     "ContextAssembler",
     "ContextAssembly",
     "ContextSource",
@@ -28,6 +31,7 @@ __all__ = [
     "DispatchRunResult",
     "TaskDispatcher",
     "TaskApplicationService",
+    "TaskProjectionService",
     "SessionProjectionService",
     "OverviewSnapshotService",
 ]

@@ -10,6 +10,10 @@ import shlex
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 
+from ainrf.api.domain_access import (
+    require_v2_active_environment,
+    require_v2_workspace_execution_owner,
+)
 from ainrf.api.schemas import (
     FileEntryResponse,
     FileListResponse,
@@ -41,15 +45,23 @@ def _get_workspace_service(request: Request):
     return service
 
 
-def _check_workspace_access(request: Request, workspace_id: str | None) -> str | None:
+def _check_workspace_access(
+    request: Request,
+    workspace_id: str | None,
+    user: dict[str, object],
+) -> str | None:
     """Validate workspace ownership. Returns the workspace default_workdir if access is allowed.
 
     Returns None if no workspace_id was given (caller should use environment default).
-    Raises 403 if the user does not own the workspace.
+    In v2, an administrator can view a Workspace but cannot bypass the
+    owner's Linux tenant boundary for file I/O.
     """
     if workspace_id is None:
         return None
-    user = get_current_user(request)
+    v2_workspace = require_v2_workspace_execution_owner(request, user, workspace_id)
+    if v2_workspace is not None:
+        canonical_path = v2_workspace.get("canonical_path")
+        return canonical_path if isinstance(canonical_path, str) and canonical_path else None
     ws_service = _get_workspace_service(request)
     try:
         workspace = ws_service.get_workspace(workspace_id)
@@ -108,8 +120,9 @@ async def list_files(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ) -> FileListResponse:
-    get_current_user(request)
-    _check_workspace_access(request, workspace_id)
+    user = get_current_user(request)
+    require_v2_active_environment(request, user, environment_id)
+    _check_workspace_access(request, workspace_id, user)
     service = _get_file_browser_service(request)
     try:
         listing = await service.list_directory(environment_id, path, workspace_id)
@@ -139,8 +152,9 @@ async def read_file(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ) -> FileReadResponse:
-    get_current_user(request)
-    _check_workspace_access(request, workspace_id)
+    user = get_current_user(request)
+    require_v2_active_environment(request, user, environment_id)
+    _check_workspace_access(request, workspace_id, user)
     service = _get_file_browser_service(request)
     try:
         content = await service.read_file(environment_id, path, workspace_id)
@@ -165,8 +179,9 @@ async def stream_file(
         default=None, description="Optional workspace ID to override workdir"
     ),
 ):
-    get_current_user(request)
-    _check_workspace_access(request, workspace_id)
+    user = get_current_user(request)
+    require_v2_active_environment(request, user, environment_id)
+    _check_workspace_access(request, workspace_id, user)
     service = _get_file_browser_service(request)
     try:
         is_local, resolved_path, environment = await service.resolve_stream_target(
@@ -240,8 +255,9 @@ async def upload_file(
     workspace_id: str | None = Form(default=None),
     file: UploadFile = File(...),
 ) -> FileUploadResponse:
-    get_current_user(request)
-    _check_workspace_access(request, workspace_id)
+    user = get_current_user(request)
+    require_v2_active_environment(request, user, environment_id)
+    _check_workspace_access(request, workspace_id, user)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
 

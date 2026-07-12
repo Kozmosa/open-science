@@ -22,6 +22,8 @@ from ainrf.domain.attempts import (
     DispatchClaimError,
 )
 from ainrf.domain_control import (
+    DomainCutoverController,
+    DomainCutoverError,
     DomainMaintenanceService,
     DomainWriteParticipant,
     MaintenanceLease,
@@ -73,13 +75,16 @@ class TaskDispatcher:
         dispatcher_id: str | None = None,
         engine_factory: EngineFactory | None = None,
         lease_seconds: int = 30,
+        artifact_sha: str | None = None,
     ) -> None:
         if lease_seconds <= 2:
             raise ValueError("lease_seconds must be greater than two seconds")
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
-        self._attempts = AttemptService(state_root)
+        self._cutover = DomainCutoverController(state_root)
+        self._artifact_sha = artifact_sha
+        self._attempts = AttemptService(state_root, artifact_sha=artifact_sha)
         self._maintenance = DomainMaintenanceService(state_root)
         self._maintenance.initialize()
         self.dispatcher_id = dispatcher_id or f"domain-worker-{uuid4().hex[:12]}"
@@ -105,6 +110,7 @@ class TaskDispatcher:
             self._started = False
 
     async def run_once(self) -> DispatchRunResult:
+        self._assert_domain_runtime_fuse()
         self.start()
         try:
             lease = self._participant.begin_mutation(source="task-dispatcher.claim")
@@ -133,6 +139,10 @@ class TaskDispatcher:
             self.stop()
 
     async def _run_claim(self, claim: DispatchClaim, lease: MaintenanceLease) -> DispatchRunResult:
+        try:
+            self._assert_domain_runtime_fuse()
+        except DomainCutoverError as exc:
+            return self._release_for_cutover_fuse(claim, str(exc))
         try:
             self._maintenance.check_lease(lease)
         except MaintenanceModeError:
@@ -167,6 +177,7 @@ class TaskDispatcher:
             grant_version=grant_version,
         )
         try:
+            self._assert_domain_runtime_fuse()
             self._maintenance.check_lease(lease)
             preparation = self._attempts.prepare_runtime_launch(claim)
             context, environment_id, grant_version = self._execution_context_for(claim)
@@ -254,6 +265,42 @@ class TaskDispatcher:
             dispatch_id=claim.dispatch_id,
             attempt_id=claim.attempt_id,
         )
+
+    def _release_for_cutover_fuse(self, claim: DispatchClaim, reason: str) -> DispatchRunResult:
+        """Return a claimed row to the durable queue before any launch boundary."""
+
+        try:
+            self._attempts.release_unstarted_claim(claim, reason=f"Domain cutover fuse: {reason}")
+        except DispatchClaimError:
+            # If a different process crossed the durable launch fence first,
+            # retain the conservative unknown state rather than starting a
+            # replacement runtime under a failed fuse.
+            try:
+                self._attempts.mark_launch_unknown(claim, reason=f"Domain cutover fuse: {reason}")
+            except DispatchClaimError:
+                pass
+        return DispatchRunResult(
+            outcome="cutover_fuse_rejected",
+            dispatch_id=claim.dispatch_id,
+            attempt_id=claim.attempt_id,
+            detail=reason,
+        )
+
+    def _assert_domain_runtime_fuse(self) -> None:
+        """Fence every dispatcher pass against the authoritative v2 mode."""
+
+        status = self._cutover.status()
+        if status.state == "legacy":
+            if self._artifact_sha is not None:
+                raise DomainCutoverError(
+                    "v2 domain worker artifact cannot run against legacy state"
+                )
+            return
+        if status.state != "v2":
+            raise DomainCutoverError("domain worker cannot run while cutover is prepared")
+        if not self._artifact_sha:
+            raise DomainCutoverError("domain worker requires the committed v2 artifact SHA")
+        self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
 
     async def _recover_existing_runtime(
         self,

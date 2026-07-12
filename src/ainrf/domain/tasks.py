@@ -19,6 +19,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 
 
@@ -43,14 +44,15 @@ class TaskApplicationService:
     database instead of relying on best-effort process-local scheduling.
     """
 
-    def __init__(self, state_root: Path) -> None:
+    def __init__(self, state_root: Path, *, artifact_sha: str | None = None) -> None:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._context_service = ProjectContextService(state_root)
+        self._context_service = ProjectContextService(state_root, artifact_sha=artifact_sha)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
+        self._write_fence = DomainWriteFence(state_root, artifact_sha=artifact_sha)
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
@@ -448,6 +450,48 @@ class TaskApplicationService:
             conn.commit()
             return result
 
+    def update_task_title(
+        self,
+        task_id: str,
+        user: Mapping[str, object],
+        *,
+        title: str,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Update the small mutable Task presentation surface transactionally.
+
+        A title change is not an Attempt lifecycle transition, but it is still
+        a v2 Task write and must not escape through the compatibility service.
+        """
+
+        actor_user_id = self._user_id(user)
+        request: dict[str, object] = {"task_id": task_id, "title": title}
+        with closing(self._connect()) as conn:
+            self._begin(conn)
+            task = self._owned_task(conn, task_id, dict(user))
+            cached = self._idempotent_result(
+                conn, actor_user_id, "task.title.update", idempotency_key, request
+            )
+            if cached is not None:
+                return cached
+            now = _now()
+            conn.execute(
+                "UPDATE tasks SET title = ?, updated_at = ? WHERE task_id = ?",
+                (title, now, task_id),
+            )
+            result: dict[str, object] = {
+                "task_id": task_id,
+                "title": title,
+                "updated_at": now,
+                "previous_title": str(task["title"]),
+            }
+            self._store_idempotency(
+                conn, actor_user_id, "task.title.update", idempotency_key, request, result
+            )
+            self._audit(conn, actor_user_id, "task.title.updated", "task", task_id)
+            conn.commit()
+            return result
+
     def archive_project(
         self,
         project_id: str,
@@ -629,7 +673,9 @@ class TaskApplicationService:
             source = self._owned_task(conn, task_id, dict(user))
             auth = DomainAuthorizationService(conn)
             auth.require_project_editor(project_id, dict(user))
-            auth.require_workspace_owner(str(source["workspace_id"]), dict(user))
+            auth.require_workspace_owner(
+                str(source["workspace_id"]), dict(user), resource_visible=True
+            )
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.move", idempotency_key, request
             )
@@ -813,7 +859,7 @@ class TaskApplicationService:
             self._begin(conn)
             preauthorized_task = self._owned_task(conn, task_id, dict(user))
             DomainAuthorizationService(conn).require_workspace_owner(
-                str(preauthorized_task["workspace_id"]), dict(user)
+                str(preauthorized_task["workspace_id"]), dict(user), resource_visible=True
             )
             cached = self._idempotent_result(conn, actor_user_id, scope, idempotency_key, request)
             if cached is not None:
@@ -860,7 +906,7 @@ class TaskApplicationService:
         if task["archived_at"] is not None:
             raise DomainConflictError("Archived Task cannot create a new Attempt")
         DomainAuthorizationService(conn).require_workspace_owner(
-            str(task["workspace_id"]), dict(user)
+            str(task["workspace_id"]), dict(user), resource_visible=True
         )
         workspace = self._writable_workspace(
             conn,
@@ -1408,14 +1454,15 @@ class TaskApplicationService:
             ),
         )
 
-    @staticmethod
     def _audit(
+        self,
         conn: sqlite3.Connection,
         actor_id: str,
         event_type: str,
         subject_type: str,
         subject_id: str,
     ) -> None:
+        self._write_fence.record_first_v2_write(conn, actor_id=actor_id)
         conn.execute(
             """INSERT INTO domain_audit_events
                (event_id, actor_id, event_type, subject_type, subject_id, created_at)

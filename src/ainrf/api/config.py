@@ -69,6 +69,10 @@ class ApiConfig:
     observability_public_key: str = ""
     auth_cookie_namespace: str = ""
     domain_model_mode: DomainModelMode = DomainModelMode.LEGACY
+    # Exact immutable artifact digest bound by the B7 cutover controller.  It
+    # is intentionally absent in legacy/validate mode; a v2 process must
+    # supply it and fail closed if it does not match the committed fuse.
+    domain_artifact_sha: str | None = None
 
     @property
     def access_cookie_names(self) -> tuple[str, str]:
@@ -174,6 +178,9 @@ class ApiConfig:
         except ValueError as exc:
             allowed = ", ".join(mode.value for mode in DomainModelMode)
             raise ValueError(f"OPENSCIENCE_DOMAIN_MODEL_MODE must be one of: {allowed}") from exc
+        raw_domain_artifact_sha = _env_value(
+            "OPENSCIENCE_DOMAIN_ARTIFACT_SHA", "AINRF_DOMAIN_ARTIFACT_SHA"
+        ).strip()
         if (
             auth_cookie_namespace
             and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", auth_cookie_namespace) is None
@@ -203,6 +210,7 @@ class ApiConfig:
             observability_public_key=observability_public_key,
             auth_cookie_namespace=auth_cookie_namespace,
             domain_model_mode=domain_model_mode,
+            domain_artifact_sha=raw_domain_artifact_sha or None,
         )
 
     @staticmethod

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pwd
 import sqlite3
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -12,8 +12,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.auth.service import AuthService
-from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
+from ainrf.environments import EnvironmentNotFoundError
 from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.environments.protocols import EnvironmentRuntimeReader
 from ainrf.terminal.models import (
     TerminalAttachmentTarget,
     TerminalMuxKind,
@@ -71,7 +72,7 @@ class SessionManager:
         self,
         *,
         state_root: Path,
-        environment_service: InMemoryEnvironmentService,
+        environment_service: EnvironmentRuntimeReader,
         tmux_adapter: TmuxAdapter,
         default_shell: str | None,
         user_id: str | None = None,
@@ -474,6 +475,7 @@ class SessionManager:
         self,
         app_user_id: str,
         environment_id: str | None = None,
+        environment_visible: Callable[[str], bool] | None = None,
     ) -> list[tuple[UserEnvironmentBinding, UserSessionPair, EnvironmentRegistryEntry | None]]:
         self.initialize()
         bindings = [binding for binding in self._list_bindings() if binding.user_id == app_user_id]
@@ -485,6 +487,8 @@ class SessionManager:
             tuple[UserEnvironmentBinding, UserSessionPair, EnvironmentRegistryEntry | None]
         ] = []
         for binding in bindings:
+            if environment_visible is not None and not environment_visible(binding.environment_id):
+                continue
             pair = pairs_map.get(binding.binding_id)
             if pair is None:
                 continue

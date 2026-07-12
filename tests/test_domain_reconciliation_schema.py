@@ -40,7 +40,7 @@ def test_reconciliation_schema_requires_typed_resolution_and_final_evidence(
     tmp_path: Path,
 ) -> None:
     with closing(connect(tmp_path / "domain.sqlite3")) as conn:
-        assert run_pending(conn, "agentic_researcher") == 17
+        assert run_pending(conn, "agentic_researcher") == 19
         _insert_run(conn, "run-1")
         _insert_run(conn, "run-2")
         _insert_issue(conn, "run-1", "issue-1")
