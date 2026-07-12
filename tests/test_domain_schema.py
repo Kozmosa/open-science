@@ -307,3 +307,130 @@ def test_domain_control_plane_uses_unique_and_restrict_constraints(tmp_path: Pat
         }
         assert runtime_foreign_keys["attempt_id"] == "RESTRICT"
         assert outbox_foreign_keys == {"attempt_id": "RESTRICT", "task_id": "RESTRICT"}
+
+
+def test_migration_017_persists_attempt_control_requests_and_guards_archived_parents(
+    tmp_path: Path,
+) -> None:
+    now = "2026-07-12T00:00:00+00:00"
+    with closing(_domain_db(tmp_path)) as conn:
+        columns = _column_definitions(conn, "task_attempt_control_requests")
+        assert {
+            "control_request_id",
+            "task_id",
+            "attempt_id",
+            "action",
+            "status",
+            "actor_user_id",
+            "idempotency_key",
+            "request_hash",
+            "reason",
+            "payload_json",
+            "created_at",
+            "updated_at",
+            "acknowledged_at",
+            "completed_at",
+            "failure_reason",
+        } <= columns.keys()
+        assert columns["attempt_id"]["notnull"] == 1
+        assert columns["payload_json"]["notnull"] == 1
+
+        conn.execute(
+            "INSERT INTO projects VALUES ('project-1', 'user-1', 'Project', NULL, "
+            "'active', 0, NULL, NULL, ?, ?)",
+            (now, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES ('task-1', 'project-1', 'workspace-legacy', 'environment-legacy', 'general',
+                'claude_code', 'queued', 'Schema task', 'test', ?, ?, 'user-1')
+            """,
+            (now, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO agent_task_attempts (
+                attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id, created_at
+            ) VALUES ('attempt-1', 'task-1', 1, 'initial', 'queued', NULL, ?)
+            """,
+            (now,),
+        )
+        conn.execute(
+            """
+            INSERT INTO task_dispatch_outbox (
+                dispatch_id, task_id, attempt_id, status, created_at
+            ) VALUES ('dispatch-1', 'task-1', 'attempt-1', 'pending', ?)
+            """,
+            (now,),
+        )
+        conn.execute(
+            """
+            INSERT INTO task_attempt_control_requests (
+                control_request_id, task_id, attempt_id, action, status, actor_user_id,
+                idempotency_key, request_hash, reason, payload_json, created_at, updated_at
+            ) VALUES ('control-1', 'task-1', 'attempt-1', 'pause', 'requested', 'user-1',
+                'pause-key', 'request-hash', 'user requested pause', '{}', ?, ?)
+            """,
+            (now, now),
+        )
+        conn.execute(
+            """
+            UPDATE task_attempt_control_requests
+            SET status = 'acknowledged', acknowledged_at = ?, updated_at = ?
+            WHERE control_request_id = 'control-1'
+            """,
+            (now, now),
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="identity is immutable"):
+            conn.execute(
+                "UPDATE task_attempt_control_requests SET action = 'stop' "
+                "WHERE control_request_id = 'control-1'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            conn.execute(
+                "DELETE FROM task_attempt_control_requests WHERE control_request_id = 'control-1'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="must match its Task"):
+            conn.execute(
+                """
+                INSERT INTO task_attempt_control_requests (
+                    control_request_id, task_id, attempt_id, action, status, actor_user_id,
+                    payload_json, created_at, updated_at
+                ) VALUES ('control-wrong-task', 'task-1', 'missing-attempt', 'pause',
+                    'requested', 'user-1', '{}', ?, ?)
+                """,
+                (now, now),
+            )
+
+        conn.execute(
+            "UPDATE projects SET status = 'archived', archived_at = ? WHERE project_id = 'project-1'",
+            (now,),
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="cannot create an Attempt"):
+            conn.execute(
+                """
+                INSERT INTO agent_task_attempts (
+                    attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id, created_at
+                ) VALUES ('attempt-2', 'task-1', 2, 'retry', 'queued', NULL, ?)
+                """,
+                (now,),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="cannot create a dispatch"):
+            conn.execute(
+                """
+                INSERT INTO task_dispatch_outbox (
+                    dispatch_id, task_id, attempt_id, status, created_at
+                ) VALUES ('dispatch-2', 'task-1', 'attempt-1', 'cancelled', ?)
+                """,
+                (now,),
+            )
+
+        conn.execute(
+            "UPDATE task_dispatch_outbox SET status = 'cancelled' WHERE dispatch_id = 'dispatch-1'"
+        )
+        conn.execute(
+            "UPDATE agent_task_attempts SET status = 'cancelled' WHERE attempt_id = 'attempt-1'"
+        )

@@ -29,8 +29,8 @@ class _DefaultProbeEngine(HarnessEngine):
     ) -> None:
         _ = context, emit
 
-    async def cancel(self, task_id: str) -> None:
-        _ = task_id
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        _ = task_id, runtime_launch_key
 
 
 async def _discard_event(event: EngineEvent) -> None:

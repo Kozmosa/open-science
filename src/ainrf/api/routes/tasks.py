@@ -462,7 +462,10 @@ async def archive_task(request: Request, task_id: str) -> TaskSummaryResponse:
     if task_application is not None:
         try:
             task_application.archive_task(
-                task_id, get_current_user(request), reason="user_archived"
+                task_id,
+                get_current_user(request),
+                reason="user_archived",
+                idempotency_key=request.headers.get("Idempotency-Key", ""),
             )
             return _task_to_response(service.get_task(task_id), service)
         except (DomainPermissionError, ValueError) as exc:

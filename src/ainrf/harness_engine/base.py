@@ -161,30 +161,39 @@ class HarnessEngine(ABC):
         """Start executing the context and emit engine events until completion."""
         ...
 
-    async def pause(self, task_id: str) -> None:
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
         """Pause an active task when supported by the engine."""
+        _ = runtime_launch_key
         raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support pause")
 
     async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
         """Resume a paused task when supported by the engine."""
         raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support resume")
 
-    async def send_input(self, task_id: str, text: str) -> None:
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
         """Send follow-up input to an active task when supported by the engine."""
+        _ = runtime_launch_key
         raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support send_input")
 
     @abstractmethod
-    async def cancel(self, task_id: str) -> None:
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
         """取消执行"""
+        _ = runtime_launch_key
         ...
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
         """Return whether the engine session/process for *task_id* is still alive.
 
         Engines that do not expose a process handle should return a best-effort
         proxy based on whether a session is currently active and not aborted.
         """
-        _ = task_id
+        _ = task_id, runtime_launch_key
         return False
 
     async def last_event_at(self, task_id: str) -> float | None:

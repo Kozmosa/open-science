@@ -783,13 +783,20 @@ class HungNoHeartbeatEngine(HarnessEngine):
         self._last_event_at[context.task_id] = time.time() - 1000
         await asyncio.Event().wait()
 
-    async def cancel(self, task_id: str) -> None:
-        pass
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        _ = task_id, runtime_launch_key
 
-    async def send_input(self, task_id: str, text: str) -> None:
-        pass
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
+        _ = task_id, text, runtime_launch_key
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        _ = task_id, runtime_launch_key
         return False
 
     async def last_event_at(self, task_id: str) -> float | None:

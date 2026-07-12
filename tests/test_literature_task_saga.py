@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from ainrf.auth.service import AuthService
 from ainrf.db import connect
 from ainrf.domain import DomainService, ProjectContextService
 from ainrf.literature.task_saga import LiteratureTaskSagaService
@@ -18,6 +19,15 @@ def test_literature_conversion_saga_is_idempotent(state_root: Path) -> None:
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
     domain = DomainService(state_root)
     environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id=str(environment["environment_id"]),
+        user_id="owner",
+        max_tasks=None,
+        granted_by="admin",
+        reason="literature task saga test",
+    )
     project = domain.create_project(owner, name="Project")
     workspace = domain.create_workspace(
         owner,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import closing
 from pathlib import Path
 
@@ -25,7 +26,7 @@ from ainrf.harness_engine import (
     RuntimeProbeStatus,
 )
 from ainrf.harness_engine.base import EngineEmit
-from tests.testutil import FakeEngine, TokenEngine, seed_user
+from tests.testutil import FakeEngine, HangingEngine, TokenEngine, seed_user
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
 
@@ -126,6 +127,220 @@ async def test_domain_worker_runs_durable_attempt_and_projects_event_data(
     assert "## Task Request\nInvestigate this" in str(outputs[0]["content"])
 
 
+@pytest.mark.anyio
+async def test_dispatcher_consumes_live_cancel_control_and_waits_for_runtime_exit(
+    state_root: Path, tmp_path: Path
+) -> None:
+    task, _, _ = _queued_task(state_root, tmp_path)
+    engine = HangingEngine()
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="dispatcher-live-control",
+        engine_factory=lambda _engine_type: engine,
+        lease_seconds=3,
+    )
+
+    run = asyncio.create_task(dispatcher.run_once())
+    for _ in range(100):
+        if engine.started_count == 1:
+            break
+        await asyncio.sleep(0.01)
+    assert engine.started_count == 1
+
+    cancellation = TaskApplicationService(state_root).cancel_task(
+        task["task_id"],
+        {"id": "owner", "role": "member"},
+        reason="cancel a live runtime",
+        idempotency_key="cancel-live-runtime",
+    )
+    result = await asyncio.wait_for(run, timeout=3)
+    dispatcher.stop()
+
+    assert result.outcome == "cancelled"
+    assert task["task_id"] in engine.cancelled_task_ids
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        control = conn.execute(
+            """SELECT status FROM task_attempt_control_requests
+               WHERE control_request_id = ?""",
+            (cancellation["control_request_id"],),
+        ).fetchone()
+        attempt = conn.execute(
+            "SELECT status FROM agent_task_attempts WHERE attempt_id = ?", (task["attempt_id"],)
+        ).fetchone()
+        runtime = conn.execute(
+            "SELECT status FROM agent_runtime_sessions WHERE attempt_id = ?", (task["attempt_id"],)
+        ).fetchone()
+
+    assert control is not None
+    assert control["status"] == "completed"
+    assert attempt is not None
+    assert attempt["status"] == "cancelled"
+    assert runtime is not None
+    assert runtime["status"] == "cancelled"
+
+
+@pytest.mark.anyio
+async def test_dispatcher_delivers_live_continuation_once_with_attempt_runtime_identity(
+    state_root: Path, tmp_path: Path
+) -> None:
+    task, _, _ = _queued_task(state_root, tmp_path)
+    engine = HangingEngine()
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="dispatcher-live-input",
+        engine_factory=lambda _engine_type: engine,
+        lease_seconds=3,
+    )
+    run = asyncio.create_task(dispatcher.run_once())
+    for _ in range(100):
+        if engine.started_count == 1:
+            break
+        await asyncio.sleep(0.01)
+    assert engine.started_count == 1
+
+    tasks = TaskApplicationService(state_root)
+    continued = tasks.continue_task(
+        task["task_id"],
+        {"id": "owner", "role": "member"},
+        prompt="Please include the uncertainty bounds.",
+        idempotency_key="continue-live-runtime",
+    )
+    assert (
+        tasks.continue_task(
+            task["task_id"],
+            {"id": "owner", "role": "member"},
+            prompt="Please include the uncertainty bounds.",
+            idempotency_key="continue-live-runtime",
+        )
+        == continued
+    )
+    for _ in range(100):
+        if engine.pending_prompts == ["Please include the uncertainty bounds."]:
+            break
+        await asyncio.sleep(0.01)
+    assert engine.pending_prompts == ["Please include the uncertainty bounds."]
+
+    TaskApplicationService(state_root).cancel_task(
+        task["task_id"],
+        {"id": "owner", "role": "member"},
+        reason="complete live input test",
+        idempotency_key="cancel-live-input",
+    )
+    await asyncio.wait_for(run, timeout=3)
+    dispatcher.stop()
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        control = conn.execute(
+            """SELECT status FROM task_attempt_control_requests
+               WHERE control_request_id = ?""",
+            (continued["control_request_id"],),
+        ).fetchone()
+
+    assert control is not None
+    assert control["status"] == "completed"
+
+
+class _PausableEngine(FakeEngine):
+    def __init__(self) -> None:
+        super().__init__()
+        self.pause_requested = asyncio.Event()
+        self.resume_count = 0
+
+    async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        self.started_count += 1
+        self._alive.add(context.task_id)
+        self._remember_runtime_launch(context)
+        await self.pause_requested.wait()
+        await emit(EngineEvent(event_type="system", payload={"subtype": "task_paused"}))
+
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        _ = task_id, runtime_launch_key
+        self.pause_requested.set()
+
+    async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        self.resume_count += 1
+        await emit(
+            EngineEvent(
+                event_type="message",
+                payload={"role": "assistant", "content": "resumed the same runtime"},
+            )
+        )
+        await emit(EngineEvent(event_type="status", payload={"status": "succeeded"}))
+        self._alive.discard(context.task_id)
+
+
+@pytest.mark.anyio
+async def test_dispatcher_pauses_and_resumes_the_same_attempt_and_runtime(
+    state_root: Path, tmp_path: Path
+) -> None:
+    task, _, _ = _queued_task(state_root, tmp_path)
+    engine = _PausableEngine()
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="dispatcher-pause-resume",
+        engine_factory=lambda _engine_type: engine,
+        lease_seconds=3,
+    )
+    run = asyncio.create_task(dispatcher.run_once())
+    for _ in range(100):
+        if engine.started_count == 1:
+            break
+        await asyncio.sleep(0.01)
+    assert engine.started_count == 1
+
+    tasks = TaskApplicationService(state_root)
+    paused = tasks.pause_task(
+        task["task_id"],
+        {"id": "owner", "role": "member"},
+        idempotency_key="pause-live-runtime",
+    )
+    for _ in range(100):
+        with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+            attempt = conn.execute(
+                "SELECT status FROM agent_task_attempts WHERE attempt_id = ?", (task["attempt_id"],)
+            ).fetchone()
+        if attempt is not None and attempt["status"] == "paused":
+            break
+        await asyncio.sleep(0.01)
+    assert attempt is not None
+    assert attempt["status"] == "paused"
+
+    resumed = tasks.resume_task(
+        task["task_id"],
+        {"id": "owner", "role": "member"},
+        idempotency_key="resume-live-runtime",
+    )
+    result = await asyncio.wait_for(run, timeout=3)
+    dispatcher.stop()
+
+    assert result.outcome == "completed"
+    assert engine.resume_count == 1
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        attempt_count = conn.execute(
+            "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = ?", (task["task_id"],)
+        ).fetchone()
+        runtime_count = conn.execute(
+            "SELECT COUNT(*) FROM agent_runtime_sessions WHERE attempt_id = ?",
+            (task["attempt_id"],),
+        ).fetchone()
+        pause_control = conn.execute(
+            "SELECT status FROM task_attempt_control_requests WHERE control_request_id = ?",
+            (paused["control_request_id"],),
+        ).fetchone()
+        resume_control = conn.execute(
+            "SELECT status FROM task_attempt_control_requests WHERE control_request_id = ?",
+            (resumed["control_request_id"],),
+        ).fetchone()
+
+    assert attempt_count is not None
+    assert attempt_count[0] == 1
+    assert runtime_count is not None
+    assert runtime_count[0] == 1
+    assert pause_control is not None
+    assert pause_control["status"] == "completed"
+    assert resume_control is not None
+    assert resume_control["status"] == "completed"
+
+
 def test_expired_claim_is_recovered_by_one_new_dispatcher_and_old_token_loses_access(
     state_root: Path, tmp_path: Path
 ) -> None:
@@ -172,6 +387,50 @@ def test_expired_claim_token_cannot_renew_or_write_after_another_dispatcher_reco
             original,
             EngineEvent(event_type="message", payload={"role": "assistant", "content": "stale"}),
         )
+
+
+def test_stop_request_wins_before_the_runtime_launch_fence(
+    state_root: Path, tmp_path: Path
+) -> None:
+    task, _, _ = _queued_task(state_root, tmp_path)
+    attempts = AttemptService(state_root)
+    claim = attempts.claim_next("dispatcher-a", lease_seconds=30)
+    assert claim is not None
+    preparation = attempts.prepare_runtime_launch(claim)
+
+    cancellation = TaskApplicationService(state_root).cancel_task(
+        task["task_id"],
+        {"id": "owner", "role": "member"},
+        reason="cancel before engine boundary",
+        idempotency_key="cancel-before-engine-boundary",
+    )
+    assert cancellation["status"] == "requested"
+    assert attempts.commit_runtime_launch(claim, preparation.runtime_session_id) is False
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        attempt = conn.execute(
+            "SELECT status FROM agent_task_attempts WHERE attempt_id = ?", (task["attempt_id"],)
+        ).fetchone()
+        dispatch = conn.execute(
+            "SELECT status, launch_state FROM task_dispatch_outbox WHERE dispatch_id = ?",
+            (task["dispatch_id"],),
+        ).fetchone()
+        runtime = conn.execute(
+            "SELECT 1 FROM agent_runtime_sessions WHERE attempt_id = ?", (task["attempt_id"],)
+        ).fetchone()
+        control = conn.execute(
+            """SELECT status FROM task_attempt_control_requests
+               WHERE control_request_id = ?""",
+            (cancellation["control_request_id"],),
+        ).fetchone()
+
+    assert attempt is not None
+    assert attempt["status"] == "cancelled"
+    assert dispatch is not None
+    assert (dispatch["status"], dispatch["launch_state"]) == ("cancelled", "none")
+    assert runtime is None
+    assert control is not None
+    assert control["status"] == "completed"
 
 
 class _AbsentRecoveryEngine(FakeEngine):

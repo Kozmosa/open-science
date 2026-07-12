@@ -165,18 +165,26 @@ class FakeEngine(HarnessEngine):
         if self.completion_event is not None:
             self.completion_event.set()
 
-    async def cancel(self, task_id: str) -> None:
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        _ = runtime_launch_key
         self.cancelled_task_ids.add(task_id)
         self._alive.discard(task_id)
         for launch_key, launched_task_id in tuple(self._runtime_launches.items()):
             if launched_task_id == task_id:
                 del self._runtime_launches[launch_key]
 
-    async def send_input(self, task_id: str, text: str) -> None:
-        _ = task_id
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
+        _ = task_id, runtime_launch_key
         self.pending_prompts.append(text)
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        _ = runtime_launch_key
         return task_id in self._alive
 
     async def last_event_at(self, task_id: str) -> float | None:
@@ -300,8 +308,8 @@ class HangingEngine(FakeEngine):
         except asyncio.CancelledError:
             pass
 
-    async def cancel(self, task_id: str) -> None:
-        await super().cancel(task_id)
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        await super().cancel(task_id, runtime_launch_key=runtime_launch_key)
         if self.cancel_event is not None:
             self.cancel_event.set()
 

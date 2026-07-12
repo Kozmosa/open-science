@@ -1128,3 +1128,108 @@ def migration_016_durable_dispatch_recovery(conn: sqlite3.Connection) -> None:
         BEGIN SELECT RAISE(ABORT, 'invalid dispatch launch state'); END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_017_task_lifecycle_controls(conn: sqlite3.Connection) -> None:
+    """Persist Attempt-control intents and protect archived parents.
+
+    Lifecycle orchestration needs a durable record for requests that cannot
+    be treated as an immediate process-side effect.  This migration leaves
+    existing Attempt and dispatch state transitions alone: an Archive
+    transaction must still be able to cancel rows it already owns.  It only
+    rejects *new* Attempts or dispatches under an archived Task or Project.
+    """
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS task_attempt_control_requests (
+            control_request_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            attempt_id TEXT NOT NULL
+                REFERENCES agent_task_attempts(attempt_id) ON DELETE RESTRICT,
+            action TEXT NOT NULL CHECK (
+                action IN ('continue', 'pause', 'resume', 'cancel', 'stop')
+            ),
+            status TEXT NOT NULL DEFAULT 'requested' CHECK (
+                status IN ('requested', 'acknowledged', 'completed', 'failed', 'cancelled')
+            ),
+            actor_user_id TEXT NOT NULL,
+            idempotency_key TEXT,
+            request_hash TEXT,
+            reason TEXT,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            acknowledged_at TEXT,
+            completed_at TEXT,
+            failure_reason TEXT,
+            CHECK (
+                (idempotency_key IS NULL AND request_hash IS NULL)
+                OR (idempotency_key IS NOT NULL AND request_hash IS NOT NULL)
+            )
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_attempt_control_request_idempotency
+        ON task_attempt_control_requests(actor_user_id, task_id, action, idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_attempt_control_request_attempt_status
+        ON task_attempt_control_requests(attempt_id, status, created_at, control_request_id);
+        CREATE INDEX IF NOT EXISTS idx_attempt_control_request_task_created
+        ON task_attempt_control_requests(task_id, created_at, control_request_id);
+
+        CREATE INDEX IF NOT EXISTS idx_tasks_project_lifecycle
+        ON tasks(project_id, archived_at, status, updated_at, task_id);
+        CREATE INDEX IF NOT EXISTS idx_attempts_task_lifecycle
+        ON agent_task_attempts(task_id, status, attempt_seq, created_at);
+        CREATE INDEX IF NOT EXISTS idx_dispatch_task_lifecycle
+        ON task_dispatch_outbox(task_id, status, launch_state, created_at);
+
+        CREATE TRIGGER IF NOT EXISTS task_attempt_control_request_matches_task
+        BEFORE INSERT ON task_attempt_control_requests
+        WHEN NOT EXISTS (
+            SELECT 1 FROM agent_task_attempts
+            WHERE attempt_id = NEW.attempt_id AND task_id = NEW.task_id
+        )
+        BEGIN SELECT RAISE(ABORT, 'attempt control request must match its Task'); END;
+
+        CREATE TRIGGER IF NOT EXISTS task_attempt_control_request_identity_immutable
+        BEFORE UPDATE OF task_id, attempt_id, action, actor_user_id,
+                         idempotency_key, request_hash, reason, payload_json,
+                         created_at ON task_attempt_control_requests
+        BEGIN SELECT RAISE(ABORT, 'attempt control request identity is immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS task_attempt_control_request_delete_forbidden
+        BEFORE DELETE ON task_attempt_control_requests
+        BEGIN SELECT RAISE(ABORT, 'attempt control requests are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS task_attempt_archived_parent_guard_insert
+        BEFORE INSERT ON agent_task_attempts
+        WHEN EXISTS (
+            SELECT 1
+            FROM tasks AS task
+            LEFT JOIN projects AS project ON project.project_id = task.project_id
+            WHERE task.task_id = NEW.task_id
+              AND (
+                  task.archived_at IS NOT NULL
+                  OR task.status = 'archived'
+                  OR project.status = 'archived'
+              )
+        )
+        BEGIN SELECT RAISE(ABORT, 'archived Task or Project cannot create an Attempt'); END;
+
+        CREATE TRIGGER IF NOT EXISTS task_dispatch_archived_parent_guard_insert
+        BEFORE INSERT ON task_dispatch_outbox
+        WHEN EXISTS (
+            SELECT 1
+            FROM tasks AS task
+            LEFT JOIN projects AS project ON project.project_id = task.project_id
+            WHERE task.task_id = NEW.task_id
+              AND (
+                  task.archived_at IS NOT NULL
+                  OR task.status = 'archived'
+                  OR project.status = 'archived'
+              )
+        )
+        BEGIN SELECT RAISE(ABORT, 'archived Task or Project cannot create a dispatch'); END;
+        """
+    )

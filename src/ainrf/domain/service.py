@@ -516,38 +516,41 @@ class DomainService:
             )
             conn.commit()
 
-    def archive_project(self, project_id: str, user: dict[str, object], *, reason: str) -> None:
-        with closing(self._connect()) as conn:
-            DomainAuthorizationService(conn).require_project_owner(project_id, user)
-            row = conn.execute(
-                "SELECT is_default FROM projects WHERE project_id = ?", (project_id,)
-            ).fetchone()
-            if row is None:
-                raise DomainNotFoundError(project_id)
-            if bool(row["is_default"]):
-                raise DomainConflictError("Default projects cannot be archived")
-            conn.execute(
-                "UPDATE projects SET status = 'archived', archived_at = ?, archive_reason = ?, updated_at = ? WHERE project_id = ?",
-                (_now(), reason, _now(), project_id),
-            )
-            self._audit(conn, self._user_id(user), "project.archived", "project", project_id)
-            conn.commit()
+    def archive_project(
+        self,
+        project_id: str,
+        user: dict[str, object],
+        *,
+        reason: str,
+        idempotency_key: str | None = None,
+    ) -> None:
+        """Compatibility facade for the transactional Task lifecycle writer.
+
+        Project archival affects queued dispatches and paused Attempts, so it
+        must not retain an independent lightweight write path here.  The
+        import stays local to avoid the intentional service/tasks dependency
+        cycle at module import time.
+        """
+
+        from ainrf.domain.tasks import TaskApplicationService
+
+        TaskApplicationService(self._state_root).archive_project(
+            project_id,
+            user,
+            reason=reason,
+            idempotency_key=idempotency_key or f"legacy-project-archive-{uuid4().hex}",
+        )
 
     def unarchive_project(self, project_id: str, user: dict[str, object]) -> None:
-        with closing(self._connect()) as conn:
-            DomainAuthorizationService(conn).require_project_owner(project_id, user)
-            updated = conn.execute(
-                """
-                UPDATE projects
-                SET status = 'active', archived_at = NULL, archive_reason = NULL, updated_at = ?
-                WHERE project_id = ? AND status = 'archived'
-                """,
-                (_now(), project_id),
-            )
-            if updated.rowcount != 1:
-                raise DomainConflictError("Project is not archived")
-            self._audit(conn, self._user_id(user), "project.unarchived", "project", project_id)
-            conn.commit()
+        """Compatibility facade; it never recreates stopped Attempts."""
+
+        from ainrf.domain.tasks import TaskApplicationService
+
+        TaskApplicationService(self._state_root).unarchive_project(
+            project_id,
+            user,
+            idempotency_key=f"legacy-project-unarchive-{uuid4().hex}",
+        )
 
     def unregister_workspace(
         self,

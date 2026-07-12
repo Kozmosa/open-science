@@ -15,7 +15,12 @@ from uuid import uuid4
 
 from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
 from ainrf.db import connect
-from ainrf.domain.attempts import AttemptService, DispatchClaim, DispatchClaimError
+from ainrf.domain.attempts import (
+    AttemptControlRequest,
+    AttemptService,
+    DispatchClaim,
+    DispatchClaimError,
+)
 from ainrf.domain_control import (
     DomainMaintenanceService,
     DomainWriteParticipant,
@@ -26,6 +31,7 @@ from ainrf.harness_engine import (
     EngineEvent,
     ExecutionContext,
     HarnessEngine,
+    HarnessEngineNotSupportedError,
     HarnessEngineType,
     RuntimeProbeStatus,
     get_engine,
@@ -132,6 +138,20 @@ class TaskDispatcher:
         except MaintenanceModeError:
             return self._release_for_maintenance(claim)
         try:
+            if self._attempts.cancel_if_stop_requested_before_launch(claim):
+                return DispatchRunResult(
+                    outcome="cancelled",
+                    dispatch_id=claim.dispatch_id,
+                    attempt_id=claim.attempt_id,
+                )
+        except DispatchClaimError as exc:
+            return DispatchRunResult(
+                outcome="claim_lost",
+                dispatch_id=claim.dispatch_id,
+                attempt_id=claim.attempt_id,
+                detail=str(exc),
+            )
+        try:
             context, environment_id, grant_version = self._execution_context_for(claim)
         except DispatchValidationError as exc:
             self._attempts.stop_for_permission_revocation(claim, reason=str(exc))
@@ -186,7 +206,30 @@ class TaskDispatcher:
             )
             if recovery is not None:
                 return recovery
-        return await self._start_new_runtime(claim, preparation.runtime_session_id, engine, context)
+        try:
+            if not self._attempts.commit_runtime_launch(claim, preparation.runtime_session_id):
+                return DispatchRunResult(
+                    outcome="cancelled",
+                    dispatch_id=claim.dispatch_id,
+                    attempt_id=claim.attempt_id,
+                )
+            self._maintenance.check_lease(lease)
+        except MaintenanceModeError:
+            return self._release_for_maintenance(claim)
+        except DispatchClaimError as exc:
+            return DispatchRunResult(
+                outcome="claim_lost",
+                dispatch_id=claim.dispatch_id,
+                attempt_id=claim.attempt_id,
+                detail=str(exc),
+            )
+        return await self._start_new_runtime(
+            claim,
+            preparation.runtime_session_id,
+            engine,
+            context,
+            lease=lease,
+        )
 
     def _release_for_maintenance(self, claim: DispatchClaim) -> DispatchRunResult:
         try:
@@ -278,9 +321,14 @@ class TaskDispatcher:
         runtime_session_id: str,
         engine: HarnessEngine,
         context: ExecutionContext,
+        *,
+        lease: MaintenanceLease,
     ) -> DispatchRunResult:
         active_claim = claim
         heartbeat_stop = asyncio.Event()
+        pending_resume_control_id: str | None = None
+        stop_requested = False
+        maintenance_observed = False
 
         async def heartbeat() -> None:
             nonlocal active_claim
@@ -301,29 +349,106 @@ class TaskDispatcher:
         heartbeat_task = asyncio.create_task(heartbeat())
 
         async def emit(event: EngineEvent) -> None:
+            nonlocal pending_resume_control_id
+            # A resume request is acknowledged when the same live engine
+            # produces its first durable event.  Marking it complete before
+            # that point would falsely claim a process-local resume succeeded
+            # if the worker died immediately after scheduling the coroutine.
+            if pending_resume_control_id is not None:
+                self._attempts.complete_control(active_claim, pending_resume_control_id)
+                pending_resume_control_id = None
             self._attempts.record_event(active_claim, event)
 
         try:
-            await engine.start(context, emit)
-            state = self._attempts.dispatch_state(active_claim.dispatch_id)
-            if state["status"] in {"claimed", "dispatched"}:
-                if state["status"] == "claimed":
-                    self._attempts.mark_runtime_running(active_claim, runtime_session_id)
-                self._attempts.mark_runtime_completed(active_claim, runtime_session_id)
-                outcome = "completed"
-            else:
-                outcome = str(state["status"])
-            return DispatchRunResult(
-                outcome=outcome,
-                dispatch_id=active_claim.dispatch_id,
-                attempt_id=active_claim.attempt_id,
-            )
+            run = engine.start(context, emit)
+            while True:
+                engine_task = asyncio.create_task(run)
+                while not engine_task.done():
+                    try:
+                        await asyncio.wait_for(asyncio.shield(engine_task), timeout=0.05)
+                    except TimeoutError:
+                        if maintenance_observed:
+                            # An already-running runtime is allowed to finish;
+                            # maintenance only prevents us from taking another
+                            # external control side effect.
+                            continue
+                        try:
+                            stop_requested = await self._consume_live_controls(
+                                active_claim,
+                                engine,
+                                lease=lease,
+                                stop_requested=stop_requested,
+                            )
+                        except MaintenanceModeError:
+                            maintenance_observed = True
+                await engine_task
+                attempt = self._attempts.attempt_state(active_claim.attempt_id)
+                attempt_status = str(attempt["status"])
+                if attempt_status == "paused":
+                    if maintenance_observed:
+                        self._participant.drain()
+                        return DispatchRunResult(
+                            outcome="maintenance_drained",
+                            dispatch_id=active_claim.dispatch_id,
+                            attempt_id=active_claim.attempt_id,
+                        )
+                    try:
+                        resume_control = await self._wait_for_resume_control(
+                            active_claim,
+                            runtime_session_id,
+                            engine,
+                            lease=lease,
+                        )
+                    except MaintenanceModeError:
+                        self._participant.drain()
+                        return DispatchRunResult(
+                            outcome="maintenance_drained",
+                            dispatch_id=active_claim.dispatch_id,
+                            attempt_id=active_claim.attempt_id,
+                        )
+                    if resume_control is None:
+                        state = self._attempts.dispatch_state(active_claim.dispatch_id)
+                        return DispatchRunResult(
+                            outcome=str(state["status"]),
+                            dispatch_id=active_claim.dispatch_id,
+                            attempt_id=active_claim.attempt_id,
+                        )
+                    pending_resume_control_id = resume_control.control_request_id
+                    run = engine.resume(context, emit)
+                    continue
+                state = self._attempts.dispatch_state(active_claim.dispatch_id)
+                if stop_requested and state["status"] in {"claimed", "dispatched"}:
+                    outcome = self._attempts.finalize_controlled_stop(
+                        active_claim, runtime_session_id
+                    )
+                elif state["status"] in {"claimed", "dispatched"}:
+                    if pending_resume_control_id is not None:
+                        self._attempts.complete_control(active_claim, pending_resume_control_id)
+                        pending_resume_control_id = None
+                    if state["status"] == "claimed":
+                        self._attempts.mark_runtime_running(active_claim, runtime_session_id)
+                    self._attempts.mark_runtime_completed(active_claim, runtime_session_id)
+                    outcome = "completed"
+                else:
+                    outcome = str(state["status"])
+                return DispatchRunResult(
+                    outcome=outcome,
+                    dispatch_id=active_claim.dispatch_id,
+                    attempt_id=active_claim.attempt_id,
+                )
         except asyncio.CancelledError:
             self._attempts.mark_launch_unknown(
                 active_claim,
                 reason="Dispatcher was cancelled while runtime launch was in progress",
             )
             raise
+        except DispatchClaimError as exc:
+            return DispatchRunResult(
+                outcome="claim_lost",
+                dispatch_id=active_claim.dispatch_id,
+                attempt_id=active_claim.attempt_id,
+                detail=str(exc),
+            )
         except Exception as exc:
             state = self._attempts.dispatch_state(active_claim.dispatch_id)
             if state["status"] in {"cancelled", "completed", "failed", "launch_unknown"}:
@@ -350,6 +475,163 @@ class TaskDispatcher:
                 await heartbeat_task
             except asyncio.CancelledError:
                 pass
+
+    async def _consume_live_controls(
+        self,
+        claim: DispatchClaim,
+        engine: HarnessEngine,
+        *,
+        lease: MaintenanceLease,
+        stop_requested: bool,
+    ) -> bool:
+        """Consume controls while this dispatcher owns a running engine.
+
+        ``acknowledged`` is deliberately terminal for worker recovery: a new
+        process never replays it because neither the generic engine contract
+        nor the external runtimes expose a command idempotency key.
+        """
+
+        while True:
+            self._maintenance.check_lease(lease)
+            control = self._attempts.claim_next_control(claim)
+            if control is None:
+                return stop_requested
+            try:
+                if control.action == "continue":
+                    prompt = control.payload.get("prompt")
+                    if not isinstance(prompt, str) or not prompt:
+                        raise ValueError("Continuation control request requires a prompt")
+                    self._maintenance.check_lease(lease)
+                    await engine.send_input(
+                        claim.task_id,
+                        prompt,
+                        runtime_launch_key=claim.runtime_launch_key,
+                    )
+                    self._attempts.complete_control(claim, control.control_request_id)
+                elif control.action == "pause":
+                    self._maintenance.check_lease(lease)
+                    await engine.pause(
+                        claim.task_id,
+                        runtime_launch_key=claim.runtime_launch_key,
+                    )
+                    # The ``task_paused`` engine event, not this method return,
+                    # confirms the state transition and completes the row.
+                elif control.action in {"cancel", "stop"}:
+                    self._maintenance.check_lease(lease)
+                    await engine.cancel(
+                        claim.task_id,
+                        runtime_launch_key=claim.runtime_launch_key,
+                    )
+                    # Completion waits for the owned engine task to exit.
+                    stop_requested = True
+                elif control.action == "resume":
+                    self._attempts.fail_control(
+                        claim,
+                        control.control_request_id,
+                        reason="Runtime is not paused",
+                    )
+                else:
+                    self._attempts.fail_control(
+                        claim,
+                        control.control_request_id,
+                        reason=f"Unsupported Attempt control action: {control.action}",
+                    )
+            except MaintenanceModeError:
+                # Do not invoke an engine after an observed maintenance epoch.
+                # The just-acknowledged row remains visible for reconciliation.
+                raise
+            except (HarnessEngineNotSupportedError, ValueError) as exc:
+                self._attempts.fail_control(
+                    claim,
+                    control.control_request_id,
+                    reason=str(exc),
+                )
+            except Exception as exc:
+                self._attempts.fail_control(
+                    claim,
+                    control.control_request_id,
+                    reason=f"Engine control failed: {exc}",
+                )
+
+    async def _wait_for_resume_control(
+        self,
+        claim: DispatchClaim,
+        runtime_session_id: str,
+        engine: HarnessEngine,
+        *,
+        lease: MaintenanceLease,
+    ) -> AttemptControlRequest | None:
+        """Keep a paused runtime under the same claim until it resumes or drains.
+
+        A new dispatcher cannot safely recreate an in-process runtime merely
+        to deliver a resume.  The original worker retains its claim heartbeat
+        and only resumes when the engine proves the paused runtime still
+        exists.  If it does not, the durable request is failed visibly rather
+        than silently creating another Attempt.
+        """
+
+        while True:
+            self._maintenance.check_lease(lease)
+            control = self._attempts.claim_next_control(claim)
+            if control is None:
+                await asyncio.sleep(0.05)
+                continue
+            try:
+                if control.action == "continue":
+                    prompt = control.payload.get("prompt")
+                    if not isinstance(prompt, str) or not prompt:
+                        raise ValueError("Continuation control request requires a prompt")
+                    self._maintenance.check_lease(lease)
+                    await engine.send_input(
+                        claim.task_id,
+                        prompt,
+                        runtime_launch_key=claim.runtime_launch_key,
+                    )
+                    self._attempts.complete_control(claim, control.control_request_id)
+                    continue
+                if control.action in {"cancel", "stop"}:
+                    self._maintenance.check_lease(lease)
+                    await engine.cancel(
+                        claim.task_id,
+                        runtime_launch_key=claim.runtime_launch_key,
+                    )
+                    # A paused runtime has no active ``start`` coroutine to
+                    # provide termination evidence.  Keep this acknowledged
+                    # intent for the runtime reconciler instead of guessing.
+                    return None
+                if control.action == "resume":
+                    alive = await engine.is_alive(
+                        claim.task_id,
+                        runtime_launch_key=claim.runtime_launch_key,
+                    )
+                    if not alive:
+                        self._attempts.fail_control(
+                            claim,
+                            control.control_request_id,
+                            reason="Paused runtime is no longer alive; reconciliation is required",
+                        )
+                        continue
+                    self._attempts.mark_runtime_running(claim, runtime_session_id)
+                    return control
+                self._attempts.fail_control(
+                    claim,
+                    control.control_request_id,
+                    reason="Runtime is already paused",
+                )
+            except MaintenanceModeError:
+                raise
+            except (HarnessEngineNotSupportedError, ValueError) as exc:
+                self._attempts.fail_control(
+                    claim,
+                    control.control_request_id,
+                    reason=str(exc),
+                )
+            except Exception as exc:
+                self._attempts.fail_control(
+                    claim,
+                    control.control_request_id,
+                    reason=f"Engine control failed: {exc}",
+                )
 
     async def _recover_after_start_error(
         self,

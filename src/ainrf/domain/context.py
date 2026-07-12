@@ -20,6 +20,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain_control import MaintenanceModeError
 
 DEFAULT_CONTEXT_BYTE_BUDGET = 32 * 1024
 DEFAULT_PREVIEW_TTL_SECONDS = 30 * 60
@@ -220,6 +221,23 @@ class ProjectContextService:
         return connect(self._db_path)
 
     @staticmethod
+    def _begin_domain_write(conn: sqlite3.Connection) -> None:
+        """Serialize a Context mutation with the persistent maintenance barrier.
+
+        Context has public writers that are also called independently of
+        :class:`TaskApplicationService`.  Acquiring the SQLite writer before
+        reading the epoch ensures a maintenance transition cannot race a
+        snapshot, preview, or draft mutation through a separate connection.
+        """
+
+        conn.execute("BEGIN IMMEDIATE")
+        state = conn.execute(
+            "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+        if state is None or bool(state["is_active"]):
+            raise MaintenanceModeError("domain writes are paused for maintenance")
+
+    @staticmethod
     def _user_id(user: Mapping[str, object]) -> str:
         value = user.get("id")
         if not isinstance(value, str) or not value:
@@ -230,6 +248,7 @@ class ProjectContextService:
         self, project_id: str, content: str, user: Mapping[str, object]
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
             now = _now()
             conn.execute(
@@ -291,6 +310,7 @@ class ProjectContextService:
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             auth = DomainAuthorizationService(conn)
             auth.require_project_publisher(project_id, dict(user))
             draft = conn.execute(
@@ -403,6 +423,7 @@ class ProjectContextService:
             source_output_end_seq,
         )
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             auth = DomainAuthorizationService(conn)
             auth.require_project_editor(project_id, dict(user))
             self._validate_candidate_provenance(
@@ -466,6 +487,7 @@ class ProjectContextService:
         self, project_id: str, candidate_id: str, user: Mapping[str, object]
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
             candidate = self._candidate(conn, project_id, candidate_id)
             if candidate["status"] == "rejected":
@@ -517,6 +539,7 @@ class ProjectContextService:
         reason: str | None = None,
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
             candidate = self._candidate(conn, project_id, candidate_id)
             if candidate["status"] == "accepted":
@@ -557,6 +580,7 @@ class ProjectContextService:
         if byte_budget is not None and byte_budget < 0:
             raise DomainConflictError("Context Fragment byte_budget cannot be negative")
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
             fragment_id = f"fragment-{uuid4().hex}"
             now = _now()
@@ -610,6 +634,7 @@ class ProjectContextService:
         """Internal compatibility helper: pin a fresh active Context Snapshot."""
 
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             task = self._task_for_project(conn, task_id, project_id)
             snapshot_id, version_id = self._create_active_snapshot_for_task_in_transaction(
                 conn,
@@ -646,10 +671,39 @@ class ProjectContextService:
             task_prompt=task_prompt,
         )
 
+    def create_snapshot_for_task_context_version_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        project_id: str,
+        workspace_id: str,
+        task_id: str,
+        task_prompt: str,
+        context_version_id: str,
+    ) -> str:
+        """Freeze an explicitly selected Project Context Version for a Task.
+
+        A Task move deliberately cannot silently adopt the target Project's
+        active Context Version.  The caller supplies the reviewed immutable
+        Version and this helper assembles and inserts the corresponding
+        Snapshot in the caller's existing lifecycle transaction.
+        """
+
+        assembly = self._assemble_for_task(
+            conn,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            task_id=task_id,
+            task_prompt=task_prompt,
+            context_version_id=context_version_id,
+        )
+        return self._insert_snapshot(conn, context_version_id, assembly)
+
     def ensure_task_snapshot(self, task_id: str) -> str:
         """Backfill an old unstarted Task's explicit Snapshot without drift."""
 
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             snapshot_id = self.ensure_task_snapshot_in_transaction(conn, task_id)
             conn.commit()
             return snapshot_id
@@ -700,6 +754,7 @@ class ProjectContextService:
         self, task_id: str, project_id: str, user: Mapping[str, object]
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             task = self._authorize_task_context_update(conn, task_id, project_id, user)
             assembly = self._assemble_for_task(
                 conn,
@@ -760,6 +815,7 @@ class ProjectContextService:
         idempotency_key: str,
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
+            self._begin_domain_write(conn)
             self._authorize_task_context_update(conn, task_id, project_id, user)
             actor_user_id = self._user_id(user)
             request = {
@@ -799,6 +855,15 @@ class ProjectContextService:
                    SET project_context_version_id = ?, project_context_snapshot_id = ?, updated_at = ?
                    WHERE task_id = ?""",
                 (context_version_id, snapshot_id, now, task_id),
+            )
+            # A queued Attempt has not crossed the runtime boundary and must
+            # follow the newly confirmed Task pin.  The migration trigger
+            # protects started Attempts from any snapshot drift.
+            conn.execute(
+                """UPDATE agent_task_attempts
+                   SET context_snapshot_id = ?
+                   WHERE task_id = ? AND status = 'queued'""",
+                (snapshot_id, task_id),
             )
             conn.execute(
                 """UPDATE task_context_update_previews
