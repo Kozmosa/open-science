@@ -408,3 +408,21 @@ def migration_008_domain_schema_expand(conn: sqlite3.Connection) -> None:
         ON domain_maintenance_mutations(maintenance_epoch)
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_009_dispatch_claim_metadata(conn: sqlite3.Connection) -> None:
+    for name, definition in (
+        ("claim_token", "TEXT"),
+        ("dispatcher_id", "TEXT"),
+        ("claim_expires_at", "TEXT"),
+        ("runtime_launch_key", "TEXT"),
+        ("cancel_reason", "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE task_dispatch_outbox ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_dispatch_launch_key ON task_dispatch_outbox(runtime_launch_key) WHERE runtime_launch_key IS NOT NULL"
+    )
