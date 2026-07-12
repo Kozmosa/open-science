@@ -1116,7 +1116,7 @@ class AgenticResearcherService:
         return ExecutionContext(
             task_id=task.task_id,
             working_directory=str(working_directory),
-            rendered_prompt=task.prompt,
+            rendered_prompt=self._rendered_context_prompt(task),
             researcher_type=task.researcher_type.value,
             engine_type=task.harness_engine,
             skills=task.user_skills,
@@ -1135,6 +1135,34 @@ class AgenticResearcherService:
             codex_app_server_command=task.codex_app_server_command,
             codex_approval_policy=task.codex_approval_policy,
         )
+
+    def _rendered_context_prompt(self, task: Task) -> str:
+        """Use the Task's immutable Context Snapshot when v2 has pinned one.
+
+        Legacy tasks deliberately keep their original prompt until B7 cutover,
+        so a missing table/column/snapshot is a safe compatibility fallback.
+        """
+
+        try:
+            with closing(self._connect()) as conn:
+                task_row = conn.execute(
+                    "SELECT project_context_snapshot_id FROM tasks WHERE task_id = ?",
+                    (task.task_id,),
+                ).fetchone()
+                if task_row is None:
+                    return task.prompt
+                snapshot_id = _col(task_row, "project_context_snapshot_id")
+                if snapshot_id is None:
+                    return task.prompt
+                snapshot = conn.execute(
+                    "SELECT content FROM context_snapshots WHERE context_snapshot_id = ?",
+                    (snapshot_id,),
+                ).fetchone()
+                if snapshot is None or not isinstance(snapshot["content"], str):
+                    return task.prompt
+                return snapshot["content"]
+        except sqlite3.Error:
+            return task.prompt
 
     def get_runtime_summary(self, task: Task) -> dict[str, object]:
         context = self._build_execution_context(task)

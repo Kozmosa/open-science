@@ -890,3 +890,129 @@ def migration_014_domain_reconciliation_workflow(conn: sqlite3.Connection) -> No
         BEGIN SELECT RAISE(ABORT, 'finalized migration evidence is immutable'); END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_015_project_context_closure(conn: sqlite3.Connection) -> None:
+    """Finish the durable Project Context contract before v2 task cutover.
+
+    The new task-level snapshot pointer prevents a later snapshot for the
+    same Context Version from changing an existing Task's future Attempts.
+    Preview rows make a human-reviewed Context change an explicit two-step
+    operation instead of an implicit "use whatever is active now" write.
+    """
+
+    for table, columns in (
+        (
+            "tasks",
+            (
+                (
+                    "project_context_snapshot_id",
+                    "TEXT REFERENCES context_snapshots(context_snapshot_id) ON DELETE RESTRICT",
+                ),
+            ),
+        ),
+        (
+            "project_context_candidates",
+            (
+                ("source_task_id", "TEXT REFERENCES tasks(task_id) ON DELETE RESTRICT"),
+                (
+                    "source_attempt_id",
+                    "TEXT REFERENCES agent_task_attempts(attempt_id) ON DELETE RESTRICT",
+                ),
+                ("source_message_start_seq", "INTEGER"),
+                ("source_message_end_seq", "INTEGER"),
+                ("source_output_start_seq", "INTEGER"),
+                ("source_output_end_seq", "INTEGER"),
+            ),
+        ),
+        (
+            "project_context_fragments",
+            (
+                ("created_by_user_id", "TEXT"),
+                ("source_metadata_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ),
+        ),
+    ):
+        for name, definition in columns:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+            except sqlite3.OperationalError:
+                pass
+
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_tasks_project_context_snapshot
+        ON tasks(project_context_snapshot_id)
+        WHERE project_context_snapshot_id IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_context_candidates_project_status
+        ON project_context_candidates(project_id, status, created_at);
+        CREATE INDEX IF NOT EXISTS idx_context_fragments_project_order
+        ON project_context_fragments(project_id, sort_order, created_at, fragment_id);
+
+        CREATE TABLE IF NOT EXISTS task_context_update_previews (
+            preview_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE RESTRICT,
+            context_version_id TEXT NOT NULL
+                REFERENCES project_context_versions(context_version_id) ON DELETE RESTRICT,
+            created_by_user_id TEXT NOT NULL,
+            proposed_fingerprint TEXT NOT NULL,
+            proposed_content TEXT NOT NULL,
+            source_manifest_json TEXT NOT NULL,
+            byte_budget INTEGER NOT NULL CHECK (byte_budget >= 0),
+            truncated INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0, 1)),
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            confirmed_snapshot_id TEXT
+                REFERENCES context_snapshots(context_snapshot_id) ON DELETE RESTRICT,
+            confirmed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_context_previews_task_actor
+        ON task_context_update_previews(task_id, created_by_user_id, created_at);
+
+        CREATE TRIGGER IF NOT EXISTS project_context_version_metadata_immutable
+        BEFORE UPDATE OF project_id, content, fingerprint, created_by_user_id, created_at
+        ON project_context_versions
+        BEGIN SELECT RAISE(ABORT, 'context versions are immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS project_context_version_delete_forbidden
+        BEFORE DELETE ON project_context_versions
+        BEGIN SELECT RAISE(ABORT, 'context versions are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_snapshot_immutable
+        BEFORE UPDATE ON context_snapshots
+        BEGIN SELECT RAISE(ABORT, 'context snapshots are immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_snapshot_delete_forbidden
+        BEFORE DELETE ON context_snapshots
+        BEGIN SELECT RAISE(ABORT, 'context snapshots are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_provenance_immutable
+        BEFORE UPDATE OF project_id, content, created_at, created_by_user_id,
+                         source_metadata_json, source_task_id, source_attempt_id,
+                         source_message_start_seq, source_message_end_seq,
+                         source_output_start_seq, source_output_end_seq
+        ON project_context_candidates
+        BEGIN SELECT RAISE(ABORT, 'context candidate provenance is immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_delete_forbidden
+        BEFORE DELETE ON project_context_candidates
+        BEGIN SELECT RAISE(ABORT, 'context candidates are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_fragment_immutable
+        BEFORE UPDATE ON project_context_fragments
+        BEGIN SELECT RAISE(ABORT, 'context fragments are immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_fragment_delete_forbidden
+        BEFORE DELETE ON project_context_fragments
+        BEGIN SELECT RAISE(ABORT, 'context fragments are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS attempt_context_snapshot_no_drift_after_start
+        BEFORE UPDATE OF context_snapshot_id ON agent_task_attempts
+        WHEN OLD.started_at IS NOT NULL
+          OR OLD.status IN ('starting', 'running', 'paused', 'succeeded', 'failed', 'stopped')
+        BEGIN SELECT RAISE(ABORT, 'started Attempts keep their Context snapshot'); END;
+        """
+    )

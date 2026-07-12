@@ -32,6 +32,7 @@ class AttemptService:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._context_service = ProjectContextService(state_root)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
 
@@ -41,26 +42,17 @@ class AttemptService:
     def create_attempt(self, task_id: str, *, trigger: str) -> str:
         with closing(self._connect()) as conn:
             task = conn.execute(
-                "SELECT project_id, project_context_version_id FROM tasks WHERE task_id = ?",
+                "SELECT project_context_snapshot_id FROM tasks WHERE task_id = ?",
                 (task_id,),
             ).fetchone()
             if task is None:
                 raise DomainNotFoundError(task_id)
-            context_version_id = task["project_context_version_id"]
-            snapshot = (
-                conn.execute(
-                    "SELECT context_snapshot_id FROM context_snapshots WHERE context_version_id = ? ORDER BY created_at DESC LIMIT 1",
-                    (context_version_id,),
-                ).fetchone()
-                if context_version_id is not None
-                else None
+            existing_snapshot_id = task["project_context_snapshot_id"]
+            snapshot_id = (
+                str(existing_snapshot_id)
+                if isinstance(existing_snapshot_id, str) and existing_snapshot_id
+                else self._context_service.ensure_task_snapshot_in_transaction(conn, task_id)
             )
-            if snapshot is None:
-                snapshot_id = ProjectContextService(self._state_root).pin_active_context(
-                    task_id, str(task["project_id"])
-                )
-            else:
-                snapshot_id = str(snapshot["context_snapshot_id"])
             next_seq = int(
                 conn.execute(
                     "SELECT COALESCE(MAX(attempt_seq), 0) + 1 FROM agent_task_attempts WHERE task_id = ?",

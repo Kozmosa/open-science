@@ -52,4 +52,4 @@ def test_publish_is_immutable_and_task_pins_active_version(state_root: Path) -> 
             "SELECT content FROM context_snapshots WHERE context_snapshot_id = ?", (snapshot_id,)
         ).fetchone()
     assert pinned["project_context_version_id"] == second["context_version_id"]
-    assert snapshot["content"] == "second"
+    assert "## Project Brief\nsecond" in snapshot["content"]

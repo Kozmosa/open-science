@@ -406,6 +406,58 @@ class TaskConfigurationSnapshotRequest(BaseModel):
     raw_prompt: str | None = None
 
 
+class ProjectContextDraftRequest(BaseModel):
+    """Replace the editable Project Brief Draft."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content: str
+
+
+class ProjectContextCandidateCreateRequest(BaseModel):
+    """An auditable Context suggestion; it never publishes itself."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content: str
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
+    source_task_id: str | None = None
+    source_attempt_id: str | None = None
+    source_message_start_seq: int | None = Field(default=None, ge=0)
+    source_message_end_seq: int | None = Field(default=None, ge=0)
+    source_output_start_seq: int | None = Field(default=None, ge=0)
+    source_output_end_seq: int | None = Field(default=None, ge=0)
+
+
+class ProjectContextCandidateRejectRequest(BaseModel):
+    """Record why a candidate was explicitly rejected."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = None
+
+
+class ProjectContextFragmentCreateRequest(BaseModel):
+    """Store one immutable Context Fragment with its provenance."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_type: str = Field(min_length=1)
+    content: str
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
+    source_version: str | None = None
+    sort_order: int = 0
+    byte_budget: int | None = Field(default=None, ge=0)
+
+
+class TaskContextConfirmRequest(BaseModel):
+    """Confirm a previously rendered Task Context update preview."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preview_id: str = Field(min_length=1)
+
+
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

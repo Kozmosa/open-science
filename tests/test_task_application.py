@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from contextlib import closing
 from pathlib import Path
 
 import pytest
 
+from ainrf.db import connect
 from ainrf.domain import DomainService, ProjectContextService, TaskApplicationService
+from ainrf.auth.service import AuthService
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
 
@@ -16,6 +20,15 @@ def test_create_and_retry_task_share_task_id_and_outbox(state_root: Path) -> Non
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
     domain = DomainService(state_root)
     environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id=str(environment["environment_id"]),
+        user_id="owner",
+        max_tasks=None,
+        granted_by="admin",
+        reason="task application test",
+    )
     project = domain.create_project(owner, name="Project")
     workspace = domain.create_workspace(
         owner,
@@ -56,3 +69,35 @@ def test_create_and_retry_task_share_task_id_and_outbox(state_root: Path) -> Non
     assert repeated == created
     assert retry["task_id"] == created["task_id"]
     assert retry["attempt_id"] != created["attempt_id"]
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        snapshot = conn.execute(
+            """SELECT snapshot.content, snapshot.source_manifest_json
+               FROM tasks AS task
+               JOIN context_snapshots AS snapshot
+                 ON snapshot.context_snapshot_id = task.project_context_snapshot_id
+               WHERE task.task_id = ?""",
+            (created["task_id"],),
+        ).fetchone()
+        retry_snapshot = conn.execute(
+            """SELECT context_snapshot_id FROM agent_task_attempts
+               WHERE attempt_id = ?""",
+            (retry["attempt_id"],),
+        ).fetchone()
+        initial_snapshot = conn.execute(
+            """SELECT context_snapshot_id FROM agent_task_attempts
+               WHERE attempt_id = ?""",
+            (created["attempt_id"],),
+        ).fetchone()
+    assert snapshot is not None
+    assert "## Project Brief\ncontext" in snapshot["content"]
+    assert "## Task Request\nPrompt" in snapshot["content"]
+    manifest = json.loads(snapshot["source_manifest_json"])
+    assert [entry["source_type"] for entry in manifest] == [
+        "platform_constraints",
+        "project_brief",
+        "workspace_context",
+        "task_request",
+    ]
+    assert retry_snapshot is not None
+    assert initial_snapshot is not None
+    assert retry_snapshot["context_snapshot_id"] == initial_snapshot["context_snapshot_id"]

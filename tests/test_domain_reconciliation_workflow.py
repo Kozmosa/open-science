@@ -8,6 +8,7 @@ import sqlite3
 from collections.abc import Iterable, Mapping
 from contextlib import closing
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -22,7 +23,7 @@ _NOW = "2026-07-12T00:00:00+00:00"
 
 def _value(result: object, name: str) -> object:
     if isinstance(result, Mapping):
-        return result[name]
+        return cast(Mapping[str, object], result)[name]
     return getattr(result, name)
 
 
@@ -255,7 +256,15 @@ def _audit_events(state_root: Path) -> list[tuple[str, str, str, str]]:
             FROM domain_audit_events ORDER BY created_at, event_id
             """
         ).fetchall()
-    return [tuple(map(str, row)) for row in rows]
+    return [
+        (
+            str(row["actor_id"]),
+            str(row["event_type"]),
+            str(row["subject_type"]),
+            str(row["subject_id"]),
+        )
+        for row in rows
+    ]
 
 
 def test_primary_workspace_resolution_is_explicit_and_audited(state_root: Path) -> None:
@@ -515,7 +524,7 @@ def test_finalization_requires_completed_unblocked_run_and_valid_restore_evidenc
     ready_run = DomainImporter(state_root).run(artifact_sha="c" * 64)
     _seed_finalizable_control_plane(state_root)
     service = DomainReconciliationService(state_root)
-    evidence = {
+    evidence: dict[str, object] = {
         "manifest_sha256": "b" * 64,
         "validated_at": _NOW,
         "status": "valid",

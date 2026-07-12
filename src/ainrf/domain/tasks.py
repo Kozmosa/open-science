@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
+from ainrf.domain.context import ProjectContextService
 from ainrf.domain.service import (
     DomainAuthorizationService,
     DomainConflictError,
@@ -25,8 +26,10 @@ def _now() -> str:
 
 class TaskApplicationService:
     def __init__(self, state_root: Path) -> None:
+        self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._context_service = ProjectContextService(state_root)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
 
@@ -67,31 +70,26 @@ class TaskApplicationService:
                 "SELECT environment_id FROM workspaces WHERE workspace_id = ? AND status = 'active'",
                 (workspace_id,),
             ).fetchone()
-            context = conn.execute(
-                "SELECT context_version_id, content, fingerprint FROM project_context_versions WHERE project_id = ? AND is_active = 1",
-                (project_id,),
-            ).fetchone()
             if link is None or workspace is None:
                 raise DomainConflictError("Task Workspace must be an active Project link")
-            if context is None:
-                raise DomainConflictError("Project requires an active Context Version")
             task_id = uuid4().hex[:12]
-            snapshot_id = f"snapshot-{uuid4().hex}"
+            try:
+                snapshot_id, context_version_id = (
+                    self._context_service.create_active_snapshot_for_task_in_transaction(
+                        conn,
+                        project_id=project_id,
+                        workspace_id=workspace_id,
+                        task_id=task_id,
+                        task_prompt=prompt,
+                    )
+                )
+            except DomainNotFoundError as exc:
+                raise DomainConflictError("Project requires an active Context Version") from exc
             attempt_id = f"attempt-{uuid4().hex}"
             dispatch_id = f"dispatch-{uuid4().hex}"
             now = _now()
             conn.execute(
-                "INSERT INTO context_snapshots(context_snapshot_id, context_version_id, fingerprint, content, created_at) VALUES (?, ?, ?, ?, ?)",
-                (
-                    snapshot_id,
-                    context["context_version_id"],
-                    context["fingerprint"],
-                    context["content"],
-                    now,
-                ),
-            )
-            conn.execute(
-                "INSERT INTO tasks (task_id, project_id, workspace_id, environment_id, researcher_type, harness_engine, user_skills, user_mcp_servers, status, title, prompt, created_at, updated_at, owner_user_id, project_context_version_id, latest_attempt_id) VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'queued', ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO tasks (task_id, project_id, workspace_id, environment_id, researcher_type, harness_engine, user_skills, user_mcp_servers, status, title, prompt, created_at, updated_at, owner_user_id, project_context_version_id, project_context_snapshot_id, latest_attempt_id) VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', 'queued', ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     task_id,
                     project_id,
@@ -104,7 +102,8 @@ class TaskApplicationService:
                     now,
                     now,
                     self._user_id(user),
-                    context["context_version_id"],
+                    context_version_id,
+                    snapshot_id,
                     attempt_id,
                 ),
             )
@@ -127,7 +126,7 @@ class TaskApplicationService:
     ) -> dict[str, str]:
         with closing(self._connect()) as conn:
             task = conn.execute(
-                "SELECT project_id, owner_user_id, project_context_version_id FROM tasks WHERE task_id = ?",
+                "SELECT project_id, owner_user_id, project_context_snapshot_id FROM tasks WHERE task_id = ?",
                 (task_id,),
             ).fetchone()
             if task is None:
@@ -137,12 +136,11 @@ class TaskApplicationService:
             cached = self._cached(conn, "task.retry", idempotency_key)
             if cached is not None:
                 return cached
-            snapshot = conn.execute(
-                "SELECT context_snapshot_id FROM context_snapshots WHERE context_version_id = ? ORDER BY created_at DESC LIMIT 1",
-                (task["project_context_version_id"],),
-            ).fetchone()
-            if snapshot is None:
-                raise DomainConflictError("Task has no Context snapshot")
+            snapshot_id = task["project_context_snapshot_id"]
+            if not isinstance(snapshot_id, str) or not snapshot_id:
+                snapshot_id = self._context_service.ensure_task_snapshot_in_transaction(
+                    conn, task_id
+                )
             sequence = int(
                 conn.execute(
                     "SELECT COALESCE(MAX(attempt_seq), 0) + 1 FROM agent_task_attempts WHERE task_id = ?",
@@ -154,7 +152,7 @@ class TaskApplicationService:
             now = _now()
             conn.execute(
                 "INSERT INTO agent_task_attempts(attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id, created_at) VALUES (?, ?, ?, 'retry', 'queued', ?, ?)",
-                (attempt_id, task_id, sequence, snapshot["context_snapshot_id"], now),
+                (attempt_id, task_id, sequence, snapshot_id, now),
             )
             conn.execute(
                 "INSERT INTO task_dispatch_outbox(dispatch_id, task_id, attempt_id, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
