@@ -146,6 +146,56 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
     assert calls == ["init", "once", "stop"]
 
 
+def test_overview_snapshot_refresh_uses_the_planner_participant(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[str] = []
+
+    class FakePlanner:
+        def __init__(
+            self,
+            state_root: Path,
+            *,
+            artifact_sha: str | None,
+            active_user_ids: object,
+        ) -> None:
+            assert state_root == tmp_path
+            assert artifact_sha is None
+            assert callable(active_user_ids)
+            self.service = SimpleNamespace(
+                latest=lambda user_id: {
+                    "owner_user_id": user_id,
+                    "source": "control_plane_only",
+                }
+            )
+            calls.append("init")
+
+        def request_refresh(self, user_id: str) -> dict[str, object]:
+            calls.append(f"request:{user_id}")
+            return {"job_id": "overview-job"}
+
+        def run_job(self, job_id: str) -> SimpleNamespace:
+            calls.append(f"run:{job_id}")
+            return SimpleNamespace(detail=None)
+
+        def stop(self) -> None:
+            calls.append("stop")
+
+    monkeypatch.setattr("ainrf.cli.OverviewSnapshotPlanner", FakePlanner)
+
+    result = runner.invoke(
+        app,
+        ["overview-snapshot", "refresh", "--user-id", "owner", "--state-root", str(tmp_path)],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "owner_user_id": "owner",
+        "source": "control_plane_only",
+    }
+    assert calls == ["init", "request:owner", "run:overview-job", "stop"]
+
+
 def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 

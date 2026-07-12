@@ -357,7 +357,10 @@ def create_app(
     )
     # Project costs are another read-only view over the same Attempt rows.
     app.state.project_cost_projection_service = attempt_projection
-    app.state.overview_snapshot_service = OverviewSnapshotService(api_config.state_root)
+    app.state.overview_snapshot_service = OverviewSnapshotService(
+        api_config.state_root,
+        artifact_sha=artifact_sha,
+    )
     # Service initialization order:
     # 1. project/workspace (no deps)
     # 2. terminal (no deps)

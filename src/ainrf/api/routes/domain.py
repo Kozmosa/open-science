@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from ainrf.api.schemas import (
     ProjectContextCandidateCreateRequest,
@@ -18,7 +18,9 @@ from ainrf.domain import (
     ProjectContextService,
     TaskApplicationService,
 )
+from ainrf.domain.overview_jobs import OverviewSnapshotService
 from ainrf.domain_control import DomainModelMode
+from ainrf.literature.task_saga import LiteratureTaskSagaService
 
 router = APIRouter(prefix="/domain", tags=["domain-v2"])
 
@@ -38,6 +40,25 @@ async def capabilities(request: Request) -> dict[str, object]:
         callable(getattr(service, name, None))
         for name in ("attach_workspace", "detach_workspace", "set_primary_workspace")
     )
+    overview_service = getattr(request.app.state, "overview_snapshot_service", None)
+    overview_readiness: dict[str, object] = {
+        "job_store_ready": False,
+        "planner_ready": False,
+        "planner_status": "unavailable",
+    }
+    if isinstance(overview_service, OverviewSnapshotService):
+        overview_readiness = overview_service.planner_readiness()
+    overview_ready = (
+        ready
+        and bool(overview_readiness.get("job_store_ready"))
+        and bool(overview_readiness.get("planner_ready"))
+    )
+    literature_saga = getattr(request.app.state, "literature_task_saga_service", None)
+    literature_ready = (
+        ready
+        and isinstance(literature_saga, LiteratureTaskSagaService)
+        and literature_saga.v2_ready()
+    )
     return {
         "domain_contract_version": 2 if ready else 1,
         "mode": mode.value,
@@ -45,21 +66,19 @@ async def capabilities(request: Request) -> dict[str, object]:
         "project_context": context_ready,
         "workspace_links": workspace_links_ready,
         "task_attempts": task_ready,
-        # B9/B10 have not yet established their durable saga/scheduler
-        # contracts.  Existing read helpers do not make those capabilities
-        # ready for the frontend.
-        "literature_research_task": False,
-        "overview_snapshot": False,
+        # Each capability reports its own runtime evidence rather than being
+        # inferred from the common contract version alone.
+        "literature_research_task": literature_ready,
+        "overview_snapshot": overview_ready,
+        "overview_snapshot_job_store": bool(overview_readiness.get("job_store_ready")),
+        "overview_snapshot_planner": overview_readiness,
     }
 
 
 @router.get("/overview/today")
 async def today_overview(request: Request) -> dict[str, object]:
-    _service(request)
+    snapshot_service = _overview_service(request)
     user = get_current_user(request)
-    snapshot_service = getattr(request.app.state, "overview_snapshot_service", None)
-    if snapshot_service is None:
-        raise HTTPException(status_code=500, detail="Overview snapshot service not initialized")
     user_id = user.get("id")
     if not isinstance(user_id, str):
         raise HTTPException(status_code=401, detail="Authenticated user ID is required")
@@ -69,12 +88,52 @@ async def today_overview(request: Request) -> dict[str, object]:
     return payload
 
 
+@router.post("/overview/today/refresh", status_code=status.HTTP_202_ACCEPTED)
+async def request_today_overview_refresh(request: Request) -> dict[str, object]:
+    """Enqueue (or reuse) the caller's durable manual refresh job."""
+
+    snapshot_service = _overview_service(request)
+    user = get_current_user(request)
+    user_id = user.get("id")
+    if not isinstance(user_id, str):
+        raise HTTPException(status_code=401, detail="Authenticated user ID is required")
+    try:
+        return snapshot_service.request_refresh(user_id, trigger="manual")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/overview/refresh/{job_id}")
+async def get_today_overview_refresh(job_id: str, request: Request) -> dict[str, object]:
+    """Return one caller-owned refresh job without exposing other users' work."""
+
+    snapshot_service = _overview_service(request)
+    user = get_current_user(request)
+    user_id = user.get("id")
+    if not isinstance(user_id, str):
+        raise HTTPException(status_code=401, detail="Authenticated user ID is required")
+    job = snapshot_service.get_job(user_id, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Overview refresh job not found")
+    return job
+
+
 def _service(request: Request) -> DomainService:
     service = getattr(request.app.state, "domain_service", None)
     if service is None or request.app.state.api_config.domain_model_mode is not DomainModelMode.V2:
         raise HTTPException(status_code=404, detail="Domain v2 is unavailable")
     if not service.v2_ready():
         raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
+    return service
+
+
+def _overview_service(request: Request) -> OverviewSnapshotService:
+    _service(request)
+    service = getattr(request.app.state, "overview_snapshot_service", None)
+    if not isinstance(service, OverviewSnapshotService):
+        raise HTTPException(status_code=503, detail="Overview snapshot service is not initialized")
+    if not service.job_store_ready():
+        raise HTTPException(status_code=503, detail="Overview refresh job store is not ready")
     return service
 
 

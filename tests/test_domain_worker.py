@@ -13,6 +13,7 @@ from ainrf.db import connect
 from ainrf.domain import (
     AttemptService,
     DomainService,
+    OverviewSnapshotService,
     ProjectContextService,
     TaskApplicationService,
 )
@@ -158,6 +159,47 @@ async def test_domain_worker_requires_the_committed_v2_artifact(
     result = await matching.run_once()
     matching.stop()
     assert result.outcome == "idle"
+
+
+@pytest.mark.anyio
+async def test_v2_domain_worker_runs_the_durable_overview_planner(
+    state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepare_committed_v2_cutover(state_root, tmp_path)
+    auth = AuthService(state_root=state_root)
+    overview_owner = seed_user(
+        auth,
+        username="overview-owner",
+        role="member",
+        user_id="overview-owner",
+    )
+    snapshots = OverviewSnapshotService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    queued = snapshots.request_refresh(overview_owner)
+
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="overview-domain-worker",
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+    )
+    monkeypatch.setattr(dispatcher._attempts, "claim_next", lambda *_args, **_kwargs: None)
+    try:
+        result = await dispatcher.run_once()
+    finally:
+        dispatcher.stop()
+
+    assert result.outcome == "idle"
+    completed = snapshots.get_job(overview_owner, str(queued["job_id"]))
+    assert completed is not None
+    assert completed["status"] in {"succeeded", "partial"}
+    assert snapshots.latest(overview_owner) is not None
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        planner = conn.execute(
+            "SELECT planner_id, status FROM overview_planner_state WHERE singleton = 1"
+        ).fetchone()
+    assert planner is not None
+    assert planner["planner_id"] == "overview-domain-worker:overview"
+    assert planner["status"] == "stopped"
 
 
 @pytest.mark.anyio

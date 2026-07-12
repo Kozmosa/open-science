@@ -25,7 +25,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
-from ainrf.domain_control import DomainCutoverError, MaintenanceModeError
+from ainrf.domain_control import DomainCutoverController, DomainCutoverError, MaintenanceModeError
 
 
 _DEFAULT_PRESET = "structured-research-default"
@@ -82,10 +82,12 @@ class LiteratureTaskSagaService:
         self._db_path = state_root / "runtime" / "literature.sqlite3"
         self._domain_db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
+        self._artifact_sha = artifact_sha
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "literature")
         self._tasks = TaskApplicationService(state_root, artifact_sha=artifact_sha)
+        self._cutover = DomainCutoverController(state_root)
 
     @property
     def state_root(self) -> Path:
@@ -93,6 +95,37 @@ class LiteratureTaskSagaService:
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
+
+    def v2_ready(self) -> bool:
+        """Whether this exact saga instance can safely create v2 Tasks.
+
+        A constructed object alone is not a capability: it must carry the
+        immutable artifact SHA, observe a committed cutover fuse, and retain
+        the durable Literature intent/work/outbox schema that recovery needs.
+        """
+
+        if not self._artifact_sha:
+            return False
+        try:
+            self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
+            with closing(self._connect()) as conn:
+                rows = conn.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'table' AND name IN (
+                        'literature_research_task_intents',
+                        'literature_work_items',
+                        'literature_outbox'
+                    )
+                    """
+                ).fetchall()
+        except (DomainCutoverError, sqlite3.Error):
+            return False
+        return {str(row["name"]) for row in rows} == {
+            "literature_research_task_intents",
+            "literature_work_items",
+            "literature_outbox",
+        }
 
     # ------------------------------------------------------------------
     # Public intent API

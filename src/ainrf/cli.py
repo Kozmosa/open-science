@@ -36,7 +36,7 @@ from ainrf.domain_migration import (
     DomainReconciliationService,
     capture_source_manifest,
 )
-from ainrf.domain import OverviewSnapshotService, TaskDispatcher
+from ainrf.domain import OverviewSnapshotPlanner, TaskDispatcher
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -887,7 +887,30 @@ def overview_snapshot_refresh(
         Path, typer.Option(help="State root containing the control plane.")
     ] = default_state_root(),
 ) -> None:
-    typer.echo(json_mod.dumps(OverviewSnapshotService(state_root).refresh(user_id), indent=2))
+    """Refresh one user's snapshot through the planner participant."""
+
+    planner: OverviewSnapshotPlanner | None = None
+    try:
+        artifact_sha = _domain_worker_artifact_sha(state_root)
+        planner = OverviewSnapshotPlanner(
+            state_root,
+            artifact_sha=artifact_sha,
+            active_user_ids=lambda: (),
+        )
+        job = planner.request_refresh(user_id)
+        result = planner.run_job(str(job["job_id"]))
+        snapshot = planner.service.latest(user_id)
+        if snapshot is None:
+            detail = result.detail or "overview refresh did not produce a snapshot"
+            typer.echo(detail, err=True)
+            raise typer.Exit(code=2)
+        typer.echo(json_mod.dumps(snapshot, indent=2))
+    except (DomainCutoverError, MaintenanceModeError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    finally:
+        if planner is not None:
+            planner.stop()
 
 
 def main() -> None:

@@ -14,7 +14,7 @@ from ainrf.domain.attempt_projection import AttemptProjectionService
 from ainrf.domain.tasks import TaskApplicationService
 from ainrf.domain.task_projection import TaskProjectionService
 from ainrf.domain.session_projection import SessionProjectionService
-from ainrf.domain.overview import OverviewSnapshotService
+from ainrf.domain.overview import OverviewSnapshotPlanner, OverviewSnapshotService
 from ainrf.domain.worker import DispatchRunResult, TaskDispatcher
 
 __all__ = [
@@ -35,5 +35,6 @@ __all__ = [
     "TaskApplicationService",
     "TaskProjectionService",
     "SessionProjectionService",
+    "OverviewSnapshotPlanner",
     "OverviewSnapshotService",
 ]

@@ -1597,3 +1597,104 @@ def migration_019_harden_domain_cutover_state_machine(conn: sqlite3.Connection) 
     """Apply B7 transition guards to databases that already ran migration 018."""
 
     _install_domain_cutover_state_guards(conn)
+
+
+@registry.register(_DATABASE)
+def migration_020_overview_refresh_jobs(conn: sqlite3.Connection) -> None:
+    """Add the durable, user-scoped Today overview work model.
+
+    ``overview_snapshots`` predates the durable dispatcher model.  Keep its
+    existing rows readable while extending it with card provenance, then make
+    every scheduled and manual refresh flow through a leased job row.  The
+    partial active-job index is the SQLite arbitration point for repeated
+    clicks, API retries, and concurrently running planners.
+    """
+
+    for name, definition in (
+        ("data_cutoff_at", "TEXT"),
+        ("source_status", "TEXT"),
+        ("attention_required", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE overview_snapshots ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS overview_refresh_jobs (
+            job_id TEXT PRIMARY KEY,
+            owner_user_id TEXT NOT NULL,
+            trigger TEXT NOT NULL CHECK (trigger IN ('manual', 'scheduled', 'catchup')),
+            scheduled_for_date TEXT,
+            status TEXT NOT NULL CHECK (status IN (
+                'queued', 'running', 'succeeded', 'partial', 'failed'
+            )),
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+            lease_owner TEXT,
+            lease_token TEXT,
+            lease_expires_at TEXT,
+            heartbeat_at TEXT,
+            snapshot_id TEXT,
+            source_status TEXT,
+            error_summary TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            updated_at TEXT NOT NULL,
+            CHECK (
+                (trigger = 'manual' AND scheduled_for_date IS NULL)
+                OR (trigger IN ('scheduled', 'catchup') AND scheduled_for_date IS NOT NULL)
+            ),
+            CHECK (
+                (status = 'running' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL
+                 AND lease_expires_at IS NOT NULL)
+                OR status != 'running'
+            )
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_overview_refresh_jobs_schedule_slot
+        ON overview_refresh_jobs(owner_user_id, scheduled_for_date)
+        WHERE scheduled_for_date IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_overview_refresh_jobs_active_owner
+        ON overview_refresh_jobs(owner_user_id)
+        WHERE status IN ('queued', 'running');
+        CREATE INDEX IF NOT EXISTS idx_overview_refresh_jobs_claim
+        ON overview_refresh_jobs(status, created_at, job_id);
+        CREATE INDEX IF NOT EXISTS idx_overview_refresh_jobs_owner_updated
+        ON overview_refresh_jobs(owner_user_id, updated_at DESC, job_id DESC);
+        CREATE INDEX IF NOT EXISTS idx_overview_refresh_jobs_lease_expiry
+        ON overview_refresh_jobs(status, lease_expires_at)
+        WHERE status = 'running';
+
+        CREATE TABLE IF NOT EXISTS overview_refresh_card_states (
+            owner_user_id TEXT NOT NULL,
+            card_id TEXT NOT NULL,
+            last_job_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN (
+                'ok', 'partial', 'stale', 'unavailable', 'failed'
+            )),
+            data_json TEXT,
+            data_cutoff_at TEXT NOT NULL,
+            last_success_data_json TEXT,
+            last_success_at TEXT,
+            last_success_cutoff_at TEXT,
+            error_summary TEXT,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (owner_user_id, card_id),
+            FOREIGN KEY (last_job_id) REFERENCES overview_refresh_jobs(job_id)
+                ON DELETE RESTRICT
+        );
+        CREATE INDEX IF NOT EXISTS idx_overview_refresh_card_states_owner_updated
+        ON overview_refresh_card_states(owner_user_id, updated_at DESC, card_id);
+
+        CREATE TABLE IF NOT EXISTS overview_planner_state (
+            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+            planner_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('running', 'drained', 'stopped')),
+            heartbeat_at TEXT NOT NULL,
+            last_schedule_at TEXT,
+            last_error TEXT,
+            updated_at TEXT NOT NULL
+        );
+        """
+    )

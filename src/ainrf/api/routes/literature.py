@@ -53,8 +53,8 @@ def _get_research_task_saga(request: Request) -> LiteratureTaskSagaService:
             status_code=409,
             detail="Literature research Tasks require a committed domain v2 cutover",
         )
-    if not isinstance(service, LiteratureTaskSagaService):
-        raise HTTPException(status_code=500, detail="Literature Task saga service not initialized")
+    if not isinstance(service, LiteratureTaskSagaService) or not service.v2_ready():
+        raise HTTPException(status_code=503, detail="Literature Task saga service is not ready")
     return service
 
 

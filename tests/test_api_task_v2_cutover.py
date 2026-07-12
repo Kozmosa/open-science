@@ -152,7 +152,7 @@ async def test_v2_task_capabilities_and_idempotency_contract(
         capability_payload = _body(capabilities)
         assert capability_payload["standard_task_create"] is True
         assert capability_payload["task_attempts"] is True
-        assert capability_payload["literature_research_task"] is False
+        assert capability_payload["literature_research_task"] is True
         assert capability_payload["overview_snapshot"] is False
 
         mismatch = await client.post(

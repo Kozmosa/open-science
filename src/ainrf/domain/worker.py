@@ -21,6 +21,7 @@ from ainrf.domain.attempts import (
     DispatchClaim,
     DispatchClaimError,
 )
+from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
 from ainrf.domain_control import (
     DomainCutoverController,
     DomainCutoverError,
@@ -94,6 +95,11 @@ class TaskDispatcher:
             participant_id=self.dispatcher_id,
             details={"component": "domain-worker"},
         )
+        self._overview_planner = OverviewSnapshotPlanner(
+            state_root,
+            planner_id=f"{self.dispatcher_id}:overview",
+            artifact_sha=artifact_sha,
+        )
         self._engine_factory = engine_factory or self._default_engine_factory
         self._engines: dict[HarnessEngineType, HarnessEngine] = {}
         self._lease_seconds = lease_seconds
@@ -105,6 +111,7 @@ class TaskDispatcher:
             self._started = True
 
     def stop(self) -> None:
+        self._overview_planner.stop()
         if self._started:
             self._participant.stop()
             self._started = False
@@ -112,6 +119,11 @@ class TaskDispatcher:
     async def run_once(self) -> DispatchRunResult:
         self._assert_domain_runtime_fuse()
         self.start()
+        if self._artifact_sha is not None:
+            overview = self._overview_planner.run_once()
+            if overview.outcome == "maintenance_drained":
+                self._participant.drain()
+                return DispatchRunResult(outcome="maintenance_drained")
         try:
             lease = self._participant.begin_mutation(source="task-dispatcher.claim")
         except MaintenanceModeError:
