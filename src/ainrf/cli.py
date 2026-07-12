@@ -27,7 +27,11 @@ from ainrf.domain_control import (
     DomainWriteParticipant,
     MaintenanceModeError,
 )
-from ainrf.domain_migration import DomainImporter, capture_source_manifest
+from ainrf.domain_migration import (
+    DomainImporter,
+    DomainReconciliationService,
+    capture_source_manifest,
+)
 from ainrf.domain import OverviewSnapshotService
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
@@ -537,6 +541,115 @@ def domain_migration_records(
     typer.echo(json_mod.dumps(results, indent=2))
 
 
+@domain_migration_app.command("issues")
+def domain_migration_issues(
+    run_id: Annotated[str, typer.Argument(help="Migration run ID whose issues to list.")],
+    include_resolved: Annotated[
+        bool,
+        typer.Option(help="Include issues with a verified, applied typed resolution."),
+    ] = False,
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing v2 shadow tables.")
+    ] = default_state_root(),
+) -> None:
+    """List unresolved remediation work without changing cutover state."""
+    service = DomainReconciliationService(state_root)
+    issues = [
+        issue.as_dict() for issue in service.list_issues(run_id, include_resolved=include_resolved)
+    ]
+    typer.echo(json_mod.dumps(issues, indent=2))
+
+
+@domain_migration_app.command("issue")
+def domain_migration_issue(
+    issue_id: Annotated[str, typer.Argument(help="Migration issue ID to inspect.")],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing v2 shadow tables.")
+    ] = default_state_root(),
+) -> None:
+    """Inspect one migration issue and its explicit resolution state."""
+    typer.echo(
+        json_mod.dumps(
+            DomainReconciliationService(state_root).inspect_issue(issue_id).as_dict(), indent=2
+        )
+    )
+
+
+@domain_migration_app.command("resolve")
+def domain_migration_resolve(
+    run_id: Annotated[str, typer.Argument(help="Migration run ID containing the issue.")],
+    issue_id: Annotated[str, typer.Argument(help="Migration issue ID to resolve.")],
+    resolution_type: Annotated[
+        str,
+        typer.Option(
+            help=(
+                "Explicit resolution: assign_project_owner, assign_workspace_environment, "
+                "set_primary_workspace, or map_runtime_session."
+            )
+        ),
+    ],
+    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in the audit event.")],
+    payload_json: Annotated[
+        str,
+        typer.Option("--payload", help="JSON object required by the selected typed resolution."),
+    ] = "{}",
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing v2 shadow tables.")
+    ] = default_state_root(),
+) -> None:
+    """Apply a narrowly typed, audited migration remediation."""
+    try:
+        parsed = json_mod.loads(payload_json)
+    except json_mod.JSONDecodeError as exc:
+        raise typer.BadParameter("--payload must be a JSON object") from exc
+    if not isinstance(parsed, dict):
+        raise typer.BadParameter("--payload must be a JSON object")
+    payload = {str(key): value for key, value in parsed.items()}
+    result = DomainReconciliationService(state_root).resolve_issue(
+        run_id,
+        issue_id,
+        resolution_type,
+        payload,
+        actor_id=actor_id,
+    )
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+
+
+@domain_migration_app.command("finalize")
+def domain_migration_finalize(
+    run_id: Annotated[
+        str, typer.Argument(help="Completed migration run to finalize for cutover prepare.")
+    ],
+    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in the audit event.")],
+    artifact_sha: Annotated[
+        str,
+        typer.Option(help="SHA-256 of the immutable artifact that performed the migration."),
+    ],
+    restore_evidence_json: Annotated[
+        str,
+        typer.Option("--restore-evidence", help="Validated restore evidence as a JSON object."),
+    ],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing v2 shadow tables.")
+    ] = default_state_root(),
+) -> None:
+    """Freeze reconciliation evidence; this does not prepare or commit cutover."""
+    try:
+        parsed = json_mod.loads(restore_evidence_json)
+    except json_mod.JSONDecodeError as exc:
+        raise typer.BadParameter("--restore-evidence must be a JSON object") from exc
+    if not isinstance(parsed, dict):
+        raise typer.BadParameter("--restore-evidence must be a JSON object")
+    evidence = {str(key): value for key, value in parsed.items()}
+    result = DomainReconciliationService(state_root).finalize_run(
+        run_id,
+        actor_id,
+        artifact_sha,
+        evidence,
+    )
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+
+
 @domain_migration_app.command("reconcile")
 def domain_migration_reconcile(
     state_root: Annotated[
@@ -545,7 +658,11 @@ def domain_migration_reconcile(
     run_id: Annotated[str | None, typer.Option(help="Optional migration run ID.")] = None,
 ) -> None:
     """Report migration counts and blocking issues without cutover."""
-    typer.echo(json_mod.dumps(DomainImporter(state_root).reconcile(run_id).as_dict(), indent=2))
+    typer.echo(
+        json_mod.dumps(
+            DomainReconciliationService(state_root).reconcile(run_id).as_dict(), indent=2
+        )
+    )
 
 
 @overview_snapshot_app.command("refresh")

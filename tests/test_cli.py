@@ -68,6 +68,17 @@ def test_help_shows_onboard_command() -> None:
     assert "onboard" in result.stdout
 
 
+def test_domain_migration_help_lists_reconciliation_workflow_commands() -> None:
+    result = runner.invoke(app, ["domain-migration", "--help"])
+
+    assert result.exit_code == 0
+    output = _strip_ansi(result.stdout)
+    assert "issues" in output
+    assert "issue" in output
+    assert "resolve" in output
+    assert "finalize" in output
+
+
 def test_openscience_cli_alias_exposes_help() -> None:
     result = subprocess.run(
         ["uv", "run", "openscience", "--help"],

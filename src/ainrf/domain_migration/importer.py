@@ -2288,8 +2288,18 @@ class DomainImporter:
         blocking = int(
             conn.execute(
                 """
-                SELECT COUNT(*) FROM domain_migration_issues
-                WHERE run_id = ? AND severity = 'blocking'
+                SELECT COUNT(*) FROM domain_migration_issues AS issue
+                WHERE issue.run_id = ? AND issue.severity = 'blocking'
+                  AND NOT (
+                      issue.resolution_status = 'resolved'
+                      AND EXISTS (
+                          SELECT 1 FROM domain_migration_resolutions AS resolution
+                          WHERE resolution.run_id = issue.run_id
+                            AND resolution.issue_id = issue.issue_id
+                            AND resolution.resolution_type = issue.resolution_type
+                            AND resolution.applied_at IS NOT NULL
+                      )
+                  )
                 """,
                 (run_id,),
             ).fetchone()[0]
@@ -2314,8 +2324,18 @@ class DomainImporter:
             str(row[0])
             for row in conn.execute(
                 """
-                SELECT DISTINCT category FROM domain_migration_issues
-                WHERE run_id = ? AND severity = 'blocking'
+                SELECT DISTINCT issue.category FROM domain_migration_issues AS issue
+                WHERE issue.run_id = ? AND issue.severity = 'blocking'
+                  AND NOT (
+                      issue.resolution_status = 'resolved'
+                      AND EXISTS (
+                          SELECT 1 FROM domain_migration_resolutions AS resolution
+                          WHERE resolution.run_id = issue.run_id
+                            AND resolution.issue_id = issue.issue_id
+                            AND resolution.resolution_type = issue.resolution_type
+                            AND resolution.applied_at IS NOT NULL
+                      )
+                  )
                 """,
                 (run_id,),
             )
@@ -2349,6 +2369,25 @@ class DomainImporter:
         )
         if duplicate_primary:
             blockers.append("primary_workspace_conflict")
+        if int(
+            conn.execute(
+                """
+                SELECT COUNT(*) FROM projects AS project
+                WHERE project.status = 'active'
+                  AND EXISTS (
+                      SELECT 1 FROM project_workspace_links AS link
+                      WHERE link.project_id = project.project_id AND link.status = 'active'
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM project_workspace_links AS link
+                      WHERE link.project_id = project.project_id
+                        AND link.status = 'active'
+                        AND link.is_primary = 1
+                  )
+                """
+            ).fetchone()[0]
+        ):
+            blockers.append("primary_workspace_missing")
         if int(
             conn.execute(
                 """

@@ -8,6 +8,11 @@ from ainrf.domain_migration.importer import (
     MigrationReport,
     ReconciliationReport,
 )
+from ainrf.domain_migration.reconciliation import (
+    DomainReconciliationService,
+    MigrationFinalization,
+    MigrationIssue,
+)
 from ainrf.domain_migration.sources import (
     SourceManifest,
     SourceSnapshotSet,
@@ -17,8 +22,11 @@ from ainrf.domain_migration.sources import (
 
 __all__ = [
     "DomainImporter",
+    "DomainReconciliationService",
+    "MigrationFinalization",
     "MigrationInspection",
     "MigrationInterruptedError",
+    "MigrationIssue",
     "MigrationRecordResult",
     "MigrationReport",
     "ReconciliationReport",

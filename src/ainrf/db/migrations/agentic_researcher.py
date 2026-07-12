@@ -757,3 +757,136 @@ def migration_013_domain_migration_record_audit(conn: sqlite3.Connection) -> Non
         WHERE source_path IS NOT NULL AND source_record_id IS NOT NULL
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_014_domain_reconciliation_workflow(conn: sqlite3.Connection) -> None:
+    """Persist final reconciliation evidence and explicit typed resolutions.
+
+    A migration issue may only be remediated through one audited resolution
+    with a deliberately small set of domain-specific types.  In particular,
+    there is no catch-all or "ignore" resolution because blocking data-loss or
+    ownership questions require an affirmative operator decision.
+    """
+
+    for name, definition in (
+        ("final_manifest_json", "TEXT"),
+        ("final_manifest_sha256", "TEXT"),
+        ("restore_evidence_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ("restore_evidence_sha256", "TEXT"),
+        ("restore_evidence_verified_at", "TEXT"),
+        ("finalized_at", "TEXT"),
+        ("reconciled_at", "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE domain_migration_runs ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError:
+            pass
+
+    try:
+        conn.execute(
+            """
+            ALTER TABLE domain_migration_issues
+            ADD COLUMN resolution_type TEXT CHECK (
+                resolution_type IS NULL OR resolution_type IN (
+                    'owner_mapping',
+                    'environment_mapping',
+                    'primary_workspace',
+                    'session_mapping'
+                )
+            )
+            """
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    conn.executescript(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_domain_migration_issues_run_issue
+        ON domain_migration_issues(run_id, issue_id);
+
+        CREATE TABLE IF NOT EXISTS domain_migration_resolutions (
+            resolution_id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL
+                REFERENCES domain_migration_runs(run_id) ON DELETE RESTRICT,
+            issue_id TEXT NOT NULL,
+            resolution_type TEXT NOT NULL CHECK (
+                resolution_type IN (
+                    'owner_mapping',
+                    'environment_mapping',
+                    'primary_workspace',
+                    'session_mapping'
+                )
+            ),
+            actor_user_id TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            applied_at TEXT,
+            FOREIGN KEY(run_id, issue_id)
+                REFERENCES domain_migration_issues(run_id, issue_id)
+                ON DELETE RESTRICT
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_migration_resolutions_run
+        ON domain_migration_resolutions(run_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_domain_migration_resolutions_type
+        ON domain_migration_resolutions(resolution_type);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_domain_migration_resolutions_one_applied_issue
+        ON domain_migration_resolutions(issue_id) WHERE applied_at IS NOT NULL;
+
+        CREATE TRIGGER IF NOT EXISTS domain_migration_resolution_append_only_update
+        BEFORE UPDATE ON domain_migration_resolutions
+        BEGIN SELECT RAISE(ABORT, 'domain migration resolutions are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_migration_resolution_append_only_delete
+        BEFORE DELETE ON domain_migration_resolutions
+        BEGIN SELECT RAISE(ABORT, 'domain migration resolutions are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_migration_issue_resolved_requires_resolution_insert
+        BEFORE INSERT ON domain_migration_issues
+        WHEN NEW.resolution_status = 'resolved'
+        BEGIN SELECT RAISE(ABORT, 'resolved migration issue requires an applied typed resolution'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_migration_issue_resolved_requires_resolution_update
+        BEFORE UPDATE OF resolution_status, resolution_type ON domain_migration_issues
+        WHEN NEW.resolution_status = 'resolved'
+          AND NOT EXISTS (
+              SELECT 1 FROM domain_migration_resolutions AS resolution
+              WHERE resolution.run_id = NEW.run_id
+                AND resolution.issue_id = NEW.issue_id
+                AND resolution.resolution_type = NEW.resolution_type
+                AND resolution.applied_at IS NOT NULL
+          )
+        BEGIN SELECT RAISE(ABORT, 'resolved migration issue requires an applied typed resolution'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_migration_run_finalization_requires_evidence
+        BEFORE UPDATE OF finalized_at ON domain_migration_runs
+        WHEN NEW.finalized_at IS NOT NULL
+          AND (
+              NEW.final_manifest_json IS NULL
+              OR NEW.final_manifest_sha256 IS NULL
+              OR NEW.restore_evidence_sha256 IS NULL
+              OR NEW.restore_evidence_verified_at IS NULL
+          )
+        BEGIN SELECT RAISE(ABORT, 'finalized migration run requires manifest and restore evidence'); END;
+
+        CREATE TRIGGER IF NOT EXISTS domain_migration_run_finalization_immutable
+        BEFORE UPDATE OF source_manifest_json, source_manifest_sha256,
+                         final_manifest_json, final_manifest_sha256,
+                         restore_evidence_json, restore_evidence_sha256,
+                         restore_evidence_verified_at,
+                         finalized_at ON domain_migration_runs
+        WHEN OLD.finalized_at IS NOT NULL
+          AND (
+              NEW.source_manifest_json IS NOT OLD.source_manifest_json
+              OR NEW.source_manifest_sha256 IS NOT OLD.source_manifest_sha256
+              OR NEW.final_manifest_json IS NOT OLD.final_manifest_json
+              OR NEW.final_manifest_sha256 IS NOT OLD.final_manifest_sha256
+              OR NEW.restore_evidence_json IS NOT OLD.restore_evidence_json
+              OR NEW.restore_evidence_sha256 IS NOT OLD.restore_evidence_sha256
+              OR NEW.restore_evidence_verified_at IS NOT OLD.restore_evidence_verified_at
+              OR NEW.finalized_at IS NOT OLD.finalized_at
+          )
+        BEGIN SELECT RAISE(ABORT, 'finalized migration evidence is immutable'); END;
+        """
+    )
