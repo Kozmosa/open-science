@@ -44,6 +44,7 @@ from ainrf.environments import InMemoryEnvironmentService
 from ainrf.files import FileBrowserService
 from ainrf.literature.service import LiteratureService
 from ainrf.literature.tracking import LiteratureTrackingService
+from ainrf.literature.task_saga import LiteratureTaskSagaService
 from ainrf.monitor.service import ResourceMonitorService
 from ainrf.projects import ProjectRegistryService
 from ainrf.runtime.readiness import check_runtime_readiness
@@ -282,6 +283,7 @@ def create_app(
     app.state.literature_tracking_service = LiteratureTrackingService(
         state_root=api_config.state_root
     )
+    app.state.literature_task_saga_service = LiteratureTaskSagaService(api_config.state_root)
 
     # Initialize OpenTelemetry auto-instrumentation (disabled by default).
     from ainrf.telemetry import init_telemetry

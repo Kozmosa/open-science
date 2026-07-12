@@ -313,11 +313,40 @@ async def convert_to_task(paper_id: str, request: Request):
     body = await request.json()
     task_id = body.get("task_id")
     subscription_id = body.get("subscription_id")
-    if not task_id:
-        raise HTTPException(status_code=400, detail="task_id is required")
     svc = _get_service(request)
     if not svc.user_owns_paper(user_id, paper_id):
         raise HTTPException(status_code=404, detail="Paper not found")
+    if not task_id:
+        project_id = body.get("project_id")
+        workspace_id = body.get("workspace_id")
+        if (
+            not isinstance(subscription_id, str)
+            or not isinstance(project_id, str)
+            or not isinstance(workspace_id, str)
+        ):
+            raise HTTPException(
+                status_code=400, detail="subscription_id, project_id, and workspace_id are required"
+            )
+        saga = getattr(request.app.state, "literature_task_saga_service", None)
+        if saga is None:
+            raise HTTPException(
+                status_code=500, detail="Literature Task saga service not initialized"
+            )
+        try:
+            return saga.convert(
+                {
+                    "id": user_id,
+                    "role": getattr(request.state, "current_user", {}).get("role", "member"),
+                },
+                paper_id=paper_id,
+                subscription_id=subscription_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="Paper not found") from exc
+        except (PermissionError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     paper = svc.convert_to_task(paper_id, task_id, subscription_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="Paper not found for this subscription")

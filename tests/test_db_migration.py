@@ -77,7 +77,7 @@ class TestBaselineCreatesTables:
             ("auth", 5),
             ("sessions", 3),
             ("agentic_researcher", 9),
-            ("literature", 4),
+            ("literature", 5),
             ("terminal", 1),
         ],
     )
@@ -208,7 +208,7 @@ class TestUpgradeFromV0:
             conn.commit()
 
         with _connect(db_file) as conn:
-            assert run_pending(conn, "literature") == 1
+            assert run_pending(conn, "literature") == 2
             topic = conn.execute(
                 "SELECT status, is_active FROM literature_topics WHERE topic_id = 'sub-ai'"
             ).fetchone()
