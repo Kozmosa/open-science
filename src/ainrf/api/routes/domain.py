@@ -23,7 +23,25 @@ async def capabilities(request: Request) -> dict[str, object]:
         "project_context": ready,
         "workspace_links": ready,
         "task_attempts": ready,
+        "literature_research_task": ready,
+        "overview_snapshot": ready,
     }
+
+
+@router.get("/overview/today")
+async def today_overview(request: Request) -> dict[str, object]:
+    _service(request)
+    user = get_current_user(request)
+    snapshot_service = getattr(request.app.state, "overview_snapshot_service", None)
+    if snapshot_service is None:
+        raise HTTPException(status_code=500, detail="Overview snapshot service not initialized")
+    user_id = user.get("id")
+    if not isinstance(user_id, str):
+        raise HTTPException(status_code=401, detail="Authenticated user ID is required")
+    payload = snapshot_service.latest(user_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="No overview snapshot is available")
+    return payload
 
 
 def _service(request: Request) -> DomainService:

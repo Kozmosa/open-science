@@ -24,6 +24,7 @@ from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
 from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 from ainrf.domain_migration import DomainImporter, capture_source_manifest
+from ainrf.domain import OverviewSnapshotService
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -45,6 +46,9 @@ app.add_typer(domain_maintenance_app, name="domain-maintenance")
 
 domain_migration_app = typer.Typer(help="Inspect legacy sources before domain-model migration.")
 app.add_typer(domain_migration_app, name="domain-migration")
+
+overview_snapshot_app = typer.Typer(help="Refresh persisted control-plane overview snapshots.")
+app.add_typer(overview_snapshot_app, name="overview-snapshot")
 
 _TOKEN_FILE = Path.home() / ".ainrf" / "token"
 
@@ -450,6 +454,16 @@ def domain_migration_reconcile(
 ) -> None:
     """Report migration counts and blocking issues without cutover."""
     typer.echo(json_mod.dumps(DomainImporter(state_root).reconcile(run_id).as_dict(), indent=2))
+
+
+@overview_snapshot_app.command("refresh")
+def overview_snapshot_refresh(
+    user_id: Annotated[str, typer.Option(help="Owner user ID for the persisted overview.")],
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the control plane.")
+    ] = default_state_root(),
+) -> None:
+    typer.echo(json_mod.dumps(OverviewSnapshotService(state_root).refresh(user_id), indent=2))
 
 
 def main() -> None:

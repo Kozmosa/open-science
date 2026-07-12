@@ -57,7 +57,12 @@ from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
 from ainrf.workspaces import WorkspaceRegistryService
 from ainrf.domain_control import DomainMaintenanceService
-from ainrf.domain import DomainService, SessionProjectionService, TaskApplicationService
+from ainrf.domain import (
+    DomainService,
+    OverviewSnapshotService,
+    SessionProjectionService,
+    TaskApplicationService,
+)
 
 
 T = TypeVar("T")
@@ -216,6 +221,7 @@ def create_app(
     app.state.domain_service = DomainService(api_config.state_root)
     app.state.task_application_service = TaskApplicationService(api_config.state_root)
     app.state.session_projection_service = SessionProjectionService(api_config.state_root)
+    app.state.overview_snapshot_service = OverviewSnapshotService(api_config.state_root)
     # Service initialization order:
     # 1. project/workspace (no deps)
     # 2. terminal (no deps)

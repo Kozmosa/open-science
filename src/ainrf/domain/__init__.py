@@ -5,6 +5,7 @@ from ainrf.domain.context import ProjectContextService
 from ainrf.domain.attempts import AttemptService, DispatchClaim
 from ainrf.domain.tasks import TaskApplicationService
 from ainrf.domain.session_projection import SessionProjectionService
+from ainrf.domain.overview import OverviewSnapshotService
 
 __all__ = [
     "DomainAuthorizationService",
@@ -15,4 +16,5 @@ __all__ = [
     "DispatchClaim",
     "TaskApplicationService",
     "SessionProjectionService",
+    "OverviewSnapshotService",
 ]

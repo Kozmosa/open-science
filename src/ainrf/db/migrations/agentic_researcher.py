@@ -426,3 +426,19 @@ def migration_009_dispatch_claim_metadata(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_dispatch_launch_key ON task_dispatch_outbox(runtime_launch_key) WHERE runtime_launch_key IS NOT NULL"
     )
+
+
+@registry.register(_DATABASE)
+def migration_010_overview_snapshots(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS overview_snapshots (
+            snapshot_id TEXT PRIMARY KEY,
+            owner_user_id TEXT NOT NULL,
+            snapshot_date TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(owner_user_id, snapshot_date)
+        )
+        """
+    )
