@@ -17,7 +17,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
@@ -50,6 +50,36 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
         "ainrf_deprecated_route_calls_total",
         ["route"],
         "Deprecated compatibility route or field uses",
+    ),
+    (
+        "ainrf_domain_legacy_write_attempts_total",
+        ["source"],
+        "Blocked attempts to mutate sealed legacy domain state",
+    ),
+    (
+        "ainrf_domain_idempotency_requests_total",
+        ["outcome"],
+        "Domain idempotency transport and durable replay outcomes",
+    ),
+    (
+        "ainrf_domain_permission_denied_total",
+        ["resource", "reason"],
+        "Domain authorization denials without resource identifiers",
+    ),
+    (
+        "ainrf_domain_sqlite_errors_total",
+        ["operation", "error_type", "kind"],
+        "SQLite errors observed by domain control-plane telemetry",
+    ),
+    (
+        "ainrf_domain_literature_saga_events_total",
+        ["outcome"],
+        "Durably recorded Literature-to-Task saga transitions",
+    ),
+    (
+        "ainrf_domain_overview_refresh_events_total",
+        ["outcome", "trigger"],
+        "Durably recorded Today overview refresh transitions",
     ),
     ("ainrf_ssh_connection_attempt_total", ["host"], "SSH connection attempts"),
     ("ainrf_ssh_connection_error_total", ["host", "error_type"], "SSH connection errors"),
@@ -87,6 +117,106 @@ _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
         "ainrf_literature_last_fetch_timestamp_seconds",
         ["subscription_id"],
         "Unix timestamp of last successful literature fetch",
+    ),
+    (
+        "ainrf_domain_mode_info",
+        ["mode"],
+        "One for the durable domain cutover mode currently in effect",
+    ),
+    (
+        "ainrf_domain_runtime_mode_info",
+        ["mode"],
+        "One for the API process DomainModelMode currently in effect",
+    ),
+    (
+        "ainrf_domain_contract_version",
+        [],
+        "Durable domain cutover contract version",
+    ),
+    (
+        "ainrf_domain_metrics_scrape_success",
+        [],
+        "Whether the most recent durable domain metric scrape completed",
+    ),
+    (
+        "ainrf_domain_metrics_last_success_timestamp_seconds",
+        [],
+        "Unix timestamp of the most recent successful durable domain metric scrape",
+    ),
+    (
+        "ainrf_domain_metrics_risk_state_known",
+        [],
+        "Whether current domain risk gauges came from a durable successful or cached scrape",
+    ),
+    (
+        "ainrf_domain_telemetry_delivery_failure_latched",
+        [],
+        "Whether a durable domain telemetry event could not be persisted",
+    ),
+    (
+        "ainrf_domain_migration_issues",
+        ["severity", "resolution_status"],
+        "Current durable domain migration issue count",
+    ),
+    (
+        "ainrf_domain_migration_runs",
+        ["status"],
+        "Current durable domain migration run count by bounded status",
+    ),
+    (
+        "ainrf_domain_migration_record_results",
+        ["status"],
+        "Current durable source record migration result count by bounded status",
+    ),
+    (
+        "ainrf_domain_dispatch_outbox_oldest_age_seconds",
+        [],
+        "Age of the oldest recoverable or launch-unknown durable task dispatch",
+    ),
+    (
+        "ainrf_domain_dispatch_outbox_backlog",
+        [],
+        "Count of recoverable or launch-unknown durable task dispatches",
+    ),
+    (
+        "ainrf_domain_dispatch_outbox_entries",
+        ["state"],
+        "Recoverable durable task dispatch count by bounded backlog state",
+    ),
+    (
+        "ainrf_domain_orphan_attempts",
+        ["reason"],
+        "Attempt rows whose required durable reference is missing",
+    ),
+    (
+        "ainrf_domain_idempotency_records",
+        [],
+        "Current number of durable domain idempotency records",
+    ),
+    (
+        "ainrf_domain_literature_saga_intents",
+        ["status"],
+        "Current durable Literature-to-Task saga intent count",
+    ),
+    (
+        "ainrf_domain_literature_saga_oldest_pending_age_seconds",
+        [],
+        "Age of the oldest non-terminal Literature-to-Task saga intent",
+    ),
+    (
+        "ainrf_domain_overview_refresh_jobs",
+        ["status"],
+        "Current durable Today overview refresh job count",
+    ),
+    (
+        "ainrf_domain_overview_snapshot_oldest_age_seconds",
+        [],
+        "Oldest latest Today overview snapshot among active users",
+    ),
+    (
+        "ainrf_domain_overview_missing_active_users",
+        [],
+        "Active users without any durable Today overview snapshot",
     ),
 ]
 
@@ -190,6 +320,25 @@ def inc_counter(name: str, labels: dict[str, str] | None = None, amount: float =
         c.inc(amount)
 
 
+def set_counter(name: str, value: float, labels: dict[str, str] | None = None) -> None:
+    """Set a counter from an authoritative durable total.
+
+    Prometheus counters are normally incremented in-process.  The domain
+    worker and management CLI deliberately have no HTTP endpoint, though, so
+    their release-gating transitions are accumulated in the shared runtime
+    telemetry store.  A scrape hydrates the API process's counter from that
+    monotonic total.  ``prometheus_client`` exposes the child value for this
+    exact use case; keeping the narrow escape here avoids leaking internals to
+    domain callers.
+    """
+
+    if value < 0:
+        raise ValueError("Prometheus counter values cannot be negative")
+    counter = _get_or_create_counter(name)
+    child: Any = counter.labels(**labels) if labels else counter
+    child._value.set(value)
+
+
 def observe_histogram(
     name: str,
     value: float,
@@ -281,6 +430,15 @@ def create_metrics_router(config: ApiConfig) -> APIRouter:
         app_config: ApiConfig = request.app.state.api_config
         if not getattr(app_config, "metrics_enabled", False):
             return PlainTextResponse("metrics disabled\n", status_code=status.HTTP_404_NOT_FOUND)
+        # The dispatcher and planners run in separate no-port processes.  A
+        # scrape therefore refreshes gauges from their common durable stores
+        # instead of reporting only state observed by this API process.
+        from ainrf.domain_telemetry import refresh_domain_metrics
+
+        refresh_domain_metrics(
+            app_config.state_root,
+            runtime_mode=app_config.domain_model_mode.value,
+        )
         return PlainTextResponse(get_metrics_text())
 
     return router

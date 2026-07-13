@@ -23,6 +23,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain_telemetry import record_durable_idempotency_event
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 
@@ -1629,6 +1630,13 @@ class TaskApplicationService:
         if row is None:
             return None
         if str(row["request_hash"]) != _request_hash(request):
+            record_durable_idempotency_event(
+                "conflict",
+                actor_user_id=actor_user_id,
+                scope=scope,
+                idempotency_key=idempotency_key,
+                request=request,
+            )
             raise DomainConflictError("Idempotency-Key was already used for a different request")
         try:
             result = json.loads(str(row["response_json"]))
@@ -1636,7 +1644,16 @@ class TaskApplicationService:
             raise DomainConflictError("Stored idempotency response is invalid") from exc
         if not isinstance(result, dict):
             raise DomainConflictError("Stored idempotency response is invalid")
-        return {str(key): value for key, value in result.items()}
+        normalized_result = {str(key): value for key, value in result.items()}
+        record_durable_idempotency_event(
+            "reused",
+            actor_user_id=actor_user_id,
+            scope=scope,
+            idempotency_key=idempotency_key,
+            request=request,
+            response=normalized_result,
+        )
+        return normalized_result
 
     @staticmethod
     def _store_idempotency(

@@ -23,6 +23,11 @@ import structlog
 from starlette.requests import Request
 from starlette.responses import Response
 
+from ainrf.domain_telemetry import (
+    bind_domain_telemetry_state_root,
+    restore_domain_telemetry_state_root,
+)
+
 # W3C Trace Context: traceparent = version-trace_id-parent_id-flags
 # https://www.w3.org/TR/trace-context/#traceparent-header
 _TRACEPARENT_RE = re.compile(r"^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
@@ -55,10 +60,12 @@ def build_request_context_middleware() -> Callable[
         if trace_id:
             bound_keys["trace_id"] = trace_id
         structlog.contextvars.bind_contextvars(**bound_keys)
+        telemetry_token = bind_domain_telemetry_state_root(request.app.state.api_config.state_root)
 
         try:
             response = await call_next(request)
         finally:
+            restore_domain_telemetry_state_root(telemetry_token)
             # Unbind ALL keys we added to prevent context leakage across requests.
             for key in bound_keys:
                 structlog.contextvars.unbind_contextvars(key)

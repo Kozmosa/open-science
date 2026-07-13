@@ -86,6 +86,216 @@ groups:
             minutes on database {{ $labels.db }}.  Consider adding indexes or
             optimizing the queries.
 
+  - name: ainrf.domain-control-plane
+    rules:
+      - alert: AINRFLegacyDomainWriteAttempt
+        # This is a durable cumulative violation counter.  A no-port worker
+        # can create its first API-visible sample at a non-zero value, so a
+        # short `increase()` window would miss the event forever.
+        expr: sum(ainrf_domain_legacy_write_attempts_total) > 0
+        labels:
+          severity: critical
+          component: domain
+        annotations:
+          summary: "A sealed legacy domain source was targeted for write"
+          description: >
+            A legacy Project, Workspace, Environment, Task, or Session source
+            write was blocked after domain cutover. This is a cutover-safety
+            violation and must be investigated before any release action.
+
+      - alert: AINRFDomainOutboxAgeWarning
+        expr: ainrf_domain_dispatch_outbox_oldest_age_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+          component: domain-dispatch
+        annotations:
+          summary: "Domain dispatch outbox is older than five minutes"
+          description: >
+            The oldest recoverable pending/expired-lease dispatch or
+            launch-unknown domain dispatch has exceeded five minutes. Normal
+            running dispatched runtimes are excluded. Check dispatcher
+            readiness and recovery state before retrying work.
+
+      - alert: AINRFDomainOutboxAgeCritical
+        expr: ainrf_domain_dispatch_outbox_oldest_age_seconds > 900
+        for: 5m
+        labels:
+          severity: critical
+          component: domain-dispatch
+        annotations:
+          summary: "Domain dispatch outbox is older than fifteen minutes"
+          description: >
+            A recoverable or launch-unknown domain dispatch has exceeded the
+            fifteen-minute recovery bound. New release or cutover actions must
+            stop until the backlog is reconciled.
+
+      - alert: AINRFDomainMetricScrapeFailed
+        expr: ainrf_domain_metrics_scrape_success == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: domain-observability
+        annotations:
+          summary: "Durable domain metric scrape is failing"
+          description: >
+            Domain control-plane gauges retain their last known good values,
+            but the current SQLite scrape is unavailable. Investigate the
+            bounded SQLite error telemetry before any release or cutover gate
+            is treated as healthy.
+
+      - alert: AINRFDomainMetricRiskStateUnknown
+        expr: ainrf_domain_metrics_risk_state_known != 1
+        for: 1m
+        labels:
+          severity: critical
+          component: domain-observability
+        annotations:
+          summary: "Domain risk gauges are unavailable rather than healthy"
+          description: >
+            Neither a current durable scrape nor a persisted last-known-good
+            snapshot could be read. Domain risk gauges are exported as NaN,
+            never zero. Block release, cutover, and cleanup decisions until
+            the shared telemetry store and control-plane reads recover.
+
+      - alert: AINRFDomainTelemetryReleaseGateBlocked
+        expr: |
+          absent(ainrf_domain_metrics_scrape_success)
+          or up{job=~"ainrf(-staging)?"} != 1
+          or ainrf_domain_metrics_scrape_success != 1
+          or ainrf_domain_metrics_risk_state_known != 1
+          or ainrf_domain_telemetry_delivery_failure_latched != 0
+        for: 1m
+        labels:
+          severity: critical
+          component: domain-observability
+          release_gate: "B,E"
+        annotations:
+          summary: "Domain telemetry cannot satisfy a release gate"
+          description: >
+            Release B cutover and Release E compatibility cleanup require a
+            current successful durable scrape and a known risk state. A
+            cached snapshot remains observable during a transient source
+            failure, but it is not release evidence.
+
+      - alert: AINRFDomainTelemetryEventDeliveryFailure
+        expr: ainrf_domain_telemetry_delivery_failure_latched != 0
+        for: 1m
+        labels:
+          severity: critical
+          component: domain-observability
+          release_gate: "B,E"
+        annotations:
+          summary: "A durable domain telemetry event could not be recorded"
+          description: >
+            An immutable delivery-failure latch was written outside the
+            telemetry sidecar. Do not clear it automatically: investigate and
+            establish new release observation evidence before any cutover or
+            compatibility cleanup decision.
+
+      - alert: AINRFLiteratureResearchTaskPending
+        expr: ainrf_domain_literature_saga_oldest_pending_age_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+          component: literature-saga
+        annotations:
+          summary: "Literature research Task saga has been pending for fifteen minutes"
+          description: >
+            A durable Literature-to-Task intent remains non-terminal for more
+            than fifteen minutes. Inspect the saga work item and Task
+            idempotency recovery evidence.
+
+      - alert: AINRFOverviewSnapshotStale
+        expr: ainrf_domain_overview_snapshot_oldest_age_seconds > 108000
+        for: 30m
+        labels:
+          severity: warning
+          component: overview
+        annotations:
+          summary: "Today overview snapshot is older than thirty hours"
+          description: >
+            At least one active user's latest durable Today overview snapshot
+            is older than thirty hours. Check the Overview planner and its
+            local source snapshots; it must not trigger external collection.
+
+      - alert: AINRFOverviewMissingActiveUser
+        expr: ainrf_domain_overview_missing_active_users > 0
+        for: 30m
+        labels:
+          severity: warning
+          component: overview
+        annotations:
+          summary: "An active user has no durable Today overview snapshot"
+          description: >
+            One or more active users lack a persisted Overview snapshot after
+            the planner's expected catch-up window.
+
+      - alert: AINRFDomainMigrationBlockingIssue
+        expr: ainrf_domain_migration_issues{severity="blocking",resolution_status="open"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: domain-migration
+        annotations:
+          summary: "Open blocking domain migration issue"
+          description: >
+            A cutover-blocking migration issue remains unresolved. Prepare and
+            commit must remain unavailable until explicit remediation is
+            recorded.
+
+      - alert: AINRFDomainOrphanAttempt
+        expr: sum(ainrf_domain_orphan_attempts) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: domain-attempt
+        annotations:
+          summary: "Domain Attempt has a missing durable reference"
+          description: >
+            An Attempt points to a missing Task or ContextSnapshot. Treat this
+            as control-plane integrity damage and stop cutover progression.
+
+      - alert: AINRFDomainIdempotencyConflict
+        expr: increase(ainrf_domain_idempotency_requests_total{outcome="conflict"}[5m]) > 0
+        labels:
+          severity: warning
+          component: domain-api
+        annotations:
+          summary: "Conflicting domain Idempotency-Key reuse"
+          description: >
+            A client supplied mismatched header/body idempotency keys. Review
+            the caller without logging the key value itself.
+
+      - alert: AINRFDomainSQLiteError
+        expr: increase(ainrf_domain_sqlite_errors_total[5m]) > 0
+        labels:
+          severity: warning
+          component: domain-database
+        annotations:
+          summary: "Domain control-plane SQLite error observed"
+          description: >
+            A domain SQLite connection or telemetry read failed. Inspect the
+            structured error type and safe operation label before attempting
+            recovery.
+
+      - alert: AINRFDeprecatedDomainRouteUse
+        # Until the Release-E controller binds a formal observation watermark,
+        # this cumulative durable total fails closed. A first non-zero sample
+        # must not disappear merely because it arrived before Prometheus had a
+        # previous sample for `increase()`.
+        expr: sum(ainrf_deprecated_route_calls_total) > 0
+        labels:
+          severity: warning
+          component: compatibility
+          release_gate: "E"
+        annotations:
+          summary: "Deprecated domain compatibility route was used"
+          description: >
+            Deprecated domain traffic is non-zero. Release E cleanup remains
+            blocked until a future release controller binds a fresh formal
+            observation watermark and proves its complete period is zero.
+
   - name: ainrf.sla
     rules:
       - alert: AINRFTaskCompletionSLABreach

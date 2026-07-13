@@ -67,12 +67,7 @@ def _mark_v2_compatibility_route(
 ) -> None:
     """Record a deprecated-route use when the app wires the B7 telemetry hook."""
 
-    hook = getattr(request.app.state, "mark_deprecated_route", None)
-    if callable(hook):
-        try:
-            hook(route_name)
-        except Exception:  # pragma: no cover - telemetry must not break the API
-            logger.exception("deprecated_route_marker_failed", extra={"route": route_name})
+    _ = request
     mark_deprecated(response, route=route_name, replacement=replacement)
 
 

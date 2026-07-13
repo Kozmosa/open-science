@@ -25,6 +25,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain_telemetry import record_durable_idempotency_event, record_literature_saga_event
 from ainrf.domain_control import DomainCutoverController, DomainCutoverError, MaintenanceModeError
 
 
@@ -195,10 +196,27 @@ class LiteratureTaskSagaService:
         paper = self._paper_for_user(actor["id"], paper_id, subscription_id)
         existing = self._existing_intent(actor["id"], paper_id, normalized_key)
         if existing is not None:
+            existing_response = self._intent_dict(existing)
             if str(existing["request_hash"]) != request_hash:
+                record_durable_idempotency_event(
+                    "conflict",
+                    actor_user_id=actor["id"],
+                    scope="literature.research_task",
+                    idempotency_key=normalized_key,
+                    request=request_input,
+                    response=existing_response,
+                )
                 raise ResearchTaskIdempotencyConflictError(
                     "Idempotency-Key was already used for a different research Task request"
                 )
+            record_durable_idempotency_event(
+                "reused",
+                actor_user_id=actor["id"],
+                scope="literature.research_task",
+                idempotency_key=normalized_key,
+                request=request_input,
+                response=existing_response,
+            )
             return self.recover_intent(
                 str(existing["intent_id"]),
                 worker_id="literature-api",
@@ -245,9 +263,25 @@ class LiteratureTaskSagaService:
                 ).fetchone()
                 if existing is not None:
                     if str(existing["request_hash"]) != request_hash:
+                        record_durable_idempotency_event(
+                            "conflict",
+                            actor_user_id=actor["id"],
+                            scope="literature.research_task",
+                            idempotency_key=normalized_key,
+                            request=request_input,
+                            response=self._intent_dict(existing),
+                        )
                         raise ResearchTaskIdempotencyConflictError(
                             "Idempotency-Key was already used for a different research Task request"
                         )
+                    record_durable_idempotency_event(
+                        "reused",
+                        actor_user_id=actor["id"],
+                        scope="literature.research_task",
+                        idempotency_key=normalized_key,
+                        request=request_input,
+                        response=self._intent_dict(existing),
+                    )
                     intent_id = str(existing["intent_id"])
                 else:
                     intent_id = _identifier("literature-intent")
@@ -315,6 +349,14 @@ class LiteratureTaskSagaService:
         # The API path takes one synchronous recovery pass for a fast success
         # response.  If this process dies here, the work item and intent are
         # already durable and the domain worker can continue it.
+        record_literature_saga_event(
+            "intent_created",
+            user_id=actor["id"],
+            project_id=normalized_project_id,
+            workspace_id=selected_workspace,
+            intent_id=intent_id,
+            idempotency_key=normalized_key,
+        )
         return self.recover_intent(
             intent_id,
             worker_id="literature-api",
@@ -889,6 +931,11 @@ class LiteratureTaskSagaService:
             except Exception:
                 conn.rollback()
                 raise
+        record_literature_saga_event(
+            "task_created",
+            intent_id=intent_id,
+            task_id=task_id,
+        )
 
     def _persist_completed_link(self, intent_id: str, worker_id: str, task_id: str) -> None:
         """Write the Literature link after a Task exists.
@@ -986,6 +1033,15 @@ class LiteratureTaskSagaService:
             except Exception:
                 conn.rollback()
                 raise
+        record_literature_saga_event(
+            "completed",
+            user_id=str(row["user_id"]),
+            project_id=str(row["project_id"]),
+            workspace_id=str(row["workspace_id"]),
+            task_id=task_id,
+            intent_id=intent_id,
+            idempotency_key=str(row["idempotency_key"]),
+        )
 
     def _record_retryable_failure(self, intent_id: str, worker_id: str, error: str) -> None:
         now = datetime.now(UTC)
@@ -1046,6 +1102,7 @@ class LiteratureTaskSagaService:
             except Exception:
                 conn.rollback()
                 raise
+        record_literature_saga_event("retryable_failure", intent_id=intent_id)
 
     def _intent_by_id(self, intent_id: str) -> dict[str, object]:
         with closing(self._connect()) as conn:

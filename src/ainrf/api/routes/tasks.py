@@ -18,6 +18,7 @@ from ainrf.agentic_researcher import (
 )
 from ainrf.agentic_researcher.models import Task, TaskOutputEvent
 from ainrf.agentic_researcher.service import TaskNotFoundError, TaskOperationError
+from ainrf.api.idempotency import require_idempotency_key
 from ainrf.projects import ProjectNotFoundError, ProjectRegistryService
 from ainrf.api.deprecation import deprecation_headers, mark_deprecated
 from ainrf.api.schemas import (
@@ -104,16 +105,7 @@ def _get_task_projection_service(request: Request) -> TaskProjectionService | No
 def _idempotency_key(request: Request, body_key: str | None = None) -> str:
     """Prefer the formal header while accepting the legacy body field safely."""
 
-    header_key = request.headers.get("Idempotency-Key")
-    if header_key and body_key and header_key != body_key:
-        raise HTTPException(
-            status_code=409,
-            detail="Idempotency-Key header and body field must match",
-        )
-    key = header_key or body_key
-    if not key:
-        raise HTTPException(status_code=409, detail="Idempotency-Key is required")
-    return key
+    return require_idempotency_key(request, body_key)
 
 
 def _translate_v2_error(exc: Exception) -> HTTPException:

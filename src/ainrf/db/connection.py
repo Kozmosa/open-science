@@ -18,7 +18,7 @@ from __future__ import annotations
 import sqlite3
 from os import PathLike
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 # Milliseconds SQLite will wait when a write conflict is detected before
 # raising ``OperationalError: database is locked``.  5000 ms is a pragmatic
@@ -32,6 +32,66 @@ BUSY_TIMEOUT_MS = 5000
 # which is a reasonable floor for multi-tenant workloads without blowing
 # memory.  Individual services can override via the *pragmas* parameter.
 DEFAULT_CACHE_SIZE_KB = -2000
+
+
+def _telemetry_state_root_for_path(db_path: str | PathLike[str] | None) -> Path | None:
+    if db_path is None:
+        return None
+    try:
+        from ainrf.domain_telemetry import domain_telemetry_state_root_for_database
+
+        return domain_telemetry_state_root_for_database(Path(db_path))
+    except Exception:
+        return None
+
+
+def _record_sqlite_execution_error(
+    operation: str,
+    error: sqlite3.Error,
+    *,
+    state_root: Path | None = None,
+) -> None:
+    """Best-effort execution telemetry without coupling the DB factory to API startup."""
+
+    try:
+        from ainrf.domain_telemetry import record_sqlite_error
+
+        record_sqlite_error(operation=operation, error=error, state_root=state_root)
+    except Exception:
+        # Recording must never hide the original sqlite exception or add a
+        # dependency cycle during the earliest bootstrap path.
+        pass
+
+
+class _TelemetryConnection(sqlite3.Connection):
+    """Connection subclass that observes execution failures from shared callers."""
+
+    _domain_telemetry_state_root: Path | None = None
+
+    def execute(self, sql: str, parameters: object = (), /) -> sqlite3.Cursor:
+        try:
+            # sqlite3 accepts several C-extension buffer protocols that its
+            # public stubs cannot express without a private alias.  Keep that
+            # escape hatch local while preserving a typed public wrapper.
+            return super().execute(sql, cast(Any, parameters))
+        except sqlite3.Error as exc:
+            _record_sqlite_execution_error(
+                "connection_execute",
+                exc,
+                state_root=self._domain_telemetry_state_root,
+            )
+            raise
+
+    def executescript(self, sql_script: str, /) -> sqlite3.Cursor:
+        try:
+            return super().executescript(sql_script)
+        except sqlite3.Error as exc:
+            _record_sqlite_execution_error(
+                "connection_executescript",
+                exc,
+                state_root=self._domain_telemetry_state_root,
+            )
+            raise
 
 
 def connect(
@@ -74,17 +134,46 @@ def connect(
     -------
     An open ``sqlite3.Connection``.
     """
-    conn = sqlite3.connect(db_path, isolation_level=isolation_level)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(f"PRAGMA busy_timeout = {int(busy_timeout_ms)}")
-    conn.execute(f"PRAGMA cache_size = {int(cache_size_kb)}")
-    if foreign_keys:
-        conn.execute("PRAGMA foreign_keys = ON")
-    if row_factory is not None:
-        conn.row_factory = row_factory
-    if extra_pragmas:
-        for key, val in extra_pragmas.items():
-            conn.execute(f"PRAGMA {key} = {val}")
+    conn: sqlite3.Connection | None = None
+    telemetry_state_root = _telemetry_state_root_for_path(db_path)
+    try:
+        conn = sqlite3.connect(
+            db_path,
+            isolation_level=isolation_level,
+            factory=_TelemetryConnection,
+        )
+        if isinstance(conn, _TelemetryConnection):
+            conn._domain_telemetry_state_root = telemetry_state_root
+        if telemetry_state_root is not None:
+            try:
+                from ainrf.domain_telemetry import configure_domain_telemetry_state_root
+
+                configure_domain_telemetry_state_root(telemetry_state_root)
+            except Exception:
+                # A database connection must remain usable during telemetry
+                # bootstrap failures; the operation-level fallback still logs
+                # the original SQLite exception.
+                pass
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(f"PRAGMA busy_timeout = {int(busy_timeout_ms)}")
+        conn.execute(f"PRAGMA cache_size = {int(cache_size_kb)}")
+        if foreign_keys:
+            conn.execute("PRAGMA foreign_keys = ON")
+        if row_factory is not None:
+            conn.row_factory = row_factory
+        if extra_pragmas:
+            for key, val in extra_pragmas.items():
+                conn.execute(f"PRAGMA {key} = {val}")
+    except sqlite3.Error as exc:
+        if conn is not None:
+            conn.close()
+        _record_sqlite_execution_error(
+            "connection_open",
+            exc,
+            state_root=telemetry_state_root,
+        )
+        raise
+    assert conn is not None
     return conn
 
 
@@ -172,6 +261,21 @@ def _reject_sealed_legacy_source_write(path: Path) -> None:
         if isinstance(sealed_path, str):
             sealed_paths.add(sealed_path)
     if relative_path in sealed_paths:
+        # Keep the cutover write-block observable.  The helper deliberately
+        # receives only a state-relative path and redacts it before logging;
+        # importing it lazily avoids a low-level connection-to-API cycle.
+        try:
+            from ainrf.domain_telemetry import record_legacy_write_attempt
+
+            record_legacy_write_attempt(
+                source="legacy_json",
+                path=relative_path,
+                state_root=state_root,
+            )
+        except Exception:
+            # A sealed write must remain blocked even if optional telemetry is
+            # unavailable during an early CLI/bootstrap path.
+            pass
         raise PermissionError(
             f"legacy source is sealed by a committed domain cutover: {relative_path}"
         )

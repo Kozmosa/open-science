@@ -238,7 +238,7 @@ services:
     network_mode: host
     volumes:
       - ./config/prometheus-host.yml:/etc/prometheus/prometheus.yml:ro
-      - ./examples/prometheus-rules.example.yml:/etc/prometheus/rules/ainrf.yml:ro
+      - ./config/prometheus/rules/ainrf-alerts.yml:/etc/prometheus/rules/ainrf.yml:ro
       - prometheus-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"

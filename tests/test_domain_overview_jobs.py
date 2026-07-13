@@ -198,6 +198,62 @@ def test_overview_compatibility_refresh_uses_a_maintenance_participant(
     assert service.latest("owner") is None
 
 
+def test_fresh_overview_planner_does_not_write_state_or_jobs_during_maintenance(
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="test-operator", reason="start planner while drained")
+    planner = OverviewSnapshotPlanner(
+        state_root,
+        planner_id="overview-maintenance-start",
+        artifact_sha=committed_v2_state,
+        active_user_ids=lambda: ("owner",),
+    )
+    try:
+        result = planner.run_once(now=_instant(1))
+    finally:
+        planner.stop(now=_instant(1, 1))
+        maintenance.exit(actor_id="test-operator")
+
+    assert result.outcome == "maintenance_drained"
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        planner_state = conn.execute(
+            "SELECT 1 FROM overview_planner_state WHERE singleton = 1"
+        ).fetchone()
+        jobs = conn.execute("SELECT COUNT(*) FROM overview_refresh_jobs").fetchone()
+    assert planner_state is None
+    assert jobs is not None
+    assert int(jobs[0]) == 0
+
+
+def test_overview_planner_stop_does_not_write_lifecycle_state_during_maintenance(
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
+    planner = OverviewSnapshotPlanner(
+        state_root,
+        planner_id="overview-maintenance-stop",
+        artifact_sha=committed_v2_state,
+        active_user_ids=lambda: (),
+    )
+    planner.start(now=_instant(1))
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="test-operator", reason="stop planner while drained")
+    try:
+        planner.stop(now=_instant(1, 1))
+    finally:
+        maintenance.exit(actor_id="test-operator")
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        planner_state = conn.execute(
+            "SELECT status, heartbeat_at FROM overview_planner_state WHERE singleton = 1"
+        ).fetchone()
+    assert planner_state is not None
+    assert planner_state["status"] == "running"
+    assert planner_state["heartbeat_at"] == _instant(1).isoformat()
+
+
 def test_overview_job_schema_and_lease_recovery_are_durable(
     state_root: Path, committed_v2_state: str
 ) -> None:

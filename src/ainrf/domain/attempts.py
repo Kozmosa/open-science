@@ -236,6 +236,8 @@ class AttemptService:
             )
 
     def heartbeat_claim(self, claim: DispatchClaim, *, lease_seconds: int = 30) -> DispatchClaim:
+        """Renew a live claim before a claimed or dispatched runtime expires."""
+
         self._require_v2_mutation()
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
@@ -249,7 +251,7 @@ class AttemptService:
             updated = conn.execute(
                 """UPDATE task_dispatch_outbox
                    SET claim_expires_at = ?, claim_heartbeat_at = ?, updated_at = ?
-                   WHERE dispatch_id = ? AND status = 'claimed' AND claim_token = ?
+                   WHERE dispatch_id = ? AND status IN ('claimed', 'dispatched') AND claim_token = ?
                      AND claim_expires_at > ?
                      AND launch_state != 'unknown'""",
                 (expires_at, now, now, claim.dispatch_id, claim.claim_token, now),

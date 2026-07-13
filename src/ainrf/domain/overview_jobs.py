@@ -23,9 +23,11 @@ from zoneinfo import ZoneInfo
 
 from ainrf.db import connect, run_pending
 from ainrf.domain.write_fence import DomainWriteFence
+from ainrf.domain_telemetry import record_overview_event
 from ainrf.domain_control import (
     DomainMaintenanceService,
     DomainWriteParticipant,
+    MaintenanceLease,
     MaintenanceModeError,
 )
 
@@ -195,7 +197,14 @@ class OverviewSnapshotService:
         with closing(self._connect()) as conn:
             active = self._active_job_for_owner(conn, owner)
             if active is not None:
-                return self._job_dict(active)
+                result = self._job_dict(active)
+                record_overview_event(
+                    "reused",
+                    trigger=str(result.get("trigger", trigger)),
+                    user_id=owner,
+                    job_id=str(result.get("job_id", "")),
+                )
+                return result
             if scheduled_for_date is not None:
                 scheduled = conn.execute(
                     """
@@ -206,7 +215,14 @@ class OverviewSnapshotService:
                     (owner, scheduled_for_date),
                 ).fetchone()
                 if scheduled is not None:
-                    return self._job_dict(scheduled)
+                    result = self._job_dict(scheduled)
+                    record_overview_event(
+                        "reused",
+                        trigger=str(result.get("trigger", trigger)),
+                        user_id=owner,
+                        job_id=str(result.get("job_id", "")),
+                    )
+                    return result
             job_id = f"overview-refresh-{uuid4().hex}"
             try:
                 self._write_fence.record_first_v2_write(conn, actor_id=owner)
@@ -226,14 +242,28 @@ class OverviewSnapshotService:
                 active = self._active_job_for_owner(conn, owner)
                 if active is None:
                     raise
-                return self._job_dict(active)
+                result = self._job_dict(active)
+                record_overview_event(
+                    "reused",
+                    trigger=str(result.get("trigger", trigger)),
+                    user_id=owner,
+                    job_id=str(result.get("job_id", "")),
+                )
+                return result
             row = conn.execute(
                 "SELECT * FROM overview_refresh_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
             conn.commit()
         if row is None:
             raise RuntimeError("overview refresh job was not persisted")
-        return self._job_dict(row)
+        result = self._job_dict(row)
+        record_overview_event(
+            "queued",
+            trigger=trigger,
+            user_id=owner,
+            job_id=str(result.get("job_id", "")),
+        )
+        return result
 
     def schedule_due_refreshes(
         self,
@@ -886,6 +916,12 @@ class OverviewSnapshotService:
                     detail="overview refresh lease was lost before failure completion",
                 )
             conn.commit()
+            record_overview_event(
+                failure_outcome,
+                trigger=claim.trigger,
+                user_id=claim.owner_user_id,
+                job_id=claim.job_id,
+            )
             return OverviewRefreshRunResult(
                 job_id=claim.job_id,
                 outcome=failure_outcome,
@@ -949,6 +985,12 @@ class OverviewSnapshotService:
                 detail="overview refresh lease was lost before completion",
             )
         conn.commit()
+        record_overview_event(
+            job_status,
+            trigger=claim.trigger,
+            user_id=claim.owner_user_id,
+            job_id=claim.job_id,
+        )
         return OverviewRefreshRunResult(
             job_id=claim.job_id,
             outcome=job_status,
@@ -1326,26 +1368,23 @@ class OverviewSnapshotPlanner:
         self.start(now=current)
         participant_status = self._participant.heartbeat()
         if participant_status.status != "active":
-            self._set_planner_state(status="drained", now=current, last_error=None)
             raise MaintenanceModeError("overview planner is drained for maintenance")
         try:
             lease = self._participant.begin_mutation(source="overview-planner.manual-refresh")
         except MaintenanceModeError:
             self._participant.drain()
-            self._set_planner_state(status="drained", now=current, last_error=None)
             raise
         try:
             self._maintenance.check_lease(lease)
             job = self._service.request_refresh(owner_user_id, trigger="manual", now=current)
             self._maintenance.check_lease(lease)
-            self._set_planner_state(status="running", now=current, last_error=None)
+            self._set_planner_state(status="running", now=current, last_error=None, lease=lease)
             return job
         except MaintenanceModeError:
             self._participant.drain()
-            self._set_planner_state(status="drained", now=current, last_error=None)
             raise
         except Exception as exc:
-            self._set_planner_state(status="running", now=current, last_error=str(exc))
+            self._set_planner_state(status="running", now=current, last_error=str(exc), lease=lease)
             raise
         finally:
             self._participant.finish_mutation(lease)
@@ -1357,26 +1396,25 @@ class OverviewSnapshotPlanner:
         self.start(now=current)
         participant_status = self._participant.heartbeat()
         if participant_status.status != "active":
-            self._set_planner_state(status="drained", now=current, last_error=None)
             return OverviewRefreshRunResult(job_id=job_id, outcome="maintenance_drained")
         try:
             lease = self._participant.begin_mutation(source="overview-planner.manual-run")
         except MaintenanceModeError:
             self._participant.drain()
-            self._set_planner_state(status="drained", now=current, last_error=None)
             return OverviewRefreshRunResult(job_id=job_id, outcome="maintenance_drained")
         try:
             self._maintenance.check_lease(lease)
             result = self._service.run_job(job_id, self.planner_id, now=current)
             self._maintenance.check_lease(lease)
-            self._set_planner_state(status="running", now=current, last_error=result.detail)
+            self._set_planner_state(
+                status="running", now=current, last_error=result.detail, lease=lease
+            )
             return result
         except MaintenanceModeError:
             self._participant.drain()
-            self._set_planner_state(status="drained", now=current, last_error=None)
             return OverviewRefreshRunResult(job_id=job_id, outcome="maintenance_drained")
         except Exception as exc:
-            self._set_planner_state(status="running", now=current, last_error=str(exc))
+            self._set_planner_state(status="running", now=current, last_error=str(exc), lease=lease)
             return OverviewRefreshRunResult(job_id=job_id, outcome="failed", detail=str(exc))
         finally:
             self._participant.finish_mutation(lease)
@@ -1384,23 +1422,59 @@ class OverviewSnapshotPlanner:
     def start(self, *, now: datetime | None = None) -> None:
         if self._started:
             return
-        self._participant.start()
-        self._set_planner_state(status="running", now=_as_utc(now), last_error=None)
+        current = _as_utc(now)
+        participant_status = self._participant.start()
+        if participant_status.status != "active":
+            # Registering while maintenance is active is required so the
+            # process becomes a known drained writer.  It must not create a
+            # planner-state heartbeat or a refresh job in that epoch.
+            self._started = True
+            return
+        try:
+            lease = self._participant.begin_mutation(source="overview-planner.start")
+        except MaintenanceModeError:
+            self._participant.drain()
+            self._started = True
+            return
+        try:
+            self._set_planner_state(status="running", now=current, last_error=None, lease=lease)
+        except MaintenanceModeError:
+            self._participant.drain()
+            self._started = True
+            return
+        finally:
+            self._participant.finish_mutation(lease)
         self._started = True
 
     def stop(self, *, now: datetime | None = None) -> None:
         if not self._started:
             return
-        self._set_planner_state(status="stopped", now=_as_utc(now), last_error=None)
-        self._participant.stop()
-        self._started = False
+        current = _as_utc(now)
+        try:
+            participant_status = self._participant.heartbeat()
+            if participant_status.status == "active":
+                try:
+                    lease = self._participant.begin_mutation(source="overview-planner.stop")
+                except MaintenanceModeError:
+                    self._participant.drain()
+                else:
+                    try:
+                        self._set_planner_state(
+                            status="stopped", now=current, last_error=None, lease=lease
+                        )
+                    except MaintenanceModeError:
+                        self._participant.drain()
+                    finally:
+                        self._participant.finish_mutation(lease)
+        finally:
+            self._participant.stop()
+            self._started = False
 
     def run_once(self, *, now: datetime | None = None) -> OverviewPlannerRunResult:
         current = _as_utc(now)
         self.start(now=current)
         participant_status = self._participant.heartbeat()
         if participant_status.status == "drained":
-            self._set_planner_state(status="drained", now=current, last_error=None)
             return OverviewPlannerRunResult(
                 outcome="maintenance_drained", scheduled_job_ids=(), completed_job_ids=()
             )
@@ -1408,7 +1482,6 @@ class OverviewSnapshotPlanner:
             lease = self._participant.begin_mutation(source="overview-planner.refresh")
         except MaintenanceModeError:
             self._participant.drain()
-            self._set_planner_state(status="drained", now=current, last_error=None)
             return OverviewPlannerRunResult(
                 outcome="maintenance_drained", scheduled_job_ids=(), completed_job_ids=()
             )
@@ -1429,8 +1502,13 @@ class OverviewSnapshotPlanner:
                     break
                 if result.job_id is not None:
                     completed.append(result.job_id)
+            self._maintenance.check_lease(lease)
             self._set_planner_state(
-                status="running", now=current, last_error=None, last_schedule_at=current
+                status="running",
+                now=current,
+                last_error=None,
+                last_schedule_at=current,
+                lease=lease,
             )
             return OverviewPlannerRunResult(
                 outcome="ok",
@@ -1439,12 +1517,11 @@ class OverviewSnapshotPlanner:
             )
         except MaintenanceModeError:
             self._participant.drain()
-            self._set_planner_state(status="drained", now=current, last_error=None)
             return OverviewPlannerRunResult(
                 outcome="maintenance_drained", scheduled_job_ids=(), completed_job_ids=()
             )
         except Exception as exc:
-            self._set_planner_state(status="running", now=current, last_error=str(exc))
+            self._set_planner_state(status="running", now=current, last_error=str(exc), lease=lease)
             return OverviewPlannerRunResult(
                 outcome="failed", scheduled_job_ids=(), completed_job_ids=(), detail=str(exc)
             )
@@ -1458,7 +1535,9 @@ class OverviewSnapshotPlanner:
         now: datetime,
         last_error: str | None,
         last_schedule_at: datetime | None = None,
+        lease: MaintenanceLease,
     ) -> None:
+        self._maintenance.check_lease(lease)
         current_iso = _iso(now)
         with closing(self._service._connect()) as conn:
             # Planner heartbeats are control-plane writes too.  Keep them
@@ -1490,4 +1569,23 @@ class OverviewSnapshotPlanner:
                     current_iso,
                 ),
             )
+            self._check_state_write_lease(conn, lease)
             conn.commit()
+
+    def _check_state_write_lease(self, conn: sqlite3.Connection, lease: MaintenanceLease) -> None:
+        """Check a planner-state commit while its SQLite write lock is held."""
+
+        state = conn.execute(
+            "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+        mutation = conn.execute(
+            "SELECT 1 FROM domain_maintenance_mutations WHERE mutation_id = ?",
+            (lease.mutation_id,),
+        ).fetchone()
+        if (
+            state is None
+            or mutation is None
+            or bool(state["is_active"])
+            or int(state["maintenance_epoch"]) != lease.maintenance_epoch
+        ):
+            raise MaintenanceModeError("overview planner write crossed a maintenance epoch")

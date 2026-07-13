@@ -542,6 +542,27 @@ def test_expired_claim_token_cannot_renew_or_write_after_another_dispatcher_reco
         )
 
 
+def test_dispatched_runtime_heartbeat_renews_the_live_dispatch_lease(
+    state_root: Path, tmp_path: Path
+) -> None:
+    """Long-running runtimes keep their recoverable dispatch lease alive."""
+
+    task, _, _ = _queued_task(state_root, tmp_path)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    claim = attempts.claim_next("dispatcher-a", lease_seconds=1)
+    assert claim is not None
+    preparation = attempts.prepare_runtime_launch(claim)
+    attempts.mark_runtime_running(claim, preparation.runtime_session_id)
+
+    renewed = attempts.heartbeat_claim(claim, lease_seconds=60)
+    state = attempts.dispatch_state(task["dispatch_id"])
+
+    assert state["status"] == "dispatched"
+    assert state["claim_token"] == claim.claim_token
+    assert state["claim_expires_at"] == renewed.claim_expires_at
+    assert state["claim_heartbeat_at"] is not None
+
+
 def test_stop_request_wins_before_the_runtime_launch_fence(
     state_root: Path, tmp_path: Path
 ) -> None:

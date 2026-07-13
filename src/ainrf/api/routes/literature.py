@@ -7,6 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from ainrf.api.deprecation import deprecation_headers
+from ainrf.api.idempotency import require_idempotency_key
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
 from ainrf.domain_control import DomainCutoverError, DomainModelMode, MaintenanceModeError
@@ -120,17 +121,8 @@ async def _json_object(request: Request, *, label: str) -> dict[str, object]:
 
 
 def _research_task_idempotency_key(request: Request, body: dict[str, object]) -> str:
-    header_key = request.headers.get("Idempotency-Key")
     body_key = _text_field(body, "idempotency_key")
-    if header_key and body_key and header_key != body_key:
-        raise HTTPException(
-            status_code=409,
-            detail="Idempotency-Key header and body field must match",
-        )
-    key = header_key or body_key
-    if key is None or not key.strip():
-        raise HTTPException(status_code=409, detail="Idempotency-Key is required")
-    return key
+    return require_idempotency_key(request, body_key)
 
 
 def _research_task_request(body: dict[str, object]) -> dict[str, str | None]:

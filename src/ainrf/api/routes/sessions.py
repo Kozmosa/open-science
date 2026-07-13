@@ -23,6 +23,7 @@ from ainrf.sessions import SessionService
 from ainrf.domain import DomainPermissionError, SessionProjectionService
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import DomainModelMode
+from ainrf.domain_telemetry import record_legacy_write_attempt
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +63,13 @@ def _translate_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=500, detail="Unexpected session error")
 
 
-def _v2_sessions_read_only() -> HTTPException:
+def _v2_sessions_read_only(request: Request) -> HTTPException:
     """Sessions are retained as an API projection, never a v2 write model."""
 
+    record_legacy_write_attempt(
+        source="legacy_session",
+        state_root=request.app.state.api_config.state_root,
+    )
     return HTTPException(
         status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
         detail="Sessions are a read-only Task Attempt projection in v2",
@@ -189,7 +194,7 @@ async def list_sessions(
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(request: Request) -> SessionResponse:
     if _projection(request) is not None:
-        raise _v2_sessions_read_only()
+        raise _v2_sessions_read_only(request)
     payload = await _legacy_request_payload(request, SessionCreateRequest)
     user = get_current_user(request)
     service = _get_service(request)
@@ -252,7 +257,7 @@ async def get_session(session_id: str, request: Request) -> SessionDetailRespons
 @router.patch("/{session_id}", response_model=SessionResponse)
 async def update_session(session_id: str, request: Request) -> SessionResponse:
     if _projection(request) is not None:
-        raise _v2_sessions_read_only()
+        raise _v2_sessions_read_only(request)
     payload = await _legacy_update_payload(request)
     user = get_current_user(request)
     service = _get_service(request)
@@ -268,7 +273,7 @@ async def update_session(session_id: str, request: Request) -> SessionResponse:
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, request: Request) -> Response:
     if _projection(request) is not None:
-        raise _v2_sessions_read_only()
+        raise _v2_sessions_read_only(request)
     user = get_current_user(request)
     service = _get_service(request)
     try:

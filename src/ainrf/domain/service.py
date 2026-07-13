@@ -17,6 +17,7 @@ from ainrf.domain.environment_identity import (
     environment_connection_fingerprint,
 )
 from ainrf.domain.repositories import SqliteDomainRepository
+from ainrf.domain_telemetry import record_durable_idempotency_event, record_permission_denied
 from ainrf.domain_control import MaintenanceModeError
 from ainrf.domain.write_fence import DomainWriteFence
 
@@ -63,18 +64,50 @@ class DomainAuthorizationService:
         member = self._repository.project_member(project_id, user_id)
         return str(member["role"]) if member is not None else None
 
+    @staticmethod
+    def _record_denial(
+        *,
+        resource: str,
+        reason: str,
+        user: dict[str, object],
+        project_id: str | None = None,
+        workspace_id: str | None = None,
+        task_id: str | None = None,
+    ) -> None:
+        user_id = user.get("id")
+        record_permission_denied(
+            resource=resource,
+            reason=reason,
+            user_id=user_id if isinstance(user_id, str) else None,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            task_id=task_id,
+        )
+
     def require_project_editor(self, project_id: str, user: dict[str, object]) -> None:
         role = self.project_role(project_id, user)
         if role is None:
+            self._record_denial(
+                resource="project", reason="not_visible", user=user, project_id=project_id
+            )
             raise DomainNotFoundError(project_id)
         if role not in {"admin", "owner", "editor"}:
+            self._record_denial(
+                resource="project", reason="editor_required", user=user, project_id=project_id
+            )
             raise DomainPermissionError("Project editor permission is required")
 
     def require_project_owner(self, project_id: str, user: dict[str, object]) -> None:
         role = self.project_role(project_id, user)
         if role is None:
+            self._record_denial(
+                resource="project", reason="not_visible", user=user, project_id=project_id
+            )
             raise DomainNotFoundError(project_id)
         if role not in {"admin", "owner"}:
+            self._record_denial(
+                resource="project", reason="owner_required", user=user, project_id=project_id
+            )
             raise DomainPermissionError("Project owner permission is required")
 
     def require_project_viewer(self, project_id: str, user: dict[str, object]) -> str:
@@ -82,6 +115,9 @@ class DomainAuthorizationService:
         if role is None:
             # Project membership is also its visibility policy.  Do not
             # disclose the resource merely because the caller guessed an ID.
+            self._record_denial(
+                resource="project", reason="not_visible", user=user, project_id=project_id
+            )
             raise DomainNotFoundError(project_id)
         return role
 
@@ -96,16 +132,25 @@ class DomainAuthorizationService:
             else None
         )
         if member is None or str(member["role"]) != "editor" or not bool(member["can_publish"]):
+            self._record_denial(
+                resource="project", reason="publish_required", user=user, project_id=project_id
+            )
             raise DomainPermissionError("Project publish permission is required")
 
     def require_workspace_viewer(self, workspace_id: str, user: dict[str, object]) -> None:
         owner_user_id = self._repository.workspace_owner(workspace_id)
         if owner_user_id is None:
+            self._record_denial(
+                resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
+            )
             raise DomainNotFoundError(workspace_id)
         if user.get("role") == "admin" or owner_user_id == user.get("id"):
             return
         # A Workspace can point into a tenant-private filesystem.  Unlike a
         # Project link, guessing its ID must not disclose it to another user.
+        self._record_denial(
+            resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
+        )
         raise DomainNotFoundError(workspace_id)
 
     def require_workspace_owner(
@@ -117,14 +162,29 @@ class DomainAuthorizationService:
     ) -> None:
         owner_user_id = self._repository.workspace_owner(workspace_id)
         if owner_user_id is None:
+            self._record_denial(
+                resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
+            )
             raise DomainNotFoundError(workspace_id)
         # Administration does not confer Linux tenant execution rights.
         if owner_user_id == user.get("id"):
             return
         if user.get("role") == "admin":
+            self._record_denial(
+                resource="workspace",
+                reason="tenant_owner_required",
+                user=user,
+                workspace_id=workspace_id,
+            )
             raise DomainPermissionError("Workspace owner permission is required")
         if resource_visible:
+            self._record_denial(
+                resource="workspace", reason="owner_required", user=user, workspace_id=workspace_id
+            )
             raise DomainPermissionError("Workspace owner permission is required")
+        self._record_denial(
+            resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
+        )
         raise DomainNotFoundError(workspace_id)
 
     def require_workspace_registry_manager(
@@ -144,11 +204,23 @@ class DomainAuthorizationService:
 
         owner_user_id = self._repository.workspace_owner(workspace_id)
         if owner_user_id is None:
+            self._record_denial(
+                resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
+            )
             raise DomainNotFoundError(workspace_id)
         if owner_user_id == user.get("id") or user.get("role") == "admin":
             return
         if resource_visible:
+            self._record_denial(
+                resource="workspace",
+                reason="registry_manager_required",
+                user=user,
+                workspace_id=workspace_id,
+            )
             raise DomainPermissionError("Workspace owner permission is required")
+        self._record_denial(
+            resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
+        )
         raise DomainNotFoundError(workspace_id)
 
     def require_task_viewer(self, task_id: str, user: dict[str, object]) -> None:
@@ -163,11 +235,13 @@ class DomainAuthorizationService:
 
         row = self._repository.task_owner_and_project(task_id)
         if row is None:
+            self._record_denial(resource="task", reason="not_visible", user=user, task_id=task_id)
             raise DomainNotFoundError(task_id)
         if user.get("role") == "admin" or row["owner_user_id"] == user.get("id"):
             return
         project_id = row["project_id"]
         if not isinstance(project_id, str) or self.project_role(project_id, user) is None:
+            self._record_denial(resource="task", reason="not_visible", user=user, task_id=task_id)
             raise DomainNotFoundError(task_id)
 
     def require_task_owner(self, task_id: str, user: dict[str, object]) -> None:
@@ -175,12 +249,15 @@ class DomainAuthorizationService:
 
         row = self._repository.task_owner_and_project(task_id)
         if row is None:
+            self._record_denial(resource="task", reason="not_visible", user=user, task_id=task_id)
             raise DomainNotFoundError(task_id)
         if user.get("role") == "admin" or row["owner_user_id"] == user.get("id"):
             return
         project_id = row["project_id"]
         if not isinstance(project_id, str) or self.project_role(project_id, user) is None:
+            self._record_denial(resource="task", reason="not_visible", user=user, task_id=task_id)
             raise DomainNotFoundError(task_id)
+        self._record_denial(resource="task", reason="owner_required", user=user, task_id=task_id)
         raise DomainPermissionError("Task owner permission is required")
 
 
@@ -1943,11 +2020,27 @@ class DomainService:
         if row is None:
             return None
         if str(row["request_hash"]) != cls._request_hash(request):
+            record_durable_idempotency_event(
+                "conflict",
+                actor_user_id=actor_user_id,
+                scope=scope,
+                idempotency_key=key,
+                request=request,
+            )
             raise DomainConflictError("Idempotency-Key was already used for a different request")
         value = json.loads(row["response_json"])
         if not isinstance(value, dict):
             raise DomainConflictError("Stored idempotency response is invalid")
-        return {str(item_key): item for item_key, item in value.items()}
+        result = {str(item_key): item for item_key, item in value.items()}
+        record_durable_idempotency_event(
+            "reused",
+            actor_user_id=actor_user_id,
+            scope=scope,
+            idempotency_key=key,
+            request=request,
+            response=result,
+        )
+        return result
 
     @classmethod
     def _store_idempotency(

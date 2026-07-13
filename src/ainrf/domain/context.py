@@ -20,6 +20,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain_telemetry import record_durable_idempotency_event
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 
@@ -2010,10 +2011,25 @@ class ProjectContextService:
         if row is None:
             return None
         if row["request_hash"] != self._request_hash(request):
+            record_durable_idempotency_event(
+                "conflict",
+                actor_user_id=actor_user_id,
+                scope=scope,
+                idempotency_key=idempotency_key,
+                request=request,
+            )
             raise DomainConflictError("Idempotency-Key was already used for a different request")
         response = _load_json_object(row["response_json"])
         if not response:
             raise DomainConflictError("Stored idempotency response is invalid")
+        record_durable_idempotency_event(
+            "reused",
+            actor_user_id=actor_user_id,
+            scope=scope,
+            idempotency_key=idempotency_key,
+            request=request,
+            response=response,
+        )
         return response
 
     def _store_idempotency(

@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-
 from starlette.responses import Response
 
-from ainrf.api.routes.metrics import inc_counter
-
-_LOG = logging.getLogger(__name__)
+from ainrf.domain_telemetry import record_deprecated_route
 
 # The actual removal remains Release-E gated.  A fixed, intentionally distant
 # RFC 7231 date makes the compatibility contract machine-readable without
@@ -19,8 +15,7 @@ DEFAULT_SUNSET = "Thu, 31 Dec 2026 23:59:59 GMT"
 def deprecation_headers(*, route: str, replacement: str) -> dict[str, str]:
     """Record one compatibility use and return its stable HTTP headers."""
 
-    inc_counter("ainrf_deprecated_route_calls_total", {"route": route})
-    _LOG.info("deprecated_route_used route=%s replacement=%s", route, replacement)
+    record_deprecated_route(route=route, replacement=replacement)
     return {
         "Deprecation": "true",
         "Sunset": DEFAULT_SUNSET,
