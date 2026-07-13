@@ -94,9 +94,10 @@ def _sha256_stream(stream: IO[bytes]) -> str:
 
 
 def _dump_sqlite_safe(source: Path, dest: Path) -> None:
-    """Consistent snapshot of a live SQLite database via the C backup API."""
+    """Consistent, source-read-only snapshot via the SQLite backup API."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    src = sqlite3.connect(str(source))
+    source_uri = f"{source.resolve().as_uri()}?mode=ro"
+    src = sqlite3.connect(source_uri, uri=True)
     dst = sqlite3.connect(str(dest))
     try:
         src.backup(dst)

@@ -13,7 +13,7 @@ import pytest
 
 import ainrf.backup.service as backup_service
 from ainrf.auth.service import AuthService
-from ainrf.backup.service import BackupManifest, BackupService
+from ainrf.backup.service import BackupManifest, BackupService, _dump_sqlite_safe
 from ainrf.domain_control import DomainCutoverController
 from ainrf.domain_migration import DomainImporter, DomainReconciliationService, ReconciliationReport
 from tests.domain_cutover_fixtures import prepare_committed_v2_cutover
@@ -51,6 +51,24 @@ def _seed_state(state_root: Path) -> None:
     ss = state_root / "session-states" / "task-abc"
     ss.mkdir(parents=True)
     (ss / "checkpoint.json").write_text('{"step": 1}', encoding="utf-8")
+
+
+def test_sqlite_backup_can_snapshot_a_read_only_source(tmp_path: Path) -> None:
+    """Source snapshots must work when production data is mounted read-only."""
+
+    source = tmp_path / "source.sqlite3"
+    destination = tmp_path / "snapshot.sqlite3"
+    with sqlite3.connect(source) as conn:
+        conn.execute("CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        conn.execute("INSERT INTO records (value) VALUES ('source')")
+    source.chmod(0o444)
+    try:
+        _dump_sqlite_safe(source, destination)
+    finally:
+        source.chmod(0o644)
+
+    with sqlite3.connect(destination) as conn:
+        assert conn.execute("SELECT value FROM records").fetchall() == [("source",)]
 
 
 def _write_v2_archive(
