@@ -13,6 +13,7 @@ from typing import cast
 import pytest
 
 from ainrf.db import connect, run_pending
+from ainrf.domain_control import DomainCutoverController, DomainMaintenanceService
 from ainrf.domain_migration import DomainImporter
 from ainrf.domain_migration.reconciliation import DomainReconciliationService
 
@@ -70,7 +71,6 @@ def _seed_run(
                 _NOW if status == "completed" else None,
             ),
         )
-        conn.execute("UPDATE domain_cutover_state SET constraints_ready = 1 WHERE singleton = 1")
         conn.commit()
 
 
@@ -163,6 +163,54 @@ def _seed_auth_user(state_root: Path, user_id: str) -> None:
         conn.commit()
 
 
+def _seed_domain_project_environment(
+    state_root: Path,
+    *,
+    include_workspace: bool = False,
+) -> None:
+    db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    with closing(connect(db_path)) as conn:
+        run_pending(conn, "agentic_researcher")
+        conn.execute(
+            """
+            INSERT INTO environments (
+                environment_id, alias, owner_user_id, display_name, connection_json,
+                status, created_at, updated_at
+            ) VALUES ('environment-1', 'environment-one', 'owner-1', 'Environment one', '{}',
+                      'active', ?, ?)
+            """,
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """
+            INSERT INTO projects (
+                project_id, owner_user_id, name, status, is_default, created_at, updated_at
+            ) VALUES ('project-1', 'owner-1', 'Migrated Project', 'active', 1, ?, ?)
+            """,
+            (_NOW, _NOW),
+        )
+        if include_workspace:
+            conn.execute(
+                """
+                INSERT INTO workspaces (
+                    workspace_id, owner_user_id, environment_id, canonical_path, label,
+                    status, created_at, updated_at
+                ) VALUES ('workspace-1', 'owner-1', 'environment-1', '/tmp/project-workspace',
+                          'Project workspace', 'active', ?, ?)
+                """,
+                (_NOW, _NOW),
+            )
+            conn.execute(
+                """
+                INSERT INTO project_workspace_links (
+                    project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at
+                ) VALUES ('project-1', 'workspace-1', 'active', 1, 'owner-1', ?, ?)
+                """,
+                (_NOW, _NOW),
+            )
+        conn.commit()
+
+
 def _seed_finalizable_control_plane(state_root: Path) -> None:
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(db_path)) as conn:
@@ -174,7 +222,6 @@ def _seed_finalizable_control_plane(state_root: Path) -> None:
             """,
             (_NOW, _NOW),
         )
-        conn.execute("UPDATE domain_cutover_state SET constraints_ready = 1 WHERE singleton = 1")
         conn.commit()
 
 
@@ -243,7 +290,6 @@ def _seed_primary_control_plane_before_import(state_root: Path) -> None:
             """,
             (_NOW, _NOW),
         )
-        conn.execute("UPDATE domain_cutover_state SET constraints_ready = 1 WHERE singleton = 1")
         conn.commit()
 
 
@@ -470,6 +516,150 @@ def test_owner_resolution_rehydrates_an_archived_import_record(state_root: Path)
     assert context is not None
 
 
+def test_workspace_owner_resolution_rehydrates_only_after_explicit_environment_choice(
+    state_root: Path,
+) -> None:
+    _seed_auth_user(state_root, "owner-1")
+    _seed_domain_project_environment(state_root)
+    runtime = state_root / "runtime"
+    (runtime / "workspaces.json").write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "workspace_id": "workspace-unmapped-owner",
+                        "owner_user_id": "legacy-owner",
+                        "project_id": "project-1",
+                        "environment_id": "environment-1",
+                        "default_workdir": "/tmp/unmapped-owner-workspace",
+                        "label": "Recovered workspace",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    imported = DomainImporter(state_root).run()
+    service = DomainReconciliationService(state_root)
+    issue = next(
+        item
+        for item in service.list_issues(imported.run_id)
+        if item.category == "workspace_owner_unmapped"
+    )
+
+    with pytest.raises(ValueError, match="active environment_id"):
+        service.resolve_issue(
+            imported.run_id,
+            issue.issue_id,
+            "assign_workspace_owner",
+            {"owner_user_id": "owner-1"},
+            actor_id="operator-5",
+        )
+    resolved = service.resolve_issue(
+        imported.run_id,
+        issue.issue_id,
+        "assign_workspace_owner",
+        {"owner_user_id": "owner-1", "environment_id": "environment-1"},
+        actor_id="operator-5",
+    )
+
+    assert resolved.resolution_type == "owner_mapping"
+    db_path = runtime / "agentic_researcher.sqlite3"
+    with closing(connect(db_path)) as conn:
+        workspace = conn.execute(
+            """
+            SELECT owner_user_id, environment_id, canonical_path
+            FROM workspaces WHERE workspace_id = 'workspace-unmapped-owner'
+            """
+        ).fetchone()
+        link = conn.execute(
+            """
+            SELECT status, is_primary FROM project_workspace_links
+            WHERE project_id = 'project-1' AND workspace_id = 'workspace-unmapped-owner'
+            """
+        ).fetchone()
+    assert workspace is not None
+    assert tuple(workspace) == (
+        "owner-1",
+        "environment-1",
+        "/tmp/unmapped-owner-workspace",
+    )
+    assert link is not None and tuple(link) == ("active", 0)
+    assert (
+        "operator-5",
+        "domain_migration_issue.resolved",
+        "migration_issue",
+        issue.issue_id,
+    ) in _audit_events(state_root)
+
+
+def test_task_owner_resolution_pins_context_and_creates_a_legacy_attempt(
+    state_root: Path,
+) -> None:
+    _seed_auth_user(state_root, "owner-1")
+    _seed_domain_project_environment(state_root, include_workspace=True)
+    db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    with closing(connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES (
+                'task-unmapped-owner', 'project-1', 'workspace-1', 'environment-1',
+                'general', 'claude_code', 'queued', 'Recovered task', 'legacy prompt', ?, ?,
+                'legacy-owner'
+            )
+            """,
+            (_NOW, _NOW),
+        )
+        conn.commit()
+
+    imported = DomainImporter(state_root).run()
+    service = DomainReconciliationService(state_root)
+    issues = service.list_issues(imported.run_id)
+    issue = next(item for item in issues if item.category == "task_owner_unmapped")
+    assert "task_domain_mapping_invalid" not in {item.category for item in issues}
+
+    resolved = service.resolve_issue(
+        imported.run_id,
+        issue.issue_id,
+        "assign_task_owner",
+        {"owner_user_id": "owner-1"},
+        actor_id="operator-6",
+    )
+
+    assert resolved.resolution_type == "owner_mapping"
+    with closing(connect(db_path)) as conn:
+        task = conn.execute(
+            """
+            SELECT owner_user_id, project_context_version_id, project_context_snapshot_id,
+                   latest_attempt_id
+            FROM tasks WHERE task_id = 'task-unmapped-owner'
+            """
+        ).fetchone()
+        attempt = conn.execute(
+            """
+            SELECT attempt_id, status, context_snapshot_id
+            FROM agent_task_attempts WHERE task_id = 'task-unmapped-owner'
+            """
+        ).fetchone()
+    assert task is not None
+    assert tuple(task) == (
+        "owner-1",
+        "legacy-empty-project-1",
+        "legacy-snapshot-task-unmapped-owner",
+        "legacy-task-attempt-task-unmapped-owner",
+    )
+    assert attempt is not None
+    assert tuple(attempt) == (
+        "legacy-task-attempt-task-unmapped-owner",
+        "queued",
+        "legacy-snapshot-task-unmapped-owner",
+    )
+
+
 def test_reconcile_rejects_a_resolved_issue_when_its_primary_invariant_is_broken(
     state_root: Path,
 ) -> None:
@@ -534,15 +724,27 @@ def test_finalization_requires_completed_unblocked_run_and_valid_restore_evidenc
         service.finalize_run("run-incomplete", "operator-3", "c" * 64, evidence)
     with pytest.raises(ValueError):
         service.finalize_run("run-blocked", "operator-3", "c" * 64, evidence)
-    with pytest.raises(ValueError):
-        service.finalize_run(
-            ready_run.run_id,
-            "operator-3",
-            "c" * 64,
-            {"manifest_sha256": "b" * 64, "validated_at": _NOW, "status": "invalid"},
-        )
 
-    finalized = service.finalize_run(ready_run.run_id, "operator-3", "c" * 64, evidence)
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="operator-3", reason="finalize Task reference constraints")
+    try:
+        constraints = DomainCutoverController(state_root).finalize_constraints(
+            actor_id="operator-3",
+            run_id=ready_run.run_id,
+            stability_window_seconds=0,
+        )
+        assert constraints.cutover_allowed
+        with pytest.raises(ValueError):
+            service.finalize_run(
+                ready_run.run_id,
+                "operator-3",
+                "c" * 64,
+                {"manifest_sha256": "b" * 64, "validated_at": _NOW, "status": "invalid"},
+            )
+
+        finalized = service.finalize_run(ready_run.run_id, "operator-3", "c" * 64, evidence)
+    finally:
+        maintenance.exit(actor_id="operator-3")
 
     assert bool(_value(finalized, "cutover_allowed"))
     assert _value(finalized, "run_id") == ready_run.run_id
@@ -572,6 +774,12 @@ def test_finalization_requires_completed_unblocked_run_and_valid_restore_evidenc
     assert ("operator-3", "domain_migration_run.finalized", "migration_run", ready_run.run_id) in (
         _audit_events(state_root)
     )
+    assert (
+        "operator-3",
+        "domain_cutover.constraints_finalized",
+        "domain_constraints",
+        "tasks",
+    ) in (_audit_events(state_root))
 
 
 def test_issue_status_tampering_is_rejected_without_a_typed_resolution(

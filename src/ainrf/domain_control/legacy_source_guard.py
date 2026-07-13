@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import tempfile
 from collections.abc import Mapping
@@ -26,6 +27,10 @@ class LegacySourceGuardError(RuntimeError):
 
 class LegacySourceDriftError(LegacySourceGuardError):
     """Raised when a prepared legacy source set has changed."""
+
+
+class LegacySourceSealError(LegacySourceGuardError):
+    """Raised when the legacy source set cannot be safely sealed or restored."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +112,7 @@ class LegacySourceInventory:
                 not isinstance(relative_path, str)
                 or not _is_safe_relative_path(relative_path)
                 or not isinstance(source_kind, str)
-                or source_kind not in {"json", "sessions_sqlite"}
+                or source_kind not in {"json", "sessions_sqlite", "sessions_sqlite_sidecar"}
                 or not isinstance(size, int)
                 or size < 0
                 or not isinstance(sha256, str)
@@ -156,6 +161,98 @@ class LegacySourceInventory:
         return inventory
 
 
+@dataclass(frozen=True, slots=True)
+class LegacySourceSealFile:
+    """One permission transition recorded by a legacy-source seal journal."""
+
+    relative_path: str
+    original_mode: int
+    sealed_mode: int
+
+    @classmethod
+    def from_dict(cls, value: object) -> LegacySourceSealFile:
+        if not isinstance(value, Mapping):
+            raise ValueError("legacy source seal file must be an object")
+        payload = cast(Mapping[str, object], value)
+        relative_path = payload.get("relative_path")
+        original_mode = payload.get("original_mode")
+        sealed_mode = payload.get("sealed_mode")
+        if (
+            not isinstance(relative_path, str)
+            or not _is_safe_relative_path(relative_path)
+            or not isinstance(original_mode, int)
+            or not isinstance(sealed_mode, int)
+            or not 0 <= original_mode <= 0o7777
+            or not 0 <= sealed_mode <= 0o7777
+            or sealed_mode & 0o222
+        ):
+            raise ValueError("legacy source seal contains an invalid file entry")
+        return cls(
+            relative_path=relative_path,
+            original_mode=original_mode,
+            sealed_mode=sealed_mode,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LegacySourceSeal:
+    """Crash-recoverable record of the physical legacy-source seal.
+
+    The journal deliberately lives beside the control-plane database rather
+    than in the source inventory.  It lets an operator safely finish an abort
+    after a process dies between chmod and the SQLite cutover transition.
+    """
+
+    version: int
+    state_root: str
+    inventory_sha256: str
+    phase: str
+    files: tuple[LegacySourceSealFile, ...]
+    created_at: str
+    updated_at: str
+
+    def as_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, value: object) -> LegacySourceSeal:
+        if not isinstance(value, Mapping):
+            raise ValueError("legacy source seal must be an object")
+        payload = cast(Mapping[str, object], value)
+        raw_files = payload.get("files")
+        if not isinstance(raw_files, (list, tuple)):
+            raise ValueError("legacy source seal is missing files")
+        version = payload.get("version")
+        state_root = payload.get("state_root")
+        inventory_sha256 = payload.get("inventory_sha256")
+        phase = payload.get("phase")
+        created_at = payload.get("created_at")
+        updated_at = payload.get("updated_at")
+        if (
+            version != 1
+            or not isinstance(state_root, str)
+            or not isinstance(inventory_sha256, str)
+            or not _is_sha256(inventory_sha256)
+            or phase not in {"sealing", "sealed"}
+            or not isinstance(created_at, str)
+            or not isinstance(updated_at, str)
+        ):
+            raise ValueError("legacy source seal has an unsupported format")
+        files = tuple(LegacySourceSealFile.from_dict(item) for item in raw_files)
+        paths = [item.relative_path for item in files]
+        if len(paths) != len(set(paths)):
+            raise ValueError("legacy source seal contains duplicate paths")
+        return cls(
+            version=1,
+            state_root=state_root,
+            inventory_sha256=inventory_sha256,
+            phase=cast(str, phase),
+            files=tuple(sorted(files, key=lambda item: item.relative_path)),
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(character in "0123456789abcdef" for character in value.lower())
 
@@ -166,18 +263,25 @@ def _is_safe_relative_path(value: str) -> bool:
 
 
 class LegacySourceGuard:
-    """Capture and verify only legacy sources without changing their modes.
+    """Inventory, seal, and monitor the legacy domain source set.
 
-    The guard never writes or chmods a source.  SQLite data is copied into a
-    temporary backup solely to hash its WAL-consistent contents; that avoids
-    treating the main ``.sqlite3`` file as authoritative while a WAL exists.
+    SQLite data is copied into a temporary backup solely to hash its
+    WAL-consistent contents; that avoids treating the main ``.sqlite3`` file
+    as authoritative while a WAL exists.  At v2 commit the source files are
+    also chmodded read-only with a crash-recoverable journal.  This is a
+    deliberate operational seal, not a replacement for the fuse: a privileged
+    actor can still alter permissions, and the monitor rejects that drift
+    before any v2 write proceeds.
     """
 
     _AGENTIC_RESEARCHER_PATH = "runtime/agentic_researcher.sqlite3"
     _SESSION_DATABASE_PATH = "runtime/sessions.sqlite3"
+    _SESSION_DATABASE_SIDECAR_SUFFIXES = ("-wal", "-shm")
+    _SEAL_PATH = "runtime/domain-legacy-source-seal.json"
     _LEGACY_RUNTIME_JSON_PATHS = (
         "runtime/projects.json",
         "runtime/workspaces.json",
+        "runtime/environments.json",
         "runtime/task_edges.json",
         "runtime/sessions.json",
     )
@@ -194,6 +298,10 @@ class LegacySourceGuard:
         session_database = self._state_root / self._SESSION_DATABASE_PATH
         if session_database.exists():
             files.append(self._capture_sessions_sqlite(session_database))
+            for suffix in self._SESSION_DATABASE_SIDECAR_SUFFIXES:
+                sidecar = session_database.with_name(f"{session_database.name}{suffix}")
+                if sidecar.exists():
+                    files.append(self._capture_sessions_sqlite_sidecar(sidecar))
         return LegacySourceInventory(
             version=1,
             state_root=self._state_root.name,
@@ -211,6 +319,130 @@ class LegacySourceGuard:
         if expected.canonical_dict() != observed.canonical_dict():
             raise LegacySourceDriftError(self._drift_detail(expected, observed))
         return observed
+
+    def seal(self, expected: LegacySourceInventory) -> LegacySourceSeal:
+        """Physically mark every captured legacy source read-only.
+
+        A small journal is committed before the first chmod.  If this process
+        crashes halfway through, ``abort`` can restore only the recorded modes
+        after re-verifying the immutable source inventory.  A pre-existing
+        sealed journal is accepted only when it belongs to this exact source
+        manifest; a partially written journal is intentionally fail-closed.
+        """
+
+        self.verify(expected)
+        existing = self._load_seal()
+        if existing is not None:
+            self._assert_seal_matches_inventory(existing, expected)
+            if existing.phase != "sealed":
+                raise LegacySourceSealError(
+                    "legacy source seal is incomplete; abort must restore it before retrying cutover"
+                )
+            self.verify_sealed(expected)
+            return existing
+
+        now = datetime.now(timezone.utc).isoformat()
+        files: list[LegacySourceSealFile] = []
+        for source in expected.files:
+            path = self._path_for_relative(source.relative_path)
+            self._reject_symlink(path)
+            try:
+                mode = path.stat().st_mode & 0o7777
+            except FileNotFoundError as exc:
+                raise LegacySourceSealError(
+                    f"legacy source disappeared before it could be sealed: {source.relative_path}"
+                ) from exc
+            files.append(
+                LegacySourceSealFile(
+                    relative_path=source.relative_path,
+                    original_mode=mode,
+                    sealed_mode=mode & ~0o222,
+                )
+            )
+
+        seal = LegacySourceSeal(
+            version=1,
+            state_root=self._state_root.name,
+            inventory_sha256=expected.digest,
+            phase="sealing",
+            files=tuple(sorted(files, key=lambda item: item.relative_path)),
+            created_at=now,
+            updated_at=now,
+        )
+        self._write_seal(seal)
+        try:
+            for item in seal.files:
+                self._chmod(item.relative_path, item.sealed_mode)
+            self.verify(expected)
+            sealed = LegacySourceSeal(
+                version=seal.version,
+                state_root=seal.state_root,
+                inventory_sha256=seal.inventory_sha256,
+                phase="sealed",
+                files=seal.files,
+                created_at=seal.created_at,
+                updated_at=datetime.now(timezone.utc).isoformat(),
+            )
+            self._write_seal(sealed)
+            self.verify_sealed(expected)
+            return sealed
+        except Exception as exc:
+            try:
+                self._restore_seal(seal)
+            except LegacySourceSealError as restore_error:
+                raise LegacySourceSealError(
+                    "legacy source seal failed and its partial chmod state could not be restored"
+                ) from restore_error
+            self._delete_seal()
+            if isinstance(exc, LegacySourceGuardError):
+                raise
+            raise LegacySourceSealError("legacy source seal failed") from exc
+
+    def verify_sealed(self, expected: LegacySourceInventory) -> LegacySourceSeal:
+        """Prove a committed source inventory still has its physical seal."""
+
+        self.verify(expected)
+        seal = self._load_seal()
+        if seal is None:
+            raise LegacySourceSealError("committed cutover has no legacy source seal journal")
+        self._assert_seal_matches_inventory(seal, expected)
+        if seal.phase != "sealed":
+            raise LegacySourceSealError("legacy source seal journal is not finalized")
+        for item in seal.files:
+            path = self._path_for_relative(item.relative_path)
+            self._reject_symlink(path)
+            try:
+                actual_mode = path.stat().st_mode & 0o7777
+            except FileNotFoundError as exc:
+                raise LegacySourceSealError(
+                    f"sealed legacy source disappeared: {item.relative_path}"
+                ) from exc
+            if actual_mode != item.sealed_mode or actual_mode & 0o222:
+                raise LegacySourceSealError(
+                    f"sealed legacy source permissions changed: {item.relative_path}"
+                )
+        return seal
+
+    def unseal(self, expected: LegacySourceInventory) -> None:
+        """Restore original source modes during a prepared-cutover abort only."""
+
+        seal = self._load_seal()
+        if seal is None:
+            return
+        self._assert_seal_matches_inventory(seal, expected)
+        self.verify(expected)
+        self._restore_seal(seal)
+        self.verify(expected)
+        self._delete_seal()
+
+    def assert_no_pending_seal(self) -> None:
+        """Reject prepare when a crash left a prior seal journal behind."""
+
+        seal = self._load_seal()
+        if seal is not None:
+            raise LegacySourceSealError(
+                "legacy source seal journal exists; resolve the prepared cutover before preparing again"
+            )
 
     def _json_sources(self) -> tuple[Path, ...]:
         paths: list[Path] = []
@@ -290,11 +522,120 @@ class LegacySourceGuard:
             mtime_ns=before[1],
         )
 
+    def _capture_sessions_sqlite_sidecar(self, path: Path) -> LegacySourceFile:
+        """Capture a WAL/SHM companion with a stable raw-byte fingerprint.
+
+        A SQLite backup captures the main database's logical state, but a
+        writable ``-wal`` or ``-shm`` sidecar would leave a path for a legacy
+        writer.  Treating present sidecars as first-class source members makes
+        both their mutation and their later creation observable and sealable.
+        """
+
+        self._reject_symlink(path)
+        relative_path = self._relative_path(path)
+        before = self._stat(path, relative_path)
+        try:
+            payload = path.read_bytes()
+        except FileNotFoundError as exc:
+            raise LegacySourceDriftError(
+                f"legacy sessions sidecar disappeared: {relative_path}"
+            ) from exc
+        after = self._stat(path, relative_path)
+        if before != after or len(payload) != before[2]:
+            raise LegacySourceDriftError(
+                f"legacy sessions sidecar changed while being read: {relative_path}"
+            )
+        return LegacySourceFile(
+            relative_path=relative_path,
+            source_kind="sessions_sqlite_sidecar",
+            size=before[2],
+            sha256=hashlib.sha256(payload).hexdigest(),
+            inode=before[0],
+            mtime_ns=before[1],
+        )
+
     def _relative_path(self, path: Path) -> str:
         try:
             return path.relative_to(self._state_root).as_posix()
         except ValueError as exc:
             raise LegacySourceGuardError("legacy source escaped state root") from exc
+
+    def _path_for_relative(self, relative_path: str) -> Path:
+        if not _is_safe_relative_path(relative_path):
+            raise LegacySourceSealError("legacy source seal contains an unsafe path")
+        path = self._state_root / relative_path
+        try:
+            path.resolve().relative_to(self._state_root)
+        except ValueError as exc:
+            raise LegacySourceSealError("legacy source seal escaped state root") from exc
+        return path
+
+    @property
+    def _seal_path(self) -> Path:
+        return self._state_root / self._SEAL_PATH
+
+    def _load_seal(self) -> LegacySourceSeal | None:
+        path = self._seal_path
+        if not path.exists():
+            return None
+        self._reject_symlink(path)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return LegacySourceSeal.from_dict(payload)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise LegacySourceSealError("legacy source seal journal is invalid") from exc
+
+    def _write_seal(self, seal: LegacySourceSeal) -> None:
+        from ainrf.db.connection import atomic_write_json
+
+        self._seal_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            atomic_write_json(self._seal_path, seal.as_dict())
+            os.chmod(self._seal_path, 0o600)
+        except OSError as exc:
+            raise LegacySourceSealError("cannot persist legacy source seal journal") from exc
+
+    def _delete_seal(self) -> None:
+        try:
+            self._seal_path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise LegacySourceSealError("cannot remove legacy source seal journal") from exc
+
+    def _assert_seal_matches_inventory(
+        self, seal: LegacySourceSeal, expected: LegacySourceInventory
+    ) -> None:
+        if seal.state_root != self._state_root.name or seal.inventory_sha256 != expected.digest:
+            raise LegacySourceSealError(
+                "legacy source seal journal does not match the source inventory"
+            )
+        expected_paths = {item.relative_path for item in expected.files}
+        seal_paths = {item.relative_path for item in seal.files}
+        if seal_paths != expected_paths:
+            raise LegacySourceSealError(
+                "legacy source seal journal does not cover every source file"
+            )
+
+    def _restore_seal(self, seal: LegacySourceSeal) -> None:
+        failures: list[str] = []
+        for item in seal.files:
+            try:
+                self._chmod(item.relative_path, item.original_mode)
+            except LegacySourceSealError:
+                failures.append(item.relative_path)
+        if failures:
+            raise LegacySourceSealError(
+                "could not restore legacy source permissions: " + ", ".join(sorted(failures))
+            )
+
+    def _chmod(self, relative_path: str, mode: int) -> None:
+        path = self._path_for_relative(relative_path)
+        self._reject_symlink(path)
+        try:
+            os.chmod(path, mode)
+        except OSError as exc:
+            raise LegacySourceSealError(
+                f"cannot change permissions for legacy source: {relative_path}"
+            ) from exc
 
     @staticmethod
     def _sha256(path: Path) -> str:

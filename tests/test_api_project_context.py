@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 from urllib.parse import urlencode
@@ -13,6 +14,7 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
+from ainrf.db import connect
 from ainrf.domain_control import DomainModelMode
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 
@@ -88,6 +90,60 @@ def _prepare_attached_workspace(app: FastAPI, state_root: Path, project_id: str)
 
 
 @pytest.mark.anyio
+async def test_api_fresh_project_has_an_initial_context_and_can_create_a_task(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        project_response = await client.post(
+            _api_path("/domain/projects"),
+            headers={"Idempotency-Key": "initial-context-project"},
+            json={"name": "Initial Context Project"},
+        )
+        assert project_response.status_code == 200
+        project_id = str(_payload(project_response)["project_id"])
+
+        context_response = await client.get(_api_path(f"/domain/projects/{project_id}/context"))
+        assert context_response.status_code == 200
+        initial_context = _payload(context_response)
+        active_version = _nested(initial_context, "active_version")
+        draft = _nested(initial_context, "draft")
+        assert active_version["project_id"] == project_id
+        assert active_version["content"] == ""
+        assert active_version["is_active"] is True
+        assert draft["content"] == ""
+        # Version fingerprints include the frozen Fragment manifest, while a
+        # Draft fingerprint intentionally represents only editable Brief text.
+        assert active_version["fragment_manifest"] == []
+        assert active_version["fragment_provenance_status"] == "verified"
+        assert isinstance(draft["fingerprint"], str)
+
+        workspace_id, environment_id = _prepare_attached_workspace(app, state_root, project_id)
+        created = await client.post(
+            _api_path("/tasks"),
+            headers={"Idempotency-Key": "initial-context-task"},
+            json={
+                "project_id": project_id,
+                "workspace_id": workspace_id,
+                "environment_id": environment_id,
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "prompt": "Run against the initial Context.",
+                "skills": [],
+            },
+        )
+        assert created.status_code == 201
+        task_id = str(_payload(created)["task_id"])
+
+        task_context = await client.get(_api_path(f"/domain/tasks/{task_id}/context"))
+        assert task_context.status_code == 200
+        assert _payload(task_context)["context_version_id"] == active_version["context_version_id"]
+
+
+@pytest.mark.anyio
 async def test_api_key_context_publish_candidate_and_task_confirmation(
     state_root: Path, tmp_path: Path
 ) -> None:
@@ -97,13 +153,16 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         project_response = await client.post(
-            _api_path("/domain/projects"), json={"name": "Context API Project"}
+            _api_path("/domain/projects"),
+            headers={"Idempotency-Key": "context-api-project"},
+            json={"name": "Context API Project"},
         )
         assert project_response.status_code == 200
         project_id = str(_payload(project_response)["project_id"])
 
         draft_v1 = await client.put(
             _api_path(f"/domain/projects/{project_id}/context/draft"),
+            headers={"Idempotency-Key": "draft-v1"},
             json={"content": "Brief v1"},
         )
         assert draft_v1.status_code == 200
@@ -124,6 +183,7 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(
 
         draft_v2 = await client.put(
             _api_path(f"/domain/projects/{project_id}/context/draft"),
+            headers={"Idempotency-Key": "draft-v2"},
             json={"content": "Draft v2"},
         )
         assert draft_v2.status_code == 200
@@ -131,29 +191,6 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(
             _api_path(f"/domain/projects/{project_id}/context/publish"), headers=publish_headers
         )
         assert conflict.status_code == 409
-
-        created_candidate = await client.post(
-            _api_path(f"/domain/projects/{project_id}/context/candidates"),
-            json={"content": "Candidate finding", "source_metadata": {"kind": "manual"}},
-        )
-        assert created_candidate.status_code == 200
-        candidate = _payload(created_candidate)
-        candidate_id = str(candidate["candidate_id"])
-        assert candidate["status"] == "pending"
-
-        accepted = await client.post(
-            _api_path(f"/domain/projects/{project_id}/context/candidates/{candidate_id}/accept")
-        )
-        assert accepted.status_code == 200
-        accepted_payload = _payload(accepted)
-        assert _nested(accepted_payload, "candidate")["status"] == "accepted"
-        assert _nested(accepted_payload, "draft")["content"] == "Draft v2\n\nCandidate finding"
-
-        context_after_accept = await client.get(_api_path(f"/domain/projects/{project_id}/context"))
-        assert context_after_accept.status_code == 200
-        context_payload = _payload(context_after_accept)
-        assert _nested(context_payload, "active_version")["context_version_id"] == active_v1_id
-        assert _nested(context_payload, "draft")["content"] == "Draft v2\n\nCandidate finding"
 
         workspace_id, environment_id = _prepare_attached_workspace(app, state_root, project_id)
         task_response = await client.post(
@@ -171,6 +208,47 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(
         )
         assert task_response.status_code == 201
         task_id = str(_payload(task_response)["task_id"])
+
+        with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+            conn.execute(
+                """
+                INSERT INTO task_outputs(task_id, seq, kind, content, created_at)
+                VALUES (?, 1, 'result', ?, ?)
+                """,
+                (task_id, "candidate source", datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+
+        created_candidate = await client.post(
+            _api_path(f"/domain/projects/{project_id}/context/candidates"),
+            headers={"Idempotency-Key": "candidate-create"},
+            json={
+                "content": "Candidate finding",
+                "source_metadata": {"kind": "manual"},
+                "source_task_id": task_id,
+                "source_output_start_seq": 1,
+                "source_output_end_seq": 1,
+            },
+        )
+        assert created_candidate.status_code == 200
+        candidate = _payload(created_candidate)
+        candidate_id = str(candidate["candidate_id"])
+        assert candidate["status"] == "proposed"
+
+        accepted = await client.post(
+            _api_path(f"/domain/projects/{project_id}/context/candidates/{candidate_id}/accept"),
+            headers={"Idempotency-Key": "candidate-accept"},
+        )
+        assert accepted.status_code == 200
+        accepted_payload = _payload(accepted)
+        assert _nested(accepted_payload, "candidate")["status"] == "accepted"
+        assert _nested(accepted_payload, "draft")["content"] == "Draft v2\n\nCandidate finding"
+
+        context_after_accept = await client.get(_api_path(f"/domain/projects/{project_id}/context"))
+        assert context_after_accept.status_code == 200
+        context_payload = _payload(context_after_accept)
+        assert _nested(context_payload, "active_version")["context_version_id"] == active_v1_id
+        assert _nested(context_payload, "draft")["content"] == "Draft v2\n\nCandidate finding"
 
         published_v2 = await client.post(
             _api_path(f"/domain/projects/{project_id}/context/publish"),
@@ -245,6 +323,7 @@ async def test_api_key_context_permissions_for_viewer_editor_and_publisher(
 
         viewer_draft = await client.put(
             _api_path(f"/domain/projects/{project_id}/context/draft"),
+            headers={"Idempotency-Key": "viewer-draft"},
             json={"content": "Viewer cannot write"},
         )
         assert viewer_draft.status_code == 403
@@ -257,6 +336,7 @@ async def test_api_key_context_permissions_for_viewer_editor_and_publisher(
         domain.add_member(project_id, "api-key-user", "editor", False, _OWNER)
         editor_draft = await client.put(
             _api_path(f"/domain/projects/{project_id}/context/draft"),
+            headers={"Idempotency-Key": "editor-draft"},
             json={"content": "Editor draft"},
         )
         assert editor_draft.status_code == 200

@@ -89,21 +89,21 @@ async def _summarize(service: LiteratureTrackingService, item: WorkItem) -> None
         raise
 
 
-def _research_task_artifact_sha(state_root: Path, supplied: str | None) -> str | None:
+def _research_task_artifact_sha(state_root: Path, supplied: str | None) -> str:
     """Return a verified v2 artifact SHA before crossing the Task-write boundary.
 
-    The historical Literature worker may still drain legacy records while the
-    domain is in legacy mode.  Once cutover is prepared or committed, however,
-    it must never create a Task with an unverified or process-local artifact.
+    A ``research_task`` work item is a standard v2 Task mutation, not a
+    legacy Literature side effect.  The historical worker may still drain
+    fetch and summary work before cutover, but it must leave these intents
+    durable and retryable until a committed v2 domain worker with a verified
+    artifact takes ownership.
     """
 
     controller = DomainCutoverController(state_root)
     status = controller.status()
-    if status.state == "legacy":
-        return None
     if status.state != "v2":
         raise DomainCutoverError(
-            "Literature research Task work is unavailable while domain cutover is prepared"
+            "Literature research Task work requires a committed domain v2 cutover"
         )
     artifact_sha = (
         supplied

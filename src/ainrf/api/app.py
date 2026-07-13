@@ -76,6 +76,7 @@ from ainrf.domain import (
     TaskApplicationService,
     TaskProjectionService,
 )
+from ainrf.domain.environment_observations import PersistentEnvironmentObservationService
 
 
 T = TypeVar("T")
@@ -135,22 +136,16 @@ ROUTERS: tuple[APIRouter, ...] = (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    environment_service = app.state.environment_service
     workspace_service = app.state.workspace_service
     terminal_session_manager = app.state.terminal_session_manager
     terminal_attachment_broker = app.state.terminal_attachment_broker
     project_service = app.state.project_service
     is_v2 = app.state.api_config.domain_model_mode is DomainModelMode.V2
-    resource_monitor_service: ResourceMonitorService | None = None
-    if not is_v2:
-        resource_monitor_service = ResourceMonitorService(environment_service)
-        app.state.resource_monitor_service = resource_monitor_service
-        await resource_monitor_service.start()
-    else:
-        # Resource observation remains an independent persisted source.  Do
-        # not start the legacy in-memory monitor in a v2 process, where it
-        # could initiate detection or reach a legacy registry.
-        app.state.resource_monitor_service = None
+    resource_monitor_service: ResourceMonitorService = app.state.resource_monitor_service
+    # Resource collection is observation-only.  In v2 it receives the
+    # persistent facade, so it never reaches the retired process-local
+    # Environment registry or triggers detection writes.
+    await resource_monitor_service.start()
     api_participant = DomainWriteParticipant(
         app.state.domain_maintenance_service,
         "api",
@@ -245,10 +240,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Admin role fix is handled by auth migration_003_admin_role_fix
         except Exception:
             _LOG.exception("Failed to create initial admin user")
-        # Backfill per-user default projects for any user lacking one (idempotent).
+        # v2 registration records an auth-local provisioning intent rather
+        # than claiming an impossible cross-database transaction.  Reconcile
+        # every known user at startup: a retry after either database commits is
+        # harmless because the domain default-Project write is idempotent.
+        if is_v2:
+
+            def reconcile_v2_default_projects() -> None:
+                domain_service: DomainService = app.state.domain_service
+                for account in auth_service.list_users():
+                    auth_service.ensure_domain_default_project_provisioning(
+                        account.id, account.username
+                    )
+                for user_id, username in auth_service.pending_domain_default_project_provisioning():
+                    try:
+                        domain_service.provision_default_project(user_id=user_id, username=username)
+                    except Exception as exc:
+                        _LOG.exception(
+                            "v2_default_project_provisioning_failed",
+                            extra={"user_id": user_id},
+                        )
+                        auth_service.record_domain_default_project_provisioning_failure(
+                            user_id, exc
+                        )
+                    else:
+                        auth_service.mark_domain_default_project_provisioned(user_id)
+
+            try:
+                await _run_sync_in_lifespan(reconcile_v2_default_projects)
+            except Exception:
+                _LOG.exception("v2_default_project_provisioning_reconcile_failed")
+        # Legacy mode continues its historical JSON registry backfill.
         # Covers pre-existing users and the bootstrap admin created directly above,
         # which bypasses the HTTP registration hook that normally provisions it.
-        if project_service is not None:
+        elif project_service is not None:
             try:
                 from ainrf.projects.backfill import backfill_user_default_projects
 
@@ -351,6 +376,9 @@ def create_app(
         api_config.state_root,
         attempt_projection=attempt_projection,
     )
+    # The legacy ``/projects/{id}/tasks`` compatibility adapter must consume
+    # this v2 projection, never the absent legacy AgenticResearcher service.
+    app.state.project_task_projection_service = app.state.task_projection_service
     app.state.session_projection_service = SessionProjectionService(
         api_config.state_root,
         attempt_projection=attempt_projection,
@@ -374,6 +402,15 @@ def create_app(
     app.state.auth_service = auth_service
     app.state.project_service = project_service
     app.state.environment_service = environment_service
+    if is_v2:
+        if not isinstance(environment_service, PersistentEnvironmentFacade):
+            raise RuntimeError("v2 must use the persistent Environment facade")
+        app.state.environment_observation_service = PersistentEnvironmentObservationService(
+            api_config.state_root, environment_service
+        )
+    else:
+        app.state.environment_observation_service = None
+    app.state.resource_monitor_service = ResourceMonitorService(environment_service)
     app.state.workspace_service = workspace_service
     app.state.terminal_session_manager = SessionManager(
         state_root=api_config.state_root,

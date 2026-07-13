@@ -205,6 +205,29 @@ class HarnessEngine(ABC):
         _ = task_id
         return None
 
+    def bind_runtime_context(self, context: ExecutionContext) -> None:
+        """Bind durable local state before probing a recovered launch.
+
+        The dispatcher constructs a fresh engine instance after a process
+        crash.  It therefore supplies the Attempt-scoped checkpoint location
+        before :meth:`probe_runtime`; adapters that persist engine-local launch
+        evidence override this hook.  The base implementation keeps legacy and
+        third-party engines source-compatible.
+        """
+
+        _ = context
+
+    def arm_runtime_launch(self, context: ExecutionContext) -> None:
+        """Persist evidence that an adapter has not yet started its process.
+
+        This hook runs immediately before the dispatcher's durable launch
+        fence.  Adapters may raise when they cannot safely persist the record;
+        in that case the dispatcher must not cross the external launch
+        boundary.  Legacy engines retain a no-op implementation.
+        """
+
+        _ = context
+
     async def probe_runtime(
         self,
         *,

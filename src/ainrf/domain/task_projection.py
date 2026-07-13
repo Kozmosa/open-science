@@ -12,14 +12,14 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
 from ainrf.agentic_researcher.models import TaskOutputEvent
 from ainrf.db import connect, run_pending
 from ainrf.domain.attempt_projection import AttemptProjectionService
-from ainrf.domain.service import DomainNotFoundError
+from ainrf.domain.service import DomainAuthorizationService, DomainNotFoundError
 
 
 class TaskProjectionService:
@@ -54,12 +54,12 @@ class TaskProjectionService:
         if project_id:
             clauses.append("project_id = ?")
             params.append(project_id)
-        if user.get("role") != "admin":
-            user_id = user.get("id")
-            if not isinstance(user_id, str) or not user_id:
+        elif user.get("role") != "admin":
+            visibility_clause, visibility_params = self._global_visibility_clause(user)
+            if visibility_clause is None:
                 return []
-            clauses.append("owner_user_id = ?")
-            params.append(user_id)
+            clauses.append(visibility_clause)
+            params.extend(visibility_params)
         if not include_archived:
             clauses.append("archived_at IS NULL")
 
@@ -70,20 +70,77 @@ class TaskProjectionService:
         }.get(sort, "updated_at DESC, task_id ASC")
         query = f"SELECT * FROM tasks WHERE {' AND '.join(clauses)} ORDER BY {order_by} LIMIT ?"
         with closing(self._connect()) as conn:
+            if project_id:
+                DomainAuthorizationService(conn).require_project_viewer(project_id, dict(user))
             rows = conn.execute(query, (*params, limit)).fetchall()
             attempts_by_task = self._attempt_projection.attempts_for_tasks(
                 conn,
                 [str(row["task_id"]) for row in rows],
+                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
             )
         return [self._task_dict(row, attempts_by_task[str(row["task_id"])]) for row in rows]
+
+    def list_project_tasks(
+        self,
+        project_id: str,
+        user: Mapping[str, object],
+        *,
+        include_archived: bool,
+        limit: int,
+        sort: str,
+    ) -> dict[str, object]:
+        """List every Task visible through a Project collaboration membership.
+
+        Project membership deliberately differs from the global Task list:
+        an editor or viewer may inspect the Project's shared work even where
+        they are not the Task owner.  The caller still receives the same
+        Attempt-derived serialization used everywhere else in v2; this method
+        is only the authorization and scope-specific query boundary.
+        """
+
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        order_by = {
+            "updated": "updated_at DESC, task_id ASC",
+            "created": "created_at DESC, task_id ASC",
+            "status": "status ASC, updated_at DESC, task_id ASC",
+        }.get(sort, "updated_at DESC, task_id ASC")
+        clauses = ["project_id = ?"]
+        params: list[object] = [project_id]
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        where = " AND ".join(clauses)
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_project_viewer(project_id, dict(user))
+            total_row = conn.execute(
+                f"SELECT COUNT(*) AS count FROM tasks WHERE {where}", params
+            ).fetchone()
+            rows = conn.execute(
+                f"SELECT * FROM tasks WHERE {where} ORDER BY {order_by} LIMIT ?",
+                (*params, limit),
+            ).fetchall()
+            attempts_by_task = self._attempt_projection.attempts_for_tasks(
+                conn,
+                [str(row["task_id"]) for row in rows],
+                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
+            )
+        total = int(total_row["count"]) if total_row is not None else 0
+        return {
+            "items": [self._task_dict(row, attempts_by_task[str(row["task_id"])]) for row in rows],
+            "total": total,
+        }
 
     def task(self, task_id: str, user: Mapping[str, object]) -> dict[str, object]:
         with closing(self._connect()) as conn:
             row = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
             if row is None:
                 raise DomainNotFoundError(task_id)
-            self._require_visible(row, user)
-            attempts = self._attempt_projection.attempts_for_tasks(conn, [task_id])[task_id]
+            self._require_visible(conn, task_id, user)
+            attempts = self._attempt_projection.attempts_for_tasks(
+                conn,
+                [task_id],
+                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
+            )[task_id]
         return self._task_dict(row, attempts)
 
     def attempts(self, task_id: str, user: Mapping[str, object]) -> list[dict[str, object]]:
@@ -91,8 +148,69 @@ class TaskProjectionService:
             task = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
             if task is None:
                 raise DomainNotFoundError(task_id)
-            self._require_visible(task, user)
-            return self._attempt_projection.attempts_for_tasks(conn, [task_id])[task_id]
+            self._require_visible(conn, task_id, user)
+            return self._attempt_projection.attempts_for_tasks(
+                conn,
+                [task_id],
+                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
+            )[task_id]
+
+    def health(self, task_id: str, user: Mapping[str, object]) -> dict[str, object]:
+        """Return Task health from the durable Attempt/Runtime projection.
+
+        The v2 API must not ask the legacy in-process engine registry whether a
+        Task is alive: after a dispatcher restart that registry is neither
+        authoritative nor necessarily present.  RuntimeSession status is the
+        last durable liveness observation, and Task output or runtime probe
+        timestamps provide the last known activity without creating a probe as
+        a side effect of this read endpoint.
+        """
+
+        with closing(self._connect()) as conn:
+            task = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
+            if task is None:
+                raise DomainNotFoundError(task_id)
+            self._require_visible(conn, task_id, user)
+            attempts = self._attempt_projection.attempts_for_tasks(
+                conn,
+                [task_id],
+                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
+            )[task_id]
+            output_row = conn.execute(
+                """SELECT created_at FROM task_outputs
+                   WHERE task_id = ?
+                   ORDER BY created_at DESC, seq DESC
+                   LIMIT 1""",
+                (task_id,),
+            ).fetchone()
+
+        runtime_sessions: list[Mapping[str, object]] = []
+        for attempt in attempts:
+            raw_runtime_sessions = attempt.get("runtime_sessions")
+            if not isinstance(raw_runtime_sessions, Sequence):
+                continue
+            for runtime in raw_runtime_sessions:
+                if isinstance(runtime, Mapping):
+                    runtime_sessions.append(cast(Mapping[str, object], runtime))
+        runtime_alive = any(
+            runtime.get("status") in {"starting", "running", "paused"}
+            for runtime in runtime_sessions
+        )
+        observed_at: list[str] = []
+        if output_row is not None and isinstance(output_row["created_at"], str):
+            observed_at.append(output_row["created_at"])
+        observed_at.extend(
+            value
+            for runtime in runtime_sessions
+            for value in (runtime.get("last_probe_at"),)
+            if isinstance(value, str) and value
+        )
+        return {
+            "task_id": task_id,
+            "status": str(task["status"]),
+            "engine_alive": runtime_alive,
+            "last_event_at": self._latest_timestamp(observed_at),
+        }
 
     def attempt(self, attempt_id: str, user: Mapping[str, object]) -> dict[str, object]:
         with closing(self._connect()) as conn:
@@ -105,8 +223,12 @@ class TaskProjectionService:
             ).fetchone()
             if row is None:
                 raise DomainNotFoundError(attempt_id)
-            self._require_visible(row, user)
-            attempt = self._attempt_projection.attempt(conn, attempt_id)
+            self._require_visible(conn, str(row["task_id"]), user)
+            attempt = self._attempt_projection.attempt(
+                conn,
+                attempt_id,
+                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
+            )
             if attempt is None:
                 raise DomainNotFoundError(attempt_id)
             return attempt
@@ -122,8 +244,12 @@ class TaskProjectionService:
             ).fetchone()
             if row is None:
                 raise DomainNotFoundError(dispatch_id)
-            self._require_visible(row, user)
-            attempt = self._attempt_projection.attempt(conn, str(row["attempt_id"]))
+            self._require_visible(conn, str(row["task_id"]), user)
+            attempt = self._attempt_projection.attempt(
+                conn,
+                str(row["attempt_id"]),
+                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
+            )
         if attempt is None:
             raise DomainNotFoundError(dispatch_id)
         dispatch = attempt.get("dispatch")
@@ -159,7 +285,7 @@ class TaskProjectionService:
             task = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
             if task is None:
                 raise DomainNotFoundError(task_id)
-            self._require_visible(task, user)
+            self._require_visible(conn, task_id, user)
             rows = conn.execute(
                 """SELECT task_id, seq, kind, content, created_at FROM task_outputs
                    WHERE task_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?""",
@@ -177,13 +303,53 @@ class TaskProjectionService:
         ]
 
     @staticmethod
-    def _require_visible(row: sqlite3.Row, user: Mapping[str, object]) -> None:
-        if user.get("role") == "admin":
-            return
-        if row["owner_user_id"] != user.get("id"):
-            # Task ownership is also Task visibility.  Do not distinguish an
-            # unauthorized guessed ID from an absent Task.
-            raise DomainNotFoundError(str(row["task_id"]))
+    def _require_visible(
+        conn: sqlite3.Connection,
+        task_id: str,
+        user: Mapping[str, object],
+    ) -> None:
+        """Apply the B3 Project-viewer matrix to Task/Attempt reads."""
+
+        DomainAuthorizationService(conn).require_task_viewer(task_id, dict(user))
+
+    @staticmethod
+    def _can_view_runtime_diagnostics(user: Mapping[str, object]) -> bool:
+        """Only a management/troubleshooting administrator sees raw runtime IDs."""
+
+        return user.get("role") == "admin"
+
+    @staticmethod
+    def _global_visibility_clause(user: Mapping[str, object]) -> tuple[str | None, list[object]]:
+        """Return the shared-project visibility predicate for collection reads.
+
+        Detail reads delegate to :class:`DomainAuthorizationService`; list
+        reads need the equivalent SQL predicate before pagination so an owner
+        cannot accidentally receive a partial page that omits shared Tasks.
+        A Project link never grants Workspace access: this predicate only
+        exposes the Task/Attempt projection explicitly allowed to viewers.
+        """
+
+        user_id = user.get("id")
+        if not isinstance(user_id, str) or not user_id:
+            return None, []
+        return (
+            """(
+                owner_user_id = ?
+                OR EXISTS (
+                    SELECT 1 FROM projects AS visible_project
+                    WHERE visible_project.project_id = tasks.project_id
+                      AND (
+                          visible_project.owner_user_id = ?
+                          OR EXISTS (
+                              SELECT 1 FROM project_members AS visible_member
+                              WHERE visible_member.project_id = tasks.project_id
+                                AND visible_member.user_id = ?
+                          )
+                      )
+                )
+            )""",
+            [user_id, user_id, user_id],
+        )
 
     @staticmethod
     def _task_dict(
@@ -221,6 +387,21 @@ class TaskProjectionService:
     @staticmethod
     def _optional_str(value: object) -> str | None:
         return value if isinstance(value, str) else None
+
+    @staticmethod
+    def _latest_timestamp(values: Sequence[str]) -> str | None:
+        """Choose the latest well-formed ISO-8601 timestamp deterministically."""
+
+        parsed: list[tuple[datetime, str]] = []
+        for value in values:
+            try:
+                observed_at = datetime.fromisoformat(value)
+            except ValueError:
+                continue
+            if observed_at.tzinfo is None:
+                observed_at = observed_at.replace(tzinfo=timezone.utc)
+            parsed.append((observed_at, value))
+        return max(parsed, key=lambda item: item[0])[1] if parsed else None
 
     @staticmethod
     def _attempt_time_bounds(

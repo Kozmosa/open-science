@@ -127,6 +127,21 @@ class LiteratureTaskSagaService:
             "literature_outbox",
         }
 
+    def _require_v2_writable(self) -> None:
+        """Fail closed before a saga can cross into the Task write model.
+
+        HTTP routes are not the only callers: durable Literature work may be
+        recovered by a process that imports this service directly.  The
+        cutover fuse therefore belongs at the saga boundary as well, with the
+        exact immutable artifact binding used by the domain worker.
+        """
+
+        if not self._artifact_sha:
+            raise DomainCutoverError(
+                "Literature research Tasks require the committed v2 artifact SHA"
+            )
+        self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
+
     # ------------------------------------------------------------------
     # Public intent API
     # ------------------------------------------------------------------
@@ -150,6 +165,7 @@ class LiteratureTaskSagaService:
         retries safe across the database boundary.
         """
 
+        self._require_v2_writable()
         actor = self._actor(user)
         normalized_project_id = project_id.strip()
         normalized_workspace_id = workspace_id.strip() if workspace_id is not None else None
@@ -385,6 +401,7 @@ class LiteratureTaskSagaService:
         lease and the underlying Task writer has its own idempotency fence.
         """
 
+        self._require_v2_writable()
         if limit <= 0:
             raise ValueError("limit must be positive")
         now = _now()
@@ -423,6 +440,7 @@ class LiteratureTaskSagaService:
     def recover_work_item(self, work_item_id: str, *, worker_id: str) -> dict[str, object] | None:
         """Recover the intent named by a durable Literature work item."""
 
+        self._require_v2_writable()
         with closing(self._connect()) as conn:
             row = conn.execute(
                 """
@@ -449,6 +467,7 @@ class LiteratureTaskSagaService:
         because it has no HTTP caller to present that synchronous outcome to.
         """
 
+        self._require_v2_writable()
         claimed = self._claim_intent(intent_id, worker_id)
         if claimed is None:
             return self._intent_by_id(intent_id)
@@ -469,8 +488,9 @@ class LiteratureTaskSagaService:
                 self._record_task_created(intent_id, worker_id, recovered_task_id)
                 self._persist_completed_link(intent_id, worker_id, recovered_task_id)
                 return self._intent_by_id(intent_id)
+            current_actor = self._current_active_actor(str(claimed["user_id"]))
             task = self._tasks.create_task(
-                {"id": str(claimed["user_id"]), "role": str(claimed["actor_role"])},
+                current_actor,
                 project_id=str(request["project_id"]),
                 workspace_id=str(request["workspace_id"]),
                 title=str(request["title"]),
@@ -509,6 +529,49 @@ class LiteratureTaskSagaService:
             raise DomainPermissionError("Authenticated user ID is required")
         role = user.get("role")
         return {"id": user_id, "role": role if isinstance(role, str) and role else "member"}
+
+    def _current_active_actor(self, user_id: str) -> dict[str, str]:
+        """Load the current durable principal before a recovery creates a Task.
+
+        ``actor_role`` in the Literature intent is retained as an audit record,
+        not an authorization credential.  A retry can happen well after an
+        administrator has demoted or disabled the original requester, so it
+        must fail closed rather than replaying the stale role.
+        """
+
+        if not user_id:
+            raise DomainPermissionError("attention_required: Literature actor is invalid")
+        if user_id == "api-key-user":
+            # API keys deliberately authenticate as one restricted compatibility
+            # principal rather than as a row in auth.sqlite3.  There is no
+            # persisted admin capability to replay here: this fixed role can
+            # only act through the Project membership/ownership and
+            # Environment grant already checked by TaskApplicationService.
+            # Keep it aligned with DomainService's explicit API-key principal
+            # exception instead of treating an absent auth row as a bypass.
+            return {"id": user_id, "role": "user"}
+        if not self._auth_db_path.is_file():
+            raise DomainPermissionError(
+                "attention_required: Literature actor identity is unavailable"
+            )
+        auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
+        try:
+            with closing(sqlite3.connect(auth_uri, uri=True)) as conn:
+                row = conn.execute(
+                    "SELECT id, role, status FROM users WHERE id = ?", (user_id,)
+                ).fetchone()
+        except sqlite3.Error as exc:
+            raise DomainPermissionError(
+                "attention_required: Literature actor identity cannot be read"
+            ) from exc
+        if row is None:
+            raise DomainPermissionError("attention_required: Literature actor is unavailable")
+        role = row[1]
+        if row[2] != "active":
+            raise DomainPermissionError("attention_required: Literature actor is inactive")
+        if not isinstance(role, str) or role not in {"admin", "member"}:
+            raise DomainPermissionError("attention_required: Literature actor role is invalid")
+        return {"id": user_id, "role": role}
 
     @staticmethod
     def _preset_config(task_preset: str) -> tuple[str, str]:

@@ -18,7 +18,7 @@ from __future__ import annotations
 import sqlite3
 from os import PathLike
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 # Milliseconds SQLite will wait when a write conflict is detected before
 # raising ``OperationalError: database is locked``.  5000 ms is a pragmatic
@@ -100,6 +100,7 @@ def atomic_write_json(path: Path, payload: object) -> None:
     import tempfile
 
     path = Path(path)
+    _reject_sealed_legacy_source_write(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_str = tempfile.mkstemp(suffix=".tmp", prefix=path.name + ".", dir=str(path.parent))
     try:
@@ -112,3 +113,115 @@ def atomic_write_json(path: Path, payload: object) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def _reject_sealed_legacy_source_write(path: Path) -> None:
+    """Block atomic replacement of a legacy JSON source after v2 cutover.
+
+    ``chmod 0444`` alone does not stop the old registry implementation: it
+    writes a temporary sibling and atomically renames it over the target while
+    the shared runtime directory remains writable for the v2 SQLite files.
+    The cutover seal journal is intentionally dependency-free here so this
+    low-level helper does not import the domain-control package and create a
+    database import cycle.  Invalid or unrelated journals do not affect normal
+    JSON persistence; a valid finalized journal blocks exactly the listed
+    source paths.  The journal itself is always exempt so the controller can
+    atomically create, finalize, and remove it.
+    """
+
+    import json
+
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return
+    state_root: Path | None = None
+    for ancestor in (resolved.parent, *resolved.parents):
+        if ancestor.name in {"runtime", "session-states"}:
+            state_root = ancestor.parent
+            break
+    if state_root is None:
+        return
+    journal = state_root / "runtime" / "domain-legacy-source-seal.json"
+    if resolved == journal:
+        return
+    try:
+        relative_path = resolved.relative_to(state_root).as_posix()
+    except ValueError:
+        return
+    try:
+        raw_payload = json.loads(journal.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(raw_payload, dict):
+        return
+    payload = cast(dict[str, object], raw_payload)
+    if not _is_valid_finalized_legacy_seal(payload, state_root):
+        return
+    files = payload.get("files")
+    if not isinstance(files, list):
+        return
+    sealed_paths: set[str] = set()
+    for raw_item in files:
+        if not isinstance(raw_item, dict):
+            continue
+        item = cast(dict[str, object], raw_item)
+        sealed_path = item.get("relative_path")
+        if isinstance(sealed_path, str):
+            sealed_paths.add(sealed_path)
+    if relative_path in sealed_paths:
+        raise PermissionError(
+            f"legacy source is sealed by a committed domain cutover: {relative_path}"
+        )
+
+
+def _is_valid_finalized_legacy_seal(payload: object, state_root: Path) -> bool:
+    """Validate only the dependency-free shape needed by the JSON write gate."""
+
+    if not isinstance(payload, dict):
+        return False
+    seal = cast(dict[str, object], payload)
+    if (
+        seal.get("version") != 1
+        or seal.get("phase") != "sealed"
+        or seal.get("state_root") != state_root.name
+        or not _is_sha256(seal.get("inventory_sha256"))
+    ):
+        return False
+    files = seal.get("files")
+    if not isinstance(files, list):
+        return False
+    paths: set[str] = set()
+    for raw_item in files:
+        if not isinstance(raw_item, dict):
+            return False
+        item = cast(dict[str, object], raw_item)
+        relative_path = item.get("relative_path")
+        original_mode = item.get("original_mode")
+        sealed_mode = item.get("sealed_mode")
+        if not isinstance(relative_path, str) or not relative_path:
+            return False
+        candidate = Path(relative_path)
+        if (
+            candidate.is_absolute()
+            or ".." in candidate.parts
+            or not isinstance(original_mode, int)
+            or not isinstance(sealed_mode, int)
+            or not 0 <= original_mode <= 0o7777
+            or not 0 <= sealed_mode <= 0o7777
+            or sealed_mode & 0o222
+            or relative_path in paths
+        ):
+            return False
+        paths.add(relative_path)
+    return True
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value.lower())
+    )

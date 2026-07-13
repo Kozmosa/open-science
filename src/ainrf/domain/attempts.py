@@ -11,8 +11,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
-from ainrf.domain.context import ProjectContextService
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError
+from ainrf.domain.write_fence import DomainWriteFence
+from ainrf.domain_control import DomainCutoverError
 from ainrf.harness_engine import EngineEvent
 
 
@@ -111,58 +112,54 @@ class AttemptService:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._context_service = ProjectContextService(state_root, artifact_sha=artifact_sha)
+        self._write_fence = DomainWriteFence(state_root, artifact_sha=artifact_sha)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
 
-    def create_attempt(self, task_id: str, *, trigger: str) -> str:
-        with closing(self._connect()) as conn:
-            task = conn.execute(
-                "SELECT project_context_snapshot_id FROM tasks WHERE task_id = ?",
-                (task_id,),
-            ).fetchone()
-            if task is None:
-                raise DomainNotFoundError(task_id)
-            existing_snapshot_id = task["project_context_snapshot_id"]
-            snapshot_id = (
-                str(existing_snapshot_id)
-                if isinstance(existing_snapshot_id, str) and existing_snapshot_id
-                else self._context_service.ensure_task_snapshot_in_transaction(conn, task_id)
+    def _require_v2_mutation(self) -> None:
+        """Reject repository writes outside the committed v2 runtime.
+
+        AttemptService is intentionally a dispatcher repository, not an
+        alternate lifecycle admission path.  Its public mutations must not be
+        usable by a legacy/validate process simply because they bypassed HTTP
+        startup wiring.
+        """
+
+        if not self._write_fence.v2_ready():
+            raise DomainCutoverError(
+                "durable Attempt mutations require a committed v2 artifact and cutover fuse"
             )
-            next_seq = int(
-                conn.execute(
-                    "SELECT COALESCE(MAX(attempt_seq), 0) + 1 FROM agent_task_attempts WHERE task_id = ?",
-                    (task_id,),
-                ).fetchone()[0]
-            )
-            attempt_id = f"attempt-{uuid4().hex}"
-            dispatch_id = f"dispatch-{uuid4().hex}"
-            now = _now()
-            conn.execute(
-                """INSERT INTO agent_task_attempts (
-                       attempt_id, task_id, attempt_seq, trigger, status,
-                       context_snapshot_id, created_at
-                   ) VALUES (?, ?, ?, ?, 'queued', ?, ?)""",
-                (attempt_id, task_id, next_seq, trigger, snapshot_id, now),
-            )
-            conn.execute(
-                """INSERT INTO task_dispatch_outbox (
-                       dispatch_id, task_id, attempt_id, status, created_at, updated_at
-                   ) VALUES (?, ?, ?, 'pending', ?, ?)""",
-                (dispatch_id, task_id, attempt_id, now, now),
-            )
-            conn.execute(
-                """UPDATE tasks SET latest_attempt_id = ?, status = 'queued', updated_at = ?
-                   WHERE task_id = ?""",
-                (attempt_id, now, task_id),
-            )
-            conn.commit()
-            return attempt_id
+
+    @staticmethod
+    def _dispatcher_actor_id(value: object) -> str:
+        """Return an auditable actor for a worker-owned repository write."""
+
+        if isinstance(value, str) and value:
+            return f"domain-worker:{value}"
+        return "system:domain-attempt-service"
+
+    def _record_v2_write(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        actor_id: str,
+    ) -> None:
+        """Re-check and durably record the first v2 write in this transaction.
+
+        ``AttemptService`` is intentionally usable by a separate worker
+        process, so it cannot rely on a preceding Task application-service
+        audit event to bind the cutover fuse.  Calling the fence while this
+        connection owns the mutation transaction makes every direct repository
+        write fail closed if the sealed legacy inventory or artifact changed.
+        """
+
+        self._write_fence.record_first_v2_write(conn, actor_id=actor_id)
 
     def claim_next(self, dispatcher_id: str, *, lease_seconds: int = 30) -> DispatchClaim | None:
+        self._require_v2_mutation()
         if not dispatcher_id:
             raise ValueError("dispatcher_id is required")
         if lease_seconds <= 0:
@@ -192,6 +189,10 @@ class AttemptService:
                 else f"launch-{row['attempt_id']}"
             )
             expires_at = _after(lease_seconds)
+            self._record_v2_write(
+                conn,
+                actor_id=self._dispatcher_actor_id(dispatcher_id),
+            )
             updated = conn.execute(
                 """UPDATE task_dispatch_outbox
                    SET status = 'claimed', claim_token = ?, dispatcher_id = ?,
@@ -235,11 +236,16 @@ class AttemptService:
             )
 
     def heartbeat_claim(self, claim: DispatchClaim, *, lease_seconds: int = 30) -> DispatchClaim:
+        self._require_v2_mutation()
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
         now = _now()
         expires_at = _after(lease_seconds)
         with closing(self._connect()) as conn:
+            self._record_v2_write(
+                conn,
+                actor_id="system:domain-attempt-service",
+            )
             updated = conn.execute(
                 """UPDATE task_dispatch_outbox
                    SET claim_expires_at = ?, claim_heartbeat_at = ?, updated_at = ?
@@ -264,10 +270,22 @@ class AttemptService:
     def prepare_runtime_launch(self, claim: DispatchClaim) -> RuntimeLaunchPreparation:
         """Persist the deterministic launch key before any external side effect."""
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             dispatch = self._current_claim(conn, claim, require_not_expired=True)
             launch_state = str(dispatch["launch_state"])
+            engine = conn.execute(
+                """SELECT task.harness_engine
+                   FROM agent_task_attempts AS attempt
+                   JOIN tasks AS task ON task.task_id = attempt.task_id
+                   WHERE attempt.attempt_id = ? AND task.task_id = ?""",
+                (claim.attempt_id, claim.task_id),
+            ).fetchone()
+            if engine is None:
+                raise DispatchClaimError("Attempt no longer has a Task runtime configuration")
+            engine_name = str(engine["harness_engine"])
             runtime = conn.execute(
                 """SELECT runtime_session_id, status FROM agent_runtime_sessions
                    WHERE launch_key = ?""",
@@ -286,6 +304,12 @@ class AttemptService:
                            updated_at = ? WHERE dispatch_id = ?""",
                     (now, now, claim.dispatch_id),
                 )
+                conn.execute(
+                    """UPDATE agent_runtime_sessions
+                       SET engine_name = COALESCE(engine_name, ?)
+                       WHERE runtime_session_id = ?""",
+                    (engine_name, runtime["runtime_session_id"]),
+                )
                 conn.commit()
                 return RuntimeLaunchPreparation(
                     runtime_session_id=str(runtime["runtime_session_id"]),
@@ -296,9 +320,17 @@ class AttemptService:
             runtime_session_id = f"runtime-{uuid4().hex}"
             conn.execute(
                 """INSERT INTO agent_runtime_sessions (
-                       runtime_session_id, attempt_id, launch_key, status, created_at, started_at
-                   ) VALUES (?, ?, ?, 'starting', ?, ?)""",
-                (runtime_session_id, claim.attempt_id, claim.runtime_launch_key, now, now),
+                       runtime_session_id, attempt_id, launch_key, engine_name, status,
+                       created_at, started_at
+                   ) VALUES (?, ?, ?, ?, 'starting', ?, ?)""",
+                (
+                    runtime_session_id,
+                    claim.attempt_id,
+                    claim.runtime_launch_key,
+                    engine_name,
+                    now,
+                    now,
+                ),
             )
             conn.execute(
                 """UPDATE task_dispatch_outbox
@@ -331,8 +363,10 @@ class AttemptService:
         atomic process kill.
         """
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             dispatch = self._current_claim(conn, claim, require_not_expired=True)
             attempt = conn.execute(
                 """SELECT stop_requested_at, stop_requested_reason
@@ -370,8 +404,10 @@ class AttemptService:
         a blind second start.
         """
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             dispatch = self._current_claim(conn, claim, require_not_expired=True)
             runtime = conn.execute(
                 """SELECT attempt_id, launch_key, status FROM agent_runtime_sessions
@@ -385,10 +421,27 @@ class AttemptService:
             if runtime["status"] != "starting":
                 raise DispatchClaimError("Runtime Session has already crossed the launch boundary")
             attempt = conn.execute(
-                """SELECT stop_requested_at, stop_requested_reason
-                   FROM agent_task_attempts WHERE attempt_id = ?""",
-                (claim.attempt_id,),
+                """SELECT attempt.stop_requested_at, attempt.stop_requested_reason,
+                          task.archived_at AS task_archived_at,
+                          project.status AS project_status
+                   FROM agent_task_attempts AS attempt
+                   JOIN tasks AS task ON task.task_id = attempt.task_id
+                   JOIN projects AS project ON project.project_id = task.project_id
+                   WHERE attempt.attempt_id = ? AND task.task_id = ?""",
+                (claim.attempt_id, claim.task_id),
             ).fetchone()
+            if attempt is None:
+                raise DispatchClaimError("Attempt no longer has an active Task")
+            if attempt["task_archived_at"] is not None or attempt["project_status"] != "active":
+                self._cancel_before_launch_in_transaction(
+                    conn,
+                    claim,
+                    reason="Task or Project was archived before the runtime launch boundary",
+                    now=now,
+                    runtime_session_id=runtime_session_id,
+                )
+                conn.commit()
+                return False
             if attempt is not None and attempt["stop_requested_at"] is not None:
                 if (
                     str(dispatch["launch_state"]) in {"none", "starting"}
@@ -429,8 +482,10 @@ class AttemptService:
         engine_session_key: str | None = None,
         metadata: dict[str, object] | None = None,
     ) -> None:
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             runtime = conn.execute(
                 """SELECT attempt_id, launch_key FROM agent_runtime_sessions
@@ -503,6 +558,12 @@ class AttemptService:
                WHERE attempt_id = ? AND status IN ('queued', 'starting')""",
             (reason, now, claim.attempt_id),
         )
+        self._finalize_task_archive_if_requested(
+            conn,
+            task_id=claim.task_id,
+            attempt_id=claim.attempt_id,
+            now=now,
+        )
         conn.execute(
             """UPDATE task_attempt_control_requests
                SET status = 'completed', completed_at = ?, updated_at = ?
@@ -528,8 +589,10 @@ class AttemptService:
         )
 
     def mark_launch_unknown(self, claim: DispatchClaim, *, reason: str) -> None:
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             conn.execute(
                 """UPDATE task_dispatch_outbox
@@ -575,8 +638,10 @@ class AttemptService:
     def record_event(self, claim: DispatchClaim, event: EngineEvent) -> DispatchEventResult:
         """Persist one engine event against the claimed Attempt and its Task."""
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             dispatch = self._current_claim(conn, claim, require_not_expired=True)
             if dispatch["status"] not in {"claimed", "dispatched"}:
                 raise DispatchClaimError("Dispatch cannot accept events in its current state")
@@ -728,8 +793,10 @@ class AttemptService:
         environment_id: str,
         grant_version: int,
     ) -> None:
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             conn.execute(
                 """UPDATE agent_task_attempts
@@ -747,8 +814,10 @@ class AttemptService:
             conn.commit()
 
     def stop_for_permission_revocation(self, claim: DispatchClaim, *, reason: str) -> None:
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             cancelled = conn.execute(
                 """UPDATE task_dispatch_outbox
@@ -769,6 +838,19 @@ class AttemptService:
                        SET status = 'stopped_permission_revoked', stop_reason = ?, finished_at = ?
                        WHERE attempt_id = ?""",
                     (reason, now, claim.attempt_id),
+                )
+                self._finalize_task_archive_if_requested(
+                    conn,
+                    task_id=claim.task_id,
+                    attempt_id=claim.attempt_id,
+                    now=now,
+                )
+                conn.execute(
+                    """UPDATE task_attempt_control_requests
+                       SET status = 'completed', completed_at = ?, updated_at = ?
+                       WHERE attempt_id = ? AND action IN ('cancel', 'stop')
+                         AND status IN ('requested', 'acknowledged')""",
+                    (now, now, claim.attempt_id),
                 )
                 self._project_task_status(conn, claim.attempt_id, "stopped_permission_revoked", now)
             else:
@@ -798,8 +880,10 @@ class AttemptService:
         caller must use probe/adopt instead of this method.
         """
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             dispatch = self._current_claim(conn, claim, require_not_expired=True)
             if str(dispatch["launch_state"]) not in {"none", "starting"}:
                 raise DispatchClaimError("Dispatch has crossed the runtime launch boundary")
@@ -845,8 +929,10 @@ class AttemptService:
     def invalidate_unstarted_for_project(self, project_id: str, *, reason: str) -> int:
         """Cancel only work that has not crossed the external-launch boundary."""
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             updated = conn.execute(
                 """UPDATE task_dispatch_outbox
                    SET status = 'cancelled', cancel_reason = ?, cancelled_at = ?, updated_at = ?
@@ -858,8 +944,10 @@ class AttemptService:
             return updated.rowcount
 
     def invalidate_unstarted_for_task(self, task_id: str, *, reason: str) -> int:
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             updated = conn.execute(
                 """UPDATE task_dispatch_outbox
                    SET status = 'cancelled', cancel_reason = ?, cancelled_at = ?, updated_at = ?
@@ -889,6 +977,79 @@ class AttemptService:
                 raise DomainNotFoundError(attempt_id)
             return dict(row)
 
+    @staticmethod
+    def _resolve_launch_unknown_in_transaction(
+        conn: sqlite3.Connection,
+        *,
+        task_id: str,
+        attempt_id: str,
+        reason: str,
+        now: str,
+    ) -> dict[str, str]:
+        """Terminally resolve one manually investigated unknown launch.
+
+        This is deliberately a *terminal* reconciliation primitive.  It never
+        changes an outbox row back to ``pending`` and never reuses the launch
+        key, so a manual assertion that the unknown runtime has stopped cannot
+        accidentally create a second external process.  Authorization,
+        idempotency, and audit ownership are supplied by
+        :class:`TaskApplicationService` around the caller-owned transaction.
+        """
+
+        if not reason.strip():
+            raise DomainConflictError("launch_unknown resolution reason is required")
+        attempt = conn.execute(
+            """SELECT task_id, status FROM agent_task_attempts
+               WHERE attempt_id = ?""",
+            (attempt_id,),
+        ).fetchone()
+        if attempt is None or str(attempt["task_id"]) != task_id:
+            raise DomainNotFoundError(attempt_id)
+        if str(attempt["status"]) != "launch_unknown":
+            raise DomainConflictError("Attempt is not awaiting launch_unknown resolution")
+        dispatch = conn.execute(
+            """SELECT dispatch_id FROM task_dispatch_outbox
+               WHERE attempt_id = ? AND task_id = ? AND status = 'launch_unknown'
+                 AND launch_state = 'unknown'""",
+            (attempt_id, task_id),
+        ).fetchone()
+        if dispatch is None:
+            raise DomainConflictError("Attempt has no unresolved unknown launch dispatch")
+        updated_dispatch = conn.execute(
+            """UPDATE task_dispatch_outbox
+               SET status = 'cancelled', cancel_reason = ?, cancelled_at = ?,
+                   completed_at = COALESCE(completed_at, ?), updated_at = ?
+               WHERE dispatch_id = ? AND attempt_id = ? AND task_id = ?
+                 AND status = 'launch_unknown' AND launch_state = 'unknown'""",
+            (reason, now, now, now, dispatch["dispatch_id"], attempt_id, task_id),
+        )
+        if updated_dispatch.rowcount != 1:
+            raise DomainConflictError("unknown launch dispatch changed during resolution")
+        updated_attempt = conn.execute(
+            """UPDATE agent_task_attempts
+               SET status = 'stopped_runtime_unknown', stop_reason = ?,
+                   failure_reason = COALESCE(failure_reason, ?),
+                   finished_at = COALESCE(finished_at, ?)
+               WHERE attempt_id = ? AND task_id = ? AND status = 'launch_unknown'""",
+            (reason, reason, now, attempt_id, task_id),
+        )
+        if updated_attempt.rowcount != 1:
+            raise DomainConflictError("unknown launch Attempt changed during resolution")
+        conn.execute(
+            """UPDATE agent_runtime_sessions
+               SET status = 'stopped_runtime_unknown', finished_at = COALESCE(finished_at, ?),
+                   failure_reason = COALESCE(failure_reason, ?), last_probe_at = ?
+               WHERE attempt_id = ? AND status = 'unknown'""",
+            (now, reason, now, attempt_id),
+        )
+        AttemptService._project_task_status(conn, attempt_id, "stopped_runtime_unknown", now)
+        return {
+            "task_id": task_id,
+            "attempt_id": attempt_id,
+            "dispatch_id": str(dispatch["dispatch_id"]),
+            "status": "stopped_runtime_unknown",
+        }
+
     def claim_next_control(self, claim: DispatchClaim) -> AttemptControlRequest | None:
         """Atomically hand one requested control command to its live dispatcher.
 
@@ -899,8 +1060,10 @@ class AttemptService:
         reconciliation instead of being guessed safe to replay.
         """
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             row = conn.execute(
                 """SELECT control_request_id, task_id, attempt_id, action, reason, payload_json
@@ -945,8 +1108,10 @@ class AttemptService:
     def complete_control(self, claim: DispatchClaim, control_request_id: str) -> None:
         """Record that the live engine accepted a claimed control command."""
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             updated = conn.execute(
                 """UPDATE task_attempt_control_requests
@@ -961,8 +1126,10 @@ class AttemptService:
     def fail_control(self, claim: DispatchClaim, control_request_id: str, *, reason: str) -> None:
         """Make an engine-side control failure visible without changing runtime state."""
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             updated = conn.execute(
                 """UPDATE task_attempt_control_requests
@@ -983,20 +1150,23 @@ class AttemptService:
         Task projections.
         """
 
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             rows = conn.execute(
                 """SELECT action, reason, payload_json
                    FROM task_attempt_control_requests
                    WHERE attempt_id = ? AND action IN ('cancel', 'stop')
-                     AND status IN ('acknowledged', 'completed')
+                     AND status = 'acknowledged'
                    ORDER BY created_at, control_request_id""",
                 (claim.attempt_id,),
             ).fetchall()
             if not rows:
                 raise DispatchClaimError("Attempt has no acknowledged stop control")
             project_archive = False
+            task_archive = False
             reason = "cancelled"
             for row in rows:
                 if row["reason"] is not None:
@@ -1009,6 +1179,8 @@ class AttemptService:
                         payload = None
                     if isinstance(payload, dict) and payload.get("project_archive") is True:
                         project_archive = True
+                    if isinstance(payload, dict) and payload.get("archive") is True:
+                        task_archive = True
             attempt_status = "stopped_by_project_archive" if project_archive else "cancelled"
             runtime_status = "stopped" if project_archive else "cancelled"
             conn.execute(
@@ -1030,6 +1202,14 @@ class AttemptService:
                    WHERE dispatch_id = ? AND claim_token = ?""",
                 (reason, now, now, claim.dispatch_id, claim.claim_token),
             )
+            if task_archive:
+                self._finalize_task_archive_if_requested(
+                    conn,
+                    task_id=claim.task_id,
+                    attempt_id=claim.attempt_id,
+                    now=now,
+                    fallback_reason=reason,
+                )
             conn.execute(
                 """UPDATE task_attempt_control_requests
                    SET status = 'completed', completed_at = ?, updated_at = ?
@@ -1040,6 +1220,329 @@ class AttemptService:
             self._project_task_status(conn, claim.attempt_id, attempt_status, now)
             conn.commit()
             return attempt_status
+
+    def reconcile_absent_paused_runtime(
+        self,
+        claim: DispatchClaim,
+        runtime_session_id: str,
+    ) -> dict[str, str]:
+        """Resolve a paused RuntimeSession after a successor proves it absent.
+
+        A paused runtime is special: no active ``start`` coroutine remains to
+        provide termination evidence after its dispatcher crashes.  A fresh
+        worker must first probe the deterministic launch key.  Only a positive
+        ``ABSENT`` result reaches this method, which can safely finish a
+        pending archive/stop or turn an *unacknowledged* resume intent into a
+        new ``trigger='resume'`` Attempt.  An acknowledged control is never
+        replayed because its engine-side effect may already have happened.
+        """
+
+        self._require_v2_mutation()
+        now = _now()
+        with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
+            self._current_claim(conn, claim, require_not_expired=True)
+            attempt = conn.execute(
+                """SELECT attempt.*, task.project_id, task.archived_at AS task_archived_at,
+                          project.status AS project_status
+                   FROM agent_task_attempts AS attempt
+                   JOIN tasks AS task ON task.task_id = attempt.task_id
+                   JOIN projects AS project ON project.project_id = task.project_id
+                   WHERE attempt.attempt_id = ? AND task.task_id = ?""",
+                (claim.attempt_id, claim.task_id),
+            ).fetchone()
+            if attempt is None or str(attempt["status"]) != "paused":
+                raise DispatchClaimError("Attempt is no longer a paused runtime recovery")
+            runtime = conn.execute(
+                """SELECT runtime_session_id FROM agent_runtime_sessions
+                   WHERE runtime_session_id = ? AND attempt_id = ?""",
+                (runtime_session_id, claim.attempt_id),
+            ).fetchone()
+            if runtime is None:
+                raise DispatchClaimError("Paused Runtime Session no longer belongs to this Attempt")
+
+            control_rows = conn.execute(
+                """SELECT control_request_id, action, status, reason, payload_json
+                   FROM task_attempt_control_requests
+                   WHERE attempt_id = ? AND action IN ('cancel', 'stop', 'resume')
+                     AND status IN ('requested', 'acknowledged')
+                   ORDER BY created_at, control_request_id""",
+                (claim.attempt_id,),
+            ).fetchall()
+            stop_rows = [row for row in control_rows if row["action"] in {"cancel", "stop"}]
+            if stop_rows:
+                result = self._finalize_absent_paused_stop_in_transaction(
+                    conn,
+                    claim=claim,
+                    runtime_session_id=runtime_session_id,
+                    stop_rows=stop_rows,
+                    now=now,
+                )
+                conn.commit()
+                return result
+
+            resume_rows = [row for row in control_rows if row["action"] == "resume"]
+            if resume_rows:
+                if any(row["status"] == "acknowledged" for row in resume_rows):
+                    self._mark_paused_recovery_unknown_in_transaction(
+                        conn,
+                        claim,
+                        runtime_session_id=runtime_session_id,
+                        reason=(
+                            "Paused runtime disappeared after a resume control was acknowledged; "
+                            "its engine side effect is unknown"
+                        ),
+                        now=now,
+                    )
+                    conn.commit()
+                    return {
+                        "outcome": "launch_unknown",
+                        "dispatch_id": claim.dispatch_id,
+                        "attempt_id": claim.attempt_id,
+                    }
+                if attempt["task_archived_at"] is not None or attempt["project_status"] != "active":
+                    self._mark_paused_recovery_unknown_in_transaction(
+                        conn,
+                        claim,
+                        runtime_session_id=runtime_session_id,
+                        reason="Paused runtime disappeared after its Task or Project was archived",
+                        now=now,
+                    )
+                    conn.commit()
+                    return {
+                        "outcome": "launch_unknown",
+                        "dispatch_id": claim.dispatch_id,
+                        "attempt_id": claim.attempt_id,
+                    }
+                result = self._create_resume_attempt_after_absence_in_transaction(
+                    conn,
+                    claim=claim,
+                    runtime_session_id=runtime_session_id,
+                    attempt=attempt,
+                    resume_rows=resume_rows,
+                    now=now,
+                )
+                conn.commit()
+                return result
+
+            # Nothing asked the old paused runtime to do.  Preserve the paused
+            # projection and let a later dispatcher re-probe rather than
+            # reclassifying an otherwise benign worker crash as a failure.
+            conn.execute(
+                """UPDATE task_dispatch_outbox
+                   SET status = 'dispatched', claim_token = NULL, dispatcher_id = NULL,
+                       claim_expires_at = ?, claim_heartbeat_at = ?, updated_at = ?
+                   WHERE dispatch_id = ? AND claim_token = ?""",
+                (now, now, now, claim.dispatch_id, claim.claim_token),
+            )
+            conn.commit()
+            return {
+                "outcome": "paused_runtime_absent",
+                "dispatch_id": claim.dispatch_id,
+                "attempt_id": claim.attempt_id,
+            }
+
+    def _finalize_absent_paused_stop_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        claim: DispatchClaim,
+        runtime_session_id: str,
+        stop_rows: list[sqlite3.Row],
+        now: str,
+    ) -> dict[str, str]:
+        """Finish a stop whose paused runtime was positively found absent."""
+
+        project_archive = False
+        task_archive = False
+        reason = "cancelled"
+        for row in stop_rows:
+            if isinstance(row["reason"], str) and row["reason"]:
+                reason = str(row["reason"])
+            raw_payload = row["payload_json"]
+            if not isinstance(raw_payload, str):
+                continue
+            try:
+                payload = json.loads(raw_payload)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            project_archive = project_archive or payload.get("project_archive") is True
+            task_archive = task_archive or payload.get("archive") is True
+
+        attempt_status = "stopped_by_project_archive" if project_archive else "cancelled"
+        runtime_status = "stopped" if project_archive else "cancelled"
+        conn.execute(
+            """UPDATE agent_runtime_sessions
+               SET status = ?, finished_at = ?, failure_reason = ?
+               WHERE runtime_session_id = ? AND attempt_id = ?""",
+            (runtime_status, now, reason, runtime_session_id, claim.attempt_id),
+        )
+        conn.execute(
+            """UPDATE agent_task_attempts
+               SET status = ?, stop_reason = COALESCE(stop_requested_reason, ?), finished_at = ?
+               WHERE attempt_id = ?""",
+            (attempt_status, reason, now, claim.attempt_id),
+        )
+        conn.execute(
+            """UPDATE task_dispatch_outbox
+               SET status = 'cancelled', launch_state = 'launched', cancel_reason = ?,
+                   cancelled_at = ?, updated_at = ?
+               WHERE dispatch_id = ? AND claim_token = ?""",
+            (reason, now, now, claim.dispatch_id, claim.claim_token),
+        )
+        if task_archive:
+            self._finalize_task_archive_if_requested(
+                conn,
+                task_id=claim.task_id,
+                attempt_id=claim.attempt_id,
+                now=now,
+                fallback_reason=reason,
+            )
+        conn.execute(
+            """UPDATE task_attempt_control_requests
+               SET status = 'completed', completed_at = ?, updated_at = ?
+               WHERE attempt_id = ? AND action IN ('cancel', 'stop')
+                 AND status IN ('requested', 'acknowledged')""",
+            (now, now, claim.attempt_id),
+        )
+        self._project_task_status(conn, claim.attempt_id, attempt_status, now)
+        return {
+            "outcome": attempt_status,
+            "dispatch_id": claim.dispatch_id,
+            "attempt_id": claim.attempt_id,
+        }
+
+    def _create_resume_attempt_after_absence_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        claim: DispatchClaim,
+        runtime_session_id: str,
+        attempt: sqlite3.Row,
+        resume_rows: list[sqlite3.Row],
+        now: str,
+    ) -> dict[str, str]:
+        """Close one proven-absent paused runtime and enqueue its replacement."""
+
+        conn.execute(
+            """UPDATE agent_runtime_sessions
+               SET status = 'stopped', finished_at = ?,
+                   failure_reason = 'Paused runtime was positively absent during resume recovery'
+               WHERE runtime_session_id = ? AND attempt_id = ?""",
+            (now, runtime_session_id, claim.attempt_id),
+        )
+        conn.execute(
+            """UPDATE agent_task_attempts
+               SET status = 'stopped', stop_reason = ?, finished_at = ?
+               WHERE attempt_id = ?""",
+            ("paused runtime was absent before resume", now, claim.attempt_id),
+        )
+        conn.execute(
+            """UPDATE task_dispatch_outbox
+               SET status = 'completed', launch_state = 'launched', completed_at = ?,
+                   last_error = ?, updated_at = ?
+               WHERE dispatch_id = ? AND claim_token = ?""",
+            (
+                now,
+                "paused runtime was positively absent before resume",
+                now,
+                claim.dispatch_id,
+                claim.claim_token,
+            ),
+        )
+        conn.execute(
+            """UPDATE task_attempt_control_requests
+               SET status = 'completed', completed_at = ?, updated_at = ?
+               WHERE control_request_id IN ({}) AND status = 'requested'""".format(
+                ",".join("?" for _ in resume_rows)
+            ),
+            (now, now, *(str(row["control_request_id"]) for row in resume_rows)),
+        )
+        attempt_sequence = int(
+            conn.execute(
+                "SELECT COALESCE(MAX(attempt_seq), 0) + 1 FROM agent_task_attempts WHERE task_id = ?",
+                (claim.task_id,),
+            ).fetchone()[0]
+        )
+        new_attempt_id = f"attempt-{uuid4().hex}"
+        new_dispatch_id = f"dispatch-{uuid4().hex}"
+        conn.execute(
+            """INSERT INTO agent_task_attempts (
+                   attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id,
+                   runtime_config_fingerprint, authorization_environment_id,
+                   authorization_grant_version, authorization_checked_at, created_at
+               ) VALUES (?, ?, ?, 'resume', 'queued', ?, ?, ?, ?, ?, ?)""",
+            (
+                new_attempt_id,
+                claim.task_id,
+                attempt_sequence,
+                attempt["context_snapshot_id"],
+                attempt["runtime_config_fingerprint"],
+                attempt["authorization_environment_id"],
+                attempt["authorization_grant_version"],
+                now,
+                now,
+            ),
+        )
+        conn.execute(
+            """INSERT INTO task_dispatch_outbox (
+                   dispatch_id, task_id, attempt_id, status, created_at, updated_at,
+                   authorization_environment_id, authorization_grant_version,
+                   authorization_checked_at
+               ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)""",
+            (
+                new_dispatch_id,
+                claim.task_id,
+                new_attempt_id,
+                now,
+                now,
+                attempt["authorization_environment_id"],
+                attempt["authorization_grant_version"],
+                now,
+            ),
+        )
+        conn.execute(
+            """UPDATE tasks
+               SET latest_attempt_id = ?, status = 'queued', updated_at = ?
+               WHERE task_id = ?""",
+            (new_attempt_id, now, claim.task_id),
+        )
+        return {
+            "outcome": "resume_queued",
+            "dispatch_id": new_dispatch_id,
+            "attempt_id": new_attempt_id,
+        }
+
+    def _mark_paused_recovery_unknown_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        claim: DispatchClaim,
+        *,
+        runtime_session_id: str,
+        reason: str,
+        now: str,
+    ) -> None:
+        conn.execute(
+            """UPDATE agent_runtime_sessions
+               SET status = 'unknown', failure_reason = ?, last_probe_at = ?
+               WHERE runtime_session_id = ? AND attempt_id = ?""",
+            (reason, now, runtime_session_id, claim.attempt_id),
+        )
+        conn.execute(
+            """UPDATE agent_task_attempts
+               SET status = 'launch_unknown', failure_reason = ? WHERE attempt_id = ?""",
+            (reason, claim.attempt_id),
+        )
+        conn.execute(
+            """UPDATE task_dispatch_outbox
+               SET status = 'launch_unknown', launch_state = 'unknown', last_error = ?,
+                   launch_unknown_at = ?, updated_at = ?
+               WHERE dispatch_id = ? AND claim_token = ?""",
+            (reason, now, now, claim.dispatch_id, claim.claim_token),
+        )
+        self._project_task_status(conn, claim.attempt_id, "launch_unknown", now)
 
     @staticmethod
     def _cost_from_event(event: EngineEvent) -> float | None:
@@ -1101,8 +1604,10 @@ class AttemptService:
         dispatch_status: str,
         failure_reason: str | None,
     ) -> None:
+        self._require_v2_mutation()
         now = _now()
         with closing(self._connect()) as conn:
+            self._record_v2_write(conn, actor_id="system:domain-attempt-service")
             self._current_claim(conn, claim, require_not_expired=True)
             runtime = conn.execute(
                 "SELECT attempt_id FROM agent_runtime_sessions WHERE runtime_session_id = ?",
@@ -1148,4 +1653,69 @@ class AttemptService:
                WHERE dispatch_id = ? AND claim_token = ?""",
             (dispatch_status, now, now, claim.dispatch_id, claim.claim_token),
         )
+        self._finalize_task_archive_if_requested(
+            conn,
+            task_id=claim.task_id,
+            attempt_id=claim.attempt_id,
+            now=now,
+        )
+        conn.execute(
+            """UPDATE task_attempt_control_requests
+               SET status = 'completed', completed_at = ?, updated_at = ?
+               WHERE attempt_id = ? AND action IN ('cancel', 'stop')
+                 AND status IN ('requested', 'acknowledged')""",
+            (now, now, claim.attempt_id),
+        )
         self._project_task_status(conn, claim.attempt_id, attempt_status, now)
+
+    @staticmethod
+    def _finalize_task_archive_if_requested(
+        conn: sqlite3.Connection,
+        *,
+        task_id: str,
+        attempt_id: str,
+        now: str,
+        fallback_reason: str | None = None,
+    ) -> bool:
+        """Archive a Task only after its active runtime has demonstrably ended.
+
+        Task archive uses a durable cancellation control rather than setting
+        ``archived_at`` speculatively.  This helper is intentionally called
+        from every authoritative terminal transition, including pre-launch
+        cancellation and permission-revocation fences, so an archive request
+        cannot be stranded or incorrectly completed by a historical control.
+        """
+
+        rows = conn.execute(
+            """SELECT reason, payload_json
+               FROM task_attempt_control_requests
+               WHERE task_id = ? AND attempt_id = ? AND action = 'cancel'
+                 AND status IN ('requested', 'acknowledged')
+               ORDER BY created_at DESC, control_request_id DESC""",
+            (task_id, attempt_id),
+        ).fetchall()
+        for row in rows:
+            raw_payload = row["payload_json"]
+            if not isinstance(raw_payload, str):
+                continue
+            try:
+                payload = json.loads(raw_payload)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict) or payload.get("archive") is not True:
+                continue
+            reason = row["reason"]
+            archive_reason = (
+                str(reason)
+                if isinstance(reason, str) and reason
+                else (fallback_reason or "Task archive completed after runtime cancellation")
+            )
+            conn.execute(
+                """UPDATE tasks
+                   SET archived_at = COALESCE(archived_at, ?),
+                       archive_reason = COALESCE(archive_reason, ?), updated_at = ?
+                   WHERE task_id = ?""",
+                (now, archive_reason, now, task_id),
+            )
+            return True
+        return False

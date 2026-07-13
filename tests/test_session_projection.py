@@ -3,45 +3,75 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from ainrf.agentic_researcher import AgenticResearcherService, HarnessEngineType, vanilla
-from ainrf.db import connect
-from ainrf.domain import (
-    AttemptService,
-    DomainService,
-    ProjectContextService,
-    SessionProjectionService,
-)
+from ainrf.db import connect, run_pending
+from ainrf.domain import SessionProjectionService, TaskProjectionService
+from ainrf.domain.service import DomainNotFoundError
 
 pytestmark = [pytest.mark.unit]
 
 
+def _mapping(value: object) -> dict[str, object]:
+    assert isinstance(value, Mapping)
+    return {str(key): item for key, item in cast(Mapping[object, object], value).items()}
+
+
+def _first_runtime(attempt: dict[str, object]) -> dict[str, object]:
+    values = attempt["runtime_sessions"]
+    assert isinstance(values, list)
+    assert values
+    return _mapping(values[0])
+
+
 def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None:
     owner: dict[str, object] = {"id": "owner", "role": "member"}
-    domain = DomainService(state_root)
-    project = domain.create_project(owner, name="Project")
-    context = ProjectContextService(state_root)
-    context.save_draft(str(project["project_id"]), "context", owner)
-    context.publish(str(project["project_id"]), owner)
+    viewer: dict[str, object] = {"id": "viewer", "role": "member"}
+    outsider: dict[str, object] = {"id": "outsider", "role": "member"}
+    administrator: dict[str, object] = {"id": "administrator", "role": "admin"}
+    project_id = "session-projection-project"
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        run_pending(conn, "agentic_researcher")
+        conn.execute(
+            """INSERT INTO projects(
+                   project_id, owner_user_id, name, status, is_default, created_at, updated_at
+               ) VALUES (?, ?, 'Project', 'active', 0, ?, ?)""",
+            (project_id, "owner", "2026-07-12T00:00:00+00:00", "2026-07-12T00:00:00+00:00"),
+        )
+        conn.commit()
     tasks = AgenticResearcherService(state_root)
     tasks.initialize()
     task = tasks.create_task(
-        str(project["project_id"]),
+        project_id,
         "workspace",
         "environment",
         vanilla(HarnessEngineType.CLAUDE_CODE),
         "prompt",
         "owner",
     )
-    attempt_id = AttemptService(state_root).create_attempt(task.task_id, trigger="initial")
+    attempt_id = "attempt-session-projection"
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        # Projection fixtures seed immutable historical Attempt facts directly;
+        # production Attempt creation is deliberately only available through
+        # TaskApplicationService.
+        conn.execute(
+            """INSERT INTO agent_task_attempts(
+                   attempt_id, task_id, attempt_seq, trigger, status, created_at
+               ) VALUES (?, ?, 1, 'initial', 'succeeded', ?)""",
+            (attempt_id, task.task_id, "2026-07-12T00:00:00+00:00"),
+        )
         conn.execute(
             """UPDATE agent_task_attempts
-               SET status = 'succeeded', token_usage_json = ?, cost_usd = ?
+               SET status = 'succeeded', token_usage_json = ?, cost_usd = ?,
+                   failure_reason = ?, stop_reason = ?, authorization_environment_id = ?,
+                   authorization_grant_version = ?, authorization_checked_at = ?,
+                   stop_requested_at = ?, stop_requested_reason = ?
                WHERE attempt_id = ?""",
             (
                 json.dumps(
@@ -56,6 +86,13 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
                     }
                 ),
                 0.42,
+                "/home/tenant/private-attempt-error",
+                "/home/tenant/private-stop-reason",
+                "environment-private-id",
+                7,
+                "2026-07-12T00:00:01+00:00",
+                "2026-07-12T00:00:02+00:00",
+                "/home/tenant/private-stop-request",
                 attempt_id,
             ),
         )
@@ -74,9 +111,43 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
                 "claude-code",
             ),
         )
+        conn.execute(
+            """UPDATE agent_runtime_sessions
+               SET engine_session_key = ?, failure_reason = ?
+               WHERE runtime_session_id = ?""",
+            ("tenant-runtime-secret", "/home/tenant/private-runtime-error", "runtime-session-1"),
+        )
+        conn.execute(
+            """INSERT INTO task_dispatch_outbox (
+                   dispatch_id, task_id, attempt_id, status, created_at, updated_at,
+                   launch_state, runtime_launch_key, dispatcher_id, last_error
+               ) VALUES (?, ?, ?, 'completed', ?, ?, 'launched', ?, ?, ?)""",
+            (
+                "dispatch-session-projection-1",
+                task.task_id,
+                attempt_id,
+                "2026-07-12T00:00:00+00:00",
+                "2026-07-12T00:00:03+00:00",
+                "runtime-launch-secret",
+                "dispatcher-secret",
+                "/home/tenant/private-dispatch-error",
+            ),
+        )
+        conn.execute(
+            """INSERT INTO project_members (
+                   project_id, user_id, role, can_publish, created_at, updated_at
+               ) VALUES (?, ?, 'viewer', 0, ?, ?)""",
+            (project_id, "viewer", "2026-07-12T00:00:00+00:00", "2026-07-12T00:00:00+00:00"),
+        )
+        conn.execute(
+            """INSERT INTO task_outputs(task_id, seq, kind, content, created_at)
+               VALUES (?, 1, 'message', 'shared durable task output', ?)""",
+            (task.task_id, "2026-07-12T00:00:02+00:00"),
+        )
         conn.commit()
 
     projection = SessionProjectionService(state_root)
+    task_projection = TaskProjectionService(state_root)
     session, attempts = projection.get_session(task.task_id, owner)
 
     assert session["id"] == task.task_id
@@ -87,8 +158,8 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
     assert attempts[0]["duration_ms"] == 2000
 
     listed, total, has_more, next_cursor = projection.list_sessions(
-        project_id=str(project["project_id"]),
-        owner_user_id="owner",
+        project_id=project_id,
+        user=owner,
         status=None,
         cursor=None,
         limit=20,
@@ -101,4 +172,88 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
         task.task_id: attempts,
         "not-visible": [],
     }
+
+    # B3 viewers can read the Project's Task dialogue and Attempt projection,
+    # but an unrelated guessed Task remains a 404-shaped absence.
+    shared_task = task_projection.task(task.task_id, viewer)
+    assert shared_task["task_id"] == task.task_id
+    viewer_attempt = task_projection.attempts(task.task_id, viewer)[0]
+    assert viewer_attempt["attempt_id"] == attempt_id
+    viewer_runtime = _first_runtime(viewer_attempt)
+    viewer_dispatch = _mapping(viewer_attempt["dispatch"])
+    assert viewer_runtime["engine_session_key"] is None
+    assert viewer_runtime["failure_reason"] is None
+    assert viewer_dispatch["runtime_launch_key"] is None
+    assert viewer_dispatch["dispatcher_id"] is None
+    assert viewer_dispatch["last_error"] is None
+    assert viewer_attempt["failure_reason"] is None
+    assert viewer_attempt["stop_reason"] is None
+    assert viewer_attempt["authorization_environment_id"] is None
+    assert viewer_attempt["authorization_grant_version"] is None
+    assert viewer_attempt["authorization_checked_at"] is None
+    assert viewer_attempt["stop_requested_at"] is None
+    assert viewer_attempt["stop_requested_reason"] is None
+    administrator_attempt = task_projection.attempts(task.task_id, administrator)[0]
+    administrator_runtime = _first_runtime(administrator_attempt)
+    administrator_dispatch = _mapping(administrator_attempt["dispatch"])
+    assert administrator_runtime["engine_session_key"] == "tenant-runtime-secret"
+    assert administrator_runtime["failure_reason"] == "/home/tenant/private-runtime-error"
+    assert administrator_dispatch["runtime_launch_key"] == "runtime-launch-secret"
+    assert administrator_dispatch["dispatcher_id"] == "dispatcher-secret"
+    assert administrator_dispatch["last_error"] == "/home/tenant/private-dispatch-error"
+    assert administrator_attempt["failure_reason"] == "/home/tenant/private-attempt-error"
+    assert administrator_attempt["stop_reason"] == "/home/tenant/private-stop-reason"
+    assert administrator_attempt["authorization_environment_id"] == "environment-private-id"
+    assert administrator_attempt["authorization_grant_version"] == 7
+    assert administrator_attempt["authorization_checked_at"] == "2026-07-12T00:00:01+00:00"
+    assert administrator_attempt["stop_requested_at"] == "2026-07-12T00:00:02+00:00"
+    assert administrator_attempt["stop_requested_reason"] == "/home/tenant/private-stop-request"
+    assert task_projection.outputs(task.task_id, viewer, after_seq=0, limit=20)[0].content == (
+        "shared durable task output"
+    )
+    viewer_session, viewer_attempts = projection.get_session(task.task_id, viewer)
+    assert viewer_session["id"] == task.task_id
+    assert viewer_attempts == attempts
+    viewer_listed, viewer_total, viewer_has_more, viewer_next_cursor = projection.list_sessions(
+        project_id=project_id,
+        user=viewer,
+        status=None,
+        cursor=None,
+        limit=20,
+    )
+    assert viewer_listed == [session]
+    assert (viewer_total, viewer_has_more, viewer_next_cursor) == (1, False, None)
+    viewer_global_tasks = task_projection.list_tasks(
+        viewer,
+        project_id=None,
+        include_archived=False,
+        limit=20,
+        sort="updated",
+    )
+    assert [item["task_id"] for item in viewer_global_tasks] == [task.task_id]
+    viewer_global_sessions, viewer_global_total, _, _ = projection.list_sessions(
+        project_id=None,
+        user=viewer,
+        status=None,
+        cursor=None,
+        limit=20,
+    )
+    assert viewer_global_sessions == [session]
+    assert viewer_global_total == 1
+    assert projection.batch_details([task.task_id], viewer) == {task.task_id: attempts}
+    with pytest.raises(DomainNotFoundError):
+        task_projection.task(task.task_id, outsider)
+    with pytest.raises(DomainNotFoundError):
+        projection.get_session(task.task_id, outsider)
+    assert (
+        task_projection.list_tasks(
+            outsider,
+            project_id=None,
+            include_archived=False,
+            limit=20,
+            sort="updated",
+        )
+        == []
+    )
+    assert projection.batch_details([task.task_id], outsider) == {task.task_id: []}
     assert not (state_root / "runtime" / "sessions.sqlite3").exists()

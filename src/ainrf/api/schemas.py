@@ -81,6 +81,7 @@ class ProjectCreateRequest(BaseModel):
 
     name: str = Field(min_length=1)
     description: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -90,6 +91,7 @@ class ProjectUpdateRequest(BaseModel):
     description: str | None = None
     default_workspace_id: str | None = None
     default_environment_id: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ComponentHealth(BaseModel):
@@ -299,6 +301,7 @@ class EnvironmentCreateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class EnvironmentUpdateRequest(BaseModel):
@@ -321,6 +324,7 @@ class EnvironmentUpdateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectEnvironmentReferenceCreateRequest(BaseModel):
@@ -414,6 +418,7 @@ class ProjectContextDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextCandidateCreateRequest(BaseModel):
@@ -423,12 +428,13 @@ class ProjectContextCandidateCreateRequest(BaseModel):
 
     content: str
     source_metadata: dict[str, Any] = Field(default_factory=dict)
-    source_task_id: str | None = None
+    source_task_id: str = Field(min_length=1)
     source_attempt_id: str | None = None
     source_message_start_seq: int | None = Field(default=None, ge=0)
     source_message_end_seq: int | None = Field(default=None, ge=0)
     source_output_start_seq: int | None = Field(default=None, ge=0)
     source_output_end_seq: int | None = Field(default=None, ge=0)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextCandidateRejectRequest(BaseModel):
@@ -437,6 +443,7 @@ class ProjectContextCandidateRejectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextFragmentCreateRequest(BaseModel):
@@ -450,6 +457,7 @@ class ProjectContextFragmentCreateRequest(BaseModel):
     source_version: str | None = None
     sort_order: int = 0
     byte_budget: int | None = Field(default=None, ge=0)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskContextConfirmRequest(BaseModel):
@@ -776,6 +784,7 @@ class TaskEdgeCreateRequest(BaseModel):
 
     source_task_id: str = Field(min_length=1)
     target_task_id: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskRetryRequest(BaseModel):
@@ -1275,6 +1284,8 @@ class CollaboratorRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_id: str
     role: str = "member"
+    can_publish: bool = False
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class CollaboratorResponse(BaseModel):
@@ -1283,11 +1294,45 @@ class CollaboratorResponse(BaseModel):
     username: str
     display_name: str
     role: str
+    can_publish: bool = False
 
 
 class CollaboratorListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[CollaboratorResponse]
+
+
+class ProjectMemberRequest(BaseModel):
+    """Authoritative v2 Project membership and publishing capability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["viewer", "editor"]
+    can_publish: bool = False
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class ProjectMemberResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    username: str
+    display_name: str
+    role: Literal["viewer", "editor"]
+    can_publish: bool
+
+
+class ProjectMemberListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ProjectMemberResponse]
+
+
+class ProjectOwnerTransferRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    new_owner_user_id: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 # ── Environment Access schemas ────────────────────────────

@@ -13,12 +13,20 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
+from ainrf.domain.context import (
+    context_version_fingerprint,
+    empty_fragment_manifest_json,
+    record_context_version_fragment_provenance_in_transaction,
+    unresolved_legacy_fragment_provenance_evidence,
+)
 
 if TYPE_CHECKING:
     from ainrf.domain_migration.importer import ReconciliationReport
 
 _RESOLUTION_KINDS = {
     "assign_project_owner": "owner_mapping",
+    "assign_workspace_owner": "owner_mapping",
+    "assign_task_owner": "owner_mapping",
     "assign_workspace_environment": "environment_mapping",
     "set_primary_workspace": "primary_workspace",
     "map_runtime_session": "session_mapping",
@@ -26,10 +34,13 @@ _RESOLUTION_KINDS = {
 
 _ALLOWED_CATEGORIES = {
     "assign_project_owner": frozenset({"owner_missing", "owner_unmapped"}),
+    "assign_workspace_owner": frozenset({"workspace_owner_unmapped"}),
+    "assign_task_owner": frozenset({"task_owner_unmapped"}),
     "assign_workspace_environment": frozenset(
         {
             "workspace_environment_missing",
             "workspace_environment_invalid",
+            "workspace_environment_ambiguous",
             "legacy_environment_placeholder",
             "task_domain_mapping_invalid",
         }
@@ -199,6 +210,10 @@ class DomainReconciliationService:
                 )
             if resolution_type == "assign_project_owner":
                 self._assign_project_owner(conn, issue, payload)
+            elif resolution_type == "assign_workspace_owner":
+                self._assign_workspace_owner(conn, issue, payload)
+            elif resolution_type == "assign_task_owner":
+                self._assign_task_owner(conn, issue, payload)
             elif resolution_type == "assign_workspace_environment":
                 self._assign_workspace_environment(conn, issue, payload)
             elif resolution_type == "set_primary_workspace":
@@ -467,10 +482,301 @@ class DomainReconciliationService:
         )
         self._ensure_legacy_project_context(conn, project_id, owner_user_id, now)
 
+    def _assign_workspace_owner(
+        self, conn: sqlite3.Connection, issue: sqlite3.Row, payload: dict[str, object]
+    ) -> None:
+        """Rehydrate an archived Workspace only after explicit owner and Environment choices.
+
+        A Workspace with an unresolved legacy owner is deliberately not inserted
+        by the importer.  Reconciliation must therefore materialize its durable
+        identity, rather than merely marking an issue resolved.  It never
+        silently restores Primary status: that remains a separate, audited
+        ``set_primary_workspace`` decision.
+        """
+
+        owner_user_id = self._required_owner_user_id(payload, "assign_workspace_owner")
+        workspace_id = self._required_record_id(payload, issue, "workspace_id")
+        source = self._archived_source(conn, issue, "workspace", workspace_id)
+        path = source.get("default_workdir")
+        if not isinstance(path, str) or not Path(path).is_absolute():
+            raise ValueError("Archived Workspace has no absolute canonical path")
+        environment_id = payload.get("environment_id")
+        if not isinstance(environment_id, str) or not environment_id:
+            raise ValueError("assign_workspace_owner requires an active environment_id")
+        environment = conn.execute(
+            "SELECT 1 FROM environments WHERE environment_id = ? AND status = 'active'",
+            (environment_id,),
+        ).fetchone()
+        if environment is None:
+            raise LookupError("Workspace owner resolution requires an active Environment")
+        project_id = source.get("project_id")
+        if project_id is not None and (not isinstance(project_id, str) or not project_id):
+            raise ValueError("Archived Workspace has an invalid Project reference")
+        if isinstance(project_id, str):
+            project = conn.execute(
+                "SELECT owner_user_id FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            if project is None:
+                raise LookupError("Resolve the Workspace Project before assigning its owner")
+        canonical_path = str(Path(path).expanduser().resolve())
+        existing = conn.execute(
+            """
+            SELECT environment_id, canonical_path FROM workspaces
+            WHERE workspace_id = ?
+            """,
+            (workspace_id,),
+        ).fetchone()
+        now = _now()
+        if existing is None:
+            status = "unregistered" if source.get("status") == "unregistered" else "active"
+            conn.execute(
+                """
+                INSERT INTO workspaces (
+                    workspace_id, owner_user_id, environment_id, canonical_path, label,
+                    description, workspace_context, legacy_project_id, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    workspace_id,
+                    owner_user_id,
+                    environment_id,
+                    canonical_path,
+                    str(source.get("label", workspace_id)),
+                    source.get("description")
+                    if isinstance(source.get("description"), str)
+                    else None,
+                    (
+                        source.get("workspace_prompt")
+                        if isinstance(source.get("workspace_prompt"), str)
+                        else None
+                    ),
+                    project_id,
+                    status,
+                    source.get("created_at") if isinstance(source.get("created_at"), str) else now,
+                    source.get("updated_at") if isinstance(source.get("updated_at"), str) else now,
+                ),
+            )
+        elif (
+            str(existing["environment_id"]) != environment_id
+            or str(existing["canonical_path"]) != canonical_path
+        ):
+            raise ValueError(
+                "Workspace ID is already bound to a different Environment or canonical path"
+            )
+        else:
+            conn.execute(
+                "UPDATE workspaces SET owner_user_id = ?, updated_at = ? WHERE workspace_id = ?",
+                (owner_user_id, now, workspace_id),
+            )
+
+        if isinstance(project_id, str):
+            workspace = conn.execute(
+                "SELECT status FROM workspaces WHERE workspace_id = ?", (workspace_id,)
+            ).fetchone()
+            if workspace is not None and str(workspace["status"]) == "active":
+                conn.execute(
+                    """
+                    INSERT INTO project_workspace_links (
+                        project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at
+                    ) VALUES (?, ?, 'active', 0, ?, ?, ?)
+                    ON CONFLICT(project_id, workspace_id) DO UPDATE SET
+                        status = 'active', actor_id = excluded.actor_id, updated_at = excluded.updated_at
+                    """,
+                    (project_id, workspace_id, owner_user_id, now, now),
+                )
+                if source.get("is_primary") is True:
+                    self._record_issue(
+                        conn,
+                        str(issue["run_id"]),
+                        category="primary_workspace_missing",
+                        record_type="workspace",
+                        record_id=workspace_id,
+                        detail=(
+                            "Legacy Workspace was Primary; select the Primary explicitly after "
+                            "owner remediation"
+                        ),
+                    )
+
+    def _assign_task_owner(
+        self, conn: sqlite3.Connection, issue: sqlite3.Row, payload: dict[str, object]
+    ) -> None:
+        """Map an archived Task owner and finish its immutable legacy context pin."""
+
+        owner_user_id = self._required_owner_user_id(payload, "assign_task_owner")
+        task_id = self._required_record_id(payload, issue, "task_id")
+        source = self._archived_source(conn, issue, "task", task_id)
+        task = conn.execute(
+            """
+            SELECT task_id, project_id, workspace_id, environment_id,
+                   project_context_version_id, project_context_snapshot_id, latest_attempt_id
+            FROM tasks WHERE task_id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+        if task is None:
+            raise LookupError("Unknown Task for owner assignment")
+        project = conn.execute(
+            "SELECT owner_user_id FROM projects WHERE project_id = ?", (str(task["project_id"]),)
+        ).fetchone()
+        workspace = conn.execute(
+            "SELECT environment_id FROM workspaces WHERE workspace_id = ?",
+            (str(task["workspace_id"]),),
+        ).fetchone()
+        if project is None or workspace is None:
+            raise ValueError("Resolve the Task Project and Workspace before assigning its owner")
+        if str(workspace["environment_id"]) != str(task["environment_id"]):
+            raise ValueError(
+                "Resolve the Task Workspace/Environment mapping before assigning its owner"
+            )
+
+        project_id = str(task["project_id"])
+        version_id = task["project_context_version_id"]
+        if not isinstance(version_id, str) or not version_id:
+            version_id = self._ensure_legacy_project_context(
+                conn, project_id, str(project["owner_user_id"]), _now()
+            )
+        snapshot_id = task["project_context_snapshot_id"]
+        if not isinstance(snapshot_id, str) or not snapshot_id:
+            snapshot_id = f"legacy-snapshot-{task_id}"
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO context_snapshots (
+                    context_snapshot_id, context_version_id, fingerprint, content,
+                    source_manifest_json, created_at
+                ) VALUES (?, ?, ?, '', '[]', ?)
+                """,
+                (snapshot_id, version_id, hashlib.sha256(b"").hexdigest(), _now()),
+            )
+        now = _now()
+        conn.execute(
+            """
+            UPDATE tasks
+            SET owner_user_id = ?, project_context_version_id = ?,
+                project_context_snapshot_id = ?
+            WHERE task_id = ?
+            """,
+            (owner_user_id, version_id, snapshot_id, task_id),
+        )
+        attempt = conn.execute(
+            "SELECT attempt_id FROM agent_task_attempts WHERE task_id = ? ORDER BY attempt_seq LIMIT 1",
+            (task_id,),
+        ).fetchone()
+        if attempt is None:
+            attempt_id = f"legacy-task-attempt-{task_id}"
+            raw_status = source.get("status")
+            attempt_status = self._legacy_attempt_status(raw_status)
+            conn.execute(
+                """
+                INSERT INTO agent_task_attempts (
+                    attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id,
+                    started_at, finished_at, token_usage_json, created_at
+                ) VALUES (?, ?, 1, 'legacy_task', ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    attempt_id,
+                    task_id,
+                    attempt_status,
+                    snapshot_id,
+                    source.get("started_at") if isinstance(source.get("started_at"), str) else None,
+                    source.get("completed_at")
+                    if isinstance(source.get("completed_at"), str)
+                    else None,
+                    self._json_text(source.get("token_usage_json")),
+                    now,
+                ),
+            )
+            conn.execute(
+                "UPDATE tasks SET latest_attempt_id = ? WHERE task_id = ?",
+                (attempt_id, task_id),
+            )
+
+    def _required_owner_user_id(self, payload: dict[str, object], action: str) -> str:
+        owner_user_id = payload.get("owner_user_id")
+        if not isinstance(owner_user_id, str) or not owner_user_id:
+            raise ValueError(f"{action} requires owner_user_id")
+        self._auth_username(owner_user_id)
+        return owner_user_id
+
+    @staticmethod
+    def _required_record_id(payload: dict[str, object], issue: sqlite3.Row, field: str) -> str:
+        record_id = payload.get(field, issue["record_id"])
+        if not isinstance(record_id, str) or not record_id:
+            raise ValueError(f"Resolution requires {field}")
+        if record_id != str(issue["record_id"]):
+            raise ValueError(f"Resolution {field} does not match the migration issue")
+        return record_id
+
+    @staticmethod
+    def _archived_source(
+        conn: sqlite3.Connection, issue: sqlite3.Row, record_type: str, record_id: str
+    ) -> dict[str, object]:
+        row = conn.execute(
+            """
+            SELECT payload_json FROM legacy_domain_records
+            WHERE run_id = ? AND record_type = ? AND source_record_id = ?
+            ORDER BY created_at, legacy_record_id LIMIT 1
+            """,
+            (str(issue["run_id"]), record_type, record_id),
+        ).fetchone()
+        if row is None:
+            raise LookupError("No archived source record is available for owner resolution")
+        source = _parse_json_object(row["payload_json"])
+        source_id = source.get(f"{record_type}_id")
+        if source_id != record_id:
+            raise ValueError("Archived source record does not match the migration issue")
+        return source
+
+    @staticmethod
+    def _legacy_attempt_status(value: object) -> str:
+        raw = value if isinstance(value, str) else "completed"
+        return {
+            "pending": "queued",
+            "active": "running",
+            "cancelled": "cancelled",
+            "canceled": "cancelled",
+            "stopped": "stopped",
+        }.get(raw, raw)
+
+    @staticmethod
+    def _json_text(value: object) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return _canonical_json(value)
+
+    @staticmethod
+    def _record_issue(
+        conn: sqlite3.Connection,
+        run_id: str,
+        *,
+        category: str,
+        record_type: str,
+        record_id: str,
+        detail: str,
+    ) -> None:
+        existing = conn.execute(
+            """
+            SELECT 1 FROM domain_migration_issues
+            WHERE run_id = ? AND category = ? AND record_type = ? AND record_id = ?
+            """,
+            (run_id, category, record_type, record_id),
+        ).fetchone()
+        if existing is not None:
+            return
+        conn.execute(
+            """
+            INSERT INTO domain_migration_issues (
+                issue_id, run_id, category, record_type, record_id, severity, detail, created_at
+            ) VALUES (?, ?, ?, ?, ?, 'blocking', ?, ?)
+            """,
+            (uuid4().hex, run_id, category, record_type, record_id, detail, _now()),
+        )
+
     @staticmethod
     def _ensure_legacy_project_context(
         conn: sqlite3.Connection, project_id: str, owner_user_id: str, now: str
-    ) -> None:
+    ) -> str:
         version_id = f"legacy-empty-{project_id}"
         conn.execute(
             """
@@ -483,12 +789,37 @@ class DomainReconciliationService:
         conn.execute(
             """
             INSERT OR IGNORE INTO project_context_versions
-                (context_version_id, project_id, content, fingerprint, is_active,
-                 created_by_user_id, created_at)
-            VALUES (?, ?, '', ?, 1, ?, ?)
+                (context_version_id, project_id, content, fingerprint, fragment_manifest_json,
+                 is_active, created_by_user_id, created_at)
+            VALUES (?, ?, '', ?, ?, 1, ?, ?)
             """,
-            (version_id, project_id, hashlib.sha256(b"").hexdigest(), owner_user_id, now),
+            (
+                version_id,
+                project_id,
+                context_version_fingerprint(""),
+                empty_fragment_manifest_json(),
+                owner_user_id,
+                now,
+            ),
         )
+        provenance_row = conn.execute(
+            """
+            SELECT 1 FROM project_context_version_provenance
+            WHERE context_version_id = ?
+            """,
+            (version_id,),
+        ).fetchone()
+        if provenance_row is None:
+            record_context_version_fragment_provenance_in_transaction(
+                conn,
+                context_version_id=version_id,
+                status="attention_needed",
+                evidence_json=unresolved_legacy_fragment_provenance_evidence(
+                    source="domain_reconciliation.synthetic_legacy_context"
+                ),
+                recorded_at=now,
+            )
+        return version_id
 
     @staticmethod
     def _assign_workspace_environment(
@@ -711,20 +1042,42 @@ class DomainReconciliationService:
         self, conn: sqlite3.Connection, issue: sqlite3.Row, payload: dict[str, object]
     ) -> bool:
         owner_user_id = payload.get("owner_user_id")
-        project_id = payload.get("project_id", issue["record_id"])
-        if not isinstance(owner_user_id, str) or not isinstance(project_id, str):
+        if not isinstance(owner_user_id, str) or not owner_user_id:
             return False
         try:
             self._auth_username(owner_user_id)
         except (LookupError, ValueError):
             return False
-        return (
-            conn.execute(
-                "SELECT 1 FROM projects WHERE project_id = ? AND owner_user_id = ?",
-                (project_id, owner_user_id),
-            ).fetchone()
-            is not None
-        )
+        record_type = str(issue["record_type"])
+        record_id = str(issue["record_id"])
+        if record_type == "project":
+            project_id = payload.get("project_id", record_id)
+            if not isinstance(project_id, str) or project_id != record_id:
+                return False
+            return (
+                conn.execute(
+                    "SELECT 1 FROM projects WHERE project_id = ? AND owner_user_id = ?",
+                    (project_id, owner_user_id),
+                ).fetchone()
+                is not None
+            )
+        if record_type == "workspace":
+            return (
+                conn.execute(
+                    "SELECT 1 FROM workspaces WHERE workspace_id = ? AND owner_user_id = ?",
+                    (record_id, owner_user_id),
+                ).fetchone()
+                is not None
+            )
+        if record_type == "task":
+            return (
+                conn.execute(
+                    "SELECT 1 FROM tasks WHERE task_id = ? AND owner_user_id = ?",
+                    (record_id, owner_user_id),
+                ).fetchone()
+                is not None
+            )
+        return False
 
     @staticmethod
     def _environment_resolution_holds(

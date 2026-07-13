@@ -14,11 +14,11 @@ pytestmark = [pytest.mark.unit]
 
 
 def test_persistent_workspace_facade_reads_domain_workspace_without_json_registry(
-    state_root: Path, tmp_path: Path
+    state_root: Path, tmp_path: Path, committed_v2_state: str
 ) -> None:
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
     owner: dict[str, object] = {"id": "owner", "role": "member"}
-    domain = DomainService(state_root)
+    domain = DomainService(state_root, artifact_sha=committed_v2_state)
     environment = domain.create_environment(
         admin,
         alias="workspace-facade-host",

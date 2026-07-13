@@ -93,7 +93,14 @@ def _start_sshd() -> None:
     staging environments running alongside production on the same
     host can each bind their own port without collision.
     """
-    import subprocess
+    if os.environ.get("OPENSCIENCE_NO_SSHD", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        print("[entrypoint] sshd disabled for this process", flush=True)
+        return
 
     port = os.environ.get("AINRF_SSHD_PORT", "2222")
 

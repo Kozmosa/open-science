@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
 from ainrf.auth.service import AuthService
 from ainrf.db import connect, run_pending
 from ainrf.domain import DomainService, ProjectContextService, TaskDispatcher
-from ainrf.domain_control import DomainCutoverError, DomainMaintenanceService, MaintenanceModeError
-from ainrf.literature.work import process_durable_work_item
+from ainrf.domain_control import (
+    DomainCutoverController,
+    DomainCutoverError,
+    DomainMaintenanceService,
+    MaintenanceModeError,
+)
+from ainrf.literature.tracking import LiteratureTrackingService, WorkItem
+from ainrf.literature.work import execute_work_item, process_durable_work_item
 from ainrf.literature.task_saga import (
     LiteratureTaskSagaService,
     ResearchTaskIdempotencyConflictError,
@@ -19,17 +27,37 @@ from ainrf.literature.task_saga import (
     ResearchTaskWorkspaceRequiredError,
 )
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
+from tests.testutil import seed_user
 
-pytestmark = [pytest.mark.unit]
+pytestmark = [pytest.mark.unit, pytest.mark.db_race]
+
+
+def _ensure_v2_cutover(state_root: Path) -> None:
+    """Build v2 evidence once for direct saga tests.
+
+    A direct service invocation must exercise the same fuse as the HTTP and
+    domain-worker paths.  The fixture creates only pytest-owned backup
+    evidence beside the scratch state root.
+    """
+
+    if DomainCutoverController(state_root).status().state != "v2":
+        prepare_committed_v2_cutover(state_root, state_root.parent)
+
+
+def _saga(state_root: Path) -> LiteratureTaskSagaService:
+    return LiteratureTaskSagaService(state_root, artifact_sha=V2_ARTIFACT_SHA)
 
 
 def _scope(state_root: Path) -> tuple[dict[str, object], str, str]:
+    _ensure_v2_cutover(state_root)
     owner: dict[str, object] = {"id": "owner", "role": "member"}
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
-    domain = DomainService(state_root)
-    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
     auth = AuthService(state_root=state_root)
     auth.initialize()
+    seed_user(auth, username="literature-owner", role="member", user_id="owner")
+    seed_user(auth, username="literature-admin", role="admin", user_id="admin")
+    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
     auth.grant_environment(
         env_id=str(environment["environment_id"]),
         user_id="owner",
@@ -46,8 +74,9 @@ def _scope(state_root: Path) -> tuple[dict[str, object], str, str]:
         label="Lit",
     )
     workspace_id = str(workspace["workspace_id"])
+    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="attach")
     domain.set_primary_workspace(project_id, workspace_id, owner, idempotency_key="link")
-    context = ProjectContextService(state_root)
+    context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     context.save_draft(project_id, "context", owner)
     context.publish(project_id, owner)
     return owner, project_id, workspace_id
@@ -59,13 +88,15 @@ def _v2_scope(state_root: Path, tmp_path: Path) -> tuple[dict[str, object], str,
     prepare_committed_v2_cutover(state_root, tmp_path)
     owner: dict[str, object] = {"id": "owner", "role": "member"}
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    seed_user(auth, username="v2-literature-owner", role="member", user_id="owner")
+    seed_user(auth, username="v2-literature-admin", role="admin", user_id="admin")
     domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     environment = domain.create_environment(
         admin, alias="v2-host", display_name="V2 Host", connection={}
     )
     environment_id = str(environment["environment_id"])
-    auth = AuthService(state_root=state_root)
-    auth.initialize()
     auth.grant_environment(
         env_id=environment_id,
         user_id="owner",
@@ -82,6 +113,7 @@ def _v2_scope(state_root: Path, tmp_path: Path) -> tuple[dict[str, object], str,
         label="V2 Literature Workspace",
     )
     workspace_id = str(workspace["workspace_id"])
+    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="v2-attach")
     domain.set_primary_workspace(project_id, workspace_id, owner, idempotency_key="v2-link")
     context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     context.save_draft(project_id, "V2 context", owner)
@@ -89,7 +121,7 @@ def _v2_scope(state_root: Path, tmp_path: Path) -> tuple[dict[str, object], str,
     return owner, project_id, workspace_id
 
 
-def _seed_legacy_paper(state_root: Path) -> None:
+def _seed_legacy_paper(state_root: Path, *, user_id: str = "owner") -> None:
     literature_db = state_root / "runtime" / "literature.sqlite3"
     with connect(literature_db) as conn:
         run_pending(conn, "literature")
@@ -98,8 +130,9 @@ def _seed_legacy_paper(state_root: Path) -> None:
             INSERT INTO literature_subscriptions(
                 subscription_id, user_id, label, keywords_json, arxiv_categories_json,
                 seed_paper_ids_json, frequency, is_active, created_at, max_results
-            ) VALUES ('sub', 'owner', '', '[]', '[]', '[]', 'daily', 1, 'now', 10)
-            """
+            ) VALUES ('sub', ?, '', '[]', '[]', '[]', 'daily', 1, 'now', 10)
+            """,
+            (user_id,),
         )
         conn.execute(
             """
@@ -177,12 +210,166 @@ def _retryable_intent_without_task(
     return failed
 
 
+def _former_admin_scope(state_root: Path) -> tuple[dict[str, object], str, str, AuthService]:
+    """Create a scope that an administrator can use but a member cannot."""
+
+    _ensure_v2_cutover(state_root)
+    former_admin: dict[str, object] = {"id": "former-admin", "role": "admin"}
+    project_owner: dict[str, object] = {"id": "project-owner", "role": "member"}
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    seed_user(auth, username="former-admin", role="admin", user_id="former-admin")
+    seed_user(auth, username="project-owner", role="member", user_id="project-owner")
+    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.create_environment(
+        former_admin, alias="former-admin-host", display_name="Former Admin Host", connection={}
+    )
+    project = domain.create_project(project_owner, name="Project owned by another user")
+    project_id = str(project["project_id"])
+    workspace = domain.create_workspace(
+        former_admin,
+        environment_id=str(environment["environment_id"]),
+        canonical_path=str(state_root / "former-admin-workspace"),
+        label="Former Admin Workspace",
+    )
+    workspace_id = str(workspace["workspace_id"])
+    domain.attach_workspace(
+        project_id, workspace_id, former_admin, idempotency_key="former-admin-attach"
+    )
+    domain.set_primary_workspace(
+        project_id, workspace_id, former_admin, idempotency_key="former-admin-primary"
+    )
+    context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    context.save_draft(project_id, "context", project_owner)
+    context.publish(project_id, project_owner)
+    return former_admin, project_id, workspace_id, auth
+
+
+def test_literature_recovery_uses_current_role_after_admin_demotion(
+    state_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A durable intent cannot retain an administrator capability after demotion."""
+
+    former_admin, project_id, workspace_id, auth = _former_admin_scope(state_root)
+    _seed_legacy_paper(state_root, user_id="former-admin")
+    failed = _retryable_intent_without_task(
+        state_root,
+        owner=former_admin,
+        project_id=project_id,
+        workspace_id=workspace_id,
+        idempotency_key="former-admin-demoted",
+        monkeypatch=monkeypatch,
+    )
+
+    seed_user(auth, username="former-admin", role="member", user_id="former-admin")
+    recovered = _saga(state_root).recover_pending(worker_id="former-admin-recovery")
+
+    assert len(recovered) == 1
+    assert recovered[0]["status"] == "retryable_failed"
+    assert recovered[0]["task_id"] is None
+    assert _task_count(state_root) == 0
+    with connect(state_root / "runtime" / "literature.sqlite3") as conn:
+        row = conn.execute(
+            """
+            SELECT actor_role, status, last_error
+            FROM literature_research_task_intents
+            WHERE intent_id = ?
+            """,
+            (failed["intent_id"],),
+        ).fetchone()
+    assert row is not None
+    assert row["actor_role"] == "admin"
+    assert row["status"] == "retryable_failed"
+    assert isinstance(row["last_error"], str) and row["last_error"]
+
+
+def test_literature_recovery_refuses_disabled_actor(
+    state_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disabling an actor after intent persistence blocks later Task creation."""
+
+    owner, project_id, workspace_id = _scope(state_root)
+    _seed_legacy_paper(state_root)
+    failed = _retryable_intent_without_task(
+        state_root,
+        owner=owner,
+        project_id=project_id,
+        workspace_id=workspace_id,
+        idempotency_key="disabled-owner",
+        monkeypatch=monkeypatch,
+    )
+
+    auth = AuthService(state_root=state_root)
+    auth.disable_user("owner")
+    recovered = _saga(state_root).recover_pending(worker_id="disabled-owner-recovery")
+
+    assert len(recovered) == 1
+    assert recovered[0]["status"] == "retryable_failed"
+    assert recovered[0]["task_id"] is None
+    assert _task_count(state_root) == 0
+    with connect(state_root / "runtime" / "literature.sqlite3") as conn:
+        row = conn.execute(
+            """
+            SELECT status, last_error FROM literature_research_task_intents
+            WHERE intent_id = ?
+            """,
+            (failed["intent_id"],),
+        ).fetchone()
+    assert row is not None
+    assert row["status"] == "retryable_failed"
+    assert row["last_error"] == "attention_required: Literature actor is inactive"
+
+
+def test_direct_literature_saga_refuses_uncommitted_domain_before_creating_an_intent(
+    state_root: Path,
+) -> None:
+    """A worker import cannot bypass the HTTP v2/cutover admission gate."""
+
+    with pytest.raises(DomainCutoverError, match="committed v2 artifact SHA"):
+        LiteratureTaskSagaService(state_root).create_research_task(
+            {"id": "owner", "role": "member"},
+            paper_id="paper",
+            subscription_id="sub",
+            project_id="project",
+            workspace_id="workspace",
+            idempotency_key="legacy-bypass",
+        )
+    with connect(state_root / "runtime" / "literature.sqlite3") as conn:
+        count = conn.execute("SELECT COUNT(*) FROM literature_research_task_intents").fetchone()
+    assert count is not None
+    assert int(count[0]) == 0
+
+
+def test_legacy_literature_worker_refuses_research_task_work_before_task_creation(
+    state_root: Path,
+) -> None:
+    """The legacy worker may not turn a durable intent into a v2 Task."""
+
+    service = LiteratureTrackingService(state_root)
+    service.initialize()
+    with pytest.raises(DomainCutoverError, match="committed domain v2 cutover"):
+        asyncio.run(
+            execute_work_item(
+                service,
+                WorkItem(
+                    work_item_id="legacy-research-work",
+                    kind="research_task",
+                    payload={"intent_id": "legacy-intent"},
+                ),
+            )
+        )
+    with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+        count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()
+    assert count is not None
+    assert int(count[0]) == 0
+
+
 def test_literature_research_task_intent_is_idempotent_and_allows_distinct_keys(
     state_root: Path,
 ) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
 
     first = saga.create_research_task(
         owner,
@@ -233,10 +420,47 @@ def test_literature_research_task_intent_is_idempotent_and_allows_distinct_keys(
     assert tuple(outbox) == ("published", "completed")
 
 
+def test_literature_research_task_concurrent_same_key_creates_one_task(
+    state_root: Path,
+) -> None:
+    """The Literature intent and the Task write remain single-winner under a race."""
+
+    owner, project_id, workspace_id = _scope(state_root)
+    _seed_legacy_paper(state_root)
+    barrier = Barrier(2)
+
+    def create() -> dict[str, object]:
+        barrier.wait(timeout=10)
+        return _saga(state_root).create_research_task(
+            owner,
+            paper_id="paper",
+            subscription_id="sub",
+            project_id=project_id,
+            workspace_id=workspace_id,
+            idempotency_key="concurrent-same-key",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first, second = tuple(executor.map(lambda _index: create(), range(2)))
+
+    assert first["status"] == second["status"] == "completed"
+    assert first["intent_id"] == second["intent_id"]
+    assert first["task_id"] == second["task_id"]
+    assert _task_count(state_root) == 1
+    with connect(state_root / "runtime" / "literature.sqlite3") as conn:
+        count = conn.execute(
+            """SELECT COUNT(*) FROM literature_research_task_intents
+               WHERE user_id = 'owner' AND paper_id = 'paper'
+                 AND idempotency_key = 'concurrent-same-key'"""
+        ).fetchone()
+    assert count is not None
+    assert int(count[0]) == 1
+
+
 def test_literature_research_task_key_rejects_changed_request(state_root: Path) -> None:
     owner, project_id, _workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
     saga.create_research_task(
         owner,
         paper_id="paper",
@@ -263,7 +487,7 @@ def test_literature_research_task_reuses_same_key_after_workspace_state_changes(
 ) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
     first = saga.create_research_task(
         owner,
         paper_id="paper",
@@ -272,7 +496,7 @@ def test_literature_research_task_reuses_same_key_after_workspace_state_changes(
         workspace_id=None,
         idempotency_key="retry-after-detach",
     )
-    DomainService(state_root).detach_workspace(
+    DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA).detach_workspace(
         project_id,
         workspace_id,
         owner,
@@ -298,7 +522,7 @@ def test_literature_research_task_recovers_task_created_link_without_duplicate_t
 ) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
     original = saga._persist_completed_link
 
     def fail_link_once(intent_id: str, worker_id: str, task_id: str) -> None:
@@ -328,6 +552,7 @@ def test_literature_research_task_recovers_task_created_link_without_duplicate_t
         )
         conn.commit()
     monkeypatch.setattr(saga, "_persist_completed_link", original)
+    AuthService(state_root=state_root).disable_user("owner")
 
     recovered = saga.recover_pending(worker_id="test-domain-worker")
 
@@ -342,7 +567,7 @@ def test_literature_research_task_recovers_after_crash_before_task_checkpoint(
 ) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
     created = saga.create_research_task(
         owner,
         paper_id="paper",
@@ -377,7 +602,7 @@ def test_literature_research_task_recovers_after_crash_before_task_checkpoint(
             (work_item_id,),
         )
         conn.commit()
-    DomainService(state_root).detach_workspace(
+    DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA).detach_workspace(
         project_id,
         workspace_id,
         owner,
@@ -396,7 +621,7 @@ def test_literature_research_task_recovers_after_crash_before_task_checkpoint(
 def test_literature_research_task_link_completion_requires_current_lease(state_root: Path) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
     completed = saga.create_research_task(
         owner,
         paper_id="paper",
@@ -456,12 +681,88 @@ def test_literature_research_task_link_completion_requires_current_lease(state_r
     assert tuple(state) == ("task_created", "pending", "running")
 
 
+def test_literature_summary_failure_never_rebuilds_completed_research_task(
+    state_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed LLM summary is a Literature concern, not a Task retry trigger."""
+
+    owner, project_id, workspace_id = _scope(state_root)
+    _seed_legacy_paper(state_root)
+    saga = _saga(state_root)
+    created = saga.create_research_task(
+        owner,
+        paper_id="paper",
+        subscription_id="sub",
+        project_id=project_id,
+        workspace_id=workspace_id,
+        idempotency_key="summary-failure-is-not-task-retry",
+    )
+    task_id = str(created["task_id"])
+    tracking = LiteratureTrackingService(state_root)
+    tracking.initialize()
+
+    def summary_context(_summary_id: str) -> dict[str, object]:
+        return {
+            "summary_id": "summary-fixture",
+            "paper_id": "paper",
+            "title": "Paper",
+            "authors_json": "[]",
+            "abstract": "Abstract",
+            "published_at": "",
+            "primary_category": "",
+        }
+
+    class FailingSummarizer:
+        def __init__(self, *, batch_size: int) -> None:
+            assert batch_size == 1
+
+        async def __aenter__(self) -> FailingSummarizer:
+            return self
+
+        async def __aexit__(
+            self,
+            _exc_type: object,
+            _exc: object,
+            _traceback: object,
+        ) -> None:
+            return None
+
+        async def summarize(self, _papers: list[object]) -> None:
+            raise RuntimeError("fixture LLM summary failure")
+
+    monkeypatch.setattr(tracking, "summary_context", summary_context)
+    monkeypatch.setattr("ainrf.literature.work.AnthropicSummarizer", FailingSummarizer)
+    with pytest.raises(RuntimeError, match="fixture LLM summary failure"):
+        asyncio.run(
+            execute_work_item(
+                tracking,
+                WorkItem(
+                    work_item_id="summary-work-fixture",
+                    kind="summarize",
+                    payload={"summary_id": "summary-fixture"},
+                ),
+                artifact_sha=V2_ARTIFACT_SHA,
+            )
+        )
+
+    replayed = saga.create_research_task(
+        owner,
+        paper_id="paper",
+        subscription_id="sub",
+        project_id=project_id,
+        workspace_id=workspace_id,
+        idempotency_key="summary-failure-is-not-task-retry",
+    )
+    assert replayed["task_id"] == task_id
+    assert _task_count(state_root) == 1
+
+
 def test_literature_research_task_preserves_maintenance_error_for_api_call(
     state_root: Path,
 ) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
     maintenance = DomainMaintenanceService(state_root)
     maintenance.enter(actor_id="operator", reason="test Literature saga maintenance")
     try:
@@ -492,7 +793,7 @@ def test_literature_research_task_preserves_maintenance_error_for_api_call(
 def test_literature_research_task_requires_owned_executable_primary(state_root: Path) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    domain = DomainService(state_root)
+    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     domain.detach_workspace(
         project_id,
         workspace_id,
@@ -500,7 +801,7 @@ def test_literature_research_task_requires_owned_executable_primary(state_root: 
         idempotency_key="detach",
         allow_no_primary=True,
     )
-    saga = LiteratureTaskSagaService(state_root)
+    saga = _saga(state_root)
 
     with pytest.raises(ResearchTaskWorkspaceRequiredError):
         saga.create_research_task(

@@ -8,7 +8,7 @@ import os
 import sqlite3
 import subprocess
 from collections.abc import Callable
-from contextlib import closing
+from contextlib import closing, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -21,6 +21,7 @@ from ainrf.domain.attempts import (
     DispatchClaim,
     DispatchClaimError,
 )
+from ainrf.domain.dispatch_wakeup import DispatchWakeup
 from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
 from ainrf.domain_control import (
     DomainCutoverController,
@@ -101,11 +102,24 @@ class TaskDispatcher:
             artifact_sha=artifact_sha,
         )
         self._engine_factory = engine_factory or self._default_engine_factory
+        self._dispatch_wakeup = DispatchWakeup(state_root)
         self._engines: dict[HarnessEngineType, HarnessEngine] = {}
         self._lease_seconds = lease_seconds
         self._started = False
 
     def start(self) -> None:
+        # Registering a participant is itself a durable control-plane write.
+        # Do not let a direct Python caller create a shadow dispatcher in
+        # legacy/validate mode merely by bypassing the CLI entry point.
+        self._assert_domain_runtime_fuse()
+        # A worker may be the first v2 process to persist state after cutover
+        # (for example, when imported queued Attempts are already present).
+        # Bind that participant-registration write to the exact prepared
+        # artifact and sealed legacy inventory before it reaches the registry.
+        self._cutover.record_first_v2_write(
+            actor_id=f"domain-worker:{self.dispatcher_id}",
+            artifact_sha=self._artifact_sha,
+        )
         if not self._started:
             self._participant.start()
             self._started = True
@@ -147,13 +161,34 @@ class TaskDispatcher:
         if poll_seconds <= 0:
             raise ValueError("poll_seconds must be positive")
         self.start()
+        heartbeat_task = asyncio.create_task(self._heartbeat_forever(poll_seconds=poll_seconds))
+        observed_wakeup_generation = self._dispatch_wakeup.generation()
         try:
             while True:
                 result = await self.run_once()
                 if result.outcome in {"idle", "maintenance_drained"}:
-                    await asyncio.sleep(poll_seconds)
+                    observed_wakeup_generation = await self._dispatch_wakeup.wait_for_change(
+                        observed_wakeup_generation,
+                        timeout_seconds=poll_seconds,
+                    )
         finally:
+            heartbeat_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await heartbeat_task
             self.stop()
+
+    async def _heartbeat_forever(self, *, poll_seconds: float) -> None:
+        """Keep the durable dispatcher readiness lease current while work runs.
+
+        A Task runtime can legitimately run much longer than a dispatch poll.
+        Its process must still advertise a fresh heartbeat so API capabilities
+        and a later maintenance drain can distinguish it from a crashed worker.
+        """
+
+        interval = min(5.0, max(1.0, poll_seconds))
+        while True:
+            self._participant.heartbeat()
+            await asyncio.sleep(interval)
 
     async def _run_claim(self, claim: DispatchClaim, lease: MaintenanceLease) -> DispatchRunResult:
         try:
@@ -178,6 +213,8 @@ class TaskDispatcher:
                 attempt_id=claim.attempt_id,
                 detail=str(exc),
             )
+        if self._attempts.attempt_state(claim.attempt_id).get("status") == "paused":
+            return await self._recover_paused_claim(claim, lease)
         try:
             context, environment_id, grant_version = self._execution_context_for(claim)
         except DispatchValidationError as exc:
@@ -225,6 +262,11 @@ class TaskDispatcher:
                 detail=str(exc),
             )
         engine = self._engine_for(context.engine_type)
+        # A recovered dispatcher is a new process with a new engine instance.
+        # Bind the Attempt-scoped checkpoint directory before probing so a
+        # concrete adapter can read the durable evidence written by its
+        # predecessor instead of falling back to an unsafe global guess.
+        engine.bind_runtime_context(context)
         if preparation.must_probe:
             recovery = await self._recover_existing_runtime(
                 claim,
@@ -234,6 +276,24 @@ class TaskDispatcher:
             )
             if recovery is not None:
                 return recovery
+        else:
+            # Persist the adapter-side "armed" record before crossing the
+            # database launch fence.  A crash after this point but before the
+            # first engine syscall is provably absent; after an adapter marks
+            # itself launching it is deliberately reconciled as unknown.
+            try:
+                engine.arm_runtime_launch(context)
+            except Exception as exc:
+                self._attempts.mark_launch_unknown(
+                    claim,
+                    reason=f"Unable to persist engine launch evidence: {exc}",
+                )
+                return DispatchRunResult(
+                    outcome="launch_unknown",
+                    dispatch_id=claim.dispatch_id,
+                    attempt_id=claim.attempt_id,
+                    detail=str(exc),
+                )
         try:
             if not self._attempts.commit_runtime_launch(claim, preparation.runtime_session_id):
                 return DispatchRunResult(
@@ -258,6 +318,66 @@ class TaskDispatcher:
             context,
             lease=lease,
         )
+
+    async def _recover_paused_claim(
+        self,
+        claim: DispatchClaim,
+        lease: MaintenanceLease,
+    ) -> DispatchRunResult:
+        """Probe a claimed paused runtime before applying normal launch admission.
+
+        Project archive intentionally makes the usual execution authorization
+        fail.  That must not turn a positively absent paused runtime into a
+        permission-revoked/unknown launch before its durable stop request can
+        be reconciled.  This path performs no engine start; a newly queued
+        resume Attempt returns to the regular admission flow on the next pass.
+        """
+
+        try:
+            self._maintenance.check_lease(lease)
+            preparation = self._attempts.prepare_runtime_launch(claim)
+            engine = self._engine_for(self._engine_type_for_attempt(claim.attempt_id))
+            recovery = await self._recover_existing_runtime(
+                claim,
+                preparation.runtime_session_id,
+                engine,
+                allow_start_after_absent=False,
+            )
+            if recovery is not None:
+                return recovery
+            # A paused dispatch never starts a replacement runtime directly.
+            # ``reconcile_absent_paused_runtime`` should have consumed this
+            # branch, but preserve a fail-closed result if a future engine
+            # adapter changes its probe contract.
+            return DispatchRunResult(
+                outcome="paused_recovery_requires_reconcile",
+                dispatch_id=claim.dispatch_id,
+                attempt_id=claim.attempt_id,
+            )
+        except MaintenanceModeError:
+            return self._release_for_maintenance(claim)
+        except DispatchClaimError as exc:
+            return DispatchRunResult(
+                outcome="claim_lost",
+                dispatch_id=claim.dispatch_id,
+                attempt_id=claim.attempt_id,
+                detail=str(exc),
+            )
+
+    def _engine_type_for_attempt(self, attempt_id: str) -> HarnessEngineType:
+        """Read only the adapter identity needed for a no-start recovery probe."""
+
+        with closing(connect(self._db_path)) as conn:
+            row = conn.execute(
+                """SELECT task.harness_engine
+                   FROM agent_task_attempts AS attempt
+                   JOIN tasks AS task ON task.task_id = attempt.task_id
+                   WHERE attempt.attempt_id = ?""",
+                (attempt_id,),
+            ).fetchone()
+        if row is None:
+            raise DispatchClaimError("Attempt no longer has a harness engine")
+        return HarnessEngineType(str(row["harness_engine"]))
 
     def _release_for_maintenance(self, claim: DispatchClaim) -> DispatchRunResult:
         try:
@@ -307,14 +427,10 @@ class TaskDispatcher:
         """Fence every dispatcher pass against the authoritative v2 mode."""
 
         status = self._cutover.status()
-        if status.state == "legacy":
-            if self._artifact_sha is not None:
-                raise DomainCutoverError(
-                    "v2 domain worker artifact cannot run against legacy state"
-                )
-            return
         if status.state != "v2":
-            raise DomainCutoverError("domain worker cannot run while cutover is prepared")
+            raise DomainCutoverError(
+                "domain worker requires a committed v2 cutover and cannot run in legacy or prepared mode"
+            )
         if not self._artifact_sha:
             raise DomainCutoverError("domain worker requires the committed v2 artifact SHA")
         self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
@@ -332,11 +448,9 @@ class TaskDispatcher:
         """
 
         status = self._cutover.status()
-        if status.state == "legacy":
-            return
         if status.state != "v2":
             raise DomainCutoverError(
-                "domain worker cannot recover Literature intents while cutover is prepared"
+                "domain worker cannot recover Literature intents outside a committed v2 cutover"
             )
         if not self._artifact_sha:
             raise DomainCutoverError("domain worker requires the committed v2 artifact SHA")
@@ -364,6 +478,17 @@ class TaskDispatcher:
             launch_key=claim.runtime_launch_key,
         )
         if probe.status is RuntimeProbeStatus.ABSENT:
+            attempt = self._attempts.attempt_state(claim.attempt_id)
+            if attempt.get("status") == "paused":
+                resolution = self._attempts.reconcile_absent_paused_runtime(
+                    claim,
+                    runtime_session_id,
+                )
+                return DispatchRunResult(
+                    outcome=resolution["outcome"],
+                    dispatch_id=resolution["dispatch_id"],
+                    attempt_id=resolution["attempt_id"],
+                )
             if allow_start_after_absent:
                 return None
             self._attempts.mark_launch_unknown(
@@ -795,9 +920,9 @@ class TaskDispatcher:
             raise DispatchValidationError("Task, Attempt, or domain relationship no longer exists")
         if row["project_status"] != "active":
             raise DispatchValidationError("Project is not active")
-        if row["task_status"] not in {"queued", "starting", "running"}:
+        if row["task_status"] not in {"queued", "starting", "running", "paused"}:
             raise DispatchValidationError("Task is no longer eligible to start")
-        if row["attempt_status"] not in {"queued", "starting", "running"}:
+        if row["attempt_status"] not in {"queued", "starting", "running", "paused"}:
             raise DispatchValidationError("Attempt is no longer eligible to start")
         if row["workspace_status"] != "active":
             raise DispatchValidationError("Workspace is not active")

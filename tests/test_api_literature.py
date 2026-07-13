@@ -179,6 +179,12 @@ def _v2_literature_app(state_root: Path, tmp_path: Path) -> tuple[FastAPI, str]:
         canonical_path=str(state_root / "literature-v2-workspace"),
         label="Literature V2 Workspace",
     )
+    domain.attach_workspace(
+        project_id,
+        str(workspace["workspace_id"]),
+        owner,
+        idempotency_key="literature-v2-attach",
+    )
     domain.set_primary_workspace(
         project_id,
         str(workspace["workspace_id"]),

@@ -41,51 +41,57 @@ def prepare_committed_v2_cutover(state_root: Path, tmp_path: Path) -> None:
             """,
             (_NOW, _NOW),
         )
-        conn.execute("UPDATE domain_cutover_state SET constraints_ready = 1 WHERE singleton = 1")
         conn.commit()
-
-    archive = BackupService(state_root).create_backup(tmp_path / "v2-cutover-backup.tar.gz")
-    manifest = BackupService(state_root).verify_backup(archive)
-    DomainReconciliationService(state_root).finalize_run(
-        run.run_id,
-        "test-cutover-operator",
-        V2_ARTIFACT_SHA,
-        {
-            "manifest_sha256": backup_manifest_sha256(manifest),
-            "validated_at": _NOW,
-            "status": "valid",
-        },
-    )
 
     maintenance = DomainMaintenanceService(state_root)
     maintenance.enter(actor_id="test-cutover-operator", reason="prepare v2 API fixture")
-    with closing(connect(db_path)) as conn:
-        schema_row = conn.execute(
-            "SELECT version FROM _schema_version WHERE database = 'agentic_researcher'"
-        ).fetchone()
-    assert schema_row is not None
-    schema_version = int(schema_row[0])
+    try:
+        controller.finalize_constraints(
+            actor_id="test-cutover-operator",
+            run_id=run.run_id,
+            stability_window_seconds=0,
+        )
+        archive = BackupService(state_root).create_backup(tmp_path / "v2-cutover-backup.tar.gz")
+        manifest = BackupService(state_root).verify_backup(archive)
+        DomainReconciliationService(state_root).finalize_run(
+            run.run_id,
+            "test-cutover-operator",
+            V2_ARTIFACT_SHA,
+            {
+                "manifest_sha256": backup_manifest_sha256(manifest),
+                "validated_at": _NOW,
+                "status": "valid",
+            },
+        )
 
-    controller.prepare(
-        actor_id="test-cutover-operator",
-        run_id=run.run_id,
-        backup_archive=archive,
-        artifact_sha=V2_ARTIFACT_SHA,
-        artifact_contract_min=2,
-        artifact_contract_max=2,
-        artifact_schema_min=schema_version,
-        artifact_schema_max=schema_version,
-        stability_window_seconds=0,
-    )
-    controller.commit(
-        actor_id="test-cutover-operator",
-        run_id=run.run_id,
-        backup_archive=archive,
-        artifact_sha=V2_ARTIFACT_SHA,
-        artifact_contract_min=2,
-        artifact_contract_max=2,
-        artifact_schema_min=schema_version,
-        artifact_schema_max=schema_version,
-        stability_window_seconds=0,
-    )
-    maintenance.exit(actor_id="test-cutover-operator")
+        with closing(connect(db_path)) as conn:
+            schema_row = conn.execute(
+                "SELECT version FROM _schema_version WHERE database = 'agentic_researcher'"
+            ).fetchone()
+        assert schema_row is not None
+        schema_version = int(schema_row[0])
+
+        controller.prepare(
+            actor_id="test-cutover-operator",
+            run_id=run.run_id,
+            backup_archive=archive,
+            artifact_sha=V2_ARTIFACT_SHA,
+            artifact_contract_min=2,
+            artifact_contract_max=2,
+            artifact_schema_min=schema_version,
+            artifact_schema_max=schema_version,
+            stability_window_seconds=0,
+        )
+        controller.commit(
+            actor_id="test-cutover-operator",
+            run_id=run.run_id,
+            backup_archive=archive,
+            artifact_sha=V2_ARTIFACT_SHA,
+            artifact_contract_min=2,
+            artifact_contract_max=2,
+            artifact_schema_min=schema_version,
+            artifact_schema_max=schema_version,
+            stability_window_seconds=0,
+        )
+    finally:
+        maintenance.exit(actor_id="test-cutover-operator")

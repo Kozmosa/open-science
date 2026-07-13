@@ -34,7 +34,11 @@ async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.post("/domain/projects?api_key=domain-key", json={"name": "V2"})
+        response = await client.post(
+            "/domain/projects?api_key=domain-key",
+            headers={"Idempotency-Key": "v2-project-create"},
+            json={"name": "V2"},
+        )
 
     assert response.status_code == 200
     assert response.json()["name"] == "V2"

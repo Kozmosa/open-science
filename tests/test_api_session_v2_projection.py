@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
 from typing import cast
@@ -29,6 +30,11 @@ def _body(response: httpx.Response) -> dict[str, object]:
     payload = response.json()
     assert isinstance(payload, dict)
     return cast(dict[str, object], payload)
+
+
+def _mapping(value: object) -> dict[str, object]:
+    assert isinstance(value, Mapping)
+    return {str(key): item for key, item in cast(Mapping[object, object], value).items()}
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
@@ -82,6 +88,7 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
+    assert app.state.session_service is None
     project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
 
     async with httpx.AsyncClient(
@@ -110,7 +117,10 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
         with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
             conn.execute(
                 """UPDATE agent_task_attempts
-                   SET status = 'succeeded', token_usage_json = ?, cost_usd = ?
+                   SET status = 'succeeded', token_usage_json = ?, cost_usd = ?,
+                       failure_reason = ?, stop_reason = ?, authorization_environment_id = ?,
+                       authorization_grant_version = ?, authorization_checked_at = ?,
+                       stop_requested_at = ?, stop_requested_reason = ?
                    WHERE attempt_id = ?""",
                 (
                     json.dumps(
@@ -125,6 +135,13 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
                         }
                     ),
                     0.19,
+                    "/home/tenant/private-attempt-error",
+                    "/home/tenant/private-stop-reason",
+                    "environment-private-id",
+                    7,
+                    "2026-07-12T00:00:01+00:00",
+                    "2026-07-12T00:00:02+00:00",
+                    "/home/tenant/private-stop-request",
                     attempt_id,
                 ),
             )
@@ -141,6 +158,27 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
                     "2026-07-12T00:00:02+00:00",
                     "2026-07-12T00:00:05+00:00",
                     "claude-code",
+                ),
+            )
+            conn.execute(
+                """UPDATE agent_runtime_sessions
+                   SET engine_session_key = ?, failure_reason = ?
+                   WHERE runtime_session_id = ?""",
+                (
+                    "tenant-engine-session-secret",
+                    "/home/tenant/private-engine-error",
+                    "runtime-api-session-1",
+                ),
+            )
+            conn.execute(
+                """UPDATE task_dispatch_outbox
+                   SET runtime_launch_key = ?, dispatcher_id = ?, last_error = ?
+                   WHERE attempt_id = ?""",
+                (
+                    "tenant-runtime-launch-secret",
+                    "dispatcher-private-id",
+                    "/home/tenant/private-dispatch-error",
+                    attempt_id,
                 ),
             )
             # The former Task-level usage cache is deliberately not a v2
@@ -265,5 +303,36 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
             await client.patch(f"/sessions/{task_id}?api_key={_API_KEY}", content=b"not-json")
         ).status_code == 405
         assert (await client.delete(f"/sessions/{task_id}?api_key={_API_KEY}")).status_code == 405
+
+        # The compatibility projection has no delete/archive side effect.  A
+        # rejected Session write must leave the authoritative Task and its
+        # durable Attempt history exactly where the read projection found it.
+        task_after_session_writes = await client.get(f"/tasks/{task_id}?api_key={_API_KEY}")
+        assert task_after_session_writes.status_code == 200
+        assert _body(task_after_session_writes)["task_id"] == task_id
+        attempts_after_session_writes = await client.get(
+            f"/tasks/{task_id}/attempts?api_key={_API_KEY}"
+        )
+        assert attempts_after_session_writes.status_code == 200
+        after_items = cast(list[dict[str, object]], _body(attempts_after_session_writes)["items"])
+        assert [(item["attempt_id"], item["status"]) for item in after_items] == [
+            (attempt_id, "succeeded")
+        ]
+        public_runtime_values = after_items[0]["runtime_sessions"]
+        assert isinstance(public_runtime_values, list) and public_runtime_values
+        public_runtime = _mapping(public_runtime_values[0])
+        public_dispatch = _mapping(after_items[0]["dispatch"])
+        assert public_runtime["engine_session_key"] is None
+        assert public_runtime["failure_reason"] is None
+        assert public_dispatch["runtime_launch_key"] is None
+        assert public_dispatch["dispatcher_id"] is None
+        assert public_dispatch["last_error"] is None
+        assert after_items[0]["failure_reason"] is None
+        assert after_items[0]["stop_reason"] is None
+        assert after_items[0]["authorization_environment_id"] is None
+        assert after_items[0]["authorization_grant_version"] is None
+        assert after_items[0]["authorization_checked_at"] is None
+        assert after_items[0]["stop_requested_at"] is None
+        assert after_items[0]["stop_requested_reason"] is None
 
     assert not (state_root / "runtime" / "sessions.sqlite3").exists()

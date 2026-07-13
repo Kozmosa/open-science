@@ -17,6 +17,7 @@ from ainrf.api.schemas import (
     UserInfoResponse,
 )
 from ainrf.auth import AuthService
+from ainrf.domain_control import DomainModelMode
 
 _LOG = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def _get_service(request: Request) -> AuthService:
 
 
 @router.post("/register", status_code=201)
-async def register(payload: RegisterRequest, request: Request) -> dict:
+async def register(payload: RegisterRequest, request: Request) -> dict[str, str]:
     service = _get_service(request)
     api_config: ApiConfig = request.app.state.api_config
     if not api_config.public_registration_enabled:
@@ -48,7 +49,34 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
             raise HTTPException(status_code=409, detail=detail) from exc
         raise HTTPException(status_code=400, detail=detail) from exc
 
-    # Create a tenant-scoped workspace entry for the new user.
+    # A v2 process deliberately has no writable JSON Workspace registry.
+    # Registration records the cross-database default-Project intent in auth
+    # first; this route then performs an idempotent best-effort reconciliation.
+    # If the domain database is temporarily unavailable, the durable intent is
+    # retried during the next v2 lifespan rather than claiming a distributed
+    # transaction succeeded.
+    if api_config.domain_model_mode is DomainModelMode.V2:
+        domain = getattr(request.app.state, "domain_service", None)
+        provision = getattr(domain, "provision_default_project", None)
+        if not callable(provision):  # pragma: no cover - create_app invariant
+            error = RuntimeError("v2 DomainService is unavailable for user provisioning")
+            _LOG.error("v2_registration_domain_service_missing", exc_info=error)
+            service.record_domain_default_project_provisioning_failure(user.id, error)
+            return {
+                "message": "Registration submitted. Default Project provisioning is queued for retry."
+            }
+        try:
+            provision(user_id=user.id, username=payload.username)
+            service.mark_domain_default_project_provisioned(user.id)
+        except Exception as exc:  # pragma: no cover - exercised by lifespan retry integration
+            _LOG.exception("v2_registration_default_project_provisioning_failed")
+            service.record_domain_default_project_provisioning_failure(user.id, exc)
+            return {
+                "message": "Registration submitted. Default Project provisioning is queued for retry."
+            }
+        return {"message": "Registration submitted. Awaiting admin approval."}
+
+    # Create a tenant-scoped workspace entry for the new user in legacy mode.
     workspace_service = getattr(request.app.state, "workspace_service", None)
     if workspace_service is not None:
         from ainrf.workspaces import WorkspaceRegistryService

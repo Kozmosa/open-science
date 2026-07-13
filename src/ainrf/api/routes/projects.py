@@ -3,11 +3,12 @@ from __future__ import annotations
 import json as json_mod
 import logging
 from dataclasses import asdict
-from uuid import uuid4
+from typing import Literal, cast
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from ainrf.api.deprecation import deprecation_headers, mark_deprecated
+from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
     CollaboratorListResponse,
     CollaboratorRequest,
@@ -19,6 +20,10 @@ from ainrf.api.schemas import (
     ProjectEnvironmentReferenceResponse,
     ProjectEnvironmentReferenceUpdateRequest,
     ProjectListResponse,
+    ProjectMemberListResponse,
+    ProjectMemberRequest,
+    ProjectMemberResponse,
+    ProjectOwnerTransferRequest,
     ProjectResponse,
     ProjectUpdateRequest,
     TaskEdgeCreateRequest,
@@ -57,19 +62,11 @@ def _get_project_service(request: Request) -> ProjectRegistryService:
 def _v2_domain_service(request: Request) -> DomainService | None:
     service = getattr(request.app.state, "domain_service", None)
     config = getattr(request.app.state, "api_config", None)
-    if (
-        service is None
-        or config is None
-        or config.domain_model_mode is not DomainModelMode.V2
-        or not service.v2_ready()
-    ):
+    if config is None or config.domain_model_mode is not DomainModelMode.V2:
         return None
+    if not isinstance(service, DomainService) or not service.v2_ready():
+        raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
     return service
-
-
-def _compatibility_idempotency_key(request: Request, scope: str) -> str:
-    key = request.headers.get("Idempotency-Key")
-    return key if key else f"compat-{scope}-{uuid4().hex}"
 
 
 def _mark_v2_compatibility_route(
@@ -250,6 +247,23 @@ def _serialize_domain_collaborator(
         username=username,
         display_name=display_name,
         role=str(member["role"]),
+        can_publish=bool(member.get("can_publish", False)),
+    )
+
+
+def _serialize_domain_member(
+    member: dict[str, object], auth_service: object
+) -> ProjectMemberResponse:
+    collaborator = _serialize_domain_collaborator(member, auth_service)
+    role = collaborator.role
+    if role not in {"viewer", "editor"}:
+        raise ValueError("Domain Project member has an invalid role")
+    return ProjectMemberResponse(
+        user_id=collaborator.user_id,
+        username=collaborator.username,
+        display_name=collaborator.display_name,
+        role=cast(Literal["viewer", "editor"], role),
+        can_publish=collaborator.can_publish,
     )
 
 
@@ -372,6 +386,7 @@ async def create_project(
                 user,
                 name=payload.name,
                 description=payload.description,
+                idempotency_key=require_idempotency_key(request, payload.idempotency_key),
             )
             return _serialize_domain_project(domain, project, user)
         except Exception as exc:
@@ -437,8 +452,17 @@ async def update_project(
         )
         try:
             project = _active_domain_project(domain, project_id, user)
+            domain.require_project_editor(project_id, user)
             changes = payload.model_dump(exclude_unset=True)
+            idempotency_key = require_idempotency_key(request, payload.idempotency_key)
+            changes.pop("idempotency_key", None)
             default_workspace_id = changes.get("default_workspace_id")
+            if "default_workspace_id" in changes and (
+                "name" in changes or "description" in changes
+            ):
+                raise ValueError(
+                    "Primary Workspace and Project metadata must be updated by separate requests"
+                )
             if "default_workspace_id" in changes:
                 if not isinstance(default_workspace_id, str) or not default_workspace_id:
                     raise ValueError("A Primary Workspace cannot be cleared through this endpoint")
@@ -446,7 +470,7 @@ async def update_project(
                     project_id,
                     default_workspace_id,
                     user,
-                    idempotency_key=_compatibility_idempotency_key(request, "project-primary"),
+                    idempotency_key=idempotency_key,
                 )
             if "default_environment_id" in changes:
                 primary = _primary_link(domain, project_id, user)
@@ -461,12 +485,14 @@ async def update_project(
                         user,
                         name=changes.get("name"),
                         description=changes["description"],
+                        idempotency_key=idempotency_key,
                     )
                 else:
                     project = domain.update_project(
                         project_id,
                         user,
                         name=changes.get("name"),
+                        idempotency_key=idempotency_key,
                     )
             return _serialize_domain_project(domain, project, user)
         except Exception as exc:
@@ -500,11 +526,12 @@ async def delete_project(project_id: str, request: Request, response: Response) 
             replacement=f"POST /projects/{project_id}/archive",
         )
         try:
+            domain.require_project_owner(project_id, user)
             domain.archive_project(
                 project_id,
                 user,
                 reason="deprecated project DELETE",
-                idempotency_key=_compatibility_idempotency_key(request, "project-delete"),
+                idempotency_key=require_idempotency_key(request),
             )
         except Exception as exc:
             raise _translate_project_error(exc) from exc
@@ -526,11 +553,12 @@ async def archive_project(project_id: str, request: Request) -> None:
     if domain is None:
         raise HTTPException(status_code=404, detail="Project archive is unavailable")
     try:
+        domain.require_project_owner(project_id, get_current_user(request))
         domain.archive_project(
             project_id,
             get_current_user(request),
             reason="user archived project",
-            idempotency_key=_compatibility_idempotency_key(request, "project-archive"),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -543,10 +571,11 @@ async def unarchive_project(project_id: str, request: Request) -> None:
     if domain is None:
         raise HTTPException(status_code=404, detail="Project unarchive is unavailable")
     try:
+        domain.require_project_owner(project_id, get_current_user(request))
         domain.unarchive_project(
             project_id,
             get_current_user(request),
-            idempotency_key=_compatibility_idempotency_key(request, "project-unarchive"),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -574,11 +603,12 @@ async def attach_project_workspace(
     if domain is None:
         raise HTTPException(status_code=404, detail="Project Workspace links are unavailable")
     try:
+        domain.require_project_editor(project_id, get_current_user(request))
         return domain.attach_workspace(
             project_id,
             workspace_id,
             get_current_user(request),
-            idempotency_key=_compatibility_idempotency_key(request, "project-workspace-attach"),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -595,11 +625,12 @@ async def detach_project_workspace(
     if domain is None:
         raise HTTPException(status_code=404, detail="Project Workspace links are unavailable")
     try:
+        domain.require_project_editor(project_id, get_current_user(request))
         domain.detach_workspace(
             project_id,
             workspace_id,
             get_current_user(request),
-            idempotency_key=_compatibility_idempotency_key(request, "project-workspace-detach"),
+            idempotency_key=require_idempotency_key(request),
             allow_no_primary=allow_no_primary,
         )
     except Exception as exc:
@@ -618,19 +649,20 @@ async def set_primary_project_workspace(
     if domain is None:
         raise HTTPException(status_code=404, detail="Project Workspace links are unavailable")
     try:
+        domain.require_project_editor(project_id, get_current_user(request))
         if previous_workspace_id is not None:
             return domain.replace_primary_workspace(
                 project_id,
                 previous_workspace_id,
                 workspace_id,
                 get_current_user(request),
-                idempotency_key=_compatibility_idempotency_key(request, "project-primary-replace"),
+                idempotency_key=require_idempotency_key(request),
             )
         return domain.set_primary_workspace(
             project_id,
             workspace_id,
             get_current_user(request),
-            idempotency_key=_compatibility_idempotency_key(request, "project-primary"),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate_project_error(exc) from exc
@@ -936,12 +968,14 @@ async def create_project_task_edge(
             replacement="Task relationship API",
         )
         try:
+            domain.require_project_editor(project_id, user)
             return _serialize_domain_task_edge(
                 domain.create_task_relationship(
                     project_id,
                     user,
                     source_task_id=payload.source_task_id,
                     target_task_id=payload.target_task_id,
+                    idempotency_key=require_idempotency_key(request, payload.idempotency_key),
                 )
             )
         except Exception as exc:
@@ -972,7 +1006,11 @@ async def delete_task_edge(edge_id: str, request: Request, response: Response) -
             replacement="Task relationship API",
         )
         try:
-            domain.delete_task_relationship(edge_id, user)
+            domain.delete_task_relationship(
+                edge_id,
+                user,
+                idempotency_key=require_idempotency_key(request),
+            )
         except Exception as exc:
             raise _translate_task_edge_error(exc) from exc
         return None
@@ -1048,6 +1086,112 @@ async def list_project_tasks(
     )
 
 
+@router.get("/{project_id}/members", response_model=ProjectMemberListResponse)
+async def list_project_members(
+    project_id: str,
+    request: Request,
+) -> ProjectMemberListResponse:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project member API is unavailable")
+    try:
+        auth_service = _get_auth_service(request)
+        return ProjectMemberListResponse(
+            items=[
+                _serialize_domain_member(member, auth_service)
+                for member in domain.list_project_members(project_id, get_current_user(request))
+            ]
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+
+@router.put(
+    "/{project_id}/members/{member_user_id}",
+    response_model=ProjectMemberResponse,
+)
+async def upsert_project_member(
+    project_id: str,
+    member_user_id: str,
+    payload: ProjectMemberRequest,
+    request: Request,
+) -> ProjectMemberResponse:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project member API is unavailable")
+    user = get_current_user(request)
+    try:
+        domain.require_project_owner(project_id, user)
+        domain.add_member(
+            project_id,
+            member_user_id,
+            payload.role,
+            payload.can_publish,
+            user,
+            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+        )
+        members = domain.list_project_members(project_id, user)
+        member = next(
+            (item for item in members if item.get("user_id") == member_user_id),
+            None,
+        )
+        if member is None:  # pragma: no cover - transaction invariant
+            raise RuntimeError("Updated Project member could not be read")
+        return _serialize_domain_member(member, _get_auth_service(request))
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+
+@router.delete("/{project_id}/members/{member_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_member(
+    project_id: str,
+    member_user_id: str,
+    request: Request,
+) -> None:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project member API is unavailable")
+    try:
+        domain.require_project_owner(project_id, get_current_user(request))
+        domain.remove_member(
+            project_id,
+            member_user_id,
+            get_current_user(request),
+            idempotency_key=require_idempotency_key(request),
+        )
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+    return None
+
+
+@router.post(
+    "/{project_id}/owner-transfer",
+    response_model=ProjectResponse,
+)
+async def transfer_project_owner(
+    project_id: str,
+    payload: ProjectOwnerTransferRequest,
+    request: Request,
+) -> ProjectResponse:
+    domain = _v2_domain_service(request)
+    if domain is None:
+        raise HTTPException(status_code=404, detail="Project owner transfer is unavailable")
+    user = get_current_user(request)
+    try:
+        domain.require_project_owner(project_id, user)
+        domain.transfer_project_owner(
+            project_id,
+            payload.new_owner_user_id,
+            user,
+            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+        )
+        # The caller is deliberately retained as an editor during transfer,
+        # so it can read the resulting Project projection.
+        return _serialize_domain_project(domain, domain.project(project_id, user), user)
+    except Exception as exc:
+        raise _translate_project_error(exc) from exc
+
+
 @router.get("/{project_id}/collaborators", response_model=CollaboratorListResponse)
 async def list_collaborators(
     project_id: str,
@@ -1100,9 +1244,21 @@ async def add_collaborator(
         )
         role = payload.role if payload.role in {"viewer", "editor"} else "viewer"
         try:
-            domain.add_member(project_id, payload.user_id, role, False, user)
+            domain.require_project_owner(project_id, user)
+            domain.add_member(
+                project_id,
+                payload.user_id,
+                role,
+                payload.can_publish,
+                user,
+                idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            )
             return _serialize_domain_collaborator(
-                {"user_id": payload.user_id, "role": role},
+                {
+                    "user_id": payload.user_id,
+                    "role": role,
+                    "can_publish": payload.can_publish,
+                },
                 _get_auth_service(request),
             )
         except Exception as exc:
@@ -1124,7 +1280,13 @@ async def remove_collaborator(project_id: str, user_id: str, request: Request) -
     domain = _v2_domain_service(request)
     if domain is not None:
         try:
-            domain.remove_member(project_id, user_id, user)
+            domain.require_project_owner(project_id, user)
+            domain.remove_member(
+                project_id,
+                user_id,
+                user,
+                idempotency_key=require_idempotency_key(request),
+            )
         except Exception as exc:
             raise _translate_project_error(exc) from exc
         response = Response(status_code=204)

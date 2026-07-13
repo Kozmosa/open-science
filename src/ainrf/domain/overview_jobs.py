@@ -30,8 +30,14 @@ from ainrf.domain_control import (
 )
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
-_SUCCESS_CARD_STATUSES = ("ok", "partial")
+# A card is a last-success candidate only when every one of its authoritative
+# local sources was readable.  In particular, a partial resource scan must not
+# replace the last complete Environment snapshot with a smaller subset.
+_SUCCESS_CARD_STATUSES = ("ok",)
 _PLANNER_HEARTBEAT_TTL = timedelta(minutes=2)
+_RETRY_BASE_DELAY_SECONDS = 15
+_RETRY_MAX_DELAY_SECONDS = 15 * 60
+_MAX_RETRY_COUNT = 3
 
 RefreshTrigger = Literal["manual", "scheduled", "catchup"]
 
@@ -132,7 +138,9 @@ class OverviewSnapshotService:
     """Persist and build user-scoped overview snapshots through durable jobs.
 
     The public enqueue/claim/complete methods intentionally make the job table
-    the only write model used by both manual and scheduled refreshes.  The
+    the only write model used by both manual and scheduled refreshes.  Failed
+    jobs retain their user-visible identity while waiting for bounded retries,
+    so a planner restart never drops a scheduled Shanghai slot.  The
     compatibility :meth:`refresh` helper merely enqueues and immediately runs
     such a job for an administrative CLI; it does not maintain a second path.
     """
@@ -233,22 +241,32 @@ class OverviewSnapshotService:
         now: datetime | None = None,
         active_user_ids: Iterable[str] | None = None,
     ) -> list[dict[str, object]]:
-        """Plan the current Shanghai 06:00 slot, including restart catch-up.
+        """Plan eligible Shanghai 06:00 slots, including restart catch-up.
 
-        Calling this after 06:00 on a restarted worker creates the missing
-        current-day jobs.  The unique scheduled slot makes repeated worker
-        starts and multiple planners harmless.
+        Before 06:00, a restarted worker must still drain historical missed
+        slots, but it must not create today's slot early.  A user without any
+        prior scheduled history is therefore first initialized at or after
+        today's 06:00 boundary; a user with recorded history can catch up
+        through yesterday before that boundary.  The unique scheduled slot
+        makes repeated worker starts and multiple planners harmless.
         """
 
         current = _as_utc(now)
         shanghai_now = current.astimezone(_SHANGHAI)
-        if (shanghai_now.hour, shanghai_now.minute) < (6, 0):
-            return []
+        current_slot_due = (shanghai_now.hour, shanghai_now.minute) >= (6, 0)
+        last_eligible_date = (
+            shanghai_now.date() if current_slot_due else shanghai_now.date() - timedelta(days=1)
+        )
         user_ids = active_user_ids if active_user_ids is not None else self.active_user_ids()
         scheduled: list[dict[str, object]] = []
         for user_id in sorted({item.strip() for item in user_ids if item.strip()}):
             with closing(self._connect()) as conn:
-                due_date = self._next_due_schedule_date(conn, user_id, shanghai_now.date())
+                due_date = self._next_due_schedule_date(
+                    conn,
+                    user_id,
+                    last_eligible_date,
+                    allow_initial_slot=current_slot_due,
+                )
             if due_date is None:
                 continue
             job = self.request_refresh(
@@ -283,7 +301,12 @@ class OverviewSnapshotService:
         lease_seconds: int = 60,
         job_id: str | None = None,
     ) -> OverviewRefreshClaim | None:
-        """Claim one queued or expired job using a lease token CAS fence."""
+        """Claim one due queued/retry job using a lease token CAS fence.
+
+        A crashed planner makes only its expired ``running`` lease eligible
+        again.  A completed failure waits for ``next_retry_at`` instead of
+        becoming immediately hot-loopable by every worker.
+        """
 
         if not worker_id.strip():
             raise ValueError("worker_id is required")
@@ -297,7 +320,7 @@ class OverviewSnapshotService:
                 """
                 UPDATE overview_refresh_jobs
                 SET status = 'queued', lease_owner = NULL, lease_token = NULL,
-                    lease_expires_at = NULL, updated_at = ?
+                    lease_expires_at = NULL, next_retry_at = NULL, updated_at = ?
                 WHERE status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
                 """,
                 (current_iso, current_iso),
@@ -307,16 +330,24 @@ class OverviewSnapshotService:
                     """
                     SELECT * FROM overview_refresh_jobs
                     WHERE status = 'queued'
+                       OR (status = 'retry_wait' AND next_retry_at IS NOT NULL
+                           AND next_retry_at <= ?)
                     ORDER BY created_at ASC, job_id ASC LIMIT 1
-                    """
+                    """,
+                    (current_iso,),
                 ).fetchone()
             else:
                 row = conn.execute(
                     """
                     SELECT * FROM overview_refresh_jobs
-                    WHERE job_id = ? AND status = 'queued'
+                    WHERE job_id = ?
+                      AND (
+                          status = 'queued'
+                          OR (status = 'retry_wait' AND next_retry_at IS NOT NULL
+                              AND next_retry_at <= ?)
+                      )
                     """,
-                    (job_id,),
+                    (job_id, current_iso),
                 ).fetchone()
             if row is None:
                 conn.commit()
@@ -327,8 +358,14 @@ class OverviewSnapshotService:
                 UPDATE overview_refresh_jobs
                 SET status = 'running', lease_owner = ?, lease_token = ?,
                     lease_expires_at = ?, heartbeat_at = ?, started_at = COALESCE(started_at, ?),
-                    attempt_count = attempt_count + 1, updated_at = ?
-                WHERE job_id = ? AND status = 'queued' AND lease_token IS NULL
+                    attempt_count = attempt_count + 1, next_retry_at = NULL, updated_at = ?
+                WHERE job_id = ?
+                  AND (
+                      status = 'queued'
+                      OR (status = 'retry_wait' AND next_retry_at IS NOT NULL
+                          AND next_retry_at <= ?)
+                  )
+                  AND lease_token IS NULL
                 """,
                 (
                     worker_id,
@@ -338,6 +375,7 @@ class OverviewSnapshotService:
                     current_iso,
                     current_iso,
                     str(row["job_id"]),
+                    current_iso,
                 ),
             ).rowcount
             if updated != 1:
@@ -579,7 +617,8 @@ class OverviewSnapshotService:
                 return self._persist_claim_result(conn, claim, cards, current)
         except Exception as exc:
             # A job-level exception must not erase a previously good snapshot.
-            if not self._fail_claim(claim, str(exc), current):
+            failure_outcome = self._fail_claim(claim, str(exc), current)
+            if failure_outcome is None:
                 return OverviewRefreshRunResult(
                     job_id=claim.job_id,
                     outcome="claim_lost",
@@ -587,7 +626,7 @@ class OverviewSnapshotService:
                 )
             return OverviewRefreshRunResult(
                 job_id=claim.job_id,
-                outcome="failed",
+                outcome=failure_outcome,
                 detail=str(exc),
             )
 
@@ -833,15 +872,13 @@ class OverviewSnapshotService:
             # pointer itself remains on the last successful whole snapshot.
             for card in cards:
                 self._upsert_card_state(conn, claim, card, current_iso)
-            if not self._finish_job_row(
+            failure_outcome = self._retry_or_fail_claim_in_transaction(
                 conn,
                 claim,
-                status="failed",
-                snapshot_id=None,
-                source_status="failed",
-                error_summary="all overview cards failed; last successful snapshot was retained",
-                current_iso=current_iso,
-            ):
+                detail="all overview cards failed; last successful snapshot was retained",
+                current=current,
+            )
+            if failure_outcome is None:
                 conn.rollback()
                 return OverviewRefreshRunResult(
                     job_id=claim.job_id,
@@ -851,7 +888,7 @@ class OverviewSnapshotService:
             conn.commit()
             return OverviewRefreshRunResult(
                 job_id=claim.job_id,
-                outcome="failed",
+                outcome=failure_outcome,
                 detail="all overview cards failed; last successful snapshot was retained",
             )
 
@@ -989,7 +1026,7 @@ class OverviewSnapshotService:
             UPDATE overview_refresh_jobs
             SET status = ?, snapshot_id = ?, source_status = ?, error_summary = ?,
                 finished_at = ?, heartbeat_at = ?, lease_owner = NULL, lease_token = NULL,
-                lease_expires_at = NULL, updated_at = ?
+                lease_expires_at = NULL, next_retry_at = NULL, updated_at = ?
             WHERE job_id = ? AND status = 'running' AND lease_token = ?
               AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
             """,
@@ -1008,23 +1045,105 @@ class OverviewSnapshotService:
         ).rowcount
         return updated == 1
 
-    def _fail_claim(self, claim: OverviewRefreshClaim, detail: str, current: datetime) -> bool:
+    def _fail_claim(
+        self, claim: OverviewRefreshClaim, detail: str, current: datetime
+    ) -> str | None:
         with closing(self._connect()) as conn:
             self._write_fence.record_first_v2_write(conn, actor_id=claim.owner_user_id)
-            finished = self._finish_job_row(
+            outcome = self._retry_or_fail_claim_in_transaction(
                 conn,
                 claim,
-                status="failed",
-                snapshot_id=None,
-                source_status="failed",
-                error_summary=detail,
-                current_iso=_iso(current),
+                detail=detail,
+                current=current,
             )
-            if finished:
+            if outcome is not None:
                 conn.commit()
             else:
                 conn.rollback()
-        return finished
+        return outcome
+
+    def _retry_or_fail_claim_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        claim: OverviewRefreshClaim,
+        *,
+        detail: str,
+        current: datetime,
+    ) -> str | None:
+        """Release one failed claim into bounded retry or terminal failure.
+
+        The exact running-lease predicate makes a stale worker unable to
+        override a later claimant.  ``retry_wait`` remains an active job for
+        its owner, which both makes repeated manual clicks idempotent and
+        prevents a restarted scheduler from skipping the failed daily slot.
+        """
+
+        current_iso = _iso(current)
+        row = conn.execute(
+            """
+            SELECT retry_count FROM overview_refresh_jobs
+            WHERE job_id = ? AND status = 'running' AND lease_token = ?
+              AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+            """,
+            (claim.job_id, claim.lease_token, current_iso),
+        ).fetchone()
+        if row is None:
+            return None
+        retry_count = int(row["retry_count"]) + 1
+        if retry_count <= _MAX_RETRY_COUNT:
+            delay_seconds = min(
+                _RETRY_BASE_DELAY_SECONDS * (2 ** (retry_count - 1)),
+                _RETRY_MAX_DELAY_SECONDS,
+            )
+            next_retry_at = _iso(current + timedelta(seconds=delay_seconds))
+            updated = conn.execute(
+                """
+                UPDATE overview_refresh_jobs
+                SET status = 'retry_wait', retry_count = ?, next_retry_at = ?,
+                    last_failure_at = ?, snapshot_id = NULL, source_status = 'failed',
+                    error_summary = ?, finished_at = NULL, heartbeat_at = ?,
+                    lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL,
+                    updated_at = ?
+                WHERE job_id = ? AND status = 'running' AND lease_token = ?
+                  AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+                """,
+                (
+                    retry_count,
+                    next_retry_at,
+                    current_iso,
+                    detail[:1000],
+                    current_iso,
+                    current_iso,
+                    claim.job_id,
+                    claim.lease_token,
+                    current_iso,
+                ),
+            ).rowcount
+            return "retry_wait" if updated == 1 else None
+        updated = conn.execute(
+            """
+            UPDATE overview_refresh_jobs
+            SET status = 'failed', retry_count = ?, next_retry_at = NULL,
+                last_failure_at = ?, snapshot_id = NULL, source_status = 'failed',
+                error_summary = ?, finished_at = ?, heartbeat_at = ?,
+                lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL,
+                updated_at = ?
+            WHERE job_id = ? AND status = 'running' AND lease_token = ?
+              AND lease_expires_at IS NOT NULL AND lease_expires_at > ?
+            """,
+            (
+                retry_count,
+                current_iso,
+                detail[:1000],
+                current_iso,
+                current_iso,
+                current_iso,
+                claim.job_id,
+                claim.lease_token,
+                current_iso,
+            ),
+        ).rowcount
+        return "failed" if updated == 1 else None
 
     def _snapshot_payload(
         self,
@@ -1097,7 +1216,7 @@ class OverviewSnapshotService:
         return conn.execute(
             """
             SELECT * FROM overview_refresh_jobs
-            WHERE owner_user_id = ? AND status IN ('queued', 'running')
+            WHERE owner_user_id = ? AND status IN ('queued', 'retry_wait', 'running')
             ORDER BY created_at ASC, job_id ASC LIMIT 1
             """,
             (owner_user_id,),
@@ -1105,14 +1224,18 @@ class OverviewSnapshotService:
 
     @staticmethod
     def _next_due_schedule_date(
-        conn: sqlite3.Connection, owner_user_id: str, current_date: date
+        conn: sqlite3.Connection,
+        owner_user_id: str,
+        current_date: date,
+        *,
+        allow_initial_slot: bool = True,
     ) -> date | None:
         """Return the oldest outstanding Shanghai daily slot for one user.
 
-        The active-job invariant intentionally permits only one queued/running
-        job per user.  The planner repeatedly calls this helper after each
-        completion, thereby draining missed days in order without creating a
-        second active job for the same user.
+        The active-job invariant intentionally permits only one queued,
+        retry-wait, or running job per user.  The planner repeatedly calls this
+        helper after each completion, thereby draining missed days in order
+        without creating a second active job for the same user.
         """
 
         row = conn.execute(
@@ -1124,7 +1247,10 @@ class OverviewSnapshotService:
         ).fetchone()
         latest = _parse_date(row["scheduled_for_date"] if row is not None else None)
         if latest is None:
-            return current_date
+            # Before today's 06:00 boundary, there is no auditable basis to
+            # infer a pre-registration historical slot for a new user.  Once
+            # the boundary passes, initialize that user's current daily slot.
+            return current_date if allow_initial_slot else None
         if latest >= current_date:
             return None
         # Do not silently discard older missed days.  The planner creates one
@@ -1141,6 +1267,9 @@ class OverviewSnapshotService:
             "scheduled_for_date": OverviewSnapshotService._optional_str(row["scheduled_for_date"]),
             "status": str(row["status"]),
             "attempt_count": int(row["attempt_count"]),
+            "retry_count": int(row["retry_count"]),
+            "next_retry_at": OverviewSnapshotService._optional_str(row["next_retry_at"]),
+            "last_failure_at": OverviewSnapshotService._optional_str(row["last_failure_at"]),
             "snapshot_id": OverviewSnapshotService._optional_str(row["snapshot_id"]),
             "source_status": OverviewSnapshotService._optional_str(row["source_status"]),
             "error_summary": OverviewSnapshotService._optional_str(row["error_summary"]),
@@ -1332,6 +1461,11 @@ class OverviewSnapshotPlanner:
     ) -> None:
         current_iso = _iso(now)
         with closing(self._service._connect()) as conn:
+            # Planner heartbeats are control-plane writes too.  Keep them
+            # behind the same committed-v2 fuse as enqueue/claim/completion so
+            # a legacy or prepared process cannot advertise a false-ready
+            # Overview planner.
+            self._service._write_fence.record_first_v2_write(conn, actor_id=self.planner_id)
             conn.execute(
                 """
                 INSERT INTO overview_planner_state (

@@ -15,10 +15,13 @@ from ainrf.auth.service import AuthService
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
 
 
-def test_create_and_retry_task_share_task_id_and_outbox(state_root: Path) -> None:
+def test_create_and_retry_task_share_task_id_and_outbox(
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
     owner: dict[str, object] = {"id": "owner", "role": "member"}
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
-    domain = DomainService(state_root)
+    domain = DomainService(state_root, artifact_sha=committed_v2_state)
     environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
     auth = AuthService(state_root=state_root)
     auth.initialize()
@@ -39,10 +42,10 @@ def test_create_and_retry_task_share_task_id_and_outbox(state_root: Path) -> Non
     domain.attach_workspace(
         str(project["project_id"]), str(workspace["workspace_id"]), owner, idempotency_key="link"
     )
-    context = ProjectContextService(state_root)
+    context = ProjectContextService(state_root, artifact_sha=committed_v2_state)
     context.save_draft(str(project["project_id"]), "context", owner)
     context.publish(str(project["project_id"]), owner)
-    tasks = TaskApplicationService(state_root)
+    tasks = TaskApplicationService(state_root, artifact_sha=committed_v2_state)
 
     created = tasks.create_task(
         owner,

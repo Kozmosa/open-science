@@ -1,10 +1,111 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 
 from ainrf.db.migration import registry
 
 _DATABASE = "agentic_researcher"
+
+_DOMAIN_TASK_REFERENCE_GUARD_NAMES = (
+    "domain_v2_task_reference_guard_insert",
+    "domain_v2_task_reference_guard_update",
+)
+
+
+def _normalized_sql(value: str) -> str:
+    """Normalize SQLite's persisted trigger text for integrity comparison."""
+
+    return " ".join(value.strip().rstrip(";").split()).lower()
+
+
+def _domain_task_reference_guard_definitions() -> tuple[tuple[str, str], ...]:
+    """Return the final v2 Task reference guards in their canonical form.
+
+    SQLite cannot add the complete Project/Workspace foreign-key graph to the
+    historical ``tasks`` table with ``ALTER TABLE``.  These guards are the
+    final-cutover equivalent: they keep every newly written or moved Task tied
+    to an authoritative Project, Workspace, and Workspace-derived Environment.
+    """
+
+    return (
+        (
+            "domain_v2_task_reference_guard_insert",
+            """
+            CREATE TRIGGER domain_v2_task_reference_guard_insert
+            BEFORE INSERT ON tasks
+            WHEN (SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1) = 1
+              AND (
+                NOT EXISTS (SELECT 1 FROM projects WHERE project_id = NEW.project_id)
+                OR NOT EXISTS (
+                    SELECT 1 FROM workspaces
+                    WHERE workspace_id = NEW.workspace_id
+                      AND environment_id = NEW.environment_id
+                )
+              )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'v2 task requires a domain project, workspace, and derived environment'
+                );
+            END
+            """,
+        ),
+        (
+            "domain_v2_task_reference_guard_update",
+            """
+            CREATE TRIGGER domain_v2_task_reference_guard_update
+            BEFORE UPDATE OF project_id, workspace_id, environment_id ON tasks
+            WHEN (SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1) = 1
+              AND (
+                NOT EXISTS (SELECT 1 FROM projects WHERE project_id = NEW.project_id)
+                OR NOT EXISTS (
+                    SELECT 1 FROM workspaces
+                    WHERE workspace_id = NEW.workspace_id
+                      AND environment_id = NEW.environment_id
+                )
+              )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'v2 task requires a domain project, workspace, and derived environment'
+                );
+            END
+            """,
+        ),
+    )
+
+
+def install_domain_task_reference_guards(conn: sqlite3.Connection) -> None:
+    """Install the final-cutover Task reference guards transactionally.
+
+    This helper intentionally uses individual ``execute`` calls rather than
+    ``executescript`` so a cutover controller may install it while retaining
+    its caller-owned ``BEGIN IMMEDIATE`` maintenance transaction.
+    """
+
+    for name in _DOMAIN_TASK_REFERENCE_GUARD_NAMES:
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for _name, definition in _domain_task_reference_guard_definitions():
+        conn.execute(definition)
+
+
+def domain_task_reference_guard_digest(conn: sqlite3.Connection) -> str:
+    """Verify the installed equivalent FK guards and return their digest."""
+
+    parts: list[str] = []
+    for name, expected_definition in _domain_task_reference_guard_definitions():
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", (name,)
+        ).fetchone()
+        actual = row[0] if row is not None else None
+        if not isinstance(actual, str) or _normalized_sql(actual) != _normalized_sql(
+            expected_definition
+        ):
+            raise RuntimeError(f"domain Task reference guard is missing or invalid: {name}")
+        parts.append(f"{name}:{_normalized_sql(actual)}")
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 @registry.register(_DATABASE)
@@ -683,30 +784,7 @@ def migration_012_harden_domain_control_plane(conn: sqlite3.Connection) -> None:
         BEGIN SELECT RAISE(ABORT, 'invalid domain cutover state transition'); END;
         """
     )
-    conn.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS domain_v2_task_reference_guard_insert
-        BEFORE INSERT ON tasks
-        WHEN (SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1) = 1
-          AND (
-            NOT EXISTS (SELECT 1 FROM projects WHERE project_id = NEW.project_id)
-            OR NOT EXISTS (SELECT 1 FROM workspaces WHERE workspace_id = NEW.workspace_id)
-          )
-        BEGIN SELECT RAISE(ABORT, 'v2 task requires a domain project and workspace'); END
-        """
-    )
-    conn.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS domain_v2_task_reference_guard_update
-        BEFORE UPDATE OF project_id, workspace_id ON tasks
-        WHEN (SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1) = 1
-          AND (
-            NOT EXISTS (SELECT 1 FROM projects WHERE project_id = NEW.project_id)
-            OR NOT EXISTS (SELECT 1 FROM workspaces WHERE workspace_id = NEW.workspace_id)
-          )
-        BEGIN SELECT RAISE(ABORT, 'v2 task requires a domain project and workspace'); END
-        """
-    )
+    install_domain_task_reference_guards(conn)
 
 
 @registry.register(_DATABASE)
@@ -1696,5 +1774,461 @@ def migration_020_overview_refresh_jobs(conn: sqlite3.Connection) -> None:
             last_error TEXT,
             updated_at TEXT NOT NULL
         );
+        """
+    )
+
+
+@registry.register(_DATABASE)
+def migration_021_freeze_context_version_fragments(conn: sqlite3.Connection) -> None:
+    """Add an immutable manifest slot without inventing legacy provenance.
+
+    Prior schema revisions attached Fragments to a Project, not to a Context
+    Version.  They therefore cannot prove which set belonged to any historic
+    Version.  This migration creates the slot and protects it; migration 023
+    records every pre-existing Version as explicit ``attention_needed`` rather
+    than copying the current Project Fragment rows into its past.
+    """
+
+    try:
+        conn.execute(
+            "ALTER TABLE project_context_versions "
+            "ADD COLUMN fragment_manifest_json TEXT NOT NULL DEFAULT '[]'"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    # Reinstall the immutable trigger to add the new manifest column.  Existing
+    # rows intentionally retain the canonical empty placeholder until the
+    # following provenance migration marks them as unresolved.
+    conn.execute("DROP TRIGGER IF EXISTS project_context_version_metadata_immutable")
+    conn.executescript(
+        """
+        CREATE TRIGGER project_context_version_metadata_immutable
+        BEFORE UPDATE OF project_id, content, fingerprint, fragment_manifest_json,
+                         created_by_user_id, created_at
+        ON project_context_versions
+        BEGIN SELECT RAISE(ABORT, 'context versions are immutable'); END;
+        """
+    )
+
+
+def _create_overview_refresh_jobs_with_retry_schema(conn: sqlite3.Connection) -> None:
+    """Create the retry-capable Overview job table and its durable indexes."""
+
+    conn.executescript(
+        """
+        CREATE TABLE overview_refresh_jobs (
+            job_id TEXT PRIMARY KEY,
+            owner_user_id TEXT NOT NULL,
+            trigger TEXT NOT NULL CHECK (trigger IN ('manual', 'scheduled', 'catchup')),
+            scheduled_for_date TEXT,
+            status TEXT NOT NULL CHECK (status IN (
+                'queued', 'retry_wait', 'running', 'succeeded', 'partial', 'failed'
+            )),
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+            retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+            next_retry_at TEXT,
+            last_failure_at TEXT,
+            lease_owner TEXT,
+            lease_token TEXT,
+            lease_expires_at TEXT,
+            heartbeat_at TEXT,
+            snapshot_id TEXT,
+            source_status TEXT,
+            error_summary TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            updated_at TEXT NOT NULL,
+            CHECK (
+                (trigger = 'manual' AND scheduled_for_date IS NULL)
+                OR (trigger IN ('scheduled', 'catchup') AND scheduled_for_date IS NOT NULL)
+            ),
+            CHECK (
+                (status = 'running' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL
+                 AND lease_expires_at IS NOT NULL)
+                OR status != 'running'
+            ),
+            CHECK (
+                (status = 'retry_wait' AND next_retry_at IS NOT NULL)
+                OR status != 'retry_wait'
+            )
+        );
+        CREATE UNIQUE INDEX idx_overview_refresh_jobs_schedule_slot
+        ON overview_refresh_jobs(owner_user_id, scheduled_for_date)
+        WHERE scheduled_for_date IS NOT NULL;
+        CREATE UNIQUE INDEX idx_overview_refresh_jobs_active_owner
+        ON overview_refresh_jobs(owner_user_id)
+        WHERE status IN ('queued', 'retry_wait', 'running');
+        CREATE INDEX idx_overview_refresh_jobs_claim
+        ON overview_refresh_jobs(status, next_retry_at, created_at, job_id);
+        CREATE INDEX idx_overview_refresh_jobs_owner_updated
+        ON overview_refresh_jobs(owner_user_id, updated_at DESC, job_id DESC);
+        CREATE INDEX idx_overview_refresh_jobs_lease_expiry
+        ON overview_refresh_jobs(status, lease_expires_at)
+        WHERE status = 'running';
+        """
+    )
+
+
+def _create_overview_refresh_card_states(conn: sqlite3.Connection) -> None:
+    """Recreate the child table after the retry-schema parent rebuild."""
+
+    conn.executescript(
+        """
+        CREATE TABLE overview_refresh_card_states (
+            owner_user_id TEXT NOT NULL,
+            card_id TEXT NOT NULL,
+            last_job_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN (
+                'ok', 'partial', 'stale', 'unavailable', 'failed'
+            )),
+            data_json TEXT,
+            data_cutoff_at TEXT NOT NULL,
+            last_success_data_json TEXT,
+            last_success_at TEXT,
+            last_success_cutoff_at TEXT,
+            error_summary TEXT,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (owner_user_id, card_id),
+            FOREIGN KEY (last_job_id) REFERENCES overview_refresh_jobs(job_id)
+                ON DELETE RESTRICT
+        );
+        CREATE INDEX idx_overview_refresh_card_states_owner_updated
+        ON overview_refresh_card_states(owner_user_id, updated_at DESC, card_id);
+        """
+    )
+
+
+@registry.register(_DATABASE)
+def migration_022_overview_refresh_retry_backoff(conn: sqlite3.Connection) -> None:
+    """Add bounded retry state without letting a failed daily slot disappear.
+
+    SQLite cannot alter a table-level ``CHECK`` to admit ``retry_wait``.  The
+    parent and its FK child are rebuilt inside the migration transaction with
+    deferred FK enforcement, then copied exactly.  This keeps completed
+    snapshot/card history intact while allowing a scheduled slot to retain its
+    latest successful data and retry before becoming terminally failed.
+    """
+
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'overview_refresh_jobs'"
+    ).fetchone()
+    if row is None:
+        # Defensive only: fresh schemas always receive migration 020 first.
+        _create_overview_refresh_jobs_with_retry_schema(conn)
+        _create_overview_refresh_card_states(conn)
+        return
+    table_sql = str(row["sql"] or "").lower()
+    if "retry_wait" in table_sql:
+        # A partially upgraded development database may already have a
+        # compatible status constraint; retain its rows and add only columns.
+        for name, definition in (
+            ("retry_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("next_retry_at", "TEXT"),
+            ("last_failure_at", "TEXT"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE overview_refresh_jobs ADD COLUMN {name} {definition}")
+            except sqlite3.OperationalError:
+                pass
+        return
+
+    # `foreign_keys` is enabled on every project connection.  Deferring it for
+    # this transaction permits the parent/child swap while preserving all
+    # existing FK values for the newly recreated child table.
+    conn.execute("PRAGMA defer_foreign_keys = ON")
+    conn.execute("ALTER TABLE overview_refresh_jobs RENAME TO overview_refresh_jobs_legacy")
+    for index_name in (
+        "idx_overview_refresh_jobs_schedule_slot",
+        "idx_overview_refresh_jobs_active_owner",
+        "idx_overview_refresh_jobs_claim",
+        "idx_overview_refresh_jobs_owner_updated",
+        "idx_overview_refresh_jobs_lease_expiry",
+    ):
+        conn.execute(f"DROP INDEX IF EXISTS {index_name}")
+    _create_overview_refresh_jobs_with_retry_schema(conn)
+    conn.execute(
+        """
+        INSERT INTO overview_refresh_jobs (
+            job_id, owner_user_id, trigger, scheduled_for_date, status, attempt_count,
+            retry_count, next_retry_at, last_failure_at, lease_owner, lease_token,
+            lease_expires_at, heartbeat_at, snapshot_id, source_status, error_summary,
+            created_at, started_at, finished_at, updated_at
+        )
+        SELECT
+            job_id, owner_user_id, trigger, scheduled_for_date, status, attempt_count,
+            0, NULL, NULL, lease_owner, lease_token, lease_expires_at, heartbeat_at,
+            snapshot_id, source_status, error_summary, created_at, started_at,
+            finished_at, updated_at
+        FROM overview_refresh_jobs_legacy
+        """
+    )
+
+    conn.execute(
+        "ALTER TABLE overview_refresh_card_states RENAME TO overview_refresh_card_states_legacy"
+    )
+    conn.execute("DROP INDEX IF EXISTS idx_overview_refresh_card_states_owner_updated")
+    _create_overview_refresh_card_states(conn)
+    conn.execute(
+        """
+        INSERT INTO overview_refresh_card_states (
+            owner_user_id, card_id, last_job_id, status, data_json, data_cutoff_at,
+            last_success_data_json, last_success_at, last_success_cutoff_at,
+            error_summary, updated_at
+        )
+        SELECT
+            owner_user_id, card_id, last_job_id, status, data_json, data_cutoff_at,
+            last_success_data_json, last_success_at, last_success_cutoff_at,
+            error_summary, updated_at
+        FROM overview_refresh_card_states_legacy
+        """
+    )
+    conn.execute("DROP TABLE overview_refresh_card_states_legacy")
+    conn.execute("DROP TABLE overview_refresh_jobs_legacy")
+
+
+@registry.register(_DATABASE)
+def migration_023_context_version_fragment_provenance(conn: sqlite3.Connection) -> None:
+    """Mark historic Context Version Fragment associations as unresolved.
+
+    A pre-manifest schema had only live Project-level Fragments.  Rebuilding a
+    historic Version from the rows visible during upgrade would falsely claim
+    those rows were reviewed with that Version.  Preserve every existing
+    Version and Snapshot, but record immutable attention-needed provenance and
+    clear the untrustworthy manifest.  New publishes insert a verified record;
+    an unresolved historic Version is never silently assembled for a new Task.
+    """
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS project_context_version_provenance (
+            context_version_id TEXT PRIMARY KEY
+                REFERENCES project_context_versions(context_version_id) ON DELETE RESTRICT,
+            fragment_provenance_status TEXT NOT NULL
+                CHECK (fragment_provenance_status IN ('verified', 'attention_needed')),
+            evidence_json TEXT NOT NULL,
+            recorded_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_context_version_provenance_status
+        ON project_context_version_provenance(fragment_provenance_status, recorded_at);
+
+        CREATE TRIGGER IF NOT EXISTS context_version_provenance_append_only_update
+        BEFORE UPDATE ON project_context_version_provenance
+        BEGIN SELECT RAISE(ABORT, 'context version provenance is append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_version_provenance_append_only_delete
+        BEFORE DELETE ON project_context_version_provenance
+        BEGIN SELECT RAISE(ABORT, 'context version provenance is append-only'); END;
+        """
+    )
+
+    # A prior development build of migration 021 copied current live Fragments
+    # into every historic Version.  Temporarily lift only the Version metadata
+    # trigger so this corrective migration can remove that fabricated claim.
+    conn.execute("DROP TRIGGER IF EXISTS project_context_version_metadata_immutable")
+    unresolved_rows = conn.execute(
+        """
+        SELECT version.context_version_id, version.fingerprint, version.fragment_manifest_json
+        FROM project_context_versions AS version
+        LEFT JOIN project_context_version_provenance AS provenance
+          ON provenance.context_version_id = version.context_version_id
+        WHERE provenance.context_version_id IS NULL
+        """
+    ).fetchall()
+    for row in unresolved_rows:
+        raw_manifest = (
+            str(row["fragment_manifest_json"])
+            if isinstance(row["fragment_manifest_json"], str)
+            else "[]"
+        )
+        evidence = json.dumps(
+            {
+                "kind": "legacy_fragment_provenance_unavailable",
+                "migration": "023_context_version_fragment_provenance",
+                "reason": (
+                    "The source schema did not persist a Version-to-Fragment association; "
+                    "current Project Fragments are not evidence of historic review."
+                ),
+                "recorded_version_fingerprint": str(row["fingerprint"]),
+                "discarded_manifest_sha256": hashlib.sha256(
+                    raw_manifest.encode("utf-8")
+                ).hexdigest(),
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        conn.execute(
+            """
+            INSERT INTO project_context_version_provenance (
+                context_version_id, fragment_provenance_status, evidence_json, recorded_at
+            ) VALUES (?, 'attention_needed', ?, strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now'))
+            """,
+            (str(row["context_version_id"]), evidence),
+        )
+        conn.execute(
+            """
+            UPDATE project_context_versions
+            SET fragment_manifest_json = '[]'
+            WHERE context_version_id = ?
+            """,
+            (str(row["context_version_id"]),),
+        )
+
+    conn.executescript(
+        """
+        CREATE TRIGGER project_context_version_metadata_immutable
+        BEFORE UPDATE OF project_id, content, fingerprint, fragment_manifest_json,
+                         created_by_user_id, created_at
+        ON project_context_versions
+        BEGIN SELECT RAISE(ABORT, 'context versions are immutable'); END;
+        """
+    )
+
+
+@registry.register(_DATABASE)
+def migration_024_context_candidate_source_guard(conn: sqlite3.Connection) -> None:
+    """Name pending Candidates ``proposed`` and guard new source provenance.
+
+    The earlier expand phase used ``pending`` as an implementation label.  The
+    public domain contract is ``proposed → accepted|rejected``.  SQLite cannot
+    alter a table-level status ``CHECK`` in place, so rebuild just this
+    append-only table and retain every historical row as a proposed Candidate.
+    Historic rows may lack source fields; the insert guards apply only to new
+    writes, keeping imported audit records readable without legitimizing a new
+    unprovenanced Candidate.
+    """
+
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'project_context_candidates'"
+    ).fetchone()
+    table_sql = str(row["sql"] or "").lower() if row is not None else ""
+    if "'proposed'" not in table_sql:
+        conn.execute("PRAGMA defer_foreign_keys = ON")
+        conn.execute(
+            "ALTER TABLE project_context_candidates RENAME TO project_context_candidates_legacy"
+        )
+        conn.execute("DROP INDEX IF EXISTS idx_context_candidates_project_status")
+        conn.executescript(
+            """
+            CREATE TABLE project_context_candidates (
+                candidate_id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE RESTRICT,
+                content TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'proposed'
+                    CHECK (status IN ('proposed', 'accepted', 'rejected')),
+                created_at TEXT NOT NULL,
+                created_by_user_id TEXT,
+                source_metadata_json TEXT NOT NULL DEFAULT '{}',
+                accepted_by_user_id TEXT,
+                accepted_at TEXT,
+                rejected_by_user_id TEXT,
+                rejected_at TEXT,
+                rejection_reason TEXT,
+                source_task_id TEXT REFERENCES tasks(task_id) ON DELETE RESTRICT,
+                source_attempt_id TEXT
+                    REFERENCES agent_task_attempts(attempt_id) ON DELETE RESTRICT,
+                source_message_start_seq INTEGER,
+                source_message_end_seq INTEGER,
+                source_output_start_seq INTEGER,
+                source_output_end_seq INTEGER
+            );
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO project_context_candidates (
+                candidate_id, project_id, content, status, created_at, created_by_user_id,
+                source_metadata_json, accepted_by_user_id, accepted_at, rejected_by_user_id,
+                rejected_at, rejection_reason, source_task_id, source_attempt_id,
+                source_message_start_seq, source_message_end_seq,
+                source_output_start_seq, source_output_end_seq
+            )
+            SELECT
+                candidate_id, project_id, content,
+                CASE WHEN status = 'pending' THEN 'proposed' ELSE status END,
+                created_at, created_by_user_id, COALESCE(source_metadata_json, '{}'),
+                accepted_by_user_id, accepted_at, rejected_by_user_id, rejected_at,
+                rejection_reason, source_task_id, source_attempt_id,
+                source_message_start_seq, source_message_end_seq,
+                source_output_start_seq, source_output_end_seq
+            FROM project_context_candidates_legacy
+            """
+        )
+        conn.execute("DROP TABLE project_context_candidates_legacy")
+
+    # Renaming/dropping the old table drops its append-only triggers.  Install
+    # the complete final constraint set regardless of whether a development
+    # database was already rebuilt by a prior interrupted migration.
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_context_candidates_project_status
+        ON project_context_candidates(project_id, status, created_at);
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_provenance_immutable
+        BEFORE UPDATE OF project_id, content, created_at, created_by_user_id,
+                         source_metadata_json, source_task_id, source_attempt_id,
+                         source_message_start_seq, source_message_end_seq,
+                         source_output_start_seq, source_output_end_seq
+        ON project_context_candidates
+        BEGIN SELECT RAISE(ABORT, 'context candidate provenance is immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_delete_forbidden
+        BEFORE DELETE ON project_context_candidates
+        BEGIN SELECT RAISE(ABORT, 'context candidates are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_source_required_insert
+        BEFORE INSERT ON project_context_candidates
+        WHEN NEW.created_by_user_id IS NULL
+          OR trim(NEW.created_by_user_id) = ''
+          OR NEW.source_task_id IS NULL
+          OR trim(NEW.source_task_id) = ''
+          OR (NEW.source_message_start_seq IS NULL
+              AND NEW.source_output_start_seq IS NULL)
+          OR ((NEW.source_message_start_seq IS NULL)
+              != (NEW.source_message_end_seq IS NULL))
+          OR ((NEW.source_output_start_seq IS NULL)
+              != (NEW.source_output_end_seq IS NULL))
+          OR (NEW.source_message_start_seq IS NOT NULL
+              AND (NEW.source_message_start_seq < 0
+                   OR NEW.source_message_end_seq < NEW.source_message_start_seq))
+          OR (NEW.source_output_start_seq IS NOT NULL
+              AND (NEW.source_output_start_seq < 0
+                   OR NEW.source_output_end_seq < NEW.source_output_start_seq))
+        BEGIN SELECT RAISE(ABORT, 'context candidate requires Task source provenance'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_source_task_project_insert
+        BEFORE INSERT ON project_context_candidates
+        WHEN NOT EXISTS (
+            SELECT 1 FROM tasks
+            WHERE task_id = NEW.source_task_id AND project_id = NEW.project_id
+        )
+        BEGIN SELECT RAISE(ABORT, 'context candidate source Task must belong to Project'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_source_attempt_insert
+        BEFORE INSERT ON project_context_candidates
+        WHEN NEW.source_attempt_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM agent_task_attempts
+              WHERE attempt_id = NEW.source_attempt_id AND task_id = NEW.source_task_id
+          )
+        BEGIN SELECT RAISE(ABORT, 'context candidate source Attempt must belong to Task'); END;
+
+        CREATE TRIGGER IF NOT EXISTS context_candidate_source_range_insert
+        BEFORE INSERT ON project_context_candidates
+        WHEN (NEW.source_message_start_seq IS NOT NULL
+              AND (
+                  SELECT COUNT(*) FROM task_outputs
+                  WHERE task_id = NEW.source_task_id
+                    AND seq BETWEEN NEW.source_message_start_seq AND NEW.source_message_end_seq
+              ) != NEW.source_message_end_seq - NEW.source_message_start_seq + 1)
+          OR (NEW.source_output_start_seq IS NOT NULL
+              AND (
+                  SELECT COUNT(*) FROM task_outputs
+                  WHERE task_id = NEW.source_task_id
+                    AND seq BETWEEN NEW.source_output_start_seq AND NEW.source_output_end_seq
+              ) != NEW.source_output_end_seq - NEW.source_output_start_seq + 1)
+        BEGIN SELECT RAISE(ABORT, 'context candidate source range is not persisted'); END;
         """
     )

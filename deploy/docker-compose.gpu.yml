@@ -47,6 +47,8 @@ services:
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
       # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
@@ -87,6 +89,52 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Start only after the release controller has committed the v2 fuse.
+  # Unlike host-network deployment this container owns its private sshd, which
+  # the runtime adapters can use for local probe/adopt operations.
+  domain-worker:
+    profiles: ["domain-v2"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
+        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+        RUNTIME_BASE_IMAGE: ${AINRF_GPU_RUNTIME_BASE_IMAGE:-docker.1ms.run/nvidia/cuda:12.5.1-runtime-ubuntu24.04}
+        PYTHON_VERSION: "3.13"
+    restart: unless-stopped
+    container_name: openscience-domain-worker
+    runtime: nvidia
+    environment:
+      HOME: /opt/ainrf
+      AINRF_PRODUCTION: "1"
+      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ainrf-state:/opt/ainrf/state
+      - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - ainrf-tenants:/home/ainrf_tenants
+    cap_add:
+      - SYS_ADMIN
+    command: ["openscience", "domain-worker", "--state-root", "/opt/ainrf/state"]
+    depends_on:
+      ainrf:
+        condition: service_healthy
     logging:
       driver: json-file
       options:

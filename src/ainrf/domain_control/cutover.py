@@ -9,10 +9,15 @@ from contextlib import closing
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.backup import BackupManifest, BackupService
 from ainrf.db import connect, run_pending
+from ainrf.db.migrations.agentic_researcher import (
+    domain_task_reference_guard_digest,
+    install_domain_task_reference_guards,
+)
 from ainrf.domain_control.legacy_source_guard import (
     LegacySourceDriftError,
     LegacySourceGuard,
@@ -20,7 +25,9 @@ from ainrf.domain_control.legacy_source_guard import (
     LegacySourceInventory,
 )
 from ainrf.domain_control.service import DomainMaintenanceService
-from ainrf.domain_migration import DomainReconciliationService, ReconciliationReport
+
+if TYPE_CHECKING:
+    from ainrf.domain_migration import ReconciliationReport
 
 
 class DomainCutoverError(RuntimeError):
@@ -67,6 +74,22 @@ class CutoverStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class ConstraintFinalization:
+    """Auditable result of installing the final Task-reference constraint guard."""
+
+    run_id: str
+    maintenance_epoch: int
+    schema_version: int
+    task_reference_count: int
+    guard_digest: str
+    finalized_at: str
+    cutover_allowed: bool
+
+    def as_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
 class _BackupEvidence:
     manifest_sha256: str
     tree_sha256: str
@@ -103,9 +126,10 @@ def backup_manifest_sha256(manifest: BackupManifest) -> str:
 class DomainCutoverController:
     """Prepare, commit, abort, and fence the one-way v2 cutover transition.
 
-    The controller performs no deployment, restore, chmod, or production
-    action.  It only binds existing backup/reconciliation evidence into the
-    authoritative SQLite fuse.
+    The controller performs no deployment or restore.  It binds existing
+    backup/reconciliation evidence into the authoritative SQLite fuse and,
+    while maintenance holds all writers drained, seals the immutable legacy
+    source inventory before the fuse can transition to v2.
     """
 
     def __init__(self, state_root: Path) -> None:
@@ -127,13 +151,68 @@ class DomainCutoverController:
         drift: str | None = None
         if inventory is not None:
             try:
-                self._legacy_sources.verify(inventory)
+                if str(row["state"]) == "v2":
+                    self._legacy_sources.verify_sealed(inventory)
+                else:
+                    self._legacy_sources.verify(inventory)
             except LegacySourceGuardError as exc:
                 stable = False
                 drift = str(exc)
             else:
                 stable = True
         return self._status_from_row(row, stable, drift)
+
+    def finalize_constraints(
+        self,
+        *,
+        actor_id: str,
+        run_id: str,
+        stability_window_seconds: float = 5.0,
+    ) -> ConstraintFinalization:
+        """Install and attest the final Task-reference guard under stopped writes.
+
+        ``tasks`` predates the authoritative domain graph and cannot receive
+        the required SQLite foreign keys through a safe ``ALTER TABLE``.  The
+        final cutover therefore installs an equivalent insert/update guard only
+        after every other migration reconciliation invariant is clean.  The
+        operation is deliberately separate from migration finalization: that
+        finalization itself requires ``constraints_ready``, so collapsing the
+        two would make a real production cutover unreachable.
+        """
+
+        self._require_actor(actor_id)
+        self._require_text(run_id, "run_id")
+        preflight_epoch = self._require_preflight(stability_window_seconds)
+        before = self._reconcile_for_cutover(run_id)
+        blockers = tuple(
+            blocker for blocker in before.blocking_issues if blocker != "constraints_not_ready"
+        )
+        if blockers:
+            raise CutoverPreconditionError(
+                "domain constraints cannot be finalized while reconciliation is blocked: "
+                + ", ".join(blockers)
+            )
+        finalized = self._finalize_constraints_transaction(
+            actor_id=actor_id,
+            run_id=run_id,
+            preflight_epoch=preflight_epoch,
+        )
+        after = self._reconcile_for_cutover(run_id)
+        if after.blocking_issues or not after.cutover_allowed:
+            detail = ", ".join(after.blocking_issues) or "migration run is not cutover-allowed"
+            raise CutoverPreconditionError(
+                "domain constraints were installed but reconciliation is not cutover-ready: "
+                + detail
+            )
+        return ConstraintFinalization(
+            run_id=finalized.run_id,
+            maintenance_epoch=finalized.maintenance_epoch,
+            schema_version=finalized.schema_version,
+            task_reference_count=finalized.task_reference_count,
+            guard_digest=finalized.guard_digest,
+            finalized_at=finalized.finalized_at,
+            cutover_allowed=True,
+        )
 
     def prepare(
         self,
@@ -166,6 +245,7 @@ class DomainCutoverController:
                 "migration reconciliation is not cutover-ready: "
                 + ", ".join(reconciliation.blocking_issues)
             )
+        self._legacy_sources.assert_no_pending_seal()
         inventory = self._legacy_sources.capture()
         preflight_epoch = self._require_preflight(stability_window_seconds)
         self._verify_legacy_inventory(inventory)
@@ -225,6 +305,7 @@ class DomainCutoverController:
                 raise CutoverPreconditionError("prepared cutover has no legacy source inventory")
             preflight_epoch = self._require_preflight(stability_window_seconds)
             self._verify_legacy_inventory(inventory)
+            self._seal_legacy_inventory(inventory)
             return self._commit_transaction(
                 actor_id=actor_id,
                 run_id=run_id,
@@ -237,15 +318,33 @@ class DomainCutoverController:
                 inventory=inventory,
                 preflight_epoch=preflight_epoch,
             )
-        except CutoverPreconditionError as exc:
+        except (CutoverPreconditionError, LegacySourceGuardError) as exc:
             self._abort_after_failed_commit(actor_id, str(exc))
-            raise
+            if isinstance(exc, CutoverPreconditionError):
+                raise
+            raise CutoverPreconditionError("legacy source seal failed") from exc
 
     def abort(self, *, actor_id: str, reason: str) -> CutoverStatus:
         """Return a prepared cutover to legacy before any v2 write exists."""
 
         self._require_actor(actor_id)
         self._require_text(reason, "reason")
+        # Restore the source modes before returning the database to legacy.
+        # If a crash occurs after this step but before the state transition,
+        # the prepared fuse remains fail-closed; a retry sees no journal and
+        # completes only the durable state transition.
+        with closing(connect(self._db_path)) as conn:
+            row = self._state_row(conn)
+            if str(row["state"]) == "v2" or row["first_v2_write_at"] is not None:
+                raise DomainCutoverError(
+                    "committed v2 cutover cannot be aborted; restore a complete pre-cutover backup"
+                )
+            if str(row["state"]) != "prepared":
+                raise DomainCutoverError("only a prepared cutover can be aborted")
+            inventory = self._inventory_from_row(row)
+            if inventory is None:
+                raise DomainCutoverError("prepared cutover has no legacy source inventory")
+        self._legacy_sources.unseal(inventory)
         with closing(connect(self._db_path)) as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
@@ -330,6 +429,7 @@ class DomainCutoverController:
         if inventory is None:
             raise DomainCutoverError("committed cutover has no legacy source inventory")
         self._verify_legacy_inventory(inventory)
+        self._verify_legacy_seal(inventory, error_type=DomainCutoverError)
         return self._status_from_row(row, True, None)
 
     def record_first_v2_write(
@@ -370,6 +470,7 @@ class DomainCutoverController:
         if inventory is None:
             raise DomainCutoverError("committed cutover has no legacy source inventory")
         self._verify_legacy_inventory(inventory)
+        self._verify_legacy_seal(inventory, error_type=DomainCutoverError)
         if row["first_v2_write_at"] is not None:
             return self._status_from_row(row, True, None)
         now = _now()
@@ -404,6 +505,112 @@ class DomainCutoverController:
         updated = self._state_row(conn)
         return self._status_from_row(updated, True, None)
 
+    def _finalize_constraints_transaction(
+        self,
+        *,
+        actor_id: str,
+        run_id: str,
+        preflight_epoch: int,
+    ) -> ConstraintFinalization:
+        """Install the Task guard and its durable audit attestation atomically."""
+
+        with closing(connect(self._db_path)) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                state = self._state_row(conn)
+                if str(state["state"]) != "legacy":
+                    raise DomainCutoverError(
+                        "domain constraints can only be finalized before cutover prepare"
+                    )
+                if state["first_v2_write_at"] is not None:
+                    raise DomainCutoverError("legacy state unexpectedly records a v2 write")
+                self._assert_maintenance_epoch(conn, preflight_epoch)
+                schema_version = self._schema_version(conn)
+                invalid_task_count = int(
+                    conn.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM tasks AS task
+                        LEFT JOIN projects AS project ON project.project_id = task.project_id
+                        LEFT JOIN workspaces AS workspace ON workspace.workspace_id = task.workspace_id
+                        WHERE project.project_id IS NULL
+                           OR workspace.workspace_id IS NULL
+                           OR workspace.environment_id != task.environment_id
+                        """
+                    ).fetchone()[0]
+                )
+                if invalid_task_count:
+                    raise CutoverPreconditionError(
+                        "domain constraints cannot be finalized: "
+                        f"{invalid_task_count} Task reference(s) do not map to a Project, "
+                        "Workspace, and derived Environment"
+                    )
+                task_reference_count = int(conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0])
+                integrity = conn.execute("PRAGMA integrity_check").fetchone()
+                if integrity is None or str(integrity[0]) != "ok":
+                    raise CutoverPreconditionError(
+                        "domain constraints cannot be finalized: SQLite integrity check failed"
+                    )
+                if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                    raise CutoverPreconditionError(
+                        "domain constraints cannot be finalized: SQLite foreign-key check failed"
+                    )
+
+                # This is intentionally done while the maintenance epoch still
+                # owns the sole writer slot.  The function uses transactional
+                # DDL so either the two equivalent FK guards and their audit
+                # evidence commit together, or neither one does.
+                install_domain_task_reference_guards(conn)
+                guard_digest = domain_task_reference_guard_digest(conn)
+                evidence_at = self._constraint_evidence_at(
+                    conn,
+                    schema_version=schema_version,
+                    guard_digest=guard_digest,
+                )
+                if not bool(state["constraints_ready"]) or evidence_at is None:
+                    now = _now()
+                    conn.execute(
+                        """
+                        UPDATE domain_cutover_state
+                        SET constraints_ready = 1
+                        WHERE singleton = 1
+                        """
+                    )
+                    self._audit(
+                        conn,
+                        actor_id,
+                        "domain_cutover.constraints_finalized",
+                        "domain_constraints",
+                        "tasks",
+                        {
+                            "run_id": run_id,
+                            "maintenance_epoch": preflight_epoch,
+                            "schema_version": schema_version,
+                            "task_reference_count": task_reference_count,
+                            "guard_digest": guard_digest,
+                        },
+                    )
+                    evidence_at = now
+                updated = self._state_row(conn)
+                self._assert_constraints_ready(
+                    conn,
+                    updated,
+                    error_type=CutoverPreconditionError,
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        return ConstraintFinalization(
+            run_id=run_id,
+            maintenance_epoch=preflight_epoch,
+            schema_version=schema_version,
+            task_reference_count=task_reference_count,
+            guard_digest=guard_digest,
+            finalized_at=evidence_at,
+            cutover_allowed=False,
+        )
+
     def _prepare_transaction(
         self,
         *,
@@ -426,8 +633,11 @@ class DomainCutoverController:
                     raise DomainCutoverError("domain cutover is not in legacy state")
                 if state["first_v2_write_at"] is not None:
                     raise DomainCutoverError("legacy state unexpectedly records a v2 write")
-                if not bool(state["constraints_ready"]):
-                    raise CutoverPreconditionError("domain constraints are not ready")
+                self._assert_constraints_ready(
+                    conn,
+                    state,
+                    error_type=CutoverPreconditionError,
+                )
                 self._assert_maintenance_epoch(conn, preflight_epoch)
                 actual_schema = self._schema_version(conn)
                 contract_version = int(state["contract_version"])
@@ -574,6 +784,10 @@ class DomainCutoverController:
                     backup_tree_sha256=backup.tree_sha256,
                 )
                 self._verify_legacy_inventory(inventory)
+                self._verify_legacy_seal(
+                    inventory,
+                    error_type=CutoverPreconditionError,
+                )
                 now = _now()
                 conn.execute(
                     """
@@ -649,6 +863,11 @@ class DomainCutoverController:
             raise CutoverPreconditionError("prepared cutover unexpectedly has v2 write metadata")
         if not bool(state["constraints_ready"]) or bool(state["cutover_ready"]):
             raise CutoverPreconditionError("prepared cutover has invalid readiness flags")
+        self._assert_constraints_ready(
+            conn,
+            state,
+            error_type=CutoverPreconditionError,
+        )
         actual_schema = self._schema_version(conn)
         if int(state["schema_version"]) != actual_schema:
             raise CutoverPreconditionError("database schema changed after cutover prepare")
@@ -688,6 +907,7 @@ class DomainCutoverController:
             or not bool(state["cutover_ready"])
         ):
             raise DomainCutoverError("domain v2 cutover fuse is not committed and ready")
+        self._assert_constraints_ready(conn, state, error_type=DomainCutoverError)
         if artifact_sha is not None and state["artifact_sha"] != artifact_sha:
             raise DomainCutoverError("running artifact does not match committed domain cutover")
         actual_schema = self._schema_version(conn)
@@ -806,6 +1026,69 @@ class DomainCutoverController:
         if int(maintenance["maintenance_epoch"]) != preflight_epoch:
             raise CutoverPreconditionError("domain maintenance epoch changed during cutover")
 
+    def _assert_constraints_ready(
+        self,
+        conn: sqlite3.Connection,
+        state: sqlite3.Row,
+        *,
+        error_type: type[DomainCutoverError],
+    ) -> None:
+        """Require both the flag and a matching, audited guard installation."""
+
+        if not bool(state["constraints_ready"]):
+            raise error_type("domain constraints are not ready")
+        schema_version = self._schema_version(conn)
+        try:
+            guard_digest = domain_task_reference_guard_digest(conn)
+        except RuntimeError as exc:
+            raise error_type("domain Task reference guards are missing or invalid") from exc
+        if (
+            self._constraint_evidence_at(
+                conn,
+                schema_version=schema_version,
+                guard_digest=guard_digest,
+            )
+            is None
+        ):
+            raise error_type("domain constraints lack a valid maintenance audit attestation")
+
+    @staticmethod
+    def _constraint_evidence_at(
+        conn: sqlite3.Connection,
+        *,
+        schema_version: int,
+        guard_digest: str,
+    ) -> str | None:
+        """Return an append-only finalization audit matching the live guards."""
+
+        rows = conn.execute(
+            """
+            SELECT metadata_json, created_at
+            FROM domain_audit_events
+            WHERE event_type = 'domain_cutover.constraints_finalized'
+              AND subject_type = 'domain_constraints'
+              AND subject_id = 'tasks'
+            ORDER BY created_at DESC, event_id DESC
+            """
+        ).fetchall()
+        for row in rows:
+            raw_metadata = row["metadata_json"]
+            if not isinstance(raw_metadata, str):
+                continue
+            try:
+                metadata = json.loads(raw_metadata)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(metadata, dict):
+                continue
+            if (
+                metadata.get("schema_version") == schema_version
+                and metadata.get("guard_digest") == guard_digest
+                and isinstance(row["created_at"], str)
+            ):
+                return str(row["created_at"])
+        return None
+
     def _require_preflight(self, stability_window_seconds: float) -> int:
         report = self._maintenance.preflight(stability_window_seconds=stability_window_seconds)
         if report.ready:
@@ -840,6 +1123,8 @@ class DomainCutoverController:
 
     def _reconcile_for_cutover(self, run_id: str) -> ReconciliationReport:
         try:
+            from ainrf.domain_migration import DomainReconciliationService
+
             return DomainReconciliationService(self._state_root).reconcile(run_id)
         except (OSError, ValueError) as exc:
             raise CutoverPreconditionError(
@@ -861,6 +1146,25 @@ class DomainCutoverController:
         except LegacySourceGuardError as exc:
             raise CutoverPreconditionError("legacy source guard failed") from exc
 
+    def _seal_legacy_inventory(self, inventory: LegacySourceInventory) -> None:
+        """Apply the pre-commit physical seal or reject the cutover."""
+
+        try:
+            self._legacy_sources.seal(inventory)
+        except LegacySourceGuardError as exc:
+            raise CutoverPreconditionError("legacy source seal failed") from exc
+
+    def _verify_legacy_seal(
+        self,
+        inventory: LegacySourceInventory,
+        *,
+        error_type: type[DomainCutoverError],
+    ) -> None:
+        try:
+            self._legacy_sources.verify_sealed(inventory)
+        except LegacySourceGuardError as exc:
+            raise error_type("legacy source seal is not valid") from exc
+
     def _abort_after_failed_commit(self, actor_id: str, detail: str) -> None:
         if not actor_id:
             return
@@ -869,7 +1173,7 @@ class DomainCutoverController:
                 row = self._state_row(conn)
             if str(row["state"]) == "prepared" and row["first_v2_write_at"] is None:
                 self.abort(actor_id=actor_id, reason=f"automatic commit abort: {detail}")
-        except DomainCutoverError:
+        except (DomainCutoverError, LegacySourceGuardError):
             return
 
     @staticmethod

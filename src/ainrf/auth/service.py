@@ -210,6 +210,7 @@ class AuthService:
         password: str,
         must_change_password: bool = False,
     ) -> User:
+        self.initialize()
         if not _USERNAME_RE.fullmatch(username):
             raise AuthError(
                 "Username must be 2-31 characters, start with a letter or digit, "
@@ -230,10 +231,92 @@ class AuthService:
                 "VALUES (?, ?, ?, ?, 'member', 'pending', ?, ?)",
                 (uid, username, password_hash, display_name, now, int(must_change_password)),
             )
+            # The default Project lives in the separate domain database.  Do
+            # not fake a distributed transaction: persist this intent beside
+            # the newly-created user and let the v2 control plane reconcile it
+            # idempotently after the auth transaction commits.
+            conn.execute(
+                """
+                INSERT INTO domain_default_project_provisioning (
+                    user_id, username, status, attempt_count, created_at, updated_at
+                ) VALUES (?, ?, 'queued', 0, ?, ?)
+                """,
+                (uid, username, now, now),
+            )
             conn.commit()
 
         self._ensure_tenant_user(username)
         return self._load_user(uid)
+
+    def ensure_domain_default_project_provisioning(self, user_id: str, username: str) -> None:
+        """Backfill an idempotent default-Project provisioning intent for one user."""
+
+        self.initialize()
+        now = _now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO domain_default_project_provisioning (
+                    user_id, username, status, attempt_count, created_at, updated_at
+                ) VALUES (?, ?, 'queued', 0, ?, ?)
+                """,
+                (user_id, username, now, now),
+            )
+            conn.commit()
+
+    def pending_domain_default_project_provisioning(self) -> list[tuple[str, str]]:
+        """Return durable provisioning work that has not reached the v2 domain."""
+
+        self.initialize()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT user_id, username FROM domain_default_project_provisioning
+                WHERE status = 'queued'
+                ORDER BY created_at, user_id
+                """
+            ).fetchall()
+        return [(str(row["user_id"]), str(row["username"])) for row in rows]
+
+    def mark_domain_default_project_provisioned(self, user_id: str) -> None:
+        """Acknowledge a successful idempotent v2 default-Project write."""
+
+        self.initialize()
+        now = _now_iso()
+        with self._connect() as conn:
+            updated = conn.execute(
+                """
+                UPDATE domain_default_project_provisioning
+                SET status = 'provisioned', last_error = NULL, provisioned_at = ?, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (now, now, user_id),
+            ).rowcount
+            if updated != 1:
+                raise AuthError("Default Project provisioning intent is missing")
+            conn.commit()
+
+    def record_domain_default_project_provisioning_failure(
+        self, user_id: str, error: Exception
+    ) -> None:
+        """Retain a bounded diagnostic while keeping the provisioning intent retryable."""
+
+        self.initialize()
+        now = _now_iso()
+        detail = str(error).strip() or type(error).__name__
+        with self._connect() as conn:
+            updated = conn.execute(
+                """
+                UPDATE domain_default_project_provisioning
+                SET status = 'queued', attempt_count = attempt_count + 1,
+                    last_error = ?, updated_at = ?
+                WHERE user_id = ? AND status = 'queued'
+                """,
+                (detail[:1024], now, user_id),
+            ).rowcount
+            if updated != 1:
+                raise AuthError("Default Project provisioning intent is missing")
+            conn.commit()
 
     # --- Login ---
 

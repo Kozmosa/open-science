@@ -116,6 +116,8 @@ class AttemptProjectionService:
         self,
         conn: sqlite3.Connection,
         task_ids: Sequence[str],
+        *,
+        include_runtime_diagnostics: bool = False,
     ) -> dict[str, list[dict[str, object]]]:
         """Return Attempt projections grouped by Task with runtime/dispatch state.
 
@@ -151,7 +153,12 @@ class AttemptProjectionService:
             attempt_ids,
         ).fetchall()
         for row in runtime_rows:
-            runtime_by_attempt[str(row["attempt_id"])].append(self._runtime_session_dict(row))
+            runtime_by_attempt[str(row["attempt_id"])].append(
+                self._runtime_session_dict(
+                    row,
+                    include_runtime_diagnostics=include_runtime_diagnostics,
+                )
+            )
 
         dispatch_by_attempt: dict[str, dict[str, object]] = {}
         dispatch_rows = conn.execute(
@@ -162,7 +169,13 @@ class AttemptProjectionService:
         ).fetchall()
         for row in dispatch_rows:
             attempt_id = str(row["attempt_id"])
-            dispatch_by_attempt.setdefault(attempt_id, self._dispatch_dict(row))
+            dispatch_by_attempt.setdefault(
+                attempt_id,
+                self._dispatch_dict(
+                    row,
+                    include_runtime_diagnostics=include_runtime_diagnostics,
+                ),
+            )
 
         for row in attempt_rows:
             attempt_id = str(row["attempt_id"])
@@ -172,6 +185,7 @@ class AttemptProjectionService:
                     row,
                     runtime_sessions=runtime_by_attempt[attempt_id],
                     dispatch=dispatch_by_attempt.get(attempt_id),
+                    include_runtime_diagnostics=include_runtime_diagnostics,
                 )
             )
         return grouped
@@ -180,6 +194,8 @@ class AttemptProjectionService:
         self,
         conn: sqlite3.Connection,
         attempt_id: str,
+        *,
+        include_runtime_diagnostics: bool = False,
     ) -> dict[str, object] | None:
         """Return an Attempt projection by ID without performing authorization."""
 
@@ -188,7 +204,11 @@ class AttemptProjectionService:
         ).fetchone()
         if row is None:
             return None
-        attempts = self.attempts_for_tasks(conn, [str(row["task_id"])])
+        attempts = self.attempts_for_tasks(
+            conn,
+            [str(row["task_id"])],
+            include_runtime_diagnostics=include_runtime_diagnostics,
+        )
         for attempt in attempts[str(row["task_id"])]:
             if attempt["attempt_id"] == attempt_id:
                 return attempt
@@ -445,6 +465,7 @@ class AttemptProjectionService:
         *,
         runtime_sessions: list[dict[str, object]],
         dispatch: dict[str, object] | None,
+        include_runtime_diagnostics: bool,
     ) -> dict[str, object]:
         started_at = _optional_str(row["started_at"])
         finished_at = _optional_str(row["finished_at"])
@@ -486,52 +507,113 @@ class AttemptProjectionService:
             "data_refs": AttemptProjectionService._string_list(row["data_refs_json"]),
             "token_usage_json": _optional_str(row["token_usage_json"]),
             "cost_usd": float(row["cost_usd"]) if row["cost_usd"] is not None else None,
-            "failure_reason": _optional_str(row["failure_reason"]),
-            "stop_reason": _optional_str(row["stop_reason"]),
-            "authorization_environment_id": _optional_str(row["authorization_environment_id"]),
-            "authorization_grant_version": _optional_int(row["authorization_grant_version"]),
-            "authorization_checked_at": _optional_str(row["authorization_checked_at"]),
-            "stop_requested_at": _optional_str(row["stop_requested_at"]),
-            "stop_requested_reason": _optional_str(row["stop_requested_reason"]),
+            # Failure/stop text and authorization snapshots are operational
+            # diagnostics, not shared Project content.  In particular, engine
+            # errors can contain a tenant-private filesystem path.  Preserve
+            # the user-visible Attempt status/timestamps above while exposing
+            # these fields only to the admin troubleshooting projection.
+            "failure_reason": (
+                _optional_str(row["failure_reason"]) if include_runtime_diagnostics else None
+            ),
+            "stop_reason": (
+                _optional_str(row["stop_reason"]) if include_runtime_diagnostics else None
+            ),
+            "authorization_environment_id": (
+                _optional_str(row["authorization_environment_id"])
+                if include_runtime_diagnostics
+                else None
+            ),
+            "authorization_grant_version": (
+                _optional_int(row["authorization_grant_version"])
+                if include_runtime_diagnostics
+                else None
+            ),
+            "authorization_checked_at": (
+                _optional_str(row["authorization_checked_at"])
+                if include_runtime_diagnostics
+                else None
+            ),
+            "stop_requested_at": (
+                _optional_str(row["stop_requested_at"]) if include_runtime_diagnostics else None
+            ),
+            "stop_requested_reason": (
+                _optional_str(row["stop_requested_reason"]) if include_runtime_diagnostics else None
+            ),
             "runtime_sessions": runtime_sessions,
             "dispatch": dispatch,
         }
 
     @staticmethod
-    def _runtime_session_dict(row: sqlite3.Row) -> dict[str, object]:
+    def _runtime_session_dict(
+        row: sqlite3.Row,
+        *,
+        include_runtime_diagnostics: bool,
+    ) -> dict[str, object]:
+        """Project a RuntimeSession without leaking control-plane credentials.
+
+        Project viewers are entitled to durable execution state, not the
+        engine-native session handle or an error string that can contain a
+        tenant-private path.  Administrators use the same projection from a
+        management/troubleshooting surface and receive the complete fields.
+        """
+
         return {
             "runtime_session_id": str(row["runtime_session_id"]),
             "attempt_id": str(row["attempt_id"]),
             "status": str(row["status"]),
             "engine_name": _optional_str(row["engine_name"]),
-            "engine_session_key": _optional_str(row["engine_session_key"]),
+            "engine_session_key": (
+                _optional_str(row["engine_session_key"]) if include_runtime_diagnostics else None
+            ),
             "created_at": str(row["created_at"]),
             "started_at": _optional_str(row["started_at"]),
             "finished_at": _optional_str(row["finished_at"]),
             "last_probe_at": _optional_str(row["last_probe_at"]),
             "adopted_at": _optional_str(row["adopted_at"]),
-            "failure_reason": _optional_str(row["failure_reason"]),
+            "failure_reason": (
+                _optional_str(row["failure_reason"]) if include_runtime_diagnostics else None
+            ),
         }
 
     @staticmethod
-    def _dispatch_dict(row: sqlite3.Row) -> dict[str, object]:
+    def _dispatch_dict(
+        row: sqlite3.Row,
+        *,
+        include_runtime_diagnostics: bool,
+    ) -> dict[str, object]:
+        """Project dispatch status while hiding worker-control identifiers."""
+
         return {
             "dispatch_id": str(row["dispatch_id"]),
             "task_id": str(row["task_id"]),
             "attempt_id": str(row["attempt_id"]),
             "status": str(row["status"]),
             "launch_state": str(row["launch_state"]),
-            "runtime_launch_key": _optional_str(row["runtime_launch_key"]),
-            "dispatcher_id": _optional_str(row["dispatcher_id"]),
-            "claimed_at": _optional_str(row["claimed_at"]),
-            "claim_expires_at": _optional_str(row["claim_expires_at"]),
-            "claim_heartbeat_at": _optional_str(row["claim_heartbeat_at"]),
+            "runtime_launch_key": (
+                _optional_str(row["runtime_launch_key"]) if include_runtime_diagnostics else None
+            ),
+            "dispatcher_id": (
+                _optional_str(row["dispatcher_id"]) if include_runtime_diagnostics else None
+            ),
+            "claimed_at": (
+                _optional_str(row["claimed_at"]) if include_runtime_diagnostics else None
+            ),
+            "claim_expires_at": (
+                _optional_str(row["claim_expires_at"]) if include_runtime_diagnostics else None
+            ),
+            "claim_heartbeat_at": (
+                _optional_str(row["claim_heartbeat_at"]) if include_runtime_diagnostics else None
+            ),
             "created_at": str(row["created_at"]),
             "updated_at": _optional_str(row["updated_at"]),
             "completed_at": _optional_str(row["completed_at"]),
             "cancelled_at": _optional_str(row["cancelled_at"]),
-            "cancel_reason": _optional_str(row["cancel_reason"]),
-            "last_error": _optional_str(row["last_error"]),
+            "cancel_reason": (
+                _optional_str(row["cancel_reason"]) if include_runtime_diagnostics else None
+            ),
+            "last_error": (
+                _optional_str(row["last_error"]) if include_runtime_diagnostics else None
+            ),
         }
 
     @staticmethod

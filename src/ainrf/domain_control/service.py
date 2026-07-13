@@ -136,6 +136,58 @@ class DomainMaintenanceService:
             ).fetchall()
         return tuple(self._participant_status(row) for row in rows)
 
+    def participant_readiness(
+        self,
+        participant_type: str,
+        *,
+        stale_after_seconds: float = 30.0,
+    ) -> dict[str, object]:
+        """Report whether a durable writer has a current, usable heartbeat.
+
+        A registered historical process is not proof that work can be
+        dispatched.  Consumers such as the v2 capability endpoint use this
+        compact view to distinguish a live worker from a stopped, draining, or
+        stale registry row without exposing process-local implementation data.
+        """
+
+        if not participant_type:
+            raise ValueError("participant_type is required")
+        if stale_after_seconds <= 0:
+            raise ValueError("stale_after_seconds must be positive")
+        maintenance = self.status()
+        now = datetime.now(timezone.utc)
+        matching = tuple(
+            participant
+            for participant in self.participants()
+            if participant.participant_type == participant_type and participant.status != "stopped"
+        )
+        stale_ids = tuple(
+            participant.participant_id
+            for participant in matching
+            if self._participant_is_stale(participant, now, stale_after_seconds)
+        )
+        active_ids = tuple(
+            participant.participant_id for participant in matching if participant.status == "active"
+        )
+        fresh_ids = tuple(
+            participant.participant_id
+            for participant in matching
+            if participant.status == "active"
+            and participant.observed_epoch == maintenance.maintenance_epoch
+            and participant.participant_id not in stale_ids
+        )
+        return {
+            "participant_type": participant_type,
+            "ready": not maintenance.is_active and bool(fresh_ids),
+            "maintenance_active": maintenance.is_active,
+            "maintenance_epoch": maintenance.maintenance_epoch,
+            "stale_after_seconds": stale_after_seconds,
+            "registered_participant_ids": [item.participant_id for item in matching],
+            "active_participant_ids": list(active_ids),
+            "fresh_participant_ids": list(fresh_ids),
+            "stale_participant_ids": list(stale_ids),
+        }
+
     def register_participant(
         self,
         participant_id: str,

@@ -246,3 +246,34 @@ def migration_006_harden_environment_grant_history(conn: sqlite3.Connection) -> 
         FROM environment_access
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_007_domain_default_project_provisioning(conn: sqlite3.Connection) -> None:
+    """Persist the cross-database default-Project provisioning intent.
+
+    User registration is authoritative in ``auth.sqlite3`` while the default
+    Project belongs to the domain control plane.  The two databases must not
+    pretend to share a transaction, so registration records a durable intent
+    locally and a v2 process reconciles it through an idempotent domain write.
+    """
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS domain_default_project_provisioning (
+            user_id TEXT PRIMARY KEY REFERENCES users(id)
+                ON DELETE RESTRICT ON UPDATE CASCADE,
+            username TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'queued'
+                CHECK (status IN ('queued', 'provisioned')),
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            provisioned_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_default_project_provisioning_pending
+        ON domain_default_project_provisioning(status, updated_at, user_id)
+        WHERE status = 'queued';
+        """
+    )

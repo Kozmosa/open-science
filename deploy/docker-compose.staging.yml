@@ -48,6 +48,10 @@ services:
       AINRF_HOST: "127.0.0.1"
       AINRF_PORT: "17000"
       AINRF_STATE_ROOT: "/opt/ainrf/state"
+      # Staging retains an independent legacy default and never inherits a
+      # production cutover token through the host environment.
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${STAGING_OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${STAGING_OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
       # ── 必填：在 .env 文件中设置（同生产共享）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
@@ -111,6 +115,58 @@ services:
       interval: 15s
       retries: 5
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Explicit v2-only no-port worker.  It reuses the staging API's host-network
+  # sshd on :2223 and cannot start a second listener in the same namespace.
+  domain-worker-staging:
+    profiles: ["domain-v2"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
+        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    restart: unless-stopped
+    container_name: openscience-staging-domain-worker
+    network_mode: host
+    environment:
+      HOME: /opt/ainrf
+      OPENSCIENCE_PRODUCTION: "1"
+      AINRF_STAGING: "1"
+      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${STAGING_OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${STAGING_OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      OPENSCIENCE_NO_SSHD: "1"
+      AINRF_CONTAINER_HOST: "127.0.0.1"
+      AINRF_CONTAINER_PORT: "2223"
+      AINRF_CONTAINER_USER: "root"
+      AINRF_CONTAINER_SSH_KEY_PATH: "/opt/ainrf/.ssh/ainrf_local"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+    volumes:
+      - staging-ainrf-state:/opt/ainrf/state
+      - staging-ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - staging-ainrf-tenants:/home/ainrf_tenants
+      - ../src/ainrf/:/usr/local/lib/python3.13/site-packages/ainrf/:ro
+    cap_add:
+      - SYS_ADMIN
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    command: ["openscience", "domain-worker", "--state-root", "/opt/ainrf/state"]
+    depends_on:
+      ainrf-staging:
+        condition: service_healthy
     logging:
       driver: json-file
       options:

@@ -15,8 +15,9 @@ class DomainWriteFence:
     SQLite transaction and before they add their own audit event.  The
     controller verifies the immutable cutover evidence and legacy-source
     stability in that transaction; a failed check rolls the business mutation
-    back with it.  Legacy and prepared databases deliberately do not record a
-    v2 write here: startup/mode gates decide whether their callers may run.
+    back with it.  There is deliberately no pre-cutover compatibility path:
+    a direct application-service caller cannot bypass the API startup gate and
+    mutate v2 tables while the fuse is ``legacy`` or ``prepared``.
     """
 
     def __init__(self, state_root: Path, *, artifact_sha: str | None = None) -> None:
@@ -28,7 +29,7 @@ class DomainWriteFence:
             "SELECT state FROM domain_cutover_state WHERE singleton = 1"
         ).fetchone()
         if state is None or str(state["state"]) != "v2":
-            return
+            raise DomainCutoverError("domain v2 writes require a committed domain cutover fuse")
         if not self._artifact_sha:
             raise DomainCutoverError(
                 "an immutable domain artifact SHA is required for v2 domain writes"

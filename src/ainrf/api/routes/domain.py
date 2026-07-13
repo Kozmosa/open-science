@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
+from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
     ProjectContextCandidateCreateRequest,
     ProjectContextCandidateRejectRequest,
@@ -19,7 +20,7 @@ from ainrf.domain import (
     TaskApplicationService,
 )
 from ainrf.domain.overview_jobs import OverviewSnapshotService
-from ainrf.domain_control import DomainModelMode
+from ainrf.domain_control import DomainMaintenanceService, DomainModelMode
 from ainrf.literature.task_saga import LiteratureTaskSagaService
 
 router = APIRouter(prefix="/domain", tags=["domain-v2"])
@@ -33,9 +34,24 @@ async def capabilities(request: Request) -> dict[str, object]:
     context_ready = ready and isinstance(
         getattr(request.app.state, "project_context_service", None), ProjectContextService
     )
-    task_ready = ready and isinstance(
+    task_service_ready = ready and isinstance(
         getattr(request.app.state, "task_application_service", None), TaskApplicationService
     )
+    maintenance = getattr(request.app.state, "domain_maintenance_service", None)
+    dispatcher_readiness: dict[str, object] = {
+        "participant_type": "task-dispatcher",
+        "ready": False,
+        "maintenance_active": False,
+        "maintenance_epoch": None,
+        "stale_after_seconds": 30.0,
+        "registered_participant_ids": [],
+        "active_participant_ids": [],
+        "fresh_participant_ids": [],
+        "stale_participant_ids": [],
+    }
+    if isinstance(maintenance, DomainMaintenanceService):
+        dispatcher_readiness = maintenance.participant_readiness("task-dispatcher")
+    task_ready = task_service_ready and bool(dispatcher_readiness.get("ready"))
     workspace_links_ready = ready and all(
         callable(getattr(service, name, None))
         for name in ("attach_workspace", "detach_workspace", "set_primary_workspace")
@@ -56,6 +72,7 @@ async def capabilities(request: Request) -> dict[str, object]:
     literature_saga = getattr(request.app.state, "literature_task_saga_service", None)
     literature_ready = (
         ready
+        and task_ready
         and isinstance(literature_saga, LiteratureTaskSagaService)
         and literature_saga.v2_ready()
     )
@@ -66,6 +83,7 @@ async def capabilities(request: Request) -> dict[str, object]:
         "project_context": context_ready,
         "workspace_links": workspace_links_ready,
         "task_attempts": task_ready,
+        "task_dispatcher": dispatcher_readiness,
         # Each capability reports its own runtime evidence rather than being
         # inferred from the common contract version alone.
         "literature_research_task": literature_ready,
@@ -153,19 +171,6 @@ def _task_application_service(request: Request) -> TaskApplicationService:
     return service
 
 
-def _idempotency_key(request: Request, body_key: str | None = None) -> str:
-    header_key = request.headers.get("Idempotency-Key")
-    if header_key and body_key and header_key != body_key:
-        raise HTTPException(
-            status_code=409,
-            detail="Idempotency-Key header and body field must match",
-        )
-    key = header_key or body_key
-    if not key:
-        raise HTTPException(status_code=409, detail="Idempotency-Key is required")
-    return key
-
-
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, DomainPermissionError):
         return HTTPException(status_code=403, detail="Domain permission denied")
@@ -185,6 +190,7 @@ async def create_project(request: Request, payload: dict[str, object]) -> dict[s
             get_current_user(request),
             name=str(payload["name"]),
             description=description,
+            idempotency_key=require_idempotency_key(request, payload.get("idempotency_key")),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -198,6 +204,7 @@ async def create_workspace(request: Request, payload: dict[str, object]) -> dict
             environment_id=str(payload["environment_id"]),
             canonical_path=str(payload["canonical_path"]),
             label=str(payload["label"]),
+            idempotency_key=require_idempotency_key(request, payload.get("idempotency_key")),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -212,7 +219,7 @@ async def attach_workspace(
             project_id,
             workspace_id,
             get_current_user(request),
-            idempotency_key=request.headers.get("Idempotency-Key", ""),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -227,7 +234,7 @@ async def set_primary_workspace(
             project_id,
             workspace_id,
             get_current_user(request),
-            idempotency_key=request.headers.get("Idempotency-Key", ""),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -249,7 +256,10 @@ async def save_project_context_draft(
 ) -> dict[str, object]:
     try:
         return _context_service(request).save_draft(
-            project_id, payload.content, get_current_user(request)
+            project_id,
+            payload.content,
+            get_current_user(request),
+            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -261,7 +271,7 @@ async def publish_project_context(project_id: str, request: Request) -> dict[str
         return _context_service(request).publish(
             project_id,
             get_current_user(request),
-            idempotency_key=request.headers.get("Idempotency-Key", ""),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -337,6 +347,7 @@ async def create_project_context_candidate(
             source_message_end_seq=payload.source_message_end_seq,
             source_output_start_seq=payload.source_output_start_seq,
             source_output_end_seq=payload.source_output_end_seq,
+            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -348,7 +359,10 @@ async def accept_project_context_candidate(
 ) -> dict[str, object]:
     try:
         return _context_service(request).accept_candidate(
-            project_id, candidate_id, get_current_user(request)
+            project_id,
+            candidate_id,
+            get_current_user(request),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -367,6 +381,7 @@ async def reject_project_context_candidate(
             candidate_id,
             get_current_user(request),
             reason=payload.reason,
+            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -398,6 +413,7 @@ async def create_project_context_fragment(
             source_version=payload.source_version,
             sort_order=payload.sort_order,
             byte_budget=payload.byte_budget,
+            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -439,7 +455,7 @@ async def confirm_task_context_update(
             project_id,
             payload.preview_id,
             get_current_user(request),
-            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
         )
     except Exception as exc:
         raise _translate(exc) from exc

@@ -46,6 +46,10 @@ services:
       AINRF_PRODUCTION: "1"
       AINRF_HOST: "127.0.0.1"
       AINRF_PORT: "18000"
+      # Release A stays legacy/validate by default.  The release controller
+      # explicitly sets v2 plus the immutable artifact SHA after commit.
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
       # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
@@ -93,6 +97,55 @@ services:
       interval: 30s
       retries: 3
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Enabled explicitly only for a committed v2 cutover:
+  #   docker compose --profile domain-v2 -f deploy/docker-compose.cpu.yml up -d
+  # It has no HTTP port and shares every durable state/tenant mount with the
+  # API process.  Host networking uses the API container's sshd, so its own
+  # entrypoint must not bind the same port.
+  domain-worker:
+    profiles: ["domain-v2"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
+        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    restart: unless-stopped
+    container_name: openscience-domain-worker
+    network_mode: host
+    environment:
+      HOME: /opt/ainrf
+      AINRF_PRODUCTION: "1"
+      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      OPENSCIENCE_NO_SSHD: "1"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+    volumes:
+      - ainrf-state:/opt/ainrf/state
+      - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - ainrf-tenants:/home/ainrf_tenants
+    cap_add:
+      - SYS_ADMIN
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    command: ["openscience", "domain-worker", "--state-root", "/opt/ainrf/state"]
+    depends_on:
+      ainrf:
+        condition: service_healthy
     logging:
       driver: json-file
       options:

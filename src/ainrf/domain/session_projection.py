@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import closing
 from pathlib import Path
 
 from ainrf.db import connect, run_pending
 from ainrf.domain.attempt_projection import AttemptProjectionService
-from ainrf.domain.service import DomainNotFoundError, DomainPermissionError
+from ainrf.domain.service import DomainAuthorizationService, DomainNotFoundError
 
 
 class SessionProjectionService:
@@ -38,7 +38,7 @@ class SessionProjectionService:
         self,
         *,
         project_id: str | None,
-        owner_user_id: str | None,
+        user: Mapping[str, object],
         status: str | None,
         cursor: str | None,
         limit: int,
@@ -48,9 +48,12 @@ class SessionProjectionService:
         if project_id is not None:
             clauses.append("project_id = ?")
             params.append(project_id)
-        if owner_user_id is not None:
-            clauses.append("owner_user_id = ?")
-            params.append(owner_user_id)
+        elif user.get("role") != "admin":
+            visibility_clause, visibility_params = self._global_visibility_clause(user)
+            if visibility_clause is None:
+                return [], 0, False, None
+            clauses.append(visibility_clause)
+            params.extend(visibility_params)
         if status is not None:
             clauses.append("status = ?")
             params.append(status)
@@ -60,6 +63,8 @@ class SessionProjectionService:
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
         with closing(self._connect()) as conn:
+            if project_id is not None:
+                DomainAuthorizationService(conn).require_project_viewer(project_id, dict(user))
             total = int(
                 conn.execute(
                     f"SELECT COUNT(*) FROM tasks {where}",
@@ -89,7 +94,7 @@ class SessionProjectionService:
             row = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
             if row is None:
                 raise DomainNotFoundError(task_id)
-            self._require_visible(row, user)
+            DomainAuthorizationService(conn).require_task_viewer(task_id, dict(user))
             attempts_by_task = self._attempt_projection.attempts_for_tasks(conn, [task_id])
         attempts = attempts_by_task[task_id]
         return self._session_dict(row, attempts), [
@@ -114,10 +119,12 @@ class SessionProjectionService:
             visible_task_ids: list[str] = []
             for row in task_rows:
                 try:
-                    self._require_visible(row, user)
-                except DomainPermissionError:
+                    DomainAuthorizationService(conn).require_task_viewer(
+                        str(row["task_id"]), dict(user)
+                    )
+                except DomainNotFoundError:
                     # Preserve the legacy batch shape without confirming that
-                    # an unowned Task exists.
+                    # an invisible Task exists.
                     continue
                 visible_task_ids.append(str(row["task_id"]))
             attempts_by_task = self._attempt_projection.attempts_for_tasks(conn, visible_task_ids)
@@ -129,11 +136,30 @@ class SessionProjectionService:
         return result
 
     @staticmethod
-    def _require_visible(row: sqlite3.Row, user: dict[str, object]) -> None:
-        if user.get("role") == "admin":
-            return
-        if row["owner_user_id"] != user.get("id"):
-            raise DomainPermissionError("Session projection is not visible")
+    def _global_visibility_clause(user: Mapping[str, object]) -> tuple[str | None, list[object]]:
+        """Return the B3 Task/Project viewer predicate before pagination."""
+
+        user_id = user.get("id")
+        if not isinstance(user_id, str) or not user_id:
+            return None, []
+        return (
+            """(
+                owner_user_id = ?
+                OR EXISTS (
+                    SELECT 1 FROM projects AS visible_project
+                    WHERE visible_project.project_id = tasks.project_id
+                      AND (
+                          visible_project.owner_user_id = ?
+                          OR EXISTS (
+                              SELECT 1 FROM project_members AS visible_member
+                              WHERE visible_member.project_id = tasks.project_id
+                                AND visible_member.user_id = ?
+                          )
+                      )
+                )
+            )""",
+            [user_id, user_id, user_id],
+        )
 
     @staticmethod
     def _session_dict(

@@ -21,6 +21,7 @@ from ainrf.api.schemas import (
 )
 from ainrf.sessions import SessionService
 from ainrf.domain import DomainPermissionError, SessionProjectionService
+from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import DomainModelMode
 
 logger = logging.getLogger(__name__)
@@ -38,13 +39,15 @@ def _get_service(request: Request) -> SessionService:
 def _projection(request: Request) -> SessionProjectionService | None:
     domain = getattr(request.app.state, "domain_service", None)
     service = getattr(request.app.state, "session_projection_service", None)
-    if (
-        domain is None
-        or service is None
-        or request.app.state.api_config.domain_model_mode is not DomainModelMode.V2
-        or not domain.v2_ready()
-    ):
+    if request.app.state.api_config.domain_model_mode is not DomainModelMode.V2:
         return None
+    if domain is None or service is None or not domain.v2_ready():
+        # A v2 process has no writable SessionService by design.  Never let a
+        # failed fuse masquerade as legacy mode and fall through to an
+        # uninitialized compatibility service.
+        raise HTTPException(status_code=503, detail="Session domain v2 is not ready")
+    if not isinstance(service, SessionProjectionService):
+        raise HTTPException(status_code=500, detail="Session projection service is invalid")
     return service
 
 
@@ -136,13 +139,16 @@ async def list_sessions(
     user = get_current_user(request)
     projection = _projection(request)
     if projection is not None:
-        items, total, has_more, next_cursor = projection.list_sessions(
-            project_id=project_id,
-            owner_user_id=None if is_admin(user) else str(user["id"]),
-            status=status,
-            cursor=cursor,
-            limit=limit,
-        )
+        try:
+            items, total, has_more, next_cursor = projection.list_sessions(
+                project_id=project_id,
+                user=user,
+                status=status,
+                cursor=cursor,
+                limit=limit,
+            )
+        except DomainNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Session not found") from exc
         return SessionListResponse.model_validate(
             {
                 "items": items,

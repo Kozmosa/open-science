@@ -11,6 +11,7 @@ from typing import Annotated
 import typer
 
 from ainrf import __version__
+from ainrf.auth.service import AuthService
 from ainrf.onboarding import (
     config_path_for,
     ensure_interactive_onboarding_available,
@@ -36,7 +37,7 @@ from ainrf.domain_migration import (
     DomainReconciliationService,
     capture_source_manifest,
 )
-from ainrf.domain import OverviewSnapshotPlanner, TaskDispatcher
+from ainrf.domain import OverviewSnapshotPlanner, TaskApplicationService, TaskDispatcher
 from ainrf.literature.planner import dispatch_outbox
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -61,6 +62,9 @@ app.add_typer(domain_migration_app, name="domain-migration")
 
 domain_cutover_app = typer.Typer(help="Prepare and commit the durable domain v2 cutover fuse.")
 app.add_typer(domain_cutover_app, name="domain-cutover")
+
+domain_runtime_app = typer.Typer(help="Reconcile durable runtime boundaries without relaunching.")
+app.add_typer(domain_runtime_app, name="domain-runtime")
 
 overview_snapshot_app = typer.Typer(help="Refresh persisted control-plane overview snapshots.")
 app.add_typer(overview_snapshot_app, name="overview-snapshot")
@@ -170,11 +174,13 @@ def domain_worker(
     except DomainCutoverError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
-    dispatcher = (
-        TaskDispatcher(state_root, artifact_sha=artifact_sha)
-        if artifact_sha is not None
-        else TaskDispatcher(state_root)
-    )
+    if artifact_sha is None:
+        typer.echo(
+            "domain worker is unavailable until the domain v2 cutover is committed",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    dispatcher = TaskDispatcher(state_root, artifact_sha=artifact_sha)
     try:
         if once:
             result = asyncio.run(dispatcher.run_once())
@@ -489,6 +495,39 @@ def domain_cutover_status(
         raise typer.Exit(code=2) from exc
 
 
+@domain_cutover_app.command("finalize-constraints")
+def domain_cutover_finalize_constraints(
+    run_id: Annotated[
+        str, typer.Argument(help="Completed migration run whose Task references will be finalized.")
+    ],
+    actor_id: Annotated[
+        str, typer.Option(help="Operator ID recorded in the constraints finalization audit.")
+    ],
+    stability_window_seconds: Annotated[
+        float,
+        typer.Option(
+            min=0.0,
+            help="Required stable source window while the maintenance epoch owns writes.",
+        ),
+    ] = 5.0,
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing migration and maintenance state.")
+    ] = default_state_root(),
+) -> None:
+    """Install and attest the final Task reference guards during maintenance."""
+
+    try:
+        result = _cutover_controller(state_root).finalize_constraints(
+            actor_id=actor_id,
+            run_id=run_id,
+            stability_window_seconds=stability_window_seconds,
+        )
+    except (DomainCutoverError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+
+
 @domain_cutover_app.command("prepare")
 def domain_cutover_prepare(
     run_id: Annotated[str, typer.Argument(help="Finalized migration run to bind to cutover.")],
@@ -595,6 +634,57 @@ def domain_cutover_abort(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+
+
+@domain_runtime_app.command("resolve-launch-unknown")
+def domain_runtime_resolve_launch_unknown(
+    task_id: Annotated[str, typer.Argument(help="Task containing the unknown runtime launch.")],
+    attempt_id: Annotated[
+        str, typer.Argument(help="Attempt whose launch was manually investigated.")
+    ],
+    actor_id: Annotated[
+        str,
+        typer.Option(help="Existing active Task owner or admin user ID recorded in the audit."),
+    ],
+    reason: Annotated[
+        str,
+        typer.Option(help="Required evidence explaining why the unknown runtime is terminal."),
+    ],
+    idempotency_key: Annotated[
+        str | None,
+        typer.Option(help="Stable key reused if this manual resolution command is retried."),
+    ] = None,
+    state_root: Annotated[
+        Path, typer.Option(help="State root containing the committed domain v2 control plane.")
+    ] = default_state_root(),
+) -> None:
+    """Close a manually investigated unknown launch; never retry or relaunch it."""
+
+    try:
+        artifact_sha = _domain_worker_artifact_sha(state_root)
+        if artifact_sha is None:
+            raise DomainCutoverError(
+                "runtime launch reconciliation requires a committed domain v2 artifact"
+            )
+        auth = AuthService(state_root=state_root)
+        auth.initialize()
+        actor = auth.get_user(actor_id)
+        if actor.status.value != "active":
+            raise DomainCutoverError("runtime launch reconciliation actor is not active")
+        result = TaskApplicationService(
+            state_root,
+            artifact_sha=artifact_sha,
+        ).resolve_launch_unknown(
+            task_id,
+            attempt_id,
+            {"id": actor.id, "role": actor.role.value},
+            reason=reason,
+            idempotency_key=idempotency_key or f"launch-unknown-resolution:{attempt_id}",
+        )
+    except (DomainCutoverError, LookupError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result, indent=2))
 
 
 @domain_maintenance_app.command("status")
@@ -798,8 +888,9 @@ def domain_migration_resolve(
         str,
         typer.Option(
             help=(
-                "Explicit resolution: assign_project_owner, assign_workspace_environment, "
-                "set_primary_workspace, or map_runtime_session."
+                "Explicit resolution: assign_project_owner, assign_workspace_owner, "
+                "assign_task_owner, assign_workspace_environment, set_primary_workspace, "
+                "or map_runtime_session."
             )
         ),
     ],
@@ -892,6 +983,10 @@ def overview_snapshot_refresh(
     planner: OverviewSnapshotPlanner | None = None
     try:
         artifact_sha = _domain_worker_artifact_sha(state_root)
+        if artifact_sha is None:
+            raise DomainCutoverError(
+                "overview snapshot refresh requires a committed domain v2 artifact"
+            )
         planner = OverviewSnapshotPlanner(
             state_root,
             artifact_sha=artifact_sha,

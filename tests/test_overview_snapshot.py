@@ -2,33 +2,33 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from ainrf.agentic_researcher import AgenticResearcherService, HarnessEngineType, vanilla
-from ainrf.domain import DomainService, OverviewSnapshotService
+from ainrf.domain import OverviewSnapshotService
 
 pytestmark = [pytest.mark.unit]
 
 
-def test_overview_snapshot_reads_only_persisted_control_plane(state_root: Path) -> None:
-    owner: dict[str, object] = {"id": "owner", "role": "member"}
-    project = DomainService(state_root).create_project(owner, name="Project")
-    tasks = AgenticResearcherService(state_root)
-    tasks.initialize()
-    tasks.create_task(
-        str(project["project_id"]),
-        "workspace",
-        "environment",
-        vanilla(HarnessEngineType.CLAUDE_CODE),
-        "prompt",
-        "owner",
+def test_overview_snapshot_reads_only_persisted_control_plane(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    snapshots = OverviewSnapshotService(state_root, artifact_sha=committed_v2_state)
+    refreshed_job = snapshots.request_refresh(
+        "owner-ready", now=datetime(2026, 7, 12, 1, tzinfo=UTC)
+    )
+    result = snapshots.run_job(
+        str(refreshed_job["job_id"]),
+        "overview-snapshot-test",
+        now=datetime(2026, 7, 12, 1, tzinfo=UTC),
     )
 
-    snapshots = OverviewSnapshotService(state_root)
-    refreshed = snapshots.refresh("owner")
-
+    assert result.outcome == "partial"
+    refreshed = snapshots.latest("owner-ready")
+    assert refreshed is not None
     assert refreshed["source"] == "control_plane_only"
-    assert refreshed["tasks_by_status"] == {"queued": 1}
-    assert snapshots.latest("owner") == refreshed
+    assert refreshed["projects_active"] == 1
+    assert refreshed["tasks_by_status"] == {}
+    assert snapshots.latest("owner-ready") == refreshed

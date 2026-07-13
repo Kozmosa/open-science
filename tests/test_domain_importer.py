@@ -210,3 +210,212 @@ def test_importer_maps_members_relationships_attempts_and_runtime_checkpoint(
         ).fetchone()
         assert runtime_session is not None
         assert tuple(runtime_session) == ("legacy", "runtime-session-1")
+
+
+def test_importer_imports_non_seed_environment_without_copying_credentials(
+    state_root: Path,
+) -> None:
+    runtime = state_root / "runtime"
+    _write_json(
+        runtime / "environments.json",
+        [
+            {
+                "id": "env-remote",
+                "alias": "remote",
+                "display_name": "Remote compute",
+                "host": "compute.example",
+                "port": 2202,
+                "user": "researcher",
+                "identity_file": "/secure/keys/researcher",
+                "default_workdir": "/workspace/research",
+                "credential_ref": "secret://environment/remote",
+                "password": "must-not-be-copied",
+                "api_key": "must-not-be-copied",
+            }
+        ],
+    )
+
+    report = DomainImporter(state_root).run()
+
+    assert report.status == "completed"
+    with connect(runtime / "agentic_researcher.sqlite3") as conn:
+        row = conn.execute(
+            """
+            SELECT connection_json, connection_fingerprint, credential_ref, status
+            FROM environments WHERE environment_id = 'env-remote'
+            """
+        ).fetchone()
+        assert row is not None
+        connection = json.loads(str(row["connection_json"]))
+        assert connection["host"] == "compute.example"
+        assert "password" not in connection
+        assert "api_key" not in connection
+        assert row["connection_fingerprint"]
+        assert row["credential_ref"] == "secret://environment/remote"
+        assert row["status"] == "active"
+        archived = conn.execute(
+            "SELECT COUNT(*) FROM legacy_domain_records WHERE run_id = ? AND record_type = 'environment'",
+            (report.run_id,),
+        ).fetchone()
+    assert archived is not None
+    assert archived[0] == 0
+
+
+def test_importer_refuses_ambiguous_workspace_environment_for_active_work(
+    state_root: Path,
+) -> None:
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    user = auth.register(username="alice", display_name="Alice", password="secret-password")
+    runtime = state_root / "runtime"
+    workspace_path = state_root / "workspaces" / "ambiguous"
+    workspace_path.mkdir(parents=True)
+    _write_json(
+        runtime / "projects.json",
+        [
+            {
+                "project_id": "p1",
+                "name": "Project",
+                "owner_user_id": user.id,
+                "default_environment_id": "env-two",
+            }
+        ],
+    )
+    _write_json(
+        runtime / "environments.json",
+        [
+            {"id": "env-one", "alias": "one", "display_name": "One", "host": "one"},
+            {"id": "env-two", "alias": "two", "display_name": "Two", "host": "two"},
+        ],
+    )
+    _write_json(
+        runtime / "workspaces.json",
+        [
+            {
+                "workspace_id": "w1",
+                "project_id": "p1",
+                "owner_user_id": user.id,
+                "default_workdir": str(workspace_path),
+            }
+        ],
+    )
+    with connect(runtime / "agentic_researcher.sqlite3") as conn:
+        run_pending(conn, "agentic_researcher")
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES (
+                'task-1', 'p1', 'w1', 'env-one', 'general', 'claude_code', 'queued',
+                'Legacy task', 'prompt', '2026-07-12T00:00:00+00:00',
+                '2026-07-12T00:00:00+00:00', ?
+            )
+            """,
+            (user.id,),
+        )
+        conn.commit()
+
+    report = DomainImporter(state_root).run()
+
+    assert report.blocking_issue_count >= 1
+    with connect(runtime / "agentic_researcher.sqlite3") as conn:
+        issue = conn.execute(
+            """
+            SELECT severity FROM domain_migration_issues
+            WHERE run_id = ? AND category = 'workspace_environment_ambiguous' AND record_id = 'w1'
+            """,
+            (report.run_id,),
+        ).fetchone()
+        workspace = conn.execute(
+            "SELECT environment_id FROM workspaces WHERE workspace_id = 'w1'"
+        ).fetchone()
+        result = conn.execute(
+            """
+            SELECT status FROM domain_migration_record_results
+            WHERE run_id = ? AND record_type = 'workspace' AND source_record_id = 'w1'
+            """,
+            (report.run_id,),
+        ).fetchone()
+    assert issue is not None
+    assert issue["severity"] == "blocking"
+    assert workspace is not None
+    assert str(workspace["environment_id"]).startswith("legacy-unresolved-workspace-")
+    assert result is not None
+    assert result["status"] == "attention_needed"
+
+
+def test_importer_marks_workspace_and_task_owner_mapping_failures_blocking(
+    state_root: Path,
+) -> None:
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    user = auth.register(username="alice", display_name="Alice", password="secret-password")
+    runtime = state_root / "runtime"
+    workspace_path = state_root / "workspaces" / "owner"
+    workspace_path.mkdir(parents=True)
+    _write_json(
+        runtime / "projects.json",
+        [{"project_id": "p1", "name": "Project", "owner_user_id": user.id}],
+    )
+    _write_json(
+        runtime / "workspaces.json",
+        [
+            {
+                "workspace_id": "w-owner-missing",
+                "project_id": "p1",
+                "owner_user_id": "retired-user",
+                "default_workdir": str(workspace_path),
+            },
+            {
+                "workspace_id": "w-task-owner",
+                "project_id": "p1",
+                "owner_user_id": user.id,
+                "default_workdir": str(workspace_path / "task"),
+            },
+        ],
+    )
+    with connect(runtime / "agentic_researcher.sqlite3") as conn:
+        run_pending(conn, "agentic_researcher")
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES (
+                'task-owner-missing', 'p1', 'w-task-owner', 'env-localhost', 'general',
+                'claude_code', 'completed', 'Legacy task', 'prompt',
+                '2026-07-12T00:00:00+00:00', '2026-07-12T00:00:00+00:00', 'retired-user'
+            )
+            """
+        )
+        conn.commit()
+
+    report = DomainImporter(state_root).run()
+
+    with connect(runtime / "agentic_researcher.sqlite3") as conn:
+        issues = {
+            str(row["category"]): str(row["severity"])
+            for row in conn.execute(
+                "SELECT category, severity FROM domain_migration_issues WHERE run_id = ?",
+                (report.run_id,),
+            ).fetchall()
+        }
+        workspace_result = conn.execute(
+            """
+            SELECT status FROM domain_migration_record_results
+            WHERE run_id = ? AND record_type = 'workspace' AND source_record_id = 'w-owner-missing'
+            """,
+            (report.run_id,),
+        ).fetchone()
+        task_result = conn.execute(
+            """
+            SELECT status FROM domain_migration_record_results
+            WHERE run_id = ? AND record_type = 'task' AND source_record_id = 'task-owner-missing'
+            """,
+            (report.run_id,),
+        ).fetchone()
+    assert issues["workspace_owner_unmapped"] == "blocking"
+    assert issues["task_owner_unmapped"] == "blocking"
+    assert workspace_result is not None and workspace_result["status"] == "attention_needed"
+    assert task_result is not None and task_result["status"] == "attention_needed"

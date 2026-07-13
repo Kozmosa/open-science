@@ -6,7 +6,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from starlette.responses import StreamingResponse
 
 from ainrf.agentic_researcher import (
@@ -74,13 +74,16 @@ def _get_project_service(request: Request) -> ProjectRegistryService:
 def _get_task_application_service(request: Request) -> TaskApplicationService | None:
     service = getattr(request.app.state, "task_application_service", None)
     domain = getattr(request.app.state, "domain_service", None)
-    if (
-        service is None
-        or domain is None
-        or request.app.state.api_config.domain_model_mode is not DomainModelMode.V2
-        or not domain.v2_ready()
-    ):
+    if request.app.state.api_config.domain_model_mode is not DomainModelMode.V2:
         return None
+    if service is None or domain is None or not domain.v2_ready():
+        # v2 processes intentionally do not initialize the legacy in-process
+        # scheduler.  Falling through to the legacy branch would therefore
+        # turn a cutover-fuse failure into a misleading 500 (or, worse, a
+        # future split-brain write if that service were ever wired again).
+        raise HTTPException(status_code=503, detail="Task domain v2 is not ready")
+    if not isinstance(service, TaskApplicationService):
+        raise HTTPException(status_code=500, detail="Task application service is invalid")
     return service
 
 
@@ -545,8 +548,76 @@ async def list_task_attempts(request: Request, task_id: str) -> TaskAttemptListR
         raise _translate_v2_error(exc) from exc
 
 
+@router.post(
+    "/{task_id}/attempts/{attempt_id}/resolve-launch-unknown",
+    response_model=TaskAttemptResponse,
+)
+async def resolve_launch_unknown_attempt(
+    request: Request,
+    task_id: str,
+    attempt_id: str,
+) -> TaskAttemptResponse:
+    """Close a manually investigated unknown launch without re-launching it."""
+
+    task_application = _get_task_application_service(request)
+    if task_application is None:
+        raise HTTPException(
+            status_code=404,
+            detail="launch_unknown resolution is unavailable before v2 cutover",
+        )
+    try:
+        raw_payload = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(
+            status_code=422, detail="resolution request must be valid JSON"
+        ) from exc
+    if not isinstance(raw_payload, dict):
+        raise HTTPException(status_code=422, detail="resolution request must be an object")
+    reason = raw_payload.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise HTTPException(status_code=422, detail="resolution reason is required")
+    body_key = raw_payload.get("idempotency_key")
+    if body_key is not None and not isinstance(body_key, str):
+        raise HTTPException(status_code=422, detail="idempotency_key must be a string")
+    try:
+        task_application.resolve_launch_unknown(
+            task_id,
+            attempt_id,
+            get_current_user(request),
+            reason=reason,
+            idempotency_key=_idempotency_key(request, body_key),
+        )
+        projection = _get_task_projection_service(request)
+        if projection is None:
+            raise HTTPException(status_code=503, detail="Task projection is unavailable")
+        return TaskAttemptResponse.model_validate(
+            projection.attempt(attempt_id, get_current_user(request))
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _translate_v2_error(exc) from exc
+
+
 @router.get("/{task_id}/health", response_model=TaskHealthResponse)
 async def get_task_health(request: Request, task_id: str) -> TaskHealthResponse:
+    projection = _get_task_projection_service(request)
+    if projection is not None:
+        try:
+            health = projection.health(task_id, get_current_user(request))
+            last_event_at = health.get("last_event_at")
+            last_event_at_iso = last_event_at if isinstance(last_event_at, str) else None
+            inactive_seconds = _inactive_seconds(last_event_at_iso)
+            return TaskHealthResponse(
+                task_id=task_id,
+                status=str(health["status"]),
+                engine_alive=bool(health["engine_alive"]),
+                last_event_at=last_event_at_iso,
+                inactive_seconds=inactive_seconds,
+            )
+        except Exception as exc:
+            raise _translate_v2_error(exc) from exc
+
     service, task = _assert_task_owner(request, task_id)
     engine = service.get_engine_for_task(task)
     engine_alive = await engine.is_alive(task_id)
@@ -563,6 +634,20 @@ async def get_task_health(request: Request, task_id: str) -> TaskHealthResponse:
         last_event_at=last_event_at_iso,
         inactive_seconds=inactive_seconds,
     )
+
+
+def _inactive_seconds(last_event_at: str | None) -> float | None:
+    """Return a non-negative elapsed duration for a durable activity timestamp."""
+
+    if last_event_at is None:
+        return None
+    try:
+        observed_at = datetime.fromisoformat(last_event_at)
+    except ValueError:
+        return None
+    if observed_at.tzinfo is None:
+        observed_at = observed_at.replace(tzinfo=timezone.utc)
+    return max(0.0, round((datetime.now(timezone.utc) - observed_at).total_seconds(), 1))
 
 
 @router.post("/{task_id}/cancel", status_code=204)
@@ -712,6 +797,8 @@ async def send_task_prompt(
 async def _archive_task(
     request: Request,
     task_id: str,
+    *,
+    pending_response: Response | None = None,
 ) -> TaskSummaryResponse:
     """Archive a Task through the v2 application service when enabled."""
 
@@ -719,12 +806,15 @@ async def _archive_task(
     if task_application is not None:
         user = get_current_user(request)
         try:
-            task_application.archive_task(
+            archive_result = task_application.archive_task(
                 task_id,
                 user,
                 reason="user_archived",
                 idempotency_key=_idempotency_key(request),
             )
+            if archive_result.get("archive_pending") is True and pending_response is not None:
+                pending_response.status_code = status.HTTP_202_ACCEPTED
+                pending_response.headers["X-OpenScience-Archive-State"] = "pending"
             projection = _get_task_projection_service(request)
             if projection is None:
                 raise HTTPException(status_code=503, detail="Task projection is unavailable")
@@ -748,10 +838,14 @@ async def _archive_task(
 
 
 @router.post("/{task_id}/archive", status_code=200)
-async def archive_task_v2(request: Request, task_id: str) -> TaskSummaryResponse:
+async def archive_task_v2(
+    request: Request,
+    task_id: str,
+    response: Response,
+) -> TaskSummaryResponse:
     """Standard explicit Task archive endpoint."""
 
-    return await _archive_task(request, task_id)
+    return await _archive_task(request, task_id, pending_response=response)
 
 
 @router.post("/{task_id}/unarchive", status_code=200)

@@ -8,7 +8,7 @@ import json
 import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -31,6 +31,7 @@ DEFAULT_PLATFORM_CONSTRAINTS = (
     "Respect tenant isolation, do not expose credentials or private paths, "
     "and report uncertainty instead of assuming unavailable state."
 )
+_TASK_CONTEXT_LIFECYCLE_CAPABILITY = object()
 
 
 def _now() -> str:
@@ -47,6 +48,97 @@ def _fingerprint(content: str) -> str:
 
 def _canonical_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def context_version_fingerprint(
+    content: str, fragment_manifest: Sequence[Mapping[str, object]] = ()
+) -> str:
+    """Return the immutable fingerprint for one published Context Version.
+
+    Context Fragments are executable Context input, not merely UI annotations.
+    Including their frozen manifest in the Version fingerprint means two
+    otherwise identical Drafts with different reviewed source material cannot
+    masquerade as the same Version.  The manifest is intentionally serialized
+    canonically so replaying a publish against the same source set is stable.
+    """
+
+    return _fingerprint(
+        _canonical_json(
+            {
+                "content": content,
+                "fragment_manifest": [dict(item) for item in fragment_manifest],
+                "version_format": 1,
+            }
+        )
+    )
+
+
+def empty_fragment_manifest_json() -> str:
+    """Return the canonical empty immutable Fragment manifest."""
+
+    return _canonical_json([])
+
+
+def verified_fragment_provenance_evidence(
+    fragment_manifest: Sequence[Mapping[str, object]],
+) -> str:
+    """Return audit evidence for a Version published with a reviewed manifest."""
+
+    manifest_json = _canonical_json([dict(item) for item in fragment_manifest])
+    return _canonical_json(
+        {
+            "kind": "published_fragment_manifest",
+            "manifest_sha256": _fingerprint(manifest_json),
+            "fragment_count": len(fragment_manifest),
+            "source": "project_context_publish_transaction",
+        }
+    )
+
+
+def unresolved_legacy_fragment_provenance_evidence(*, source: str) -> str:
+    """Record that a synthetic/imported Version has no historic association.
+
+    The source model did not persist a Version-to-Fragment mapping, so an
+    empty manifest must not be interpreted as proof that historic Context had
+    no Fragments.  Callers preserve the Version for audit but require an owner
+    to publish a verified successor before it can assemble a new Snapshot.
+    """
+
+    return _canonical_json(
+        {
+            "kind": "legacy_fragment_provenance_unavailable",
+            "reason": "No historic Version-to-Fragment association was persisted.",
+            "source": source,
+        }
+    )
+
+
+def record_context_version_fragment_provenance_in_transaction(
+    conn: sqlite3.Connection,
+    *,
+    context_version_id: str,
+    status: str,
+    evidence_json: str,
+    recorded_at: str,
+) -> None:
+    """Append immutable Fragment provenance alongside a Context Version."""
+
+    if status not in {"verified", "attention_needed"}:
+        raise ValueError("Unknown Context Version fragment provenance status")
+    conn.execute(
+        """
+        INSERT INTO project_context_version_provenance (
+            context_version_id, fragment_provenance_status, evidence_json, recorded_at
+        ) VALUES (?, ?, ?, ?)
+        """,
+        (context_version_id, status, evidence_json, recorded_at),
+    )
+
+
+def task_context_lifecycle_capability() -> object:
+    """Return the private capability held by ``TaskApplicationService`` only."""
+
+    return _TASK_CONTEXT_LIFECYCLE_CAPABILITY
 
 
 def _load_json_object(value: object) -> dict[str, object]:
@@ -95,6 +187,33 @@ class ContextSource:
     source_version: str
     label: str
     content: str
+    fragments: tuple[ContextFragment, ...] = ()
+
+    @property
+    def fingerprint(self) -> str:
+        return _fingerprint(self.content)
+
+
+@dataclass(frozen=True, slots=True)
+class ContextFragment:
+    """An immutable, provenance-bearing contribution to one Context Source.
+
+    Fragments remain nested below one of the four fixed source groups rather
+    than becoming an unbounded fifth source type.  That keeps the assembler's
+    public ordering contract stable while preserving the origin and budget of
+    manually supplied Project material in every Snapshot manifest.
+    """
+
+    fragment_id: str
+    source_type: str
+    source_version: str
+    content: str
+    source_metadata: Mapping[str, object] = field(default_factory=dict)
+    sort_order: int = 0
+    byte_budget: int | None = None
+    created_by_user_id: str | None = None
+    created_at: str | None = None
+    source_fingerprint: str | None = None
 
     @property
     def fingerprint(self) -> str:
@@ -160,9 +279,69 @@ class ContextAssembler:
             included = _utf8_prefix(rendered, remaining)
             included_bytes = len(included.encode("utf-8"))
             source_truncated = included_bytes != rendered_bytes
-            truncated = truncated or source_truncated
+            source_rendered_bytes = rendered_bytes
+            source_included_bytes = included_bytes
             chunks.append(included)
             remaining -= included_bytes
+
+            fragment_manifest: list[dict[str, object]] = []
+            for fragment_position, fragment in enumerate(source.fragments):
+                if fragment.byte_budget is not None and fragment.byte_budget < 0:
+                    raise ValueError("Context Fragment byte budget cannot be negative")
+                if (
+                    fragment.source_fingerprint is not None
+                    and fragment.source_fingerprint != fragment.fingerprint
+                ):
+                    raise ValueError(
+                        "Context Fragment provenance fingerprint does not match content"
+                    )
+
+                fragment_budget = fragment.byte_budget
+                locally_included_content = (
+                    _utf8_prefix(fragment.content, fragment_budget)
+                    if fragment_budget is not None
+                    else fragment.content
+                )
+                fragment_input_bytes = len(fragment.content.encode("utf-8"))
+                fragment_local_bytes = len(locally_included_content.encode("utf-8"))
+                locally_truncated = fragment_local_bytes != fragment_input_bytes
+                fragment_rendered = (
+                    f"### Context Fragment: {fragment.source_type}\n{locally_included_content}\n\n"
+                )
+                fragment_rendered_bytes = len(fragment_rendered.encode("utf-8"))
+                fragment_included = _utf8_prefix(fragment_rendered, remaining)
+                fragment_included_bytes = len(fragment_included.encode("utf-8"))
+                globally_truncated = fragment_included_bytes != fragment_rendered_bytes
+                fragment_truncated = locally_truncated or globally_truncated
+                source_truncated = source_truncated or fragment_truncated
+                source_rendered_bytes += fragment_rendered_bytes
+                source_included_bytes += fragment_included_bytes
+                chunks.append(fragment_included)
+                remaining -= fragment_included_bytes
+                fragment_manifest.append(
+                    {
+                        "position": fragment_position,
+                        "fragment_id": fragment.fragment_id,
+                        "source_type": fragment.source_type,
+                        "source_id": fragment.fragment_id,
+                        "source_version": fragment.source_version,
+                        "fingerprint": fragment.fingerprint,
+                        "source_metadata": dict(fragment.source_metadata),
+                        "sort_order": fragment.sort_order,
+                        "byte_budget": fragment.byte_budget,
+                        "created_by_user_id": fragment.created_by_user_id,
+                        "created_at": fragment.created_at,
+                        "input_bytes": fragment_input_bytes,
+                        "local_included_bytes": fragment_local_bytes,
+                        "rendered_bytes": fragment_rendered_bytes,
+                        "included_bytes": fragment_included_bytes,
+                        "locally_truncated": locally_truncated,
+                        "globally_truncated": globally_truncated,
+                        "truncated": fragment_truncated,
+                    }
+                )
+
+            truncated = truncated or source_truncated
             manifest.append(
                 {
                     "position": position,
@@ -171,9 +350,10 @@ class ContextAssembler:
                     "source_version": source.source_version,
                     "fingerprint": source.fingerprint,
                     "input_bytes": len(source.content.encode("utf-8")),
-                    "rendered_bytes": rendered_bytes,
-                    "included_bytes": included_bytes,
+                    "rendered_bytes": source_rendered_bytes,
+                    "included_bytes": source_included_bytes,
                     "truncated": source_truncated,
+                    "fragments": fragment_manifest,
                 }
             )
 
@@ -247,43 +427,118 @@ class ProjectContextService:
             raise DomainPermissionError("Authenticated user ID is required")
         return value
 
+    @staticmethod
+    def _require_task_lifecycle_capability(capability: object | None) -> None:
+        if capability is not _TASK_CONTEXT_LIFECYCLE_CAPABILITY:
+            raise DomainConflictError(
+                "Task Context mutations must be submitted through TaskApplicationService"
+            )
+
+    @staticmethod
+    def initialize_project_context_in_transaction(
+        conn: sqlite3.Connection,
+        *,
+        project_id: str,
+        owner_user_id: str,
+        created_at: str,
+    ) -> str:
+        """Create the empty Draft and initial immutable Active Version atomically.
+
+        A Project is not executable until it has an Active Version.  Keeping
+        both Context rows in the Project creation transaction prevents fresh
+        Projects from entering a state where a later Task creation can fail
+        only because its Context lifecycle was never initialized.
+        """
+
+        context_version_id = f"context-{uuid4().hex}"
+        content = ""
+        fragment_manifest_json = empty_fragment_manifest_json()
+        conn.execute(
+            """INSERT INTO project_context_drafts
+               (project_id, content, updated_by_user_id, updated_at)
+               VALUES (?, ?, ?, ?)""",
+            (project_id, content, owner_user_id, created_at),
+        )
+        conn.execute(
+            """INSERT INTO project_context_versions
+               (context_version_id, project_id, content, fingerprint, fragment_manifest_json,
+                is_active, created_by_user_id, created_at)
+               VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+            (
+                context_version_id,
+                project_id,
+                content,
+                context_version_fingerprint(content),
+                fragment_manifest_json,
+                owner_user_id,
+                created_at,
+            ),
+        )
+        record_context_version_fragment_provenance_in_transaction(
+            conn,
+            context_version_id=context_version_id,
+            status="verified",
+            evidence_json=verified_fragment_provenance_evidence(()),
+            recorded_at=created_at,
+        )
+        return context_version_id
+
     def save_draft(
-        self, project_id: str, content: str, user: Mapping[str, object]
+        self,
+        project_id: str,
+        content: str,
+        user: Mapping[str, object],
+        *,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
+            actor_user_id = self._user_id(user)
+            request = {"project_id": project_id, "content": content}
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "project.context.draft.save",
+                    idempotency_key,
+                    request,
+                )
+                if cached is not None:
+                    return cached
             now = _now()
             conn.execute(
                 """INSERT INTO project_context_drafts(project_id, content, updated_by_user_id, updated_at)
                    VALUES (?, ?, ?, ?)
                    ON CONFLICT(project_id) DO UPDATE SET content = excluded.content,
                        updated_by_user_id = excluded.updated_by_user_id, updated_at = excluded.updated_at""",
-                (project_id, content, self._user_id(user), now),
+                (project_id, content, actor_user_id, now),
             )
-            self._audit(
-                conn, self._user_id(user), "project_context.draft_saved", "project", project_id
-            )
-            conn.commit()
-            return {
+            result: dict[str, object] = {
                 "project_id": project_id,
                 "content": content,
                 "fingerprint": _fingerprint(content),
-                "updated_by_user_id": self._user_id(user),
+                "updated_by_user_id": actor_user_id,
                 "updated_at": now,
             }
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.context.draft.save",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "project_context.draft_saved", "project", project_id)
+            conn.commit()
+            return result
 
     def get_context(self, project_id: str, user: Mapping[str, object]) -> dict[str, object]:
         with closing(self._connect()) as conn:
             auth = DomainAuthorizationService(conn)
             role = auth.require_project_viewer(project_id, dict(user))
-            active = conn.execute(
-                """SELECT context_version_id, project_id, content, fingerprint, is_active,
-                          created_by_user_id, created_at
-                   FROM project_context_versions
-                   WHERE project_id = ? AND is_active = 1""",
-                (project_id,),
-            ).fetchone()
+            active = self._active_version_or_none(conn, project_id)
             draft = None
             if role in {"admin", "owner", "editor"}:
                 draft_row = conn.execute(
@@ -322,10 +577,15 @@ class ProjectContextService:
             if draft is None:
                 raise DomainNotFoundError("project context draft")
             content = str(draft["content"])
+            fragment_manifest = self._freeze_project_fragments(conn, project_id)
+            version_fingerprint = context_version_fingerprint(content, fragment_manifest)
             actor_user_id = self._user_id(user)
             request = {
                 "project_id": project_id,
                 "draft_fingerprint": _fingerprint(content),
+                "fragment_manifest_fingerprint": _fingerprint(
+                    _canonical_json(list(fragment_manifest))
+                ),
             }
             if idempotency_key is not None:
                 cached = self._idempotent_result(
@@ -341,15 +601,36 @@ class ProjectContextService:
             )
             conn.execute(
                 """INSERT INTO project_context_versions
-                   (context_version_id, project_id, content, fingerprint, is_active, created_by_user_id, created_at)
-                   VALUES (?, ?, ?, ?, 1, ?, ?)""",
-                (version_id, project_id, content, _fingerprint(content), actor_user_id, now),
+                   (context_version_id, project_id, content, fingerprint, fragment_manifest_json,
+                    is_active, created_by_user_id, created_at)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                (
+                    version_id,
+                    project_id,
+                    content,
+                    version_fingerprint,
+                    _canonical_json(list(fragment_manifest)),
+                    actor_user_id,
+                    now,
+                ),
+            )
+            record_context_version_fragment_provenance_in_transaction(
+                conn,
+                context_version_id=version_id,
+                status="verified",
+                evidence_json=verified_fragment_provenance_evidence(fragment_manifest),
+                recorded_at=now,
             )
             result: dict[str, object] = {
                 "context_version_id": version_id,
                 "project_id": project_id,
-                "fingerprint": _fingerprint(content),
+                "fingerprint": version_fingerprint,
                 "content": content,
+                "fragment_manifest": list(fragment_manifest),
+                "fragment_provenance_status": "verified",
+                "fragment_provenance_evidence": _load_json_object(
+                    verified_fragment_provenance_evidence(fragment_manifest)
+                ),
                 "is_active": True,
                 "created_by_user_id": actor_user_id,
                 "created_at": now,
@@ -370,13 +651,7 @@ class ProjectContextService:
     def list_versions(self, project_id: str, user: Mapping[str, object]) -> list[dict[str, object]]:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_viewer(project_id, dict(user))
-            rows = conn.execute(
-                """SELECT context_version_id, project_id, content, fingerprint, is_active,
-                          created_by_user_id, created_at
-                   FROM project_context_versions WHERE project_id = ?
-                   ORDER BY created_at DESC, context_version_id DESC""",
-                (project_id,),
-            ).fetchall()
+            rows = self._versions_for_project(conn, project_id)
             return [self._version_payload(row) for row in rows]
 
     def get_version(
@@ -418,6 +693,7 @@ class ProjectContextService:
         source_message_end_seq: int | None = None,
         source_output_start_seq: int | None = None,
         source_output_end_seq: int | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         self._validate_ranges(
             source_message_start_seq,
@@ -425,16 +701,59 @@ class ProjectContextService:
             source_output_start_seq,
             source_output_end_seq,
         )
+        if source_task_id is None:
+            raise DomainConflictError("Context Candidate provenance requires a source Task")
+        if source_message_start_seq is None and source_output_start_seq is None:
+            raise DomainConflictError(
+                "Context Candidate provenance requires a message or output source range"
+            )
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             auth = DomainAuthorizationService(conn)
-            auth.require_project_editor(project_id, dict(user))
-            self._validate_candidate_provenance(
+            provenance_task_id = self._validate_candidate_provenance(
                 conn,
                 project_id=project_id,
                 source_task_id=source_task_id,
                 source_attempt_id=source_attempt_id,
             )
+            # A Candidate is a proposal from the author of the selected Task
+            # material, not another direct Project Context write path.  The
+            # Project owner/editor remains responsible for accepting or
+            # rejecting it later.  ``require_task_owner`` preserves the
+            # normal 404/403 visibility boundary and admits administrators
+            # without granting tenant execution authority.
+            auth.require_task_owner(provenance_task_id, dict(user))
+            self._validate_candidate_source_ranges(
+                conn,
+                task_id=provenance_task_id,
+                message_start=source_message_start_seq,
+                message_end=source_message_end_seq,
+                output_start=source_output_start_seq,
+                output_end=source_output_end_seq,
+            )
+            actor_user_id = self._user_id(user)
+            canonical_source_metadata = dict(source_metadata or {})
+            request: dict[str, object] = {
+                "project_id": project_id,
+                "content": content,
+                "source_metadata": canonical_source_metadata,
+                "source_task_id": source_task_id,
+                "source_attempt_id": source_attempt_id,
+                "source_message_start_seq": source_message_start_seq,
+                "source_message_end_seq": source_message_end_seq,
+                "source_output_start_seq": source_output_start_seq,
+                "source_output_end_seq": source_output_end_seq,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "project.context.candidate.create",
+                    idempotency_key,
+                    request,
+                )
+                if cached is not None:
+                    return cached
             candidate_id = f"candidate-{uuid4().hex}"
             now = _now()
             conn.execute(
@@ -443,14 +762,14 @@ class ProjectContextService:
                        created_by_user_id, source_metadata_json, source_task_id,
                        source_attempt_id, source_message_start_seq, source_message_end_seq,
                        source_output_start_seq, source_output_end_seq
-                   ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   ) VALUES (?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     candidate_id,
                     project_id,
                     content,
                     now,
-                    self._user_id(user),
-                    _canonical_json(dict(source_metadata or {})),
+                    actor_user_id,
+                    _canonical_json(canonical_source_metadata),
                     source_task_id,
                     source_attempt_id,
                     source_message_start_seq,
@@ -461,18 +780,28 @@ class ProjectContextService:
             )
             self._audit(
                 conn,
-                self._user_id(user),
+                actor_user_id,
                 "project_context.candidate_created",
                 "candidate",
                 candidate_id,
             )
-            conn.commit()
-            return self._candidate_payload(
+            result = self._candidate_payload(
                 conn.execute(
                     "SELECT * FROM project_context_candidates WHERE candidate_id = ?",
                     (candidate_id,),
                 ).fetchone()
             )
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.context.candidate.create",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            conn.commit()
+            return result
 
     def list_candidates(
         self, project_id: str, user: Mapping[str, object]
@@ -487,11 +816,28 @@ class ProjectContextService:
             return [self._candidate_payload(row) for row in rows]
 
     def accept_candidate(
-        self, project_id: str, candidate_id: str, user: Mapping[str, object]
+        self,
+        project_id: str,
+        candidate_id: str,
+        user: Mapping[str, object],
+        *,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
+            actor_user_id = self._user_id(user)
+            request = {"project_id": project_id, "candidate_id": candidate_id}
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "project.context.candidate.accept",
+                    idempotency_key,
+                    request,
+                )
+                if cached is not None:
+                    return cached
             candidate = self._candidate(conn, project_id, candidate_id)
             if candidate["status"] == "rejected":
                 raise DomainConflictError("A rejected Context Candidate cannot be accepted")
@@ -500,10 +846,26 @@ class ProjectContextService:
             ).fetchone()
             current = str(draft["content"]) if draft is not None else ""
             if candidate["status"] == "accepted":
-                return {
+                result: dict[str, object] = {
                     "candidate": self._candidate_payload(candidate),
                     "draft": self._draft_payload(conn, project_id),
                 }
+                if idempotency_key is not None:
+                    # Compatibility callers may have accepted the Candidate
+                    # before the API required a key.  Persist the resulting
+                    # replay value without pretending that it was accepted a
+                    # second time in the domain audit trail.
+                    self._store_idempotency(
+                        conn,
+                        actor_user_id,
+                        "project.context.candidate.accept",
+                        idempotency_key,
+                        request,
+                        result,
+                    )
+                    self._write_fence.record_first_v2_write(conn, actor_id=actor_user_id)
+                    conn.commit()
+                return result
             proposed = self._append_candidate(current, str(candidate["content"]))
             now = _now()
             conn.execute(
@@ -511,27 +873,37 @@ class ProjectContextService:
                    VALUES (?, ?, ?, ?)
                    ON CONFLICT(project_id) DO UPDATE SET content = excluded.content,
                        updated_by_user_id = excluded.updated_by_user_id, updated_at = excluded.updated_at""",
-                (project_id, proposed, self._user_id(user), now),
+                (project_id, proposed, actor_user_id, now),
             )
             conn.execute(
                 """UPDATE project_context_candidates
                    SET status = 'accepted', accepted_by_user_id = ?, accepted_at = ?
                    WHERE candidate_id = ?""",
-                (self._user_id(user), now, candidate_id),
+                (actor_user_id, now, candidate_id),
             )
             self._audit(
                 conn,
-                self._user_id(user),
+                actor_user_id,
                 "project_context.candidate_accepted",
                 "candidate",
                 candidate_id,
             )
-            conn.commit()
             updated = self._candidate(conn, project_id, candidate_id)
-            return {
+            result: dict[str, object] = {
                 "candidate": self._candidate_payload(updated),
                 "draft": self._draft_payload(conn, project_id),
             }
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.context.candidate.accept",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            conn.commit()
+            return result
 
     def reject_candidate(
         self,
@@ -540,31 +912,70 @@ class ProjectContextService:
         user: Mapping[str, object],
         *,
         reason: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
+            actor_user_id = self._user_id(user)
+            request = {
+                "project_id": project_id,
+                "candidate_id": candidate_id,
+                "reason": reason,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "project.context.candidate.reject",
+                    idempotency_key,
+                    request,
+                )
+                if cached is not None:
+                    return cached
             candidate = self._candidate(conn, project_id, candidate_id)
             if candidate["status"] == "accepted":
                 raise DomainConflictError("An accepted Context Candidate cannot be rejected")
             if candidate["status"] == "rejected":
-                return self._candidate_payload(candidate)
+                result = self._candidate_payload(candidate)
+                if idempotency_key is not None:
+                    self._store_idempotency(
+                        conn,
+                        actor_user_id,
+                        "project.context.candidate.reject",
+                        idempotency_key,
+                        request,
+                        result,
+                    )
+                    self._write_fence.record_first_v2_write(conn, actor_id=actor_user_id)
+                    conn.commit()
+                return result
             now = _now()
             conn.execute(
                 """UPDATE project_context_candidates
                    SET status = 'rejected', rejected_by_user_id = ?, rejected_at = ?,
                        rejection_reason = ? WHERE candidate_id = ?""",
-                (self._user_id(user), now, reason, candidate_id),
+                (actor_user_id, now, reason, candidate_id),
             )
             self._audit(
                 conn,
-                self._user_id(user),
+                actor_user_id,
                 "project_context.candidate_rejected",
                 "candidate",
                 candidate_id,
             )
+            result = self._candidate_payload(self._candidate(conn, project_id, candidate_id))
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.context.candidate.reject",
+                    idempotency_key,
+                    request,
+                    result,
+                )
             conn.commit()
-            return self._candidate_payload(self._candidate(conn, project_id, candidate_id))
+            return result
 
     def create_fragment(
         self,
@@ -577,6 +988,7 @@ class ProjectContextService:
         source_version: str | None = None,
         sort_order: int = 0,
         byte_budget: int | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         if not source_type:
             raise DomainConflictError("Context Fragment source_type is required")
@@ -584,9 +996,37 @@ class ProjectContextService:
             raise DomainConflictError("Context Fragment byte_budget cannot be negative")
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
-            DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
+            # Persisted Fragments participate in future Task Snapshots.  They
+            # therefore carry the same publishing authority as an Active
+            # Context change; an ordinary editor may still edit a Draft or
+            # propose a Candidate, but cannot inject runtime material around
+            # the publish gate.
+            DomainAuthorizationService(conn).require_project_publisher(project_id, dict(user))
+            actor_user_id = self._user_id(user)
+            canonical_source_metadata = dict(source_metadata or {})
+            request: dict[str, object] = {
+                "project_id": project_id,
+                "content": content,
+                "source_type": source_type,
+                "source_metadata": canonical_source_metadata,
+                "source_version": source_version,
+                "sort_order": sort_order,
+                "byte_budget": byte_budget,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "project.context.fragment.create",
+                    idempotency_key,
+                    request,
+                )
+                if cached is not None:
+                    return cached
             fragment_id = f"fragment-{uuid4().hex}"
             now = _now()
+            fingerprint = _fingerprint(content)
+            effective_source_version = source_version or fingerprint
             conn.execute(
                 """INSERT INTO project_context_fragments (
                        fragment_id, project_id, source_type, content, created_at, source_version,
@@ -599,27 +1039,37 @@ class ProjectContextService:
                     source_type,
                     content,
                     now,
-                    source_version,
-                    _fingerprint(content),
+                    effective_source_version,
+                    fingerprint,
                     sort_order,
                     byte_budget,
-                    self._user_id(user),
-                    _canonical_json(dict(source_metadata or {})),
+                    actor_user_id,
+                    _canonical_json(canonical_source_metadata),
                 ),
             )
             self._audit(
                 conn,
-                self._user_id(user),
+                actor_user_id,
                 "project_context.fragment_created",
                 "fragment",
                 fragment_id,
             )
-            conn.commit()
-            return self._fragment_payload(
+            result = self._fragment_payload(
                 conn.execute(
                     "SELECT * FROM project_context_fragments WHERE fragment_id = ?", (fragment_id,)
                 ).fetchone()
             )
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.context.fragment.create",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            conn.commit()
+            return result
 
     def list_fragments(
         self, project_id: str, user: Mapping[str, object]
@@ -633,8 +1083,16 @@ class ProjectContextService:
             ).fetchall()
             return [self._fragment_payload(row) for row in rows]
 
-    def pin_active_context(self, task_id: str, project_id: str) -> str:
-        """Internal compatibility helper: pin a fresh active Context Snapshot."""
+    def pin_active_context(
+        self,
+        task_id: str,
+        project_id: str,
+        *,
+        _lifecycle_capability: object | None = None,
+    ) -> str:
+        """Retired direct Task-pin facade; only lifecycle code may use it."""
+
+        self._require_task_lifecycle_capability(_lifecycle_capability)
 
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
@@ -707,17 +1165,36 @@ class ProjectContextService:
         )
         return self._insert_snapshot(conn, context_version_id, assembly)
 
-    def ensure_task_snapshot(self, task_id: str) -> str:
-        """Backfill an old unstarted Task's explicit Snapshot without drift."""
+    def ensure_task_snapshot(
+        self,
+        task_id: str,
+        *,
+        _lifecycle_capability: object | None = None,
+    ) -> str:
+        """Retired direct Task-pin facade; only lifecycle code may use it."""
+
+        self._require_task_lifecycle_capability(_lifecycle_capability)
 
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
-            snapshot_id = self.ensure_task_snapshot_in_transaction(conn, task_id)
+            snapshot_id = self.ensure_task_snapshot_in_transaction(
+                conn,
+                task_id,
+                _lifecycle_capability=_lifecycle_capability,
+            )
             conn.commit()
             return snapshot_id
 
-    def ensure_task_snapshot_in_transaction(self, conn: sqlite3.Connection, task_id: str) -> str:
+    def ensure_task_snapshot_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        task_id: str,
+        *,
+        _lifecycle_capability: object | None = None,
+    ) -> str:
         """Backfill a Task pin using an already-open task/Attempt transaction."""
+
+        self._require_task_lifecycle_capability(_lifecycle_capability)
 
         task = conn.execute(
             """SELECT task_id, project_id, workspace_id, prompt, project_context_version_id,
@@ -763,8 +1240,14 @@ class ProjectContextService:
         return snapshot_id
 
     def preview_task_context_update(
-        self, task_id: str, project_id: str, user: Mapping[str, object]
+        self,
+        task_id: str,
+        project_id: str,
+        user: Mapping[str, object],
+        *,
+        _lifecycle_capability: object | None = None,
     ) -> dict[str, object]:
+        self._require_task_lifecycle_capability(_lifecycle_capability)
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             task = self._authorize_task_context_update(conn, task_id, project_id, user)
@@ -830,7 +1313,9 @@ class ProjectContextService:
         user: Mapping[str, object],
         *,
         idempotency_key: str,
+        _lifecycle_capability: object | None = None,
     ) -> dict[str, object]:
+        self._require_task_lifecycle_capability(_lifecycle_capability)
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             self._authorize_task_context_update(conn, task_id, project_id, user)
@@ -915,22 +1400,22 @@ class ProjectContextService:
         *,
         idempotency_key: str | None = None,
     ) -> str:
-        """Compatibility wrapper for callers that cannot render a preview UI yet."""
+        """Retire the direct Task Context write facade.
 
-        preview = self.preview_task_context_update(task_id, project_id, user)
-        key = idempotency_key or f"internal-context-confirm-{uuid4().hex}"
-        result = self.confirm_task_context_update(
-            task_id,
-            project_id,
-            str(preview["preview_id"]),
-            user,
-            idempotency_key=key,
+        A caller must render a diff and submit it through
+        :class:`TaskApplicationService`; generating an internal random key
+        here used to bypass both the lifecycle transaction boundary and the
+        formal idempotency contract.
+        """
+
+        _ = task_id, project_id, user, idempotency_key
+        raise DomainConflictError(
+            "Task Context mutations must be submitted through TaskApplicationService"
         )
-        return str(result["context_snapshot_id"])
 
     def task_context(self, task_id: str, user: Mapping[str, object]) -> dict[str, object]:
         with closing(self._connect()) as conn:
-            DomainAuthorizationService(conn).require_task_owner(task_id, dict(user))
+            DomainAuthorizationService(conn).require_task_viewer(task_id, dict(user))
             task = conn.execute(
                 """SELECT task_id, project_id, project_context_version_id, project_context_snapshot_id
                    FROM tasks WHERE task_id = ?""",
@@ -988,6 +1473,7 @@ class ProjectContextService:
             workspace_content = raw_context if isinstance(raw_context, str) else ""
             updated_at = workspace["updated_at"]
             workspace_version = str(updated_at) if updated_at is not None else "workspace-v1"
+        fragments = self._fragments_for_version(version)
         sources = (
             self._assembler.platform_source(),
             ContextSource(
@@ -996,6 +1482,7 @@ class ProjectContextService:
                 source_version=str(version["fingerprint"]),
                 label="Project Brief",
                 content=str(version["content"]),
+                fragments=fragments,
             ),
             ContextSource(
                 source_type="workspace_context",
@@ -1013,6 +1500,136 @@ class ProjectContextService:
             ),
         )
         return self._assembler.assemble(sources)
+
+    @staticmethod
+    def _freeze_project_fragments(
+        conn: sqlite3.Connection, project_id: str
+    ) -> tuple[dict[str, object], ...]:
+        """Capture the complete reviewed Fragment set into a Version manifest.
+
+        This is called only while publishing inside the Project Context write
+        transaction.  Future Fragment rows are deliberately not consulted
+        when a Task assembles an already-published Version.
+        """
+
+        rows = conn.execute(
+            """SELECT * FROM project_context_fragments WHERE project_id = ?
+               ORDER BY sort_order, created_at, fragment_id""",
+            (project_id,),
+        ).fetchall()
+        frozen: list[dict[str, object]] = []
+        for row in rows:
+            content = str(row["content"])
+            source_fingerprint = row["source_fingerprint"]
+            fingerprint = (
+                str(source_fingerprint)
+                if isinstance(source_fingerprint, str) and source_fingerprint
+                else _fingerprint(content)
+            )
+            frozen.append(
+                {
+                    "fragment_id": str(row["fragment_id"]),
+                    "source_type": str(row["source_type"]),
+                    "source_version": (
+                        str(row["source_version"])
+                        if isinstance(row["source_version"], str) and row["source_version"]
+                        else fingerprint
+                    ),
+                    "content": content,
+                    "source_metadata": _load_json_object(row["source_metadata_json"]),
+                    "sort_order": int(row["sort_order"]),
+                    "byte_budget": (
+                        int(row["byte_budget"]) if row["byte_budget"] is not None else None
+                    ),
+                    "created_by_user_id": (
+                        str(row["created_by_user_id"])
+                        if isinstance(row["created_by_user_id"], str)
+                        else None
+                    ),
+                    "created_at": str(row["created_at"]),
+                    "source_fingerprint": fingerprint,
+                }
+            )
+        return tuple(frozen)
+
+    @staticmethod
+    def _fragments_for_version(version: sqlite3.Row) -> tuple[ContextFragment, ...]:
+        """Decode the immutable Fragment manifest stored with a Context Version.
+
+        A corrupt manifest is a control-plane integrity failure.  Falling back
+        to the mutable Project fragment table would reintroduce Context drift,
+        so the caller receives a precise conflict instead.
+        """
+
+        provenance_status = version["fragment_provenance_status"]
+        if provenance_status != "verified":
+            raise DomainConflictError(
+                "Context Version Fragment provenance needs explicit review before a new Snapshot"
+            )
+        raw_manifest = version["fragment_manifest_json"]
+        if not isinstance(raw_manifest, str):
+            raise DomainConflictError("Context Version fragment manifest is missing")
+        try:
+            decoded = json.loads(raw_manifest)
+        except json.JSONDecodeError as exc:
+            raise DomainConflictError("Context Version fragment manifest is invalid") from exc
+        if not isinstance(decoded, list):
+            raise DomainConflictError("Context Version fragment manifest is invalid")
+        fragments: list[ContextFragment] = []
+        for entry in decoded:
+            if not isinstance(entry, dict):
+                raise DomainConflictError("Context Version fragment manifest is invalid")
+            content = entry.get("content")
+            fragment_id = entry.get("fragment_id")
+            source_type = entry.get("source_type")
+            source_version = entry.get("source_version")
+            source_fingerprint = entry.get("source_fingerprint")
+            created_at = entry.get("created_at")
+            if not all(
+                isinstance(value, str) and value
+                for value in (
+                    content,
+                    fragment_id,
+                    source_type,
+                    source_version,
+                    source_fingerprint,
+                    created_at,
+                )
+            ):
+                raise DomainConflictError("Context Version fragment manifest is invalid")
+            metadata = entry.get("source_metadata", {})
+            if not isinstance(metadata, dict):
+                raise DomainConflictError("Context Version fragment manifest is invalid")
+            sort_order = entry.get("sort_order", 0)
+            byte_budget = entry.get("byte_budget")
+            created_by_user_id = entry.get("created_by_user_id")
+            if isinstance(sort_order, bool) or not isinstance(sort_order, int):
+                raise DomainConflictError("Context Version fragment manifest is invalid")
+            if byte_budget is not None and (
+                isinstance(byte_budget, bool) or not isinstance(byte_budget, int)
+            ):
+                raise DomainConflictError("Context Version fragment manifest is invalid")
+            if created_by_user_id is not None and not isinstance(created_by_user_id, str):
+                raise DomainConflictError("Context Version fragment manifest is invalid")
+            if source_fingerprint != _fingerprint(content):
+                raise DomainConflictError(
+                    "Context Version fragment manifest fingerprint is invalid"
+                )
+            fragments.append(
+                ContextFragment(
+                    fragment_id=fragment_id,
+                    source_type=source_type,
+                    source_version=source_version,
+                    content=content,
+                    source_metadata={str(key): value for key, value in metadata.items()},
+                    sort_order=sort_order,
+                    byte_budget=byte_budget,
+                    created_by_user_id=created_by_user_id,
+                    created_at=created_at,
+                    source_fingerprint=source_fingerprint,
+                )
+            )
+        return tuple(fragments)
 
     def _insert_snapshot(
         self, conn: sqlite3.Connection, context_version_id: str, assembly: ContextAssembly
@@ -1037,13 +1654,27 @@ class ProjectContextService:
         return snapshot_id
 
     @staticmethod
-    def _active_version(conn: sqlite3.Connection, project_id: str) -> sqlite3.Row:
-        row = conn.execute(
-            """SELECT context_version_id, project_id, content, fingerprint, is_active,
-                      created_by_user_id, created_at
-               FROM project_context_versions WHERE project_id = ? AND is_active = 1""",
+    def _active_version_or_none(conn: sqlite3.Connection, project_id: str) -> sqlite3.Row | None:
+        return conn.execute(
+            """
+            SELECT version.context_version_id, version.project_id, version.content,
+                   version.fingerprint, version.fragment_manifest_json, version.is_active,
+                   version.created_by_user_id, version.created_at,
+                   COALESCE(provenance.fragment_provenance_status, 'attention_needed')
+                       AS fragment_provenance_status,
+                   COALESCE(provenance.evidence_json, '{}')
+                       AS fragment_provenance_evidence_json
+            FROM project_context_versions AS version
+            LEFT JOIN project_context_version_provenance AS provenance
+              ON provenance.context_version_id = version.context_version_id
+            WHERE version.project_id = ? AND version.is_active = 1
+            """,
             (project_id,),
         ).fetchone()
+
+    @classmethod
+    def _active_version(cls, conn: sqlite3.Connection, project_id: str) -> sqlite3.Row:
+        row = cls._active_version_or_none(conn, project_id)
         if row is None:
             raise DomainNotFoundError("active project context version")
         return row
@@ -1051,15 +1682,44 @@ class ProjectContextService:
     @staticmethod
     def _version(conn: sqlite3.Connection, project_id: str, context_version_id: str) -> sqlite3.Row:
         row = conn.execute(
-            """SELECT context_version_id, project_id, content, fingerprint, is_active,
-                      created_by_user_id, created_at
-               FROM project_context_versions
-               WHERE project_id = ? AND context_version_id = ?""",
+            """
+            SELECT version.context_version_id, version.project_id, version.content,
+                   version.fingerprint, version.fragment_manifest_json, version.is_active,
+                   version.created_by_user_id, version.created_at,
+                   COALESCE(provenance.fragment_provenance_status, 'attention_needed')
+                       AS fragment_provenance_status,
+                   COALESCE(provenance.evidence_json, '{}')
+                       AS fragment_provenance_evidence_json
+            FROM project_context_versions AS version
+            LEFT JOIN project_context_version_provenance AS provenance
+              ON provenance.context_version_id = version.context_version_id
+            WHERE version.project_id = ? AND version.context_version_id = ?
+            """,
             (project_id, context_version_id),
         ).fetchone()
         if row is None:
             raise DomainNotFoundError("project context version")
         return row
+
+    @staticmethod
+    def _versions_for_project(conn: sqlite3.Connection, project_id: str) -> list[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT version.context_version_id, version.project_id, version.content,
+                   version.fingerprint, version.fragment_manifest_json, version.is_active,
+                   version.created_by_user_id, version.created_at,
+                   COALESCE(provenance.fragment_provenance_status, 'attention_needed')
+                       AS fragment_provenance_status,
+                   COALESCE(provenance.evidence_json, '{}')
+                       AS fragment_provenance_evidence_json
+            FROM project_context_versions AS version
+            LEFT JOIN project_context_version_provenance AS provenance
+              ON provenance.context_version_id = version.context_version_id
+            WHERE version.project_id = ?
+            ORDER BY version.created_at DESC, version.context_version_id DESC
+            """,
+            (project_id,),
+        ).fetchall()
 
     @staticmethod
     def _task_for_project(conn: sqlite3.Connection, task_id: str, project_id: str) -> sqlite3.Row:
@@ -1107,11 +1767,9 @@ class ProjectContextService:
         conn: sqlite3.Connection,
         *,
         project_id: str,
-        source_task_id: str | None,
+        source_task_id: str,
         source_attempt_id: str | None,
-    ) -> None:
-        if source_task_id is None and source_attempt_id is None:
-            return
+    ) -> str:
         task_id = source_task_id
         if source_attempt_id is not None:
             attempt = conn.execute(
@@ -1123,11 +1781,47 @@ class ProjectContextService:
             if task_id is not None and task_id != attempt_task_id:
                 raise DomainConflictError("Candidate Task and Attempt provenance do not match")
             task_id = attempt_task_id
-        if task_id is None:
-            raise DomainConflictError("Candidate provenance requires a Task")
         task = conn.execute("SELECT project_id FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
         if task is None or task["project_id"] != project_id:
             raise DomainNotFoundError("source Task")
+        return task_id
+
+    @staticmethod
+    def _validate_candidate_source_ranges(
+        conn: sqlite3.Connection,
+        *,
+        task_id: str,
+        message_start: int | None,
+        message_end: int | None,
+        output_start: int | None,
+        output_end: int | None,
+    ) -> None:
+        """Reject a Candidate that points at non-persisted Task material.
+
+        Task output sequence numbers are assigned by the durable Task writer.
+        Checking that every selected inclusive range is present prevents a
+        caller from manufacturing provenance for an arbitrary message or
+        result while still permitting either a message selection or an output
+        selection (or both).
+        """
+
+        for start, end, label in (
+            (message_start, message_end, "message"),
+            (output_start, output_end, "output"),
+        ):
+            if start is None or end is None:
+                continue
+            row = conn.execute(
+                """SELECT COUNT(*) AS selected_count
+                   FROM task_outputs
+                   WHERE task_id = ? AND seq BETWEEN ? AND ?""",
+                (task_id, start, end),
+            ).fetchone()
+            selected_count = int(row["selected_count"]) if row is not None else 0
+            if selected_count != end - start + 1:
+                raise DomainConflictError(
+                    f"Context Candidate {label} source range is not persisted for the Task"
+                )
 
     @staticmethod
     def _append_candidate(draft: str, candidate: str) -> str:
@@ -1182,11 +1876,17 @@ class ProjectContextService:
 
     @staticmethod
     def _version_payload(row: sqlite3.Row) -> dict[str, object]:
+        provenance_status = row["fragment_provenance_status"]
+        evidence = _load_json_object(row["fragment_provenance_evidence_json"])
         return {
             "context_version_id": str(row["context_version_id"]),
             "project_id": str(row["project_id"]),
             "content": str(row["content"]),
             "fingerprint": str(row["fingerprint"]),
+            "fragment_manifest": _load_json_list(row["fragment_manifest_json"]),
+            "fragment_provenance_status": str(provenance_status),
+            "fragment_provenance_evidence": evidence,
+            "assembly_eligible": provenance_status == "verified",
             "is_active": bool(row["is_active"]),
             "created_by_user_id": str(row["created_by_user_id"]),
             "created_at": str(row["created_at"]),

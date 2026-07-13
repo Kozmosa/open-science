@@ -58,7 +58,9 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
             unavailable_payload = _payload(unavailable)
             assert unavailable_payload["overview_snapshot"] is False
             assert unavailable_payload["overview_snapshot_job_store"] is True
-            assert unavailable_payload["literature_research_task"] is True
+            # A planner process alone cannot dispatch Task or Literature saga
+            # work; those capabilities require the separate domain worker.
+            assert unavailable_payload["literature_research_task"] is False
 
             before_refresh = await client.get(f"/domain/overview/today?api_key={_API_KEY}")
             assert before_refresh.status_code == 404
@@ -71,13 +73,19 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
             second_job = _payload(second)
             assert first_job["job_id"] == second_job["job_id"]
             assert first_job["status"] == "queued"
+            assert first_job["retry_count"] == 0
+            assert first_job["next_retry_at"] is None
+            assert first_job["last_failure_at"] is None
 
             job_id = str(first_job["job_id"])
             status_response = await client.get(
                 f"/domain/overview/refresh/{job_id}?api_key={_API_KEY}"
             )
             assert status_response.status_code == 200
-            assert _payload(status_response)["owner_user_id"] == "api-key-user"
+            status_payload = _payload(status_response)
+            assert status_payload["owner_user_id"] == "api-key-user"
+            assert status_payload["retry_count"] == 0
+            assert status_payload["next_retry_at"] is None
 
             planner_result = planner.run_once()
             assert job_id in planner_result.completed_job_ids

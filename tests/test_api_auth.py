@@ -8,6 +8,8 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.domain_control import DomainModelMode
+from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 from tests.testutil import get_jwt_headers
 
 pytestmark = [pytest.mark.api]
@@ -240,3 +242,39 @@ async def test_registration_creates_per_user_default_project(tmp_path: Path) -> 
         default_project = app.state.project_service.get_project("alice_default")
         assert default_project.name == "alice's Project"
         assert default_project.owner_user_id is not None
+
+
+@pytest.mark.anyio
+async def test_v2_registration_uses_durable_default_project_provisioning(
+    tmp_path: Path,
+) -> None:
+    prepare_committed_v2_cutover(tmp_path, tmp_path)
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+            domain_model_mode=DomainModelMode.V2,
+            domain_artifact_sha=V2_ARTIFACT_SHA,
+            public_registration_enabled=True,
+        )
+    )
+    app.state.auth_service.initialize()
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            "/auth/register",
+            json={"username": "v2alice", "display_name": "V2 Alice", "password": "secret123"},
+        )
+
+    assert response.status_code == 201, response.text
+    users = [user for user in app.state.auth_service.list_users() if user.username == "v2alice"]
+    assert len(users) == 1
+    user = users[0]
+    projects = app.state.domain_service.list_projects({"id": user.id, "role": "member"})
+    defaults = [project for project in projects if bool(project["is_default"])]
+    assert len(defaults) == 1
+    assert defaults[0]["name"] == "v2alice's Project"
+    assert app.state.auth_service.pending_domain_default_project_provisioning() == []
+    assert app.state.project_service is None

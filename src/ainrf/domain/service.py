@@ -11,6 +11,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
+from ainrf.domain.environment_identity import (
+    canonical_connection_json,
+    canonical_connection_object,
+    environment_connection_fingerprint,
+)
+from ainrf.domain.repositories import SqliteDomainRepository
 from ainrf.domain_control import MaintenanceModeError
 from ainrf.domain.write_fence import DomainWriteFence
 
@@ -41,21 +47,20 @@ def _now() -> str:
 class DomainAuthorizationService:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
+        self._repository = SqliteDomainRepository(conn)
 
     def project_role(self, project_id: str, user: dict[str, object]) -> str | None:
-        row = self._conn.execute(
-            "SELECT owner_user_id FROM projects WHERE project_id = ?", (project_id,)
-        ).fetchone()
-        if row is None:
+        owner_user_id = self._repository.project_owner(project_id)
+        if owner_user_id is None:
             return None
         if user.get("role") == "admin":
             return "admin"
-        if row["owner_user_id"] == user.get("id"):
+        if owner_user_id == user.get("id"):
             return "owner"
-        member = self._conn.execute(
-            "SELECT role FROM project_members WHERE project_id = ? AND user_id = ?",
-            (project_id, user.get("id")),
-        ).fetchone()
+        user_id = user.get("id")
+        if not isinstance(user_id, str) or not user_id:
+            return None
+        member = self._repository.project_member(project_id, user_id)
         return str(member["role"]) if member is not None else None
 
     def require_project_editor(self, project_id: str, user: dict[str, object]) -> None:
@@ -84,23 +89,20 @@ class DomainAuthorizationService:
         role = self.require_project_viewer(project_id, user)
         if role in {"admin", "owner"}:
             return
-        row = self._conn.execute(
-            """
-            SELECT can_publish FROM project_members
-            WHERE project_id = ? AND user_id = ? AND role = 'editor'
-            """,
-            (project_id, user.get("id")),
-        ).fetchone()
-        if row is None or not bool(row["can_publish"]):
+        user_id = user.get("id")
+        member = (
+            self._repository.project_member(project_id, user_id)
+            if isinstance(user_id, str)
+            else None
+        )
+        if member is None or str(member["role"]) != "editor" or not bool(member["can_publish"]):
             raise DomainPermissionError("Project publish permission is required")
 
     def require_workspace_viewer(self, workspace_id: str, user: dict[str, object]) -> None:
-        row = self._conn.execute(
-            "SELECT owner_user_id FROM workspaces WHERE workspace_id = ?", (workspace_id,)
-        ).fetchone()
-        if row is None:
+        owner_user_id = self._repository.workspace_owner(workspace_id)
+        if owner_user_id is None:
             raise DomainNotFoundError(workspace_id)
-        if user.get("role") == "admin" or row["owner_user_id"] == user.get("id"):
+        if user.get("role") == "admin" or owner_user_id == user.get("id"):
             return
         # A Workspace can point into a tenant-private filesystem.  Unlike a
         # Project link, guessing its ID must not disclose it to another user.
@@ -113,13 +115,11 @@ class DomainAuthorizationService:
         *,
         resource_visible: bool = False,
     ) -> None:
-        row = self._conn.execute(
-            "SELECT owner_user_id FROM workspaces WHERE workspace_id = ?", (workspace_id,)
-        ).fetchone()
-        if row is None:
+        owner_user_id = self._repository.workspace_owner(workspace_id)
+        if owner_user_id is None:
             raise DomainNotFoundError(workspace_id)
         # Administration does not confer Linux tenant execution rights.
-        if row["owner_user_id"] == user.get("id"):
+        if owner_user_id == user.get("id"):
             return
         if user.get("role") == "admin":
             raise DomainPermissionError("Workspace owner permission is required")
@@ -127,14 +127,60 @@ class DomainAuthorizationService:
             raise DomainPermissionError("Workspace owner permission is required")
         raise DomainNotFoundError(workspace_id)
 
-    def require_task_owner(self, task_id: str, user: dict[str, object]) -> None:
-        row = self._conn.execute(
-            "SELECT owner_user_id FROM tasks WHERE task_id = ?", (task_id,)
-        ).fetchone()
+    def require_workspace_registry_manager(
+        self,
+        workspace_id: str,
+        user: dict[str, object],
+        *,
+        resource_visible: bool = False,
+    ) -> None:
+        """Authorize durable registry metadata changes without granting execution.
+
+        Administrators may repair or manage product control-plane records, but
+        this capability is deliberately separate from ``require_workspace_owner``.
+        Task, runtime, terminal, and tenant-file call sites continue to require
+        the latter so an admin role never becomes Linux tenant authority.
+        """
+
+        owner_user_id = self._repository.workspace_owner(workspace_id)
+        if owner_user_id is None:
+            raise DomainNotFoundError(workspace_id)
+        if owner_user_id == user.get("id") or user.get("role") == "admin":
+            return
+        if resource_visible:
+            raise DomainPermissionError("Workspace owner permission is required")
+        raise DomainNotFoundError(workspace_id)
+
+    def require_task_viewer(self, task_id: str, user: dict[str, object]) -> None:
+        """Authorize an inspect-only Task read without leaking private Tasks.
+
+        A Project collaborator can inspect the shared Task/Attempt projection,
+        but a guessed Task outside every visible Project remains indistinguish-
+        able from an absent record.  Mutation callers use
+        :meth:`require_task_owner` below and receive 403 only after this
+        visibility check has established that the Task is visible to them.
+        """
+
+        row = self._repository.task_owner_and_project(task_id)
         if row is None:
             raise DomainNotFoundError(task_id)
         if user.get("role") == "admin" or row["owner_user_id"] == user.get("id"):
             return
+        project_id = row["project_id"]
+        if not isinstance(project_id, str) or self.project_role(project_id, user) is None:
+            raise DomainNotFoundError(task_id)
+
+    def require_task_owner(self, task_id: str, user: dict[str, object]) -> None:
+        """Authorize a Task mutation with stable 404/403 semantics."""
+
+        row = self._repository.task_owner_and_project(task_id)
+        if row is None:
+            raise DomainNotFoundError(task_id)
+        if user.get("role") == "admin" or row["owner_user_id"] == user.get("id"):
+            return
+        project_id = row["project_id"]
+        if not isinstance(project_id, str) or self.project_role(project_id, user) is None:
+            raise DomainNotFoundError(task_id)
         raise DomainPermissionError("Task owner permission is required")
 
 
@@ -143,6 +189,7 @@ class DomainService:
 
     def __init__(self, state_root: Path, *, artifact_sha: str | None = None) -> None:
         self._state_root = state_root
+        self._artifact_sha = artifact_sha
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -173,11 +220,30 @@ class DomainService:
     def _has_environment_access(
         self, *, environment_id: str, user: dict[str, object], owner_user_id: object
     ) -> bool:
-        """Read the durable auth grant without inventing a cross-DB transaction."""
+        """Return registry visibility (which administrators may manage)."""
 
         user_id = self._user_id(user)
         if user.get("role") == "admin" or owner_user_id == user_id:
             return True
+        return self._has_active_environment_grant(environment_id=environment_id, user_id=user_id)
+
+    def _has_environment_execution_access(
+        self, *, environment_id: str, user: dict[str, object]
+    ) -> bool:
+        """Return only an explicit active grant for a tenant execution action.
+
+        Registry administration and Environment ownership are deliberately not
+        Linux tenant execution authority.  A caller that wants to register or
+        inspect an Environment may be an admin; a caller that creates, links,
+        or runs a Workspace must hold its own active durable grant.
+        """
+
+        return self._has_active_environment_grant(
+            environment_id=environment_id,
+            user_id=self._user_id(user),
+        )
+
+    def _has_active_environment_grant(self, *, environment_id: str, user_id: str) -> bool:
         if not self._auth_db_path.is_file():
             return False
         auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
@@ -194,14 +260,45 @@ class DomainService:
             return False
         return grant is not None
 
-    def _require_known_auth_user(self, user_id: str) -> None:
+    def _require_known_auth_user(
+        self, user_id: str, *, allow_api_key_principal: bool = False
+    ) -> None:
+        if allow_api_key_principal and user_id == "api-key-user":
+            # API keys authenticate a deliberately restricted, stable
+            # compatibility principal. It still gains no visibility unless a
+            # Project owner explicitly grants this exact membership.
+            return
         if not self._auth_db_path.is_file():
             raise DomainConflictError("A durable auth user is required for this operation")
         auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
         with closing(sqlite3.connect(auth_uri, uri=True)) as conn:
             row = conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone()
         if row is None:
-            raise DomainNotFoundError(f"auth user {user_id}")
+            raise DomainConflictError("Target user is not a durable auth user")
+
+    @staticmethod
+    def _environment_is_referenced(conn: sqlite3.Connection, environment_id: str) -> bool:
+        """Return whether a durable execution reference has fixed this Environment ID."""
+
+        return SqliteDomainRepository(conn).environment_is_referenced(environment_id)
+
+    @staticmethod
+    def _repository(conn: sqlite3.Connection) -> SqliteDomainRepository:
+        """Create the persistence boundary for one caller-owned transaction."""
+
+        return SqliteDomainRepository(conn)
+
+    @staticmethod
+    def _connection_from_stored_json(value: object) -> dict[str, object]:
+        if not isinstance(value, str):
+            return {}
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return {str(key): item for key, item in parsed.items()}
 
     def v2_ready(self) -> bool:
         return self._write_fence.v2_ready()
@@ -213,19 +310,137 @@ class DomainService:
         name: str,
         description: str | None = None,
         is_default: bool = False,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         owner_id = self._user_id(user)
-        project_id = f"project-{uuid4().hex[:12]}"
+        request: dict[str, object] = {
+            "name": name,
+            "description": description,
+            "is_default": is_default,
+        }
+        with closing(self._connect()) as conn:
+            self._begin_write(conn)
+            repository = self._repository(conn)
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, owner_id, "project.create", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            project_id = f"project-{uuid4().hex[:12]}"
+            now = _now()
+            repository.insert_project(
+                project_id=project_id,
+                owner_user_id=owner_id,
+                name=name,
+                description=description,
+                status="active",
+                is_default=is_default,
+                created_at=now,
+                updated_at=now,
+            )
+            # Context is part of the Project's authoritative lifecycle: a
+            # fresh Project always has the empty Draft and immutable initial
+            # Active Version that Task creation is allowed to pin.
+            from ainrf.domain.context import ProjectContextService
+
+            ProjectContextService.initialize_project_context_in_transaction(
+                conn,
+                project_id=project_id,
+                owner_user_id=owner_id,
+                created_at=now,
+            )
+            created = repository.project(project_id)
+            if created is None:  # pragma: no cover - INSERT invariant
+                raise DomainConflictError("Project creation did not persist")
+            result = dict(created)
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    owner_id,
+                    "project.create",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, owner_id, "project.created", "project", project_id)
+            conn.commit()
+        return result
+
+    def provision_default_project(self, *, user_id: str, username: str) -> dict[str, object]:
+        """Idempotently create or recover one user's authoritative default Project.
+
+        Registration commits in ``auth.sqlite3`` before this method opens the
+        separate domain database.  The caller may therefore replay this method
+        after a crash at any point; the active-default unique index and this
+        ``BEGIN IMMEDIATE`` transaction make every replay return the same
+        Project rather than creating a second one.
+        """
+
+        if not user_id or not username:
+            raise DomainConflictError(
+                "user_id and username are required for default Project provisioning"
+            )
+        self._require_known_auth_user(user_id)
         now = _now()
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            conn.execute(
-                "INSERT INTO projects (project_id, owner_user_id, name, description, is_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (project_id, owner_id, name, description, int(is_default), now, now),
+            repository = self._repository(conn)
+            rows = repository.default_projects_for_owner(user_id)
+            active = next((row for row in rows if str(row["status"]) == "active"), None)
+            if active is not None:
+                conn.commit()
+                return dict(active)
+            if rows:
+                raise DomainConflictError(
+                    "Archived default Project requires explicit reconciliation"
+                )
+
+            project_id = (
+                f"project-default-{hashlib.sha256(user_id.encode('utf-8')).hexdigest()[:24]}"
             )
-            self._audit(conn, owner_id, "project.created", "project", project_id)
+            try:
+                repository.insert_project(
+                    project_id=project_id,
+                    owner_user_id=user_id,
+                    name=f"{username}'s Project",
+                    description=None,
+                    status="active",
+                    is_default=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+            except sqlite3.IntegrityError as exc:
+                # A database upgraded from a legacy registry can already have
+                # an active default with a different retained ID.  Return that
+                # durable winner rather than attempting a non-authoritative
+                # cross-database repair.
+                active = next(
+                    (
+                        row
+                        for row in repository.default_projects_for_owner(user_id)
+                        if str(row["status"]) == "active"
+                    ),
+                    None,
+                )
+                if active is None:
+                    raise DomainConflictError("Default Project provisioning conflicted") from exc
+                conn.commit()
+                return dict(active)
+            from ainrf.domain.context import ProjectContextService
+
+            ProjectContextService.initialize_project_context_in_transaction(
+                conn,
+                project_id=project_id,
+                owner_user_id=user_id,
+                created_at=now,
+            )
+            self._audit(conn, user_id, "project.default_provisioned", "project", project_id)
+            created = repository.project(project_id)
             conn.commit()
-        return self.project(project_id, user)
+        if created is None:  # pragma: no cover - INSERT/SELECT invariant
+            raise DomainConflictError("Default Project provisioning did not persist")
+        return dict(created)
 
     def update_project(
         self,
@@ -234,6 +449,7 @@ class DomainService:
         *,
         name: str | None = None,
         description: str | None | _Unset = _UNSET,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         """Update mutable Project metadata without inventing default fields.
 
@@ -245,19 +461,40 @@ class DomainService:
         with closing(self._connect()) as conn:
             self._begin_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, user)
-            updates: list[str] = ["updated_at = ?"]
-            params: list[object] = [_now()]
-            if name is not None:
-                updates.append("name = ?")
-                params.append(name)
+            actor_user_id = self._user_id(user)
+            request: dict[str, object] = {"project_id": project_id, "name": name}
             if not isinstance(description, _Unset):
-                updates.append("description = ?")
-                params.append(description)
-            params.append(project_id)
-            conn.execute(f"UPDATE projects SET {', '.join(updates)} WHERE project_id = ?", params)
-            self._audit(conn, self._user_id(user), "project.updated", "project", project_id)
+                request["description"] = description
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "project.update", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            updates: dict[str, object] = {"updated_at": _now()}
+            if name is not None:
+                updates["name"] = name
+            if not isinstance(description, _Unset):
+                updates["description"] = description
+            repository = self._repository(conn)
+            if repository.update_project(project_id, updates) != 1:
+                raise DomainNotFoundError(project_id)
+            updated = repository.project(project_id)
+            if updated is None:  # pragma: no cover - UPDATE invariant
+                raise DomainNotFoundError(project_id)
+            result = dict(updated)
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.update",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "project.updated", "project", project_id)
             conn.commit()
-        return self.project(project_id, user)
+        return result
 
     def create_environment(
         self,
@@ -268,56 +505,111 @@ class DomainService:
         connection: dict[str, object],
         description: str | None = None,
         credential_ref: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         if user.get("role") != "admin":
             raise DomainPermissionError("Only admins can register environments")
-        environment_id = f"env-{uuid4().hex}"
-        now = _now()
+        actor_user_id = self._user_id(user)
+        canonical_connection = canonical_connection_object(connection)
+        connection_json = canonical_connection_json(canonical_connection)
+        connection_fingerprint = environment_connection_fingerprint(canonical_connection)
+        request: dict[str, object] = {
+            "alias": alias,
+            "display_name": display_name,
+            "description": description,
+            "connection": canonical_connection,
+            "credential_ref": credential_ref,
+        }
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            conn.execute(
-                "INSERT INTO environments (environment_id, alias, owner_user_id, display_name, description, connection_json, credential_ref, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    environment_id,
-                    alias,
-                    self._user_id(user),
-                    display_name,
-                    description,
-                    json.dumps(connection, sort_keys=True),
-                    credential_ref,
-                    now,
-                    now,
-                ),
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "environment.create", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            environment_id = f"env-{uuid4().hex}"
+            now = _now()
+            repository = self._repository(conn)
+            repository.insert_environment(
+                environment_id=environment_id,
+                alias=alias,
+                owner_user_id=actor_user_id,
+                display_name=display_name,
+                description=description,
+                connection_json=connection_json,
+                connection_fingerprint=connection_fingerprint,
+                credential_ref=credential_ref,
+                created_at=now,
+                updated_at=now,
             )
-            self._audit(
-                conn, self._user_id(user), "environment.created", "environment", environment_id
-            )
+            created = repository.environment(environment_id)
+            if created is None:  # pragma: no cover - INSERT invariant
+                raise DomainConflictError("Environment creation did not persist")
+            result = dict(created)
+            result.pop("credential_ref", None)
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "environment.create",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "environment.created", "environment", environment_id)
             conn.commit()
-        return self.environment(environment_id, user)
+        return result
 
-    def disable_environment(self, environment_id: str, user: dict[str, object]) -> None:
-        if user.get("role") != "admin":
-            raise DomainPermissionError("Only admins can disable environments")
+    def disable_environment(
+        self,
+        environment_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str | None = None,
+    ) -> None:
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            if (
-                conn.execute(
-                    "SELECT 1 FROM environments WHERE environment_id = ?", (environment_id,)
-                ).fetchone()
-                is None
+            actor_user_id = self._user_id(user)
+            repository = self._repository(conn)
+            environment = repository.environment(environment_id)
+            if environment is None:
+                raise DomainNotFoundError(environment_id)
+            if not self._has_environment_access(
+                environment_id=environment_id,
+                user=user,
+                owner_user_id=environment["owner_user_id"],
             ):
                 raise DomainNotFoundError(environment_id)
-            conn.execute(
-                """
-                UPDATE environments
-                SET status = 'disabled', disabled_at = ?, disabled_reason = ?, updated_at = ?
-                WHERE environment_id = ?
-                """,
-                (_now(), "disabled by administrator", _now(), environment_id),
+            if user.get("role") != "admin":
+                raise DomainPermissionError("Only admins can disable environments")
+            request: dict[str, object] = {"environment_id": environment_id}
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "environment.disable", idempotency_key, request
+                )
+                if cached is not None:
+                    return
+            now = _now()
+            repository.update_environment(
+                environment_id,
+                {
+                    "status": "disabled",
+                    "disabled_at": now,
+                    "disabled_reason": "disabled by administrator",
+                    "updated_at": now,
+                },
             )
-            self._audit(
-                conn, self._user_id(user), "environment.disabled", "environment", environment_id
-            )
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "environment.disable",
+                    idempotency_key,
+                    request,
+                    {"environment_id": environment_id, "disabled": True},
+                )
+            self._audit(conn, actor_user_id, "environment.disabled", "environment", environment_id)
             conn.commit()
 
     def update_environment(
@@ -330,45 +622,92 @@ class DomainService:
         description: str | None | _Unset = _UNSET,
         connection: dict[str, object] | None = None,
         credential_ref: str | None | _Unset = _UNSET,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
-        if user.get("role") != "admin":
-            raise DomainPermissionError("Only admins can update environments")
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            existing = conn.execute(
-                "SELECT * FROM environments WHERE environment_id = ?", (environment_id,)
-            ).fetchone()
+            actor_user_id = self._user_id(user)
+            repository = self._repository(conn)
+            existing = repository.environment(environment_id)
             if existing is None:
                 raise DomainNotFoundError(environment_id)
-            updates: list[str] = ["updated_at = ?"]
-            params: list[object] = [_now()]
+            if not self._has_environment_access(
+                environment_id=environment_id,
+                user=user,
+                owner_user_id=existing["owner_user_id"],
+            ):
+                raise DomainNotFoundError(environment_id)
+            if user.get("role") != "admin":
+                raise DomainPermissionError("Only admins can update environments")
+            request: dict[str, object] = {"environment_id": environment_id}
             if alias is not None:
-                updates.append("alias = ?")
-                params.append(alias)
+                request["alias"] = alias
             if display_name is not None:
-                updates.append("display_name = ?")
-                params.append(display_name)
+                request["display_name"] = display_name
             if not isinstance(description, _Unset):
-                updates.append("description = ?")
-                params.append(description)
+                request["description"] = description
             if connection is not None:
-                updates.append("connection_json = ?")
-                params.append(json.dumps(connection, sort_keys=True))
+                request["connection"] = canonical_connection_object(connection)
             if not isinstance(credential_ref, _Unset):
-                updates.append("credential_ref = ?")
-                params.append(credential_ref)
-            params.append(environment_id)
-            try:
-                conn.execute(
-                    f"UPDATE environments SET {', '.join(updates)} WHERE environment_id = ?", params
+                request["credential_ref"] = credential_ref
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "environment.update", idempotency_key, request
                 )
+                if cached is not None:
+                    return cached
+            updates: dict[str, object] = {"updated_at": _now()}
+            if alias is not None:
+                updates["alias"] = alias
+            if display_name is not None:
+                updates["display_name"] = display_name
+            if not isinstance(description, _Unset):
+                updates["description"] = description
+            if connection is not None:
+                current_connection = self._connection_from_stored_json(existing["connection_json"])
+                proposed_connection = canonical_connection_object(connection)
+                current_fingerprint = (
+                    str(existing["connection_fingerprint"])
+                    if existing["connection_fingerprint"] is not None
+                    else environment_connection_fingerprint(current_connection)
+                )
+                proposed_fingerprint = environment_connection_fingerprint(proposed_connection)
+                if current_fingerprint != proposed_fingerprint and self._environment_is_referenced(
+                    conn, environment_id
+                ):
+                    raise DomainConflictError(
+                        "A referenced Environment cannot be repointed to a different endpoint"
+                    )
+                updates["connection_json"] = canonical_connection_json(proposed_connection)
+                updates["connection_fingerprint"] = proposed_fingerprint
+            elif existing["connection_fingerprint"] is None:
+                updates["connection_fingerprint"] = environment_connection_fingerprint(
+                    self._connection_from_stored_json(existing["connection_json"])
+                )
+            if not isinstance(credential_ref, _Unset):
+                updates["credential_ref"] = credential_ref
+            try:
+                if repository.update_environment(environment_id, updates) != 1:
+                    raise DomainNotFoundError(environment_id)
             except sqlite3.IntegrityError as exc:
                 raise DomainConflictError("Environment alias already exists") from exc
-            self._audit(
-                conn, self._user_id(user), "environment.updated", "environment", environment_id
-            )
+            updated = repository.environment(environment_id)
+            if updated is None:  # pragma: no cover - UPDATE invariant
+                raise DomainNotFoundError(environment_id)
+            result = dict(updated)
+            result.pop("credential_ref", None)
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "environment.update",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "environment.updated", "environment", environment_id)
             conn.commit()
-        return self.environment(environment_id, user)
+        return result
 
     def create_workspace(
         self,
@@ -379,56 +718,188 @@ class DomainService:
         label: str,
         description: str | None = None,
         workspace_prompt: str | None = None,
-        legacy_project_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         owner_id = self._user_id(user)
         path = str(Path(canonical_path).expanduser().resolve())
-        workspace_id = f"workspace-{uuid4().hex[:12]}"
-        now = _now()
         context_metadata = (
             {"workspace_prompt": workspace_prompt} if workspace_prompt is not None else {}
         )
+        request: dict[str, object] = {
+            "environment_id": environment_id,
+            "canonical_path": path,
+            "label": label,
+            "description": description,
+            "workspace_prompt": workspace_prompt,
+        }
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            environment = conn.execute(
-                "SELECT status, owner_user_id FROM environments WHERE environment_id = ?",
-                (environment_id,),
-            ).fetchone()
+            repository = self._repository(conn)
+            environment = repository.environment(environment_id)
             if environment is None:
                 raise DomainNotFoundError(environment_id)
             if environment["status"] != "active":
                 raise DomainConflictError("Workspace requires an active environment")
-            if not self._has_environment_access(
-                environment_id=environment_id,
-                user=user,
-                owner_user_id=environment["owner_user_id"],
+            if user.get("role") != "admin" and not self._has_environment_execution_access(
+                environment_id=environment_id, user=user
             ):
                 raise DomainNotFoundError(environment_id)
-            conn.execute(
-                """
-                INSERT INTO workspaces (
-                    workspace_id, owner_user_id, environment_id, canonical_path, label,
-                    description, context_metadata_json, workspace_context, legacy_project_id,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    workspace_id,
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, owner_id, "workspace.create", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            workspace_id = f"workspace-{uuid4().hex[:12]}"
+            now = _now()
+            try:
+                repository.insert_workspace(
+                    workspace_id=workspace_id,
+                    owner_user_id=owner_id,
+                    environment_id=environment_id,
+                    canonical_path=path,
+                    label=label,
+                    description=description,
+                    context_metadata_json=json.dumps(context_metadata, sort_keys=True),
+                    workspace_context=workspace_prompt,
+                    # This compatibility field belongs to the importer only.
+                    # A normal v2 write must never create a second project
+                    # authority beside project_workspace_links.
+                    legacy_project_id=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise DomainConflictError("Workspace canonical path is already registered") from exc
+            created = repository.workspace(workspace_id)
+            if created is None:  # pragma: no cover - INSERT invariant
+                raise DomainConflictError("Workspace creation did not persist")
+            result = dict(created)
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
                     owner_id,
-                    environment_id,
-                    path,
-                    label,
-                    description,
-                    json.dumps(context_metadata, sort_keys=True),
-                    workspace_prompt,
-                    legacy_project_id,
-                    now,
-                    now,
-                ),
-            )
+                    "workspace.create",
+                    idempotency_key,
+                    request,
+                    result,
+                )
             self._audit(conn, owner_id, "workspace.created", "workspace", workspace_id)
             conn.commit()
-        return self.workspace(workspace_id, user)
+        return result
+
+    def create_workspace_and_attach(
+        self,
+        *,
+        project_id: str,
+        user: dict[str, object],
+        environment_id: str,
+        canonical_path: str,
+        label: str,
+        description: str | None = None,
+        workspace_prompt: str | None = None,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Create one Workspace and its authoritative Project link atomically.
+
+        The former compatibility adapter created a registry row first and then
+        attached it in a second transaction.  A permission or link failure left
+        an orphan record behind.  This operation is intentionally the only
+        create-and-link entry point exposed to that adapter.
+        """
+
+        owner_id = self._user_id(user)
+        path = str(Path(canonical_path).expanduser().resolve())
+        context_metadata = (
+            {"workspace_prompt": workspace_prompt} if workspace_prompt is not None else {}
+        )
+        request: dict[str, object] = {
+            "project_id": project_id,
+            "environment_id": environment_id,
+            "canonical_path": path,
+            "label": label,
+            "description": description,
+            "workspace_prompt": workspace_prompt,
+        }
+        with closing(self._connect()) as conn:
+            self._begin_write(conn)
+            auth = DomainAuthorizationService(conn)
+            auth.require_project_editor(project_id, user)
+            repository = self._repository(conn)
+            project = repository.project(project_id)
+            if project is None or str(project["status"]) != "active":
+                raise DomainConflictError("Workspace links require an active Project")
+            environment = repository.environment(environment_id)
+            if environment is None:
+                raise DomainNotFoundError(environment_id)
+            if str(environment["status"]) != "active":
+                raise DomainConflictError("Workspace requires an active environment")
+            if user.get("role") != "admin" and not self._has_environment_execution_access(
+                environment_id=environment_id, user=user
+            ):
+                raise DomainNotFoundError(environment_id)
+            cached = self._idempotent_result(
+                conn, owner_id, "workspace.create_and_attach", idempotency_key, request
+            )
+            if cached is not None:
+                return cached
+            now = _now()
+            workspace_id = f"workspace-{uuid4().hex[:12]}"
+            try:
+                repository.insert_workspace(
+                    workspace_id=workspace_id,
+                    owner_user_id=owner_id,
+                    environment_id=environment_id,
+                    canonical_path=path,
+                    label=label,
+                    description=description,
+                    context_metadata_json=json.dumps(context_metadata, sort_keys=True),
+                    workspace_context=workspace_prompt,
+                    legacy_project_id=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise DomainConflictError("Workspace canonical path is already registered") from exc
+            repository.upsert_project_workspace_link(
+                project_id=project_id,
+                workspace_id=workspace_id,
+                is_primary=False,
+                actor_id=owner_id,
+                now=now,
+            )
+            created = repository.workspace(workspace_id)
+            if created is None:  # pragma: no cover - INSERT invariant
+                raise DomainConflictError("Workspace creation did not persist")
+            result = dict(created)
+            self._store_idempotency(
+                conn,
+                owner_id,
+                "workspace.create_and_attach",
+                idempotency_key,
+                request,
+                result,
+            )
+            self._audit(conn, owner_id, "workspace.created", "workspace", workspace_id)
+            self._audit(
+                conn,
+                owner_id,
+                "workspace.attached",
+                "workspace",
+                workspace_id,
+                metadata={
+                    "project_id": project_id,
+                    "idempotency_key": idempotency_key,
+                    "old_link": None,
+                    "new_link": {
+                        "status": "active",
+                        "is_primary": False,
+                        "workspace_id": workspace_id,
+                    },
+                },
+            )
+            conn.commit()
+            return result
 
     def update_workspace(
         self,
@@ -439,28 +910,45 @@ class DomainService:
         description: str | None | _Unset = _UNSET,
         canonical_path: str | _Unset = _UNSET,
         workspace_prompt: str | None | _Unset = _UNSET,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         """Update Workspace metadata without changing its Environment or links."""
 
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            DomainAuthorizationService(conn).require_workspace_owner(workspace_id, user)
-            existing = conn.execute(
-                "SELECT * FROM workspaces WHERE workspace_id = ?", (workspace_id,)
-            ).fetchone()
+            DomainAuthorizationService(conn).require_workspace_registry_manager(workspace_id, user)
+            actor_user_id = self._user_id(user)
+            repository = self._repository(conn)
+            existing = repository.workspace(workspace_id)
             if existing is None:
                 raise DomainNotFoundError(workspace_id)
-            updates: list[str] = ["updated_at = ?"]
-            params: list[object] = [_now()]
+            normalized_path = (
+                str(Path(canonical_path).expanduser().resolve())
+                if not isinstance(canonical_path, _Unset)
+                else None
+            )
+            request: dict[str, object] = {"workspace_id": workspace_id}
             if label is not None:
-                updates.append("label = ?")
-                params.append(label)
+                request["label"] = label
             if not isinstance(description, _Unset):
-                updates.append("description = ?")
-                params.append(description)
-            if not isinstance(canonical_path, _Unset):
-                updates.append("canonical_path = ?")
-                params.append(str(Path(canonical_path).expanduser().resolve()))
+                request["description"] = description
+            if normalized_path is not None:
+                request["canonical_path"] = normalized_path
+            if not isinstance(workspace_prompt, _Unset):
+                request["workspace_prompt"] = workspace_prompt
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "workspace.update", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            updates: dict[str, object] = {"updated_at": _now()}
+            if label is not None:
+                updates["label"] = label
+            if not isinstance(description, _Unset):
+                updates["description"] = description
+            if normalized_path is not None:
+                updates["canonical_path"] = normalized_path
             if not isinstance(workspace_prompt, _Unset):
                 try:
                     metadata = json.loads(str(existing["context_metadata_json"]))
@@ -469,18 +957,29 @@ class DomainService:
                 if not isinstance(metadata, dict):
                     metadata = {}
                 metadata["workspace_prompt"] = workspace_prompt
-                updates.extend(("context_metadata_json = ?", "workspace_context = ?"))
-                params.extend((json.dumps(metadata, sort_keys=True), workspace_prompt))
-            params.append(workspace_id)
+                updates["context_metadata_json"] = json.dumps(metadata, sort_keys=True)
+                updates["workspace_context"] = workspace_prompt
             try:
-                conn.execute(
-                    f"UPDATE workspaces SET {', '.join(updates)} WHERE workspace_id = ?", params
-                )
+                if repository.update_workspace(workspace_id, updates) != 1:
+                    raise DomainNotFoundError(workspace_id)
             except sqlite3.IntegrityError as exc:
                 raise DomainConflictError("Workspace canonical path is already registered") from exc
-            self._audit(conn, self._user_id(user), "workspace.updated", "workspace", workspace_id)
+            updated = repository.workspace(workspace_id)
+            if updated is None:  # pragma: no cover - UPDATE invariant
+                raise DomainNotFoundError(workspace_id)
+            result = dict(updated)
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "workspace.update",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "workspace.updated", "workspace", workspace_id)
             conn.commit()
-        return self.workspace(workspace_id, user)
+        return result
 
     def attach_workspace(
         self, project_id: str, workspace_id: str, user: dict[str, object], *, idempotency_key: str
@@ -511,7 +1010,7 @@ class DomainService:
             self._begin_write(conn)
             auth = DomainAuthorizationService(conn)
             auth.require_project_editor(project_id, user)
-            auth.require_workspace_owner(workspace_id, user)
+            auth.require_workspace_registry_manager(workspace_id, user)
             actor_user_id = self._user_id(user)
             request: dict[str, object] = {
                 "project_id": project_id,
@@ -523,14 +1022,13 @@ class DomainService:
             )
             if cached is not None:
                 return cached
-            previous = conn.execute(
-                """
-                SELECT 1 FROM project_workspace_links
-                WHERE project_id = ? AND workspace_id = ? AND status = 'active' AND is_primary = 1
-                """,
-                (project_id, previous_workspace_id),
-            ).fetchone()
-            if previous is None:
+            repository = self._repository(conn)
+            previous = repository.project_workspace_link(project_id, previous_workspace_id)
+            if (
+                previous is None
+                or str(previous["status"]) != "active"
+                or not bool(previous["is_primary"])
+            ):
                 raise DomainConflictError("Specified previous Workspace is not the active Primary")
             replacement = self._link_operation_in_transaction(
                 conn,
@@ -548,7 +1046,19 @@ class DomainService:
                 replacement,
             )
             self._audit(
-                conn, actor_user_id, "workspace.primary.replaced", "workspace", workspace_id
+                conn,
+                actor_user_id,
+                "workspace.primary.replaced",
+                "workspace",
+                workspace_id,
+                metadata={
+                    "project_id": project_id,
+                    "idempotency_key": idempotency_key,
+                    "old_link": self._link_audit_value(previous),
+                    "new_link": self._link_audit_value(
+                        repository.project_workspace_link(project_id, workspace_id)
+                    ),
+                },
             )
             conn.commit()
             return replacement
@@ -566,7 +1076,7 @@ class DomainService:
             self._begin_write(conn)
             auth = DomainAuthorizationService(conn)
             auth.require_project_editor(project_id, user)
-            auth.require_workspace_owner(workspace_id, user)
+            auth.require_workspace_registry_manager(workspace_id, user)
             actor_user_id = self._user_id(user)
             request: dict[str, object] = {
                 "project_id": project_id,
@@ -578,17 +1088,17 @@ class DomainService:
             )
             if cached is not None:
                 return
-            link = conn.execute(
-                "SELECT is_primary FROM project_workspace_links WHERE project_id = ? AND workspace_id = ? AND status = 'active'",
-                (project_id, workspace_id),
-            ).fetchone()
-            if link is None:
+            repository = self._repository(conn)
+            link = repository.project_workspace_link(project_id, workspace_id)
+            if link is None or str(link["status"]) != "active":
                 raise DomainNotFoundError("project workspace link")
             if bool(link["is_primary"]) and not allow_no_primary:
                 raise DomainConflictError("Detach primary requires replacement or allow_no_primary")
-            conn.execute(
-                "UPDATE project_workspace_links SET status = 'retired', is_primary = 0, updated_at = ? WHERE project_id = ? AND workspace_id = ?",
-                (_now(), project_id, workspace_id),
+            old_link = self._link_audit_value(link)
+            repository.retire_project_workspace_link(
+                project_id=project_id,
+                workspace_id=workspace_id,
+                now=_now(),
             )
             self._store_idempotency(
                 conn,
@@ -598,7 +1108,21 @@ class DomainService:
                 request,
                 {"detached": True},
             )
-            self._audit(conn, actor_user_id, "workspace.detached", "workspace", workspace_id)
+            self._audit(
+                conn,
+                actor_user_id,
+                "workspace.detached",
+                "workspace",
+                workspace_id,
+                metadata={
+                    "project_id": project_id,
+                    "idempotency_key": idempotency_key,
+                    "old_link": old_link,
+                    "new_link": self._link_audit_value(
+                        repository.project_workspace_link(project_id, workspace_id)
+                    ),
+                },
+            )
             conn.commit()
 
     def add_member(
@@ -608,53 +1132,116 @@ class DomainService:
         role: str,
         can_publish: bool,
         user: dict[str, object],
-    ) -> None:
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, object]:
         if role not in {"viewer", "editor"}:
             raise DomainConflictError("Unknown project role")
+        if can_publish and role != "editor":
+            raise DomainConflictError("Only editors may receive project publish permission")
+        self._require_known_auth_user(member_user_id, allow_api_key_principal=True)
         with closing(self._connect()) as conn:
             self._begin_write(conn)
             DomainAuthorizationService(conn).require_project_owner(project_id, user)
-            conn.execute(
-                "INSERT INTO project_members (project_id, user_id, role, can_publish, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(project_id, user_id) DO UPDATE SET role = excluded.role, can_publish = excluded.can_publish, updated_at = excluded.updated_at",
-                (project_id, member_user_id, role, int(can_publish), _now(), _now()),
+            actor_user_id = self._user_id(user)
+            request: dict[str, object] = {
+                "project_id": project_id,
+                "member_user_id": member_user_id,
+                "role": role,
+                "can_publish": can_publish,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "project.member.upsert", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            repository = self._repository(conn)
+            project = repository.project(project_id)
+            if project is None:
+                raise DomainNotFoundError(project_id)
+            if str(project["owner_user_id"]) == member_user_id:
+                raise DomainConflictError("Project owner is not a project member")
+            repository.upsert_project_member(
+                project_id=project_id,
+                user_id=member_user_id,
+                role=role,
+                can_publish=can_publish,
+                now=_now(),
             )
-            self._audit(conn, self._user_id(user), "project.member.updated", "project", project_id)
+            result: dict[str, object] = {
+                "project_id": project_id,
+                "user_id": member_user_id,
+                "role": role,
+                "can_publish": can_publish,
+            }
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.member.upsert",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "project.member.updated", "project", project_id)
             conn.commit()
+            return result
 
-    def remove_member(self, project_id: str, member_user_id: str, user: dict[str, object]) -> None:
+    def remove_member(
+        self,
+        project_id: str,
+        member_user_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, object]:
         with closing(self._connect()) as conn:
             self._begin_write(conn)
             DomainAuthorizationService(conn).require_project_owner(project_id, user)
-            owner = conn.execute(
-                "SELECT owner_user_id FROM projects WHERE project_id = ?", (project_id,)
-            ).fetchone()
+            actor_user_id = self._user_id(user)
+            request: dict[str, object] = {
+                "project_id": project_id,
+                "member_user_id": member_user_id,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "project.member.remove", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            repository = self._repository(conn)
+            owner = repository.project(project_id)
             if owner is None:
                 raise DomainNotFoundError(project_id)
             if owner["owner_user_id"] == member_user_id:
                 raise DomainConflictError("Project owner cannot be removed as a member")
-            deleted = conn.execute(
-                "DELETE FROM project_members WHERE project_id = ? AND user_id = ?",
-                (project_id, member_user_id),
-            )
-            if deleted.rowcount != 1:
+            if repository.remove_project_member(project_id, member_user_id) != 1:
                 raise DomainNotFoundError("project member")
-            self._audit(conn, self._user_id(user), "project.member.removed", "project", project_id)
+            result: dict[str, object] = {
+                "project_id": project_id,
+                "user_id": member_user_id,
+                "removed": True,
+            }
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.member.remove",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "project.member.removed", "project", project_id)
             conn.commit()
+            return result
 
     def list_project_members(
         self, project_id: str, user: dict[str, object]
     ) -> list[dict[str, object]]:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_viewer(project_id, user)
-            rows = conn.execute(
-                """
-                SELECT user_id, role, can_publish, created_at, updated_at
-                FROM project_members
-                WHERE project_id = ?
-                ORDER BY created_at, user_id
-                """,
-                (project_id,),
-            ).fetchall()
+            rows = self._repository(conn).list_project_members(project_id)
         return [dict(row) for row in rows]
 
     def list_task_relationships(
@@ -664,20 +1251,7 @@ class DomainService:
 
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_viewer(project_id, user)
-            rows = conn.execute(
-                """
-                SELECT relationship.relationship_id, relationship.source_task_id,
-                       relationship.target_task_id, relationship.created_at
-                FROM task_relationships AS relationship
-                JOIN tasks AS source ON source.task_id = relationship.source_task_id
-                JOIN tasks AS target ON target.task_id = relationship.target_task_id
-                WHERE source.project_id = ?
-                  AND target.project_id = ?
-                  AND relationship.relationship_type = 'related_to'
-                ORDER BY relationship.created_at, relationship.relationship_id
-                """,
-                (project_id, project_id),
-            ).fetchall()
+            rows = self._repository(conn).list_related_task_relationships(project_id)
         return [
             {
                 "edge_id": str(row["relationship_id"]),
@@ -696,6 +1270,7 @@ class DomainService:
         *,
         source_task_id: str,
         target_task_id: str,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         """Create the compatibility ``related_to`` edge in SQLite."""
 
@@ -704,70 +1279,109 @@ class DomainService:
         with closing(self._connect()) as conn:
             self._begin_write(conn)
             DomainAuthorizationService(conn).require_project_editor(project_id, user)
-            task_count = conn.execute(
-                """
-                SELECT COUNT(*) FROM tasks
-                WHERE project_id = ? AND task_id IN (?, ?)
-                """,
-                (project_id, source_task_id, target_task_id),
-            ).fetchone()
-            if task_count is None or int(task_count[0]) != 2:
+            actor_user_id = self._user_id(user)
+            request: dict[str, object] = {
+                "project_id": project_id,
+                "source_task_id": source_task_id,
+                "target_task_id": target_task_id,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "task.relationship.create",
+                    idempotency_key,
+                    request,
+                )
+                if cached is not None:
+                    return cached
+            repository = self._repository(conn)
+            if not repository.project_tasks_exist(
+                project_id=project_id,
+                source_task_id=source_task_id,
+                target_task_id=target_task_id,
+            ):
                 raise DomainNotFoundError("project task")
             now = _now()
-            conn.execute(
-                """
-                INSERT INTO task_relationships (
-                    source_task_id, target_task_id, relationship_type,
-                    relationship_id, metadata_json, created_at
-                ) VALUES (?, ?, ?, ?, '{}', ?)
-                ON CONFLICT(source_task_id, target_task_id, relationship_type) DO NOTHING
-                """,
-                (source_task_id, target_task_id, relationship_type, relationship_id, now),
+            repository.insert_task_relationship(
+                source_task_id=source_task_id,
+                target_task_id=target_task_id,
+                relationship_type=relationship_type,
+                relationship_id=relationship_id,
+                metadata_json="{}",
+                created_at=now,
             )
-            row = conn.execute(
-                """
-                SELECT relationship_id, created_at FROM task_relationships
-                WHERE source_task_id = ? AND target_task_id = ? AND relationship_type = ?
-                """,
-                (source_task_id, target_task_id, relationship_type),
-            ).fetchone()
+            row = repository.task_relationship_for_pair(
+                source_task_id=source_task_id,
+                target_task_id=target_task_id,
+                relationship_type=relationship_type,
+            )
             if row is None:
                 raise DomainConflictError("Task relationship was not created")
-            self._audit(
-                conn, self._user_id(user), "task.relationship.created", "task", source_task_id
-            )
+            result: dict[str, object] = {
+                "edge_id": str(row["relationship_id"]),
+                "project_id": project_id,
+                "source_task_id": source_task_id,
+                "target_task_id": target_task_id,
+                "created_at": str(row["created_at"]),
+            }
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "task.relationship.create",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "task.relationship.created", "task", source_task_id)
             conn.commit()
-        return {
-            "edge_id": str(row["relationship_id"]),
-            "project_id": project_id,
-            "source_task_id": source_task_id,
-            "target_task_id": target_task_id,
-            "created_at": str(row["created_at"]),
-        }
+        return result
 
-    def delete_task_relationship(self, relationship_id: str, user: dict[str, object]) -> None:
+    def delete_task_relationship(
+        self,
+        relationship_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str | None = None,
+    ) -> None:
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            row = conn.execute(
-                """
-                SELECT relationship.source_task_id, source.project_id
-                FROM task_relationships AS relationship
-                JOIN tasks AS source ON source.task_id = relationship.source_task_id
-                WHERE relationship.relationship_id = ?
-                  AND relationship.relationship_type = 'related_to'
-                """,
-                (relationship_id,),
-            ).fetchone()
+            repository = self._repository(conn)
+            row = repository.related_task_relationship(relationship_id)
             if row is None:
                 raise DomainNotFoundError(relationship_id)
             project_id = str(row["project_id"])
             DomainAuthorizationService(conn).require_project_editor(project_id, user)
-            conn.execute(
-                "DELETE FROM task_relationships WHERE relationship_id = ?", (relationship_id,)
-            )
+            actor_user_id = self._user_id(user)
+            request: dict[str, object] = {
+                "project_id": project_id,
+                "relationship_id": relationship_id,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "task.relationship.delete",
+                    idempotency_key,
+                    request,
+                )
+                if cached is not None:
+                    return
+            if repository.delete_task_relationship(relationship_id) != 1:
+                raise DomainNotFoundError(relationship_id)
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "task.relationship.delete",
+                    idempotency_key,
+                    request,
+                    {"relationship_id": relationship_id, "deleted": True},
+                )
             self._audit(
                 conn,
-                self._user_id(user),
+                actor_user_id,
                 "task.relationship.deleted",
                 "task",
                 str(row["source_task_id"]),
@@ -775,8 +1389,13 @@ class DomainService:
             conn.commit()
 
     def transfer_project_owner(
-        self, project_id: str, new_owner_user_id: str, user: dict[str, object]
-    ) -> None:
+        self,
+        project_id: str,
+        new_owner_user_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, object]:
         if not new_owner_user_id:
             raise DomainConflictError("new_owner_user_id is required")
         self._require_known_auth_user(new_owner_user_id)
@@ -784,37 +1403,75 @@ class DomainService:
             self._begin_write(conn)
             auth = DomainAuthorizationService(conn)
             auth.require_project_owner(project_id, user)
-            project = conn.execute(
-                "SELECT owner_user_id FROM projects WHERE project_id = ?", (project_id,)
-            ).fetchone()
+            actor_user_id = self._user_id(user)
+            request: dict[str, object] = {
+                "project_id": project_id,
+                "new_owner_user_id": new_owner_user_id,
+            }
+            if idempotency_key is not None:
+                cached = self._idempotent_result(
+                    conn, actor_user_id, "project.owner.transfer", idempotency_key, request
+                )
+                if cached is not None:
+                    return cached
+            repository = self._repository(conn)
+            project = repository.project(project_id)
             if project is None:
                 raise DomainNotFoundError(project_id)
+            if bool(project["is_default"]):
+                raise DomainConflictError("Default Project ownership cannot be transferred")
             old_owner_user_id = str(project["owner_user_id"])
             if old_owner_user_id == new_owner_user_id:
-                return
+                result: dict[str, object] = {
+                    "project_id": project_id,
+                    "owner_user_id": new_owner_user_id,
+                    "transferred": False,
+                }
+                if idempotency_key is not None:
+                    self._store_idempotency(
+                        conn,
+                        actor_user_id,
+                        "project.owner.transfer",
+                        idempotency_key,
+                        request,
+                        result,
+                    )
+                conn.commit()
+                return result
             now = _now()
-            conn.execute(
-                "UPDATE projects SET owner_user_id = ?, updated_at = ? WHERE project_id = ?",
-                (new_owner_user_id, now, project_id),
+            if (
+                repository.update_project(
+                    project_id,
+                    {"owner_user_id": new_owner_user_id, "updated_at": now},
+                )
+                != 1
+            ):
+                raise DomainNotFoundError(project_id)
+            repository.upsert_project_member(
+                project_id=project_id,
+                user_id=old_owner_user_id,
+                role="editor",
+                can_publish=True,
+                now=now,
             )
-            conn.execute(
-                """
-                INSERT INTO project_members (
-                    project_id, user_id, role, can_publish, created_at, updated_at
-                ) VALUES (?, ?, 'editor', 1, ?, ?)
-                ON CONFLICT(project_id, user_id) DO UPDATE SET
-                    role = 'editor', can_publish = 1, updated_at = excluded.updated_at
-                """,
-                (project_id, old_owner_user_id, now, now),
-            )
-            conn.execute(
-                "DELETE FROM project_members WHERE project_id = ? AND user_id = ?",
-                (project_id, new_owner_user_id),
-            )
-            self._audit(
-                conn, self._user_id(user), "project.owner.transferred", "project", project_id
-            )
+            repository.remove_project_member(project_id, new_owner_user_id)
+            result: dict[str, object] = {
+                "project_id": project_id,
+                "owner_user_id": new_owner_user_id,
+                "transferred": True,
+            }
+            if idempotency_key is not None:
+                self._store_idempotency(
+                    conn,
+                    actor_user_id,
+                    "project.owner.transfer",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+            self._audit(conn, actor_user_id, "project.owner.transferred", "project", project_id)
             conn.commit()
+            return result
 
     def archive_project(
         self,
@@ -834,7 +1491,7 @@ class DomainService:
 
         from ainrf.domain.tasks import TaskApplicationService
 
-        TaskApplicationService(self._state_root).archive_project(
+        TaskApplicationService(self._state_root, artifact_sha=self._artifact_sha).archive_project(
             project_id,
             user,
             reason=reason,
@@ -852,7 +1509,7 @@ class DomainService:
 
         from ainrf.domain.tasks import TaskApplicationService
 
-        TaskApplicationService(self._state_root).unarchive_project(
+        TaskApplicationService(self._state_root, artifact_sha=self._artifact_sha).unarchive_project(
             project_id,
             user,
             idempotency_key=idempotency_key or f"legacy-project-unarchive-{uuid4().hex}",
@@ -868,8 +1525,9 @@ class DomainService:
     ) -> None:
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            DomainAuthorizationService(conn).require_workspace_owner(workspace_id, user)
+            DomainAuthorizationService(conn).require_workspace_registry_manager(workspace_id, user)
             actor_user_id = self._user_id(user)
+            repository = self._repository(conn)
             request: dict[str, object] = {
                 "workspace_id": workspace_id,
                 "allow_no_primary": allow_no_primary,
@@ -880,32 +1538,33 @@ class DomainService:
                 )
                 if cached is not None:
                     return
-            active_tasks = conn.execute(
-                "SELECT COUNT(*) FROM tasks WHERE workspace_id = ? AND status IN ('queued', 'starting', 'running')",
-                (workspace_id,),
-            ).fetchone()
-            if active_tasks is not None and int(active_tasks[0]) > 0:
+            if repository.workspace_active_task_count(workspace_id) > 0:
                 raise DomainConflictError(
                     "Cannot unregister a workspace with queued or running tasks"
                 )
-            primary = conn.execute(
-                """
-                SELECT 1 FROM project_workspace_links
-                WHERE workspace_id = ? AND status = 'active' AND is_primary = 1
-                """,
-                (workspace_id,),
-            ).fetchone()
+            primary = repository.active_primary_for_workspace(workspace_id)
             if primary is not None and not allow_no_primary:
                 raise DomainConflictError("Replace the Primary Workspace before unregistering it")
-            conn.execute(
-                "UPDATE workspaces SET status = 'unregistered', updated_at = ? WHERE workspace_id = ?",
-                (_now(), workspace_id),
+            previous_links = [
+                self._link_audit_value(link)
+                for link in repository.list_project_links_for_workspace(workspace_id)
+            ]
+            repository.unregister_workspace_and_retire_links(workspace_id, now=_now())
+            self._audit(
+                conn,
+                actor_user_id,
+                "workspace.unregistered",
+                "workspace",
+                workspace_id,
+                metadata={
+                    "idempotency_key": idempotency_key,
+                    "old_links": previous_links,
+                    "new_links": [
+                        self._link_audit_value(link)
+                        for link in repository.list_project_links_for_workspace(workspace_id)
+                    ],
+                },
             )
-            conn.execute(
-                "UPDATE project_workspace_links SET status = 'retired', is_primary = 0, updated_at = ? WHERE workspace_id = ?",
-                (_now(), workspace_id),
-            )
-            self._audit(conn, actor_user_id, "workspace.unregistered", "workspace", workspace_id)
             if idempotency_key is not None:
                 self._store_idempotency(
                     conn,
@@ -920,9 +1579,7 @@ class DomainService:
     def project(self, project_id: str, user: dict[str, object]) -> dict[str, object]:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_viewer(project_id, user)
-            row = conn.execute(
-                "SELECT * FROM projects WHERE project_id = ?", (project_id,)
-            ).fetchone()
+            row = self._repository(conn).project(project_id)
         return dict(row) if row is not None else {}
 
     def require_project_editor(self, project_id: str, user: dict[str, object]) -> None:
@@ -931,66 +1588,78 @@ class DomainService:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_editor(project_id, user)
 
+    def require_project_owner(self, project_id: str, user: dict[str, object]) -> None:
+        """Expose owner-only Project actions without a route-local SQL query."""
+
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_project_owner(project_id, user)
+
+    def require_project_publisher(self, project_id: str, user: dict[str, object]) -> None:
+        """Expose Context publication capability to the API adapter layer."""
+
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_project_publisher(project_id, user)
+
+    def require_task_owner(self, task_id: str, user: dict[str, object]) -> None:
+        """Expose the mutation capability while preserving 404/403 semantics."""
+
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_task_owner(task_id, user)
+
     def list_projects(
         self, user: dict[str, object], *, include_archived: bool = False
     ) -> list[dict[str, object]]:
         with closing(self._connect()) as conn:
-            if user.get("role") == "admin":
-                rows = conn.execute(
-                    "SELECT * FROM projects WHERE ? OR status = 'active' ORDER BY updated_at DESC, project_id",
-                    (int(include_archived),),
-                ).fetchall()
-            else:
-                user_id = self._user_id(user)
-                rows = conn.execute(
-                    """
-                    SELECT DISTINCT project.* FROM projects AS project
-                    LEFT JOIN project_members AS member ON member.project_id = project.project_id
-                    WHERE (project.owner_user_id = ? OR member.user_id = ?)
-                      AND (? OR project.status = 'active')
-                    ORDER BY project.updated_at DESC, project.project_id
-                    """,
-                    (user_id, user_id, int(include_archived)),
-                ).fetchall()
+            rows = self._repository(conn).list_projects_visible(
+                user_id=self._user_id(user),
+                is_admin=user.get("role") == "admin",
+                include_archived=include_archived,
+            )
         return [dict(row) for row in rows]
 
     def workspace(self, workspace_id: str, user: dict[str, object]) -> dict[str, object]:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_workspace_viewer(workspace_id, user)
-            row = conn.execute(
-                "SELECT * FROM workspaces WHERE workspace_id = ?", (workspace_id,)
-            ).fetchone()
+            row = self._repository(conn).workspace(workspace_id)
         return dict(row) if row is not None else {}
 
     def list_workspaces(
-        self, user: dict[str, object], *, include_unregistered: bool = False
+        self,
+        user: dict[str, object],
+        *,
+        include_unregistered: bool = False,
+        project_id: str | None = None,
     ) -> list[dict[str, object]]:
+        """List only registry records the caller may inspect.
+
+        A Project link is authoritative for filtering by ``project_id`` but
+        never grants access to a tenant-private Workspace path.  Therefore a
+        collaborator first needs Project visibility and then sees only their
+        own linked Workspaces (an admin sees all registry records for product
+        administration, but still cannot execute a different tenant's path).
+        """
+
         with closing(self._connect()) as conn:
-            user_id = self._user_id(user)
-            if user.get("role") == "admin":
-                rows = conn.execute(
-                    "SELECT * FROM workspaces WHERE ? OR status = 'active' ORDER BY updated_at DESC, workspace_id",
-                    (int(include_unregistered),),
-                ).fetchall()
+            repository = self._repository(conn)
+            if project_id is not None:
+                DomainAuthorizationService(conn).require_project_viewer(project_id, user)
+                rows = repository.list_workspaces_linked_to_project(
+                    project_id=project_id,
+                    owner_user_id=None if user.get("role") == "admin" else self._user_id(user),
+                    include_unregistered=include_unregistered,
+                )
             else:
-                rows = conn.execute(
-                    """
-                    SELECT * FROM workspaces
-                    WHERE owner_user_id = ? AND (? OR status = 'active')
-                    ORDER BY updated_at DESC, workspace_id
-                    """,
-                    (user_id, int(include_unregistered)),
-                ).fetchall()
+                rows = repository.list_workspaces_owned(
+                    user_id=None if user.get("role") == "admin" else self._user_id(user),
+                    include_unregistered=include_unregistered,
+                )
         return [dict(row) for row in rows]
 
     def list_environments(
         self, user: dict[str, object], *, include_disabled: bool = False
     ) -> list[dict[str, object]]:
         with closing(self._connect()) as conn:
-            rows = conn.execute(
-                "SELECT * FROM environments WHERE ? OR status = 'active' ORDER BY alias, environment_id",
-                (int(include_disabled),),
-            ).fetchall()
+            rows = self._repository(conn).list_environments(include_disabled=include_disabled)
         visible: list[dict[str, object]] = []
         for row in rows:
             if self._has_environment_access(
@@ -1006,20 +1675,7 @@ class DomainService:
     def workspace_links(self, project_id: str, user: dict[str, object]) -> list[dict[str, object]]:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_viewer(project_id, user)
-            rows = conn.execute(
-                """
-                SELECT link.project_id, link.workspace_id, link.status, link.is_primary,
-                       workspace.environment_id, workspace.owner_user_id, workspace.status AS workspace_status,
-                       environment.status AS environment_status,
-                       environment.owner_user_id AS environment_owner_user_id
-                FROM project_workspace_links AS link
-                JOIN workspaces AS workspace ON workspace.workspace_id = link.workspace_id
-                JOIN environments AS environment ON environment.environment_id = workspace.environment_id
-                WHERE link.project_id = ?
-                ORDER BY link.is_primary DESC, link.created_at, link.workspace_id
-                """,
-                (project_id,),
-            ).fetchall()
+            rows = self._repository(conn).list_workspace_links(project_id)
         result: list[dict[str, object]] = []
         for row in rows:
             reason: str | None = None
@@ -1033,10 +1689,9 @@ class DomainService:
             elif row["environment_status"] != "active":
                 can_execute = False
                 reason = "derived Environment is disabled"
-            elif not self._has_environment_access(
+            elif not self._has_environment_execution_access(
                 environment_id=str(row["environment_id"]),
                 user=user,
-                owner_user_id=row["environment_owner_user_id"],
             ):
                 can_execute = False
                 reason = "active Environment grant is required"
@@ -1061,9 +1716,7 @@ class DomainService:
         include_disabled: bool = True,
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT * FROM environments WHERE environment_id = ?", (environment_id,)
-            ).fetchone()
+            row = self._repository(conn).environment(environment_id)
         if row is None:
             raise DomainNotFoundError(environment_id)
         if not self._has_environment_access(
@@ -1092,8 +1745,9 @@ class DomainService:
             self._begin_write(conn)
             auth = DomainAuthorizationService(conn)
             auth.require_project_editor(project_id, user)
-            auth.require_workspace_owner(workspace_id, user)
+            auth.require_workspace_registry_manager(workspace_id, user)
             actor_user_id = self._user_id(user)
+            repository = self._repository(conn)
             request: dict[str, object] = {
                 "project_id": project_id,
                 "workspace_id": workspace_id,
@@ -1102,47 +1756,54 @@ class DomainService:
             cached = self._idempotent_result(conn, actor_user_id, scope, idempotency_key, request)
             if cached is not None:
                 return cached
-            project = conn.execute(
-                "SELECT status FROM projects WHERE project_id = ?", (project_id,)
-            ).fetchone()
-            workspace = conn.execute(
-                """
-                SELECT workspace.environment_id, workspace.status AS workspace_status,
-                       environment.status AS environment_status, environment.owner_user_id
-                FROM workspaces AS workspace
-                JOIN environments AS environment ON environment.environment_id = workspace.environment_id
-                WHERE workspace.workspace_id = ?
-                """,
-                (workspace_id,),
-            ).fetchone()
+            project = repository.project(project_id)
+            workspace = repository.linked_workspace_state(workspace_id)
             if project is None or str(project["status"]) != "active":
                 raise DomainConflictError("Workspace links require an active Project")
             if workspace is None or str(workspace["workspace_status"]) != "active":
                 raise DomainConflictError("Workspace links require an active Workspace")
             if str(workspace["environment_status"]) != "active":
                 raise DomainConflictError("Workspace links require an active Environment")
-            if not self._has_environment_access(
-                environment_id=str(workspace["environment_id"]),
-                user=user,
-                owner_user_id=workspace["owner_user_id"],
-            ):
+            can_execute = self._has_environment_execution_access(
+                environment_id=str(workspace["environment_id"]), user=user
+            )
+            if user.get("role") != "admin" and not can_execute:
                 raise DomainPermissionError("Active Environment access is required")
-            if make_primary:
-                conn.execute(
-                    "UPDATE project_workspace_links SET is_primary = 0, updated_at = ? WHERE project_id = ? AND status = 'active'",
-                    (_now(), project_id),
+            existing_link = repository.project_workspace_link(project_id, workspace_id)
+            if make_primary and (existing_link is None or str(existing_link["status"]) != "active"):
+                raise DomainConflictError(
+                    "Primary Workspace must already be an active Project link"
                 )
-            conn.execute(
-                "INSERT INTO project_workspace_links (project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at) VALUES (?, ?, 'active', ?, ?, ?, ?) ON CONFLICT(project_id, workspace_id) DO UPDATE SET status = 'active', is_primary = excluded.is_primary, actor_id = excluded.actor_id, updated_at = excluded.updated_at",
-                (project_id, workspace_id, int(make_primary), self._user_id(user), _now(), _now()),
+            old_link = self._link_audit_value(existing_link)
+            active_primary = repository.active_primary_for_project(project_id)
+            old_primary = self._link_audit_value(active_primary)
+            if (
+                make_primary
+                and active_primary is not None
+                and str(active_primary["workspace_id"]) != workspace_id
+            ):
+                raise DomainConflictError(
+                    "Replace the active Primary Workspace with the replace operation"
+                )
+            now = _now()
+            if make_primary:
+                repository.clear_active_primary(project_id, now=now)
+            repository.upsert_project_workspace_link(
+                project_id=project_id,
+                workspace_id=workspace_id,
+                is_primary=make_primary,
+                actor_id=actor_user_id,
+                now=now,
             )
             result: dict[str, object] = {
                 "project_id": project_id,
                 "workspace_id": workspace_id,
                 "is_primary": make_primary,
                 "environment_id": str(workspace["environment_id"]),
-                "can_execute": True,
-                "cannot_execute_reason": None,
+                "can_execute": can_execute,
+                "cannot_execute_reason": None
+                if can_execute
+                else "active Environment grant is required",
             }
             self._store_idempotency(conn, actor_user_id, scope, idempotency_key, request, result)
             self._audit(
@@ -1151,6 +1812,15 @@ class DomainService:
                 "workspace.primary_set" if make_primary else "workspace.attached",
                 "workspace",
                 workspace_id,
+                metadata={
+                    "project_id": project_id,
+                    "idempotency_key": idempotency_key,
+                    "old_link": old_link,
+                    "old_primary": old_primary,
+                    "new_link": self._link_audit_value(
+                        repository.project_workspace_link(project_id, workspace_id)
+                    ),
+                },
             )
             conn.commit()
             return result
@@ -1164,57 +1834,41 @@ class DomainService:
         user: dict[str, object],
         actor_user_id: str,
     ) -> dict[str, object]:
-        project = conn.execute(
-            "SELECT status FROM projects WHERE project_id = ?", (project_id,)
-        ).fetchone()
-        workspace = conn.execute(
-            """
-            SELECT workspace.environment_id, workspace.status AS workspace_status,
-                   environment.status AS environment_status, environment.owner_user_id
-            FROM workspaces AS workspace
-            JOIN environments AS environment ON environment.environment_id = workspace.environment_id
-            WHERE workspace.workspace_id = ?
-            """,
-            (workspace_id,),
-        ).fetchone()
+        repository = self._repository(conn)
+        project = repository.project(project_id)
+        workspace = repository.linked_workspace_state(workspace_id)
         if project is None or str(project["status"]) != "active":
             raise DomainConflictError("Workspace links require an active Project")
         if workspace is None or str(workspace["workspace_status"]) != "active":
             raise DomainConflictError("Workspace links require an active Workspace")
         if str(workspace["environment_status"]) != "active":
             raise DomainConflictError("Workspace links require an active Environment")
-        if not self._has_environment_access(
-            environment_id=str(workspace["environment_id"]),
-            user=user,
-            owner_user_id=workspace["owner_user_id"],
-        ):
-            raise DomainPermissionError("Active Environment access is required")
-        now = _now()
-        conn.execute(
-            """
-            UPDATE project_workspace_links SET is_primary = 0, updated_at = ?
-            WHERE project_id = ? AND status = 'active'
-            """,
-            (now, project_id),
+        can_execute = self._has_environment_execution_access(
+            environment_id=str(workspace["environment_id"]), user=user
         )
-        conn.execute(
-            """
-            INSERT INTO project_workspace_links (
-                project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at
-            ) VALUES (?, ?, 'active', 1, ?, ?, ?)
-            ON CONFLICT(project_id, workspace_id) DO UPDATE SET
-                status = 'active', is_primary = 1, actor_id = excluded.actor_id,
-                updated_at = excluded.updated_at
-            """,
-            (project_id, workspace_id, actor_user_id, now, now),
+        if user.get("role") != "admin" and not can_execute:
+            raise DomainPermissionError("Active Environment access is required")
+        target_link = repository.project_workspace_link(project_id, workspace_id)
+        if target_link is None or str(target_link["status"]) != "active":
+            raise DomainConflictError("Primary Workspace must already be an active Project link")
+        now = _now()
+        repository.clear_active_primary(project_id, now=now)
+        repository.upsert_project_workspace_link(
+            project_id=project_id,
+            workspace_id=workspace_id,
+            is_primary=True,
+            actor_id=actor_user_id,
+            now=now,
         )
         return {
             "project_id": project_id,
             "workspace_id": workspace_id,
             "is_primary": True,
             "environment_id": str(workspace["environment_id"]),
-            "can_execute": True,
-            "cannot_execute_reason": None,
+            "can_execute": can_execute,
+            "cannot_execute_reason": None
+            if can_execute
+            else "active Environment grant is required",
         }
 
     @staticmethod
@@ -1231,12 +1885,30 @@ class DomainService:
         event_type: str,
         subject_type: str,
         subject_id: str,
+        *,
+        metadata: dict[str, object] | None = None,
     ) -> None:
         self._write_fence.record_first_v2_write(conn, actor_id=actor_id)
-        conn.execute(
-            "INSERT INTO domain_audit_events (event_id, actor_id, event_type, subject_type, subject_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (uuid4().hex, actor_id, event_type, subject_type, subject_id, _now()),
+        self._repository(conn).insert_audit_event(
+            event_id=uuid4().hex,
+            actor_id=actor_id,
+            event_type=event_type,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            metadata_json=json.dumps(metadata or {}, ensure_ascii=True, sort_keys=True),
+            created_at=_now(),
         )
+
+    @staticmethod
+    def _link_audit_value(link: sqlite3.Row | None) -> dict[str, object] | None:
+        if link is None:
+            return None
+        return {
+            "project_id": str(link["project_id"]),
+            "workspace_id": str(link["workspace_id"]),
+            "status": str(link["status"]),
+            "is_primary": bool(link["is_primary"]),
+        }
 
     @staticmethod
     def _request_hash(request: dict[str, object]) -> str:
@@ -1263,13 +1935,11 @@ class DomainService:
     ) -> dict[str, object] | None:
         if not key:
             raise DomainConflictError("idempotency_key is required")
-        row = conn.execute(
-            """
-            SELECT request_hash, response_json FROM domain_idempotency_requests
-            WHERE actor_user_id = ? AND scope = ? AND idempotency_key = ?
-            """,
-            (actor_user_id, scope, key),
-        ).fetchone()
+        row = SqliteDomainRepository(conn).idempotency_record(
+            actor_user_id=actor_user_id,
+            scope=scope,
+            key=key,
+        )
         if row is None:
             return None
         if str(row["request_hash"]) != cls._request_hash(request):
@@ -1289,18 +1959,11 @@ class DomainService:
         request: dict[str, object],
         result: dict[str, object],
     ) -> None:
-        conn.execute(
-            """
-            INSERT INTO domain_idempotency_requests (
-                actor_user_id, scope, idempotency_key, request_hash, response_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                actor_user_id,
-                scope,
-                key,
-                cls._request_hash(request),
-                json.dumps(result, ensure_ascii=True, sort_keys=True),
-                _now(),
-            ),
+        SqliteDomainRepository(conn).insert_idempotency_record(
+            actor_user_id=actor_user_id,
+            scope=scope,
+            key=key,
+            request_hash=cls._request_hash(request),
+            response_json=json.dumps(result, ensure_ascii=True, sort_keys=True),
+            created_at=_now(),
         )

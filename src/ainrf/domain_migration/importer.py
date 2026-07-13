@@ -15,6 +15,17 @@ from typing import cast
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
+from ainrf.domain.environment_identity import (
+    canonical_connection_json,
+    canonical_connection_object,
+    environment_connection_fingerprint,
+)
+from ainrf.domain.context import (
+    context_version_fingerprint,
+    empty_fragment_manifest_json,
+    record_context_version_fragment_provenance_in_transaction,
+    unresolved_legacy_fragment_provenance_evidence,
+)
 from ainrf.domain_migration.sources import SourceSnapshotSet, SourceStaleError
 
 _ACTIVE_TASK_STATUSES = frozenset(
@@ -93,6 +104,15 @@ class ReconciliationReport:
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceEnvironmentInference:
+    """One explicit outcome for legacy Workspace Environment inference."""
+
+    environment_id: str | None
+    detail: str
+    candidates: tuple[str, ...] = ()
 
 
 def _now() -> str:
@@ -436,13 +456,14 @@ class DomainImporter:
     def _run_pipeline(
         self, conn: sqlite3.Connection, run_id: str, source: dict[str, object]
     ) -> None:
+        user_aliases, usernames = self._user_maps(source)
         self._enter_phase(conn, run_id, "environments")
         self._ensure_seed_environment(conn)
+        self._import_environment_registry(conn, run_id, source, user_aliases)
         self._import_environment_placeholders(conn, run_id, source)
         self._complete_phase(conn, run_id, "environments")
 
         self._enter_phase(conn, run_id, "projects")
-        user_aliases, usernames = self._user_maps(source)
         self._import_projects(conn, run_id, source, user_aliases, usernames)
         self._import_project_members(conn, run_id, source, user_aliases)
         self._complete_phase(conn, run_id, "projects")
@@ -467,6 +488,7 @@ class DomainImporter:
     def _load_source_data(self, sources: SourceSnapshotSet) -> dict[str, object]:
         projects = self._read_json_records(sources, "runtime/projects.json", "project_id")
         workspaces = self._read_json_records(sources, "runtime/workspaces.json", "workspace_id")
+        environments = self._read_json_records(sources, "runtime/environments.json", "id")
         edges = self._read_json_records(sources, "runtime/task_edges.json", "edge_id")
         json_sessions = self._read_json_records(sources, "runtime/sessions.json", "session_id")
         checkpoints: list[tuple[str, dict[str, object]]] = []
@@ -483,6 +505,7 @@ class DomainImporter:
         return {
             "projects": projects,
             "workspaces": workspaces,
+            "environments": environments,
             "edges": edges,
             "json_sessions": json_sessions,
             "users": self._read_sqlite_rows(sources, "runtime/auth.sqlite3", "users"),
@@ -561,6 +584,7 @@ class DomainImporter:
     def _user_maps(source: Mapping[str, object]) -> tuple[dict[str, str], dict[str, str]]:
         aliases: dict[str, str] = {}
         usernames: dict[str, str] = {}
+        administrator_ids: list[str] = []
         rows = source.get("users", [])
         if not isinstance(rows, list):
             return aliases, usernames
@@ -576,6 +600,12 @@ class DomainImporter:
             if isinstance(username, str) and username:
                 aliases[username] = user_id
                 usernames[user_id] = username
+            if record.get("role") == "admin":
+                administrator_ids.append(user_id)
+        if len(administrator_ids) == 1:
+            # Some early registries stored the literal ``admin`` rather than
+            # the auth row ID.  Map it only when it is unambiguous.
+            aliases["admin"] = administrator_ids[0]
         return aliases, usernames
 
     def _ensure_seed_environment(self, conn: sqlite3.Connection) -> None:
@@ -591,6 +621,374 @@ class DomainImporter:
             (now, now),
         )
         conn.commit()
+
+    def _import_environment_registry(
+        self,
+        conn: sqlite3.Connection,
+        run_id: str,
+        source: Mapping[str, object],
+        user_aliases: Mapping[str, str],
+    ) -> None:
+        """Import non-seed Environment registrations without copying secrets.
+
+        Legacy registries were process-local and could contain credentials in
+        arbitrary fields.  Only the execution endpoint metadata and an
+        explicit credential *reference* are eligible for the durable domain
+        registry; raw credentials remain absent from both control-plane rows
+        and remediation artifacts.
+        """
+
+        environments = source.get("environments", [])
+        if not isinstance(environments, list):
+            return
+        source_path = "runtime/environments.json"
+        for index, raw_item in enumerate(environments):
+            item = _as_record(raw_item)
+            if item is None:
+                continue
+            environment_id = self._legacy_environment_id(
+                item, fallback=f"<missing-environment-{index}>"
+            )
+            if self._has_result(conn, run_id, source_path, "environment", environment_id):
+                continue
+            sanitized = self._redacted_environment_record(item)
+            if not self._safe_environment_identifier(environment_id):
+                detail = "Legacy Environment ID is not a safe stable identifier"
+                self._issue(
+                    conn,
+                    run_id,
+                    category="environment_registry_invalid",
+                    record_type="environment",
+                    record_id=environment_id,
+                    detail=detail,
+                )
+                self._archive(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=sanitized,
+                    reason=detail,
+                )
+                self._record_outcome(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=item,
+                    status="attention_needed",
+                    detail=detail,
+                )
+                continue
+            raw_owner = item.get("owner_user_id")
+            owner_id = user_aliases.get(str(raw_owner)) if raw_owner is not None else None
+            if raw_owner is not None and owner_id is None:
+                detail = "Environment owner cannot be mapped to a durable auth user"
+                self._issue(
+                    conn,
+                    run_id,
+                    category="environment_owner_unmapped",
+                    record_type="environment",
+                    record_id=environment_id,
+                    detail=detail,
+                )
+                self._archive(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=sanitized,
+                    reason=detail,
+                )
+                self._record_outcome(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=item,
+                    status="attention_needed",
+                    detail=detail,
+                )
+                continue
+            try:
+                connection = self._legacy_environment_connection(item)
+                connection_json = canonical_connection_json(connection)
+                connection_fingerprint = environment_connection_fingerprint(connection)
+            except ValueError as exc:
+                detail = f"Legacy Environment connection is invalid: {exc}"
+                self._issue(
+                    conn,
+                    run_id,
+                    category="environment_registry_invalid",
+                    record_type="environment",
+                    record_id=environment_id,
+                    detail=detail,
+                )
+                self._archive(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=sanitized,
+                    reason=detail,
+                )
+                self._record_outcome(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=item,
+                    status="attention_needed",
+                    detail=detail,
+                )
+                continue
+
+            existing = conn.execute(
+                "SELECT * FROM environments WHERE environment_id = ?", (environment_id,)
+            ).fetchone()
+            if existing is not None:
+                if environment_id == "env-localhost" and bool(existing["is_seed"]):
+                    self._record_outcome(
+                        conn,
+                        run_id,
+                        source_path=source_path,
+                        record_type="environment",
+                        source_record_id=environment_id,
+                        payload=item,
+                        status="skipped",
+                        target_id=environment_id,
+                        detail="fixed seed Environment remains authoritative",
+                    )
+                    continue
+                existing_connection = self._connection_object(existing["connection_json"])
+                existing_fingerprint = (
+                    str(existing["connection_fingerprint"])
+                    if existing["connection_fingerprint"] is not None
+                    else environment_connection_fingerprint(existing_connection)
+                )
+                if existing_fingerprint != connection_fingerprint:
+                    detail = "Environment ID is already bound to a different endpoint identity"
+                    self._issue(
+                        conn,
+                        run_id,
+                        category="environment_identity_conflict",
+                        record_type="environment",
+                        record_id=environment_id,
+                        detail=detail,
+                    )
+                    self._archive(
+                        conn,
+                        run_id,
+                        source_path=source_path,
+                        record_type="environment",
+                        source_record_id=environment_id,
+                        payload=sanitized,
+                        reason=detail,
+                    )
+                    self._record_outcome(
+                        conn,
+                        run_id,
+                        source_path=source_path,
+                        record_type="environment",
+                        source_record_id=environment_id,
+                        payload=item,
+                        status="attention_needed",
+                        detail=detail,
+                    )
+                    continue
+                self._record_outcome(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=item,
+                    status="skipped",
+                    target_id=environment_id,
+                    detail="legacy Environment identity already imported",
+                )
+                continue
+
+            alias = self._optional_text(item.get("alias"))
+            if alias is None:
+                alias = f"legacy-{hashlib.sha256(environment_id.encode()).hexdigest()[:12]}"
+            alias_row = conn.execute(
+                "SELECT environment_id FROM environments WHERE alias = ?", (alias,)
+            ).fetchone()
+            if alias_row is not None:
+                detail = "Legacy Environment alias conflicts with another durable Environment"
+                self._issue(
+                    conn,
+                    run_id,
+                    category="environment_alias_conflict",
+                    record_type="environment",
+                    record_id=environment_id,
+                    detail=detail,
+                )
+                self._archive(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=sanitized,
+                    reason=detail,
+                )
+                self._record_outcome(
+                    conn,
+                    run_id,
+                    source_path=source_path,
+                    record_type="environment",
+                    source_record_id=environment_id,
+                    payload=item,
+                    status="attention_needed",
+                    detail=detail,
+                )
+                continue
+            now = _now()
+            source_status = self._optional_text(item.get("status"))
+            status = "disabled" if source_status == "disabled" else "active"
+            credential_ref = self._optional_text(
+                item.get("credential_ref", item.get("credential_profile_ref"))
+            )
+            conn.execute(
+                """
+                INSERT INTO environments (
+                    environment_id, alias, owner_user_id, display_name, description,
+                    connection_json, connection_fingerprint, credential_ref, is_seed,
+                    status, disabled_at, disabled_reason, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+                """,
+                (
+                    environment_id,
+                    alias,
+                    owner_id,
+                    self._optional_text(item.get("display_name"))
+                    or f"Legacy environment {environment_id}",
+                    self._optional_text(item.get("description")),
+                    connection_json,
+                    connection_fingerprint,
+                    credential_ref,
+                    status,
+                    now if status == "disabled" else None,
+                    "disabled in legacy registry" if status == "disabled" else None,
+                    self._source_time(item.get("created_at")),
+                    self._source_time(item.get("updated_at")),
+                ),
+            )
+            self._record_outcome(
+                conn,
+                run_id,
+                source_path=source_path,
+                record_type="environment",
+                source_record_id=environment_id,
+                payload=item,
+                status="imported",
+                target_id=environment_id,
+                detail="imported non-seed legacy Environment without credential material",
+            )
+
+    @staticmethod
+    def _legacy_environment_id(item: Mapping[str, object], *, fallback: str) -> str:
+        value = item.get("environment_id", item.get("id"))
+        return _as_record_id(value, fallback=fallback)
+
+    @staticmethod
+    def _safe_environment_identifier(environment_id: str) -> bool:
+        return (
+            bool(environment_id)
+            and environment_id not in {".", ".."}
+            and "/" not in environment_id
+            and "\\" not in environment_id
+            and "\x00" not in environment_id
+        )
+
+    @staticmethod
+    def _connection_object(value: object) -> dict[str, object]:
+        if not isinstance(value, str):
+            return {}
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return {str(key): item for key, item in parsed.items()}
+
+    @staticmethod
+    def _legacy_environment_connection(item: Mapping[str, object]) -> dict[str, object]:
+        nested_value = item.get("connection")
+        nested: dict[str, object]
+        if isinstance(nested_value, Mapping):
+            nested = {str(key): value for key, value in nested_value.items()}
+        else:
+            raw_json = item.get("connection_json")
+            if isinstance(raw_json, str):
+                try:
+                    parsed = json.loads(raw_json)
+                except json.JSONDecodeError:
+                    parsed = None
+                nested = (
+                    {str(key): value for key, value in parsed.items()}
+                    if isinstance(parsed, dict)
+                    else {}
+                )
+            else:
+                nested = {}
+        connection: dict[str, object] = {}
+        for field in (
+            "host",
+            "port",
+            "user",
+            "auth_kind",
+            "identity_file",
+            "proxy_jump",
+            "proxy_command",
+            "default_workdir",
+            "preferred_python",
+            "preferred_env_manager",
+            "preferred_runtime_notes",
+            "task_harness_profile",
+            "tags",
+        ):
+            value = nested.get(field)
+            if value is None:
+                value = item.get(field)
+            if value is not None:
+                connection[field] = value
+        ssh_options = nested.get("ssh_options")
+        if ssh_options is None:
+            ssh_options = item.get("ssh_options")
+        if isinstance(ssh_options, Mapping):
+            connection["ssh_options"] = {str(key): str(value) for key, value in ssh_options.items()}
+        return canonical_connection_object(connection)
+
+    @staticmethod
+    def _redacted_environment_record(item: Mapping[str, object]) -> dict[str, object]:
+        """Keep a remediation artifact useful while excluding credential values."""
+
+        allowed = {
+            "id",
+            "environment_id",
+            "alias",
+            "owner_user_id",
+            "display_name",
+            "description",
+            "status",
+            "credential_ref",
+            "credential_profile_ref",
+            "created_at",
+            "updated_at",
+        }
+        result = {str(key): value for key, value in item.items() if key in allowed}
+        result["connection"] = DomainImporter._legacy_environment_connection(item)
+        return result
 
     def _import_environment_placeholders(
         self, conn: sqlite3.Connection, run_id: str, source: Mapping[str, object]
@@ -616,8 +1014,28 @@ class DomainImporter:
                     environment_id = record.get("default_environment_id")
                     if isinstance(environment_id, str) and environment_id:
                         environment_statuses.setdefault(environment_id, set())
+        workspaces = source.get("workspaces", [])
+        if isinstance(workspaces, list):
+            for workspace in workspaces:
+                record = _as_record(workspace)
+                if record is None:
+                    continue
+                environment_id = record.get("environment_id")
+                if isinstance(environment_id, str) and environment_id:
+                    environment_statuses.setdefault(environment_id, set())
         for environment_id, statuses in sorted(environment_statuses.items()):
             if environment_id == "env-localhost":
+                continue
+            if not self._safe_environment_identifier(environment_id):
+                self._issue(
+                    conn,
+                    run_id,
+                    category="environment_registry_invalid",
+                    record_type="environment",
+                    record_id=environment_id,
+                    detail="Historical Environment reference has an unsafe identifier",
+                    blocking=bool(statuses & _ACTIVE_TASK_STATUSES),
+                )
                 continue
             existing = conn.execute(
                 "SELECT 1 FROM environments WHERE environment_id = ?", (environment_id,)
@@ -625,20 +1043,23 @@ class DomainImporter:
             if existing is None:
                 alias = f"legacy-{hashlib.sha256(environment_id.encode()).hexdigest()[:12]}"
                 now = _now()
+                connection = {"legacy_placeholder": True}
                 conn.execute(
                     """
                     INSERT INTO environments (
                         environment_id, alias, owner_user_id, display_name, description,
-                        connection_json, is_seed, status, disabled_at, disabled_reason,
-                        created_at, updated_at
-                    ) VALUES (?, ?, NULL, ?, ?, '{"legacy_placeholder":true}', 0,
-                        'disabled', ?, 'legacy environment registration was not found', ?, ?)
+                        connection_json, connection_fingerprint, is_seed, status,
+                        disabled_at, disabled_reason, created_at, updated_at
+                    ) VALUES (?, ?, NULL, ?, ?, ?, ?, 0, 'disabled', ?,
+                        'legacy environment registration was not found', ?, ?)
                     """,
                     (
                         environment_id,
                         alias,
                         f"Legacy environment {environment_id}",
                         "Placeholder created without copying credential material",
+                        canonical_connection_json(connection),
+                        environment_connection_fingerprint(connection),
                         now,
                         now,
                         now,
@@ -807,12 +1228,36 @@ class DomainImporter:
         conn.execute(
             """
             INSERT OR IGNORE INTO project_context_versions
-                (context_version_id, project_id, content, fingerprint, is_active,
-                 created_by_user_id, created_at)
-            VALUES (?, ?, '', ?, 1, ?, ?)
+                (context_version_id, project_id, content, fingerprint, fragment_manifest_json,
+                 is_active, created_by_user_id, created_at)
+            VALUES (?, ?, '', ?, ?, 1, ?, ?)
             """,
-            (version_id, project_id, hashlib.sha256(b"").hexdigest(), owner_id, now),
+            (
+                version_id,
+                project_id,
+                context_version_fingerprint(""),
+                empty_fragment_manifest_json(),
+                owner_id,
+                now,
+            ),
         )
+        provenance_row = conn.execute(
+            """
+            SELECT 1 FROM project_context_version_provenance
+            WHERE context_version_id = ?
+            """,
+            (version_id,),
+        ).fetchone()
+        if provenance_row is None:
+            record_context_version_fragment_provenance_in_transaction(
+                conn,
+                context_version_id=version_id,
+                status="attention_needed",
+                evidence_json=unresolved_legacy_fragment_provenance_evidence(
+                    source="domain_importer.synthetic_legacy_context"
+                ),
+                recorded_at=now,
+            )
         return version_id
 
     def _import_project_members(
@@ -917,6 +1362,8 @@ class DomainImporter:
         task_environments = self._task_environment_candidates(source)
         project_defaults = self._project_default_environments(source)
         project_primary = self._project_default_workspaces(source)
+        active_workspace_ids = self._active_workspace_ids(source)
+        known_environment_ids = self._known_environment_ids(conn)
         for index, item in enumerate(workspaces):
             record = _as_record(item)
             if record is None:
@@ -931,12 +1378,42 @@ class DomainImporter:
             owner_id = user_aliases.get(str(raw_owner)) if raw_owner is not None else None
             project_id = self._optional_text(item.get("project_id"))
             path = item.get("default_workdir")
-            if owner_id is None or not isinstance(path, str) or not Path(path).is_absolute():
-                detail = "Workspace owner or absolute canonical path cannot be inferred"
+            if owner_id is None:
+                detail = "Workspace owner cannot be mapped to a durable auth user"
                 self._issue(
                     conn,
                     run_id,
-                    category="workspace_unmapped",
+                    category="workspace_owner_unmapped",
+                    record_type="workspace",
+                    record_id=workspace_id,
+                    detail=detail,
+                )
+                self._archive(
+                    conn,
+                    run_id,
+                    source_path="runtime/workspaces.json",
+                    record_type="workspace",
+                    source_record_id=workspace_id,
+                    payload=item,
+                    reason=detail,
+                )
+                self._record_outcome(
+                    conn,
+                    run_id,
+                    source_path="runtime/workspaces.json",
+                    record_type="workspace",
+                    source_record_id=workspace_id,
+                    payload=item,
+                    status="attention_needed",
+                    detail=detail,
+                )
+                continue
+            if not isinstance(path, str) or not Path(path).is_absolute():
+                detail = "Workspace absolute canonical path cannot be inferred"
+                self._issue(
+                    conn,
+                    run_id,
+                    category="workspace_path_invalid",
                     record_type="workspace",
                     record_id=workspace_id,
                     detail=detail,
@@ -962,14 +1439,85 @@ class DomainImporter:
                 )
                 continue
             canonical_path = str(Path(path).expanduser().resolve())
-            environment_id = self._workspace_environment_id(
-                item, project_id, workspace_id, task_environments, project_defaults
+            inference = self._workspace_environment_inference(
+                item,
+                project_id,
+                workspace_id,
+                task_environments,
+                project_defaults,
+                known_environment_ids,
             )
-            if environment_id != "env-localhost":
-                self._ensure_legacy_environment(conn, run_id, environment_id, blocking=False)
+            is_active_workspace = workspace_id in active_workspace_ids
+            attention_details: list[str] = []
+            if inference.environment_id is None:
+                environment_id = self._unresolved_workspace_environment_id(workspace_id)
+                self._ensure_unresolved_workspace_placeholder(conn, environment_id)
+                detail = inference.detail
+                self._issue(
+                    conn,
+                    run_id,
+                    category="workspace_environment_ambiguous",
+                    record_type="workspace",
+                    record_id=workspace_id,
+                    detail=detail,
+                    blocking=is_active_workspace,
+                )
+                attention_details.append(detail)
+            else:
+                environment_id = inference.environment_id
+                environment = conn.execute(
+                    "SELECT status FROM environments WHERE environment_id = ?", (environment_id,)
+                ).fetchone()
+                if environment is None:
+                    self._ensure_legacy_environment(
+                        conn, run_id, environment_id, blocking=is_active_workspace
+                    )
+                    detail = "Workspace Environment has no durable registration"
+                    self._issue(
+                        conn,
+                        run_id,
+                        category="workspace_environment_missing",
+                        record_type="workspace",
+                        record_id=workspace_id,
+                        detail=detail,
+                        blocking=is_active_workspace,
+                    )
+                    attention_details.append(detail)
+                elif str(environment["status"]) != "active":
+                    detail = "Workspace derives a disabled Environment"
+                    self._issue(
+                        conn,
+                        run_id,
+                        category="workspace_environment_invalid",
+                        record_type="workspace",
+                        record_id=workspace_id,
+                        detail=detail,
+                        blocking=is_active_workspace,
+                    )
+                    attention_details.append(detail)
+            project_exists = (
+                conn.execute(
+                    "SELECT 1 FROM projects WHERE project_id = ?", (project_id,)
+                ).fetchone()
+                if project_id is not None
+                else True
+            )
+            if not project_exists:
+                detail = "Workspace legacy Project was not imported"
+                self._issue(
+                    conn,
+                    run_id,
+                    category="workspace_project_missing",
+                    record_type="workspace",
+                    record_id=workspace_id,
+                    detail=detail,
+                )
+                attention_details.append(detail)
             try:
                 existing = conn.execute(
-                    "SELECT 1 FROM workspaces WHERE workspace_id = ?", (workspace_id,)
+                    "SELECT owner_user_id, environment_id, canonical_path FROM workspaces "
+                    "WHERE workspace_id = ?",
+                    (workspace_id,),
                 ).fetchone()
                 if existing is None:
                     now = _now()
@@ -995,8 +1543,24 @@ class DomainImporter:
                     )
                     status = "imported"
                 else:
-                    status = "skipped"
-                if project_id is not None:
+                    if (
+                        str(existing["owner_user_id"]) != owner_id
+                        or str(existing["environment_id"]) != environment_id
+                        or str(existing["canonical_path"]) != canonical_path
+                    ):
+                        detail = "Workspace ID already maps to a different durable identity"
+                        self._issue(
+                            conn,
+                            run_id,
+                            category="workspace_identity_conflict",
+                            record_type="workspace",
+                            record_id=workspace_id,
+                            detail=detail,
+                        )
+                        attention_details.append(detail)
+                    else:
+                        status = "skipped"
+                if project_id is not None and project_exists:
                     self._link_legacy_workspace(
                         conn,
                         run_id,
@@ -1009,6 +1573,20 @@ class DomainImporter:
                             or workspace_id == "workspace-default"
                         ),
                     )
+                if attention_details:
+                    detail = "; ".join(sorted(set(attention_details)))
+                    self._archive(
+                        conn,
+                        run_id,
+                        source_path="runtime/workspaces.json",
+                        record_type="workspace",
+                        source_record_id=workspace_id,
+                        payload=item,
+                        reason=detail,
+                    )
+                    status = "attention_needed"
+                else:
+                    detail = "retained legacy workspace ID"
                 self._record_outcome(
                     conn,
                     run_id,
@@ -1018,7 +1596,7 @@ class DomainImporter:
                     payload=item,
                     status=status,
                     target_id=workspace_id,
-                    detail="retained legacy workspace ID",
+                    detail=detail,
                 )
             except sqlite3.IntegrityError as exc:
                 detail = f"Workspace canonical identity conflicts with existing state: {exc}"
@@ -1067,6 +1645,31 @@ class DomainImporter:
         return result
 
     @staticmethod
+    def _active_workspace_ids(source: Mapping[str, object]) -> set[str]:
+        active: set[str] = set()
+        tasks = source.get("tasks", [])
+        if not isinstance(tasks, list):
+            return active
+        for task in tasks:
+            record = _as_record(task)
+            if record is None:
+                continue
+            workspace_id = record.get("workspace_id")
+            if (
+                isinstance(workspace_id, str)
+                and str(record.get("status", "unknown")) in _ACTIVE_TASK_STATUSES
+            ):
+                active.add(workspace_id)
+        return active
+
+    @staticmethod
+    def _known_environment_ids(conn: sqlite3.Connection) -> set[str]:
+        return {
+            str(row["environment_id"])
+            for row in conn.execute("SELECT environment_id FROM environments").fetchall()
+        }
+
+    @staticmethod
     def _project_default_environments(source: Mapping[str, object]) -> dict[str, str]:
         result: dict[str, str] = {}
         projects = source.get("projects", [])
@@ -1099,22 +1702,91 @@ class DomainImporter:
         return result
 
     @staticmethod
-    def _workspace_environment_id(
+    def _workspace_environment_inference(
         item: Mapping[str, object],
         project_id: str | None,
         workspace_id: str,
         task_environments: Mapping[str, set[str]],
         project_defaults: Mapping[str, str],
-    ) -> str:
+        known_environment_ids: set[str],
+    ) -> WorkspaceEnvironmentInference:
         explicit = item.get("environment_id")
-        if isinstance(explicit, str) and explicit:
-            return explicit
-        candidates = task_environments.get(workspace_id, set())
-        if len(candidates) == 1:
-            return next(iter(candidates))
+        candidates = set(task_environments.get(workspace_id, set()))
         if project_id is not None and project_id in project_defaults:
-            return project_defaults[project_id]
-        return "env-localhost"
+            candidates.add(project_defaults[project_id])
+        if isinstance(explicit, str) and explicit:
+            if candidates and candidates != {explicit}:
+                return WorkspaceEnvironmentInference(
+                    environment_id=None,
+                    detail="Workspace explicit Environment conflicts with Task or Project evidence",
+                    candidates=tuple(sorted(candidates.union({explicit}))),
+                )
+            return WorkspaceEnvironmentInference(
+                environment_id=explicit,
+                detail="Workspace declared an explicit Environment",
+                candidates=(explicit,),
+            )
+        if len(candidates) == 1:
+            environment_id = next(iter(candidates))
+            return WorkspaceEnvironmentInference(
+                environment_id=environment_id,
+                detail="Workspace Environment inferred from one durable legacy reference",
+                candidates=(environment_id,),
+            )
+        if len(candidates) > 1:
+            return WorkspaceEnvironmentInference(
+                environment_id=None,
+                detail="Workspace has multiple possible Environment mappings",
+                candidates=tuple(sorted(candidates)),
+            )
+        if known_environment_ids == {"env-localhost"}:
+            return WorkspaceEnvironmentInference(
+                environment_id="env-localhost",
+                detail="Workspace Environment inferred from the only registered seed",
+                candidates=("env-localhost",),
+            )
+        return WorkspaceEnvironmentInference(
+            environment_id=None,
+            detail="Workspace Environment cannot be uniquely inferred",
+        )
+
+    @staticmethod
+    def _unresolved_workspace_environment_id(workspace_id: str) -> str:
+        digest = hashlib.sha256(workspace_id.encode("utf-8")).hexdigest()[:16]
+        return f"legacy-unresolved-workspace-{digest}"
+
+    @staticmethod
+    def _ensure_unresolved_workspace_placeholder(
+        conn: sqlite3.Connection, environment_id: str
+    ) -> None:
+        existing = conn.execute(
+            "SELECT 1 FROM environments WHERE environment_id = ?", (environment_id,)
+        ).fetchone()
+        if existing is not None:
+            return
+        now = _now()
+        connection = {"legacy_unresolved_workspace_environment": True}
+        conn.execute(
+            """
+            INSERT INTO environments (
+                environment_id, alias, display_name, description, connection_json,
+                connection_fingerprint, status, disabled_at, disabled_reason,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'disabled', ?, ?, ?, ?)
+            """,
+            (
+                environment_id,
+                f"legacy-{hashlib.sha256(environment_id.encode()).hexdigest()[:12]}",
+                "Unresolved legacy Workspace Environment",
+                "Placeholder created because Workspace Environment inference was ambiguous",
+                canonical_connection_json(connection),
+                environment_connection_fingerprint(connection),
+                now,
+                "Workspace Environment requires an explicit reconciliation decision",
+                now,
+                now,
+            ),
+        )
 
     def _ensure_legacy_environment(
         self, conn: sqlite3.Connection, run_id: str, environment_id: str, *, blocking: bool
@@ -1124,12 +1796,14 @@ class DomainImporter:
         ).fetchone()
         if existing is None:
             now = _now()
+            connection = {"legacy_placeholder": True}
             conn.execute(
                 """
                 INSERT INTO environments (
                     environment_id, alias, display_name, description, connection_json,
-                    status, disabled_at, disabled_reason, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, '{"legacy_placeholder":true}', 'disabled', ?,
+                    connection_fingerprint, status, disabled_at, disabled_reason,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'disabled', ?,
                     'legacy environment registration was not found', ?, ?)
                 """,
                 (
@@ -1137,6 +1811,8 @@ class DomainImporter:
                     f"legacy-{hashlib.sha256(environment_id.encode()).hexdigest()[:12]}",
                     f"Legacy environment {environment_id}",
                     "Placeholder created without copying credential material",
+                    canonical_connection_json(connection),
+                    environment_connection_fingerprint(connection),
                     now,
                     now,
                     now,
@@ -1235,9 +1911,10 @@ class DomainImporter:
             raw_owner = item.get("owner_user_id")
             owner_id = user_aliases.get(str(raw_owner)) if raw_owner is not None else None
             invalid: list[str] = []
+            owner_unmapped = owner_id is None
             if target is None:
                 invalid.append("task target is missing")
-            if owner_id is None:
+            if owner_unmapped:
                 invalid.append("task owner is not an auth user")
             project = (
                 conn.execute(
@@ -1258,6 +1935,8 @@ class DomainImporter:
             if workspace is None:
                 invalid.append("task workspace is not imported")
             status = str(item.get("status", "unknown"))
+            if environment_id is None:
+                invalid.append("task Environment is missing")
             if (
                 workspace is not None
                 and environment_id is not None
@@ -1266,15 +1945,33 @@ class DomainImporter:
                 invalid.append("task workspace/environment history conflicts")
             if invalid:
                 detail = "; ".join(invalid)
-                self._issue(
-                    conn,
-                    run_id,
-                    category="task_domain_mapping_invalid",
-                    record_type="task",
-                    record_id=task_id,
-                    detail=detail,
-                    blocking=status in _ACTIVE_TASK_STATUSES,
-                )
+                if owner_unmapped:
+                    self._issue(
+                        conn,
+                        run_id,
+                        category="task_owner_unmapped",
+                        record_type="task",
+                        record_id=task_id,
+                        detail="Task owner cannot be mapped to a durable auth user",
+                    )
+                mapping_invalid = [
+                    item for item in invalid if item != "task owner is not an auth user"
+                ]
+                if mapping_invalid:
+                    self._issue(
+                        conn,
+                        run_id,
+                        category="task_domain_mapping_invalid",
+                        record_type="task",
+                        record_id=task_id,
+                        detail="; ".join(mapping_invalid),
+                        blocking=(
+                            target is None
+                            or project is None
+                            or workspace is None
+                            or status in _ACTIVE_TASK_STATUSES
+                        ),
+                    )
                 self._archive(
                     conn,
                     run_id,
@@ -1302,10 +1999,11 @@ class DomainImporter:
             conn.execute(
                 """
                 UPDATE tasks
-                SET project_context_version_id = COALESCE(project_context_version_id, ?)
+                SET owner_user_id = ?,
+                    project_context_version_id = COALESCE(project_context_version_id, ?)
                 WHERE task_id = ?
                 """,
-                (version_id, task_id),
+                (owner_id, version_id, task_id),
             )
             output_start, output_end = output_ranges.get(task_id, (None, None))
             if output_start is not None:

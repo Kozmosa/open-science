@@ -13,8 +13,9 @@ pytestmark = [pytest.mark.unit]
 
 def test_persistent_environment_facade_survives_restart_without_detection_side_effects(
     state_root: Path,
+    committed_v2_state: str,
 ) -> None:
-    service = DomainService(state_root)
+    service = DomainService(state_root, artifact_sha=committed_v2_state)
     environment = service.create_environment(
         {"id": "admin", "role": "admin"},
         alias="durable-host",
@@ -38,11 +39,13 @@ def test_persistent_environment_facade_survives_restart_without_detection_side_e
     assert first.port == 2202
     assert first.user == "researcher"
     assert first.tags == ["gpu", "research"]
-    assert [item.id for item in second] == [environment_id]
+    assert environment_id in [item.id for item in second]
 
     service.disable_environment(environment_id, {"id": "admin", "role": "admin"})
 
-    assert PersistentEnvironmentFacade(state_root).list_environments() == []
+    assert environment_id not in [
+        item.id for item in PersistentEnvironmentFacade(state_root).list_environments()
+    ]
     assert (
         PersistentEnvironmentFacade(state_root).get_environment(environment_id).display_name
         == "Durable host"

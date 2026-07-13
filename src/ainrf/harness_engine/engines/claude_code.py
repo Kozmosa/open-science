@@ -17,7 +17,10 @@ from ainrf.harness_engine.base import (
     HarnessEngine,
     HarnessEngineNotSupportedError,
     HarnessEngineType,
+    RuntimeProbeResult,
+    RuntimeProbeStatus,
 )
+from ainrf.harness_engine.session_state import RuntimeLaunchTracker
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +87,11 @@ class ClaudeCodeEngine(HarnessEngine):
 
     def __init__(self) -> None:
         self._processes: dict[str, asyncio.subprocess.Process] = {}
+        self._runtime_task_ids: dict[str, str] = {}
         self._session_ids: dict[str, str] = {}
         self._pending_messages: dict[str, deque[str]] = {}
         self._last_event_at: dict[str, float] = {}
+        self._runtime_recovery = RuntimeLaunchTracker(HarnessEngineType.CLAUDE_CODE.value)
 
     @property
     def engine_type(self) -> HarnessEngineType:
@@ -95,6 +100,8 @@ class ClaudeCodeEngine(HarnessEngine):
     # ── public API ────────────────────────────────────────────────────
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        self.bind_runtime_context(context)
+        self.arm_runtime_launch(context)
         started_at = time.time()
 
         skill_cleanup_dirs = self._mount_skills(context)
@@ -198,6 +205,63 @@ class ClaudeCodeEngine(HarnessEngine):
         process = self._processes.get(runtime_identity)
         return process is not None and process.returncode is None
 
+    def bind_runtime_context(self, context: ExecutionContext) -> None:
+        self._runtime_recovery.bind(context)
+
+    def arm_runtime_launch(self, context: ExecutionContext) -> None:
+        self._runtime_recovery.arm(context)
+
+    async def probe_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        process = self._processes.get(launch_key)
+        if process is not None and process.returncode is None:
+            if self._runtime_task_ids.get(launch_key) == task_id:
+                return RuntimeProbeResult(
+                    status=RuntimeProbeStatus.RUNNING,
+                    engine_session_key=self._session_ids.get(launch_key, launch_key),
+                    metadata={"recovery_evidence": "owned-process"},
+                )
+            return RuntimeProbeResult(
+                status=RuntimeProbeStatus.UNKNOWN,
+                metadata={"reason": "Launch key is associated with a different Task"},
+            )
+        inspection = self._runtime_recovery.inspect(task_id=task_id, launch_key=launch_key)
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus(inspection.status),
+            engine_session_key=inspection.engine_session_key,
+            metadata={
+                key: value
+                for key, value in {
+                    "process_id": inspection.process_id,
+                    "reason": inspection.reason,
+                }.items()
+                if value is not None
+            },
+        )
+
+    async def adopt_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        probe = await self.probe_runtime(task_id=task_id, launch_key=launch_key)
+        if probe.status is not RuntimeProbeStatus.RUNNING:
+            return probe
+        # Claude's one-shot CLI owns a private stdin/stdout pipe.  A new
+        # dispatcher can prove that process exists, but cannot reconnect to
+        # its stream or safely resume its control protocol.  Reporting RUNNING
+        # here would make the worker mark a fake adoption as successful.
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus.UNKNOWN,
+            engine_session_key=probe.engine_session_key,
+            metadata={"reason": "Claude Code stdio process is observable but cannot be reattached"},
+        )
+
     async def last_event_at(
         self, task_id: str, *, runtime_launch_key: str | None = None
     ) -> float | None:
@@ -282,6 +346,12 @@ class ClaudeCodeEngine(HarnessEngine):
             env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = context.default_haiku_model
         if context.env_overrides:
             env.update(context.env_overrides)
+        engine_session_key = self._session_ids.get(
+            context.runtime_identity,
+            self._make_session_id(context),
+        )
+        self._runtime_recovery.begin(context, engine_session_key=engine_session_key)
+        env.update(self._runtime_recovery.environment(context))
 
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -292,13 +362,19 @@ class ClaudeCodeEngine(HarnessEngine):
             stderr=asyncio.subprocess.PIPE,
         )
         self._processes[context.runtime_identity] = process
+        self._runtime_task_ids[context.runtime_identity] = context.task_id
+        self._runtime_recovery.mark_running(
+            context,
+            process_id=(process.pid if isinstance(getattr(process, "pid", None), int) else None),
+            engine_session_key=engine_session_key,
+        )
         stdin = process.stdin
         stdout = process.stdout
         stderr = process.stderr
-        if stdin is None or stdout is None or stderr is None:
-            raise RuntimeError("Claude Code engine failed to attach stdio pipes")
 
         try:
+            if stdin is None or stdout is None or stderr is None:
+                raise RuntimeError("Claude Code engine failed to attach stdio pipes")
             if prompt:
                 stdin.write(prompt.encode())
                 await stdin.drain()
@@ -364,6 +440,7 @@ class ClaudeCodeEngine(HarnessEngine):
                 raise RuntimeError(f"claude exited with code {process.returncode}")
         finally:
             self._processes.pop(context.runtime_identity, None)
+            self._runtime_task_ids.pop(context.runtime_identity, None)
             if process.returncode is None:
                 process.terminate()
                 try:
@@ -371,6 +448,7 @@ class ClaudeCodeEngine(HarnessEngine):
                 except asyncio.TimeoutError:
                     process.kill()
                     await process.wait()
+            self._runtime_recovery.finish(context)
 
     # ── helpers ────────────────────────────────────────────────────────
 

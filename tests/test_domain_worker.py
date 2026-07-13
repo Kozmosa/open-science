@@ -39,13 +39,19 @@ def _queued_task(
     *,
     harness_engine: str = "claude-code",
 ) -> tuple[dict[str, str], AuthService, str]:
+    # Every B5 test exercises the authoritative worker, never a pre-cutover
+    # shadow writer.  The fixture follows the real finalize/prepare/commit
+    # path and binds all application repositories to its immutable artifact.
+    prepare_committed_v2_cutover(state_root, tmp_path)
     owner: dict[str, object] = {"id": "owner", "role": "member"}
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
-    domain = DomainService(state_root)
-    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
-    environment_id = str(environment["environment_id"])
     auth = AuthService(state_root=state_root)
     auth.initialize()
+    seed_user(auth, username="worker-owner", role="member", user_id="owner")
+    seed_user(auth, username="worker-admin", role="admin", user_id="admin")
+    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    environment_id = str(environment["environment_id"])
     auth.grant_environment(
         env_id=environment_id,
         user_id="owner",
@@ -65,10 +71,10 @@ def _queued_task(
     project_id = str(project["project_id"])
     workspace_id = str(workspace["workspace_id"])
     domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="link")
-    context = ProjectContextService(state_root)
+    context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     context.save_draft(project_id, "Project context", owner)
     context.publish(project_id, owner)
-    task = TaskApplicationService(state_root).create_task(
+    task = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA).create_task(
         owner,
         project_id=project_id,
         workspace_id=workspace_id,
@@ -92,6 +98,7 @@ async def test_domain_worker_runs_durable_attempt_and_projects_event_data(
         dispatcher_id="dispatcher-a",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     result = await dispatcher.run_once()
@@ -129,6 +136,66 @@ async def test_domain_worker_runs_durable_attempt_and_projects_event_data(
     assert "## Task Request\nInvestigate this" in str(outputs[0]["content"])
 
 
+class _LaunchEvidenceEngine(FakeEngine):
+    def __init__(self) -> None:
+        super().__init__()
+        self.bound_launch_keys: list[str] = []
+        self.armed_launch_keys: list[str] = []
+
+    def bind_runtime_context(self, context: ExecutionContext) -> None:
+        if context.runtime_launch_key is not None:
+            self.bound_launch_keys.append(context.runtime_launch_key)
+
+    def arm_runtime_launch(self, context: ExecutionContext) -> None:
+        if context.runtime_launch_key is not None:
+            self.armed_launch_keys.append(context.runtime_launch_key)
+
+
+@pytest.mark.anyio
+async def test_domain_worker_arms_adapter_evidence_before_first_runtime_start(
+    state_root: Path, tmp_path: Path
+) -> None:
+    task, _, _ = _queued_task(state_root, tmp_path)
+    engine = _LaunchEvidenceEngine()
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="dispatcher-evidence",
+        engine_factory=lambda _engine_type: engine,
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+    )
+
+    result = await dispatcher.run_once()
+    dispatcher.stop()
+
+    expected_launch_key = f"launch-{task['attempt_id']}"
+    assert result.outcome == "completed"
+    assert engine.bound_launch_keys == [expected_launch_key]
+    assert engine.armed_launch_keys == [expected_launch_key]
+
+
+@pytest.mark.anyio
+async def test_domain_worker_refuses_legacy_state_before_registering_a_participant(
+    state_root: Path,
+) -> None:
+    dispatcher = TaskDispatcher(
+        state_root, dispatcher_id="legacy-direct-dispatcher", lease_seconds=3
+    )
+
+    with pytest.raises(DomainCutoverError, match="committed v2 cutover"):
+        await dispatcher.run_once()
+    with pytest.raises(DomainCutoverError, match="committed v2 cutover"):
+        dispatcher.start()
+    dispatcher.stop()
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        participant = conn.execute(
+            "SELECT 1 FROM domain_write_participants WHERE participant_id = ?",
+            ("legacy-direct-dispatcher",),
+        ).fetchone()
+    assert participant is None
+
+
 @pytest.mark.anyio
 async def test_domain_worker_requires_the_committed_v2_artifact(
     state_root: Path, tmp_path: Path
@@ -159,6 +226,14 @@ async def test_domain_worker_requires_the_committed_v2_artifact(
     result = await matching.run_once()
     matching.stop()
     assert result.outcome == "idle"
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        cutover = conn.execute(
+            "SELECT first_v2_write_at, first_v2_write_actor_id "
+            "FROM domain_cutover_state WHERE singleton = 1"
+        ).fetchone()
+    assert cutover is not None
+    assert cutover["first_v2_write_at"] is not None
+    assert cutover["first_v2_write_actor_id"] == "domain-worker:matching-artifact"
 
 
 @pytest.mark.anyio
@@ -213,6 +288,7 @@ async def test_dispatcher_consumes_live_cancel_control_and_waits_for_runtime_exi
         dispatcher_id="dispatcher-live-control",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     run = asyncio.create_task(dispatcher.run_once())
@@ -222,7 +298,7 @@ async def test_dispatcher_consumes_live_cancel_control_and_waits_for_runtime_exi
         await asyncio.sleep(0.01)
     assert engine.started_count == 1
 
-    cancellation = TaskApplicationService(state_root).cancel_task(
+    cancellation = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA).cancel_task(
         task["task_id"],
         {"id": "owner", "role": "member"},
         reason="cancel a live runtime",
@@ -265,6 +341,7 @@ async def test_dispatcher_delivers_live_continuation_once_with_attempt_runtime_i
         dispatcher_id="dispatcher-live-input",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
     run = asyncio.create_task(dispatcher.run_once())
     for _ in range(100):
@@ -273,7 +350,7 @@ async def test_dispatcher_delivers_live_continuation_once_with_attempt_runtime_i
         await asyncio.sleep(0.01)
     assert engine.started_count == 1
 
-    tasks = TaskApplicationService(state_root)
+    tasks = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     continued = tasks.continue_task(
         task["task_id"],
         {"id": "owner", "role": "member"},
@@ -295,7 +372,7 @@ async def test_dispatcher_delivers_live_continuation_once_with_attempt_runtime_i
         await asyncio.sleep(0.01)
     assert engine.pending_prompts == ["Please include the uncertainty bounds."]
 
-    TaskApplicationService(state_root).cancel_task(
+    TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA).cancel_task(
         task["task_id"],
         {"id": "owner", "role": "member"},
         reason="complete live input test",
@@ -354,6 +431,7 @@ async def test_dispatcher_pauses_and_resumes_the_same_attempt_and_runtime(
         dispatcher_id="dispatcher-pause-resume",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
     run = asyncio.create_task(dispatcher.run_once())
     for _ in range(100):
@@ -362,7 +440,7 @@ async def test_dispatcher_pauses_and_resumes_the_same_attempt_and_runtime(
         await asyncio.sleep(0.01)
     assert engine.started_count == 1
 
-    tasks = TaskApplicationService(state_root)
+    tasks = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     paused = tasks.pause_task(
         task["task_id"],
         {"id": "owner", "role": "member"},
@@ -420,7 +498,7 @@ def test_expired_claim_is_recovered_by_one_new_dispatcher_and_old_token_loses_ac
     state_root: Path, tmp_path: Path
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path)
-    attempts = AttemptService(state_root)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     original = attempts.claim_next("dispatcher-a", lease_seconds=30)
     assert original is not None
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
@@ -443,7 +521,7 @@ def test_expired_claim_token_cannot_renew_or_write_after_another_dispatcher_reco
     state_root: Path, tmp_path: Path
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path)
-    attempts = AttemptService(state_root)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     original = attempts.claim_next("dispatcher-a", lease_seconds=30)
     assert original is not None
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
@@ -468,12 +546,12 @@ def test_stop_request_wins_before_the_runtime_launch_fence(
     state_root: Path, tmp_path: Path
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path)
-    attempts = AttemptService(state_root)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     claim = attempts.claim_next("dispatcher-a", lease_seconds=30)
     assert claim is not None
     preparation = attempts.prepare_runtime_launch(claim)
 
-    cancellation = TaskApplicationService(state_root).cancel_task(
+    cancellation = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA).cancel_task(
         task["task_id"],
         {"id": "owner", "role": "member"},
         reason="cancel before engine boundary",
@@ -542,7 +620,7 @@ async def _recover_expired_start(
     task: dict[str, str],
     engine: FakeEngine,
 ) -> tuple[DispatchRunResult, FakeEngine]:
-    attempts = AttemptService(state_root)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     original = attempts.claim_next("dispatcher-a", lease_seconds=30)
     assert original is not None
     attempts.prepare_runtime_launch(original)
@@ -557,6 +635,7 @@ async def _recover_expired_start(
         dispatcher_id="dispatcher-b",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
     result = await dispatcher.run_once()
     dispatcher.stop()
@@ -573,10 +652,14 @@ async def test_domain_worker_never_blindly_restarts_an_unknown_prior_launch(
 
     assert result.outcome == "launch_unknown"
     assert engine.started_count == 0
-    state = AttemptService(state_root).dispatch_state(task["dispatch_id"])
+    state = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA).dispatch_state(
+        task["dispatch_id"]
+    )
     assert state["status"] == "launch_unknown"
     assert state["launch_state"] == "unknown"
-    assert AttemptService(state_root).claim_next("dispatcher-c") is None
+    assert (
+        AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA).claim_next("dispatcher-c") is None
+    )
 
 
 @pytest.mark.anyio
@@ -605,7 +688,7 @@ async def test_expired_dispatched_runtime_is_reconciled_without_a_blind_restart(
     state_root: Path, tmp_path: Path
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path)
-    attempts = AttemptService(state_root)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     original = attempts.claim_next("dispatcher-a", lease_seconds=30)
     assert original is not None
     prepared = attempts.prepare_runtime_launch(original)
@@ -622,6 +705,7 @@ async def test_expired_dispatched_runtime_is_reconciled_without_a_blind_restart(
         dispatcher_id="dispatcher-b",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     result = await dispatcher.run_once()
@@ -631,6 +715,141 @@ async def test_expired_dispatched_runtime_is_reconciled_without_a_blind_restart(
     assert engine.started_count == 0
     state = attempts.dispatch_state(task["dispatch_id"])
     assert state["status"] == "launch_unknown"
+
+
+@pytest.mark.anyio
+async def test_paused_runtime_absence_creates_one_resume_attempt_only_after_a_probe(
+    state_root: Path, tmp_path: Path
+) -> None:
+    """A paused runtime loss never restarts blindly, but a resume intent recovers it."""
+
+    task, _, _ = _queued_task(state_root, tmp_path)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    original = attempts.claim_next("paused-dispatcher-a", lease_seconds=30)
+    assert original is not None
+    prepared = attempts.prepare_runtime_launch(original)
+    assert attempts.commit_runtime_launch(original, prepared.runtime_session_id)
+    attempts.mark_runtime_running(original, prepared.runtime_session_id)
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute(
+            "UPDATE agent_task_attempts SET status = 'paused' WHERE attempt_id = ?",
+            (task["attempt_id"],),
+        )
+        conn.execute("UPDATE tasks SET status = 'paused' WHERE task_id = ?", (task["task_id"],))
+        conn.execute(
+            "UPDATE agent_runtime_sessions SET status = 'paused' WHERE runtime_session_id = ?",
+            (prepared.runtime_session_id,),
+        )
+        conn.execute(
+            "UPDATE task_dispatch_outbox SET claim_expires_at = ? WHERE dispatch_id = ?",
+            ("1970-01-01T00:00:00+00:00", task["dispatch_id"]),
+        )
+        conn.commit()
+
+    resume = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA).resume_task(
+        task["task_id"],
+        {"id": "owner", "role": "member"},
+        idempotency_key="resume-after-paused-worker-crash",
+    )
+    engine = _AbsentRecoveryEngine()
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="paused-dispatcher-b",
+        engine_factory=lambda _engine_type: engine,
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+    )
+
+    recovered = await dispatcher.run_once()
+    assert recovered.outcome == "resume_queued"
+    assert recovered.attempt_id is not None and recovered.attempt_id != task["attempt_id"]
+    assert engine.started_count == 0
+    completed = await dispatcher.run_once()
+    dispatcher.stop()
+
+    assert completed.outcome == "completed"
+    assert engine.started_count == 1
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        attempt_rows = conn.execute(
+            """SELECT attempt_id, attempt_seq, trigger, status
+               FROM agent_task_attempts WHERE task_id = ? ORDER BY attempt_seq""",
+            (task["task_id"],),
+        ).fetchall()
+        control = conn.execute(
+            "SELECT status FROM task_attempt_control_requests WHERE control_request_id = ?",
+            (resume["control_request_id"],),
+        ).fetchone()
+
+    assert [(row["attempt_seq"], row["trigger"]) for row in attempt_rows] == [
+        (1, "initial"),
+        (2, "resume"),
+    ]
+    assert attempt_rows[0]["status"] == "stopped"
+    assert attempt_rows[1]["status"] == "succeeded"
+    assert control is not None and control["status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_paused_project_archive_reconciles_after_a_positive_absence_probe(
+    state_root: Path, tmp_path: Path
+) -> None:
+    task, _, _ = _queued_task(state_root, tmp_path)
+    attempts = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    original = attempts.claim_next("paused-archive-dispatcher-a", lease_seconds=30)
+    assert original is not None
+    prepared = attempts.prepare_runtime_launch(original)
+    assert attempts.commit_runtime_launch(original, prepared.runtime_session_id)
+    attempts.mark_runtime_running(original, prepared.runtime_session_id)
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute(
+            "UPDATE agent_task_attempts SET status = 'paused' WHERE attempt_id = ?",
+            (task["attempt_id"],),
+        )
+        conn.execute("UPDATE tasks SET status = 'paused' WHERE task_id = ?", (task["task_id"],))
+        conn.execute(
+            "UPDATE agent_runtime_sessions SET status = 'paused' WHERE runtime_session_id = ?",
+            (prepared.runtime_session_id,),
+        )
+        conn.execute(
+            "UPDATE task_dispatch_outbox SET claim_expires_at = ? WHERE dispatch_id = ?",
+            ("1970-01-01T00:00:00+00:00", task["dispatch_id"]),
+        )
+        project_id = conn.execute(
+            "SELECT project_id FROM tasks WHERE task_id = ?", (task["task_id"],)
+        ).fetchone()
+        assert project_id is not None
+        conn.commit()
+
+    archived = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA).archive_project(
+        str(project_id["project_id"]),
+        {"id": "owner", "role": "member"},
+        reason="archive paused runtime",
+        idempotency_key="archive-paused-runtime",
+    )
+    assert archived["stop_request_ids"]
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="paused-archive-dispatcher-b",
+        engine_factory=lambda _engine_type: _AbsentRecoveryEngine(),
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+    )
+    result = await dispatcher.run_once()
+    dispatcher.stop()
+
+    assert result.outcome == "stopped_by_project_archive"
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        attempt = conn.execute(
+            "SELECT status FROM agent_task_attempts WHERE attempt_id = ?", (task["attempt_id"],)
+        ).fetchone()
+        control = conn.execute(
+            """SELECT status FROM task_attempt_control_requests
+               WHERE attempt_id = ? AND action = 'stop'""",
+            (task["attempt_id"],),
+        ).fetchone()
+
+    assert attempt is not None and attempt["status"] == "stopped_by_project_archive"
+    assert control is not None and control["status"] == "completed"
 
 
 class _FailedThenRaisesEngine(FakeEngine):
@@ -657,13 +876,16 @@ async def test_terminal_engine_event_wins_when_engine_then_raises(
         dispatcher_id="dispatcher-a",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     result = await dispatcher.run_once()
     dispatcher.stop()
 
     assert result.outcome == "failed"
-    state = AttemptService(state_root).dispatch_state(task["dispatch_id"])
+    state = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA).dispatch_state(
+        task["dispatch_id"]
+    )
     assert state["status"] == "failed"
 
 
@@ -678,6 +900,7 @@ async def test_maintenance_epoch_after_claim_releases_prepared_work_without_star
         dispatcher_id="dispatcher-a",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
     original_context = dispatcher._execution_context_for
     entered = False
@@ -699,7 +922,9 @@ async def test_maintenance_epoch_after_claim_releases_prepared_work_without_star
 
     assert result.outcome == "maintenance_drained"
     assert engine.started_count == 0
-    state = AttemptService(state_root).dispatch_state(task["dispatch_id"])
+    state = AttemptService(state_root, artifact_sha=V2_ARTIFACT_SHA).dispatch_state(
+        task["dispatch_id"]
+    )
     assert (state["status"], state["launch_state"]) == ("pending", "none")
 
 
@@ -707,8 +932,7 @@ async def test_maintenance_epoch_after_claim_releases_prepared_work_without_star
 async def test_tenant_agent_sdk_is_rejected_before_any_backend_user_launch(
     state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    task, auth, _ = _queued_task(state_root, tmp_path, harness_engine="agent-sdk")
-    seed_user(auth, username="owner-user", password="test-pass", role="member", user_id="owner")
+    task, _, _ = _queued_task(state_root, tmp_path, harness_engine="agent-sdk")
     monkeypatch.setattr("ainrf.domain.worker._is_container_environment", lambda: True)
     monkeypatch.setattr("ainrf.domain.worker._linux_user_exists", lambda _user: True)
     engine = FakeEngine()
@@ -717,6 +941,7 @@ async def test_tenant_agent_sdk_is_rejected_before_any_backend_user_launch(
         dispatcher_id="dispatcher-a",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     result = await dispatcher.run_once()
@@ -738,6 +963,7 @@ async def test_domain_worker_projects_attempt_token_usage_and_cost(
         dispatcher_id="dispatcher-a",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     result = await dispatcher.run_once()
@@ -783,6 +1009,7 @@ async def test_domain_worker_persists_attempt_output_scope_and_references(
         dispatcher_id="dispatcher-a",
         engine_factory=lambda _engine_type: _ReferenceEngine(),
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     result = await dispatcher.run_once()
@@ -816,6 +1043,7 @@ async def test_domain_worker_rechecks_environment_grant_before_any_runtime_start
         dispatcher_id="dispatcher-a",
         engine_factory=lambda _engine_type: engine,
         lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
     )
 
     result = await dispatcher.run_once()

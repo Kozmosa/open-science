@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Callable
 from typing import Mapping
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
-from ainrf.domain.context import ProjectContextService
+from ainrf.domain.attempts import AttemptService
+from ainrf.domain.context import ProjectContextService, task_context_lifecycle_capability
+from ainrf.domain.dispatch_wakeup import DispatchWakeup
 from ainrf.domain.service import (
     DomainAuthorizationService,
     DomainConflictError,
@@ -35,6 +39,9 @@ def _request_hash(value: Mapping[str, object]) -> str:
     return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
 
 
+_LOG = logging.getLogger(__name__)
+
+
 class TaskApplicationService:
     """The only v2 writer for Task lifecycle mutations.
 
@@ -44,7 +51,13 @@ class TaskApplicationService:
     database instead of relying on best-effort process-local scheduling.
     """
 
-    def __init__(self, state_root: Path, *, artifact_sha: str | None = None) -> None:
+    def __init__(
+        self,
+        state_root: Path,
+        *,
+        artifact_sha: str | None = None,
+        dispatch_notifier: Callable[[str], None] | None = None,
+    ) -> None:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
@@ -53,6 +66,7 @@ class TaskApplicationService:
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
         self._write_fence = DomainWriteFence(state_root, artifact_sha=artifact_sha)
+        self._dispatch_notifier = dispatch_notifier or DispatchWakeup(state_root).notify
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
@@ -181,6 +195,7 @@ class TaskApplicationService:
             )
             self._audit(conn, actor_user_id, "task.created", "task", task_id)
             conn.commit()
+            self._notify_dispatch_after_commit(result)
             return result
 
     def retry_task(
@@ -267,6 +282,7 @@ class TaskApplicationService:
             )
             self._audit(conn, actor_user_id, "task.continued", "task", task_id)
             conn.commit()
+            self._notify_dispatch_after_commit(result)
             return result
 
     # ------------------------------------------------------------------
@@ -337,6 +353,66 @@ class TaskApplicationService:
             idempotency_key=idempotency_key,
         )
 
+    def resolve_launch_unknown(
+        self,
+        task_id: str,
+        attempt_id: str,
+        user: Mapping[str, object],
+        *,
+        reason: str,
+        idempotency_key: str,
+    ) -> dict[str, str]:
+        """Record an authorized terminal resolution for an unknown launch.
+
+        This does not retry or relaunch the affected Attempt.  A later user
+        Retry is an explicit, separately idempotent decision that creates a
+        new Attempt only after this unresolved runtime boundary is closed.
+        """
+
+        actor_user_id = self._user_id(user)
+        normalized_reason = reason.strip()
+        request: dict[str, object] = {
+            "task_id": task_id,
+            "attempt_id": attempt_id,
+            "reason": normalized_reason,
+        }
+        with closing(self._connect()) as conn:
+            self._begin(conn)
+            self._owned_task(conn, task_id, dict(user))
+            cached = self._idempotent_result(
+                conn,
+                actor_user_id,
+                "task.launch_unknown.resolve",
+                idempotency_key,
+                request,
+            )
+            if cached is not None:
+                return self._string_result(cached)
+            result = AttemptService._resolve_launch_unknown_in_transaction(
+                conn,
+                task_id=task_id,
+                attempt_id=attempt_id,
+                reason=normalized_reason,
+                now=_now(),
+            )
+            self._store_idempotency(
+                conn,
+                actor_user_id,
+                "task.launch_unknown.resolve",
+                idempotency_key,
+                request,
+                result,
+            )
+            self._audit(
+                conn,
+                actor_user_id,
+                "task.launch_unknown.resolved",
+                "attempt",
+                attempt_id,
+            )
+            conn.commit()
+            return result
+
     def archive_task(
         self,
         task_id: str,
@@ -357,6 +433,8 @@ class TaskApplicationService:
                 return cached
             if task["archived_at"] is not None:
                 raise DomainConflictError("Task is already archived")
+            if self._has_pending_task_archive_in_transaction(conn, task_id):
+                raise DomainConflictError("Task archive is awaiting runtime cancellation")
             now = _now()
             cancelled_attempt_ids = self._cancel_unstarted_dispatches_in_transaction(
                 conn,
@@ -366,7 +444,18 @@ class TaskApplicationService:
             )
             attempt = self._latest_attempt(conn, task_id)
             control: dict[str, object] | None = None
-            if attempt is not None and attempt["status"] in {"starting", "running", "paused"}:
+            latest_cancelled = (
+                attempt is not None and str(attempt["attempt_id"]) in cancelled_attempt_ids
+            )
+            if attempt is not None and attempt["status"] == "launch_unknown":
+                raise DomainConflictError(
+                    "Task runtime launch must be reconciled before the Task can be archived"
+                )
+            if (
+                attempt is not None
+                and not latest_cancelled
+                and attempt["status"] in {"queued", "starting", "running", "paused"}
+            ):
                 control = self._request_control_in_transaction(
                     conn,
                     task_id=task_id,
@@ -378,24 +467,30 @@ class TaskApplicationService:
                     reason=reason,
                     payload={"archive": True},
                 )
-            latest_cancelled = (
-                attempt is not None and str(attempt["attempt_id"]) in cancelled_attempt_ids
-            )
             if latest_cancelled:
                 conn.execute(
                     """UPDATE tasks SET status = 'cancelled', updated_at = ?
                        WHERE task_id = ?""",
                     (now, task_id),
                 )
-            conn.execute(
-                """UPDATE tasks
-                   SET archived_at = ?, archive_reason = ?, updated_at = ?
-                   WHERE task_id = ?""",
-                (now, reason, now, task_id),
-            )
+            # An external runtime cannot be atomically terminated with this
+            # SQLite transaction.  A running/paused Task therefore remains
+            # visible while its durable cancel request is in flight; the
+            # dispatcher/reconciler records ``archived_at`` only once it has
+            # observed the RuntimeSession stop.  Queued work and terminal
+            # Tasks have no outstanding process to confirm and may archive now.
+            archive_pending = control is not None
+            if not archive_pending:
+                conn.execute(
+                    """UPDATE tasks
+                       SET archived_at = ?, archive_reason = ?, updated_at = ?
+                       WHERE task_id = ?""",
+                    (now, reason, now, task_id),
+                )
             result: dict[str, object] = {
                 "task_id": task_id,
-                "archived": True,
+                "archived": not archive_pending,
+                "archive_pending": archive_pending,
                 "cancelled_attempt_ids": cancelled_attempt_ids,
                 "control": control,
             }
@@ -407,7 +502,13 @@ class TaskApplicationService:
                 request,
                 result,
             )
-            self._audit(conn, actor_user_id, "task.archived", "task", task_id)
+            self._audit(
+                conn,
+                actor_user_id,
+                "task.archive_requested" if archive_pending else "task.archived",
+                "task",
+                task_id,
+            )
             conn.commit()
             return result
 
@@ -429,6 +530,8 @@ class TaskApplicationService:
             if cached is not None:
                 return cached
             if task["archived_at"] is None:
+                if self._has_pending_task_archive_in_transaction(conn, task_id):
+                    raise DomainConflictError("Task archive is awaiting runtime cancellation")
                 raise DomainConflictError("Task is not archived")
             project = conn.execute(
                 "SELECT status FROM projects WHERE project_id = ?", (task["project_id"],)
@@ -632,7 +735,12 @@ class TaskApplicationService:
     ) -> dict[str, object]:
         """Expose the B4 diff phase through the one Task lifecycle facade."""
 
-        return self._context_service.preview_task_context_update(task_id, project_id, user)
+        return self._context_service.preview_task_context_update(
+            task_id,
+            project_id,
+            user,
+            _lifecycle_capability=task_context_lifecycle_capability(),
+        )
 
     def confirm_task_context_update(
         self,
@@ -651,6 +759,7 @@ class TaskApplicationService:
             preview_id,
             user,
             idempotency_key=idempotency_key,
+            _lifecycle_capability=task_context_lifecycle_capability(),
         )
 
     def move_task(
@@ -838,6 +947,7 @@ class TaskApplicationService:
             )
             self._audit(conn, actor_user_id, "task.forked", "task", new_task_id)
             conn.commit()
+            self._notify_dispatch_after_commit(result)
             return result
 
     # ------------------------------------------------------------------
@@ -886,6 +996,7 @@ class TaskApplicationService:
             self._store_idempotency(conn, actor_user_id, scope, idempotency_key, request, result)
             self._audit(conn, actor_user_id, f"task.{trigger}", "task", task_id)
             conn.commit()
+            self._notify_dispatch_after_commit(result)
             return self._string_result(result)
 
     def _create_attempt_for_existing_task_in_transaction(
@@ -922,7 +1033,9 @@ class TaskApplicationService:
         snapshot_id = context_snapshot_id or task["project_context_snapshot_id"]
         if not isinstance(snapshot_id, str) or not snapshot_id:
             snapshot_id = self._context_service.ensure_task_snapshot_in_transaction(
-                conn, str(task["task_id"])
+                conn,
+                str(task["task_id"]),
+                _lifecycle_capability=task_context_lifecycle_capability(),
             )
         return self._create_attempt_in_transaction(
             conn,
@@ -950,7 +1063,11 @@ class TaskApplicationService:
 
         context_version_id = task["project_context_version_id"]
         if not isinstance(context_version_id, str) or not context_version_id:
-            self._context_service.ensure_task_snapshot_in_transaction(conn, str(task["task_id"]))
+            self._context_service.ensure_task_snapshot_in_transaction(
+                conn,
+                str(task["task_id"]),
+                _lifecycle_capability=task_context_lifecycle_capability(),
+            )
             refreshed = conn.execute(
                 "SELECT project_context_version_id FROM tasks WHERE task_id = ?",
                 (task["task_id"],),
@@ -1069,18 +1186,21 @@ class TaskApplicationService:
         attempt_id = f"attempt-{uuid4().hex}"
         dispatch_id = f"dispatch-{uuid4().hex}"
         now = _now()
+        runtime_config_fingerprint = self._runtime_config_fingerprint_in_transaction(conn, task_id)
         conn.execute(
             """INSERT INTO agent_task_attempts (
                    attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id,
+                   runtime_config_fingerprint,
                    authorization_environment_id, authorization_grant_version,
                    authorization_checked_at, created_at
-               ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?)""",
+               ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?)""",
             (
                 attempt_id,
                 task_id,
                 sequence,
                 trigger,
                 context_snapshot_id,
+                runtime_config_fingerprint,
                 authorization_environment_id,
                 authorization_grant_version,
                 now,
@@ -1195,29 +1315,76 @@ class TaskApplicationService:
         now: str,
     ) -> list[str]:
         rows = conn.execute(
-            """SELECT attempt_id FROM task_dispatch_outbox
+            """SELECT attempt_id, runtime_launch_key FROM task_dispatch_outbox
                WHERE task_id = ?
-                 AND (status = 'pending' OR (status = 'claimed' AND launch_state = 'none'))""",
+                 AND (
+                    status = 'pending'
+                    OR (status = 'claimed' AND launch_state IN ('none', 'starting'))
+                 )""",
             (task_id,),
         ).fetchall()
         attempt_ids = [str(row["attempt_id"]) for row in rows]
         if not attempt_ids:
             return []
         placeholders = ",".join("?" for _ in attempt_ids)
+        launch_keys = [
+            str(row["runtime_launch_key"])
+            for row in rows
+            if isinstance(row["runtime_launch_key"], str) and row["runtime_launch_key"]
+        ]
+        if launch_keys:
+            launch_placeholders = ",".join("?" for _ in launch_keys)
+            conn.execute(
+                f"""DELETE FROM agent_runtime_sessions
+                    WHERE launch_key IN ({launch_placeholders}) AND status = 'starting'""",
+                tuple(launch_keys),
+            )
         conn.execute(
             f"""UPDATE task_dispatch_outbox
                  SET status = 'cancelled', cancel_reason = ?, cancelled_at = ?, updated_at = ?
                  WHERE attempt_id IN ({placeholders})
-                   AND (status = 'pending' OR (status = 'claimed' AND launch_state = 'none'))""",
+                   AND (
+                        status = 'pending'
+                        OR (status = 'claimed' AND launch_state IN ('none', 'starting'))
+                   )""",
             (reason, now, now, *attempt_ids),
         )
         conn.execute(
             f"""UPDATE agent_task_attempts
                  SET status = 'cancelled', stop_reason = ?, finished_at = ?
-                 WHERE attempt_id IN ({placeholders}) AND status = 'queued'""",
+                 WHERE attempt_id IN ({placeholders}) AND status IN ('queued', 'starting')""",
             (reason, now, *attempt_ids),
         )
         return attempt_ids
+
+    @staticmethod
+    def _runtime_config_fingerprint_in_transaction(
+        conn: sqlite3.Connection,
+        task_id: str,
+    ) -> str:
+        """Freeze the runtime-facing Task configuration for one Attempt.
+
+        Context has its own immutable Snapshot pointer.  This fingerprint
+        covers the remaining engine admission inputs so an Attempt remains
+        explainable even if a later Task-level presentation setting changes.
+        """
+
+        task = conn.execute(
+            """SELECT researcher_type, harness_engine, environment_id,
+                      user_skills, user_mcp_servers
+               FROM tasks WHERE task_id = ?""",
+            (task_id,),
+        ).fetchone()
+        if task is None:
+            raise DomainNotFoundError(task_id)
+        payload = {
+            "researcher_type": str(task["researcher_type"]),
+            "harness_engine": str(task["harness_engine"]),
+            "environment_id": str(task["environment_id"]),
+            "user_skills": str(task["user_skills"] or "[]"),
+            "user_mcp_servers": str(task["user_mcp_servers"] or "[]"),
+        }
+        return _request_hash(payload)
 
     @staticmethod
     def _terminal_attempt_statuses() -> frozenset[str]:
@@ -1229,6 +1396,7 @@ class TaskApplicationService:
                 "stopped",
                 "stopped_by_project_archive",
                 "stopped_permission_revoked",
+                "stopped_runtime_unknown",
             }
         )
 
@@ -1304,12 +1472,35 @@ class TaskApplicationService:
         task = self._owned_task(conn, task_id, user)
         if task["archived_at"] is not None:
             raise DomainConflictError("Task is archived")
+        if self._has_pending_task_archive_in_transaction(conn, task_id):
+            raise DomainConflictError("Task archive is awaiting runtime cancellation")
         project = conn.execute(
             "SELECT status FROM projects WHERE project_id = ?", (task["project_id"],)
         ).fetchone()
         if project is None or project["status"] != "active":
             raise DomainConflictError("Project is archived")
         return task
+
+    @staticmethod
+    def _has_pending_task_archive_in_transaction(conn: sqlite3.Connection, task_id: str) -> bool:
+        """Whether a live Runtime must still confirm a Task archive request.
+
+        The archive marker intentionally lives in the durable control request
+        rather than a speculative ``tasks.archived_at`` update.  This keeps a
+        Task's archived projection truthful while an external engine may still
+        be producing output, and closes the retry/create race during that
+        cancellation window.
+        """
+
+        row = conn.execute(
+            """SELECT 1 FROM task_attempt_control_requests
+               WHERE task_id = ? AND action = 'cancel'
+                 AND payload_json = ?
+                 AND status IN ('requested', 'acknowledged')
+               LIMIT 1""",
+            (task_id, _canonical_json({"archive": True})),
+        ).fetchone()
+        return row is not None
 
     @staticmethod
     def _owned_task(conn: sqlite3.Connection, task_id: str, user: dict[str, object]) -> sqlite3.Row:
@@ -1337,6 +1528,24 @@ class TaskApplicationService:
     @staticmethod
     def _string_result(result: Mapping[str, object]) -> dict[str, str]:
         return {key: str(value) for key, value in result.items() if isinstance(value, str)}
+
+    def _notify_dispatch_after_commit(self, result: Mapping[str, object]) -> None:
+        """Best-effort wake the worker only after the outbox transaction commits.
+
+        A notification failure must never roll back or hide the durable Task,
+        Attempt, and outbox row.  The separate worker polls the same outbox,
+        so it recovers this condition after restart or the next bounded poll.
+        """
+
+        dispatch_id = result.get("dispatch_id")
+        if not isinstance(dispatch_id, str) or not dispatch_id:
+            return
+        try:
+            self._dispatch_notifier(dispatch_id)
+        except Exception:
+            _LOG.warning(
+                "domain dispatch wakeup failed for dispatch_id=%s", dispatch_id, exc_info=True
+            )
 
     @staticmethod
     def _object_result(result: Mapping[str, object]) -> dict[str, object]:
