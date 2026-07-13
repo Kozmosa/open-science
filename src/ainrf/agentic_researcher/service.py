@@ -18,6 +18,7 @@ from uuid import uuid4
 import structlog
 
 from ainrf.auth.service import AuthService
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceLease
 from ainrf.agentic_researcher.models import (
     AgenticResearcher,
     AgenticResearcherType,
@@ -191,6 +192,8 @@ class AgenticResearcherService:
         self._workspace_service = workspace_service
         self._engine_factory = engine_factory
         self._auth_service = auth_service
+        self._maintenance = DomainMaintenanceService(state_root)
+        self._maintenance_participant_id: str | None = None
         self._observability = observability_reporter or NullReporter()
         self._engines: dict[HarnessEngineType, HarnessEngine] = {}
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
@@ -206,6 +209,22 @@ class AgenticResearcherService:
         self._token_usage_lock = threading.Lock()
         # Serializes schedule/cancel access to _running_tasks.
         self._task_lock = threading.Lock()
+        self._task_execution_leases: dict[str, MaintenanceLease] = {}
+
+    def bind_maintenance_participant(self, participant_id: str) -> None:
+        """Associate legacy background execution with the API writer lease.
+
+        The legacy scheduler remains live in legacy/validate releases.  Its
+        background coroutine must keep the same durable participant in-flight
+        while it writes Task state after the originating HTTP request returns.
+        """
+
+        if not participant_id:
+            raise ValueError("participant_id is required")
+        with self._task_lock:
+            if self._task_execution_leases:
+                raise RuntimeError("cannot rebind maintenance participant while Tasks are running")
+            self._maintenance_participant_id = participant_id
 
     def initialize(self) -> None:
         if self._initialized:
@@ -386,15 +405,32 @@ class AgenticResearcherService:
                 loop = asyncio.get_running_loop()
             except RuntimeError as exc:
                 raise TaskOperationError("Task execution requires an active event loop") from exc
-            task = loop.create_task(self.run_task(task_id))
+            lease = self._task_execution_leases.get(task_id)
+            if lease is None:
+                lease = self._maintenance.begin_mutation(
+                    source=f"legacy-task-runner.schedule:{task_id}",
+                    participant_id=self._maintenance_participant_id,
+                )
+                self._task_execution_leases[task_id] = lease
+            try:
+                task = loop.create_task(self.run_task(task_id))
+            except Exception:
+                self._task_execution_leases.pop(task_id, None)
+                self._maintenance.finish_mutation(lease)
+                raise
             self._running_tasks[task_id] = task
             _LOG.info("task_scheduled", task_id=task_id)
             return task
 
     async def run_task(self, task_id: str) -> None:
-        task = self.get_task(task_id)
-        if task.status != TaskStatus.QUEUED:
-            raise TaskOperationError(f"Cannot run task with status: {task.status}")
+        lease = self._ensure_task_execution_lease(task_id)
+        try:
+            task = self.get_task(task_id)
+            if task.status != TaskStatus.QUEUED:
+                raise TaskOperationError(f"Cannot run task with status: {task.status}")
+        except Exception:
+            self._release_task_execution_lease(task_id, lease)
+            raise
 
         # Bind task_id to structlog context so all downstream log entries
         # (SSH executor, DB queries, etc.) carry the correlation key.
@@ -416,6 +452,7 @@ class AgenticResearcherService:
             input={"prompt": task.prompt},
         )
 
+        watchdog_task: asyncio.Task[None] | None = None
         try:
             _LOG.info(
                 "task_starting",
@@ -429,7 +466,6 @@ class AgenticResearcherService:
                 context.engine_inactivity_timeout_seconds
                 or _DEFAULT_ENGINE_INACTIVITY_TIMEOUT_SECONDS
             )
-            watchdog_task: asyncio.Task[None] | None = None
             if timeout_seconds > 0:
                 watchdog_task = asyncio.create_task(
                     self._task_watchdog(task_id, engine, timeout_seconds)
@@ -523,10 +559,33 @@ class AgenticResearcherService:
                     await watchdog_task
             with self._task_lock:
                 self._running_tasks.pop(task_id, None)
+            self._release_task_execution_lease(task_id, lease)
             from ainrf.api.routes.sla_metrics import cleanup_task_state
 
             cleanup_task_state(task_id)
             structlog.contextvars.unbind_contextvars("task_id")
+
+    def _ensure_task_execution_lease(self, task_id: str) -> MaintenanceLease:
+        """Hold a durable mutation lease for a legacy runtime's full lifetime."""
+
+        with self._task_lock:
+            existing = self._task_execution_leases.get(task_id)
+            if existing is not None:
+                return existing
+            lease = self._maintenance.begin_mutation(
+                source=f"legacy-task-runner.run:{task_id}",
+                participant_id=self._maintenance_participant_id,
+            )
+            self._task_execution_leases[task_id] = lease
+            return lease
+
+    def _release_task_execution_lease(self, task_id: str, lease: MaintenanceLease) -> None:
+        with self._task_lock:
+            current = self._task_execution_leases.get(task_id)
+            if current != lease:
+                return
+            self._task_execution_leases.pop(task_id, None)
+        self._maintenance.finish_mutation(lease)
 
     async def _task_watchdog(
         self,

@@ -16,6 +16,7 @@ from ainrf.agentic_researcher import (
     vanilla,
 )
 from ainrf.agentic_researcher.service import TaskNotFoundError
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 from tests.testutil import FakeEngine
 
 pytestmark = [pytest.mark.unit]
@@ -165,6 +166,25 @@ async def test_run_task_persists_output_and_succeeds(tmp_path: Path) -> None:
         '{"event_type": "status", "payload": {"status": "succeeded", "exit_code": 0}, "token_usage": null}',
     ]
     assert completed.latest_output_seq == 3
+    assert DomainMaintenanceService(tmp_path).status().in_flight_mutations == 0
+
+
+@pytest.mark.anyio
+async def test_legacy_scheduler_refuses_new_work_during_maintenance(tmp_path: Path) -> None:
+    svc = AgenticResearcherService(state_root=tmp_path, engine_factory=lambda _name: FakeEngine())
+    svc.initialize()
+    task = svc.create_task(
+        project_id="proj-001",
+        workspace_id="ws-001",
+        environment_id="env-001",
+        researcher=vanilla(engine=HarnessEngineType.CLAUDE_CODE),
+        prompt="Maintenance boundary",
+        owner_user_id="user-001",
+    )
+    DomainMaintenanceService(tmp_path).enter(actor_id="operator", reason="cutover")
+
+    with pytest.raises(MaintenanceModeError, match="paused for maintenance"):
+        svc.schedule_task(task.task_id)
 
 
 @pytest.mark.anyio

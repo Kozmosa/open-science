@@ -15,16 +15,20 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
+import socket
 import sqlite3
+import subprocess
 import tarfile
 import tempfile
+import time
 from collections.abc import Callable, Sequence
 from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import IO
+from typing import IO, cast
 from uuid import uuid4
 
 _LOG = logging.getLogger(__name__)
@@ -70,6 +74,16 @@ _STATE_DIRS: tuple[str, ...] = (
 _RESERVED_STATE_ROOTS = frozenset({"runtime", "workspaces", "tenants"})
 _ARCHIVE_RESERVED_ROOTS = frozenset({"databases", "config", "workspaces", "tenants"})
 
+# SQLite's online backup API gives a transactional snapshot while writers are
+# active.  A read-only mount can still reject that direct path when SQLite
+# needs WAL shared-memory bookkeeping, so the fallback takes a stable raw
+# copy in private writable storage.  Neither path is allowed to wait forever:
+# callers get a hard failure instead of an archive with an unverifiable source
+# race.
+_SQLITE_SNAPSHOT_DEADLINE_SECONDS = 5.0
+_SQLITE_SNAPSHOT_RETRY_INTERVAL_SECONDS = 0.025
+_SQLITE_SNAPSHOT_PAGE_COUNT = 128
+
 
 # ── helpers ───────────────────────────────────────────────────────
 
@@ -93,38 +107,52 @@ def _sha256_stream(stream: IO[bytes]) -> str:
     return h.hexdigest()
 
 
+class _SQLiteSnapshotDeadlineExceeded(TimeoutError):
+    """The source never yielded a bounded, trustworthy SQLite snapshot."""
+
+
 def _dump_sqlite_safe(source: Path, dest: Path) -> None:
     """Create a consistent snapshot without writing to the source volume.
 
-    A SQLite database in WAL mode may need to create or update its ``-shm``
-    sidecar even when callers ask for ``mode=ro``.  That makes a direct backup
-    from a Docker read-only volume fail despite the database being healthy.
-    Copy the main file and all SQLite sidecars into a private writable staging
-    directory first, then use SQLite's backup API there.  Hashing the complete
-    source member set before and after the copy rejects a concurrently changing
-    source instead of quietly emitting an incoherent archive.
+    Prefer SQLite's online backup API against a ``mode=ro`` source.  It holds
+    a real SQLite read snapshot and is consequently safe while a WAL writer is
+    active; source-byte fingerprints are neither needed nor meaningful for
+    that transactionally consistent path.  Some read-only mounts cannot open
+    WAL shared memory directly, so only that failed direct attempt falls back
+    to a private staged copy.  The fallback retries until its complete main /
+    WAL / rollback-journal member set is stable, then fails closed at the
+    shared deadline rather than archiving a raced raw copy.
     """
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    source_members = _sqlite_source_members(source)
-    before = _sqlite_source_fingerprint(source_members)
-    snapshot_root = dest.parent / f".{dest.name}.source-{uuid4().hex}"
-    src: sqlite3.Connection | None = None
-    dst: sqlite3.Connection | None = None
+    deadline = time.monotonic() + _SQLITE_SNAPSHOT_DEADLINE_SECONDS
+    direct_error: Exception | None = None
     try:
-        snapshot_root.mkdir()
-        for member in source_members:
-            shutil.copyfile(member, snapshot_root / member.name)
-        if before != _sqlite_source_fingerprint(_sqlite_source_members(source)):
-            raise ValueError(f"SQLite source changed while being copied: {source.name}")
+        _dump_sqlite_online(source, dest, deadline=deadline)
+    except (OSError, sqlite3.Error, _SQLiteSnapshotDeadlineExceeded) as exc:
+        # ``mode=ro`` is intentionally strict: if SQLite cannot use the
+        # source's WAL shared-memory state without a write, take the existing
+        # copy-based route instead.  The fallback retains the same deadline,
+        # so a lock storm never turns into an unbounded backup operation.
+        direct_error = exc
+        _remove_sqlite_sidecars(dest)
+        dest.unlink(missing_ok=True)
+        _LOG.debug(
+            "direct SQLite snapshot unavailable for %s; trying stable staged copy (%s)",
+            source.name,
+            type(exc).__name__,
+        )
 
-        # The staged copy can safely perform WAL recovery/checkpoint work.  It
-        # is still query-only at the SQL layer, and the original source mount
-        # remains untouched throughout this operation.
-        src = sqlite3.connect(str(snapshot_root / source.name))
-        src.execute("PRAGMA query_only = ON")
-        dst = sqlite3.connect(str(dest))
-        src.backup(dst)
+    if direct_error is None:
+        _remove_sqlite_sidecars(dest)
+        return
+
+    try:
+        _dump_sqlite_staged_with_retry(source, dest, deadline=deadline)
+    except _SQLiteSnapshotDeadlineExceeded as exc:
+        raise ValueError(
+            f"SQLite source did not stabilize before snapshot deadline: {source.name}"
+        ) from exc
     except (OSError, sqlite3.Error) as exc:
         # A runtime filename alone is safe operator context; avoid leaking an
         # absolute state-root path while making an invalid ``*.sqlite3``
@@ -133,29 +161,141 @@ def _dump_sqlite_safe(source: Path, dest: Path) -> None:
             f"Cannot create a read-only SQLite snapshot for {source.name}: {type(exc).__name__}"
         ) from exc
     finally:
-        if dst is not None:
-            dst.close()
-        if src is not None:
-            src.close()
-        shutil.rmtree(snapshot_root, ignore_errors=True)
-    # A point-in-time SQLite backup is a single main database file.  Some
-    # connection configurations leave transient sidecars beside the staged
-    # destination; they must never become independent archive members.
+        _remove_sqlite_sidecars(dest)
+
+
+def _dump_sqlite_online(source: Path, dest: Path, *, deadline: float) -> None:
+    """Use SQLite's read-only online-backup API and atomically publish it."""
+
+    _raise_if_sqlite_snapshot_expired(deadline)
+    candidate = _sqlite_snapshot_candidate(dest)
+    source_conn: sqlite3.Connection | None = None
+    destination_conn: sqlite3.Connection | None = None
+    try:
+        source_uri = f"{source.resolve().as_uri()}?mode=ro"
+        source_conn = sqlite3.connect(source_uri, uri=True, timeout=_sqlite_timeout(deadline))
+        source_conn.execute("PRAGMA query_only = ON")
+        destination_conn = sqlite3.connect(candidate)
+        _backup_sqlite_connection(source_conn, destination_conn, deadline=deadline)
+        destination_conn.close()
+        destination_conn = None
+        source_conn.close()
+        source_conn = None
+        os.replace(candidate, dest)
+    finally:
+        if destination_conn is not None:
+            destination_conn.close()
+        if source_conn is not None:
+            source_conn.close()
+        candidate.unlink(missing_ok=True)
+
+
+def _dump_sqlite_staged_with_retry(source: Path, dest: Path, *, deadline: float) -> None:
+    """Create a snapshot from a complete raw-copy observation that stayed stable."""
+
+    while True:
+        _raise_if_sqlite_snapshot_expired(deadline)
+        snapshot_root = dest.parent / f".{dest.name}.source-{uuid4().hex}"
+        candidate = _sqlite_snapshot_candidate(dest)
+        source_conn: sqlite3.Connection | None = None
+        destination_conn: sqlite3.Connection | None = None
+        try:
+            source_members = _sqlite_source_members(source)
+            before = _sqlite_source_fingerprint(source_members)
+            snapshot_root.mkdir()
+            for member in source_members:
+                _raise_if_sqlite_snapshot_expired(deadline)
+                shutil.copyfile(member, snapshot_root / member.name)
+            if before != _sqlite_source_fingerprint(_sqlite_source_members(source)):
+                _wait_for_sqlite_snapshot_retry(deadline)
+                continue
+
+            # The staged copy can safely perform WAL recovery/checkpoint work.
+            # It is query-only at the SQL layer, and the original source mount
+            # remains untouched throughout this operation.
+            source_conn = sqlite3.connect(snapshot_root / source.name)
+            source_conn.execute("PRAGMA query_only = ON")
+            destination_conn = sqlite3.connect(candidate)
+            _backup_sqlite_connection(source_conn, destination_conn, deadline=deadline)
+            destination_conn.close()
+            destination_conn = None
+            source_conn.close()
+            source_conn = None
+            os.replace(candidate, dest)
+            return
+        finally:
+            if destination_conn is not None:
+                destination_conn.close()
+            if source_conn is not None:
+                source_conn.close()
+            candidate.unlink(missing_ok=True)
+            shutil.rmtree(snapshot_root, ignore_errors=True)
+
+
+def _sqlite_snapshot_candidate(dest: Path) -> Path:
+    """Return a private destination that is atomically promoted on success."""
+
+    return dest.parent / f".{dest.name}.snapshot-{uuid4().hex}"
+
+
+def _backup_sqlite_connection(
+    source_conn: sqlite3.Connection,
+    destination_conn: sqlite3.Connection,
+    *,
+    deadline: float,
+) -> None:
+    """Copy a fixed SQLite read transaction without exceeding *deadline*."""
+
+    def progress(_status: int, _remaining: int, _total: int) -> None:
+        _raise_if_sqlite_snapshot_expired(deadline)
+
+    source_conn.backup(
+        destination_conn,
+        pages=_SQLITE_SNAPSHOT_PAGE_COUNT,
+        progress=progress,
+        sleep=min(_SQLITE_SNAPSHOT_RETRY_INTERVAL_SECONDS, _sqlite_timeout(deadline)),
+    )
+    _raise_if_sqlite_snapshot_expired(deadline)
+
+
+def _raise_if_sqlite_snapshot_expired(deadline: float) -> None:
+    if time.monotonic() >= deadline:
+        raise _SQLiteSnapshotDeadlineExceeded()
+
+
+def _sqlite_timeout(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _SQLiteSnapshotDeadlineExceeded()
+    return min(1.0, remaining)
+
+
+def _wait_for_sqlite_snapshot_retry(deadline: float) -> None:
+    _raise_if_sqlite_snapshot_expired(deadline)
+    time.sleep(min(_SQLITE_SNAPSHOT_RETRY_INTERVAL_SECONDS, _sqlite_timeout(deadline)))
+
+
+def _remove_sqlite_sidecars(path: Path) -> None:
+    """Ensure the staged archive contains one logical SQLite member only."""
+
     for suffix in ("-wal", "-shm", "-journal"):
-        dest.with_name(f"{dest.name}{suffix}").unlink(missing_ok=True)
+        path.with_name(f"{path.name}{suffix}").unlink(missing_ok=True)
 
 
 def _sqlite_source_members(source: Path) -> tuple[Path, ...]:
-    """Return the source database and every current SQLite sidecar."""
+    """Return database bytes that must be copied atomically for a raw fallback.
+
+    SQLite's ``-shm`` file is a disposable shared-memory index/lock file, not
+    persistent database state.  Deliberately omit it: copying it turns normal
+    reader/writer lock churn into a false source race, while the writable
+    private staging directory can safely rebuild it from main + WAL.
+    """
 
     members = tuple(
         path
         for path in (
             source,
-            *(
-                source.with_name(f"{source.name}{suffix}")
-                for suffix in ("-wal", "-shm", "-journal")
-            ),
+            *(source.with_name(f"{source.name}{suffix}") for suffix in ("-wal", "-journal")),
         )
         if path.is_file()
     )
@@ -229,6 +369,812 @@ class BackupManifest:
 
 StagedRestoreValidator = Callable[[Path, BackupManifest], None]
 """A read/validate hook invoked before a staged restore is promoted."""
+
+
+_RESTORE_PROMOTION_JOURNAL_VERSION = 1
+_RESTORE_GENERATION_ATTESTATION_VERSION = 1
+_RESTORE_GENERATION_ATTESTATION_NAME = ".openscience-restore-generation.json"
+_ACTIVE_GENERATION_PROMOTION_JOURNAL_VERSION = 1
+_HIGH_RISK_RESTORE_REPORT_VERSION = 1
+_HIGH_RISK_RESTORE_REPORT_NAME = ".openscience-restore-high-risk-report.json"
+_HIGH_RISK_REPORT_PATH_LIMIT = 256
+_HIGH_RISK_REPORT_GIT_REPOSITORY_LIMIT = 32
+_HIGH_RISK_REPORT_GIT_PATH_LIMIT = 128
+_ACTIVE_GENERATION_OPERATION_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
+
+
+@dataclass(frozen=True, slots=True)
+class RestoreGenerationAttestation:
+    """Evidence that a state root was created by the verified restore path."""
+
+    generation_id: str
+    manifest_digest: str
+    restored_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveGenerationPromotion:
+    """Result of atomically selecting an already-verified state generation."""
+
+    active_pointer: Path
+    generation_root: Path
+    previous_generation_root: Path | None
+    operation_id: str | None
+    recovered: bool = False
+
+
+def _manifest_digest(manifest: BackupManifest) -> str:
+    """Return the stable journal binding for one already-verified archive."""
+
+    encoded = json.dumps(asdict(manifest), ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _fsync_directory(path: Path) -> None:
+    """Durably publish a directory entry update before continuing promotion."""
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _write_promotion_journal(
+    journal_path: Path,
+    payload: dict[str, object],
+    *,
+    exclusive: bool = False,
+) -> None:
+    """Persist one promotion journal revision before the next rename.
+
+    The initial revision uses ``O_EXCL`` so two restore attempts cannot replace
+    each other's safety record.  Later revisions use a fsynced sibling file
+    and ``os.replace``; a crash can leave either complete revision, both of
+    which the recovery path understands.
+    """
+
+    encoded = (json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n").encode("utf-8")
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+    if exclusive:
+        descriptor = os.open(journal_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            _write_all(descriptor, encoded)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        _fsync_directory(journal_path.parent)
+        return
+
+    temporary = journal_path.parent / f".{journal_path.name}.{uuid4().hex}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        _write_all(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        os.replace(temporary, journal_path)
+        _fsync_directory(journal_path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _write_all(descriptor: int, content: bytes) -> None:
+    """Write every byte to a low-level journal descriptor."""
+
+    offset = 0
+    while offset < len(content):
+        written = os.write(descriptor, content[offset:])
+        if written <= 0:
+            raise OSError("could not write restore promotion journal")
+        offset += written
+
+
+def _remove_promotion_journal(journal_path: Path) -> None:
+    journal_path.unlink(missing_ok=True)
+    if journal_path.parent.is_dir():
+        _fsync_directory(journal_path.parent)
+
+
+def _journal_pair_paths(payload: dict[str, object]) -> tuple[tuple[Path, Path], ...]:
+    """Parse only safe sibling candidate/target pairs from durable JSON."""
+
+    pairs = payload.get("pairs")
+    if not isinstance(pairs, list) or not pairs:
+        raise ValueError("restore promotion journal has no candidate/target pairs")
+    parsed: list[tuple[Path, Path]] = []
+    for entry in pairs:
+        if not isinstance(entry, dict):
+            raise ValueError("restore promotion journal has an invalid pair")
+        pair = cast(dict[str, object], entry)
+        raw_candidate = pair.get("candidate")
+        raw_target = pair.get("target")
+        if not isinstance(raw_candidate, str) or not isinstance(raw_target, str):
+            raise ValueError("restore promotion journal pair paths are invalid")
+        candidate = Path(raw_candidate)
+        target = Path(raw_target)
+        if (
+            not candidate.is_absolute()
+            or not target.is_absolute()
+            or candidate.parent != target.parent
+            or not candidate.name.startswith(f".{target.name}.restore-")
+        ):
+            raise ValueError("restore promotion journal pair is outside its staged sibling root")
+        parsed.append((candidate, target))
+    return tuple(parsed)
+
+
+def _journal_process_is_alive(payload: dict[str, object]) -> bool:
+    """Avoid rolling back a promotion that is still executing on this host."""
+
+    hostname = payload.get("hostname")
+    process_id = payload.get("process_id")
+    if not isinstance(hostname, str) or hostname != socket.gethostname():
+        # A journal from another host cannot be distinguished from a live
+        # network-volume promotion, so recovery must fail closed.
+        return True
+    if not isinstance(process_id, int) or isinstance(process_id, bool) or process_id <= 0:
+        return True
+    try:
+        os.kill(process_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _recover_pending_restore_promotion(
+    journal_path: Path,
+    *,
+    expected_manifest_digest: str,
+) -> str | None:
+    """Recover a crashed staged-root promotion without touching active state.
+
+    ``"completed"`` means every candidate had already been atomically renamed
+    before the process died, so the verified generation remains published and
+    only the stale journal is removed.  ``"rolled_back"`` moves any partially
+    published roots back to their private candidates and removes them.  Any
+    malformed or ambiguous state is left intact and fails closed.
+    """
+
+    if not journal_path.exists():
+        return None
+    try:
+        payload = json.loads(journal_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            "restore promotion journal is unreadable; manual recovery is required"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("restore promotion journal is invalid; manual recovery is required")
+    if payload.get("version") != _RESTORE_PROMOTION_JOURNAL_VERSION:
+        raise ValueError(
+            "restore promotion journal version is unsupported; manual recovery is required"
+        )
+    if payload.get("manifest_digest") != expected_manifest_digest:
+        raise ValueError("restore promotion journal archive does not match this restore request")
+    if _journal_process_is_alive(payload):
+        raise ValueError("restore promotion is already in progress; refusing concurrent recovery")
+    pairs = _journal_pair_paths(payload)
+
+    moved: list[tuple[Path, Path]] = []
+    staged: list[tuple[Path, Path]] = []
+    for candidate, target in pairs:
+        candidate_exists = candidate.exists()
+        target_exists = target.exists()
+        if candidate_exists and not target_exists:
+            staged.append((candidate, target))
+        elif target_exists and not candidate_exists:
+            moved.append((candidate, target))
+        else:
+            raise ValueError("restore promotion state is ambiguous; manual recovery is required")
+
+    if len(moved) == len(pairs):
+        _remove_promotion_journal(journal_path)
+        return "completed"
+
+    for candidate, target in reversed(moved):
+        os.replace(target, candidate)
+        _fsync_directory(target.parent)
+    for candidate, _target in pairs:
+        if candidate.exists():
+            shutil.rmtree(candidate, ignore_errors=True)
+    _remove_promotion_journal(journal_path)
+    return "rolled_back"
+
+
+def _write_restore_generation_attestation(
+    generation_root: Path,
+    manifest: BackupManifest,
+) -> RestoreGenerationAttestation:
+    """Seal a restored root after all archive and domain checks have passed.
+
+    The attestation is deliberately written only after reconciliation and all
+    caller validators succeeded.  Selecting a generation through the active
+    pointer controller therefore cannot accidentally expose an arbitrary
+    directory that merely happens to look like an OpenScience state root.
+    """
+
+    attestation = RestoreGenerationAttestation(
+        generation_id=uuid4().hex,
+        manifest_digest=_manifest_digest(manifest),
+        restored_at=datetime.now(timezone.utc).isoformat(),
+    )
+    payload = {
+        "version": _RESTORE_GENERATION_ATTESTATION_VERSION,
+        "generation_id": attestation.generation_id,
+        "manifest_digest": attestation.manifest_digest,
+        "restored_at": attestation.restored_at,
+    }
+    marker_path = generation_root / _RESTORE_GENERATION_ATTESTATION_NAME
+    temporary = generation_root / f".{marker_path.name}.{uuid4().hex}.tmp"
+    encoded = (json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n").encode("utf-8")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        _write_all(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        os.replace(temporary, marker_path)
+        _fsync_directory(generation_root)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return attestation
+
+
+def _read_restore_generation_attestation(generation_root: Path) -> RestoreGenerationAttestation:
+    """Read the narrow, durable evidence required for active promotion."""
+
+    marker_path = generation_root / _RESTORE_GENERATION_ATTESTATION_NAME
+    try:
+        payload = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            "state generation is not a verified restore or its attestation is unreadable"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("state generation attestation is invalid")
+    if payload.get("version") != _RESTORE_GENERATION_ATTESTATION_VERSION:
+        raise ValueError("state generation attestation version is unsupported")
+    generation_id = payload.get("generation_id")
+    manifest_digest = payload.get("manifest_digest")
+    restored_at = payload.get("restored_at")
+    if (
+        not isinstance(generation_id, str)
+        or not generation_id
+        or not isinstance(manifest_digest, str)
+        or len(manifest_digest) != 64
+        or any(character not in "0123456789abcdef" for character in manifest_digest)
+        or not isinstance(restored_at, str)
+        or not restored_at
+    ):
+        raise ValueError("state generation attestation is incomplete")
+    return RestoreGenerationAttestation(
+        generation_id=generation_id,
+        manifest_digest=manifest_digest,
+        restored_at=restored_at,
+    )
+
+
+def _absolute_lexical_path(path: Path) -> Path:
+    """Canonicalize a pointer parent without resolving the pointer itself.
+
+    The final component is intentionally left lexical: resolving it would
+    dereference the active symlink that this controller must replace.  Its
+    parent is canonicalized, however, so a journal written through a symlinked
+    directory or a ``..`` spelling is recoverable through every equivalent
+    spelling of the same pointer path.
+    """
+
+    raw = Path(os.path.abspath(os.fspath(path)))
+    if not raw.name:
+        raise ValueError("active generation pointer must name a symlink")
+    return raw.parent.resolve(strict=False) / raw.name
+
+
+def _active_generation_promotion_journal_path(active_pointer: Path) -> Path:
+    pointer = _absolute_lexical_path(active_pointer)
+    return pointer.parent / f".{pointer.name}.active-generation-promotion.json"
+
+
+def _read_active_generation_pointer(active_pointer: Path) -> Path | None:
+    """Return the current state generation, rejecting non-pointer targets."""
+
+    pointer = _absolute_lexical_path(active_pointer)
+    if pointer.is_symlink():
+        target = (pointer.parent / os.readlink(pointer)).resolve()
+        if not target.is_dir():
+            raise ValueError(
+                "active generation pointer is dangling or does not reference a directory"
+            )
+        return target
+    if pointer.exists():
+        raise ValueError(
+            "active generation path must be a symlink, never a directory or regular file"
+        )
+    return None
+
+
+def _validated_active_generation_operation_id(value: object) -> str:
+    """Accept only a single safe journal operation identifier."""
+
+    if not isinstance(value, str) or not _ACTIVE_GENERATION_OPERATION_ID_PATTERN.fullmatch(value):
+        raise ValueError("active generation promotion journal has an invalid operation id")
+    return value
+
+
+def _active_generation_promotion_payload(
+    *,
+    active_pointer: Path,
+    generation_root: Path,
+    previous_generation_root: Path | None,
+    attestation: RestoreGenerationAttestation,
+    operation_id: str,
+) -> dict[str, object]:
+    pointer = _absolute_lexical_path(active_pointer)
+    safe_operation_id = _validated_active_generation_operation_id(operation_id)
+    temporary_pointer = pointer.parent / (
+        f".{pointer.name}.active-generation-{safe_operation_id}.tmp"
+    )
+    return {
+        "version": _ACTIVE_GENERATION_PROMOTION_JOURNAL_VERSION,
+        "operation_id": safe_operation_id,
+        "hostname": socket.gethostname(),
+        "process_id": os.getpid(),
+        "active_pointer": str(pointer),
+        "temporary_pointer": str(temporary_pointer),
+        "generation_root": str(generation_root),
+        "previous_generation_root": (
+            str(previous_generation_root) if previous_generation_root is not None else None
+        ),
+        "manifest_digest": attestation.manifest_digest,
+        "generation_id": attestation.generation_id,
+        "intent": "promote",
+        "phase": "prepared",
+        "created_at": _ts(),
+    }
+
+
+def _active_generation_journal_paths(
+    payload: dict[str, object],
+    *,
+    active_pointer: Path,
+) -> tuple[Path, Path, Path | None]:
+    """Parse journal paths only when they remain local to the pointer root."""
+
+    pointer = _absolute_lexical_path(active_pointer)
+    operation_id = _validated_active_generation_operation_id(payload.get("operation_id"))
+    raw_pointer = payload.get("active_pointer")
+    raw_temporary = payload.get("temporary_pointer")
+    raw_generation = payload.get("generation_root")
+    raw_previous = payload.get("previous_generation_root")
+    if (
+        raw_pointer != str(pointer)
+        or not isinstance(raw_temporary, str)
+        or not isinstance(raw_generation, str)
+        or (raw_previous is not None and not isinstance(raw_previous, str))
+    ):
+        raise ValueError("active generation promotion journal paths are invalid")
+    temporary_pointer = Path(raw_temporary)
+    generation_root = Path(raw_generation)
+    previous_generation_root = Path(raw_previous) if raw_previous is not None else None
+    expected_temporary = pointer.parent / (f".{pointer.name}.active-generation-{operation_id}.tmp")
+    if (
+        not temporary_pointer.is_absolute()
+        or temporary_pointer != expected_temporary
+        or not generation_root.is_absolute()
+        or (previous_generation_root is not None and not previous_generation_root.is_absolute())
+    ):
+        raise ValueError("active generation promotion journal escapes its pointer root")
+    return temporary_pointer, generation_root, previous_generation_root
+
+
+def _remove_generation_pointer_candidate(
+    temporary_pointer: Path,
+    *,
+    generation_root: Path,
+) -> None:
+    """Remove only the private symlink that this promotion created."""
+
+    if not temporary_pointer.exists() and not temporary_pointer.is_symlink():
+        return
+    if not temporary_pointer.is_symlink():
+        raise ValueError("active generation promotion temporary path is not a symlink")
+    target = (temporary_pointer.parent / os.readlink(temporary_pointer)).resolve()
+    if target != generation_root:
+        raise ValueError("active generation promotion temporary pointer changed unexpectedly")
+    temporary_pointer.unlink()
+    _fsync_directory(temporary_pointer.parent)
+
+
+def _read_active_generation_promotion_journal(
+    journal_path: Path,
+    *,
+    active_pointer: Path,
+) -> tuple[dict[str, object], Path, Path, Path | None]:
+    try:
+        payload = json.loads(journal_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            "active generation promotion journal is unreadable; manual recovery is required"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError(
+            "active generation promotion journal is invalid; manual recovery is required"
+        )
+    if payload.get("version") != _ACTIVE_GENERATION_PROMOTION_JOURNAL_VERSION:
+        raise ValueError(
+            "active generation promotion journal version is unsupported; manual recovery is required"
+        )
+    if _journal_process_is_alive(payload):
+        raise ValueError(
+            "active generation promotion is already in progress; refusing concurrent recovery"
+        )
+    temporary_pointer, generation_root, previous_generation_root = _active_generation_journal_paths(
+        payload,
+        active_pointer=active_pointer,
+    )
+    if not generation_root.is_dir():
+        raise ValueError(
+            "active generation promotion target no longer exists; manual recovery is required"
+        )
+    if previous_generation_root is not None and not previous_generation_root.is_dir():
+        raise ValueError(
+            "active generation promotion previous target no longer exists; manual recovery is required"
+        )
+    attestation = _read_restore_generation_attestation(generation_root)
+    if (
+        payload.get("manifest_digest") != attestation.manifest_digest
+        or payload.get("generation_id") != attestation.generation_id
+    ):
+        raise ValueError("active generation promotion attestation does not match its journal")
+    return payload, temporary_pointer, generation_root, previous_generation_root
+
+
+def _pointer_matches_generation(
+    active_pointer: Path,
+    generation_root: Path | None,
+) -> bool:
+    current = _read_active_generation_pointer(active_pointer)
+    return current == generation_root
+
+
+def _optional_journal_operation_id(payload: dict[str, object]) -> str | None:
+    return _validated_active_generation_operation_id(payload.get("operation_id"))
+
+
+def _restore_active_generation_pointer(
+    active_pointer: Path,
+    *,
+    previous_generation_root: Path | None,
+    operation_id: str,
+) -> None:
+    """Atomically restore the previous selection while a journal remains live."""
+
+    pointer = _absolute_lexical_path(active_pointer)
+    safe_operation_id = _validated_active_generation_operation_id(operation_id)
+    if previous_generation_root is None:
+        if pointer.is_symlink():
+            pointer.unlink()
+            _fsync_directory(pointer.parent)
+        return
+    if not previous_generation_root.is_dir():
+        raise ValueError("active generation rollback target no longer exists")
+    rollback_pointer = pointer.parent / (
+        f".{pointer.name}.active-generation-rollback-{safe_operation_id}.tmp"
+    )
+    if rollback_pointer.exists() or rollback_pointer.is_symlink():
+        raise ValueError("active generation rollback temporary pointer already exists")
+    os.symlink(str(previous_generation_root), rollback_pointer)
+    _fsync_directory(pointer.parent)
+    try:
+        os.replace(rollback_pointer, pointer)
+        _fsync_directory(pointer.parent)
+    finally:
+        rollback_pointer.unlink(missing_ok=True)
+
+
+def _rollback_active_generation_promotion(
+    journal_path: Path,
+    payload: dict[str, object],
+    *,
+    active_pointer: Path,
+    temporary_pointer: Path,
+    generation_root: Path,
+    previous_generation_root: Path | None,
+) -> None:
+    """Return to the old pointer before reporting a synchronous failure."""
+
+    payload["intent"] = "rollback"
+    payload["phase"] = "rolling_back"
+    _write_promotion_journal(journal_path, payload)
+    if _pointer_matches_generation(active_pointer, generation_root):
+        operation_id = _validated_active_generation_operation_id(payload.get("operation_id"))
+        _restore_active_generation_pointer(
+            active_pointer,
+            previous_generation_root=previous_generation_root,
+            operation_id=operation_id,
+        )
+    elif not _pointer_matches_generation(active_pointer, previous_generation_root):
+        raise ValueError("active generation pointer changed unexpectedly during rollback")
+    _remove_generation_pointer_candidate(temporary_pointer, generation_root=generation_root)
+    payload["phase"] = "rolled_back"
+    _write_promotion_journal(journal_path, payload)
+    _remove_promotion_journal(journal_path)
+
+
+def recover_active_generation_promotion(active_pointer: Path) -> ActiveGenerationPromotion | None:
+    """Finish or roll back a stale atomic active-generation pointer switch.
+
+    A promotion only changes one symlink, so the old generation directory is
+    never renamed or deleted.  The journal distinguishes a completed pointer
+    replacement from a pre-replacement temporary link, and preserves a
+    deliberate rollback intent if a synchronous promotion error occurred.
+    """
+
+    pointer = _absolute_lexical_path(active_pointer)
+    journal_path = _active_generation_promotion_journal_path(pointer)
+    if not journal_path.exists():
+        return None
+    payload, temporary_pointer, generation_root, previous_generation_root = (
+        _read_active_generation_promotion_journal(journal_path, active_pointer=pointer)
+    )
+    intent = payload.get("intent")
+    if intent not in {"promote", "rollback"}:
+        raise ValueError("active generation promotion journal has an invalid intent")
+
+    if intent == "rollback":
+        if _pointer_matches_generation(pointer, generation_root):
+            operation_id = _validated_active_generation_operation_id(payload.get("operation_id"))
+            _restore_active_generation_pointer(
+                pointer,
+                previous_generation_root=previous_generation_root,
+                operation_id=operation_id,
+            )
+        elif not _pointer_matches_generation(pointer, previous_generation_root):
+            raise ValueError(
+                "active generation pointer changed unexpectedly; manual recovery is required"
+            )
+        _remove_generation_pointer_candidate(temporary_pointer, generation_root=generation_root)
+        _remove_promotion_journal(journal_path)
+        return ActiveGenerationPromotion(
+            active_pointer=pointer,
+            generation_root=previous_generation_root or generation_root,
+            previous_generation_root=previous_generation_root,
+            operation_id=_optional_journal_operation_id(payload),
+            recovered=True,
+        )
+
+    if _pointer_matches_generation(pointer, generation_root):
+        _remove_generation_pointer_candidate(temporary_pointer, generation_root=generation_root)
+        _remove_promotion_journal(journal_path)
+        return ActiveGenerationPromotion(
+            active_pointer=pointer,
+            generation_root=generation_root,
+            previous_generation_root=previous_generation_root,
+            operation_id=_optional_journal_operation_id(payload),
+            recovered=True,
+        )
+    if not _pointer_matches_generation(pointer, previous_generation_root):
+        raise ValueError(
+            "active generation pointer changed unexpectedly; manual recovery is required"
+        )
+    _remove_generation_pointer_candidate(temporary_pointer, generation_root=generation_root)
+    _remove_promotion_journal(journal_path)
+    return ActiveGenerationPromotion(
+        active_pointer=pointer,
+        generation_root=previous_generation_root or generation_root,
+        previous_generation_root=previous_generation_root,
+        operation_id=_optional_journal_operation_id(payload),
+        recovered=True,
+    )
+
+
+def _bounded_regular_file_paths(root: Path) -> tuple[int, list[str]]:
+    """Inventory a high-risk restore tree without exporting private roots."""
+
+    count = 0
+    paths: list[str] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        count += 1
+        if len(paths) < _HIGH_RISK_REPORT_PATH_LIMIT:
+            paths.append(path.relative_to(root).as_posix())
+    return count, paths
+
+
+def _git_restore_report(root: Path) -> list[dict[str, object]]:
+    """Capture bounded Git status facts without modifying restored files."""
+
+    repositories: list[dict[str, object]] = []
+    git_markers = sorted(path for path in root.rglob(".git") if path.is_dir() or path.is_file())
+    for marker in git_markers[:_HIGH_RISK_REPORT_GIT_REPOSITORY_LIMIT]:
+        repository = marker.parent
+        relative_repository = repository.relative_to(root).as_posix()
+        try:
+            completed = subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "-c",
+                    "core.fsmonitor=false",
+                    "-c",
+                    "core.untrackedCache=false",
+                    "-C",
+                    str(repository),
+                    "status",
+                    "--porcelain=v1",
+                    "--untracked-files=all",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={
+                    **os.environ,
+                    "GIT_CONFIG_NOSYSTEM": "1",
+                    "GIT_OPTIONAL_LOCKS": "0",
+                    "GIT_TERMINAL_PROMPT": "0",
+                },
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            repositories.append(
+                {
+                    "relative_path": relative_repository,
+                    "status": "unavailable",
+                    "changed_path_count": None,
+                    "changed_paths": [],
+                }
+            )
+            continue
+        if completed.returncode != 0:
+            repositories.append(
+                {
+                    "relative_path": relative_repository,
+                    "status": "unavailable",
+                    "changed_path_count": None,
+                    "changed_paths": [],
+                }
+            )
+            continue
+        changed = completed.stdout.splitlines()
+        repositories.append(
+            {
+                "relative_path": relative_repository,
+                "status": "clean" if not changed else "dirty",
+                "changed_path_count": len(changed),
+                "changed_paths": [line[3:] for line in changed[:_HIGH_RISK_REPORT_GIT_PATH_LIMIT]],
+                "changed_paths_truncated": len(changed) > _HIGH_RISK_REPORT_GIT_PATH_LIMIT,
+            }
+        )
+    return repositories
+
+
+def _write_high_risk_restore_report(
+    candidate_root: Path,
+    *,
+    workspace_root: Path | None,
+    tenant_root: Path | None,
+    control_plane_v2: bool,
+) -> None:
+    """Write an operator-review report for explicitly selected file restores.
+
+    Workspace and tenant data remain opt-in and are never merged into an
+    existing target.  Every restored regular file is conservatively listed as
+    a potential orphan artifact for the operator to reconcile; Git inspection
+    is read-only and only records a bounded porcelain snapshot.
+    """
+
+    selected: list[tuple[str, Path]] = []
+    if workspace_root is not None:
+        selected.append(("workspaces", workspace_root))
+    if tenant_root is not None:
+        selected.append(("tenants", tenant_root))
+    if not selected and not control_plane_v2:
+        return
+
+    trees: list[dict[str, object]] = []
+    for kind, root in selected:
+        file_count, paths = _bounded_regular_file_paths(root)
+        trees.append(
+            {
+                "kind": kind,
+                "file_count": file_count,
+                "restored_paths": paths,
+                "restored_paths_truncated": file_count > len(paths),
+                "orphan_artifacts": {
+                    "status": "operator_review_required",
+                    "count": file_count,
+                    "paths": paths,
+                    "paths_truncated": file_count > len(paths),
+                },
+                "git_repositories": _git_restore_report(root),
+                "git_repositories_truncated": len(
+                    [path for path in root.rglob(".git") if path.is_dir() or path.is_file()]
+                )
+                > _HIGH_RISK_REPORT_GIT_REPOSITORY_LIMIT,
+            }
+        )
+    payload: dict[str, object] = {
+        "version": _HIGH_RISK_RESTORE_REPORT_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "operator_action_required": True,
+        "automatic_git_changes_applied": False,
+        "trees": trees,
+    }
+    if control_plane_v2:
+        # A control-plane-only restore deliberately leaves the live Workspace
+        # and tenant trees untouched.  It can still make their files and Git
+        # worktrees inconsistent with restored domain references, so retain a
+        # durable, privacy-safe report even when no external tree was selected
+        # for materialization.  We never discover host roots by convention.
+        payload["control_plane_restore"] = {
+            "domain_mode": "v2",
+            "workspace_tenant_data_restored": bool(selected),
+            "orphan_artifacts": {
+                "status": "operator_review_required",
+                "count": None,
+                "paths": [],
+                "paths_truncated": False,
+            },
+            "git_change_report": {
+                "status": (
+                    "captured_for_explicit_restored_trees"
+                    if selected
+                    else "not_collected_without_explicit_restore_tree"
+                ),
+                "repositories": [],
+            },
+        }
+    report_path = candidate_root / _HIGH_RISK_RESTORE_REPORT_NAME
+    temporary = candidate_root / f".{report_path.name}.{uuid4().hex}.tmp"
+    encoded = (json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n").encode("utf-8")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        _write_all(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        os.replace(temporary, report_path)
+        _fsync_directory(candidate_root)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _restore_targets_overlap(left: Path, right: Path) -> bool:
+    """Return whether two already-canonical restore destinations intersect."""
+
+    return left == right or left.is_relative_to(right) or right.is_relative_to(left)
+
+
+def _validate_restore_target_roots(
+    state_root: Path,
+    workspace_root: Path | None,
+    tenant_root: Path | None,
+) -> None:
+    """Reject nested restore targets before candidate creation can make one live.
+
+    Each root is promoted independently through a sibling candidate.  A
+    nested target would make ``copytree`` create another target's parent
+    during staging, defeating the all-or-nothing promotion/rollback contract.
+    """
+
+    roots: list[tuple[str, Path]] = [("target_state_root", state_root)]
+    if workspace_root is not None:
+        roots.append(("target_workspace_root", workspace_root))
+    if tenant_root is not None:
+        roots.append(("target_tenant_root", tenant_root))
+    for index, (left_name, left_root) in enumerate(roots):
+        for right_name, right_root in roots[index + 1 :]:
+            if _restore_targets_overlap(left_root, right_root):
+                raise ValueError(f"{left_name} and {right_name} must not overlap")
 
 
 def _file_meta(
@@ -951,8 +1897,9 @@ class BackupService:
                 "target_state_root is required; restore only supports a new staged root"
             )
         state_root = target_state_root.resolve()
-        if state_root.exists():
-            raise ValueError(f"target_state_root must not exist: {state_root}")
+        workspace_target = target_workspace_root.resolve() if target_workspace_root else None
+        tenant_target = target_tenant_root.resolve() if target_tenant_root else None
+        _validate_restore_target_roots(state_root, workspace_target, tenant_target)
 
         manifest = self.verify_backup(archive_path)
 
@@ -961,6 +1908,17 @@ class BackupService:
                 f"Backup version {manifest.version} > supported {_BACKUP_VERSION}. "
                 "Upgrade OpenScience first."
             )
+
+        journal_path = state_root.parent / f".{state_root.name}.restore-promotion.json"
+        recovery = _recover_pending_restore_promotion(
+            journal_path,
+            expected_manifest_digest=_manifest_digest(manifest),
+        )
+        if recovery == "completed":
+            _LOG.info("completed interrupted restore promotion → %s", state_root)
+            return state_root
+        if state_root.exists():
+            raise ValueError(f"target_state_root must not exist: {state_root}")
 
         _LOG.info(
             "restoring backup from %s (%s, %d db, %d cfg)",
@@ -988,21 +1946,21 @@ class BackupService:
         candidate_root = state_root.parent / f".{state_root.name}.restore-{uuid4().hex}"
         candidate_workspace_root: Path | None = None
         candidate_tenant_root: Path | None = None
-        if target_workspace_root is not None:
-            if target_workspace_root.exists():
-                raise ValueError(f"target_workspace_root must not exist: {target_workspace_root}")
-            candidate_workspace_root = target_workspace_root.parent / (
-                f".{target_workspace_root.name}.restore-{uuid4().hex}"
+        if workspace_target is not None:
+            if workspace_target.exists():
+                raise ValueError(f"target_workspace_root must not exist: {workspace_target}")
+            candidate_workspace_root = workspace_target.parent / (
+                f".{workspace_target.name}.restore-{uuid4().hex}"
             )
-        if target_tenant_root is not None:
-            if target_tenant_root.exists():
-                raise ValueError(f"target_tenant_root must not exist: {target_tenant_root}")
-            candidate_tenant_root = target_tenant_root.parent / (
-                f".{target_tenant_root.name}.restore-{uuid4().hex}"
+        if tenant_target is not None:
+            if tenant_target.exists():
+                raise ValueError(f"target_tenant_root must not exist: {tenant_target}")
+            candidate_tenant_root = tenant_target.parent / (
+                f".{tenant_target.name}.restore-{uuid4().hex}"
             )
 
-        journal_path = state_root.parent / f".{state_root.name}.restore-promotion.json"
         promoted_pairs: list[tuple[Path, Path]] = []
+        promotion_journal_created = False
         candidate_paths = [candidate_root]
         if candidate_workspace_root is not None:
             candidate_paths.append(candidate_workspace_root)
@@ -1065,19 +2023,19 @@ class BackupService:
                 # 4. Optional high-risk workspace/tenant data only activates
                 # when the caller supplied an explicit target root.
                 promotion_pairs = [(candidate_root, state_root)]
-                if target_workspace_root and manifest.includes_workspaces:
+                if workspace_target and manifest.includes_workspaces:
                     ws_src = stage / "workspaces"
                     if ws_src.is_dir():
                         assert candidate_workspace_root is not None
                         shutil.copytree(ws_src, candidate_workspace_root)
-                        promotion_pairs.append((candidate_workspace_root, target_workspace_root))
+                        promotion_pairs.append((candidate_workspace_root, workspace_target))
                         _LOG.info("staged workspaces → %s", candidate_workspace_root)
-                if target_tenant_root and manifest.includes_tenants:
+                if tenant_target and manifest.includes_tenants:
                     t_src = stage / "tenants"
                     if t_src.is_dir():
                         assert candidate_tenant_root is not None
                         shutil.copytree(t_src, candidate_tenant_root)
-                        promotion_pairs.append((candidate_tenant_root, target_tenant_root))
+                        promotion_pairs.append((candidate_tenant_root, tenant_target))
                         _LOG.info("staged tenants → %s", candidate_tenant_root)
 
                 for db_name, meta in manifest.databases.items():
@@ -1096,39 +2054,268 @@ class BackupService:
                 )
                 for validator in validators:
                     validator(candidate_root, manifest)
-
-                journal_path.write_text(
-                    json.dumps(
-                        {
-                            "archive": str(archive_path),
-                            "targets": [str(target) for _, target in promotion_pairs],
-                            "created_at": _ts(),
-                        },
-                        sort_keys=True,
-                    )
-                    + "\n",
-                    encoding="utf-8",
+                candidate_domain_state, _candidate_run_id = _staged_domain_reconciliation_target(
+                    candidate_root
                 )
-                for candidate, target in promotion_pairs:
+                _write_high_risk_restore_report(
+                    candidate_root,
+                    workspace_root=(
+                        candidate_workspace_root
+                        if candidate_workspace_root is not None
+                        and candidate_workspace_root.is_dir()
+                        else None
+                    ),
+                    tenant_root=(
+                        candidate_tenant_root
+                        if candidate_tenant_root is not None and candidate_tenant_root.is_dir()
+                        else None
+                    ),
+                    control_plane_v2=candidate_domain_state == "v2",
+                )
+                _write_restore_generation_attestation(candidate_root, manifest)
+
+                journal: dict[str, object] = {
+                    "version": _RESTORE_PROMOTION_JOURNAL_VERSION,
+                    "operation_id": uuid4().hex,
+                    "archive": str(archive_path.resolve()),
+                    "manifest_digest": _manifest_digest(manifest),
+                    "hostname": socket.gethostname(),
+                    "process_id": os.getpid(),
+                    "phase": "prepared",
+                    "created_at": _ts(),
+                    "pairs": [
+                        {"candidate": str(candidate), "target": str(target), "status": "staged"}
+                        for candidate, target in promotion_pairs
+                    ],
+                }
+                _write_promotion_journal(
+                    journal_path,
+                    journal,
+                    exclusive=True,
+                )
+                promotion_journal_created = True
+                raw_pairs = journal["pairs"]
+                assert isinstance(raw_pairs, list)
+                for index, (candidate, target) in enumerate(promotion_pairs):
+                    entry = raw_pairs[index]
+                    assert isinstance(entry, dict)
+                    entry["status"] = "promoting"
+                    journal["phase"] = "promoting"
+                    _write_promotion_journal(journal_path, journal)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     os.replace(candidate, target)
+                    # Record the rename before syncing the directory.  If the
+                    # sync itself fails, the exception handler must still know
+                    # this target needs to be moved back to its private
+                    # candidate path.
                     promoted_pairs.append((candidate, target))
-                journal_path.unlink(missing_ok=True)
-        except Exception:
+                    _fsync_directory(target.parent)
+                    entry["status"] = "promoted"
+                    _write_promotion_journal(journal_path, journal)
+                journal["phase"] = "completed"
+                _write_promotion_journal(journal_path, journal)
+                _remove_promotion_journal(journal_path)
+        except BaseException:
             # A multi-root promotion either completes as a unit or restores
             # every target back to its private candidate path.  The active
             # source root was never used as a target here.
+            rollback_error: BaseException | None = None
             for candidate, target in reversed(promoted_pairs):
                 if target.exists() and not candidate.exists():
-                    os.replace(target, candidate)
-            for candidate in candidate_paths:
-                if candidate.exists():
-                    shutil.rmtree(candidate, ignore_errors=True)
-            journal_path.unlink(missing_ok=True)
+                    try:
+                        os.replace(target, candidate)
+                        # Keep the journal until every rollback rename is
+                        # durable.  A failed fsync leaves enough pair state
+                        # for the next restore invocation to fail closed or
+                        # recover safely instead of forgetting a target.
+                        _fsync_directory(target.parent)
+                    except BaseException as exc:
+                        rollback_error = exc
+                        break
+            if rollback_error is None:
+                for candidate in candidate_paths:
+                    if candidate.exists():
+                        shutil.rmtree(candidate, ignore_errors=True)
+                if promotion_journal_created:
+                    _remove_promotion_journal(journal_path)
+            else:
+                _LOG.error(
+                    "restore promotion rollback was not durable; retaining journal for recovery",
+                    exc_info=rollback_error,
+                )
+                raise RuntimeError(
+                    "restore promotion rollback was not durable; journal retained for recovery"
+                ) from rollback_error
             raise
 
         _LOG.info("restore staged and published to %s", state_root)
         return state_root
+
+    def promote_restored_generation(
+        self,
+        generation_root: Path,
+        *,
+        active_state_pointer: Path,
+        maintenance_state_root: Path | None = None,
+        maintenance_stability_window_seconds: float = 5.0,
+    ) -> ActiveGenerationPromotion:
+        """Atomically select a verified staged state root through a symlink.
+
+        This deliberately does not promote workspace or tenant trees.  Those
+        remain explicit restore outputs for an operator to inspect through the
+        high-risk report. The current active generation must pass the durable
+        maintenance preflight, and this operation owns its maintenance lease
+        from before journal creation through the pointer swap.
+        """
+
+        if maintenance_stability_window_seconds < 0:
+            raise ValueError("maintenance_stability_window_seconds must be non-negative")
+        generation = generation_root.resolve()
+        if not generation.is_dir():
+            raise ValueError("generation_root must be an existing verified state directory")
+        attestation = _read_restore_generation_attestation(generation)
+        pointer = _absolute_lexical_path(active_state_pointer)
+        if not pointer.parent.is_dir():
+            raise ValueError("active generation pointer parent must already exist")
+
+        active_before_recovery = _read_active_generation_pointer(pointer)
+        maintenance_root = (
+            maintenance_state_root.resolve()
+            if maintenance_state_root is not None
+            else active_before_recovery
+        )
+        if maintenance_root is None:
+            raise ValueError(
+                "generation promotion requires an active state pointer or maintenance_state_root"
+            )
+        if active_before_recovery is not None and maintenance_root != active_before_recovery:
+            raise ValueError("maintenance_state_root must be the current active state generation")
+
+        # DomainCutoverController imports BackupService at module load. Keep
+        # this dependency local so importing the backup package remains
+        # acyclic while promotion still uses the real persisted barrier.
+        from ainrf.domain_control.service import DomainMaintenanceService
+
+        # A process that resolves the pointer immediately after the swap must
+        # still encounter a durable write fence in the selected generation.
+        # Operators can explicitly enter maintenance on the staged root before
+        # promotion; silently initializing it here would mutate the verified
+        # generation and could reopen a restored legacy state.
+        staged_maintenance = DomainMaintenanceService(generation)
+        try:
+            staged_maintenance.adopt_existing_maintenance_schema()
+        except RuntimeError as exc:
+            raise ValueError(
+                "generation promotion requires the staged generation to retain "
+                "a readable maintenance control plane"
+            ) from exc
+        if not staged_maintenance.status().is_active:
+            raise ValueError(
+                "generation promotion requires the staged generation to remain in maintenance"
+            )
+
+        maintenance = DomainMaintenanceService(maintenance_root)
+        try:
+            maintenance.adopt_existing_maintenance_schema()
+        except RuntimeError as exc:
+            raise ValueError(
+                "generation promotion requires a readable persisted maintenance control plane"
+            ) from exc
+        maintenance_before = maintenance.status()
+        preflight = maintenance.preflight(
+            stability_window_seconds=maintenance_stability_window_seconds
+        )
+        maintenance_after_preflight = maintenance.status()
+        if (
+            not preflight.ready
+            or not maintenance_after_preflight.is_active
+            or maintenance_after_preflight.maintenance_epoch != maintenance_before.maintenance_epoch
+        ):
+            raise ValueError("active maintenance preflight is not ready for generation promotion")
+
+        lease = maintenance.begin_maintenance_operation(
+            source="backup.promote-generation",
+            expected_epoch=maintenance_before.maintenance_epoch,
+        )
+        try:
+            maintenance.check_maintenance_operation(lease)
+            recovered = recover_active_generation_promotion(pointer)
+            previous_generation = _read_active_generation_pointer(pointer)
+            if active_before_recovery is not None and previous_generation != maintenance_root:
+                raise ValueError(
+                    "stale promotion changed the active state pointer; rerun against its maintenance epoch"
+                )
+            if previous_generation == generation:
+                return ActiveGenerationPromotion(
+                    active_pointer=pointer,
+                    generation_root=generation,
+                    previous_generation_root=previous_generation,
+                    operation_id=None,
+                    recovered=recovered is not None,
+                )
+
+            operation_id = uuid4().hex
+            journal_path = _active_generation_promotion_journal_path(pointer)
+            journal = _active_generation_promotion_payload(
+                active_pointer=pointer,
+                generation_root=generation,
+                previous_generation_root=previous_generation,
+                attestation=attestation,
+                operation_id=operation_id,
+            )
+            temporary_pointer, _, _ = _active_generation_journal_paths(
+                journal, active_pointer=pointer
+            )
+            journal_created = False
+            try:
+                maintenance.check_maintenance_operation(lease)
+                _write_promotion_journal(journal_path, journal, exclusive=True)
+                journal_created = True
+                os.symlink(str(generation), temporary_pointer)
+                _fsync_directory(pointer.parent)
+                journal["phase"] = "candidate_ready"
+                _write_promotion_journal(journal_path, journal)
+                journal["phase"] = "promoting"
+                _write_promotion_journal(journal_path, journal)
+                maintenance.check_maintenance_operation(lease)
+                os.replace(temporary_pointer, pointer)
+                _fsync_directory(pointer.parent)
+                maintenance.check_maintenance_operation(lease)
+                journal["phase"] = "promoted"
+                _write_promotion_journal(journal_path, journal)
+                _remove_promotion_journal(journal_path)
+            except BaseException:
+                if journal_created:
+                    try:
+                        _rollback_active_generation_promotion(
+                            journal_path,
+                            journal,
+                            active_pointer=pointer,
+                            temporary_pointer=temporary_pointer,
+                            generation_root=generation,
+                            previous_generation_root=previous_generation,
+                        )
+                    except BaseException as rollback_error:
+                        _LOG.error(
+                            "active generation promotion rollback was not durable; retaining journal",
+                            exc_info=rollback_error,
+                        )
+                        raise RuntimeError(
+                            "active generation promotion rollback was not durable; journal retained"
+                        ) from rollback_error
+                raise
+            maintenance.check_maintenance_operation(lease)
+        finally:
+            maintenance.finish_mutation(lease)
+
+        _LOG.info("active state generation switched to %s", generation)
+        return ActiveGenerationPromotion(
+            active_pointer=pointer,
+            generation_root=generation,
+            previous_generation_root=previous_generation,
+            operation_id=operation_id,
+            recovered=recovered is not None,
+        )
 
     # ── internal ──────────────────────────────────────────────────
 

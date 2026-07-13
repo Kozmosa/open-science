@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 from ainrf.db import connect, run_pending
 from ainrf.domain.write_fence import DomainWriteFence
-from ainrf.domain_telemetry import record_overview_event
+from ainrf.domain_telemetry import record_overview_event, record_permission_denied
 from ainrf.domain_control import (
     DomainMaintenanceService,
     DomainWriteParticipant,
@@ -42,6 +42,49 @@ _RETRY_MAX_DELAY_SECONDS = 15 * 60
 _MAX_RETRY_COUNT = 3
 
 RefreshTrigger = Literal["manual", "scheduled", "catchup"]
+
+
+def _maintenance_is_active_read_only(state_root: Path) -> bool:
+    """Read the maintenance flag without constructing writable Overview state.
+
+    A planner can be started by the no-port worker, the compatibility CLI, or
+    an administrative Python caller while a restore/cutover owns the
+    maintenance epoch.  ``OverviewSnapshotService`` creates the runtime
+    directory and runs migrations in its constructor, so checking through the
+    ordinary maintenance service would already be a source mutation.  Keep
+    this narrow read-only probe in front of every writable planner bootstrap.
+
+    An existing WAL cannot be safely observed with SQLite's immutable URI, so
+    it is deliberately treated as active/indeterminate and the caller joins
+    maintenance as a drained participant instead of risking a write.
+    """
+
+    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    if not database_path.is_file():
+        return False
+    if database_path.with_name(f"{database_path.name}-wal").exists():
+        return True
+    try:
+        database_uri = f"{database_path.resolve().as_uri()}?mode=ro&immutable=1"
+        with sqlite3.connect(database_uri, uri=True, isolation_level=None) as connection:
+            table = connection.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'domain_maintenance_state'"
+            ).fetchone()
+            if table is None:
+                return False
+            row = connection.execute(
+                "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+            ).fetchone()
+    except sqlite3.Error as exc:
+        raise RuntimeError(
+            "cannot read persisted domain maintenance state; refusing overview planner startup"
+        ) from exc
+    if row is None:
+        raise RuntimeError(
+            "persisted domain maintenance state is malformed; refusing overview planner startup"
+        )
+    return bool(row[0])
 
 
 def _utc_now() -> datetime:
@@ -166,6 +209,16 @@ class OverviewSnapshotService:
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
 
+    @staticmethod
+    def _assert_maintenance_writable(conn: sqlite3.Connection) -> None:
+        """Fence a job transaction against a concurrent maintenance epoch."""
+
+        maintenance = conn.execute(
+            "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+        if maintenance is None or bool(maintenance["is_active"]):
+            raise MaintenanceModeError("overview refresh is paused for maintenance")
+
     def request_refresh(
         self,
         owner_user_id: str,
@@ -195,6 +248,12 @@ class OverviewSnapshotService:
 
         created_at = _iso(_as_utc(now))
         with closing(self._connect()) as conn:
+            # Own the SQLite write transaction before observing maintenance.
+            # A concurrent ``enter()`` serializes behind this transaction, so
+            # either the job commits before the new epoch or it is rejected
+            # before any durable Overview mutation.
+            conn.execute("BEGIN IMMEDIATE")
+            self._assert_maintenance_writable(conn)
             active = self._active_job_for_owner(conn, owner)
             if active is not None:
                 result = self._job_dict(active)
@@ -253,6 +312,7 @@ class OverviewSnapshotService:
             row = conn.execute(
                 "SELECT * FROM overview_refresh_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
+            self._assert_maintenance_writable(conn)
             conn.commit()
         if row is None:
             raise RuntimeError("overview refresh job was not persisted")
@@ -346,6 +406,12 @@ class OverviewSnapshotService:
         current_iso = _iso(current)
         expiry_iso = _iso(current + timedelta(seconds=lease_seconds))
         with closing(self._connect()) as conn:
+            # Take the writer lock before checking the epoch.  Maintenance
+            # either starts before this claim (which rejects it) or waits for
+            # this bounded transaction to complete; a direct service caller
+            # cannot acquire work behind the planner's participant fence.
+            conn.execute("BEGIN IMMEDIATE")
+            self._assert_maintenance_writable(conn)
             conn.execute(
                 """
                 UPDATE overview_refresh_jobs
@@ -437,6 +503,8 @@ class OverviewSnapshotService:
             raise ValueError("lease_seconds must be positive")
         current = _as_utc(now)
         with closing(self._connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._assert_maintenance_writable(conn)
             updated = self._heartbeat_claim(
                 conn,
                 claim,
@@ -561,11 +629,23 @@ class OverviewSnapshotService:
             row = conn.execute(
                 """
                 SELECT * FROM overview_refresh_jobs
-                WHERE job_id = ? AND owner_user_id = ?
+                WHERE job_id = ?
                 """,
-                (job_id, owner_user_id),
+                (job_id,),
             ).fetchone()
-        return self._job_dict(row) if row is not None else None
+        if row is None:
+            return None
+        if str(row["owner_user_id"]) != owner_user_id:
+            # Keep the external result indistinguishable from an absent job,
+            # but retain a bounded audit signal for cross-user probing.
+            record_permission_denied(
+                resource="overview",
+                reason="not_visible",
+                user_id=owner_user_id,
+                state_root=self._state_root,
+            )
+            return None
+        return self._job_dict(row)
 
     def job_store_ready(self) -> bool:
         """Whether the durable overview schema exists in the control plane."""
@@ -637,6 +717,12 @@ class OverviewSnapshotService:
             )
         try:
             with closing(self._connect()) as conn:
+                # Hold the same writer boundary across the local projection
+                # and its result write.  A maintenance epoch cannot begin
+                # halfway through and turn a direct service call into an
+                # untracked snapshot mutation.
+                conn.execute("BEGIN IMMEDIATE")
+                self._assert_maintenance_writable(conn)
                 cards = self._build_cards(conn, claim.owner_user_id, cutoff_at)
                 if self._heartbeat_claim(conn, claim, current=current, lease_seconds=300) != 1:
                     return OverviewRefreshRunResult(
@@ -1091,6 +1177,8 @@ class OverviewSnapshotService:
         self, claim: OverviewRefreshClaim, detail: str, current: datetime
     ) -> str | None:
         with closing(self._connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._assert_maintenance_writable(conn)
             self._write_fence.record_first_v2_write(conn, actor_id=claim.owner_user_id)
             outcome = self._retry_or_fail_claim_in_transaction(
                 conn,
@@ -1341,9 +1429,7 @@ class OverviewSnapshotPlanner:
     ) -> None:
         if max_jobs_per_cycle <= 0:
             raise ValueError("max_jobs_per_cycle must be positive")
-        self._service = OverviewSnapshotService(state_root, artifact_sha=artifact_sha)
         self._maintenance = DomainMaintenanceService(state_root)
-        self._maintenance.initialize()
         self.planner_id = planner_id or f"overview-planner-{uuid4().hex[:12]}"
         self._participant = DomainWriteParticipant(
             self._maintenance,
@@ -1351,13 +1437,70 @@ class OverviewSnapshotPlanner:
             participant_id=self.planner_id,
             details={"component": "domain-worker-overview"},
         )
-        self._active_user_ids = active_user_ids or self._service.active_user_ids
+        self._state_root = state_root
+        self._artifact_sha = artifact_sha
+        self._configured_active_user_ids = active_user_ids
         self._max_jobs_per_cycle = max_jobs_per_cycle
         self._started = False
+        self._maintenance_startup_read_only = _maintenance_is_active_read_only(state_root)
+        self._service: OverviewSnapshotService | None = None
+        if not self._maintenance_startup_read_only:
+            self._initialize_writable_service()
+
+    def _initialize_writable_service(self) -> None:
+        """Construct migration-capable Overview state behind one writer lease.
+
+        The initial read-only probe covers a maintenance epoch that was
+        already active when this process began.  The bootstrap lease closes
+        the race with an epoch that starts between that probe and the
+        constructor: the restore/cutover preflight sees the in-flight row and
+        the post-construction check prevents this planner from starting.
+        """
+
+        try:
+            lease = self._maintenance.begin_mutation(source="overview-planner.bootstrap")
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+            return
+        try:
+            self._maintenance.check_lease(lease)
+            self._service = OverviewSnapshotService(
+                self._state_root,
+                artifact_sha=self._artifact_sha,
+            )
+            self._maintenance.check_lease(lease)
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+        finally:
+            self._maintenance.finish_mutation(lease)
+
+    def _start_as_drained_maintenance_participant(self) -> None:
+        """Register this incomplete process without recreating writable state."""
+
+        self._maintenance.adopt_existing_maintenance_schema()
+        participant_status = self._participant.start()
+        self._started = True
+        if participant_status.status != "drained":
+            # The epoch may have ended after the read-only probe.  This
+            # process intentionally has no writable service graph; require a
+            # clean restart rather than partially reconstructing one.
+            self._participant.stop()
+
+    def _require_service(self) -> OverviewSnapshotService:
+        if self._service is None:
+            raise MaintenanceModeError(
+                "overview planner started read-only during maintenance; restart after maintenance exits"
+            )
+        return self._service
+
+    def _active_user_ids(self) -> Iterable[str]:
+        if self._configured_active_user_ids is not None:
+            return self._configured_active_user_ids()
+        return self._require_service().active_user_ids()
 
     @property
     def service(self) -> OverviewSnapshotService:
-        return self._service
+        return self._require_service()
 
     def request_refresh(
         self, owner_user_id: str, *, now: datetime | None = None
@@ -1366,6 +1509,10 @@ class OverviewSnapshotPlanner:
 
         current = _as_utc(now)
         self.start(now=current)
+        if self._maintenance_startup_read_only:
+            raise MaintenanceModeError(
+                "overview planner started read-only during maintenance; restart after maintenance exits"
+            )
         participant_status = self._participant.heartbeat()
         if participant_status.status != "active":
             raise MaintenanceModeError("overview planner is drained for maintenance")
@@ -1376,7 +1523,9 @@ class OverviewSnapshotPlanner:
             raise
         try:
             self._maintenance.check_lease(lease)
-            job = self._service.request_refresh(owner_user_id, trigger="manual", now=current)
+            job = self._require_service().request_refresh(
+                owner_user_id, trigger="manual", now=current
+            )
             self._maintenance.check_lease(lease)
             self._set_planner_state(status="running", now=current, last_error=None, lease=lease)
             return job
@@ -1394,6 +1543,8 @@ class OverviewSnapshotPlanner:
 
         current = _as_utc(now)
         self.start(now=current)
+        if self._maintenance_startup_read_only:
+            return OverviewRefreshRunResult(job_id=job_id, outcome="maintenance_drained")
         participant_status = self._participant.heartbeat()
         if participant_status.status != "active":
             return OverviewRefreshRunResult(job_id=job_id, outcome="maintenance_drained")
@@ -1404,7 +1555,7 @@ class OverviewSnapshotPlanner:
             return OverviewRefreshRunResult(job_id=job_id, outcome="maintenance_drained")
         try:
             self._maintenance.check_lease(lease)
-            result = self._service.run_job(job_id, self.planner_id, now=current)
+            result = self._require_service().run_job(job_id, self.planner_id, now=current)
             self._maintenance.check_lease(lease)
             self._set_planner_state(
                 status="running", now=current, last_error=result.detail, lease=lease
@@ -1421,6 +1572,19 @@ class OverviewSnapshotPlanner:
 
     def start(self, *, now: datetime | None = None) -> None:
         if self._started:
+            return
+        if self._maintenance_startup_read_only or _maintenance_is_active_read_only(
+            self._state_root
+        ):
+            self._maintenance_startup_read_only = True
+            self._start_as_drained_maintenance_participant()
+            return
+        if self._service is None:
+            # A bootstrap that raced a new maintenance epoch intentionally
+            # leaves this process without an Overview service.  Never revive
+            # such a partial graph after the epoch exits.
+            self._maintenance_startup_read_only = True
+            self._start_as_drained_maintenance_participant()
             return
         current = _as_utc(now)
         participant_status = self._participant.start()
@@ -1449,6 +1613,10 @@ class OverviewSnapshotPlanner:
     def stop(self, *, now: datetime | None = None) -> None:
         if not self._started:
             return
+        if self._maintenance_startup_read_only:
+            self._participant.stop()
+            self._started = False
+            return
         current = _as_utc(now)
         try:
             participant_status = self._participant.heartbeat()
@@ -1473,6 +1641,10 @@ class OverviewSnapshotPlanner:
     def run_once(self, *, now: datetime | None = None) -> OverviewPlannerRunResult:
         current = _as_utc(now)
         self.start(now=current)
+        if self._maintenance_startup_read_only:
+            return OverviewPlannerRunResult(
+                outcome="maintenance_drained", scheduled_job_ids=(), completed_job_ids=()
+            )
         participant_status = self._participant.heartbeat()
         if participant_status.status == "drained":
             return OverviewPlannerRunResult(
@@ -1487,17 +1659,18 @@ class OverviewSnapshotPlanner:
             )
         try:
             active_user_ids = tuple(self._active_user_ids())
+            service = self._require_service()
             scheduled_by_id: dict[str, None] = {}
             completed: list[str] = []
             for _ in range(self._max_jobs_per_cycle):
                 self._maintenance.check_lease(lease)
-                for job in self._service.schedule_due_refreshes(
+                for job in service.schedule_due_refreshes(
                     now=current, active_user_ids=active_user_ids
                 ):
                     job_id = job.get("job_id")
                     if isinstance(job_id, str):
                         scheduled_by_id[job_id] = None
-                result = self._service.run_next_job(self.planner_id, now=current)
+                result = service.run_next_job(self.planner_id, now=current)
                 if result.outcome == "idle":
                     break
                 if result.job_id is not None:
@@ -1539,12 +1712,13 @@ class OverviewSnapshotPlanner:
     ) -> None:
         self._maintenance.check_lease(lease)
         current_iso = _iso(now)
-        with closing(self._service._connect()) as conn:
+        service = self._require_service()
+        with closing(service._connect()) as conn:
             # Planner heartbeats are control-plane writes too.  Keep them
             # behind the same committed-v2 fuse as enqueue/claim/completion so
             # a legacy or prepared process cannot advertise a false-ready
             # Overview planner.
-            self._service._write_fence.record_first_v2_write(conn, actor_id=self.planner_id)
+            service._write_fence.record_first_v2_write(conn, actor_id=self.planner_id)
             conn.execute(
                 """
                 INSERT INTO overview_planner_state (

@@ -26,7 +26,8 @@ def _domain_task_reference_guard_definitions() -> tuple[tuple[str, str], ...]:
     SQLite cannot add the complete Project/Workspace foreign-key graph to the
     historical ``tasks`` table with ``ALTER TABLE``.  These guards are the
     final-cutover equivalent: they keep every newly written or moved Task tied
-    to an authoritative Project, Workspace, and Workspace-derived Environment.
+    to an authoritative Project, active Project–Workspace link, and
+    Workspace-derived Environment.
     """
 
     return (
@@ -43,11 +44,17 @@ def _domain_task_reference_guard_definitions() -> tuple[tuple[str, str], ...]:
                     WHERE workspace_id = NEW.workspace_id
                       AND environment_id = NEW.environment_id
                 )
+                OR NOT EXISTS (
+                    SELECT 1 FROM project_workspace_links
+                    WHERE project_id = NEW.project_id
+                      AND workspace_id = NEW.workspace_id
+                      AND status = 'active'
+                )
               )
             BEGIN
                 SELECT RAISE(
                     ABORT,
-                    'v2 task requires a domain project, workspace, and derived environment'
+                    'v2 task requires a domain project, active workspace link, and derived environment'
                 );
             END
             """,
@@ -65,11 +72,17 @@ def _domain_task_reference_guard_definitions() -> tuple[tuple[str, str], ...]:
                     WHERE workspace_id = NEW.workspace_id
                       AND environment_id = NEW.environment_id
                 )
+                OR NOT EXISTS (
+                    SELECT 1 FROM project_workspace_links
+                    WHERE project_id = NEW.project_id
+                      AND workspace_id = NEW.workspace_id
+                      AND status = 'active'
+                )
               )
             BEGIN
                 SELECT RAISE(
                     ABORT,
-                    'v2 task requires a domain project, workspace, and derived environment'
+                    'v2 task requires a domain project, active workspace link, and derived environment'
                 );
             END
             """,

@@ -22,7 +22,7 @@ import math
 import os
 import re
 import sqlite3
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from contextlib import closing
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, replace
@@ -39,6 +39,55 @@ _ISSUE_SEVERITIES = ("blocking", "non_blocking")
 _ISSUE_RESOLUTIONS = ("open", "resolved")
 _MIGRATION_RUN_STATUSES = ("running", "completed", "interrupted", "stale", "unknown")
 _MIGRATION_RECORD_STATUSES = ("imported", "skipped", "attention_needed", "unknown")
+_MIGRATION_ATTENTION_RECORD_TYPES = (
+    "environment",
+    "project",
+    "project_member",
+    "runtime_checkpoint",
+    "session",
+    "session_attempt",
+    "source",
+    "task",
+    "task_output",
+    "task_relationship",
+    "workspace",
+    "other",
+    "unknown",
+)
+_MIGRATION_ATTENTION_CATEGORIES = (
+    "canonical_path_conflict",
+    "collaborator_unmapped",
+    "environment_alias_conflict",
+    "environment_identity_conflict",
+    "environment_owner_unmapped",
+    "environment_registry_invalid",
+    "legacy_environment_placeholder",
+    "orphan_task_relationship",
+    "owner_missing",
+    "owner_unmapped",
+    "primary_link_inactive",
+    "primary_workspace_conflict",
+    "primary_workspace_missing",
+    "project_identity_conflict",
+    "runtime_checkpoint_unmapped",
+    "session_attempt_unmapped",
+    "session_mapping_missing",
+    "session_unmapped",
+    "source_manifest_changed",
+    "task_domain_mapping_invalid",
+    "task_output_unmapped",
+    "task_owner_unmapped",
+    "workspace_environment_ambiguous",
+    "workspace_environment_invalid",
+    "workspace_environment_missing",
+    "workspace_identity_conflict",
+    "workspace_owner_unmapped",
+    "workspace_path_invalid",
+    "workspace_project_missing",
+    "unclassified",
+    "other",
+    "unknown",
+)
 _OUTBOX_BACKLOG_STATES = (
     "pending",
     "expired_claimed",
@@ -47,12 +96,24 @@ _OUTBOX_BACKLOG_STATES = (
 )
 _IDEMPOTENCY_OUTCOMES = ("accepted", "missing", "invalid", "conflict", "reused", "stored", "other")
 _LEGACY_WRITE_SOURCES = ("legacy_json", "legacy_session", "other")
-_PERMISSION_RESOURCES = ("project", "workspace", "task", "other")
+_PERMISSION_RESOURCES = (
+    "project",
+    "workspace",
+    "task",
+    "environment",
+    "literature",
+    "overview",
+    "other",
+)
 _PERMISSION_REASONS = (
     "not_visible",
     "editor_required",
     "owner_required",
     "publish_required",
+    "admin_required",
+    "environment_grant_required",
+    "authenticated_user_required",
+    "actor_unavailable",
     "tenant_owner_required",
     "registry_manager_required",
     "other",
@@ -95,6 +156,8 @@ _OVERVIEW_JOB_STATUSES = (
     "partial",
     "failed",
 )
+_OVERVIEW_CARD_STATUSES = ("ok", "partial", "stale", "unavailable", "failed", "unknown")
+_OVERVIEW_UNTRUSTED_SNAPSHOT_AGE_SECONDS = 30 * 60 * 60 + 1
 _SAGA_EVENT_OUTCOMES = (
     "intent_created",
     "task_created",
@@ -138,6 +201,7 @@ _SAFE_STRING_FIELD_NAMES = frozenset(
     {
         "attempt_id",
         "component",
+        "environment_id",
         "error_type",
         "error_kind",
         "event",
@@ -166,7 +230,7 @@ _SAFE_STRING_FIELD_NAMES = frozenset(
 _TELEMETRY_STORE_FILENAME = "domain_telemetry.sqlite3"
 _TELEMETRY_ANCHOR_FILENAME = "domain_telemetry_anchor.json"
 _TELEMETRY_DELIVERY_FAILURE_LATCH_FILENAME = "domain_telemetry_delivery_failure.json"
-_TELEMETRY_STORE_SCHEMA_VERSION = 1
+_TELEMETRY_STORE_SCHEMA_VERSION = 2
 _DURABLE_COUNTER_LABEL_VALUES: dict[str, dict[str, tuple[str, ...]]] = {
     "ainrf_deprecated_route_calls_total": {"route": _DEPRECATED_ROUTE_GROUPS},
     "ainrf_domain_idempotency_requests_total": {"outcome": _IDEMPOTENCY_OUTCOMES},
@@ -190,6 +254,99 @@ _DURABLE_COUNTER_LABELS: dict[str, tuple[str, ...]] = {
     name: tuple(values) for name, values in _DURABLE_COUNTER_LABEL_VALUES.items()
 }
 
+_V2_DOMAIN_CONTRACT_VERSION = 2
+_V2_MIN_SOURCE_SCHEMA_VERSION: dict[str, int] = {
+    "agentic_researcher": 25,
+    "auth": 7,
+    "literature": 6,
+}
+_V2_CONTROL_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "_schema_version": ("database", "version"),
+    "domain_cutover_state": (
+        "singleton",
+        "state",
+        "contract_version",
+        "schema_version",
+        "cutover_epoch",
+        "constraints_ready",
+        "cutover_ready",
+        "committed_at",
+        "cutover_run_id",
+        "artifact_sha",
+        "artifact_contract_min",
+        "artifact_contract_max",
+        "artifact_schema_min",
+        "artifact_schema_max",
+        "backup_manifest_sha256",
+        "backup_tree_sha256",
+        "restore_evidence_sha256",
+        "source_inventory_sha256",
+        "preparation_digest",
+    ),
+    "domain_migration_issues": (
+        "run_id",
+        "category",
+        "record_type",
+        "severity",
+        "resolution_status",
+    ),
+    "domain_migration_runs": ("run_id", "status"),
+    "domain_migration_record_results": ("run_id", "record_type", "source_record_id", "status"),
+    "tasks": ("task_id",),
+    "agent_task_attempts": ("attempt_id", "task_id", "status", "context_snapshot_id"),
+    "context_snapshots": ("context_snapshot_id",),
+    "task_dispatch_outbox": (
+        "task_id",
+        "attempt_id",
+        "status",
+        "created_at",
+        "next_attempt_at",
+        "claim_expires_at",
+        "claim_heartbeat_at",
+        "updated_at",
+        "launch_unknown_at",
+    ),
+    "domain_idempotency_requests": ("actor_user_id", "scope", "idempotency_key"),
+}
+_V2_AUTH_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "_schema_version": ("database", "version"),
+    "users": ("id", "status"),
+    "environment_access": (
+        "environment_id",
+        "user_id",
+        "grant_version",
+        "status",
+        "updated_at",
+        "revoked_at",
+    ),
+}
+_V2_LITERATURE_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "_schema_version": ("database", "version"),
+    "literature_research_task_intents": (
+        "intent_id",
+        "user_id",
+        "paper_id",
+        "idempotency_key",
+        "task_id",
+        "status",
+        "created_at",
+        "updated_at",
+    ),
+}
+_V2_OVERVIEW_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "overview_snapshots": (
+        "snapshot_id",
+        "owner_user_id",
+        "created_at",
+        "source_status",
+        "attention_required",
+    ),
+    "overview_refresh_jobs": ("job_id", "owner_user_id", "status"),
+    "overview_refresh_card_states": ("owner_user_id", "card_id", "status"),
+}
+_TELEMETRY_SOURCES = ("control", "auth", "literature", "overview")
+_TELEMETRY_SOURCE_STATES = ("ready", "missing", "schema_invalid", "unavailable")
+
 DurableCounterKey: TypeAlias = tuple[str, tuple[tuple[str, str], ...]]
 
 # The state root is bound by the connection factory and by request middleware.
@@ -202,6 +359,7 @@ _TELEMETRY_STATE_ROOT: ContextVar[Path | None] = ContextVar(
 )
 _LAST_GOOD_SCRAPES: dict[Path, _CollectedDomainMetrics] = {}
 _LAST_SUCCESS_TIMESTAMPS: dict[Path, float] = {}
+_PUBLISHED_MIGRATION_ATTENTION_LABELS: set[tuple[str, str]] = set()
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,6 +377,7 @@ class DomainTelemetrySnapshot:
     literature_pending_age_seconds: float
     overview_oldest_age_seconds: float
     overview_missing_active_user_count: int
+    overview_attention_required_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,15 +388,26 @@ class _CollectedDomainMetrics:
     migration_issues: Mapping[tuple[str, str], int]
     migration_runs: Mapping[str, int]
     migration_records: Mapping[str, int]
+    migration_attention: Mapping[tuple[str, str], int]
     outbox_backlog: Mapping[str, int]
     orphan_attempts: Mapping[str, int]
     saga_counts: Mapping[str, int]
     overview_job_counts: Mapping[str, int]
+    overview_card_states: Mapping[str, int]
     durable_counters: Mapping[DurableCounterKey, float]
 
 
 class _TelemetryStoreError(RuntimeError):
     """A local durable telemetry store was unavailable or malformed."""
+
+
+class _TelemetrySourceReadinessError(_TelemetryStoreError):
+    """A v2 scrape lacks a required authoritative telemetry source."""
+
+    def __init__(self, source: str, state: str) -> None:
+        super().__init__(f"domain telemetry source {source} is {state}")
+        self.source = source
+        self.state = state
 
 
 def bind_domain_telemetry_state_root(state_root: Path) -> Token[Path | None]:
@@ -456,9 +626,15 @@ def _open_telemetry_store(state_root: Path, *, create: bool) -> sqlite3.Connecti
         runtime_root.mkdir(parents=True, exist_ok=True)
     conn: sqlite3.Connection | None = None
     try:
-        conn = sqlite3.connect(path, timeout=5.0, isolation_level=None)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout = 5000")
+        if create:
+            conn = sqlite3.connect(path, timeout=5.0, isolation_level=None)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA busy_timeout = 5000")
+        else:
+            # All telemetry hydrations are observational.  In particular, a
+            # maintenance-mode API must never open the sidecar in a mode that
+            # could initialize a journal or mutate SQLite connection state.
+            conn = _read_only(path)
         if create:
             if needs_bootstrap:
                 conn.execute("PRAGMA journal_mode=WAL")
@@ -762,6 +938,7 @@ def record_permission_denied(
     project_id: str | None = None,
     workspace_id: str | None = None,
     task_id: str | None = None,
+    environment_id: str | None = None,
     state_root: Path | None = None,
 ) -> None:
     """Record an authorization denial without adding identifiers to metric labels."""
@@ -785,6 +962,7 @@ def record_permission_denied(
         project_id=project_id,
         workspace_id=workspace_id,
         task_id=task_id,
+        environment_id=environment_id,
     )
 
 
@@ -956,6 +1134,7 @@ def _snapshot_payload(collected: _CollectedDomainMetrics) -> str:
             "literature_pending_age_seconds": snapshot.literature_pending_age_seconds,
             "overview_oldest_age_seconds": snapshot.overview_oldest_age_seconds,
             "overview_missing_active_user_count": snapshot.overview_missing_active_user_count,
+            "overview_attention_required_count": snapshot.overview_attention_required_count,
         },
         "migration_issues": [
             {"severity": severity, "resolution": resolution, "value": value}
@@ -968,6 +1147,10 @@ def _snapshot_payload(collected: _CollectedDomainMetrics) -> str:
         "migration_records": [
             {"status": status, "value": value}
             for status, value in sorted(collected.migration_records.items())
+        ],
+        "migration_attention": [
+            {"record_type": record_type, "category": category, "value": value}
+            for (record_type, category), value in sorted(collected.migration_attention.items())
         ],
         "outbox_backlog": [
             {"status": status, "value": value}
@@ -984,6 +1167,10 @@ def _snapshot_payload(collected: _CollectedDomainMetrics) -> str:
         "overview_job_counts": [
             {"status": status, "value": value}
             for status, value in sorted(collected.overview_job_counts.items())
+        ],
+        "overview_card_states": [
+            {"status": status, "value": value}
+            for status, value in sorted(collected.overview_card_states.items())
         ],
         "durable_counters": [
             {
@@ -1023,6 +1210,7 @@ def _bounded_count_records(
     records = payload.get(key)
     if not isinstance(records, list):
         raise _TelemetryStoreError(f"invalid snapshot {key}")
+    seen: set[str] = set()
     for record in records:
         if not isinstance(record, dict) or not all(
             isinstance(item_key, str) for item_key in record
@@ -1032,7 +1220,49 @@ def _bounded_count_records(
         label = typed_record.get(label_name)
         if not isinstance(label, str) or label not in values:
             raise _TelemetryStoreError(f"invalid snapshot {key}")
+        if label in seen:
+            raise _TelemetryStoreError(f"duplicate snapshot {key}")
+        seen.add(label)
         values[label] = _non_negative_int(typed_record.get("value"), name=key)
+    if seen != set(allowed):
+        raise _TelemetryStoreError(f"incomplete snapshot {key}")
+    return values
+
+
+def _bounded_pair_count_records(
+    payload: Mapping[str, object],
+    *,
+    key: str,
+    first_label_name: str,
+    first_allowed: tuple[str, ...],
+    second_label_name: str,
+    second_allowed: tuple[str, ...],
+) -> dict[tuple[str, str], int]:
+    """Parse a bounded two-label gauge collection from a persisted snapshot."""
+
+    records = payload.get(key)
+    if not isinstance(records, list):
+        raise _TelemetryStoreError(f"invalid snapshot {key}")
+    values: dict[tuple[str, str], int] = {}
+    for record in records:
+        if not isinstance(record, dict) or not all(
+            isinstance(item_key, str) for item_key in record
+        ):
+            raise _TelemetryStoreError(f"invalid snapshot {key}")
+        typed_record = cast(dict[str, object], record)
+        first = typed_record.get(first_label_name)
+        second = typed_record.get(second_label_name)
+        if (
+            not isinstance(first, str)
+            or not isinstance(second, str)
+            or first not in first_allowed
+            or second not in second_allowed
+        ):
+            raise _TelemetryStoreError(f"invalid snapshot {key}")
+        pair = (first, second)
+        if pair in values:
+            raise _TelemetryStoreError(f"duplicate snapshot {key}")
+        values[pair] = _non_negative_int(typed_record.get("value"), name=key)
     return values
 
 
@@ -1091,6 +1321,10 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
             typed_snapshot.get("overview_missing_active_user_count"),
             name="overview_missing_active_user_count",
         ),
+        overview_attention_required_count=_non_negative_int(
+            typed_snapshot.get("overview_attention_required_count"),
+            name="overview_attention_required_count",
+        ),
     )
     migration_issues = {
         (severity, resolution): 0
@@ -1100,6 +1334,7 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
     issue_records = typed_payload.get("migration_issues")
     if not isinstance(issue_records, list):
         raise _TelemetryStoreError("invalid snapshot migration_issues")
+    seen_issues: set[tuple[str, str]] = set()
     for record in issue_records:
         if not isinstance(record, dict) or not all(
             isinstance(item_key, str) for item_key in record
@@ -1115,9 +1350,15 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
             or resolution not in _ISSUE_RESOLUTIONS
         ):
             raise _TelemetryStoreError("invalid snapshot migration_issues")
-        migration_issues[(severity, resolution)] = _non_negative_int(
+        issue_key = (severity, resolution)
+        if issue_key in seen_issues:
+            raise _TelemetryStoreError("duplicate snapshot migration_issues")
+        seen_issues.add(issue_key)
+        migration_issues[issue_key] = _non_negative_int(
             typed_record.get("value"), name="migration_issues"
         )
+    if seen_issues != set(migration_issues):
+        raise _TelemetryStoreError("incomplete snapshot migration_issues")
     counter_records = typed_payload.get("durable_counters")
     if not isinstance(counter_records, list):
         raise _TelemetryStoreError("invalid snapshot durable_counters")
@@ -1139,7 +1380,10 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
         ):
             raise _TelemetryStoreError("invalid snapshot durable_counters")
         typed_labels = cast(dict[str, str], labels)
-        durable_counters[_canonical_counter_labels(name, typed_labels)] = _non_negative_float(
+        counter_key = _canonical_counter_labels(name, typed_labels)
+        if counter_key in durable_counters:
+            raise _TelemetryStoreError("duplicate snapshot durable_counters")
+        durable_counters[counter_key] = _non_negative_float(
             typed_record.get("value"), name="durable_counters"
         )
     return _CollectedDomainMetrics(
@@ -1156,6 +1400,14 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
             key="migration_records",
             label_name="status",
             allowed=_MIGRATION_RECORD_STATUSES,
+        ),
+        migration_attention=_bounded_pair_count_records(
+            typed_payload,
+            key="migration_attention",
+            first_label_name="record_type",
+            first_allowed=_MIGRATION_ATTENTION_RECORD_TYPES,
+            second_label_name="category",
+            second_allowed=_MIGRATION_ATTENTION_CATEGORIES,
         ),
         outbox_backlog=_bounded_count_records(
             typed_payload,
@@ -1180,6 +1432,12 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
             key="overview_job_counts",
             label_name="status",
             allowed=_OVERVIEW_JOB_STATUSES,
+        ),
+        overview_card_states=_bounded_count_records(
+            typed_payload,
+            key="overview_card_states",
+            label_name="status",
+            allowed=_OVERVIEW_CARD_STATUSES,
         ),
         durable_counters=durable_counters,
     )
@@ -1250,6 +1508,7 @@ def refresh_domain_metrics(
     state_root: Path,
     *,
     runtime_mode: str | None = None,
+    read_only: bool = False,
 ) -> DomainTelemetrySnapshot:
     """Publish durable domain health without turning a failed scrape green.
 
@@ -1257,7 +1516,11 @@ def refresh_domain_metrics(
     dispatcher and planners have no HTTP listener.  If *any* durable read
     fails, the last internally consistent scrape remains exported and a
     separate freshness gauge becomes false.  This avoids a transient lock or
-    damaged store resetting a critical backlog/issue gauge to zero.
+    damaged store resetting a critical backlog/issue gauge to zero.  When
+    *read_only* is true (or the persisted maintenance flag is active), the
+    scrape uses immutable source reads only; it never opens the telemetry
+    sidecar, initializes a sidecar, writes a snapshot, or records a durable
+    error.
     """
 
     root = Path(state_root).resolve()
@@ -1265,30 +1528,94 @@ def refresh_domain_metrics(
     now = datetime.now(UTC)
     control_path = root / "runtime" / "agentic_researcher.sqlite3"
     empty = _empty_collected_metrics()
+    source_states = {source: "unavailable" for source in _TELEMETRY_SOURCES}
+    effective_read_only = read_only
 
     try:
         if not control_path.is_file():
-            raise FileNotFoundError(control_path.name)
-        with closing(_read_only(control_path)) as conn:
-            tables = _tables(conn)
-            mode, contract_version = _cutover_state(conn, tables)
-            migration_issues = _migration_issue_count(conn, tables)
-            migration_runs = _migration_run_counts(conn, tables)
-            migration_records = _migration_record_counts(conn, tables)
-            outbox_age, outbox_backlog = _outbox_metrics(conn, tables, now)
-            orphan_attempts = _orphan_attempt_count(conn, tables)
-            idempotency_records = _idempotency_record_count(conn, tables)
-            overview_age, overview_missing = _overview_freshness(
-                conn,
-                tables,
-                root / "runtime" / "auth.sqlite3",
-                now,
-            )
+            source_states["control"] = "missing"
+            raise _TelemetrySourceReadinessError("control", "missing")
+        try:
+            with closing(
+                _maintenance_read_only(control_path, source="control")
+                if effective_read_only
+                else _read_only(control_path)
+            ) as conn:
+                tables = _tables(conn)
+                effective_read_only = effective_read_only or _maintenance_requires_read_only(
+                    conn, tables
+                )
+                source_states["control"] = _schema_state(
+                    conn,
+                    tables,
+                    _V2_CONTROL_SOURCE_REQUIREMENTS,
+                    database_name="agentic_researcher",
+                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"],
+                )
+                source_states["overview"] = _schema_state(
+                    conn,
+                    tables,
+                    _V2_OVERVIEW_SOURCE_REQUIREMENTS,
+                    database_name="agentic_researcher",
+                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"],
+                )
+                mode, contract_version = _cutover_state(conn, tables)
+                source_states["auth"] = _external_source_state(
+                    root / "runtime" / "auth.sqlite3",
+                    _V2_AUTH_SOURCE_REQUIREMENTS,
+                    source="auth",
+                    database_name="auth",
+                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["auth"],
+                    maintenance_read_only=effective_read_only,
+                )
+                source_states["literature"] = _external_source_state(
+                    root / "runtime" / "literature.sqlite3",
+                    _V2_LITERATURE_SOURCE_REQUIREMENTS,
+                    source="literature",
+                    database_name="literature",
+                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["literature"],
+                    maintenance_read_only=effective_read_only,
+                )
+                if effective_read_only or runtime_mode == "v2" or mode == "v2":
+                    if mode == "v2" and not _committed_v2_control_fuse_ready(conn):
+                        source_states["control"] = "schema_invalid"
+                    not_ready = _first_not_ready_source(source_states)
+                    if not_ready is not None:
+                        raise _TelemetrySourceReadinessError(*not_ready)
+                migration_issues = _migration_issue_count(conn, tables)
+                migration_runs = _migration_run_counts(conn, tables)
+                migration_records = _migration_record_counts(conn, tables)
+                migration_attention = _migration_attention_issue_counts(conn, tables)
+                outbox_age, outbox_backlog = _outbox_metrics(conn, tables, now)
+                orphan_attempts = _orphan_attempt_count(conn, tables)
+                idempotency_records = _idempotency_record_count(conn, tables)
+                (
+                    overview_age,
+                    overview_missing,
+                    overview_attention,
+                    overview_card_states,
+                ) = _overview_freshness(
+                    conn,
+                    tables,
+                    root / "runtime" / "auth.sqlite3",
+                    now,
+                    maintenance_read_only=effective_read_only,
+                )
+                overview_job_counts = _overview_job_counts(conn, tables)
+        except (OSError, sqlite3.Error) as exc:
+            # A v2 API cannot use cached risk gauges when the authoritative
+            # control source itself is unreadable.  The source-state gauge is
+            # deliberately bounded and contains no filesystem or SQLite detail.
+            source_states["control"] = "unavailable"
+            if runtime_mode == "v2":
+                raise _TelemetrySourceReadinessError("control", "unavailable") from exc
+            raise
         literature_age, saga_counts = _literature_saga_metrics(
-            root / "runtime" / "literature.sqlite3", now
+            root / "runtime" / "literature.sqlite3",
+            now,
+            maintenance_read_only=effective_read_only,
         )
-        overview_job_counts = _overview_job_counts(control_path)
-        durable_counters = _load_durable_counters(root)
+        durable_counters = {} if effective_read_only else _load_durable_counters(root)
         snapshot = DomainTelemetrySnapshot(
             mode=mode,
             contract_version=contract_version,
@@ -1301,21 +1628,37 @@ def refresh_domain_metrics(
             literature_pending_age_seconds=literature_age,
             overview_oldest_age_seconds=overview_age,
             overview_missing_active_user_count=overview_missing,
+            overview_attention_required_count=overview_attention,
         )
         collected = _CollectedDomainMetrics(
             snapshot=snapshot,
             migration_issues=migration_issues,
             migration_runs=migration_runs,
             migration_records=migration_records,
+            migration_attention=migration_attention,
             outbox_backlog=outbox_backlog,
             orphan_attempts=orphan_attempts,
             saga_counts=saga_counts,
             overview_job_counts=overview_job_counts,
+            overview_card_states=overview_card_states,
             durable_counters=durable_counters,
         )
-        _persist_collected_snapshot(root, collected, collected_at=now.timestamp())
+        if not effective_read_only:
+            _persist_collected_snapshot(root, collected, collected_at=now.timestamp())
     except Exception as exc:
-        record_sqlite_error(operation="domain_metrics_refresh", error=exc, state_root=root)
+        if not effective_read_only:
+            record_sqlite_error(operation="domain_metrics_refresh", error=exc, state_root=root)
+        if isinstance(exc, _TelemetrySourceReadinessError):
+            _publish_collected_metrics(
+                empty,
+                runtime_mode=runtime_mode,
+                scrape_success=False,
+                last_success_timestamp=math.nan,
+                risk_state_known=False,
+                telemetry_delivery_failure_latched=_telemetry_delivery_failure_latched(root),
+                source_states=source_states,
+            )
+            return empty.snapshot
         collected = _LAST_GOOD_SCRAPES.get(root)
         last_success_timestamp = _LAST_SUCCESS_TIMESTAMPS.get(root)
         if collected is None:
@@ -1335,7 +1678,7 @@ def refresh_domain_metrics(
             except Exception:
                 collected = None
                 last_success_timestamp = None
-        if collected is None:
+        if effective_read_only or collected is None:
             _publish_collected_metrics(
                 empty,
                 runtime_mode=runtime_mode,
@@ -1343,6 +1686,7 @@ def refresh_domain_metrics(
                 last_success_timestamp=math.nan,
                 risk_state_known=False,
                 telemetry_delivery_failure_latched=_telemetry_delivery_failure_latched(root),
+                source_states=source_states,
             )
             return empty.snapshot
         _publish_collected_metrics(
@@ -1352,10 +1696,12 @@ def refresh_domain_metrics(
             last_success_timestamp=last_success_timestamp or math.nan,
             risk_state_known=True,
             telemetry_delivery_failure_latched=_telemetry_delivery_failure_latched(root),
+            source_states=source_states,
         )
         return collected.snapshot
-    _LAST_GOOD_SCRAPES[root] = collected
-    _LAST_SUCCESS_TIMESTAMPS[root] = now.timestamp()
+    if not effective_read_only:
+        _LAST_GOOD_SCRAPES[root] = collected
+        _LAST_SUCCESS_TIMESTAMPS[root] = now.timestamp()
     _publish_collected_metrics(
         collected,
         runtime_mode=runtime_mode,
@@ -1363,6 +1709,7 @@ def refresh_domain_metrics(
         last_success_timestamp=now.timestamp(),
         risk_state_known=True,
         telemetry_delivery_failure_latched=_telemetry_delivery_failure_latched(root),
+        source_states=source_states,
     )
     return collected.snapshot
 
@@ -1380,6 +1727,7 @@ def _empty_collected_metrics() -> _CollectedDomainMetrics:
         literature_pending_age_seconds=0.0,
         overview_oldest_age_seconds=0.0,
         overview_missing_active_user_count=0,
+        overview_attention_required_count=0,
     )
     return _CollectedDomainMetrics(
         snapshot=snapshot,
@@ -1390,16 +1738,40 @@ def _empty_collected_metrics() -> _CollectedDomainMetrics:
         },
         migration_runs={status: 0 for status in _MIGRATION_RUN_STATUSES},
         migration_records={status: 0 for status in _MIGRATION_RECORD_STATUSES},
+        migration_attention={},
         outbox_backlog={status: 0 for status in _OUTBOX_BACKLOG_STATES},
         orphan_attempts={reason: 0 for reason in _ORPHAN_REASONS},
         saga_counts={status: 0 for status in _SAGA_STATUSES},
         overview_job_counts={status: 0 for status in _OVERVIEW_JOB_STATUSES},
+        overview_card_states={status: 0 for status in _OVERVIEW_CARD_STATUSES},
         durable_counters={},
     )
 
 
 def _read_only(path: Path) -> sqlite3.Connection:
     uri = f"{path.resolve().as_uri()}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _sqlite_has_wal_sidecars(path: Path) -> bool:
+    return any(path.with_name(f"{path.name}{suffix}").exists() for suffix in ("-wal", "-shm"))
+
+
+def _maintenance_read_only(path: Path, *, source: str) -> sqlite3.Connection:
+    """Open one authoritative source without changing its SQLite sidecars.
+
+    SQLite may create or update a shared-memory sidecar even for a regular
+    ``mode=ro`` connection.  Immutable mode prevents that write, but it would
+    ignore an existing WAL; a main database with WAL/SHM members is therefore
+    not a trustworthy immutable view.  During maintenance we defer that
+    source rather than touching it or fabricating a partial read.
+    """
+
+    if _sqlite_has_wal_sidecars(path):
+        raise _TelemetrySourceReadinessError(source, "unavailable")
+    uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
@@ -1412,6 +1784,165 @@ def _tables(conn: sqlite3.Connection) -> set[str]:
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _maintenance_requires_read_only(conn: sqlite3.Connection, tables: set[str]) -> bool:
+    """Read the maintenance flag without constructing a writable service.
+
+    A maintenance-mode API has intentionally not initialized
+    :class:`DomainMaintenanceService`: its ``status()`` path opens the control
+    database through the writable connection factory.  Telemetry already has
+    a read-only control connection, so it can conservatively decide whether a
+    scrape must avoid creating or updating its sidecar from that connection.
+    """
+
+    if "domain_maintenance_state" not in tables:
+        return False
+    if not {"singleton", "is_active"} <= _columns(conn, "domain_maintenance_state"):
+        return True
+    row = conn.execute(
+        "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+    ).fetchone()
+    if row is None:
+        return True
+    value = row["is_active"]
+    return not (isinstance(value, int) and not isinstance(value, bool) and value == 0)
+
+
+def _schema_state(
+    conn: sqlite3.Connection,
+    tables: set[str],
+    requirements: Mapping[str, tuple[str, ...]],
+    *,
+    database_name: str,
+    minimum_version: int,
+) -> str:
+    """Return a bounded readiness state without exposing a database path."""
+
+    for table, required_columns in requirements.items():
+        if table not in tables or not set(required_columns) <= _columns(conn, table):
+            return "schema_invalid"
+    row = conn.execute(
+        "SELECT version FROM _schema_version WHERE database = ?", (database_name,)
+    ).fetchone()
+    if (
+        row is None
+        or not isinstance(row["version"], int)
+        or isinstance(row["version"], bool)
+        or int(row["version"]) < minimum_version
+    ):
+        return "schema_invalid"
+    return "ready"
+
+
+def _external_source_state(
+    path: Path,
+    requirements: Mapping[str, tuple[str, ...]],
+    *,
+    source: str,
+    database_name: str,
+    minimum_version: int,
+    maintenance_read_only: bool,
+) -> str:
+    """Probe an external SQLite source without treating absence as an empty source."""
+
+    if not path.is_file():
+        return "missing"
+    try:
+        opener = (
+            _maintenance_read_only(path, source=source)
+            if maintenance_read_only
+            else _read_only(path)
+        )
+        with closing(opener) as conn:
+            return _schema_state(
+                conn,
+                _tables(conn),
+                requirements,
+                database_name=database_name,
+                minimum_version=minimum_version,
+            )
+    except (_TelemetrySourceReadinessError, OSError, sqlite3.Error):
+        return "unavailable"
+
+
+def _first_not_ready_source(source_states: Mapping[str, str]) -> tuple[str, str] | None:
+    for source in _TELEMETRY_SOURCES:
+        state = source_states.get(source, "unavailable")
+        if state != "ready":
+            return source, state
+    return None
+
+
+def _committed_v2_control_fuse_ready(conn: sqlite3.Connection) -> bool:
+    """Validate the durable v2 fuse before calling its source telemetry ready.
+
+    The normal cutover controller enforces these invariants transactionally.
+    Telemetry repeats only the bounded, local facts needed to reject a stale
+    or manually damaged control row instead of letting a v2 scrape claim a
+    healthy source from table shape alone.
+    """
+
+    row = conn.execute(
+        """
+        SELECT state, contract_version, schema_version, constraints_ready, cutover_ready,
+               committed_at, cutover_run_id, artifact_sha, artifact_contract_min,
+               artifact_contract_max, artifact_schema_min, artifact_schema_max,
+               backup_manifest_sha256, backup_tree_sha256, restore_evidence_sha256,
+               source_inventory_sha256, preparation_digest
+        FROM domain_cutover_state
+        WHERE singleton = 1
+        """
+    ).fetchone()
+    if row is None or row["state"] != "v2":
+        return False
+
+    integers = (
+        "contract_version",
+        "schema_version",
+        "constraints_ready",
+        "cutover_ready",
+        "artifact_contract_min",
+        "artifact_contract_max",
+        "artifact_schema_min",
+        "artifact_schema_max",
+    )
+    if any(not isinstance(row[name], int) or isinstance(row[name], bool) for name in integers):
+        return False
+    if row["contract_version"] != _V2_DOMAIN_CONTRACT_VERSION:
+        return False
+    if row["constraints_ready"] != 1 or row["cutover_ready"] != 1:
+        return False
+    current_schema = conn.execute(
+        "SELECT version FROM _schema_version WHERE database = 'agentic_researcher'"
+    ).fetchone()
+    if (
+        current_schema is None
+        or not isinstance(current_schema["version"], int)
+        or isinstance(current_schema["version"], bool)
+        or row["schema_version"] != current_schema["version"]
+        or row["schema_version"] < _V2_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"]
+    ):
+        return False
+    if not (
+        row["artifact_contract_min"] <= row["contract_version"] <= row["artifact_contract_max"]
+        and row["artifact_schema_min"] <= row["schema_version"] <= row["artifact_schema_max"]
+    ):
+        return False
+
+    return all(
+        isinstance(row[name], str) and bool(row[name])
+        for name in (
+            "committed_at",
+            "cutover_run_id",
+            "artifact_sha",
+            "backup_manifest_sha256",
+            "backup_tree_sha256",
+            "restore_evidence_sha256",
+            "source_inventory_sha256",
+            "preparation_digest",
+        )
+    )
 
 
 def _cutover_state(conn: sqlite3.Connection, tables: set[str]) -> tuple[str, int]:
@@ -1427,8 +1958,15 @@ def _cutover_state(conn: sqlite3.Connection, tables: set[str]) -> tuple[str, int
     ).fetchone()
     value = str(row["state"]) if row is not None and row["state"] is not None else "legacy"
     mode = value if value in _DOMAIN_MODES else "unknown"
-    contract_version = int(row["contract_version"]) if row is not None else 0
-    return mode, max(0, contract_version)
+    raw_contract_version = row["contract_version"] if row is not None else None
+    contract_version = (
+        raw_contract_version
+        if isinstance(raw_contract_version, int)
+        and not isinstance(raw_contract_version, bool)
+        and raw_contract_version >= 0
+        else 0
+    )
+    return mode, contract_version
 
 
 def _migration_issue_count(
@@ -1481,6 +2019,41 @@ def _migration_record_counts(conn: sqlite3.Connection, tables: set[str]) -> dict
         raw_status = str(row["status"])
         status = raw_status if raw_status in values else "unknown"
         values[status] += int(row["count"])
+    return values
+
+
+def _migration_attention_issue_counts(
+    conn: sqlite3.Connection, tables: set[str]
+) -> dict[tuple[str, str], int]:
+    """Return unresolved migration remediation work with bounded labels.
+
+    Import result rows preserve historical outcomes, including an
+    ``attention_needed`` result after its remediation has been completed.
+    The issue workflow is the authoritative current queue, so this gauge
+    counts only open typed issues rather than joining and over-counting source
+    records with multiple remediation steps.
+    """
+
+    if "domain_migration_issues" not in tables:
+        return {}
+    columns = _columns(conn, "domain_migration_issues")
+    if not {"record_type", "category"} <= columns:
+        return {}
+    resolution = (
+        "WHERE COALESCE(resolution_status, 'open') = 'open'"
+        if "resolution_status" in columns
+        else ""
+    )
+    values: dict[tuple[str, str], int] = {}
+    query = (
+        "SELECT record_type, category, COUNT(*) AS count "
+        f"FROM domain_migration_issues {resolution} GROUP BY record_type, category"
+    )
+    for row in conn.execute(query).fetchall():
+        record_type = _bounded_label(str(row["record_type"]), _MIGRATION_ATTENTION_RECORD_TYPES)
+        category = _bounded_label(str(row["category"]), _MIGRATION_ATTENTION_CATEGORIES)
+        key = (record_type, category)
+        values[key] = values.get(key, 0) + int(row["count"])
     return values
 
 
@@ -1658,35 +2231,79 @@ def _overview_freshness(
     tables: set[str],
     auth_path: Path,
     now: datetime,
-) -> tuple[float, int]:
+    *,
+    maintenance_read_only: bool = False,
+) -> tuple[float, int, int, dict[str, int]]:
+    card_states = {status: 0 for status in _OVERVIEW_CARD_STATUSES}
     if "overview_snapshots" not in tables:
-        return 0.0, len(_active_user_ids(auth_path))
+        active_users = set(_active_user_ids(auth_path, maintenance_read_only=maintenance_read_only))
+        return 0.0, len(active_users), len(active_users), card_states
+    columns = _columns(conn, "overview_snapshots")
+    source_status = "source_status" if "source_status" in columns else "'unknown' AS source_status"
+    attention_required = (
+        "attention_required" if "attention_required" in columns else "1 AS attention_required"
+    )
     rows = conn.execute(
-        """
-        SELECT owner_user_id, MAX(created_at) AS latest_created_at
+        f"""
+        SELECT snapshot_id, owner_user_id, created_at,
+               {source_status}, {attention_required}
         FROM overview_snapshots
-        GROUP BY owner_user_id
+        ORDER BY owner_user_id, created_at DESC, snapshot_id DESC
         """
     ).fetchall()
-    latest = {
-        str(row["owner_user_id"]): _age_seconds(row["latest_created_at"], now)
-        for row in rows
-        if isinstance(row["owner_user_id"], str)
-    }
-    active_users = set(_active_user_ids(auth_path))
+    latest: dict[str, sqlite3.Row] = {}
+    for row in rows:
+        owner_user_id = row["owner_user_id"]
+        if isinstance(owner_user_id, str) and owner_user_id not in latest:
+            latest[owner_user_id] = row
+    active_users = set(_active_user_ids(auth_path, maintenance_read_only=maintenance_read_only))
     missing = len(active_users.difference(latest))
-    candidate_ages: Iterable[float] = (
-        (latest[user_id] for user_id in active_users if user_id in latest)
-        if active_users
-        else latest.values()
-    )
-    return max(candidate_ages, default=0.0), missing
+    tracked_users = active_users or set(latest)
+    candidate_ages: list[float] = []
+    attention_users = set(active_users.difference(latest))
+    for owner_user_id, row in latest.items():
+        if owner_user_id not in tracked_users:
+            continue
+        age = _trusted_overview_age_seconds(row["created_at"], now)
+        if age is None:
+            # A malformed or future snapshot timestamp cannot prove current
+            # Overview data.  Keep a finite stale sentinel so both the stale
+            # and attention alerts fire rather than silently reporting age 0.
+            candidate_ages.append(_OVERVIEW_UNTRUSTED_SNAPSHOT_AGE_SECONDS)
+            attention_users.add(owner_user_id)
+        else:
+            candidate_ages.append(age)
+        status = _bounded_label(str(row["source_status"]), _OVERVIEW_CARD_STATUSES)
+        if status != "ok" or _overview_attention_required(row["attention_required"]):
+            attention_users.add(owner_user_id)
+    if "overview_refresh_card_states" in tables:
+        card_columns = _columns(conn, "overview_refresh_card_states")
+        if {"owner_user_id", "status"} <= card_columns:
+            for row in conn.execute(
+                "SELECT owner_user_id, status FROM overview_refresh_card_states"
+            ).fetchall():
+                owner_user_id = row["owner_user_id"]
+                if not isinstance(owner_user_id, str) or owner_user_id not in tracked_users:
+                    continue
+                status = _bounded_label(str(row["status"]), _OVERVIEW_CARD_STATUSES)
+                card_states[status] += 1
+                if status != "ok":
+                    attention_users.add(owner_user_id)
+    return max(candidate_ages, default=0.0), missing, len(attention_users), card_states
 
 
-def _active_user_ids(auth_path: Path) -> tuple[str, ...]:
+def _active_user_ids(
+    auth_path: Path,
+    *,
+    maintenance_read_only: bool = False,
+) -> tuple[str, ...]:
     if not auth_path.is_file():
         return ()
-    with closing(_read_only(auth_path)) as conn:
+    with closing(
+        _maintenance_read_only(auth_path, source="auth")
+        if maintenance_read_only
+        else _read_only(auth_path)
+    ) as conn:
         if "users" not in _tables(conn):
             return ()
         query = "SELECT id FROM users"
@@ -1696,11 +2313,20 @@ def _active_user_ids(auth_path: Path) -> tuple[str, ...]:
     return tuple(str(row["id"]) for row in rows if isinstance(row["id"], str))
 
 
-def _literature_saga_metrics(path: Path, now: datetime) -> tuple[float, dict[str, int]]:
+def _literature_saga_metrics(
+    path: Path,
+    now: datetime,
+    *,
+    maintenance_read_only: bool = False,
+) -> tuple[float, dict[str, int]]:
     counts = {status: 0 for status in _SAGA_STATUSES}
     if not path.is_file():
         return 0.0, counts
-    with closing(_read_only(path)) as conn:
+    with closing(
+        _maintenance_read_only(path, source="literature")
+        if maintenance_read_only
+        else _read_only(path)
+    ) as conn:
         if "literature_research_task_intents" not in _tables(conn):
             return 0.0, counts
         rows = conn.execute(
@@ -1724,17 +2350,16 @@ def _literature_saga_metrics(path: Path, now: datetime) -> tuple[float, dict[str
     return _age_seconds(row["oldest_created_at"] if row is not None else None, now), counts
 
 
-def _overview_job_counts(path: Path) -> dict[str, int]:
+def _overview_job_counts(conn: sqlite3.Connection, tables: set[str]) -> dict[str, int]:
     counts = {status: 0 for status in _OVERVIEW_JOB_STATUSES}
-    with closing(_read_only(path)) as conn:
-        if "overview_refresh_jobs" not in _tables(conn):
-            return counts
-        for row in conn.execute(
-            "SELECT status, COUNT(*) AS count FROM overview_refresh_jobs GROUP BY status"
-        ).fetchall():
-            status = str(row["status"])
-            if status in counts:
-                counts[status] = int(row["count"])
+    if "overview_refresh_jobs" not in tables:
+        return counts
+    for row in conn.execute(
+        "SELECT status, COUNT(*) AS count FROM overview_refresh_jobs GROUP BY status"
+    ).fetchall():
+        status = str(row["status"])
+        if status in counts:
+            counts[status] = int(row["count"])
     return counts
 
 
@@ -1743,6 +2368,21 @@ def _age_seconds(value: object, now: datetime) -> float:
     if parsed is None:
         return 0.0
     return max(0.0, (now - parsed.astimezone(UTC)).total_seconds())
+
+
+def _trusted_overview_age_seconds(value: object, now: datetime) -> float | None:
+    """Return a valid Overview age, never treating invalid data as fresh."""
+
+    parsed = _parse_timestamp(value)
+    if parsed is None or parsed > now:
+        return None
+    return (now - parsed).total_seconds()
+
+
+def _overview_attention_required(value: object) -> bool:
+    """Treat malformed durable attention flags conservatively as attention."""
+
+    return not (isinstance(value, int) and not isinstance(value, bool) and value == 0)
 
 
 def _parse_timestamp(value: object | None) -> datetime | None:
@@ -1763,7 +2403,10 @@ def _publish_collected_metrics(
     last_success_timestamp: float,
     risk_state_known: bool,
     telemetry_delivery_failure_latched: bool,
+    source_states: Mapping[str, str],
 ) -> None:
+    global _PUBLISHED_MIGRATION_ATTENTION_LABELS
+
     snapshot = collected.snapshot
     risk_value = 1.0 if risk_state_known else math.nan
 
@@ -1791,6 +2434,14 @@ def _publish_collected_metrics(
         "ainrf_domain_telemetry_delivery_failure_latched",
         1.0 if telemetry_delivery_failure_latched else 0.0,
     )
+    for source in _TELEMETRY_SOURCES:
+        current_state = source_states.get(source, "unavailable")
+        for state in _TELEMETRY_SOURCE_STATES:
+            _gauge(
+                "ainrf_domain_telemetry_source_status",
+                1.0 if current_state == state else 0.0,
+                {"source": source, "state": state},
+            )
     for severity in _ISSUE_SEVERITIES:
         for resolution in _ISSUE_RESOLUTIONS:
             value = collected.migration_issues.get((severity, resolution), 0)
@@ -1811,6 +2462,16 @@ def _publish_collected_metrics(
             risk(float(collected.migration_records.get(status, 0))),
             {"status": status},
         )
+    attention_labels = set(collected.migration_attention) | _PUBLISHED_MIGRATION_ATTENTION_LABELS
+    if not risk_state_known:
+        attention_labels.add(("unknown", "unknown"))
+    for record_type, category in sorted(attention_labels):
+        _gauge(
+            "ainrf_domain_migration_attention_needed_issues",
+            risk(float(collected.migration_attention.get((record_type, category), 0))),
+            {"record_type": record_type, "category": category},
+        )
+    _PUBLISHED_MIGRATION_ATTENTION_LABELS = attention_labels
     for state in _OUTBOX_BACKLOG_STATES:
         _gauge(
             "ainrf_domain_dispatch_outbox_entries",
@@ -1833,6 +2494,12 @@ def _publish_collected_metrics(
         _gauge(
             "ainrf_domain_overview_refresh_jobs",
             risk(float(collected.overview_job_counts.get(status, 0))),
+            {"status": status},
+        )
+    for status in _OVERVIEW_CARD_STATUSES:
+        _gauge(
+            "ainrf_domain_overview_card_states",
+            risk(float(collected.overview_card_states.get(status, 0))),
             {"status": status},
         )
     _gauge(
@@ -1858,6 +2525,10 @@ def _publish_collected_metrics(
     _gauge(
         "ainrf_domain_overview_missing_active_users",
         risk(float(snapshot.overview_missing_active_user_count)),
+    )
+    _gauge(
+        "ainrf_domain_overview_attention_required",
+        risk(float(snapshot.overview_attention_required_count)),
     )
     for (name, labels), value in collected.durable_counters.items():
         _set_counter(name, value, dict(labels))

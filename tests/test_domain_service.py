@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from ainrf.auth.service import AuthService
+from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain.service import (
     DomainConflictError,
@@ -85,14 +86,16 @@ def test_project_workspace_link_is_idempotent_and_does_not_grant_workspace_acces
             bob,
             idempotency_key="attach-2",
         )
-    admin_result = service.attach_workspace(
-        str(project["project_id"]),
-        str(workspace["workspace_id"]),
-        admin,
-        idempotency_key="attach-3",
-    )
-    assert admin_result["can_execute"] is False
-    assert admin_result["cannot_execute_reason"] == "active Environment grant is required"
+    with pytest.raises(DomainPermissionError, match="Environment access"):
+        service.attach_workspace(
+            str(project["project_id"]),
+            str(workspace["workspace_id"]),
+            admin,
+            idempotency_key="attach-3",
+        )
+    admin_link = service.workspace_links(str(project["project_id"]), admin)[0]
+    assert admin_link["can_execute"] is False
+    assert admin_link["cannot_execute_reason"] == "active Environment grant is required"
     updated = service.update_workspace(
         str(workspace["workspace_id"]),
         admin,
@@ -100,6 +103,148 @@ def test_project_workspace_link_is_idempotent_and_does_not_grant_workspace_acces
         idempotency_key="admin-metadata-update",
     )
     assert updated["label"] == "Admin-managed registry label"
+
+
+def test_admin_cannot_bypass_environment_execution_grants_for_workspace_operations(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    """Registry administration never implies a tenant's execution authority."""
+
+    reset_metrics()
+    service = _service(state_root, committed_v2_state)
+    admin, owner = _admin(), _user("workspace-owner")
+    environment = service.create_environment(
+        admin, alias="grant-guard-host", display_name="Grant guard", connection={}
+    )
+    environment_id = str(environment["environment_id"])
+    _grant_environment(state_root, environment_id, "workspace-owner")
+    project_id = str(service.create_project(owner, name="Grant guard project")["project_id"])
+    first = service.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path="/tmp/grant-guard-first",
+        label="first",
+    )
+    first_workspace_id = str(first["workspace_id"])
+
+    with pytest.raises(DomainPermissionError, match="Environment access"):
+        service.create_workspace(
+            admin,
+            environment_id=environment_id,
+            canonical_path="/tmp/grant-guard-admin-create",
+            label="admin create",
+        )
+    with pytest.raises(DomainPermissionError, match="Environment access"):
+        service.create_workspace_and_attach(
+            project_id=project_id,
+            user=admin,
+            environment_id=environment_id,
+            canonical_path="/tmp/grant-guard-admin-create-attach",
+            label="admin create and attach",
+            idempotency_key="admin-create-and-attach",
+        )
+    with pytest.raises(DomainPermissionError, match="Environment access"):
+        service.attach_workspace(
+            project_id,
+            first_workspace_id,
+            admin,
+            idempotency_key="admin-attach-without-grant",
+        )
+
+    service.attach_workspace(
+        project_id,
+        first_workspace_id,
+        owner,
+        idempotency_key="owner-attach-first",
+    )
+    service.set_primary_workspace(
+        project_id,
+        first_workspace_id,
+        owner,
+        idempotency_key="owner-primary-first",
+    )
+    second = service.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path="/tmp/grant-guard-second",
+        label="second",
+    )
+    second_workspace_id = str(second["workspace_id"])
+    service.attach_workspace(
+        project_id,
+        second_workspace_id,
+        owner,
+        idempotency_key="owner-attach-second",
+    )
+    with pytest.raises(DomainPermissionError, match="Environment access"):
+        service.replace_primary_workspace(
+            project_id,
+            first_workspace_id,
+            second_workspace_id,
+            admin,
+            idempotency_key="admin-replace-primary-without-grant",
+        )
+
+    assert (
+        'ainrf_domain_permission_denied_total{reason="environment_grant_required",resource="environment"} 4.0'
+        in get_metrics_text()
+    )
+    reset_metrics()
+
+
+def test_environment_admin_denial_records_bounded_permission_telemetry(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    reset_metrics()
+    service = _service(state_root, committed_v2_state)
+
+    with pytest.raises(DomainPermissionError, match="Only admins"):
+        service.create_environment(
+            _user("member"), alias="member-host", display_name="Member host", connection={}
+        )
+
+    assert (
+        'ainrf_domain_permission_denied_total{reason="admin_required",resource="environment"} 1.0'
+        in get_metrics_text()
+    )
+    reset_metrics()
+
+
+def test_invisible_environment_operations_record_bounded_permission_telemetry(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    """A hidden Environment remains a 404 while observability sees the denial."""
+
+    reset_metrics()
+    service = _service(state_root, committed_v2_state)
+    environment = service.create_environment(
+        _admin(), alias="hidden-host", display_name="Hidden host", connection={}
+    )
+    environment_id = str(environment["environment_id"])
+    outsider = _user("environment-outsider")
+
+    with pytest.raises(DomainNotFoundError):
+        service.environment(environment_id, outsider)
+    with pytest.raises(DomainNotFoundError):
+        service.disable_environment(environment_id, outsider)
+    with pytest.raises(DomainNotFoundError):
+        service.update_environment(environment_id, outsider, display_name="Not allowed")
+
+    assert (
+        'ainrf_domain_permission_denied_total{reason="not_visible",resource="environment"} 3.0'
+        in get_metrics_text()
+    )
+
+    # An absent Environment is not a permission denial, but has the same
+    # public result as the hidden one.
+    reset_metrics()
+    with pytest.raises(DomainNotFoundError):
+        service.environment("env-not-present", outsider)
+    assert (
+        'ainrf_domain_permission_denied_total{reason="not_visible",resource="environment"}'
+        not in get_metrics_text()
+    )
+    reset_metrics()
 
 
 def test_primary_replacement_and_detach_guard(state_root: Path, committed_v2_state: str) -> None:

@@ -188,6 +188,71 @@ def test_maintenance_source_fingerprint_uses_physical_sqlite_source_size(
     assert fingerprint[2] == database.stat().st_size
 
 
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        "runtime/literature.sqlite3",
+        "runtime/terminal_state.sqlite3",
+        "runtime/skill_registries.json",
+        "detections/environment-snapshot.json",
+    ),
+)
+def test_maintenance_stability_covers_every_control_state_source(
+    state_root: Path,
+    relative_path: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Files omitted from the legacy importer still block a cutover window."""
+
+    source = state_root / relative_path
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text('{"state":"before"}\n', encoding="utf-8")
+    service = DomainMaintenanceService(state_root)
+
+    def change_source(_seconds: float) -> None:
+        source.write_text('{"state":"after"}\n', encoding="utf-8")
+
+    monkeypatch.setattr("ainrf.domain_control.service.time.sleep", change_source)
+
+    assert not service._sources_are_stable(5.0)
+
+
+@pytest.mark.parametrize("source_kind", ("workspace", "tenant"))
+def test_maintenance_preflight_rejects_a_changed_explicit_external_source_tree(
+    state_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_kind: str,
+) -> None:
+    """Selected backup trees must be stable even when they sit outside state_root."""
+
+    external_root = tmp_path / f"selected-{source_kind}-root"
+    external_root.mkdir()
+    source = external_root / "tracked.txt"
+    source.write_text("before\n", encoding="utf-8")
+    service = (
+        DomainMaintenanceService(state_root, workspace_root=external_root)
+        if source_kind == "workspace"
+        else DomainMaintenanceService(state_root, tenant_root=external_root)
+    )
+    service.enter(actor_id="operator", reason="verify external backup source stability")
+
+    def change_source(_seconds: float) -> None:
+        source.write_text("after\n", encoding="utf-8")
+
+    monkeypatch.setattr("ainrf.domain_control.service.time.sleep", change_source)
+    try:
+        report = service.preflight(
+            required_participant_types=(),
+            stability_window_seconds=5.0,
+        )
+    finally:
+        service.exit(actor_id="operator")
+
+    assert report.source_stable is False
+    assert report.ready is False
+
+
 def test_sqlite_snapshot_reads_wal_and_remains_fixed(state_root: Path) -> None:
     database = state_root / "runtime" / "sessions.sqlite3"
     writer = sqlite3.connect(database)

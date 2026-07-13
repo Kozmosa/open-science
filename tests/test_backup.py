@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 import tarfile
 from io import BytesIO
@@ -14,7 +15,11 @@ import pytest
 import ainrf.backup.service as backup_service
 from ainrf.auth.service import AuthService
 from ainrf.backup.service import BackupManifest, BackupService, _dump_sqlite_safe
-from ainrf.domain_control import DomainCutoverController
+from ainrf.domain_control import (
+    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
+    DomainCutoverController,
+    DomainMaintenanceService,
+)
 from ainrf.domain_migration import DomainImporter, DomainReconciliationService, ReconciliationReport
 from tests.domain_cutover_fixtures import prepare_committed_v2_cutover
 
@@ -51,6 +56,22 @@ def _seed_state(state_root: Path) -> None:
     ss = state_root / "session-states" / "task-abc"
     ss.mkdir(parents=True)
     (ss / "checkpoint.json").write_text('{"step": 1}', encoding="utf-8")
+
+
+def _enter_drained_maintenance(state_root: Path) -> DomainMaintenanceService:
+    """Create the full persisted maintenance proof required for promotion."""
+
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.initialize()
+    participant_ids: list[str] = []
+    for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES:
+        participant_id = f"backup-test:{participant_type}"
+        maintenance.register_participant(participant_id, participant_type)
+        participant_ids.append(participant_id)
+    maintenance.enter(actor_id="backup-test", reason="verify generation promotion")
+    for participant_id in participant_ids:
+        maintenance.drain_participant(participant_id)
+    return maintenance
 
 
 def test_sqlite_backup_can_snapshot_a_read_only_source(tmp_path: Path) -> None:
@@ -107,6 +128,68 @@ def test_sqlite_backup_can_snapshot_a_read_only_file_source(tmp_path: Path) -> N
 
     with sqlite3.connect(destination) as conn:
         assert conn.execute("SELECT value FROM records").fetchall() == [("source",)]
+
+
+def test_sqlite_backup_retries_a_changed_staged_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A transient raw-copy race retries instead of rejecting a valid backup."""
+
+    source = tmp_path / "source.sqlite3"
+    destination = tmp_path / "snapshot.sqlite3"
+    with sqlite3.connect(source) as conn:
+        conn.execute("CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        conn.execute("INSERT INTO records (value) VALUES ('source')")
+
+    def unavailable_online_snapshot(_source: Path, _dest: Path, *, deadline: float) -> None:
+        _ = deadline
+        raise sqlite3.OperationalError("readonly WAL shared memory")
+
+    real_fingerprint = backup_service._sqlite_source_fingerprint
+    fingerprint_calls = 0
+
+    def changes_once(
+        members: tuple[Path, ...],
+    ) -> tuple[tuple[str, int, int, int, str], ...]:
+        nonlocal fingerprint_calls
+        fingerprint_calls += 1
+        fingerprint = real_fingerprint(members)
+        if fingerprint_calls == 2:
+            return fingerprint + (("simulated-source-change", 0, 0, 0, ""),)
+        return fingerprint
+
+    monkeypatch.setattr(backup_service, "_dump_sqlite_online", unavailable_online_snapshot)
+    monkeypatch.setattr(backup_service, "_sqlite_source_fingerprint", changes_once)
+    monkeypatch.setattr(backup_service, "_SQLITE_SNAPSHOT_RETRY_INTERVAL_SECONDS", 0.0)
+
+    _dump_sqlite_safe(source, destination)
+
+    assert fingerprint_calls >= 4
+    with sqlite3.connect(destination) as conn:
+        assert conn.execute("SELECT value FROM records").fetchall() == [("source",)]
+
+
+def test_sqlite_backup_rejects_unavailable_fallback_after_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read-only fallback never writes an archive after its deadline expires."""
+
+    source = tmp_path / "source.sqlite3"
+    destination = tmp_path / "snapshot.sqlite3"
+    with sqlite3.connect(source) as conn:
+        conn.execute("CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+
+    def unavailable_online_snapshot(_source: Path, _dest: Path, *, deadline: float) -> None:
+        _ = deadline
+        raise sqlite3.OperationalError("readonly WAL shared memory")
+
+    monkeypatch.setattr(backup_service, "_dump_sqlite_online", unavailable_online_snapshot)
+    monkeypatch.setattr(backup_service, "_SQLITE_SNAPSHOT_DEADLINE_SECONDS", 0.0)
+
+    with pytest.raises(ValueError, match="did not stabilize before snapshot deadline"):
+        _dump_sqlite_safe(source, destination)
+
+    assert not destination.exists()
 
 
 def _write_v2_archive(
@@ -358,6 +441,56 @@ def test_restore_requires_new_staged_root(tmp_path: Path) -> None:
         BackupService(source_root).restore_backup(archive, target_state_root=existing_root)
 
 
+def test_restore_rejects_nested_state_and_workspace_targets_before_staging(tmp_path: Path) -> None:
+    """A Workspace candidate must never create the state target as its parent."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    workspace_root = tmp_path / "source-workspaces"
+    workspace_root.mkdir()
+    (workspace_root / "README.md").write_text("workspace", encoding="utf-8")
+    archive = BackupService(source_root).create_backup(
+        tmp_path / "archive.tar.gz",
+        include_workspaces=True,
+        workspace_root=workspace_root,
+    )
+    state_target = tmp_path / "generation"
+
+    with pytest.raises(
+        ValueError, match="target_state_root and target_workspace_root must not overlap"
+    ):
+        BackupService(source_root).restore_backup(
+            archive,
+            target_state_root=state_target,
+            target_workspace_root=state_target / "workspaces",
+            skip_pre_backup=True,
+        )
+
+    assert not state_target.exists()
+
+
+def test_restore_rejects_nested_workspace_and_tenant_targets_before_staging(tmp_path: Path) -> None:
+    """Independent high-risk promotion roots must not create each other."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    workspace_target = tmp_path / "workspaces"
+
+    with pytest.raises(
+        ValueError, match="target_workspace_root and target_tenant_root must not overlap"
+    ):
+        BackupService(source_root).restore_backup(
+            archive,
+            target_state_root=tmp_path / "generation",
+            target_workspace_root=workspace_target,
+            target_tenant_root=workspace_target / "tenants",
+            skip_pre_backup=True,
+        )
+
+    assert not workspace_target.exists()
+
+
 def test_verify_rejects_checksum_tampering(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     _seed_state(source_root)
@@ -540,6 +673,16 @@ def test_manifest_v3_binds_posix_metadata_to_archive_and_restored_files(tmp_path
         assert restored_stat.st_uid == meta.uid
         assert restored_stat.st_gid == meta.gid
 
+    high_risk_report = json.loads(
+        (target_state / backup_service._HIGH_RISK_RESTORE_REPORT_NAME).read_text(encoding="utf-8")
+    )
+    assert high_risk_report["operator_action_required"] is True
+    assert high_risk_report["automatic_git_changes_applied"] is False
+    assert high_risk_report["trees"][0]["kind"] == "workspaces"
+    assert high_risk_report["trees"][0]["orphan_artifacts"]["status"] == "operator_review_required"
+    assert "project/README.md" in high_risk_report["trees"][0]["restored_paths"]
+    assert str(target_workspace) not in json.dumps(high_risk_report)
+
 
 def test_verify_rejects_mode_uid_and_gid_tampering(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
@@ -721,6 +864,35 @@ def test_restore_reconciles_committed_v2_before_promotion(tmp_path: Path) -> Non
     assert DomainCutoverController(target).status().state == "v2"
 
 
+def test_v2_control_plane_restore_writes_privacy_safe_orphan_report(tmp_path: Path) -> None:
+    """An unselected Workspace/tenant tree cannot suppress the v2 risk report."""
+
+    source_root = tmp_path / "source"
+    prepare_committed_v2_cutover(source_root, tmp_path)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    target = tmp_path / "restored"
+
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=target,
+        skip_pre_backup=True,
+    )
+
+    report = json.loads(
+        (target / backup_service._HIGH_RISK_RESTORE_REPORT_NAME).read_text(encoding="utf-8")
+    )
+    control_plane = report["control_plane_restore"]
+    assert report["operator_action_required"] is True
+    assert report["automatic_git_changes_applied"] is False
+    assert control_plane["domain_mode"] == "v2"
+    assert control_plane["workspace_tenant_data_restored"] is False
+    assert control_plane["orphan_artifacts"]["status"] == "operator_review_required"
+    assert control_plane["git_change_report"]["status"] == (
+        "not_collected_without_explicit_restore_tree"
+    )
+    assert str(source_root) not in json.dumps(report)
+
+
 def test_verify_rejects_tampered_nested_state_member(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     _seed_state(state_root)
@@ -860,4 +1032,435 @@ def test_restore_removes_promotion_journal_after_success(tmp_path: Path) -> None
 
     assert restored == target
     assert (target / "runtime" / "auth.sqlite3").exists()
+    assert not journal.exists()
+
+
+def test_restore_seals_generation_and_active_pointer_promotion_preserves_old_root(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    _enter_drained_maintenance(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    generation = tmp_path / "restored-generation"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=generation,
+        skip_pre_backup=True,
+    )
+
+    attestation = json.loads(
+        (generation / backup_service._RESTORE_GENERATION_ATTESTATION_NAME).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert attestation["version"] == backup_service._RESTORE_GENERATION_ATTESTATION_VERSION
+    assert attestation["manifest_digest"] == backup_service._manifest_digest(
+        BackupService(source_root).verify_backup(archive)
+    )
+
+    active_pointer = tmp_path / "active-state"
+    os.symlink(str(source_root), active_pointer)
+
+    result = BackupService(source_root).promote_restored_generation(
+        generation,
+        active_state_pointer=active_pointer,
+        maintenance_stability_window_seconds=0,
+    )
+
+    assert result.active_pointer == active_pointer
+    assert result.generation_root == generation.resolve()
+    assert result.previous_generation_root == source_root.resolve()
+    assert active_pointer.resolve() == generation.resolve()
+    assert (source_root / "runtime" / "auth.sqlite3").exists()
+    assert not backup_service._active_generation_promotion_journal_path(active_pointer).exists()
+
+
+def test_active_generation_promotion_rejects_unattested_directory(tmp_path: Path) -> None:
+    generation = tmp_path / "not-a-restore"
+    generation.mkdir()
+    active_pointer = tmp_path / "active-state"
+
+    with pytest.raises(ValueError, match="not a verified restore"):
+        BackupService(generation).promote_restored_generation(
+            generation,
+            active_state_pointer=active_pointer,
+        )
+
+    assert not active_pointer.exists()
+
+
+def test_active_generation_promotion_requires_a_ready_maintenance_epoch(tmp_path: Path) -> None:
+    """A confirmation flag cannot replace the persisted writer-drain proof."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    generation = tmp_path / "restored-generation"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=generation,
+        skip_pre_backup=True,
+    )
+    active_pointer = tmp_path / "active-state"
+    os.symlink(str(source_root), active_pointer)
+
+    with pytest.raises(ValueError, match="staged generation.*maintenance control plane"):
+        BackupService(source_root).promote_restored_generation(
+            generation,
+            active_state_pointer=active_pointer,
+            maintenance_stability_window_seconds=0,
+        )
+
+    assert active_pointer.resolve() == source_root.resolve()
+
+
+def test_active_generation_promotion_requires_the_staged_generation_to_be_fenced(
+    tmp_path: Path,
+) -> None:
+    """The source drain alone cannot allow a newly selected root to reopen writers."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    DomainMaintenanceService(source_root).initialize()
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    _enter_drained_maintenance(source_root)
+    generation = tmp_path / "restored-generation"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=generation,
+        skip_pre_backup=True,
+    )
+    active_pointer = tmp_path / "active-state"
+    os.symlink(str(source_root), active_pointer)
+
+    with pytest.raises(ValueError, match="staged generation to remain in maintenance"):
+        BackupService(source_root).promote_restored_generation(
+            generation,
+            active_state_pointer=active_pointer,
+            maintenance_stability_window_seconds=0,
+        )
+
+    assert active_pointer.resolve() == source_root.resolve()
+
+
+def test_active_generation_recovery_rejects_unsafe_journal_operation_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Recovery must not turn a corrupt journal field into an outside path."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    generation = tmp_path / "restored-generation"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=generation,
+        skip_pre_backup=True,
+    )
+    old_generation = tmp_path / "old-generation"
+    old_generation.mkdir()
+    active_pointer = tmp_path / "active-state"
+    os.symlink(str(old_generation), active_pointer)
+    attestation = backup_service._read_restore_generation_attestation(generation)
+    journal = backup_service._active_generation_promotion_journal_path(active_pointer)
+    payload = backup_service._active_generation_promotion_payload(
+        active_pointer=active_pointer,
+        generation_root=generation.resolve(),
+        previous_generation_root=old_generation.resolve(),
+        attestation=attestation,
+        operation_id="safe-operation",
+    )
+    payload["operation_id"] = "../../outside"
+    backup_service._write_promotion_journal(journal, payload, exclusive=True)
+    monkeypatch.setattr(backup_service, "_journal_process_is_alive", lambda _payload: False)
+
+    with pytest.raises(ValueError, match="invalid operation id"):
+        backup_service.recover_active_generation_promotion(active_pointer)
+
+    assert not (tmp_path.parent / "outside.tmp").exists()
+    assert journal.exists()
+
+
+def test_active_generation_recovery_canonicalizes_parent_aliases(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A crash journal remains recoverable through an equivalent pointer spelling."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    generation = tmp_path / "restored-generation"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=generation,
+        skip_pre_backup=True,
+    )
+    old_generation = tmp_path / "old-generation"
+    old_generation.mkdir()
+    real_parent = tmp_path / "real-pointer-parent"
+    real_parent.mkdir()
+    alias_parent = tmp_path / "pointer-parent-alias"
+    os.symlink(str(real_parent), alias_parent)
+    alias_pointer = alias_parent / "active-state"
+    resolved_pointer = real_parent / "active-state"
+    os.symlink(str(old_generation), alias_pointer)
+    attestation = backup_service._read_restore_generation_attestation(generation)
+    journal = backup_service._active_generation_promotion_journal_path(alias_pointer)
+    payload = backup_service._active_generation_promotion_payload(
+        active_pointer=alias_pointer,
+        generation_root=generation.resolve(),
+        previous_generation_root=old_generation.resolve(),
+        attestation=attestation,
+        operation_id="canonical-recovery",
+    )
+    temporary_pointer, _, _ = backup_service._active_generation_journal_paths(
+        payload,
+        active_pointer=alias_pointer,
+    )
+    backup_service._write_promotion_journal(journal, payload, exclusive=True)
+    os.symlink(str(generation.resolve()), temporary_pointer)
+    payload["phase"] = "promoting"
+    backup_service._write_promotion_journal(journal, payload)
+    backup_service.os.replace(temporary_pointer, resolved_pointer)
+    monkeypatch.setattr(backup_service, "_journal_process_is_alive", lambda _payload: False)
+
+    recovered = backup_service.recover_active_generation_promotion(resolved_pointer)
+
+    assert recovered is not None
+    assert recovered.recovered is True
+    assert resolved_pointer.resolve() == generation.resolve()
+    assert not journal.exists()
+
+
+def test_interrupted_active_generation_pointer_switch_is_finalized_on_recovery(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    generation = tmp_path / "restored-generation"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=generation,
+        skip_pre_backup=True,
+    )
+    old_generation = tmp_path / "old-generation"
+    old_generation.mkdir()
+    active_pointer = tmp_path / "active-state"
+    os.symlink(str(old_generation), active_pointer)
+    attestation = backup_service._read_restore_generation_attestation(generation)
+    operation_id = "interrupted-pointer-switch"
+    journal = backup_service._active_generation_promotion_journal_path(active_pointer)
+    payload = backup_service._active_generation_promotion_payload(
+        active_pointer=active_pointer,
+        generation_root=generation.resolve(),
+        previous_generation_root=old_generation.resolve(),
+        attestation=attestation,
+        operation_id=operation_id,
+    )
+    temporary_pointer, _, _ = backup_service._active_generation_journal_paths(
+        payload,
+        active_pointer=active_pointer,
+    )
+    backup_service._write_promotion_journal(journal, payload, exclusive=True)
+    os.symlink(str(generation.resolve()), temporary_pointer)
+    payload["phase"] = "promoting"
+    backup_service._write_promotion_journal(journal, payload)
+    backup_service.os.replace(temporary_pointer, active_pointer)
+    monkeypatch.setattr(backup_service, "_journal_process_is_alive", lambda _payload: False)
+
+    recovered = backup_service.recover_active_generation_promotion(active_pointer)
+
+    assert recovered is not None
+    assert recovered.recovered is True
+    assert active_pointer.resolve() == generation.resolve()
+    assert old_generation.exists()
+    assert not journal.exists()
+
+
+def test_active_generation_promotion_rolls_back_on_pointer_sync_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    _enter_drained_maintenance(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    generation = tmp_path / "restored-generation"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=generation,
+        skip_pre_backup=True,
+    )
+    active_pointer = tmp_path / "active-state"
+    os.symlink(str(source_root), active_pointer)
+    journal = backup_service._active_generation_promotion_journal_path(active_pointer)
+    real_fsync_directory = backup_service._fsync_directory
+    failed = False
+
+    def fail_after_pointer_switch(path: Path) -> None:
+        nonlocal failed
+        if (
+            path == active_pointer.parent
+            and active_pointer.is_symlink()
+            and active_pointer.resolve() == generation.resolve()
+            and not failed
+        ):
+            failed = True
+            raise OSError("simulated active pointer fsync failure")
+        real_fsync_directory(path)
+
+    monkeypatch.setattr(backup_service, "_fsync_directory", fail_after_pointer_switch)
+
+    with pytest.raises(OSError, match="simulated active pointer fsync failure"):
+        BackupService(source_root).promote_restored_generation(
+            generation,
+            active_state_pointer=active_pointer,
+            maintenance_stability_window_seconds=0,
+        )
+
+    assert failed is True
+    assert active_pointer.resolve() == source_root.resolve()
+    assert not journal.exists()
+
+
+def test_restore_rolls_back_when_promotion_directory_sync_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    target = tmp_path / "restored"
+    journal = target.parent / f".{target.name}.restore-promotion.json"
+    real_fsync_directory = backup_service._fsync_directory
+    failed = False
+
+    def fail_after_target_rename(path: Path) -> None:
+        nonlocal failed
+        if path == target.parent and target.exists() and not failed:
+            failed = True
+            raise OSError("simulated promotion fsync failure")
+        real_fsync_directory(path)
+
+    monkeypatch.setattr(backup_service, "_fsync_directory", fail_after_target_rename)
+
+    with pytest.raises(OSError, match="simulated promotion fsync failure"):
+        BackupService(source_root).restore_backup(
+            archive,
+            target_state_root=target,
+            skip_pre_backup=True,
+        )
+
+    assert failed is True
+    assert not target.exists()
+    assert not journal.exists()
+    assert not list(target.parent.glob(f".{target.name}.restore-*"))
+
+
+def test_interrupted_multi_root_promotion_is_rolled_back_before_a_retry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A stale journal returns a partial publish to private candidates safely."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    source_workspace = tmp_path / "source-workspace"
+    (source_workspace / "project").mkdir(parents=True)
+    (source_workspace / "project" / "README.md").write_text("workspace", encoding="utf-8")
+    archive = BackupService(source_root).create_backup(
+        tmp_path / "archive.tar.gz",
+        include_workspaces=True,
+        workspace_root=source_workspace,
+    )
+    manifest = BackupService(source_root).verify_backup(archive)
+    target = tmp_path / "restored"
+    workspace_target = tmp_path / "restored-workspace"
+    candidate = target.parent / f".{target.name}.restore-crashed"
+    workspace_candidate = workspace_target.parent / f".{workspace_target.name}.restore-crashed"
+    candidate.mkdir()
+    workspace_candidate.mkdir()
+    (candidate / "marker").write_text("state", encoding="utf-8")
+    (workspace_candidate / "marker").write_text("workspace", encoding="utf-8")
+    os_replace = backup_service.os.replace
+    os_replace(candidate, target)
+
+    journal = target.parent / f".{target.name}.restore-promotion.json"
+    payload: dict[str, object] = {
+        "version": backup_service._RESTORE_PROMOTION_JOURNAL_VERSION,
+        "operation_id": "crashed-promotion",
+        "manifest_digest": backup_service._manifest_digest(manifest),
+        "hostname": "test-host",
+        "process_id": 1,
+        "phase": "promoting",
+        "pairs": [
+            {"candidate": str(candidate), "target": str(target), "status": "promoted"},
+            {
+                "candidate": str(workspace_candidate),
+                "target": str(workspace_target),
+                "status": "staged",
+            },
+        ],
+    }
+    backup_service._write_promotion_journal(journal, payload, exclusive=True)
+    monkeypatch.setattr(backup_service, "_journal_process_is_alive", lambda _payload: False)
+
+    assert (
+        backup_service._recover_pending_restore_promotion(
+            journal,
+            expected_manifest_digest=backup_service._manifest_digest(manifest),
+        )
+        == "rolled_back"
+    )
+    assert not target.exists()
+    assert not workspace_target.exists()
+    assert not candidate.exists()
+    assert not workspace_candidate.exists()
+    assert not journal.exists()
+
+    restored = BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=target,
+        target_workspace_root=workspace_target,
+        skip_pre_backup=True,
+    )
+    assert restored == target
+    assert (target / "runtime" / "auth.sqlite3").exists()
+    assert (workspace_target / "project" / "README.md").read_text(encoding="utf-8") == "workspace"
+
+
+def test_completed_promotion_journal_is_finalized_after_process_crash(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """All renamed candidates are a completed generation, never rolled back."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    manifest = BackupService(source_root).verify_backup(archive)
+    target = tmp_path / "restored"
+    candidate = target.parent / f".{target.name}.restore-crashed"
+    candidate.mkdir()
+    (candidate / "completed-marker").write_text("complete", encoding="utf-8")
+    backup_service.os.replace(candidate, target)
+    journal = target.parent / f".{target.name}.restore-promotion.json"
+    payload: dict[str, object] = {
+        "version": backup_service._RESTORE_PROMOTION_JOURNAL_VERSION,
+        "operation_id": "completed-promotion",
+        "manifest_digest": backup_service._manifest_digest(manifest),
+        "hostname": "test-host",
+        "process_id": 1,
+        "phase": "completed",
+        "pairs": [{"candidate": str(candidate), "target": str(target), "status": "promoted"}],
+    }
+    backup_service._write_promotion_journal(journal, payload, exclusive=True)
+    monkeypatch.setattr(backup_service, "_journal_process_is_alive", lambda _payload: False)
+
+    restored = BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=target,
+        skip_pre_backup=True,
+    )
+
+    assert restored == target
+    assert (target / "completed-marker").read_text(encoding="utf-8") == "complete"
     assert not journal.exists()

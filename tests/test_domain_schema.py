@@ -85,6 +85,73 @@ def test_domain_schema_enforces_one_active_primary(tmp_path: Path) -> None:
             )
 
 
+def test_final_task_reference_guard_requires_an_active_project_workspace_link(
+    tmp_path: Path,
+) -> None:
+    """The final v2 equivalent FK guard rejects cross-Project Task writes."""
+
+    with closing(_domain_db(tmp_path)) as conn:
+        conn.execute("UPDATE domain_cutover_state SET constraints_ready = 1 WHERE singleton = 1")
+        for project_id in ("project-linked", "project-unlinked"):
+            conn.execute(
+                """
+                INSERT INTO projects (
+                    project_id, owner_user_id, name, status, is_default, created_at, updated_at
+                ) VALUES (?, 'user-1', ?, 'active', 0, 't', 't')
+                """,
+                (project_id, project_id),
+            )
+        conn.execute(
+            """
+            INSERT INTO environments (
+                environment_id, alias, owner_user_id, display_name, description,
+                connection_json, credential_ref, is_seed, status, created_at, updated_at
+            ) VALUES ('environment-1', 'guard-env', 'user-1', 'Guard environment', NULL,
+                '{}', NULL, 0, 'active', 't', 't')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO workspaces (
+                workspace_id, owner_user_id, environment_id, canonical_path, label,
+                description, context_metadata_json, status, legacy_project_id, created_at, updated_at
+            ) VALUES ('workspace-1', 'user-1', 'environment-1', '/tmp/task-guard', 'Guard',
+                NULL, '{}', 'active', NULL, 't', 't')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO project_workspace_links (
+                project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at
+            ) VALUES ('project-linked', 'workspace-1', 'active', 1, 'user-1', 't', 't')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES ('task-linked', 'project-linked', 'workspace-1', 'environment-1',
+                'general', 'claude_code', 'queued', 'Linked task', 'test', 't', 't', 'user-1')
+            """
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="active workspace link"):
+            conn.execute(
+                """
+                INSERT INTO tasks (
+                    task_id, project_id, workspace_id, environment_id, researcher_type,
+                    harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+                ) VALUES ('task-cross-project', 'project-unlinked', 'workspace-1', 'environment-1',
+                    'general', 'claude_code', 'queued', 'Cross project task', 'test', 't', 't',
+                    'user-1')
+                """
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="active workspace link"):
+            conn.execute(
+                "UPDATE tasks SET project_id = 'project-unlinked' WHERE task_id = 'task-linked'"
+            )
+
+
 def test_migration_012_upgrades_idempotency_to_actor_scoped_keys(tmp_path: Path) -> None:
     """Existing idempotency records survive the actor-scoped primary-key rebuild."""
     with closing(connect(tmp_path / "domain.sqlite3")) as conn:

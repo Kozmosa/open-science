@@ -269,6 +269,22 @@ def test_preflight_ignores_v2_participant_heartbeats_but_keeps_legacy_stability(
     assert service._source_fingerprints() == before
 
 
+def test_maintenance_reads_and_preflight_do_not_mutate_the_stability_proof(
+    state_root: Path,
+) -> None:
+    """Status/preflight must not create WAL writes while proving source stability."""
+
+    service = _participant_service_in_maintenance(state_root)
+    _drain_required_cutover_participants(service)
+    before = service._source_fingerprints()
+
+    assert service.status().is_active
+    assert service.participants()
+    assert service.preflight(stability_window_seconds=0).ready
+
+    assert service._source_fingerprints() == before
+
+
 def test_concurrent_heartbeats_cannot_revive_a_drained_participant(state_root: Path) -> None:
     service = DomainMaintenanceService(state_root)
     service.register_participant("worker-1", "literature_worker")

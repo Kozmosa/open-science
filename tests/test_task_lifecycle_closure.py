@@ -12,6 +12,7 @@ from threading import Barrier
 import pytest
 
 from ainrf.auth.service import AuthService
+from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain import (
     AttemptService,
@@ -161,6 +162,166 @@ def test_task_create_idempotency_is_actor_scoped_and_request_bound(
 
     second = _create_task(tasks, second_scope, idempotency_key="shared-create")
     assert second["task_id"] != first["task_id"]
+
+
+def test_idempotency_replays_before_later_authorization_and_state_checks(
+    state_root: Path, tmp_path: Path
+) -> None:
+    """A successful request stays replayable without reopening write authority."""
+
+    scope = _task_scope(state_root, tmp_path, label="replay-after-revocation")
+    tasks = _tasks(state_root)
+    created = _create_task(tasks, scope, idempotency_key="replay-create")
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute(
+            "UPDATE agent_task_attempts SET status = 'failed' WHERE attempt_id = ?",
+            (created["attempt_id"],),
+        )
+        conn.execute(
+            "UPDATE task_dispatch_outbox SET status = 'failed' WHERE dispatch_id = ?",
+            (created["dispatch_id"],),
+        )
+        conn.execute("UPDATE tasks SET status = 'failed' WHERE task_id = ?", (created["task_id"],))
+        conn.commit()
+    retried = tasks.retry_task(created["task_id"], scope.owner, idempotency_key="replay-retry")
+
+    context = _context(state_root)
+    first_draft = context.save_draft(
+        scope.project_id,
+        "First durable draft.",
+        scope.owner,
+        idempotency_key="replay-draft",
+    )
+    context.save_draft(
+        scope.project_id,
+        "Draft used for the replayable publish.",
+        scope.owner,
+        idempotency_key="publish-draft",
+    )
+    published = context.publish(
+        scope.project_id,
+        scope.owner,
+        idempotency_key="replay-publish",
+    )
+    preview = tasks.preview_task_context_update(created["task_id"], scope.project_id, scope.owner)
+    confirmed = tasks.confirm_task_context_update(
+        created["task_id"],
+        scope.project_id,
+        str(preview["preview_id"]),
+        scope.owner,
+        idempotency_key="replay-context-confirm",
+    )
+
+    tasks.archive_project(
+        scope.project_id,
+        scope.owner,
+        reason="close the Project after first results",
+        idempotency_key="replay-project-archive",
+    )
+    auth = AuthService(state_root=state_root)
+    auth.revoke_environment(
+        scope.environment_id,
+        str(scope.owner["id"]),
+        revoked_by="admin",
+        reason="verify replay does not reauthorize execution",
+    )
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute(
+            "UPDATE projects SET owner_user_id = ? WHERE project_id = ?",
+            ("replacement-owner", scope.project_id),
+        )
+        conn.commit()
+
+    assert _create_task(tasks, scope, idempotency_key="replay-create") == created
+    assert (
+        tasks.retry_task(created["task_id"], scope.owner, idempotency_key="replay-retry") == retried
+    )
+    assert (
+        context.save_draft(
+            scope.project_id,
+            "First durable draft.",
+            scope.owner,
+            idempotency_key="replay-draft",
+        )
+        == first_draft
+    )
+    assert (
+        context.publish(
+            scope.project_id,
+            scope.owner,
+            idempotency_key="replay-publish",
+        )
+        == published
+    )
+    assert (
+        tasks.confirm_task_context_update(
+            created["task_id"],
+            scope.project_id,
+            str(preview["preview_id"]),
+            scope.owner,
+            idempotency_key="replay-context-confirm",
+        )
+        == confirmed
+    )
+
+    with pytest.raises(DomainConflictError, match="different request"):
+        _create_task(
+            tasks,
+            scope,
+            idempotency_key="replay-create",
+            prompt="A distinct request must never reuse the original result.",
+        )
+    with pytest.raises(DomainConflictError, match="different request"):
+        tasks.confirm_task_context_update(
+            created["task_id"],
+            scope.project_id,
+            "another-preview",
+            scope.owner,
+            idempotency_key="replay-context-confirm",
+        )
+
+    with pytest.raises(DomainNotFoundError):
+        tasks.create_task(
+            _member("unrelated-actor"),
+            project_id=scope.project_id,
+            workspace_id=scope.workspace_id,
+            title="Lifecycle task",
+            prompt="Investigate the lifecycle.",
+            researcher_type="vanilla",
+            harness_engine="claude-code",
+            idempotency_key="replay-create",
+        )
+    with pytest.raises(DomainNotFoundError):
+        context.save_draft(
+            scope.project_id,
+            "First durable draft.",
+            _member("unrelated-actor"),
+            idempotency_key="replay-draft",
+        )
+
+
+def test_task_create_missing_environment_grant_records_permission_telemetry(
+    state_root: Path, tmp_path: Path
+) -> None:
+    scope = _task_scope(state_root, tmp_path, label="permission-telemetry")
+    tasks = _tasks(state_root)
+    auth = AuthService(state_root=state_root)
+    auth.revoke_environment(
+        scope.environment_id,
+        str(scope.owner["id"]),
+        revoked_by="admin",
+        reason="permission telemetry coverage",
+    )
+    reset_metrics()
+
+    with pytest.raises(DomainPermissionError, match="Environment grant"):
+        _create_task(tasks, scope, idempotency_key="permission-telemetry-create")
+
+    assert (
+        'ainrf_domain_permission_denied_total{reason="environment_grant_required",resource="environment"} 1.0'
+        in get_metrics_text()
+    )
+    reset_metrics()
 
 
 def test_task_application_fails_closed_during_domain_maintenance(

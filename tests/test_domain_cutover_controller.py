@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from ainrf.backup import BackupService
-from ainrf.db import connect
+from ainrf.db import connect, run_pending
 from ainrf.domain_control import (
     CutoverPreconditionError,
     DomainCutoverController,
@@ -196,6 +196,91 @@ def test_constraint_finalizer_requires_maintenance_and_installs_task_guard(
         maintenance.exit(actor_id="operator-cutover")
 
 
+def test_constraint_finalizer_rejects_preexisting_task_without_active_workspace_link(
+    state_root: Path,
+) -> None:
+    """Final cutover validation must cover rows written before the v2 guard."""
+
+    controller = DomainCutoverController(state_root)
+    db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    with closing(connect(state_root / "runtime" / "auth.sqlite3")) as conn:
+        run_pending(conn, "auth")
+        conn.execute(
+            """
+            INSERT INTO users (
+                id, username, password_hash, display_name, role, status, created_at
+            ) VALUES ('owner-ready', 'owner-ready', 'not-used-in-test', 'Owner', 'member',
+                'active', ?)
+            """,
+            (_NOW,),
+        )
+        conn.commit()
+    with closing(connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO projects (
+                project_id, owner_user_id, name, status, is_default, created_at, updated_at
+            ) VALUES ('project-unlinked', 'owner-ready', 'Unlinked project', 'active', 1, ?, ?)
+            """,
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """
+            INSERT INTO environments (
+                environment_id, alias, owner_user_id, display_name, description,
+                connection_json, credential_ref, is_seed, status, created_at, updated_at
+            ) VALUES ('environment-unlinked', 'unlinked-env', 'owner-ready',
+                'Unlinked environment', NULL, '{}', NULL, 0, 'active', ?, ?)
+            """,
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """
+            INSERT INTO workspaces (
+                workspace_id, owner_user_id, environment_id, canonical_path, label,
+                description, context_metadata_json, status, legacy_project_id, created_at, updated_at
+            ) VALUES ('workspace-unlinked', 'owner-ready', 'environment-unlinked',
+                '/tmp/cutover-unlinked', 'Unlinked workspace', NULL, '{}', 'active', NULL, ?, ?)
+            """,
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES ('task-unlinked', 'project-unlinked', 'workspace-unlinked',
+                'environment-unlinked', 'general', 'claude_code', 'completed',
+                'Unlinked task', 'test', ?, ?, 'owner-ready')
+            """,
+            (_NOW, _NOW),
+        )
+        conn.commit()
+    run = DomainImporter(state_root).run(artifact_sha=_ARTIFACT_SHA)
+
+    maintenance = DomainMaintenanceService(state_root)
+    enter_maintenance_with_required_participants(
+        maintenance,
+        actor_id="operator-cutover",
+        reason="reject an unlinked preexisting Task",
+    )
+    try:
+        with pytest.raises(CutoverPreconditionError, match="active Project-Workspace link"):
+            controller.finalize_constraints(
+                actor_id="operator-cutover",
+                run_id=run.run_id,
+                stability_window_seconds=0,
+            )
+        with closing(connect(db_path)) as conn:
+            state = conn.execute(
+                "SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1"
+            ).fetchone()
+        assert state is not None
+        assert not bool(state["constraints_ready"])
+    finally:
+        maintenance.exit(actor_id="operator-cutover")
+
+
 def test_prepare_commit_binds_evidence_and_fences_first_v2_write(
     state_root: Path, tmp_path: Path
 ) -> None:
@@ -212,6 +297,9 @@ def test_prepare_commit_binds_evidence_and_fences_first_v2_write(
                 ("b" * 64,),
             )
     _commit(controller, run_id, archive, schema_version)
+    # The v2 runtime may begin its first authoritative write only after the
+    # cutover control operation is complete and maintenance has reopened.
+    DomainMaintenanceService(state_root).exit(actor_id="operator-cutover")
 
     with closing(connect(db_path)) as conn:
         conn.execute("BEGIN IMMEDIATE")

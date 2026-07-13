@@ -13,7 +13,7 @@ from uuid import uuid4
 from ainrf.db import connect, run_pending
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError
 from ainrf.domain.write_fence import DomainWriteFence
-from ainrf.domain_control import DomainCutoverError
+from ainrf.domain_control import DomainCutoverError, MaintenanceLease, MaintenanceModeError
 from ainrf.harness_engine import EngineEvent
 
 
@@ -886,37 +886,107 @@ class AttemptService:
         now = _now()
         with closing(self._connect()) as conn:
             self._record_v2_write(conn, actor_id="system:domain-attempt-service")
-            dispatch = self._current_claim(conn, claim, require_not_expired=True)
-            if str(dispatch["launch_state"]) not in {"none", "starting"}:
-                raise DispatchClaimError("Dispatch has crossed the runtime launch boundary")
-            runtime = conn.execute(
-                """SELECT runtime_session_id, status FROM agent_runtime_sessions
-                   WHERE launch_key = ?""",
-                (claim.runtime_launch_key,),
-            ).fetchone()
-            if runtime is not None:
-                if runtime["status"] != "starting":
-                    raise DispatchClaimError("Prepared Runtime Session is no longer unstarted")
-                conn.execute(
-                    "DELETE FROM agent_runtime_sessions WHERE runtime_session_id = ?",
-                    (runtime["runtime_session_id"],),
-                )
-            conn.execute(
-                """UPDATE task_dispatch_outbox
-                   SET status = 'pending', claim_token = NULL, dispatcher_id = NULL,
-                       claim_expires_at = NULL, runtime_launch_key = NULL,
-                       launch_state = 'none', last_error = ?, updated_at = ?
-                   WHERE dispatch_id = ? AND claim_token = ?""",
-                (reason, now, claim.dispatch_id, claim.claim_token),
-            )
-            conn.execute(
-                """UPDATE agent_task_attempts
-                   SET status = 'queued', started_at = NULL
-                   WHERE attempt_id = ?""",
-                (claim.attempt_id,),
-            )
-            self._project_task_status(conn, claim.attempt_id, "queued", now)
+            self._release_unstarted_claim_in_transaction(conn, claim, reason=reason, now=now)
             conn.commit()
+
+    def release_unstarted_claim_for_maintenance_drain(
+        self,
+        claim: DispatchClaim,
+        *,
+        maintenance_lease: MaintenanceLease,
+        reason: str,
+    ) -> None:
+        """Release a pre-maintenance claim without reopening ordinary v2 writes.
+
+        A dispatcher can hold a claim when an operator enters maintenance.  It
+        has not crossed the engine boundary yet, so leaving it claimed would
+        make preflight fail indefinitely.  This narrowly-scoped drain path is
+        permitted only while the original ``task-dispatcher.claim`` lease is
+        still in the persistent in-flight table.  It intentionally bypasses
+        the normal first-v2-write fence, which correctly rejects every new
+        application mutation during maintenance.
+        """
+
+        self._require_v2_mutation()
+        now = _now()
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                self._assert_maintenance_drain_lease(conn, maintenance_lease)
+                self._release_unstarted_claim_in_transaction(conn, claim, reason=reason, now=now)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+    @staticmethod
+    def _assert_maintenance_drain_lease(
+        conn: sqlite3.Connection,
+        maintenance_lease: MaintenanceLease,
+    ) -> None:
+        state = conn.execute(
+            "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+        mutation = conn.execute(
+            """
+            SELECT maintenance_epoch, source
+            FROM domain_maintenance_mutations
+            WHERE mutation_id = ?
+            """,
+            (maintenance_lease.mutation_id,),
+        ).fetchone()
+        if (
+            state is None
+            or mutation is None
+            or not bool(state["is_active"])
+            or int(mutation["maintenance_epoch"]) != maintenance_lease.maintenance_epoch
+            or int(state["maintenance_epoch"]) != maintenance_lease.maintenance_epoch + 1
+            or str(mutation["source"]) != "task-dispatcher.claim"
+        ):
+            raise MaintenanceModeError(
+                "unstarted dispatch claim is not owned by a pre-maintenance worker lease"
+            )
+
+    def _release_unstarted_claim_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        claim: DispatchClaim,
+        *,
+        reason: str,
+        now: str,
+    ) -> None:
+        """Apply the reversible pre-launch state transition in an owned transaction."""
+
+        dispatch = self._current_claim(conn, claim, require_not_expired=True)
+        if str(dispatch["launch_state"]) not in {"none", "starting"}:
+            raise DispatchClaimError("Dispatch has crossed the runtime launch boundary")
+        runtime = conn.execute(
+            """SELECT runtime_session_id, status FROM agent_runtime_sessions
+               WHERE launch_key = ?""",
+            (claim.runtime_launch_key,),
+        ).fetchone()
+        if runtime is not None:
+            if runtime["status"] != "starting":
+                raise DispatchClaimError("Prepared Runtime Session is no longer unstarted")
+            conn.execute(
+                "DELETE FROM agent_runtime_sessions WHERE runtime_session_id = ?",
+                (runtime["runtime_session_id"],),
+            )
+        conn.execute(
+            """UPDATE task_dispatch_outbox
+               SET status = 'pending', claim_token = NULL, dispatcher_id = NULL,
+                   claim_expires_at = NULL, runtime_launch_key = NULL,
+                   launch_state = 'none', last_error = ?, updated_at = ?
+               WHERE dispatch_id = ? AND claim_token = ?""",
+            (reason, now, claim.dispatch_id, claim.claim_token),
+        )
+        conn.execute(
+            """UPDATE agent_task_attempts
+               SET status = 'queued', started_at = NULL
+               WHERE attempt_id = ?""",
+            (claim.attempt_id,),
+        )
+        self._project_task_status(conn, claim.attempt_id, "queued", now)
 
     def mark_runtime_started(self, claim: DispatchClaim) -> str:
         """Compatibility helper retained for existing B5 repository callers."""

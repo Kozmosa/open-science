@@ -13,6 +13,7 @@ from starlette.requests import HTTPConnection
 
 from ainrf.domain import DomainService
 from ainrf.domain.service import DomainNotFoundError
+from ainrf.domain_telemetry import record_permission_denied
 from ainrf.domain_control import DomainModelMode
 
 
@@ -83,6 +84,16 @@ def require_v2_workspace_execution_owner(
     if workspace.get("status") != "active":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
     if workspace.get("owner_user_id") != user.get("id"):
+        config = getattr(request.app.state, "api_config", None)
+        state_root = getattr(config, "state_root", None)
+        user_id = user.get("id")
+        record_permission_denied(
+            resource="workspace",
+            reason="tenant_owner_required",
+            user_id=user_id if isinstance(user_id, str) else None,
+            workspace_id=workspace_id,
+            state_root=state_root,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Workspace owner permission is required",

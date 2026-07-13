@@ -442,8 +442,9 @@ def backup_restore(
 ) -> None:
     """Restore OpenScience state into a new staged root.
 
-    The active state root is not overwritten. Verify and promote the staged
-    root through the deployment's explicit directory/volume switch procedure.
+    The active state root is not overwritten. After services are stopped or
+    in maintenance, use ``backup promote-generation`` with an explicit active
+    state symlink to atomically select this verified generation.
     """
     svc = BackupService(default_state_root())
     restored_root = svc.restore_backup(
@@ -454,6 +455,71 @@ def backup_restore(
         skip_pre_backup=skip_pre_backup,
     )
     typer.echo(f"Restore staged and verified: {restored_root}")
+
+
+@backup_app.command("promote-generation")
+def backup_promote_generation(
+    generation_state_root: Annotated[
+        Path,
+        typer.Argument(help="Verified staged state root returned by backup restore."),
+    ],
+    active_state_pointer: Annotated[
+        Path,
+        typer.Option(
+            help="Symlink used as AINRF_STATE_ROOT; atomically repointed to the staged generation."
+        ),
+    ],
+    maintenance_state_root: Annotated[
+        Path | None,
+        typer.Option(
+            help=(
+                "Current active state root that owns the validated maintenance epoch. "
+                "Defaults to the active-state-pointer target."
+            )
+        ),
+    ] = None,
+    maintenance_stability_window_seconds: Annotated[
+        float,
+        typer.Option(
+            min=0.0,
+            help="Required stable-source window for the active maintenance preflight.",
+        ),
+    ] = 5.0,
+    confirm_active_switch: Annotated[
+        bool,
+        typer.Option(
+            "--confirm-active-switch",
+            help="Required acknowledgement before the verified maintenance-gated switch.",
+        ),
+    ] = False,
+) -> None:
+    """Atomically point a stopped runtime at one verified restored generation.
+
+    This command does not merge, promote, or otherwise alter any explicitly
+    restored workspace or tenant tree.  Inspect its high-risk restore report
+    before a separate deployment-level volume/directory decision. Both the
+    current active root and the staged generation must already be in a valid
+    maintenance epoch; enter maintenance on the staged root explicitly before
+    running this command.
+    """
+
+    if not confirm_active_switch:
+        raise typer.BadParameter(
+            "pass --confirm-active-switch only after services are stopped or in maintenance"
+        )
+    try:
+        result = BackupService(generation_state_root).promote_restored_generation(
+            generation_state_root,
+            active_state_pointer=active_state_pointer,
+            maintenance_state_root=maintenance_state_root,
+            maintenance_stability_window_seconds=maintenance_stability_window_seconds,
+        )
+    except (MaintenanceModeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"Active state generation switched: {result.active_pointer} -> {result.generation_root}"
+    )
 
 
 @backup_app.command("verify")
@@ -475,14 +541,32 @@ def backup_verify(
         typer.echo("  Includes: tenants")
 
 
-def _maintenance_service(state_root: Path) -> DomainMaintenanceService:
-    service = DomainMaintenanceService(state_root)
+def _maintenance_service(
+    state_root: Path,
+    *,
+    workspace_root: Path | None = None,
+    tenant_root: Path | None = None,
+) -> DomainMaintenanceService:
+    service = DomainMaintenanceService(
+        state_root,
+        workspace_root=workspace_root,
+        tenant_root=tenant_root,
+    )
     service.initialize()
     return service
 
 
-def _cutover_controller(state_root: Path) -> DomainCutoverController:
-    return DomainCutoverController(state_root)
+def _cutover_controller(
+    state_root: Path,
+    *,
+    workspace_root: Path | None = None,
+    tenant_root: Path | None = None,
+) -> DomainCutoverController:
+    return DomainCutoverController(
+        state_root,
+        workspace_root=workspace_root,
+        tenant_root=tenant_root,
+    )
 
 
 def _admin_cli_participant(
@@ -562,20 +646,42 @@ def domain_cutover_finalize_constraints(
             help="Required stable source window while the maintenance epoch owns writes.",
         ),
     ] = 5.0,
+    workspace_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit Workspace tree selected for backup/cutover stability proof."),
+    ] = None,
+    tenant_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit tenant tree selected for backup/cutover stability proof."),
+    ] = None,
     state_root: Annotated[
         Path, typer.Option(help="State root containing migration and maintenance state.")
     ] = default_state_root(),
 ) -> None:
     """Install and attest the final Task reference guards during maintenance."""
 
-    participant = _admin_cli_participant(state_root, "domain-cutover.finalize-constraints")
+    maintenance = _maintenance_service(
+        state_root,
+        workspace_root=workspace_root,
+        tenant_root=tenant_root,
+    )
+    participant = _admin_cli_participant(
+        state_root,
+        "domain-cutover.finalize-constraints",
+        maintenance=maintenance,
+    )
     try:
-        result = _cutover_controller(state_root).finalize_constraints(
+        result = _cutover_controller(
+            state_root,
+            workspace_root=workspace_root,
+            tenant_root=tenant_root,
+        ).finalize_constraints(
             actor_id=actor_id,
             run_id=run_id,
             stability_window_seconds=stability_window_seconds,
+            maintenance_participant_id=participant.participant_id,
         )
-    except (DomainCutoverError, ValueError) as exc:
+    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     finally:
@@ -604,15 +710,36 @@ def domain_cutover_prepare(
     stability_window_seconds: Annotated[
         float, typer.Option(min=0.0, help="Required stable source window before preparing.")
     ] = 5.0,
+    workspace_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit Workspace tree selected for backup/cutover stability proof."),
+    ] = None,
+    tenant_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit tenant tree selected for backup/cutover stability proof."),
+    ] = None,
     state_root: Annotated[
         Path, typer.Option(help="State root containing migration and maintenance state.")
     ] = default_state_root(),
 ) -> None:
     """Prepare but do not yet enable the irreversible v2 cutover."""
 
-    participant = _admin_cli_participant(state_root, "domain-cutover.prepare")
+    maintenance = _maintenance_service(
+        state_root,
+        workspace_root=workspace_root,
+        tenant_root=tenant_root,
+    )
+    participant = _admin_cli_participant(
+        state_root,
+        "domain-cutover.prepare",
+        maintenance=maintenance,
+    )
     try:
-        result = _cutover_controller(state_root).prepare(
+        result = _cutover_controller(
+            state_root,
+            workspace_root=workspace_root,
+            tenant_root=tenant_root,
+        ).prepare(
             actor_id=actor_id,
             run_id=run_id,
             backup_archive=backup_archive,
@@ -622,8 +749,9 @@ def domain_cutover_prepare(
             artifact_schema_min=artifact_schema_min,
             artifact_schema_max=artifact_schema_max,
             stability_window_seconds=stability_window_seconds,
+            maintenance_participant_id=participant.participant_id,
         )
-    except (DomainCutoverError, ValueError) as exc:
+    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     finally:
@@ -652,15 +780,36 @@ def domain_cutover_commit(
     stability_window_seconds: Annotated[
         float, typer.Option(min=0.0, help="Required stable source window before committing.")
     ] = 5.0,
+    workspace_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit Workspace tree selected for backup/cutover stability proof."),
+    ] = None,
+    tenant_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit tenant tree selected for backup/cutover stability proof."),
+    ] = None,
     state_root: Annotated[
         Path, typer.Option(help="State root containing migration and maintenance state.")
     ] = default_state_root(),
 ) -> None:
     """Commit the prepared v2 fuse after repeating all safety gates."""
 
-    participant = _admin_cli_participant(state_root, "domain-cutover.commit")
+    maintenance = _maintenance_service(
+        state_root,
+        workspace_root=workspace_root,
+        tenant_root=tenant_root,
+    )
+    participant = _admin_cli_participant(
+        state_root,
+        "domain-cutover.commit",
+        maintenance=maintenance,
+    )
     try:
-        result = _cutover_controller(state_root).commit(
+        result = _cutover_controller(
+            state_root,
+            workspace_root=workspace_root,
+            tenant_root=tenant_root,
+        ).commit(
             actor_id=actor_id,
             run_id=run_id,
             backup_archive=backup_archive,
@@ -670,8 +819,9 @@ def domain_cutover_commit(
             artifact_schema_min=artifact_schema_min,
             artifact_schema_max=artifact_schema_max,
             stability_window_seconds=stability_window_seconds,
+            maintenance_participant_id=participant.participant_id,
         )
-    except (DomainCutoverError, ValueError) as exc:
+    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     finally:
@@ -691,8 +841,12 @@ def domain_cutover_abort(
 
     participant = _admin_cli_participant(state_root, "domain-cutover.abort")
     try:
-        result = _cutover_controller(state_root).abort(actor_id=actor_id, reason=reason)
-    except (DomainCutoverError, ValueError) as exc:
+        result = _cutover_controller(state_root).abort(
+            actor_id=actor_id,
+            reason=reason,
+            maintenance_participant_id=participant.participant_id,
+        )
+    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     finally:
@@ -725,27 +879,33 @@ def domain_runtime_resolve_launch_unknown(
     """Close a manually investigated unknown launch; never retry or relaunch it."""
 
     try:
-        artifact_sha = _domain_worker_artifact_sha(state_root)
-        if artifact_sha is None:
-            raise DomainCutoverError(
-                "runtime launch reconciliation requires a committed domain v2 artifact"
-            )
-        auth = AuthService(state_root=state_root)
-        auth.initialize()
-        actor = auth.get_user(actor_id)
-        if actor.status.value != "active":
-            raise DomainCutoverError("runtime launch reconciliation actor is not active")
-        result = TaskApplicationService(
+        with _admin_cli_mutation(
             state_root,
-            artifact_sha=artifact_sha,
-        ).resolve_launch_unknown(
-            task_id,
-            attempt_id,
-            {"id": actor.id, "role": actor.role.value},
-            reason=reason,
-            idempotency_key=idempotency_key or f"launch-unknown-resolution:{attempt_id}",
-        )
-    except (DomainCutoverError, LookupError, ValueError) as exc:
+            "domain-runtime.resolve-launch-unknown",
+        ) as (maintenance, lease):
+            artifact_sha = _domain_worker_artifact_sha(state_root)
+            if artifact_sha is None:
+                raise DomainCutoverError(
+                    "runtime launch reconciliation requires a committed domain v2 artifact"
+                )
+            auth = AuthService(state_root=state_root)
+            auth.initialize()
+            maintenance.check_lease(lease)
+            actor = auth.get_user(actor_id)
+            if actor.status.value != "active":
+                raise DomainCutoverError("runtime launch reconciliation actor is not active")
+            result = TaskApplicationService(
+                state_root,
+                artifact_sha=artifact_sha,
+            ).resolve_launch_unknown(
+                task_id,
+                attempt_id,
+                {"id": actor.id, "role": actor.role.value},
+                reason=reason,
+                idempotency_key=idempotency_key or f"launch-unknown-resolution:{attempt_id}",
+            )
+            maintenance.check_lease(lease)
+    except (DomainCutoverError, LookupError, MaintenanceModeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     typer.echo(json_mod.dumps(result, indent=2))
@@ -818,13 +978,29 @@ def domain_maintenance_preflight(
         float,
         typer.Option(min=0.1, help="Maximum age of a required participant heartbeat."),
     ] = 30.0,
+    workspace_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit Workspace tree selected for backup/cutover stability proof."),
+    ] = None,
+    tenant_root: Annotated[
+        Path | None,
+        typer.Option(help="Explicit tenant tree selected for backup/cutover stability proof."),
+    ] = None,
     state_root: Annotated[
         Path, typer.Option(help="State root containing the control database.")
     ] = default_state_root(),
 ) -> None:
     """Report the hard migration/cutover safety gates without changing state."""
-    service = _maintenance_service(state_root)
-    participant = _admin_cli_participant(state_root, "domain-maintenance.preflight")
+    service = _maintenance_service(
+        state_root,
+        workspace_root=workspace_root,
+        tenant_root=tenant_root,
+    )
+    participant = _admin_cli_participant(
+        state_root,
+        "domain-maintenance.preflight",
+        maintenance=service,
+    )
     try:
         required_types = tuple(
             dict.fromkeys(CUTOVER_REQUIRED_PARTICIPANT_TYPES + tuple(required_participant_type))

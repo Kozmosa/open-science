@@ -20,7 +20,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
-from ainrf.domain_telemetry import record_durable_idempotency_event
+from ainrf.domain_telemetry import record_durable_idempotency_event, record_permission_denied
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 
@@ -421,10 +421,14 @@ class ProjectContextService:
         if state is None or bool(state["is_active"]):
             raise MaintenanceModeError("domain writes are paused for maintenance")
 
-    @staticmethod
-    def _user_id(user: Mapping[str, object]) -> str:
+    def _user_id(self, user: Mapping[str, object]) -> str:
         value = user.get("id")
         if not isinstance(value, str) or not value:
+            record_permission_denied(
+                resource="other",
+                reason="authenticated_user_required",
+                state_root=self._state_root,
+            )
             raise DomainPermissionError("Authenticated user ID is required")
         return value
 
@@ -494,7 +498,6 @@ class ProjectContextService:
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
-            DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
             actor_user_id = self._user_id(user)
             request = {"project_id": project_id, "content": content}
             if idempotency_key is not None:
@@ -507,6 +510,7 @@ class ProjectContextService:
                 )
                 if cached is not None:
                     return cached
+            DomainAuthorizationService(conn).require_project_editor(project_id, dict(user))
             now = _now()
             conn.execute(
                 """INSERT INTO project_context_drafts(project_id, content, updated_by_user_id, updated_at)
@@ -570,7 +574,50 @@ class ProjectContextService:
     ) -> dict[str, object]:
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
+            actor_user_id = self._user_id(user)
+            # Publishing has no client body: the Draft and Fragment manifest
+            # are server state rather than request fields.  A repeated key for
+            # the same Project must therefore return its first durable result
+            # even if that mutable state later changes.  A key reused for a
+            # different Project still crosses that target's normal visibility
+            # boundary before reporting an idempotency conflict.
             auth = DomainAuthorizationService(conn)
+            existing_project_id = (
+                self._idempotency_response_project_id(
+                    conn,
+                    actor_user_id,
+                    "project.context.publish",
+                    idempotency_key,
+                )
+                if idempotency_key is not None
+                else None
+            )
+            if existing_project_id is not None:
+                if idempotency_key is None:  # pragma: no cover - guarded lookup above
+                    raise AssertionError("existing idempotency record needs a key")
+                if existing_project_id != project_id:
+                    # A caller may reuse its own key against another Project,
+                    # but must not learn whether that target has a Draft or
+                    # Fragments. Check the normal visibility/capability
+                    # boundary before reporting the deterministic conflict.
+                    auth.require_project_publisher(project_id, dict(user))
+                    self._idempotent_result(
+                        conn,
+                        actor_user_id,
+                        "project.context.publish",
+                        idempotency_key,
+                        {"project_id": project_id},
+                    )
+                    raise AssertionError("existing idempotency key must conflict")
+                cached = self._idempotent_result(
+                    conn,
+                    actor_user_id,
+                    "project.context.publish",
+                    idempotency_key,
+                    {"project_id": project_id},
+                )
+                if cached is not None:
+                    return cached
             auth.require_project_publisher(project_id, dict(user))
             draft = conn.execute(
                 "SELECT content FROM project_context_drafts WHERE project_id = ?", (project_id,)
@@ -580,14 +627,7 @@ class ProjectContextService:
             content = str(draft["content"])
             fragment_manifest = self._freeze_project_fragments(conn, project_id)
             version_fingerprint = context_version_fingerprint(content, fragment_manifest)
-            actor_user_id = self._user_id(user)
-            request = {
-                "project_id": project_id,
-                "draft_fingerprint": _fingerprint(content),
-                "fragment_manifest_fingerprint": _fingerprint(
-                    _canonical_json(list(fragment_manifest))
-                ),
-            }
+            request = {"project_id": project_id}
             if idempotency_key is not None:
                 cached = self._idempotent_result(
                     conn, actor_user_id, "project.context.publish", idempotency_key, request
@@ -1319,7 +1359,6 @@ class ProjectContextService:
         self._require_task_lifecycle_capability(_lifecycle_capability)
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
-            self._authorize_task_context_update(conn, task_id, project_id, user)
             actor_user_id = self._user_id(user)
             request = {
                 "task_id": task_id,
@@ -1331,6 +1370,7 @@ class ProjectContextService:
             )
             if cached is not None:
                 return cached
+            self._authorize_task_context_update(conn, task_id, project_id, user)
             preview = conn.execute(
                 """SELECT * FROM task_context_update_previews
                    WHERE preview_id = ? AND task_id = ? AND project_id = ?
@@ -1992,6 +2032,35 @@ class ProjectContextService:
     @staticmethod
     def _request_hash(request: Mapping[str, object]) -> str:
         return _fingerprint(_canonical_json(dict(request)))
+
+    @staticmethod
+    def _idempotency_response_project_id(
+        conn: sqlite3.Connection,
+        actor_user_id: str,
+        scope: str,
+        idempotency_key: str,
+    ) -> str | None:
+        """Return the Project bound to this actor's existing replay response.
+
+        A publish request has no body field that can identify the frozen Draft
+        without reading Project-owned state.  The durable response is safe to
+        inspect because it is scoped to the actor, and lets us route a reused
+        key for a different Project through the ordinary 404/403 boundary
+        before examining that Project's Draft or Fragments.
+        """
+
+        row = conn.execute(
+            """SELECT response_json FROM domain_idempotency_requests
+               WHERE actor_user_id = ? AND scope = ? AND idempotency_key = ?""",
+            (actor_user_id, scope, idempotency_key),
+        ).fetchone()
+        if row is None:
+            return None
+        response = _load_json_object(row["response_json"])
+        project_id = response.get("project_id")
+        if not isinstance(project_id, str) or not project_id:
+            raise DomainConflictError("Stored idempotency response is invalid")
+        return project_id
 
     def _idempotent_result(
         self,

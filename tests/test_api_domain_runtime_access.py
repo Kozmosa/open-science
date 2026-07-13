@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.domain_control import DomainModelMode
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 from tests.testutil import seed_user
@@ -101,6 +102,7 @@ async def test_v2_runtime_workspace_access_requires_the_linux_tenant_owner(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
+    reset_metrics()
     app = _v2_app(state_root, tmp_path)
     _headers(app, "runtime-owner", "runtime-owner", "member")
     admin_headers = _headers(app, "runtime-admin", "runtime-admin", "admin")
@@ -115,24 +117,31 @@ async def test_v2_runtime_workspace_access_requires_the_linux_tenant_owner(
     )
     workspace_id = str(workspace["workspace_id"])
 
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
-    ) as client:
-        file_read = await client.get(
-            f"/files/list?environment_id={environment_id}&workspace_id={workspace_id}",
-            headers=admin_headers,
-        )
-        terminal_exec = await client.post(
-            "/terminal/session/exec",
-            headers=admin_headers,
-            json={
-                "environment_id": environment_id,
-                "workspace_id": workspace_id,
-                "command": ["pwd"],
-            },
-        )
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            file_read = await client.get(
+                f"/files/list?environment_id={environment_id}&workspace_id={workspace_id}",
+                headers=admin_headers,
+            )
+            terminal_exec = await client.post(
+                "/terminal/session/exec",
+                headers=admin_headers,
+                json={
+                    "environment_id": environment_id,
+                    "workspace_id": workspace_id,
+                    "command": ["pwd"],
+                },
+            )
 
-    assert file_read.status_code == 403
-    assert file_read.json() == {"detail": "Workspace owner permission is required"}
-    assert terminal_exec.status_code == 403
-    assert terminal_exec.json() == {"detail": "Workspace owner permission is required"}
+        assert file_read.status_code == 403
+        assert file_read.json() == {"detail": "Workspace owner permission is required"}
+        assert terminal_exec.status_code == 403
+        assert terminal_exec.json() == {"detail": "Workspace owner permission is required"}
+        assert (
+            'ainrf_domain_permission_denied_total{reason="tenant_owner_required",resource="workspace"} 2.0'
+            in get_metrics_text()
+        )
+    finally:
+        reset_metrics()

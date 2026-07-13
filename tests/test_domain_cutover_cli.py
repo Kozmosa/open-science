@@ -39,15 +39,35 @@ def test_domain_cutover_prepare_passes_exact_bound_evidence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     captured: dict[str, object] = {}
+    controller_config: dict[str, object] = {}
 
     class FakeController:
         def prepare(self, **kwargs: object) -> _Result:
             captured.update(kwargs)
             return _Result("prepared")
 
-    monkeypatch.setattr("ainrf.cli._cutover_controller", lambda _: FakeController())
+    def fake_controller(
+        state_root: Path,
+        *,
+        workspace_root: Path | None = None,
+        tenant_root: Path | None = None,
+    ) -> FakeController:
+        controller_config.update(
+            {
+                "state_root": state_root,
+                "workspace_root": workspace_root,
+                "tenant_root": tenant_root,
+            }
+        )
+        return FakeController()
+
+    monkeypatch.setattr("ainrf.cli._cutover_controller", fake_controller)
     archive = tmp_path / "backup.tar.gz"
     state_root = tmp_path / "state"
+    workspace_root = tmp_path / "selected-workspaces"
+    tenant_root = tmp_path / "selected-tenants"
+    workspace_root.mkdir()
+    tenant_root.mkdir()
     result = runner.invoke(
         app,
         [
@@ -69,6 +89,10 @@ def test_domain_cutover_prepare_passes_exact_bound_evidence(
             "18",
             "--stability-window-seconds",
             "0",
+            "--workspace-root",
+            str(workspace_root),
+            "--tenant-root",
+            str(tenant_root),
             "--state-root",
             str(state_root),
         ],
@@ -76,6 +100,8 @@ def test_domain_cutover_prepare_passes_exact_bound_evidence(
 
     assert result.exit_code == 0
     assert json.loads(result.stdout) == {"state": "prepared"}
+    participant_id = captured.pop("maintenance_participant_id")
+    assert isinstance(participant_id, str) and participant_id
     assert captured == {
         "actor_id": "operator-1",
         "run_id": "run-1",
@@ -86,6 +112,11 @@ def test_domain_cutover_prepare_passes_exact_bound_evidence(
         "artifact_schema_min": 18,
         "artifact_schema_max": 18,
         "stability_window_seconds": 0.0,
+    }
+    assert controller_config == {
+        "state_root": state_root,
+        "workspace_root": workspace_root,
+        "tenant_root": tenant_root,
     }
     participants = DomainMaintenanceService(state_root).participants()
     assert any(
@@ -159,6 +190,45 @@ def test_domain_migration_mutation_commands_refuse_maintenance_before_service_co
     monkeypatch.setattr("ainrf.cli.DomainReconciliationService", UnexpectedReconciliationService)
     try:
         result = runner.invoke(app, [*arguments, "--state-root", str(state_root)])
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    assert result.exit_code == 2
+    assert "paused for maintenance" in result.output
+    assert not constructed
+
+
+def test_domain_runtime_resolution_is_registered_and_rejected_during_maintenance(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    state_root = tmp_path / "state"
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="operator", reason="block runtime reconciliation")
+    constructed = False
+
+    class UnexpectedTaskApplicationService:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            nonlocal constructed
+            constructed = True
+
+    monkeypatch.setattr("ainrf.cli.TaskApplicationService", UnexpectedTaskApplicationService)
+    try:
+        result = runner.invoke(
+            app,
+            [
+                "domain-runtime",
+                "resolve-launch-unknown",
+                "task-1",
+                "attempt-1",
+                "--actor-id",
+                "operator",
+                "--reason",
+                "investigated",
+                "--state-root",
+                str(state_root),
+            ],
+        )
     finally:
         maintenance.exit(actor_id="operator")
 

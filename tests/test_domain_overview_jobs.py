@@ -11,6 +11,7 @@ from typing import cast
 
 import pytest
 
+from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain.overview_jobs import (
     OverviewSnapshotPlanner,
@@ -64,6 +65,20 @@ def _seed_domain(state_root: Path, owner_user_id: str) -> None:
                 f"env-{owner_user_id}",
                 f"/tmp/{owner_user_id}",
                 "Workspace",
+                now,
+                now,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO project_workspace_links (
+                project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at
+            ) VALUES (?, ?, 'active', 1, ?, ?, ?)
+            """,
+            (
+                f"project-{owner_user_id}",
+                f"workspace-{owner_user_id}",
+                owner_user_id,
                 now,
                 now,
             ),
@@ -183,6 +198,32 @@ def test_overview_active_jobs_are_idempotent_and_user_scoped(
     assert service.get_job("other", str(first["job_id"])) is None
 
 
+def test_overview_hidden_job_records_telemetry_without_changing_lookup_result(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    """Cross-user job probing remains indistinguishable from an absent job."""
+
+    service = _service(state_root, committed_v2_state)
+    job = service.request_refresh("owner", now=_instant(1))
+    job_id = str(job["job_id"])
+    assert service.get_job("owner", job_id) is not None
+
+    reset_metrics()
+    assert service.get_job("other", job_id) is None
+    assert (
+        'ainrf_domain_permission_denied_total{reason="not_visible",resource="overview"} 1.0'
+        in get_metrics_text()
+    )
+
+    reset_metrics()
+    assert service.get_job("other", "overview-refresh-not-present") is None
+    assert (
+        'ainrf_domain_permission_denied_total{reason="not_visible",resource="overview"}'
+        not in get_metrics_text()
+    )
+    reset_metrics()
+
+
 def test_overview_compatibility_refresh_uses_a_maintenance_participant(
     state_root: Path, committed_v2_state: str
 ) -> None:
@@ -196,6 +237,51 @@ def test_overview_compatibility_refresh_uses_a_maintenance_participant(
         maintenance.exit(actor_id="test-operator")
 
     assert service.latest("owner") is None
+
+
+def test_overview_request_refresh_rejects_a_maintenance_epoch_before_queueing(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    service = _service(state_root, committed_v2_state)
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="test-operator", reason="cutover")
+    try:
+        with pytest.raises(MaintenanceModeError, match="paused for maintenance"):
+            service.request_refresh("owner", now=_instant(1))
+    finally:
+        maintenance.exit(actor_id="test-operator")
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        jobs = conn.execute("SELECT COUNT(*) FROM overview_refresh_jobs").fetchone()
+    assert jobs is not None and int(jobs[0]) == 0
+
+
+def test_overview_claim_and_heartbeat_reject_a_maintenance_epoch(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    """Direct service calls retain the planner's maintenance write boundary."""
+
+    service = _service(state_root, committed_v2_state)
+    job = service.request_refresh("owner", now=_instant(1))
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="test-operator", reason="claim guard")
+    try:
+        with pytest.raises(MaintenanceModeError, match="paused for maintenance"):
+            service.claim_next_job("direct-worker", now=_instant(1, 1), job_id=str(job["job_id"]))
+        queued = service.get_job("owner", str(job["job_id"]))
+        assert queued is not None
+        assert queued["status"] == "queued"
+    finally:
+        maintenance.exit(actor_id="test-operator")
+
+    claim = service.claim_next_job("direct-worker", now=_instant(1, 2), job_id=str(job["job_id"]))
+    assert claim is not None
+    maintenance.enter(actor_id="test-operator", reason="heartbeat guard")
+    try:
+        with pytest.raises(MaintenanceModeError, match="paused for maintenance"):
+            service.heartbeat_job(claim, now=_instant(1, 3))
+    finally:
+        maintenance.exit(actor_id="test-operator")
 
 
 def test_fresh_overview_planner_does_not_write_state_or_jobs_during_maintenance(
@@ -225,6 +311,35 @@ def test_fresh_overview_planner_does_not_write_state_or_jobs_during_maintenance(
     assert planner_state is None
     assert jobs is not None
     assert int(jobs[0]) == 0
+
+
+def test_overview_planner_does_not_construct_writable_service_during_maintenance(
+    monkeypatch: pytest.MonkeyPatch,
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
+    """A maintenance-started planner joins drained before service migration."""
+
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="test-operator", reason="avoid overview bootstrap writes")
+
+    def unexpected_service(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("maintenance-started overview planner must not construct writable service")
+
+    monkeypatch.setattr("ainrf.domain.overview_jobs.OverviewSnapshotService", unexpected_service)
+    planner = OverviewSnapshotPlanner(
+        state_root,
+        planner_id="overview-maintenance-no-bootstrap",
+        artifact_sha=committed_v2_state,
+        active_user_ids=lambda: (),
+    )
+    try:
+        result = planner.run_once(now=_instant(1))
+    finally:
+        planner.stop(now=_instant(1, 1))
+        maintenance.exit(actor_id="test-operator")
+
+    assert result.outcome == "maintenance_drained"
 
 
 def test_overview_planner_stop_does_not_write_lifecycle_state_during_maintenance(

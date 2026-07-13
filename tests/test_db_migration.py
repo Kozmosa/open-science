@@ -519,6 +519,29 @@ class TestMaintenanceBarrierRepair:
             ):
                 run_pending(conn, "agentic_researcher")
 
+    def test_active_maintenance_refuses_pending_sibling_database_migrations(
+        self, state_root: Path
+    ) -> None:
+        """A restarting auth/Literature service cannot mutate sources mid-cutover."""
+
+        from ainrf.domain_control import DomainMaintenanceService
+
+        control_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+        with _connect(control_path) as conn:
+            run_pending(conn, "agentic_researcher")
+        DomainMaintenanceService(state_root).enter(actor_id="operator", reason="cutover")
+
+        auth_path = state_root / "runtime" / "auth.sqlite3"
+        with _connect(auth_path) as conn:
+            with pytest.raises(
+                RuntimeError, match="maintenance is active; refusing auth migration"
+            ):
+                run_pending(conn, "auth")
+            assert "_schema_version" not in {
+                str(row["name"])
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+
 
 class TestSchemaVersionTable:
     """Verify _schema_version table is created correctly."""

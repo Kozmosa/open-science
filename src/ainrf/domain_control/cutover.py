@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from contextlib import closing
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,8 @@ from ainrf.domain_control.legacy_source_guard import (
 from ainrf.domain_control.service import (
     CUTOVER_REQUIRED_PARTICIPANT_TYPES,
     DomainMaintenanceService,
+    MaintenanceLease,
+    MaintenanceModeError,
 )
 
 if TYPE_CHECKING:
@@ -98,6 +101,8 @@ class _BackupEvidence:
     tree_sha256: str
     created_at: str
     version: int
+    includes_workspaces: bool
+    includes_tenants: bool
 
 
 def _now() -> str:
@@ -135,13 +140,23 @@ class DomainCutoverController:
     source inventory before the fuse can transition to v2.
     """
 
-    def __init__(self, state_root: Path) -> None:
+    def __init__(
+        self,
+        state_root: Path,
+        *,
+        workspace_root: Path | None = None,
+        tenant_root: Path | None = None,
+    ) -> None:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
-        self._maintenance = DomainMaintenanceService(state_root)
+        self._maintenance = DomainMaintenanceService(
+            state_root,
+            workspace_root=workspace_root,
+            tenant_root=tenant_root,
+        )
         self._legacy_sources = LegacySourceGuard(state_root)
 
     def status(self) -> CutoverStatus:
@@ -171,6 +186,7 @@ class DomainCutoverController:
         actor_id: str,
         run_id: str,
         stability_window_seconds: float = 5.0,
+        maintenance_participant_id: str | None = None,
     ) -> ConstraintFinalization:
         """Install and attest the final Task-reference guard under stopped writes.
 
@@ -185,8 +201,13 @@ class DomainCutoverController:
 
         self._require_actor(actor_id)
         self._require_text(run_id, "run_id")
-        preflight_epoch = self._require_preflight(stability_window_seconds)
-        before = self._reconcile_for_cutover(run_id)
+        # Keep the legacy no-maintenance failure deterministic before a
+        # reconciliation run can make any durable change.
+        self._require_preflight(stability_window_seconds)
+        before = self._reconcile_for_cutover(
+            run_id,
+            maintenance_participant_id=maintenance_participant_id,
+        )
         blockers = tuple(
             blocker for blocker in before.blocking_issues if blocker != "constraints_not_ready"
         )
@@ -195,12 +216,22 @@ class DomainCutoverController:
                 "domain constraints cannot be finalized while reconciliation is blocked: "
                 + ", ".join(blockers)
             )
-        finalized = self._finalize_constraints_transaction(
-            actor_id=actor_id,
-            run_id=run_id,
-            preflight_epoch=preflight_epoch,
+        preflight_epoch = self._require_preflight(stability_window_seconds)
+        with self._maintenance_control_operation(
+            source="domain-cutover.finalize-constraints",
+            participant_id=maintenance_participant_id,
+            expected_epoch=preflight_epoch,
+        ):
+            finalized = self._finalize_constraints_transaction(
+                actor_id=actor_id,
+                run_id=run_id,
+                preflight_epoch=preflight_epoch,
+            )
+        after = self._reconcile_for_cutover(
+            run_id,
+            maintenance_participant_id=maintenance_participant_id,
+            expected_epoch=preflight_epoch,
         )
-        after = self._reconcile_for_cutover(run_id)
         if after.blocking_issues or not after.cutover_allowed:
             detail = ", ".join(after.blocking_issues) or "migration run is not cutover-allowed"
             raise CutoverPreconditionError(
@@ -229,6 +260,7 @@ class DomainCutoverController:
         artifact_schema_min: int,
         artifact_schema_max: int,
         stability_window_seconds: float = 5.0,
+        maintenance_participant_id: str | None = None,
     ) -> CutoverStatus:
         """Bind final migration and backup evidence while maintenance is active."""
 
@@ -242,7 +274,11 @@ class DomainCutoverController:
             artifact_schema_max,
         )
         backup = self._verify_backup(backup_archive)
-        reconciliation = self._reconcile_for_cutover(run_id)
+        self._require_backup_source_roots(backup)
+        reconciliation = self._reconcile_for_cutover(
+            run_id,
+            maintenance_participant_id=maintenance_participant_id,
+        )
         if reconciliation.blocking_issues or not reconciliation.cutover_allowed:
             raise CutoverPreconditionError(
                 "migration reconciliation is not cutover-ready: "
@@ -251,19 +287,24 @@ class DomainCutoverController:
         self._legacy_sources.assert_no_pending_seal()
         inventory = self._legacy_sources.capture()
         preflight_epoch = self._require_preflight(stability_window_seconds)
-        self._verify_legacy_inventory(inventory)
-        return self._prepare_transaction(
-            actor_id=actor_id,
-            run_id=run_id,
-            backup=backup,
-            artifact_sha=artifact_sha,
-            artifact_contract_min=artifact_contract_min,
-            artifact_contract_max=artifact_contract_max,
-            artifact_schema_min=artifact_schema_min,
-            artifact_schema_max=artifact_schema_max,
-            inventory=inventory,
-            preflight_epoch=preflight_epoch,
-        )
+        with self._maintenance_control_operation(
+            source="domain-cutover.prepare",
+            participant_id=maintenance_participant_id,
+            expected_epoch=preflight_epoch,
+        ):
+            self._verify_legacy_inventory(inventory)
+            return self._prepare_transaction(
+                actor_id=actor_id,
+                run_id=run_id,
+                backup=backup,
+                artifact_sha=artifact_sha,
+                artifact_contract_min=artifact_contract_min,
+                artifact_contract_max=artifact_contract_max,
+                artifact_schema_min=artifact_schema_min,
+                artifact_schema_max=artifact_schema_max,
+                inventory=inventory,
+                preflight_epoch=preflight_epoch,
+            )
 
     def commit(
         self,
@@ -277,6 +318,7 @@ class DomainCutoverController:
         artifact_schema_min: int,
         artifact_schema_max: int,
         stability_window_seconds: float = 5.0,
+        maintenance_participant_id: str | None = None,
     ) -> CutoverStatus:
         """Commit a prepared fuse after repeating all hard safety gates.
 
@@ -296,7 +338,11 @@ class DomainCutoverController:
                 artifact_schema_max,
             )
             backup = self._verify_backup(backup_archive)
-            reconciliation = self._reconcile_for_cutover(run_id)
+            self._require_backup_source_roots(backup)
+            reconciliation = self._reconcile_for_cutover(
+                run_id,
+                maintenance_participant_id=maintenance_participant_id,
+            )
             if reconciliation.blocking_issues or not reconciliation.cutover_allowed:
                 raise CutoverPreconditionError(
                     "migration reconciliation is not cutover-ready: "
@@ -307,50 +353,66 @@ class DomainCutoverController:
             if inventory is None:
                 raise CutoverPreconditionError("prepared cutover has no legacy source inventory")
             preflight_epoch = self._require_preflight(stability_window_seconds)
-            self._verify_legacy_inventory(inventory)
-            self._seal_legacy_inventory(inventory)
-            return self._commit_transaction(
-                actor_id=actor_id,
-                run_id=run_id,
-                backup=backup,
-                artifact_sha=artifact_sha,
-                artifact_contract_min=artifact_contract_min,
-                artifact_contract_max=artifact_contract_max,
-                artifact_schema_min=artifact_schema_min,
-                artifact_schema_max=artifact_schema_max,
-                inventory=inventory,
-                preflight_epoch=preflight_epoch,
-            )
+            with self._maintenance_control_operation(
+                source="domain-cutover.commit",
+                participant_id=maintenance_participant_id,
+                expected_epoch=preflight_epoch,
+            ):
+                self._verify_legacy_inventory(inventory)
+                self._seal_legacy_inventory(inventory)
+                return self._commit_transaction(
+                    actor_id=actor_id,
+                    run_id=run_id,
+                    backup=backup,
+                    artifact_sha=artifact_sha,
+                    artifact_contract_min=artifact_contract_min,
+                    artifact_contract_max=artifact_contract_max,
+                    artifact_schema_min=artifact_schema_min,
+                    artifact_schema_max=artifact_schema_max,
+                    inventory=inventory,
+                    preflight_epoch=preflight_epoch,
+                )
         except (CutoverPreconditionError, LegacySourceGuardError) as exc:
-            self._abort_after_failed_commit(actor_id, str(exc))
+            self._abort_after_failed_commit(
+                actor_id,
+                str(exc),
+                maintenance_participant_id=maintenance_participant_id,
+            )
             if isinstance(exc, CutoverPreconditionError):
                 raise
             raise CutoverPreconditionError("legacy source seal failed") from exc
 
-    def abort(self, *, actor_id: str, reason: str) -> CutoverStatus:
+    def abort(
+        self,
+        *,
+        actor_id: str,
+        reason: str,
+        maintenance_participant_id: str | None = None,
+    ) -> CutoverStatus:
         """Return a prepared cutover to legacy before any v2 write exists."""
 
         self._require_actor(actor_id)
         self._require_text(reason, "reason")
-        # Restore the source modes before returning the database to legacy.
-        # If a crash occurs after this step but before the state transition,
-        # the prepared fuse remains fail-closed; a retry sees no journal and
-        # completes only the durable state transition.
+        # Preserve the explicit irreversible-v2 error even after maintenance
+        # has reopened.  This preliminary read is non-mutating; the active
+        # maintenance control lease below repeats every mutable-state check.
         with closing(connect(self._db_path)) as conn:
-            row = self._state_row(conn)
-            if str(row["state"]) == "v2" or row["first_v2_write_at"] is not None:
-                raise DomainCutoverError(
-                    "committed v2 cutover cannot be aborted; restore a complete pre-cutover backup"
-                )
-            if str(row["state"]) != "prepared":
-                raise DomainCutoverError("only a prepared cutover can be aborted")
-            inventory = self._inventory_from_row(row)
-            if inventory is None:
-                raise DomainCutoverError("prepared cutover has no legacy source inventory")
-        self._legacy_sources.unseal(inventory)
-        with closing(connect(self._db_path)) as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            try:
+            initial = self._state_row(conn)
+        if str(initial["state"]) == "v2" or initial["first_v2_write_at"] is not None:
+            raise DomainCutoverError(
+                "committed v2 cutover cannot be aborted; restore a complete pre-cutover backup"
+            )
+        if str(initial["state"]) != "prepared":
+            raise DomainCutoverError("only a prepared cutover can be aborted")
+        with self._maintenance_control_operation(
+            source="domain-cutover.abort",
+            participant_id=maintenance_participant_id,
+        ):
+            # Restore the source modes before returning the database to legacy.
+            # If a crash occurs after this step but before the state transition,
+            # the prepared fuse remains fail-closed; a retry sees no journal and
+            # completes only the durable state transition.
+            with closing(connect(self._db_path)) as conn:
                 row = self._state_row(conn)
                 if str(row["state"]) == "v2" or row["first_v2_write_at"] is not None:
                     raise DomainCutoverError(
@@ -358,50 +420,64 @@ class DomainCutoverController:
                     )
                 if str(row["state"]) != "prepared":
                     raise DomainCutoverError("only a prepared cutover can be aborted")
-                epoch = int(row["cutover_epoch"])
-                run_id = self._optional_text(row["cutover_run_id"])
-                preparation_digest = self._optional_text(row["preparation_digest"])
-                conn.execute(
-                    """
-                    UPDATE domain_cutover_state
-                    SET state = 'legacy', cutover_run_id = NULL, source_manifest_json = NULL,
-                        reconciled_at = NULL, blocking_issue_count = 0, cutover_ready = 0,
-                        prepared_at = NULL, prepared_by_user_id = NULL, committed_at = NULL,
-                        committed_by_user_id = NULL, first_v2_write_at = NULL,
-                        first_v2_write_actor_id = NULL, artifact_sha = NULL,
-                        artifact_contract_min = NULL, artifact_contract_max = NULL,
-                        artifact_schema_min = NULL, artifact_schema_max = NULL,
-                        backup_manifest_sha256 = NULL, backup_tree_sha256 = NULL,
-                        backup_created_at = NULL, backup_version = NULL, maintenance_epoch = NULL,
-                        source_inventory_json = NULL, source_inventory_sha256 = NULL,
-                        restore_evidence_sha256 = NULL, preparation_digest = NULL,
-                        prepared_blocking_issue_count = 0
-                    WHERE singleton = 1
-                    """
-                )
-                self._record_event(
-                    conn,
-                    epoch=epoch,
-                    event_type="aborted",
-                    actor_id=actor_id,
-                    run_id=run_id,
-                    preparation_digest=preparation_digest,
-                    payload={"reason": reason},
-                )
-                self._audit(
-                    conn,
-                    actor_id,
-                    "domain_cutover.aborted",
-                    "domain_cutover",
-                    str(epoch),
-                    {"run_id": run_id, "reason": reason},
-                )
-                updated = self._state_row(conn)
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
-        return self._status_from_row(updated, None, None)
+                inventory = self._inventory_from_row(row)
+                if inventory is None:
+                    raise DomainCutoverError("prepared cutover has no legacy source inventory")
+            self._legacy_sources.unseal(inventory)
+            with closing(connect(self._db_path)) as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    row = self._state_row(conn)
+                    if str(row["state"]) == "v2" or row["first_v2_write_at"] is not None:
+                        raise DomainCutoverError(
+                            "committed v2 cutover cannot be aborted; restore a complete pre-cutover backup"
+                        )
+                    if str(row["state"]) != "prepared":
+                        raise DomainCutoverError("only a prepared cutover can be aborted")
+                    epoch = int(row["cutover_epoch"])
+                    run_id = self._optional_text(row["cutover_run_id"])
+                    preparation_digest = self._optional_text(row["preparation_digest"])
+                    conn.execute(
+                        """
+                        UPDATE domain_cutover_state
+                        SET state = 'legacy', cutover_run_id = NULL, source_manifest_json = NULL,
+                            reconciled_at = NULL, blocking_issue_count = 0, cutover_ready = 0,
+                            prepared_at = NULL, prepared_by_user_id = NULL, committed_at = NULL,
+                            committed_by_user_id = NULL, first_v2_write_at = NULL,
+                            first_v2_write_actor_id = NULL, artifact_sha = NULL,
+                            artifact_contract_min = NULL, artifact_contract_max = NULL,
+                            artifact_schema_min = NULL, artifact_schema_max = NULL,
+                            backup_manifest_sha256 = NULL, backup_tree_sha256 = NULL,
+                            backup_created_at = NULL, backup_version = NULL, maintenance_epoch = NULL,
+                            source_inventory_json = NULL, source_inventory_sha256 = NULL,
+                            restore_evidence_sha256 = NULL, preparation_digest = NULL,
+                            prepared_blocking_issue_count = 0
+                        WHERE singleton = 1
+                        """
+                    )
+                    self._record_event(
+                        conn,
+                        epoch=epoch,
+                        event_type="aborted",
+                        actor_id=actor_id,
+                        run_id=run_id,
+                        preparation_digest=preparation_digest,
+                        payload={"reason": reason},
+                    )
+                    self._audit(
+                        conn,
+                        actor_id,
+                        "domain_cutover.aborted",
+                        "domain_cutover",
+                        str(epoch),
+                        {"run_id": run_id, "reason": reason},
+                    )
+                    updated = self._state_row(conn)
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+            return self._status_from_row(updated, None, None)
 
     def assert_v2_writable(self, *, artifact_sha: str | None = None) -> CutoverStatus:
         """Fail closed unless the database fuse authorizes a v2 write."""
@@ -467,6 +543,14 @@ class DomainCutoverController:
         """
 
         self._require_actor(actor_id)
+        maintenance = conn.execute(
+            """
+            SELECT is_active FROM domain_maintenance_state
+            WHERE singleton = 1
+            """
+        ).fetchone()
+        if maintenance is None or bool(maintenance["is_active"]):
+            raise MaintenanceModeError("domain first v2 write is paused for maintenance")
         row = self._state_row(conn)
         self._assert_committed_fuse(conn, row, artifact_sha=artifact_sha)
         inventory = self._inventory_from_row(row)
@@ -534,11 +618,21 @@ class DomainCutoverController:
                         """
                         SELECT COUNT(*)
                         FROM tasks AS task
-                        LEFT JOIN projects AS project ON project.project_id = task.project_id
-                        LEFT JOIN workspaces AS workspace ON workspace.workspace_id = task.workspace_id
-                        WHERE project.project_id IS NULL
-                           OR workspace.workspace_id IS NULL
-                           OR workspace.environment_id != task.environment_id
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM projects
+                            WHERE project_id = task.project_id
+                        )
+                           OR NOT EXISTS (
+                               SELECT 1 FROM workspaces
+                               WHERE workspace_id = task.workspace_id
+                                 AND environment_id = task.environment_id
+                           )
+                           OR NOT EXISTS (
+                               SELECT 1 FROM project_workspace_links
+                               WHERE project_id = task.project_id
+                                 AND workspace_id = task.workspace_id
+                                 AND status = 'active'
+                           )
                         """
                     ).fetchone()[0]
                 )
@@ -546,7 +640,7 @@ class DomainCutoverController:
                     raise CutoverPreconditionError(
                         "domain constraints cannot be finalized: "
                         f"{invalid_task_count} Task reference(s) do not map to a Project, "
-                        "Workspace, and derived Environment"
+                        "active Project-Workspace link, and derived Environment"
                     )
                 task_reference_count = int(conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0])
                 integrity = conn.execute("PRAGMA integrity_check").fetchone()
@@ -676,6 +770,7 @@ class DomainCutoverController:
                     source_manifest_sha256=str(run["final_manifest_sha256"]),
                     source_inventory_sha256=inventory.digest,
                     restore_evidence_sha256=str(run["restore_evidence_sha256"]),
+                    maintenance_source_roots_sha256=self._maintenance.source_root_config_digest(),
                 )
                 now = _now()
                 conn.execute(
@@ -729,6 +824,7 @@ class DomainCutoverController:
                         "artifact_sha": artifact_sha,
                         "backup_manifest_sha256": backup.manifest_sha256,
                         "source_inventory_sha256": inventory.digest,
+                        "maintenance_source_roots_sha256": self._maintenance.source_root_config_digest(),
                     },
                 )
                 self._audit(
@@ -897,6 +993,7 @@ class DomainCutoverController:
             source_manifest_sha256=self._source_manifest_sha256(state),
             source_inventory_sha256=inventory.digest,
             restore_evidence_sha256=str(state["restore_evidence_sha256"]),
+            maintenance_source_roots_sha256=self._maintenance.source_root_config_digest(),
         )
         if state["preparation_digest"] != expected_digest:
             raise CutoverPreconditionError("prepared cutover digest does not match bound evidence")
@@ -1128,13 +1225,76 @@ class DomainCutoverController:
             tree_sha256=str(manifest.tree_sha256),
             created_at=manifest.created_at,
             version=manifest.version,
+            includes_workspaces=manifest.includes_workspaces,
+            includes_tenants=manifest.includes_tenants,
         )
 
-    def _reconcile_for_cutover(self, run_id: str) -> ReconciliationReport:
+    def _require_backup_source_roots(self, backup: _BackupEvidence) -> None:
+        """Require an explicit stability root for every selected backup tree.
+
+        A manifest can prove bytes were copied, but it cannot prove an
+        external Workspace or tenant tree stayed still during the cutover
+        window.  The operator must therefore pass the exact root for every
+        optional tree in the archive.  Conversely, accepting an unrelated
+        root when the archive omitted it would turn the prepared binding into
+        misleading evidence, so that is rejected as well.
+        """
+
+        expected = {
+            "workspace": backup.includes_workspaces,
+            "tenant": backup.includes_tenants,
+        }
+        for source_kind, included in expected.items():
+            configured = self._maintenance.has_configured_source_root(source_kind)
+            if included and not configured:
+                raise CutoverPreconditionError(
+                    f"backup includes {source_kind} data but no explicit maintenance "
+                    f"{source_kind}_root was configured"
+                )
+            if configured and not included:
+                raise CutoverPreconditionError(
+                    f"explicit maintenance {source_kind}_root was configured but the backup "
+                    f"does not include {source_kind} data"
+                )
+
+    @contextmanager
+    def _maintenance_control_operation(
+        self,
+        *,
+        source: str,
+        participant_id: str | None,
+        expected_epoch: int | None = None,
+    ) -> Iterator[MaintenanceLease]:
+        """Make a cutover write visible to maintenance exit and the registry."""
+
+        lease = self._maintenance.begin_maintenance_operation(
+            source=source,
+            participant_id=participant_id,
+            expected_epoch=expected_epoch,
+        )
+        try:
+            self._maintenance.check_maintenance_operation(lease)
+            yield lease
+            self._maintenance.check_maintenance_operation(lease)
+        finally:
+            self._maintenance.finish_mutation(lease)
+
+    def _reconcile_for_cutover(
+        self,
+        run_id: str,
+        *,
+        maintenance_participant_id: str | None,
+        expected_epoch: int | None = None,
+    ) -> ReconciliationReport:
         try:
             from ainrf.domain_migration import DomainReconciliationService
 
-            return DomainReconciliationService(self._state_root).reconcile(run_id)
+            with self._maintenance_control_operation(
+                source="domain-cutover.reconcile",
+                participant_id=maintenance_participant_id,
+                expected_epoch=expected_epoch,
+            ):
+                return DomainReconciliationService(self._state_root).reconcile(run_id)
         except (OSError, ValueError) as exc:
             raise CutoverPreconditionError(
                 "migration reconciliation could not be verified"
@@ -1174,15 +1334,25 @@ class DomainCutoverController:
         except LegacySourceGuardError as exc:
             raise error_type("legacy source seal is not valid") from exc
 
-    def _abort_after_failed_commit(self, actor_id: str, detail: str) -> None:
+    def _abort_after_failed_commit(
+        self,
+        actor_id: str,
+        detail: str,
+        *,
+        maintenance_participant_id: str | None,
+    ) -> None:
         if not actor_id:
             return
         try:
             with closing(connect(self._db_path)) as conn:
                 row = self._state_row(conn)
             if str(row["state"]) == "prepared" and row["first_v2_write_at"] is None:
-                self.abort(actor_id=actor_id, reason=f"automatic commit abort: {detail}")
-        except (DomainCutoverError, LegacySourceGuardError):
+                self.abort(
+                    actor_id=actor_id,
+                    reason=f"automatic commit abort: {detail}",
+                    maintenance_participant_id=maintenance_participant_id,
+                )
+        except (DomainCutoverError, LegacySourceGuardError, MaintenanceModeError):
             return
 
     @staticmethod
@@ -1285,6 +1455,7 @@ class DomainCutoverController:
         source_manifest_sha256: str,
         source_inventory_sha256: str,
         restore_evidence_sha256: str,
+        maintenance_source_roots_sha256: str,
     ) -> str:
         return _sha256(
             {
@@ -1304,6 +1475,7 @@ class DomainCutoverController:
                 "source_manifest_sha256": source_manifest_sha256,
                 "source_inventory_sha256": source_inventory_sha256,
                 "restore_evidence_sha256": restore_evidence_sha256,
+                "maintenance_source_roots_sha256": maintenance_source_roots_sha256,
                 "blocking_issue_count": 0,
             }
         )

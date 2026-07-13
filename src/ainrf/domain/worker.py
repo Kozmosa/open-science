@@ -11,6 +11,7 @@ from collections.abc import Callable
 from contextlib import closing, suppress
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
@@ -23,6 +24,7 @@ from ainrf.domain.attempts import (
 )
 from ainrf.domain.dispatch_wakeup import DispatchWakeup
 from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
+from ainrf.domain_telemetry import record_permission_denied
 from ainrf.domain_control import (
     DomainCutoverController,
     DomainCutoverError,
@@ -57,7 +59,75 @@ class DispatchValidationError(ValueError):
     """A claimed Task is no longer safe or authorized to start."""
 
 
+class DispatchAuthorizationError(DispatchValidationError):
+    """A dispatch admission failure caused by access or tenant authority."""
+
+    def __init__(
+        self,
+        detail: str,
+        *,
+        resource: str,
+        reason: str,
+        user_id: str | None,
+        project_id: str | None = None,
+        workspace_id: str | None = None,
+        task_id: str | None = None,
+        environment_id: str | None = None,
+    ) -> None:
+        super().__init__(detail)
+        self.resource = resource
+        self.reason = reason
+        self.user_id = user_id
+        self.project_id = project_id
+        self.workspace_id = workspace_id
+        self.task_id = task_id
+        self.environment_id = environment_id
+
+
 EngineFactory = Callable[[HarnessEngineType], HarnessEngine]
+
+
+def _maintenance_is_active_read_only(state_root: Path) -> bool:
+    """Read the persisted maintenance flag without creating worker state.
+
+    A worker may be restarted while a backup, staged restore, or cutover owns
+    the maintenance epoch.  Its usual service constructors run migrations and
+    create runtime directories, so checking through ``DomainMaintenanceService``
+    would already be too late.  This intentionally uses SQLite's read-only URI
+    rather than the shared connection factory, whose WAL setup is writable.
+    """
+
+    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    if not database_path.is_file():
+        return False
+    # A WAL sidecar means the main database alone is not an immutable view of
+    # the maintenance flag, so fail closed rather than opening it.  A lone
+    # ``-shm`` file is only a reusable shared-memory cache after checkpointing;
+    # it does not contain uncheckpointed database state and immutable mode
+    # ignores it safely.
+    if database_path.with_name(f"{database_path.name}-wal").exists():
+        return True
+    try:
+        database_uri = f"{database_path.resolve().as_uri()}?mode=ro&immutable=1"
+        with sqlite3.connect(database_uri, uri=True, isolation_level=None) as connection:
+            table = connection.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'domain_maintenance_state'"
+            ).fetchone()
+            if table is None:
+                return False
+            row = connection.execute(
+                "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+            ).fetchone()
+    except sqlite3.Error as exc:
+        raise RuntimeError(
+            "cannot read persisted domain maintenance state; refusing worker startup"
+        ) from exc
+    if row is None:
+        raise RuntimeError(
+            "persisted domain maintenance state is malformed; refusing worker startup"
+        )
+    return bool(row[0])
 
 
 class TaskDispatcher:
@@ -84,11 +154,8 @@ class TaskDispatcher:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
-        self._cutover = DomainCutoverController(state_root)
         self._artifact_sha = artifact_sha
-        self._attempts = AttemptService(state_root, artifact_sha=artifact_sha)
         self._maintenance = DomainMaintenanceService(state_root)
-        self._maintenance.initialize()
         self.dispatcher_id = dispatcher_id or f"domain-worker-{uuid4().hex[:12]}"
         self._participant = DomainWriteParticipant(
             self._maintenance,
@@ -96,43 +163,127 @@ class TaskDispatcher:
             participant_id=self.dispatcher_id,
             details={"component": "domain-worker"},
         )
-        self._overview_planner = OverviewSnapshotPlanner(
-            state_root,
-            planner_id=f"{self.dispatcher_id}:overview",
-            artifact_sha=artifact_sha,
-        )
         self._engine_factory = engine_factory or self._default_engine_factory
+        # Construction only stores a Path.  ``notify()`` is called after an
+        # outbox commit, so retaining this lightweight helper before the
+        # maintenance probe cannot create the wakeup file or its directory.
         self._dispatch_wakeup = DispatchWakeup(state_root)
         self._engines: dict[HarnessEngineType, HarnessEngine] = {}
         self._lease_seconds = lease_seconds
         self._started = False
+        # The concrete services are intentionally absent while a worker joins
+        # an active maintenance epoch.  ``cast`` keeps the established private
+        # attributes precise for the dispatch paths, which are reachable only
+        # after ``start`` has confirmed that writable services were assembled.
+        self._cutover = cast(DomainCutoverController, None)
+        self._attempts = cast(AttemptService, None)
+        self._overview_planner = cast(OverviewSnapshotPlanner, None)
+        self._writable_services_initialized = False
+        self._maintenance_startup_read_only = _maintenance_is_active_read_only(state_root)
+        if not self._maintenance_startup_read_only:
+            self._initialize_writable_services()
 
-    def start(self) -> None:
+    def _initialize_writable_services(self) -> None:
+        """Assemble migration-capable services behind one startup lease.
+
+        The read-only probe above handles a maintenance epoch that already
+        exists.  The lease closes the remaining race: if maintenance begins
+        between the probe and a constructor, its in-flight row keeps preflight
+        closed and the post-construction check fails before the dispatcher can
+        register, claim, or launch work.
+        """
+
+        try:
+            lease = self._maintenance.begin_mutation(source="task-dispatcher.bootstrap")
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+            return
+        try:
+            self._maintenance.check_lease(lease)
+            self._cutover = DomainCutoverController(self._state_root)
+            self._maintenance.check_lease(lease)
+            self._attempts = AttemptService(self._state_root, artifact_sha=self._artifact_sha)
+            self._maintenance.check_lease(lease)
+            self._overview_planner = OverviewSnapshotPlanner(
+                self._state_root,
+                planner_id=f"{self.dispatcher_id}:overview",
+                artifact_sha=self._artifact_sha,
+            )
+            self._maintenance.check_lease(lease)
+            self._writable_services_initialized = True
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+        finally:
+            self._maintenance.finish_mutation(lease)
+
+    def _start_as_drained_maintenance_participant(self) -> bool:
+        """Register this process as drained without assembling application services."""
+
+        # This verifies the existing maintenance schema through a read-only
+        # connection and marks the service initialized without running pending
+        # migrations.  The following participant registration is the sole
+        # intentional control-plane write for this read-only worker process.
+        self._maintenance.adopt_existing_maintenance_schema()
+        participant_status = self._participant.start()
+        self._started = True
+        if participant_status.status == "drained":
+            return False
+        # Maintenance may have exited after the read-only probe.  This process
+        # deliberately remains incomplete; retire its readiness record and
+        # require a clean worker restart instead of reviving a partial graph.
+        self._participant.stop()
+        return False
+
+    def start(self) -> bool:
+        if self._started:
+            return self._writable_services_initialized
+        if self._maintenance_startup_read_only or _maintenance_is_active_read_only(
+            self._state_root
+        ):
+            self._maintenance_startup_read_only = True
+            return self._start_as_drained_maintenance_participant()
+        if not self._writable_services_initialized:
+            # A constructor that lost the bootstrap lease must never rebuild
+            # itself after maintenance has exited.  A fresh process gets a new
+            # complete graph and avoids an accidental partial recovery.
+            self._maintenance_startup_read_only = True
+            return self._start_as_drained_maintenance_participant()
         # Registering a participant is itself a durable control-plane write.
         # Do not let a direct Python caller create a shadow dispatcher in
         # legacy/validate mode merely by bypassing the CLI entry point.
         self._assert_domain_runtime_fuse()
+        participant_status = self._participant.start()
+        self._started = True
+        if participant_status.status != "active":
+            return False
         # A worker may be the first v2 process to persist state after cutover
         # (for example, when imported queued Attempts are already present).
         # Bind that participant-registration write to the exact prepared
         # artifact and sealed legacy inventory before it reaches the registry.
-        self._cutover.record_first_v2_write(
-            actor_id=f"domain-worker:{self.dispatcher_id}",
-            artifact_sha=self._artifact_sha,
-        )
-        if not self._started:
-            self._participant.start()
-            self._started = True
+        try:
+            self._cutover.record_first_v2_write(
+                actor_id=f"domain-worker:{self.dispatcher_id}",
+                artifact_sha=self._artifact_sha,
+            )
+        except MaintenanceModeError:
+            # The registration above is deliberately retained as a fresh,
+            # drained participant record.  Once maintenance ends, the same
+            # process may retry the first-v2-write transition safely.
+            self._participant.drain()
+            return False
+        return True
 
     def stop(self) -> None:
-        self._overview_planner.stop()
+        if self._writable_services_initialized:
+            self._overview_planner.stop()
         if self._started:
             self._participant.stop()
             self._started = False
 
     async def run_once(self) -> DispatchRunResult:
+        if not self.start():
+            return DispatchRunResult(outcome="maintenance_drained")
         self._assert_domain_runtime_fuse()
-        self.start()
         if self._artifact_sha is not None:
             overview = self._overview_planner.run_once()
             if overview.outcome == "maintenance_drained":
@@ -198,7 +349,7 @@ class TaskDispatcher:
         try:
             self._maintenance.check_lease(lease)
         except MaintenanceModeError:
-            return self._release_for_maintenance(claim)
+            return self._release_for_maintenance(claim, lease)
         try:
             if self._attempts.cancel_if_stop_requested_before_launch(claim):
                 return DispatchRunResult(
@@ -218,6 +369,7 @@ class TaskDispatcher:
         try:
             context, environment_id, grant_version = self._execution_context_for(claim)
         except DispatchValidationError as exc:
+            self._record_dispatch_authorization_denial(exc)
             self._attempts.stop_for_permission_revocation(claim, reason=str(exc))
             return DispatchRunResult(
                 outcome="stopped_permission_revoked",
@@ -225,11 +377,15 @@ class TaskDispatcher:
                 attempt_id=claim.attempt_id,
                 detail=str(exc),
             )
-        self._attempts.record_authorization_snapshot(
-            claim,
-            environment_id=environment_id,
-            grant_version=grant_version,
-        )
+        try:
+            self._maintenance.check_lease(lease)
+            self._attempts.record_authorization_snapshot(
+                claim,
+                environment_id=environment_id,
+                grant_version=grant_version,
+            )
+        except MaintenanceModeError:
+            return self._release_for_maintenance(claim, lease)
         try:
             self._assert_domain_runtime_fuse()
             self._maintenance.check_lease(lease)
@@ -245,8 +401,9 @@ class TaskDispatcher:
             # in-flight and cannot pass cutover preflight until it finishes.
             self._maintenance.check_lease(lease)
         except MaintenanceModeError:
-            return self._release_for_maintenance(claim)
+            return self._release_for_maintenance(claim, lease)
         except DispatchValidationError as exc:
+            self._record_dispatch_authorization_denial(exc)
             self._attempts.stop_for_permission_revocation(claim, reason=str(exc))
             return DispatchRunResult(
                 outcome="stopped_permission_revoked",
@@ -303,7 +460,7 @@ class TaskDispatcher:
                 )
             self._maintenance.check_lease(lease)
         except MaintenanceModeError:
-            return self._release_for_maintenance(claim)
+            return self._release_for_maintenance(claim, lease)
         except DispatchClaimError as exc:
             return DispatchRunResult(
                 outcome="claim_lost",
@@ -317,6 +474,29 @@ class TaskDispatcher:
             engine,
             context,
             lease=lease,
+        )
+
+    def _record_dispatch_authorization_denial(self, exc: DispatchValidationError) -> None:
+        """Emit telemetry only for a rejected access/tenant admission check.
+
+        A dispatcher also stops attempts for ordinary lifecycle and integrity
+        changes (for example an archived Project).  Those are not permission
+        denials.  The structured subtype keeps the bounded metric reserved for
+        the execution-grant and Linux-tenant checks that actually rejected
+        authority to start a runtime.
+        """
+
+        if not isinstance(exc, DispatchAuthorizationError):
+            return
+        record_permission_denied(
+            resource=exc.resource,
+            reason=exc.reason,
+            user_id=exc.user_id,
+            project_id=exc.project_id,
+            workspace_id=exc.workspace_id,
+            task_id=exc.task_id,
+            environment_id=exc.environment_id,
+            state_root=self._state_root,
         )
 
     async def _recover_paused_claim(
@@ -355,7 +535,7 @@ class TaskDispatcher:
                 attempt_id=claim.attempt_id,
             )
         except MaintenanceModeError:
-            return self._release_for_maintenance(claim)
+            return self._release_for_maintenance(claim, lease)
         except DispatchClaimError as exc:
             return DispatchRunResult(
                 outcome="claim_lost",
@@ -379,23 +559,22 @@ class TaskDispatcher:
             raise DispatchClaimError("Attempt no longer has a harness engine")
         return HarnessEngineType(str(row["harness_engine"]))
 
-    def _release_for_maintenance(self, claim: DispatchClaim) -> DispatchRunResult:
+    def _release_for_maintenance(
+        self,
+        claim: DispatchClaim,
+        lease: MaintenanceLease,
+    ) -> DispatchRunResult:
         try:
-            self._attempts.release_unstarted_claim(
+            self._attempts.release_unstarted_claim_for_maintenance_drain(
                 claim,
+                maintenance_lease=lease,
                 reason="Maintenance started before external runtime launch",
             )
-        except DispatchClaimError:
-            # A recovered runtime may have crossed the launch boundary before
-            # this worker observed the epoch.  It must remain conservative and
-            # be reconciled rather than silently requeued.
-            try:
-                self._attempts.mark_launch_unknown(
-                    claim,
-                    reason="Maintenance started while runtime launch state was uncertain",
-                )
-            except DispatchClaimError:
-                pass
+        except (DispatchClaimError, MaintenanceModeError):
+            # A lost/expired claim remains durable for post-maintenance
+            # recovery.  Do not write a speculative ``launch_unknown`` state
+            # after the barrier has become active.
+            pass
         self._participant.drain()
         return DispatchRunResult(
             outcome="maintenance_drained",
@@ -918,6 +1097,11 @@ class TaskDispatcher:
             ).fetchone()
         if row is None:
             raise DispatchValidationError("Task, Attempt, or domain relationship no longer exists")
+        task_id = str(row["task_id"])
+        project_id = str(row["project_id"])
+        workspace_id = str(row["workspace_id"])
+        environment_id = str(row["environment_id"])
+        owner_user_id = str(row["owner_user_id"])
         if row["project_status"] != "active":
             raise DispatchValidationError("Project is not active")
         if row["task_status"] not in {"queued", "starting", "running", "paused"}:
@@ -929,24 +1113,49 @@ class TaskDispatcher:
         if row["environment_status"] != "active":
             raise DispatchValidationError("Environment is not active")
         if row["workspace_owner_user_id"] != row["owner_user_id"]:
-            raise DispatchValidationError("Task owner no longer owns the Workspace")
+            raise DispatchAuthorizationError(
+                "Task owner no longer owns the Workspace",
+                resource="workspace",
+                reason="tenant_owner_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
         if row["workspace_environment_id"] != row["environment_id"]:
             raise DispatchValidationError("Task Environment no longer matches the Workspace")
         context_content = row["context_content"]
         if not isinstance(context_content, str) or not context_content:
             raise DispatchValidationError("Attempt has no immutable Context Snapshot")
-        environment_id = str(row["environment_id"])
-        owner_user_id = str(row["owner_user_id"])
         grant_version = self._active_grant_version(
             environment_id=environment_id,
             owner_user_id=owner_user_id,
             environment_owner_user_id=row["environment_owner_user_id"],
+            project_id=project_id,
+            workspace_id=workspace_id,
+            task_id=task_id,
         )
         prior_grant_version = row["prior_grant_version"]
         if prior_grant_version is not None and int(prior_grant_version) != grant_version:
-            raise DispatchValidationError("Environment grant version changed while Task was queued")
+            raise DispatchAuthorizationError(
+                "Environment grant version changed while Task was queued",
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
         canonical_path = Path(str(row["workspace_canonical_path"])).expanduser()
-        tenant_user = self._tenant_user_for(owner_user_id)
+        tenant_user = self._tenant_user_for(
+            owner_user_id,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            task_id=task_id,
+            environment_id=environment_id,
+        )
         engine_type = HarnessEngineType(str(row["harness_engine"]))
         if tenant_user is not None and engine_type is HarnessEngineType.AGENT_SDK:
             # Agent SDK currently launches through Popen without a sudo-based
@@ -955,8 +1164,15 @@ class TaskDispatcher:
             raise DispatchValidationError(
                 "Agent SDK is not eligible for tenant-isolated durable execution"
             )
-        self._validate_workspace_permissions(canonical_path, tenant_user)
-        task_id = str(row["task_id"])
+        self._validate_workspace_permissions(
+            canonical_path,
+            tenant_user,
+            owner_user_id=owner_user_id,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            task_id=task_id,
+            environment_id=environment_id,
+        )
         return (
             ExecutionContext(
                 task_id=task_id,
@@ -996,11 +1212,23 @@ class TaskDispatcher:
         environment_id: str,
         owner_user_id: str,
         environment_owner_user_id: object,
+        project_id: str,
+        workspace_id: str,
+        task_id: str,
     ) -> int:
         if environment_owner_user_id == owner_user_id:
             return 0
         if not self._auth_db_path.is_file():
-            raise DispatchValidationError("Environment grant database is unavailable")
+            raise DispatchAuthorizationError(
+                "Environment grant database is unavailable",
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
         auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
         try:
             with closing(sqlite3.connect(auth_uri, uri=True)) as conn:
@@ -1010,16 +1238,51 @@ class TaskDispatcher:
                     (environment_id, owner_user_id),
                 ).fetchone()
         except sqlite3.Error as exc:
-            raise DispatchValidationError("Environment grant cannot be read") from exc
+            raise DispatchAuthorizationError(
+                "Environment grant cannot be read",
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            ) from exc
         if grant is None:
-            raise DispatchValidationError("Environment access was revoked or is unavailable")
+            raise DispatchAuthorizationError(
+                "Environment access was revoked or is unavailable",
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
         return int(grant[0])
 
-    def _tenant_user_for(self, owner_user_id: str) -> str | None:
+    def _tenant_user_for(
+        self,
+        owner_user_id: str,
+        *,
+        project_id: str,
+        workspace_id: str,
+        task_id: str,
+        environment_id: str,
+    ) -> str | None:
         if not _is_container_environment():
             return None
         if not self._auth_db_path.is_file():
-            raise DispatchValidationError("Tenant identity database is unavailable")
+            raise DispatchAuthorizationError(
+                "Tenant identity database is unavailable",
+                resource="workspace",
+                reason="tenant_owner_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
         auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
         try:
             with closing(sqlite3.connect(auth_uri, uri=True)) as conn:
@@ -1027,21 +1290,66 @@ class TaskDispatcher:
                     "SELECT username FROM users WHERE id = ?", (owner_user_id,)
                 ).fetchone()
         except sqlite3.Error as exc:
-            raise DispatchValidationError("Tenant identity cannot be read") from exc
+            raise DispatchAuthorizationError(
+                "Tenant identity cannot be read",
+                resource="workspace",
+                reason="tenant_owner_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            ) from exc
         if row is None or not isinstance(row[0], str):
-            raise DispatchValidationError("Task owner has no tenant identity")
+            raise DispatchAuthorizationError(
+                "Task owner has no tenant identity",
+                resource="workspace",
+                reason="tenant_owner_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
         tenant_user = tenant_linux_username(row[0])
         if not _linux_user_exists(tenant_user):
-            raise DispatchValidationError("Task owner Linux tenant is not provisioned")
+            raise DispatchAuthorizationError(
+                "Task owner Linux tenant is not provisioned",
+                resource="workspace",
+                reason="tenant_owner_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
         return tenant_user
 
     @staticmethod
-    def _validate_workspace_permissions(path: Path, tenant_user: str | None) -> None:
+    def _validate_workspace_permissions(
+        path: Path,
+        tenant_user: str | None,
+        *,
+        owner_user_id: str,
+        project_id: str,
+        workspace_id: str,
+        task_id: str,
+        environment_id: str,
+    ) -> None:
         if not path.is_dir():
             raise DispatchValidationError("Workspace canonical path is unavailable")
         if tenant_user is None:
             if not os.access(path, os.R_OK | os.W_OK | os.X_OK):
-                raise DispatchValidationError("Worker lacks Workspace permissions")
+                raise DispatchAuthorizationError(
+                    "Worker lacks Workspace permissions",
+                    resource="workspace",
+                    reason="tenant_owner_required",
+                    user_id=owner_user_id,
+                    project_id=project_id,
+                    workspace_id=workspace_id,
+                    task_id=task_id,
+                    environment_id=environment_id,
+                )
             return
         result = subprocess.run(
             ["sudo", "-n", "-u", tenant_user, "test", "-rwx", str(path)],
@@ -1050,7 +1358,16 @@ class TaskDispatcher:
             text=True,
         )
         if result.returncode != 0:
-            raise DispatchValidationError("Tenant lacks Workspace permissions")
+            raise DispatchAuthorizationError(
+                "Tenant lacks Workspace permissions",
+                resource="workspace",
+                reason="tenant_owner_required",
+                user_id=owner_user_id,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                task_id=task_id,
+                environment_id=environment_id,
+            )
 
     def _engine_for(self, engine_type: HarnessEngineType) -> HarnessEngine:
         engine = self._engines.get(engine_type)

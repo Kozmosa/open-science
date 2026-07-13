@@ -15,6 +15,8 @@ from ainrf.auth.presence import record_activity
 from ainrf.auth.service import AuthService
 from ainrf.api.middleware.domain_maintenance import (
     build_domain_maintenance_middleware as build_domain_maintenance_middleware,
+    build_maintenance_startup_read_only_middleware as build_maintenance_startup_read_only_middleware,
+    is_maintenance_startup_evidence_path,
 )
 
 _EXEMPT_PATH_PREFIXES = (
@@ -162,6 +164,18 @@ def build_jwt_auth_middleware(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
+        # An API process which started inside an existing maintenance epoch is
+        # intentionally missing writable user/domain services.  Its narrowly
+        # permitted evidence endpoints must not validate a cookie or Bearer
+        # token through ``AuthService`` because that connection could create
+        # ``auth.sqlite3`` while a restore source is frozen.  The capability
+        # payload is aggregate operational evidence only in this mode.
+        if bool(getattr(request.app.state, "maintenance_startup_read_only", False)):
+            if is_maintenance_startup_evidence_path(
+                request.url.path,
+                metrics_path=api_config.metrics_path,
+            ):
+                return await call_next(request)
         if _is_exempt(request.url.path, api_config.production):
             return await call_next(request)
 
@@ -265,8 +279,9 @@ def build_concurrency_limit_middleware(
             await asyncio.wait_for(semaphore.acquire(), timeout=5.0)
         except TimeoutError:
             from ainrf.api.routes.sla_metrics import rate_limited
+            from ainrf.api.routes.metrics import route_template_for_request
 
-            rate_limited("concurrency", request.url.path)
+            rate_limited("concurrency", route_template_for_request(request))
             return JSONResponse(
                 {"detail": "Server is busy. Please retry later."},
                 status_code=503,

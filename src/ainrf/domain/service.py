@@ -122,10 +122,16 @@ class DomainAuthorizationService:
         return role
 
     def require_project_publisher(self, project_id: str, user: dict[str, object]) -> None:
-        role = self.require_project_viewer(project_id, user)
-        if role in {"admin", "owner"}:
-            return
+        # Keep the usual visibility semantics (including administrative
+        # visibility), but publishing changes the active Project Context and
+        # is deliberately narrower than general Project administration.
+        # A global admin may manage a Project without becoming a publisher for
+        # it; that capability is reserved for its actual owner or an explicit
+        # editor membership carrying can_publish.
+        self.require_project_viewer(project_id, user)
         user_id = user.get("id")
+        if self._repository.project_owner(project_id) == user_id:
+            return
         member = (
             self._repository.project_member(project_id, user_id)
             if isinstance(user_id, str)
@@ -294,6 +300,37 @@ class DomainService:
         if state is None or bool(state["is_active"]):
             raise MaintenanceModeError("domain writes are paused for maintenance")
 
+    def _record_direct_permission_denial(
+        self,
+        *,
+        resource: str,
+        reason: str,
+        user: dict[str, object],
+        project_id: str | None = None,
+        workspace_id: str | None = None,
+        task_id: str | None = None,
+        environment_id: str | None = None,
+    ) -> None:
+        """Record v2 denials that occur outside ``DomainAuthorizationService``.
+
+        The authorization service owns Project/Workspace/Task role checks, but
+        Environment execution grants and registry-admin checks are enforced by
+        this application service.  Keep both paths on the same bounded,
+        durable telemetry contract so a visible 403 is never silent.
+        """
+
+        user_id = user.get("id")
+        record_permission_denied(
+            resource=resource,
+            reason=reason,
+            user_id=user_id if isinstance(user_id, str) else None,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            task_id=task_id,
+            environment_id=environment_id,
+            state_root=self._state_root,
+        )
+
     def _has_environment_access(
         self, *, environment_id: str, user: dict[str, object], owner_user_id: object
     ) -> bool:
@@ -319,6 +356,44 @@ class DomainService:
             environment_id=environment_id,
             user_id=self._user_id(user),
         )
+
+    def _require_environment_execution_access(
+        self,
+        *,
+        environment_id: str,
+        owner_user_id: object,
+        user: dict[str, object],
+    ) -> None:
+        """Enforce execution authority without collapsing 404 and 403.
+
+        Environment visibility is broader than the Linux tenant grant: an
+        administrator or registry owner may inspect and manage metadata, but
+        must receive a visible ``403`` when attempting an execution-scoped
+        Workspace operation.  A caller that cannot see the Environment at all
+        keeps the usual ``404`` boundary.
+        """
+
+        if self._has_environment_execution_access(environment_id=environment_id, user=user):
+            return
+        if self._has_environment_access(
+            environment_id=environment_id,
+            user=user,
+            owner_user_id=owner_user_id,
+        ):
+            self._record_direct_permission_denial(
+                resource="environment",
+                reason="environment_grant_required",
+                user=user,
+                environment_id=environment_id,
+            )
+            raise DomainPermissionError("Active Environment access is required")
+        self._record_direct_permission_denial(
+            resource="environment",
+            reason="not_visible",
+            user=user,
+            environment_id=environment_id,
+        )
+        raise DomainNotFoundError(environment_id)
 
     def _has_active_environment_grant(self, *, environment_id: str, user_id: str) -> bool:
         if not self._auth_db_path.is_file():
@@ -585,6 +660,9 @@ class DomainService:
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
         if user.get("role") != "admin":
+            self._record_direct_permission_denial(
+                resource="environment", reason="admin_required", user=user
+            )
             raise DomainPermissionError("Only admins can register environments")
         actor_user_id = self._user_id(user)
         canonical_connection = canonical_connection_object(connection)
@@ -657,8 +735,20 @@ class DomainService:
                 user=user,
                 owner_user_id=environment["owner_user_id"],
             ):
+                self._record_direct_permission_denial(
+                    resource="environment",
+                    reason="not_visible",
+                    user=user,
+                    environment_id=environment_id,
+                )
                 raise DomainNotFoundError(environment_id)
             if user.get("role") != "admin":
+                self._record_direct_permission_denial(
+                    resource="environment",
+                    reason="admin_required",
+                    user=user,
+                    environment_id=environment_id,
+                )
                 raise DomainPermissionError("Only admins can disable environments")
             request: dict[str, object] = {"environment_id": environment_id}
             if idempotency_key is not None:
@@ -713,8 +803,20 @@ class DomainService:
                 user=user,
                 owner_user_id=existing["owner_user_id"],
             ):
+                self._record_direct_permission_denial(
+                    resource="environment",
+                    reason="not_visible",
+                    user=user,
+                    environment_id=environment_id,
+                )
                 raise DomainNotFoundError(environment_id)
             if user.get("role") != "admin":
+                self._record_direct_permission_denial(
+                    resource="environment",
+                    reason="admin_required",
+                    user=user,
+                    environment_id=environment_id,
+                )
                 raise DomainPermissionError("Only admins can update environments")
             request: dict[str, object] = {"environment_id": environment_id}
             if alias is not None:
@@ -817,10 +919,11 @@ class DomainService:
                 raise DomainNotFoundError(environment_id)
             if environment["status"] != "active":
                 raise DomainConflictError("Workspace requires an active environment")
-            if user.get("role") != "admin" and not self._has_environment_execution_access(
-                environment_id=environment_id, user=user
-            ):
-                raise DomainNotFoundError(environment_id)
+            self._require_environment_execution_access(
+                environment_id=environment_id,
+                owner_user_id=environment["owner_user_id"],
+                user=user,
+            )
             if idempotency_key is not None:
                 cached = self._idempotent_result(
                     conn, owner_id, "workspace.create", idempotency_key, request
@@ -911,10 +1014,11 @@ class DomainService:
                 raise DomainNotFoundError(environment_id)
             if str(environment["status"]) != "active":
                 raise DomainConflictError("Workspace requires an active environment")
-            if user.get("role") != "admin" and not self._has_environment_execution_access(
-                environment_id=environment_id, user=user
-            ):
-                raise DomainNotFoundError(environment_id)
+            self._require_environment_execution_access(
+                environment_id=environment_id,
+                owner_user_id=environment["owner_user_id"],
+                user=user,
+            )
             cached = self._idempotent_result(
                 conn, owner_id, "workspace.create_and_attach", idempotency_key, request
             )
@@ -1801,6 +1905,12 @@ class DomainService:
             user=user,
             owner_user_id=row["owner_user_id"],
         ):
+            self._record_direct_permission_denial(
+                resource="environment",
+                reason="not_visible",
+                user=user,
+                environment_id=environment_id,
+            )
             raise DomainNotFoundError(environment_id)
         if not include_disabled and row["status"] != "active":
             raise DomainNotFoundError(environment_id)
@@ -1844,7 +1954,15 @@ class DomainService:
             can_execute = self._has_environment_execution_access(
                 environment_id=str(workspace["environment_id"]), user=user
             )
-            if user.get("role") != "admin" and not can_execute:
+            if not can_execute:
+                self._record_direct_permission_denial(
+                    resource="environment",
+                    reason="environment_grant_required",
+                    user=user,
+                    project_id=project_id,
+                    workspace_id=workspace_id,
+                    environment_id=str(workspace["environment_id"]),
+                )
                 raise DomainPermissionError("Active Environment access is required")
             existing_link = repository.project_workspace_link(project_id, workspace_id)
             if make_primary and (existing_link is None or str(existing_link["status"]) != "active"):
@@ -1923,7 +2041,15 @@ class DomainService:
         can_execute = self._has_environment_execution_access(
             environment_id=str(workspace["environment_id"]), user=user
         )
-        if user.get("role") != "admin" and not can_execute:
+        if not can_execute:
+            self._record_direct_permission_denial(
+                resource="environment",
+                reason="environment_grant_required",
+                user=user,
+                project_id=project_id,
+                workspace_id=workspace_id,
+                environment_id=str(workspace["environment_id"]),
+            )
             raise DomainPermissionError("Active Environment access is required")
         target_link = repository.project_workspace_link(project_id, workspace_id)
         if target_link is None or str(target_link["status"]) != "active":
@@ -1948,10 +2074,12 @@ class DomainService:
             else "active Environment grant is required",
         }
 
-    @staticmethod
-    def _user_id(user: dict[str, object]) -> str:
+    def _user_id(self, user: dict[str, object]) -> str:
         value = user.get("id")
         if not isinstance(value, str) or not value:
+            self._record_direct_permission_denial(
+                resource="other", reason="authenticated_user_required", user=user
+            )
             raise DomainPermissionError("Authenticated user ID is required")
         return value
 

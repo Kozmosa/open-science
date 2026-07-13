@@ -16,9 +16,14 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.api.routes.terminal import _terminal_mutation
+from ainrf.api.routes.terminal import _open_terminal_attachment_runtime, _terminal_mutation
 from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
-from ainrf.terminal.models import TerminalAttachmentMode, TerminalAttachmentTarget
+from ainrf.terminal.attachments import TerminalAttachmentBroker
+from ainrf.terminal.models import (
+    TerminalAttachment,
+    TerminalAttachmentMode,
+    TerminalAttachmentTarget,
+)
 from ainrf.terminal.pty import (
     TERMINAL_LOCAL_TARGET_KIND,
     PtyUtf8Decoder,
@@ -256,6 +261,85 @@ def _maintenance_websocket(maintenance: DomainMaintenanceService) -> WebSocket:
             )
         ),
     )
+
+
+class _MaintenanceAttachmentBroker:
+    def __init__(
+        self, maintenance: DomainMaintenanceService, *, enter_after_open: bool = False
+    ) -> None:
+        self._maintenance = maintenance
+        self._enter_after_open = enter_after_open
+        self.validate_calls = 0
+        self.open_calls = 0
+        self.closed_attachment_ids: list[str] = []
+
+    def validate_attachment(self, attachment_id: str, token: str) -> TerminalAttachment:
+        _ = attachment_id, token
+        self.validate_calls += 1
+        return cast(TerminalAttachment, object())
+
+    def open_runtime(
+        self, attachment_id: str, token: str
+    ) -> tuple[TerminalAttachment, TerminalBridgeRuntime]:
+        _ = attachment_id, token
+        self.open_calls += 1
+        if self._enter_after_open:
+            self._maintenance.enter(actor_id="operator", reason="race terminal bridge open")
+        return cast(TerminalAttachment, object()), cast(TerminalBridgeRuntime, object())
+
+    def close_runtime(self, attachment_id: str) -> None:
+        self.closed_attachment_ids.append(attachment_id)
+
+
+def test_terminal_websocket_open_lease_rejects_maintenance_before_bridge_start(
+    state_root: Path,
+) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    websocket = _maintenance_websocket(maintenance)
+    broker = _MaintenanceAttachmentBroker(maintenance)
+
+    maintenance.enter(actor_id="operator", reason="pause terminal bridge open")
+    try:
+        with pytest.raises(MaintenanceModeError):
+            _open_terminal_attachment_runtime(
+                websocket,
+                cast(TerminalAttachmentBroker, broker),
+                "attachment-maintenance",
+                "token",
+            )
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    assert broker.validate_calls == 0
+    assert broker.open_calls == 0
+    assert broker.closed_attachment_ids == []
+
+
+def test_terminal_websocket_open_closes_new_bridge_when_epoch_changes(
+    state_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    websocket = _maintenance_websocket(maintenance)
+    broker = _MaintenanceAttachmentBroker(maintenance, enter_after_open=True)
+    monkeypatch.setattr(
+        "ainrf.api.routes.terminal._require_v2_attachment_environment_access",
+        lambda _websocket, _attachment: None,
+    )
+
+    try:
+        with pytest.raises(MaintenanceModeError):
+            _open_terminal_attachment_runtime(
+                websocket,
+                cast(TerminalAttachmentBroker, broker),
+                "attachment-race",
+                "token",
+            )
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    assert broker.validate_calls == 1
+    assert broker.open_calls == 1
+    assert broker.closed_attachment_ids == ["attachment-race"]
 
 
 def test_terminal_websocket_input_lease_rejects_maintenance_before_pty_write(

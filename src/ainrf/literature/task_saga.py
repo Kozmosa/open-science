@@ -25,8 +25,17 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
-from ainrf.domain_telemetry import record_durable_idempotency_event, record_literature_saga_event
-from ainrf.domain_control import DomainCutoverController, DomainCutoverError, MaintenanceModeError
+from ainrf.domain_telemetry import (
+    record_durable_idempotency_event,
+    record_literature_saga_event,
+    record_permission_denied,
+)
+from ainrf.domain_control import (
+    DomainCutoverController,
+    DomainCutoverError,
+    DomainMaintenanceService,
+    MaintenanceModeError,
+)
 
 
 _DEFAULT_PRESET = "structured-research-default"
@@ -84,6 +93,7 @@ class LiteratureTaskSagaService:
         self._domain_db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
         self._artifact_sha = artifact_sha
+        self._maintenance = DomainMaintenanceService(state_root)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "literature")
@@ -96,6 +106,28 @@ class LiteratureTaskSagaService:
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
+
+    def _record_permission_denial(
+        self,
+        *,
+        resource: str,
+        reason: str,
+        user_id: str | None,
+        project_id: str | None = None,
+        workspace_id: str | None = None,
+        environment_id: str | None = None,
+    ) -> None:
+        """Record a bounded saga authorization failure in shared telemetry."""
+
+        record_permission_denied(
+            resource=resource,
+            reason=reason,
+            user_id=user_id,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            environment_id=environment_id,
+            state_root=self._state_root,
+        )
 
     def v2_ready(self) -> bool:
         """Whether this exact saga instance can safely create v2 Tasks.
@@ -137,11 +169,25 @@ class LiteratureTaskSagaService:
         exact immutable artifact binding used by the domain worker.
         """
 
+        if self._maintenance.status().is_active:
+            raise MaintenanceModeError("Literature research Tasks are paused for maintenance")
         if not self._artifact_sha:
             raise DomainCutoverError(
                 "Literature research Tasks require the committed v2 artifact SHA"
             )
         self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
+
+    def _assert_maintenance_unchanged(self) -> None:
+        """Reject a Literature-side commit that crossed into maintenance.
+
+        The Literature and domain stores intentionally have no distributed
+        transaction.  Re-checking immediately before each local commit keeps
+        a request that began in the previous epoch from silently persisting a
+        new intent after maintenance starts.
+        """
+
+        if self._maintenance.status().is_active:
+            raise MaintenanceModeError("Literature research Tasks are paused for maintenance")
 
     # ------------------------------------------------------------------
     # Public intent API
@@ -341,6 +387,7 @@ class LiteratureTaskSagaService:
                             now,
                         ),
                     )
+                self._assert_maintenance_unchanged()
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -564,10 +611,12 @@ class LiteratureTaskSagaService:
     # ------------------------------------------------------------------
     # Domain/Literature authorization and request normalization
     # ------------------------------------------------------------------
-    @staticmethod
-    def _actor(user: Mapping[str, object]) -> dict[str, str]:
+    def _actor(self, user: Mapping[str, object]) -> dict[str, str]:
         user_id = user.get("id")
         if not isinstance(user_id, str) or not user_id:
+            self._record_permission_denial(
+                resource="literature", reason="authenticated_user_required", user_id=None
+            )
             raise DomainPermissionError("Authenticated user ID is required")
         role = user.get("role")
         return {"id": user_id, "role": role if isinstance(role, str) and role else "member"}
@@ -582,6 +631,9 @@ class LiteratureTaskSagaService:
         """
 
         if not user_id:
+            self._record_permission_denial(
+                resource="literature", reason="actor_unavailable", user_id=None
+            )
             raise DomainPermissionError("attention_required: Literature actor is invalid")
         if user_id == "api-key-user":
             # API keys deliberately authenticate as one restricted compatibility
@@ -593,6 +645,9 @@ class LiteratureTaskSagaService:
             # exception instead of treating an absent auth row as a bypass.
             return {"id": user_id, "role": "user"}
         if not self._auth_db_path.is_file():
+            self._record_permission_denial(
+                resource="literature", reason="actor_unavailable", user_id=user_id
+            )
             raise DomainPermissionError(
                 "attention_required: Literature actor identity is unavailable"
             )
@@ -603,15 +658,27 @@ class LiteratureTaskSagaService:
                     "SELECT id, role, status FROM users WHERE id = ?", (user_id,)
                 ).fetchone()
         except sqlite3.Error as exc:
+            self._record_permission_denial(
+                resource="literature", reason="actor_unavailable", user_id=user_id
+            )
             raise DomainPermissionError(
                 "attention_required: Literature actor identity cannot be read"
             ) from exc
         if row is None:
+            self._record_permission_denial(
+                resource="literature", reason="actor_unavailable", user_id=user_id
+            )
             raise DomainPermissionError("attention_required: Literature actor is unavailable")
         role = row[1]
         if row[2] != "active":
+            self._record_permission_denial(
+                resource="literature", reason="actor_unavailable", user_id=user_id
+            )
             raise DomainPermissionError("attention_required: Literature actor is inactive")
         if not isinstance(role, str) or role not in {"admin", "member"}:
+            self._record_permission_denial(
+                resource="literature", reason="actor_unavailable", user_id=user_id
+            )
             raise DomainPermissionError("attention_required: Literature actor role is invalid")
         return {"id": user_id, "role": role}
 
@@ -669,7 +736,27 @@ class LiteratureTaskSagaService:
                 """,
                 (paper_id, user_id),
             ).fetchone()
+            known_paper = None
+            if row is None:
+                # Preserve the public 404 for both an absent paper and one
+                # that belongs to another user's Literature scope.  This
+                # private existence probe is only used for bounded telemetry.
+                known_paper = conn.execute(
+                    """
+                    SELECT 1 FROM literature_catalog_papers WHERE paper_id = ?
+                    UNION ALL
+                    SELECT 1 FROM literature_papers WHERE paper_id = ?
+                    LIMIT 1
+                    """,
+                    (paper_id, paper_id),
+                ).fetchone()
         if row is None:
+            if known_paper is not None:
+                self._record_permission_denial(
+                    resource="literature",
+                    reason="not_visible",
+                    user_id=user_id,
+                )
             raise ResearchTaskPaperNotFoundError("Paper not found")
         return {"title": str(row["title"]), "abstract": str(row["abstract"])}
 
@@ -729,8 +816,22 @@ class LiteratureTaskSagaService:
                 (project_id, workspace_id),
             ).fetchone()
         if row is None:
+            self._record_permission_denial(
+                resource="workspace",
+                reason="not_visible",
+                user_id=actor["id"],
+                project_id=project_id,
+                workspace_id=workspace_id,
+            )
             raise DomainNotFoundError(workspace_id)
         if str(row["owner_user_id"]) != actor["id"]:
+            self._record_permission_denial(
+                resource="workspace",
+                reason="owner_required",
+                user_id=actor["id"],
+                project_id=project_id,
+                workspace_id=workspace_id,
+            )
             raise DomainPermissionError("Research Tasks require an owned Workspace")
         if (
             row["link_status"] != "active"
@@ -743,6 +844,14 @@ class LiteratureTaskSagaService:
             actor_user_id=actor["id"],
             environment_owner_user_id=row["environment_owner_user_id"],
         ):
+            self._record_permission_denial(
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=actor["id"],
+                project_id=project_id,
+                workspace_id=workspace_id,
+                environment_id=str(row["environment_id"]),
+            )
             raise DomainPermissionError("Active Environment grant is required")
 
     def _has_environment_grant(

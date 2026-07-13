@@ -111,26 +111,31 @@ class TmuxAdapter:
         binding: UserEnvironmentBinding,
         environment: EnvironmentRegistryEntry,
         session_name: str,
-    ) -> None:
-        self._ensure_session(binding, environment, session_name)
+    ) -> bool:
+        """Ensure a personal Session and report whether this call created it."""
+
+        return self._ensure_session(binding, environment, session_name)
 
     def ensure_agent_session(
         self,
         binding: UserEnvironmentBinding,
         environment: EnvironmentRegistryEntry,
         session_name: str,
-    ) -> None:
-        self._ensure_session(binding, environment, session_name)
+    ) -> bool:
+        """Ensure an agent Session and report whether this call created it."""
+
+        created = self._ensure_session(binding, environment, session_name)
         self._configure_remain_on_exit(binding, environment, session_name)
+        return created
 
     def _ensure_session(
         self,
         binding: UserEnvironmentBinding,
         environment: EnvironmentRegistryEntry,
         session_name: str,
-    ) -> None:
+    ) -> bool:
         if self.has_session(binding, environment, session_name):
-            return
+            return False
 
         session_target = self.session_target_for(session_name)
         default_workdir = binding.default_workdir or str(self._state_root)
@@ -175,18 +180,19 @@ class TmuxAdapter:
                 environment,
                 session_name,
             ):
-                return
+                return False
             self._raise_command_error(result, environment)
+        return True
 
     def reset_personal_session(
         self,
         binding: UserEnvironmentBinding,
         environment: EnvironmentRegistryEntry,
         session_name: str,
-    ) -> None:
+    ) -> bool:
         if self.has_session(binding, environment, session_name):
             self.kill_session(binding, environment, session_name)
-        self.ensure_personal_session(binding, environment, session_name)
+        return self.ensure_personal_session(binding, environment, session_name)
 
     def kill_session(
         self,

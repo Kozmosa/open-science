@@ -1,8 +1,8 @@
 """HTTP request/response logging middleware.
 
-Logs every request with method, path, status, duration, and the request_id
-set by ``request_context`` middleware.  Slow requests and 5xx responses are
-elevated to WARNING / ERROR so they stand out in production logs.
+Logs every request with method, stable route template, status, duration, and
+the request_id set by ``request_context`` middleware.  Slow requests and 5xx
+responses are elevated to WARNING / ERROR so they stand out in production logs.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 import structlog
 from starlette.requests import Request
 from starlette.responses import Response
+
+from ainrf.api.routes.metrics import route_template_for_request
 
 if TYPE_CHECKING:
     from ainrf.api.config import ApiConfig
@@ -35,15 +37,12 @@ def build_request_logging_middleware(
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        path = request.url.path
         # Skip noisy / low-value paths.
-        if path in _SKIP_PATHS or path.startswith("/assets/"):
+        if request.url.path in _SKIP_PATHS or request.url.path.startswith("/assets/"):
             return await call_next(request)
 
         request_id = getattr(request.state, "request_id", "-")
         method = request.method
-        query = request.url.query or ""
-
         start = time.monotonic()
         try:
             response = await call_next(request)
@@ -53,7 +52,7 @@ def build_request_logging_middleware(
                 "request_error",
                 request_id=request_id,
                 method=method,
-                path=path,
+                route=route_template_for_request(request),
                 status=500,
                 elapsed_ms=round(elapsed * 1000, 1),
             )
@@ -75,8 +74,7 @@ def build_request_logging_middleware(
             "request",
             request_id=request_id,
             method=method,
-            path=path,
-            query=query,
+            route=route_template_for_request(request),
             status=status,
             elapsed_ms=elapsed_ms,
         )

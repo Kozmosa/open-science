@@ -23,7 +23,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
-from ainrf.domain_telemetry import record_durable_idempotency_event
+from ainrf.domain_telemetry import record_durable_idempotency_event, record_permission_denied
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 
@@ -72,10 +72,36 @@ class TaskApplicationService:
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
 
-    @staticmethod
-    def _user_id(user: Mapping[str, object]) -> str:
+    def _record_permission_denial(
+        self,
+        *,
+        resource: str,
+        reason: str,
+        user_id: str | None,
+        project_id: str | None = None,
+        workspace_id: str | None = None,
+        task_id: str | None = None,
+        environment_id: str | None = None,
+    ) -> None:
+        """Persist one bounded v2 authorization denial outside role guards."""
+
+        record_permission_denied(
+            resource=resource,
+            reason=reason,
+            user_id=user_id,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            task_id=task_id,
+            environment_id=environment_id,
+            state_root=self._state_root,
+        )
+
+    def _user_id(self, user: Mapping[str, object]) -> str:
         value = user.get("id")
         if not isinstance(value, str) or not value:
+            self._record_permission_denial(
+                resource="other", reason="authenticated_user_required", user_id=None
+            )
             raise DomainPermissionError("Authenticated user ID is required")
         return value
 
@@ -128,14 +154,14 @@ class TaskApplicationService:
         }
         with closing(self._connect()) as conn:
             self._begin(conn)
-            auth = DomainAuthorizationService(conn)
-            auth.require_project_editor(project_id, dict(user))
-            auth.require_workspace_owner(workspace_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.create", idempotency_key, request
             )
             if cached is not None:
                 return self._string_result(cached)
+            auth = DomainAuthorizationService(conn)
+            auth.require_project_editor(project_id, dict(user))
+            auth.require_workspace_owner(workspace_id, dict(user))
             workspace = self._writable_workspace(
                 conn,
                 project_id=project_id,
@@ -227,7 +253,6 @@ class TaskApplicationService:
         request: dict[str, object] = {"task_id": task_id, "prompt": prompt}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            self._owned_task(conn, task_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.continue", idempotency_key, request
             )
@@ -307,7 +332,6 @@ class TaskApplicationService:
         request: dict[str, object] = {"task_id": task_id, "action": "resume"}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            self._owned_task(conn, task_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.resume", idempotency_key, request
             )
@@ -379,7 +403,6 @@ class TaskApplicationService:
         }
         with closing(self._connect()) as conn:
             self._begin(conn)
-            self._owned_task(conn, task_id, dict(user))
             cached = self._idempotent_result(
                 conn,
                 actor_user_id,
@@ -389,6 +412,7 @@ class TaskApplicationService:
             )
             if cached is not None:
                 return self._string_result(cached)
+            self._owned_task(conn, task_id, dict(user))
             result = AttemptService._resolve_launch_unknown_in_transaction(
                 conn,
                 task_id=task_id,
@@ -426,12 +450,12 @@ class TaskApplicationService:
         request: dict[str, object] = {"task_id": task_id, "reason": reason}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            task = self._owned_task(conn, task_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.archive", idempotency_key, request
             )
             if cached is not None:
                 return cached
+            task = self._owned_task(conn, task_id, dict(user))
             if task["archived_at"] is not None:
                 raise DomainConflictError("Task is already archived")
             if self._has_pending_task_archive_in_transaction(conn, task_id):
@@ -524,12 +548,12 @@ class TaskApplicationService:
         request: dict[str, object] = {"task_id": task_id}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            task = self._owned_task(conn, task_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.unarchive", idempotency_key, request
             )
             if cached is not None:
                 return cached
+            task = self._owned_task(conn, task_id, dict(user))
             if task["archived_at"] is None:
                 if self._has_pending_task_archive_in_transaction(conn, task_id):
                     raise DomainConflictError("Task archive is awaiting runtime cancellation")
@@ -572,12 +596,12 @@ class TaskApplicationService:
         request: dict[str, object] = {"task_id": task_id, "title": title}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            task = self._owned_task(conn, task_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.title.update", idempotency_key, request
             )
             if cached is not None:
                 return cached
+            task = self._owned_task(conn, task_id, dict(user))
             now = _now()
             conn.execute(
                 "UPDATE tasks SET title = ?, updated_at = ? WHERE task_id = ?",
@@ -608,8 +632,6 @@ class TaskApplicationService:
         request: dict[str, object] = {"project_id": project_id, "reason": reason}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            auth = DomainAuthorizationService(conn)
-            auth.require_project_owner(project_id, dict(user))
             cached = self._idempotent_result(
                 conn,
                 actor_user_id,
@@ -619,6 +641,8 @@ class TaskApplicationService:
             )
             if cached is not None:
                 return cached
+            auth = DomainAuthorizationService(conn)
+            auth.require_project_owner(project_id, dict(user))
             project = conn.execute(
                 "SELECT status, is_default FROM projects WHERE project_id = ?", (project_id,)
             ).fetchone()
@@ -706,12 +730,12 @@ class TaskApplicationService:
         request: dict[str, object] = {"project_id": project_id}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            DomainAuthorizationService(conn).require_project_owner(project_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "project.unarchive", idempotency_key, request
             )
             if cached is not None:
                 return cached
+            DomainAuthorizationService(conn).require_project_owner(project_id, dict(user))
             updated = conn.execute(
                 """UPDATE projects
                    SET status = 'active', archived_at = NULL, archive_reason = NULL, updated_at = ?
@@ -780,17 +804,17 @@ class TaskApplicationService:
         }
         with closing(self._connect()) as conn:
             self._begin(conn)
+            cached = self._idempotent_result(
+                conn, actor_user_id, "task.move", idempotency_key, request
+            )
+            if cached is not None:
+                return cached
             source = self._owned_task(conn, task_id, dict(user))
             auth = DomainAuthorizationService(conn)
             auth.require_project_editor(project_id, dict(user))
             auth.require_workspace_owner(
                 str(source["workspace_id"]), dict(user), resource_visible=True
             )
-            cached = self._idempotent_result(
-                conn, actor_user_id, "task.move", idempotency_key, request
-            )
-            if cached is not None:
-                return cached
             task = self._owned_active_task(conn, task_id, dict(user))
             if str(task["project_id"]) == project_id:
                 raise DomainConflictError("Task already belongs to the target Project")
@@ -864,16 +888,16 @@ class TaskApplicationService:
         }
         with closing(self._connect()) as conn:
             self._begin(conn)
-            source = self._owned_task(conn, task_id, dict(user))
-            target_project_id = project_id or str(source["project_id"])
-            auth = DomainAuthorizationService(conn)
-            auth.require_project_editor(target_project_id, dict(user))
-            auth.require_workspace_owner(workspace_id, dict(user))
             cached = self._idempotent_result(
                 conn, actor_user_id, "task.fork", idempotency_key, request
             )
             if cached is not None:
                 return self._string_result(cached)
+            source = self._owned_task(conn, task_id, dict(user))
+            target_project_id = project_id or str(source["project_id"])
+            auth = DomainAuthorizationService(conn)
+            auth.require_project_editor(target_project_id, dict(user))
+            auth.require_workspace_owner(workspace_id, dict(user))
             workspace = self._writable_workspace(
                 conn,
                 project_id=target_project_id,
@@ -968,13 +992,13 @@ class TaskApplicationService:
         request: dict[str, object] = {"task_id": task_id, "trigger": trigger, **request_extra}
         with closing(self._connect()) as conn:
             self._begin(conn)
+            cached = self._idempotent_result(conn, actor_user_id, scope, idempotency_key, request)
+            if cached is not None:
+                return self._string_result(cached)
             preauthorized_task = self._owned_task(conn, task_id, dict(user))
             DomainAuthorizationService(conn).require_workspace_owner(
                 str(preauthorized_task["workspace_id"]), dict(user), resource_visible=True
             )
-            cached = self._idempotent_result(conn, actor_user_id, scope, idempotency_key, request)
-            if cached is not None:
-                return self._string_result(cached)
             task = self._owned_active_task(conn, task_id, dict(user))
             latest = self._latest_attempt(conn, task_id)
             if latest is not None and latest["status"] == "queued":
@@ -1251,10 +1275,10 @@ class TaskApplicationService:
         request: dict[str, object] = {"task_id": task_id, "action": action, "reason": reason}
         with closing(self._connect()) as conn:
             self._begin(conn)
-            self._owned_task(conn, task_id, dict(user))
             cached = self._idempotent_result(conn, actor_user_id, scope, idempotency_key, request)
             if cached is not None:
                 return cached
+            self._owned_task(conn, task_id, dict(user))
             self._owned_active_task(conn, task_id, dict(user))
             attempt = self._latest_attempt(conn, task_id)
             if attempt is None:
@@ -1597,6 +1621,12 @@ class TaskApplicationService:
         if environment_owner_user_id == actor_user_id:
             return 0
         if not self._auth_db_path.is_file():
+            self._record_permission_denial(
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=actor_user_id,
+                environment_id=environment_id,
+            )
             raise DomainPermissionError("Environment grant database is unavailable")
         auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
         try:
@@ -1607,8 +1637,20 @@ class TaskApplicationService:
                     (environment_id, actor_user_id),
                 ).fetchone()
         except sqlite3.Error as exc:
+            self._record_permission_denial(
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=actor_user_id,
+                environment_id=environment_id,
+            )
             raise DomainPermissionError("Environment grant cannot be read") from exc
         if row is None:
+            self._record_permission_denial(
+                resource="environment",
+                reason="environment_grant_required",
+                user_id=actor_user_id,
+                environment_id=environment_id,
+            )
             raise DomainPermissionError("Active Environment grant is required")
         return int(row[0])
 

@@ -10,8 +10,10 @@ from threading import Barrier
 import pytest
 
 from ainrf.auth.service import AuthService
+from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect, run_pending
 from ainrf.domain import DomainService, ProjectContextService, TaskDispatcher
+from ainrf.domain.service import DomainPermissionError
 from ainrf.domain_control import (
     DomainCutoverController,
     DomainCutoverError,
@@ -26,6 +28,7 @@ from ainrf.literature.task_saga import (
     LiteratureTaskSagaService,
     ResearchTaskIdempotencyConflictError,
     ResearchTaskLeaseLostError,
+    ResearchTaskPaperNotFoundError,
     ResearchTaskWorkspaceRequiredError,
 )
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
@@ -226,11 +229,19 @@ def _former_admin_scope(state_root: Path) -> tuple[dict[str, object], str, str, 
     environment = domain.create_environment(
         former_admin, alias="former-admin-host", display_name="Former Admin Host", connection={}
     )
+    environment_id = str(environment["environment_id"])
+    auth.grant_environment(
+        env_id=environment_id,
+        user_id="former-admin",
+        max_tasks=None,
+        granted_by="former-admin",
+        reason="fixture requires an explicit tenant execution grant",
+    )
     project = domain.create_project(project_owner, name="Project owned by another user")
     project_id = str(project["project_id"])
     workspace = domain.create_workspace(
         former_admin,
-        environment_id=str(environment["environment_id"]),
+        environment_id=environment_id,
         canonical_path=str(state_root / "former-admin-workspace"),
         label="Former Admin Workspace",
     )
@@ -320,6 +331,92 @@ def test_literature_recovery_refuses_disabled_actor(
     assert row is not None
     assert row["status"] == "retryable_failed"
     assert row["last_error"] == "attention_required: Literature actor is inactive"
+
+
+def test_literature_authorization_denials_record_bounded_permission_telemetry(
+    state_root: Path,
+) -> None:
+    owner, project_id, workspace_id = _scope(state_root)
+    saga = _saga(state_root)
+    reset_metrics()
+
+    with pytest.raises(DomainPermissionError, match="Authenticated user ID"):
+        saga.create_research_task(
+            {},
+            paper_id="paper",
+            project_id=project_id,
+            workspace_id=workspace_id,
+            idempotency_key="missing-actor",
+        )
+    assert (
+        'ainrf_domain_permission_denied_total{reason="authenticated_user_required",resource="literature"} 1.0'
+        in get_metrics_text()
+    )
+
+    reset_metrics()
+    with pytest.raises(DomainPermissionError, match="owned Workspace"):
+        saga._require_owned_executable_workspace(
+            project_id, workspace_id, {"id": "other-user", "role": "member"}
+        )
+    assert (
+        'ainrf_domain_permission_denied_total{reason="owner_required",resource="workspace"} 1.0'
+        in get_metrics_text()
+    )
+
+    with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+        row = conn.execute(
+            "SELECT environment_id FROM workspaces WHERE workspace_id = ?", (workspace_id,)
+        ).fetchone()
+    assert row is not None
+    environment_id = str(row["environment_id"])
+    auth = AuthService(state_root=state_root)
+    auth.revoke_environment(
+        environment_id,
+        str(owner["id"]),
+        revoked_by="admin",
+        reason="permission telemetry coverage",
+    )
+    reset_metrics()
+    with pytest.raises(DomainPermissionError, match="Environment grant"):
+        saga._require_owned_executable_workspace(
+            project_id,
+            workspace_id,
+            {"id": str(owner["id"]), "role": str(owner["role"])},
+        )
+    assert (
+        'ainrf_domain_permission_denied_total{reason="environment_grant_required",resource="environment"} 1.0'
+        in get_metrics_text()
+    )
+    reset_metrics()
+
+
+def test_literature_hidden_paper_records_telemetry_without_changing_404(
+    state_root: Path,
+) -> None:
+    """A user's paper scope remains opaque even though a denial is counted."""
+
+    _scope(state_root)
+    _seed_legacy_paper(state_root, user_id="other-literature-user")
+    saga = _saga(state_root)
+
+    reset_metrics()
+    with pytest.raises(ResearchTaskPaperNotFoundError, match="Paper not found"):
+        saga._paper_for_user("owner", "paper", None)
+    assert (
+        'ainrf_domain_permission_denied_total{reason="not_visible",resource="literature"} 1.0'
+        in get_metrics_text()
+    )
+
+    # A genuinely absent paper is intentionally the same exception, but is
+    # not counted as an authorization denial.
+    reset_metrics()
+    with pytest.raises(ResearchTaskPaperNotFoundError, match="Paper not found"):
+        saga._paper_for_user("owner", "missing-paper", None)
+    assert (
+        'ainrf_domain_permission_denied_total{reason="not_visible",resource="literature"}'
+        not in get_metrics_text()
+    )
+    reset_metrics()
 
 
 def test_direct_literature_saga_refuses_uncommitted_domain_before_creating_an_intent(
@@ -759,7 +856,7 @@ def test_literature_summary_failure_never_rebuilds_completed_research_task(
     assert _task_count(state_root) == 1
 
 
-def test_literature_research_task_preserves_maintenance_error_for_api_call(
+def test_literature_research_task_does_not_persist_an_intent_during_maintenance(
     state_root: Path,
 ) -> None:
     owner, project_id, workspace_id = _scope(state_root)
@@ -787,9 +884,7 @@ def test_literature_research_task_preserves_maintenance_error_for_api_call(
             WHERE user_id = 'owner' AND paper_id = 'paper' AND idempotency_key = 'maintenance-error'
             """
         ).fetchone()
-    assert row is not None
-    assert row["status"] == "retryable_failed"
-    assert "maintenance" in str(row["last_error"])
+    assert row is None
 
 
 def test_literature_research_task_requires_owned_executable_primary(state_root: Path) -> None:

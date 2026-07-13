@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import sqlite3
 from contextlib import closing
 from pathlib import Path
 
 import pytest
 
 from ainrf.auth.service import AuthService
+from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain import (
     AttemptService,
@@ -18,7 +21,11 @@ from ainrf.domain import (
     TaskApplicationService,
 )
 from ainrf.domain.attempts import DispatchClaim, DispatchClaimError
-from ainrf.domain.worker import DispatchRunResult, TaskDispatcher
+from ainrf.domain.worker import (
+    DispatchRunResult,
+    TaskDispatcher,
+    _maintenance_is_active_read_only,
+)
 from ainrf.domain_control import DomainCutoverError, DomainMaintenanceService
 from ainrf.harness_engine import (
     EngineEvent,
@@ -85,6 +92,75 @@ def _queued_task(
         idempotency_key="create",
     )
     return task, auth, environment_id
+
+
+def _state_tree_digest(state_root: Path, *, exclude_control_database: bool) -> str:
+    """Fingerprint state contents without changing its SQLite journal state."""
+
+    digest = hashlib.sha256()
+    if not state_root.exists():
+        return digest.hexdigest()
+    for path in sorted(state_root.rglob("*"), key=lambda item: item.as_posix()):
+        relative = path.relative_to(state_root).as_posix()
+        if exclude_control_database and relative.startswith("runtime/agentic_researcher.sqlite3"):
+            continue
+        if path.is_dir():
+            digest.update(f"dir:{relative}\n".encode("utf-8"))
+            continue
+        if not path.is_file():
+            digest.update(f"other:{relative}\n".encode("utf-8"))
+            continue
+        digest.update(f"file:{relative}\n".encode("utf-8"))
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def _non_control_state_digest(state_root: Path) -> str:
+    """Fingerprint state while allowing the explicit maintenance registry write."""
+
+    return _state_tree_digest(state_root, exclude_control_database=True)
+
+
+def _checkpoint_control_database_for_immutable_probe(state_root: Path) -> None:
+    """Create a clean main-db-only fixture for the startup probe regression."""
+
+    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    for suffix in ("-wal", "-shm"):
+        database_path.with_name(f"{database_path.name}{suffix}").unlink(missing_ok=True)
+
+
+def test_worker_maintenance_probe_fails_closed_for_uncheckpointed_wal(state_root: Path) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.initialize()
+    _checkpoint_control_database_for_immutable_probe(state_root)
+    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    wal_path = database_path.with_name(f"{database_path.name}-wal")
+    wal_path.touch()
+    before = _state_tree_digest(state_root, exclude_control_database=False)
+
+    try:
+        assert _maintenance_is_active_read_only(state_root) is True
+        assert _state_tree_digest(state_root, exclude_control_database=False) == before
+    finally:
+        wal_path.unlink(missing_ok=True)
+
+
+def test_worker_maintenance_probe_uses_immutable_read_for_lone_shm(state_root: Path) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.initialize()
+    _checkpoint_control_database_for_immutable_probe(state_root)
+    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    shm_path = database_path.with_name(f"{database_path.name}-shm")
+    shm_path.touch()
+    before = _state_tree_digest(state_root, exclude_control_database=False)
+
+    try:
+        assert _maintenance_is_active_read_only(state_root) is False
+        assert _state_tree_digest(state_root, exclude_control_database=False) == before
+    finally:
+        shm_path.unlink(missing_ok=True)
 
 
 @pytest.mark.anyio
@@ -234,6 +310,83 @@ async def test_domain_worker_requires_the_committed_v2_artifact(
     assert cutover is not None
     assert cutover["first_v2_write_at"] is not None
     assert cutover["first_v2_write_actor_id"] == "domain-worker:matching-artifact"
+
+
+@pytest.mark.anyio
+async def test_maintenance_blocks_worker_first_v2_write_before_the_fuse_changes(
+    state_root: Path, tmp_path: Path
+) -> None:
+    prepare_committed_v2_cutover(state_root, tmp_path)
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="maintenance-first-write",
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+    )
+    DomainMaintenanceService(state_root).enter(actor_id="operator", reason="cutover")
+
+    result = await dispatcher.run_once()
+    dispatcher.stop()
+
+    assert result.outcome == "maintenance_drained"
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        cutover = conn.execute(
+            "SELECT first_v2_write_at, first_v2_write_actor_id "
+            "FROM domain_cutover_state WHERE singleton = 1"
+        ).fetchone()
+    assert cutover is not None
+    assert cutover["first_v2_write_at"] is None
+    assert cutover["first_v2_write_actor_id"] is None
+
+
+@pytest.mark.anyio
+async def test_active_maintenance_worker_never_constructs_writable_services(
+    state_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A restarted worker may add a drained registry row but nothing else."""
+
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="operator", reason="staged restore")
+    _checkpoint_control_database_for_immutable_probe(state_root)
+    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    assert not database_path.with_name(f"{database_path.name}-wal").exists()
+    assert not database_path.with_name(f"{database_path.name}-shm").exists()
+    wakeup_path = state_root / "runtime" / "domain-worker.wakeup"
+    assert not wakeup_path.exists()
+    before = _state_tree_digest(state_root, exclude_control_database=False)
+    before_non_control = _non_control_state_digest(state_root)
+    assert _maintenance_is_active_read_only(state_root) is True
+    assert _state_tree_digest(state_root, exclude_control_database=False) == before
+
+    def unexpected_constructor(*_args: object, **_kwargs: object) -> object:
+        pytest.fail("active-maintenance worker must not construct a writable service")
+
+    monkeypatch.setattr("ainrf.domain.worker.DomainCutoverController", unexpected_constructor)
+    monkeypatch.setattr("ainrf.domain.worker.AttemptService", unexpected_constructor)
+    monkeypatch.setattr("ainrf.domain.worker.OverviewSnapshotPlanner", unexpected_constructor)
+
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="maintenance-read-only-dispatcher",
+        lease_seconds=3,
+    )
+    assert _state_tree_digest(state_root, exclude_control_database=False) == before
+    assert not wakeup_path.exists()
+
+    try:
+        result = await dispatcher.run_once()
+        assert result.outcome == "maintenance_drained"
+        assert _non_control_state_digest(state_root) == before_non_control
+        participant = next(
+            item
+            for item in maintenance.participants()
+            if item.participant_id == "maintenance-read-only-dispatcher"
+        )
+        assert participant.status == "drained"
+        assert participant.in_flight_mutations == 0
+    finally:
+        dispatcher.stop()
+        maintenance.exit(actor_id="operator")
 
 
 @pytest.mark.anyio
@@ -974,6 +1127,37 @@ async def test_tenant_agent_sdk_is_rejected_before_any_backend_user_launch(
 
 
 @pytest.mark.anyio
+async def test_domain_worker_records_tenant_access_denial_before_runtime_start(
+    state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task, _, _ = _queued_task(state_root, tmp_path)
+    reset_metrics()
+    monkeypatch.setattr("ainrf.domain.worker._is_container_environment", lambda: True)
+    monkeypatch.setattr("ainrf.domain.worker._linux_user_exists", lambda _user: False)
+    engine = FakeEngine()
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="dispatcher-tenant-access-denial",
+        engine_factory=lambda _engine_type: engine,
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+    )
+
+    try:
+        result = await dispatcher.run_once()
+        assert result.outcome == "stopped_permission_revoked"
+        assert "tenant" in str(result.detail).lower()
+        assert engine.started_count == 0
+        assert (
+            'ainrf_domain_permission_denied_total{reason="tenant_owner_required",resource="workspace"} 1.0'
+            in get_metrics_text()
+        )
+    finally:
+        dispatcher.stop()
+        reset_metrics()
+
+
+@pytest.mark.anyio
 async def test_domain_worker_projects_attempt_token_usage_and_cost(
     state_root: Path, tmp_path: Path
 ) -> None:
@@ -1057,6 +1241,7 @@ async def test_domain_worker_rechecks_environment_grant_before_any_runtime_start
     state_root: Path, tmp_path: Path
 ) -> None:
     task, auth, environment_id = _queued_task(state_root, tmp_path)
+    reset_metrics()
     auth.revoke_environment(environment_id, "owner", reason="revoked before dispatch")
     engine = FakeEngine()
     dispatcher = TaskDispatcher(
@@ -1086,3 +1271,8 @@ async def test_domain_worker_rechecks_environment_grant_before_any_runtime_start
     assert "revoked" in str(attempt["stop_reason"])
     assert dispatch is not None
     assert dispatch["status"] == "cancelled"
+    assert (
+        'ainrf_domain_permission_denied_total{reason="environment_grant_required",resource="environment"} 1.0'
+        in get_metrics_text()
+    )
+    reset_metrics()

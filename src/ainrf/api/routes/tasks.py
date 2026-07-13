@@ -341,6 +341,12 @@ async def create_task(
 
     task_application = _get_task_application_service(request)
     if task_application is not None:
+        if payload.environment_id is not None:
+            mark_deprecated(
+                response,
+                route="tasks.create.environment_id",
+                replacement="POST /tasks without environment_id",
+            )
         if not payload.project_id:
             raise HTTPException(
                 status_code=409, detail="v2 Task creation requires an explicit Project"
@@ -368,12 +374,6 @@ async def create_task(
             if projection is None:
                 raise HTTPException(status_code=503, detail="Task projection is unavailable")
             result = _v2_task_mutation_response(projection, user, created)
-            if payload.environment_id is not None:
-                mark_deprecated(
-                    response,
-                    route="tasks.create.environment_id",
-                    replacement="POST /tasks without environment_id",
-                )
             return result
         except HTTPException:
             raise
@@ -776,13 +776,13 @@ async def send_task_prompt(
     payload: TaskPromptRequest,
     response: Response,
 ) -> TaskPromptSendResponse:
-    result = await _continue_task(request, task_id, payload)
     if _get_task_application_service(request) is not None:
         mark_deprecated(
             response,
             route="tasks.prompt",
             replacement=f"POST /tasks/{task_id}/continue",
         )
+    result = await _continue_task(request, task_id, payload)
     return result
 
 
@@ -872,13 +872,13 @@ async def archive_task(
 ) -> TaskSummaryResponse:
     """Compatibility alias for ``POST /tasks/{task_id}/archive``."""
 
-    result = await _archive_task(request, task_id)
     if _get_task_application_service(request) is not None:
         mark_deprecated(
             response,
             route="tasks.archive.delete",
             replacement=f"POST /tasks/{task_id}/archive",
         )
+    result = await _archive_task(request, task_id)
     return result
 
 
@@ -914,6 +914,11 @@ async def update_task_project(
 
     task_application = _get_task_application_service(request)
     if task_application is not None:
+        mark_deprecated(
+            response,
+            route="tasks.update_project",
+            replacement=f"POST /tasks/{task_id}/move",
+        )
         if payload.context_version_id is None:
             raise HTTPException(
                 status_code=422,
@@ -932,11 +937,6 @@ async def update_task_project(
             if projection is None:
                 raise HTTPException(status_code=503, detail="Task projection is unavailable")
             result = _v2_task_summary(projection, task_id, user)
-            mark_deprecated(
-                response,
-                route="tasks.update_project",
-                replacement=f"POST /tasks/{task_id}/move",
-            )
             return result
         except HTTPException:
             raise
@@ -1059,6 +1059,17 @@ async def retry_task(
     task_application = _get_task_application_service(request)
     if task_application is not None:
         body = payload or TaskRetryRequest()
+        mark_deprecated(
+            response,
+            route="tasks.retry.new_task",
+            replacement=f"GET /tasks/{task_id}/attempts",
+        )
+        if body.environment_id is not None:
+            mark_deprecated(
+                response,
+                route="tasks.retry.environment_id",
+                replacement="POST /tasks/{task_id}/retry without environment_id",
+            )
         try:
             projection = _get_task_projection_service(request)
             if projection is None:
@@ -1080,17 +1091,6 @@ async def retry_task(
                 idempotency_key=_idempotency_key(request, body.idempotency_key),
             )
             mutation = _v2_task_mutation_response(projection, user, retried)
-            mark_deprecated(
-                response,
-                route="tasks.retry.new_task",
-                replacement=f"GET /tasks/{task_id}/attempts",
-            )
-            if body.environment_id is not None:
-                mark_deprecated(
-                    response,
-                    route="tasks.retry.environment_id",
-                    replacement="POST /tasks/{task_id}/retry without environment_id",
-                )
             return TaskRetryResponse(
                 new_task=mutation.task,
                 archived_task_id=None,

@@ -371,6 +371,10 @@ async def test_v2_project_viewer_output_routes_and_sse_redact_durable_secrets(
                 "OPENAI_API_KEY": "sk-viewer-route-secret",
                 "bearerToken": "camel-bearer-token-value",
                 "keyValue": "camel-key-value",
+                "nestedToolPayload": json.dumps(
+                    {"keyValue": "nested-viewer-route-secret"}, separators=(",", ":")
+                ),
+                "plainToolOutput": "keyValue: plain-viewer-route-secret",
                 "cwd": "/home/ainrf_tenants/api-key-user/private-workspace",
             },
         },
@@ -446,6 +450,8 @@ async def test_v2_project_viewer_output_routes_and_sse_redact_durable_secrets(
         assert "sk-viewer-route-secret" not in rendered_view
         assert "camel-bearer-token-value" not in rendered_view
         assert "camel-key-value" not in rendered_view
+        assert "nested-viewer-route-secret" not in rendered_view
+        assert "plain-viewer-route-secret" not in rendered_view
         assert "/home/ainrf_tenants/api-key-user/private-workspace" not in rendered_view
         assert "[REDACTED]" in rendered_view
         assert "[REDACTED_PATH]" in rendered_view

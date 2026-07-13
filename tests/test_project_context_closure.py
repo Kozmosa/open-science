@@ -10,10 +10,11 @@ from typing import cast
 import pytest
 
 from ainrf.auth.service import AuthService
+from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain import DomainService, ProjectContextService, TaskApplicationService
 from ainrf.domain.context import ContextAssembler, ContextFragment, ContextSource
-from ainrf.domain.service import DomainConflictError, DomainPermissionError
+from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
 
@@ -523,8 +524,76 @@ def test_candidate_acceptance_changes_only_draft_and_publish_requires_capability
     assert second["context_version_id"] != first["context_version_id"]
     assert "candidate evidence" in str(second["content"])
     context.save_draft(project_id, "a changed draft", editor)
-    with pytest.raises(DomainConflictError, match="different request"):
-        context.publish(project_id, editor, idempotency_key="editor-publishes")
+    assert context.publish(project_id, editor, idempotency_key="editor-publishes") == second
+
+
+def test_context_publish_requires_owner_or_explicit_publisher_membership(
+    state_root: Path, tmp_path: Path, committed_v2_state: str
+) -> None:
+    """A global admin must not inherit a Project's publication authority."""
+
+    owner = _user("owner")
+    domain, context, _, project_id, _ = _project_workspace(
+        state_root,
+        tmp_path,
+        committed_v2_state,
+        owner,
+        label="publisher-membership",
+    )
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    durable_editor = auth.register(
+        username="publisher-editor",
+        display_name="Publisher Editor",
+        password="context-publisher-password",
+    )
+    editor = _user(durable_editor.id)
+    domain.add_member(project_id, durable_editor.id, "editor", True, owner)
+
+    context.save_draft(project_id, "Owner can publish", owner)
+    owner_version = context.publish(project_id, owner, idempotency_key="owner-publish")
+    assert owner_version["created_by_user_id"] == "owner"
+
+    context.save_draft(project_id, "Publisher editor can publish", editor)
+    editor_version = context.publish(project_id, editor, idempotency_key="editor-publish")
+    assert editor_version["created_by_user_id"] == durable_editor.id
+
+    global_admin: dict[str, object] = {"id": "unaffiliated-admin", "role": "admin"}
+    with pytest.raises(DomainPermissionError, match="publish permission"):
+        context.publish(project_id, global_admin, idempotency_key="admin-cannot-publish")
+
+    active = context.get_context(project_id, owner)["active_version"]
+    assert isinstance(active, dict)
+    active_version = cast(dict[str, object], active)
+    assert active_version["context_version_id"] == editor_version["context_version_id"]
+
+
+def test_context_publish_idempotency_does_not_probe_an_invisible_project(
+    state_root: Path, tmp_path: Path, committed_v2_state: str
+) -> None:
+    """A reused actor-owned key must preserve the target Project's 404 boundary."""
+
+    owner = _user("publish-owner")
+    _, context, _, project_id, _ = _project_workspace(
+        state_root,
+        tmp_path,
+        committed_v2_state,
+        owner,
+        label="publish-idempotency-source",
+    )
+    context.save_draft(project_id, "source context", owner)
+    context.publish(project_id, owner, idempotency_key="cross-project-publish-key")
+
+    hidden_owner = _user("hidden-project-owner")
+    _, _, _, hidden_project_id, _ = _project_workspace(
+        state_root,
+        tmp_path,
+        committed_v2_state,
+        hidden_owner,
+        label="publish-idempotency-hidden",
+    )
+    with pytest.raises(DomainNotFoundError):
+        context.publish(hidden_project_id, owner, idempotency_key="cross-project-publish-key")
 
 
 def test_task_context_preview_confirm_is_idempotent_and_started_attempt_never_drifts(
@@ -627,3 +696,19 @@ def test_task_context_preview_confirm_is_idempotent_and_started_attempt_never_dr
     # later confirmation cannot drift a started Attempt again.
     assert attempt_row["context_snapshot_id"] == confirmed["context_snapshot_id"]
     assert first["context_version_id"] != second["context_version_id"]
+
+
+def test_context_missing_actor_records_bounded_permission_telemetry(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    reset_metrics()
+    try:
+        context = _context(state_root, committed_v2_state)
+        with pytest.raises(DomainPermissionError, match="Authenticated user ID"):
+            context.save_draft("project-missing-actor", "draft", {})
+        assert (
+            'ainrf_domain_permission_denied_total{reason="authenticated_user_required",resource="other"} 1.0'
+            in get_metrics_text()
+        )
+    finally:
+        reset_metrics()

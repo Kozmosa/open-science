@@ -158,6 +158,22 @@ groups:
             never zero. Block release, cutover, and cleanup decisions until
             the shared telemetry store and control-plane reads recover.
 
+      - alert: AINRFDomainTelemetrySourceNotReady
+        expr: |
+          (ainrf_domain_telemetry_source_status{state="ready"} != 1)
+          and on(job, instance) (ainrf_domain_runtime_mode_info{mode="v2"} == 1)
+        for: 1m
+        labels:
+          severity: critical
+          component: domain-observability
+        annotations:
+          summary: "A required v2 domain telemetry source is not ready"
+          description: >
+            The control, auth, Literature, or Overview source is missing,
+            unavailable, or schema-incompatible. The current source state is
+            exported as a bounded label; do not treat cached gauges as v2
+            release or cutover evidence.
+
       - alert: AINRFDomainTelemetryReleaseGateBlocked
         expr: |
           absent(ainrf_domain_metrics_scrape_success)
@@ -230,6 +246,19 @@ groups:
           description: >
             One or more active users lack a persisted Overview snapshot after
             the planner's expected catch-up window.
+
+      - alert: AINRFOverviewAttentionRequired
+        expr: ainrf_domain_overview_attention_required > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: overview
+        annotations:
+          summary: "Current Today overview contains partial or stale data"
+          description: >
+            At least one active user's current Overview has a partial,
+            stale, unavailable, failed, or unknown card state. A fresh
+            snapshot timestamp does not make that degraded data healthy.
 
       - alert: AINRFDomainMigrationBlockingIssue
         expr: ainrf_domain_migration_issues{severity="blocking",resolution_status="open"} > 0

@@ -66,7 +66,7 @@ sla_uptime_seconds = Gauge(
 sla_rate_limited_total = Counter(
     "ainrf_rate_limited_total",
     "Requests rejected by rate limiting",
-    labelnames=["reason", "path"],
+    labelnames=["reason", "route"],
     registry=REGISTRY,
 )
 
@@ -77,6 +77,7 @@ sla_rate_limited_total = Counter(
 _start_time: float = _time.monotonic()
 _first_token_times: dict[str, float] = {}  # task_id → timestamp of first LLM token
 _task_start_times: dict[str, float] = {}  # task_id → timestamp when task started
+_PUBLIC_STATIC_RATE_LIMIT_ROUTES = frozenset({"/client-logs", "/client-metrics"})
 
 
 def record_uptime() -> None:
@@ -144,6 +145,10 @@ def cleanup_task_state(task_id: str) -> None:
     _task_start_times.pop(task_id, None)
 
 
-def rate_limited(reason: str, path: str = "") -> None:
-    """Increment the rate-limited counter."""
-    sla_rate_limited_total.labels(reason=reason, path=path).inc()
+def rate_limited(reason: str, route: str = "/unmatched") -> None:
+    """Increment the rate-limited counter with a bounded route label."""
+
+    normalized_route = (
+        route if route in _PUBLIC_STATIC_RATE_LIMIT_ROUTES or "{" in route else "/unmatched"
+    )
+    sla_rate_limited_total.labels(reason=reason, route=normalized_route).inc()

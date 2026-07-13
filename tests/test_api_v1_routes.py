@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import httpx
@@ -7,6 +8,7 @@ import pytest
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.domain_control import DomainMaintenanceService
 from ainrf.execution import ContainerConfig
 from tests.testutil import get_jwt_headers
 
@@ -242,6 +244,144 @@ async def test_lifespan_can_disable_automatic_remote_runtime_reconciliation(
         }
         assert participant_types == {"api"}
         assert app.state.domain_terminal_reconciler_participant_id is None
+
+
+def test_lifespan_skips_all_startup_writers_during_maintenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A restarted API joins an active maintenance epoch without seeding state."""
+
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+        )
+    )
+
+    def unexpected_initializer() -> None:
+        pytest.fail("maintenance startup must not initialize a durable writer")
+
+    async def unexpected_resource_monitor_start() -> None:
+        pytest.fail("maintenance startup must not start resource collection")
+
+    def unexpected_terminal_reconcile() -> None:
+        pytest.fail("maintenance startup must not reconcile terminal sessions")
+
+    monkeypatch.setattr(app.state.project_service, "initialize", unexpected_initializer)
+    monkeypatch.setattr(app.state.workspace_service, "initialize", unexpected_initializer)
+    monkeypatch.setattr(app.state.session_service, "initialize", unexpected_initializer)
+    monkeypatch.setattr(app.state.auth_service, "initialize", unexpected_initializer)
+    monkeypatch.setattr(app.state.literature_service, "initialize", unexpected_initializer)
+    monkeypatch.setattr(
+        app.state.literature_tracking_service,
+        "initialize",
+        unexpected_initializer,
+    )
+    monkeypatch.setattr(
+        app.state.resource_monitor_service,
+        "start",
+        unexpected_resource_monitor_start,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager,
+        "reconcile",
+        unexpected_terminal_reconcile,
+    )
+    monkeypatch.setattr(
+        "ainrf.api.app.check_runtime_readiness",
+        lambda: type(
+            "FakeReadiness",
+            (),
+            {"as_public_payload": lambda self: {"ready": False, "dependencies": {}}},
+        )(),
+    )
+
+    maintenance = DomainMaintenanceService(tmp_path)
+    maintenance.enter(actor_id="operator", reason="staged restore")
+    try:
+
+        async def assert_maintenance_lifespan() -> None:
+            async with app.router.lifespan_context(app):
+                assert app.state.runtime_readiness == {"ready": False, "dependencies": {}}
+                participants = app.state.domain_maintenance_service.participants()
+                assert {item.participant_type for item in participants} >= {
+                    "api",
+                    "terminal-session-reconciler",
+                }
+                assert all(item.status == "drained" for item in participants)
+                assert not (tmp_path / "admin_initial_password.txt").exists()
+
+        asyncio.run(assert_maintenance_lifespan())
+    finally:
+        maintenance.exit(actor_id="operator")
+
+
+def test_create_app_is_read_only_when_maintenance_precedes_construction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An API restart must not assemble durable services into an active epoch."""
+
+    maintenance = DomainMaintenanceService(tmp_path)
+    maintenance.enter(actor_id="operator", reason="staged restore")
+    runtime = tmp_path / "runtime"
+
+    def unexpected_cutover_controller(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("maintenance startup must not construct the cutover controller")
+
+    def unexpected_default_workspace_dir(*_args: object, **_kwargs: object) -> Path:
+        pytest.fail("maintenance startup must not create the default Workspace")
+
+    monkeypatch.setattr("ainrf.api.app.DomainCutoverController", unexpected_cutover_controller)
+    monkeypatch.setattr(
+        "ainrf.runtime.paths.RuntimePathConfig.ensure_default_workspace_dir",
+        unexpected_default_workspace_dir,
+    )
+    monkeypatch.setattr(
+        "ainrf.api.app.check_runtime_readiness",
+        lambda: type(
+            "FakeReadiness",
+            (),
+            {"as_public_payload": lambda self: {"ready": False, "dependencies": {}}},
+        )(),
+    )
+
+    try:
+        app = create_app(
+            ApiConfig(
+                api_key_hashes=frozenset({hash_api_key("secret-key")}),
+                state_root=tmp_path,
+            )
+        )
+
+        assert app.state.maintenance_startup_read_only is True
+        assert app.state.domain_service is None
+        assert app.state.task_application_service is None
+        assert app.state.workspace_service is None
+        assert not (runtime / "auth.sqlite3").exists()
+        assert not (runtime / "literature.sqlite3").exists()
+        assert not (runtime / "sessions.sqlite3").exists()
+        assert not (runtime / "skill_registries.json").exists()
+
+        # A legitimate read of the registry must remain in memory rather than
+        # recreating its JSON file while the restart is deliberately quiescent.
+        assert app.state.skill_registry_config_service.list_registries()
+        assert not (runtime / "skill_registries.json").exists()
+        with pytest.raises(RuntimeError, match="read-only"):
+            app.state.skill_registry_config_service.reset_to_defaults()
+        assert not (runtime / "skill_registries.json").exists()
+
+        async def assert_maintenance_lifespan() -> None:
+            async with app.router.lifespan_context(app):
+                assert app.state.runtime_readiness == {"ready": False, "dependencies": {}}
+                assert app.state.domain_maintenance_service.status().is_active is True
+
+        asyncio.run(assert_maintenance_lifespan())
+        assert not (runtime / "auth.sqlite3").exists()
+        assert not (runtime / "literature.sqlite3").exists()
+        assert not (runtime / "sessions.sqlite3").exists()
+        assert not (runtime / "skill_registries.json").exists()
+    finally:
+        maintenance.exit(actor_id="operator")
 
 
 @pytest.mark.anyio

@@ -32,6 +32,16 @@ class TerminalSessionOperationError(RuntimeError):
     pass
 
 
+MaintenanceCheck = Callable[[], None]
+PersonalSessionCleanup = Callable[[], None]
+PersonalSessionCreated = Callable[[PersonalSessionCleanup], None]
+
+
+def _check_maintenance(check: MaintenanceCheck | None) -> None:
+    if check is not None:
+        check()
+
+
 def current_daemon_user() -> str:
     try:
         resolved = getuser()
@@ -195,8 +205,12 @@ class SessionManager:
         app_user_id: str | EnvironmentRegistryEntry | None,
         environment: EnvironmentRegistryEntry | str | None = None,
         working_directory: str | None = None,
+        *,
+        maintenance_check: MaintenanceCheck | None = None,
     ) -> TerminalSessionRecord:
+        _check_maintenance(maintenance_check)
         self.initialize()
+        _check_maintenance(maintenance_check)
         if isinstance(app_user_id, EnvironmentRegistryEntry):
             working_directory = environment if isinstance(environment, str) else None
             environment = app_user_id
@@ -233,7 +247,12 @@ class SessionManager:
                 session_name=predicted_session_name,
             )
 
-        refreshed_pair = self._refresh_pair(binding, environment, pair)
+        refreshed_pair = self._refresh_pair(
+            binding,
+            environment,
+            pair,
+            maintenance_check=maintenance_check,
+        )
         return self._build_record(
             environment=environment,
             working_directory=working_directory,
@@ -247,8 +266,13 @@ class SessionManager:
         app_user_id: str | EnvironmentRegistryEntry,
         environment: EnvironmentRegistryEntry | str | None = None,
         working_directory: str | None = None,
+        *,
+        maintenance_check: MaintenanceCheck | None = None,
+        on_personal_session_created: PersonalSessionCreated | None = None,
     ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
+        _check_maintenance(maintenance_check)
         self.initialize()
+        _check_maintenance(maintenance_check)
         if isinstance(app_user_id, EnvironmentRegistryEntry):
             working_directory = environment if isinstance(environment, str) else None
             environment = app_user_id
@@ -258,15 +282,39 @@ class SessionManager:
             self._as_tenant(app_user_id),
             self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"),
         ):
+            _check_maintenance(maintenance_check)
             binding = self._upsert_binding(app_user_id, environment, working_directory)
+            _check_maintenance(maintenance_check)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
+            _check_maintenance(maintenance_check)
+            cleanup: PersonalSessionCleanup | None = None
             try:
-                self._tmux_adapter.ensure_personal_session(
-                    binding,
-                    environment,
-                    pair.personal_session_name,
+                created = bool(
+                    self._tmux_adapter.ensure_personal_session(
+                        binding,
+                        environment,
+                        pair.personal_session_name,
+                    )
                 )
+                if created:
+                    cleanup_completed = False
+
+                    def cleanup() -> None:
+                        nonlocal cleanup_completed
+                        if cleanup_completed:
+                            return
+                        cleanup_completed = True
+                        self._cleanup_new_personal_session(
+                            binding,
+                            environment,
+                            pair.personal_session_name,
+                        )
+
+                    if on_personal_session_created is not None:
+                        on_personal_session_created(cleanup)
+                _check_maintenance(maintenance_check)
             except TmuxCommandError as exc:
+                _check_maintenance(maintenance_check)
                 failure_time = utc_now()
                 self._store_pair(
                     replace(
@@ -277,20 +325,32 @@ class SessionManager:
                         detail=str(exc),
                     )
                 )
+                _check_maintenance(maintenance_check)
                 raise TerminalSessionOperationError(str(exc)) from exc
+            except Exception:
+                if cleanup is not None:
+                    cleanup()
+                raise
 
             success_time = utc_now()
-            running_pair = self._store_pair(
-                replace(
-                    pair,
-                    personal_status=TerminalSessionStatus.RUNNING,
-                    personal_started_at=pair.personal_started_at or success_time,
-                    personal_closed_at=None,
-                    last_verified_at=success_time,
-                    updated_at=success_time,
-                    detail=None,
+            try:
+                _check_maintenance(maintenance_check)
+                running_pair = self._store_pair(
+                    replace(
+                        pair,
+                        personal_status=TerminalSessionStatus.RUNNING,
+                        personal_started_at=pair.personal_started_at or success_time,
+                        personal_closed_at=None,
+                        last_verified_at=success_time,
+                        updated_at=success_time,
+                        detail=None,
+                    )
                 )
-            )
+                _check_maintenance(maintenance_check)
+            except Exception:
+                if cleanup is not None:
+                    cleanup()
+                raise
             record = self._build_record(
                 environment=environment,
                 working_directory=working_directory,
@@ -377,8 +437,13 @@ class SessionManager:
         app_user_id: str | EnvironmentRegistryEntry,
         environment: EnvironmentRegistryEntry | str | None = None,
         working_directory: str | None = None,
+        *,
+        maintenance_check: MaintenanceCheck | None = None,
+        on_personal_session_created: PersonalSessionCreated | None = None,
     ) -> tuple[TerminalSessionRecord, TerminalAttachmentTarget]:
+        _check_maintenance(maintenance_check)
         self.initialize()
+        _check_maintenance(maintenance_check)
         if isinstance(app_user_id, EnvironmentRegistryEntry):
             working_directory = environment if isinstance(environment, str) else None
             environment = app_user_id
@@ -388,15 +453,39 @@ class SessionManager:
             self._as_tenant(app_user_id),
             self._session_lifecycle_guard(app_user_id, environment.id, kind="personal"),
         ):
+            _check_maintenance(maintenance_check)
             binding = self._upsert_binding(app_user_id, environment, working_directory)
+            _check_maintenance(maintenance_check)
             pair = self._upsert_pair(app_user_id, binding, environment.id)
+            _check_maintenance(maintenance_check)
+            cleanup: PersonalSessionCleanup | None = None
             try:
-                self._tmux_adapter.reset_personal_session(
-                    binding,
-                    environment,
-                    pair.personal_session_name,
+                created = bool(
+                    self._tmux_adapter.reset_personal_session(
+                        binding,
+                        environment,
+                        pair.personal_session_name,
+                    )
                 )
+                if created:
+                    cleanup_completed = False
+
+                    def cleanup() -> None:
+                        nonlocal cleanup_completed
+                        if cleanup_completed:
+                            return
+                        cleanup_completed = True
+                        self._cleanup_new_personal_session(
+                            binding,
+                            environment,
+                            pair.personal_session_name,
+                        )
+
+                    if on_personal_session_created is not None:
+                        on_personal_session_created(cleanup)
+                _check_maintenance(maintenance_check)
             except TmuxCommandError as exc:
+                _check_maintenance(maintenance_check)
                 failure_time = utc_now()
                 self._store_pair(
                     replace(
@@ -407,20 +496,32 @@ class SessionManager:
                         detail=str(exc),
                     )
                 )
+                _check_maintenance(maintenance_check)
                 raise TerminalSessionOperationError(str(exc)) from exc
+            except Exception:
+                if cleanup is not None:
+                    cleanup()
+                raise
 
             reset_time = utc_now()
-            reset_pair = self._store_pair(
-                replace(
-                    pair,
-                    personal_status=TerminalSessionStatus.RUNNING,
-                    personal_started_at=reset_time,
-                    personal_closed_at=None,
-                    last_verified_at=reset_time,
-                    updated_at=reset_time,
-                    detail=None,
+            try:
+                _check_maintenance(maintenance_check)
+                reset_pair = self._store_pair(
+                    replace(
+                        pair,
+                        personal_status=TerminalSessionStatus.RUNNING,
+                        personal_started_at=reset_time,
+                        personal_closed_at=None,
+                        last_verified_at=reset_time,
+                        updated_at=reset_time,
+                        detail=None,
+                    )
                 )
-            )
+                _check_maintenance(maintenance_check)
+            except Exception:
+                if cleanup is not None:
+                    cleanup()
+                raise
             record = self._build_record(
                 environment=environment,
                 working_directory=working_directory,
@@ -447,14 +548,47 @@ class SessionManager:
             )
             return record, target
 
-    def record_personal_attach(self, binding_id: str) -> None:
-        self._record_attach(binding_id, personal=True)
+    def _cleanup_new_personal_session(
+        self,
+        binding: UserEnvironmentBinding,
+        environment: EnvironmentRegistryEntry,
+        session_name: str,
+    ) -> None:
+        """Best-effort cleanup for a Session opened across a maintenance epoch."""
+
+        try:
+            self._tmux_adapter.kill_session(binding, environment, session_name)
+        except Exception:
+            # The original maintenance error is the actionable result.  A
+            # failed cleanup is surfaced later by normal reconciliation rather
+            # than being allowed to masquerade as a successful terminal start.
+            return
+
+    def record_personal_attach(
+        self,
+        binding_id: str,
+        *,
+        maintenance_check: MaintenanceCheck | None = None,
+    ) -> None:
+        self._record_attach(
+            binding_id,
+            personal=True,
+            maintenance_check=maintenance_check,
+        )
 
     def record_agent_attach(self, binding_id: str) -> None:
         self._record_attach(binding_id, personal=False)
 
-    def _record_attach(self, binding_id: str, *, personal: bool) -> None:
+    def _record_attach(
+        self,
+        binding_id: str,
+        *,
+        personal: bool,
+        maintenance_check: MaintenanceCheck | None = None,
+    ) -> None:
+        _check_maintenance(maintenance_check)
         self.initialize()
+        _check_maintenance(maintenance_check)
         pair = self._load_pair(binding_id)
         if pair is None:
             return
@@ -465,7 +599,9 @@ class SessionManager:
             last_agent_attach_at=attach_time if not personal else pair.last_agent_attach_at,
             updated_at=attach_time,
         )
+        _check_maintenance(maintenance_check)
         self._store_pair(updated_pair)
+        _check_maintenance(maintenance_check)
 
     def get_binding_by_id(self, binding_id: str) -> UserEnvironmentBinding | None:
         self.initialize()
@@ -534,6 +670,8 @@ class SessionManager:
         binding: UserEnvironmentBinding,
         environment: EnvironmentRegistryEntry,
         pair: UserSessionPair,
+        *,
+        maintenance_check: MaintenanceCheck | None = None,
     ) -> UserSessionPair:
         verify_time = utc_now()
         detail: str | None = None
@@ -585,7 +723,8 @@ class SessionManager:
         if personal_status is TerminalSessionStatus.RUNNING:
             detail = None
 
-        return self._store_pair(
+        _check_maintenance(maintenance_check)
+        refreshed = self._store_pair(
             replace(
                 pair,
                 personal_status=personal_status,
@@ -597,6 +736,8 @@ class SessionManager:
                 detail=detail,
             )
         )
+        _check_maintenance(maintenance_check)
+        return refreshed
 
     def _upsert_binding(
         self,

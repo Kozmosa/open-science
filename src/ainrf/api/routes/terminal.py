@@ -54,6 +54,7 @@ from ainrf.terminal.pty import (
     TERMINAL_OUTPUT_QUEUE_MAX_CHUNKS,
     TERMINAL_OUTPUT_READ_CHUNK_BYTES,
     PtyUtf8Decoder,
+    TerminalBridgeRuntime,
     resize_terminal,
     write_terminal_input,
 )
@@ -164,11 +165,68 @@ def _terminal_mutation(
         maintenance.finish_mutation(lease)
 
 
+@contextmanager
+def _terminal_http_mutation(
+    request: Request,
+    *,
+    source: str,
+) -> Iterator[Callable[[], None]]:
+    """Fence an HTTP terminal side effect at the point it actually starts.
+
+    The request-wide middleware lease is necessary for inventory, but it may
+    span validation and awaits before a terminal operation reaches tmux, a
+    bridge, or a tenant command.  This nested lease makes the final pre-start
+    and post-completion checks explicit at that external boundary.
+    """
+
+    maintenance = _get_domain_maintenance_service(request)
+    lease = maintenance.begin_mutation(
+        source=source,
+        participant_id=getattr(request.app.state, "domain_api_participant_id", None),
+    )
+    try:
+        maintenance.check_lease(lease)
+        yield lambda: maintenance.check_lease(lease)
+        maintenance.check_lease(lease)
+    finally:
+        maintenance.finish_mutation(lease)
+
+
 def _get_attachment_broker(request: Request | WebSocket) -> TerminalAttachmentBroker:
     broker = getattr(request.app.state, "terminal_attachment_broker", None)
     if broker is None:
         raise HTTPException(status_code=500, detail="terminal attachment broker not initialized")
     return broker
+
+
+def _open_terminal_attachment_runtime(
+    websocket: WebSocket,
+    broker: TerminalAttachmentBroker,
+    attachment_id: str,
+    token: str,
+) -> tuple[TerminalAttachment, TerminalBridgeRuntime]:
+    """Open a terminal bridge only while the maintenance lease is current.
+
+    A WebSocket handshake starts a PTY/tmux attachment before the first input
+    message arrives.  It is therefore a domain-side mutation in its own right,
+    rather than a harmless read that can wait for the input/resize guards.
+    """
+
+    runtime_opened = False
+    try:
+        with _terminal_mutation(websocket, source="terminal.websocket.open") as check_lease:
+            attachment = broker.validate_attachment(attachment_id, token)
+            _require_v2_attachment_environment_access(websocket, attachment)
+            attachment, runtime = broker.open_runtime(attachment_id, token)
+            runtime_opened = True
+            # A cutover may begin while the PTY bridge is spawning.  Tear it
+            # down instead of leaving a newly created external runtime behind.
+            check_lease()
+            return attachment, runtime
+    except Exception:
+        if runtime_opened:
+            broker.close_runtime(attachment_id)
+        raise
 
 
 def _require_app_user_id(request: Request) -> str:
@@ -359,19 +417,45 @@ async def create_terminal_session(
         raise _translate_environment_error(exc) from exc
     assert environment is not None
 
+    attachment_id: str | None = None
+    created_session_cleanup: Callable[[], None] | None = None
+
+    def remember_created_session(cleanup: Callable[[], None]) -> None:
+        nonlocal created_session_cleanup
+        created_session_cleanup = cleanup
+
     try:
-        session, target = await to_thread.run_sync(
-            manager.ensure_personal_session,
-            app_user_id,
-            environment,
-            working_directory,
-        )
+        with _terminal_http_mutation(request, source="terminal.session.create") as check_lease:
+            session, target = await to_thread.run_sync(
+                lambda: manager.ensure_personal_session(
+                    app_user_id,
+                    environment,
+                    working_directory,
+                    maintenance_check=check_lease,
+                    on_personal_session_created=remember_created_session,
+                )
+            )
+            check_lease()
+            attachment = broker.create_attachment(str(request.base_url), target)
+            attachment_id = attachment.attachment_id
+            check_lease()
+            await to_thread.run_sync(
+                lambda: manager.record_personal_attach(
+                    target.binding_id,
+                    maintenance_check=check_lease,
+                )
+            )
+            check_lease()
+            attached_session = broker.attach_record(session, attachment, str(request.base_url))
+    except MaintenanceModeError:
+        if attachment_id is not None:
+            broker.detach_attachment(attachment_id)
+        if created_session_cleanup is not None:
+            await to_thread.run_sync(created_session_cleanup)
+        raise
     except Exception as exc:
         raise _translate_terminal_error(exc) from exc
 
-    attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(manager.record_personal_attach, target.binding_id)
-    attached_session = broker.attach_record(session, attachment, str(request.base_url))
     audit_event(
         "terminal.session.created",
         severity="info",
@@ -395,28 +479,33 @@ async def delete_terminal_session(
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
-    detached_attachment = broker.detach_attachment(attachment_id)
-    resolved_environment_id = environment_id or (
-        detached_attachment.environment_id if detached_attachment is not None else None
-    )
-    try:
-        environment, working_directory = _get_environment_context(
-            request,
-            service,
-            resolved_environment_id,
-            user,
-            request.app.state.api_config.state_root,
-            project_id=project_id,
+    with _terminal_http_mutation(request, source="terminal.session.delete") as check_lease:
+        detached_attachment = broker.detach_attachment(attachment_id)
+        check_lease()
+        resolved_environment_id = environment_id or (
+            detached_attachment.environment_id if detached_attachment is not None else None
         )
-    except Exception as exc:
-        raise _translate_environment_error(exc) from exc
+        try:
+            environment, working_directory = _get_environment_context(
+                request,
+                service,
+                resolved_environment_id,
+                user,
+                request.app.state.api_config.state_root,
+                project_id=project_id,
+            )
+        except Exception as exc:
+            raise _translate_environment_error(exc) from exc
 
-    session = await to_thread.run_sync(
-        manager.get_session_record,
-        app_user_id,
-        environment,
-        working_directory,
-    )
+        session = await to_thread.run_sync(
+            lambda: manager.get_session_record(
+                app_user_id,
+                environment,
+                working_directory,
+                maintenance_check=check_lease,
+            )
+        )
+        check_lease()
     return TerminalSessionResponse.model_validate(_serialize_session(session))
 
 
@@ -431,7 +520,6 @@ async def reset_terminal_session(
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
-    broker.detach_attachment(payload.attachment_id)
     try:
         environment, working_directory = _get_environment_context(
             request,
@@ -445,19 +533,47 @@ async def reset_terminal_session(
         raise _translate_environment_error(exc) from exc
     assert environment is not None
 
+    attachment_id: str | None = None
+    created_session_cleanup: Callable[[], None] | None = None
+
+    def remember_created_session(cleanup: Callable[[], None]) -> None:
+        nonlocal created_session_cleanup
+        created_session_cleanup = cleanup
+
     try:
-        session, target = await to_thread.run_sync(
-            manager.reset_personal_session,
-            app_user_id,
-            environment,
-            working_directory,
-        )
+        with _terminal_http_mutation(request, source="terminal.session.reset") as check_lease:
+            broker.detach_attachment(payload.attachment_id)
+            check_lease()
+            session, target = await to_thread.run_sync(
+                lambda: manager.reset_personal_session(
+                    app_user_id,
+                    environment,
+                    working_directory,
+                    maintenance_check=check_lease,
+                    on_personal_session_created=remember_created_session,
+                )
+            )
+            check_lease()
+            attachment = broker.create_attachment(str(request.base_url), target)
+            attachment_id = attachment.attachment_id
+            check_lease()
+            await to_thread.run_sync(
+                lambda: manager.record_personal_attach(
+                    target.binding_id,
+                    maintenance_check=check_lease,
+                )
+            )
+            check_lease()
+            attached_session = broker.attach_record(session, attachment, str(request.base_url))
+    except MaintenanceModeError:
+        if attachment_id is not None:
+            broker.detach_attachment(attachment_id)
+        if created_session_cleanup is not None:
+            await to_thread.run_sync(created_session_cleanup)
+        raise
     except Exception as exc:
         raise _translate_terminal_error(exc) from exc
 
-    attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(manager.record_personal_attach, target.binding_id)
-    attached_session = broker.attach_record(session, attachment, str(request.base_url))
     audit_event(
         "terminal.session.reset",
         severity="info",
@@ -552,12 +668,17 @@ async def terminal_session_exec(
                 detail=f"Command '{base_cmd}' not in allowed list. Contact administrator to add it.",
             )
 
-        result = await exec_command(
-            environment,
-            payload.command,
-            cwd=working_directory or "/",
-            timeout=payload.timeout,
-        )
+        with _terminal_http_mutation(request, source="terminal.session.exec") as check_lease:
+            check_lease()
+            result = await exec_command(
+                environment,
+                payload.command,
+                cwd=working_directory or "/",
+                timeout=payload.timeout,
+            )
+            check_lease()
+    except MaintenanceModeError:
+        raise
     except HTTPException:
         raise
     except Exception as exc:
@@ -575,9 +696,15 @@ async def terminal_session_exec(
 async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebSocket) -> None:
     broker = _get_attachment_broker(websocket)
     try:
-        attachment = broker.validate_attachment(attachment_id, token)
-        _require_v2_attachment_environment_access(websocket, attachment)
-        attachment, runtime = broker.open_runtime(attachment_id, token)
+        attachment, runtime = _open_terminal_attachment_runtime(
+            websocket,
+            broker,
+            attachment_id,
+            token,
+        )
+    except MaintenanceModeError:
+        await websocket.close(code=4503)
+        return
     except HTTPException as exc:
         await websocket.close(code=_close_code_for_http_status(exc.status_code))
         return

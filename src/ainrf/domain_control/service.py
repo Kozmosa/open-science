@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
+import stat
 import time
 from contextlib import closing
 from dataclasses import dataclass
@@ -28,6 +30,23 @@ CUTOVER_REQUIRED_PARTICIPANT_TYPES: tuple[str, ...] = (
     "overview-planner",
     "terminal-session-reconciler",
     "admin-cli",
+)
+
+# Prometheus scrape state is a write-only observability sidecar.  It has no
+# domain authority and may legitimately be refreshed while an operator is
+# reading maintenance status.  The legacy-source seal is created *after* the
+# stability gate as part of commit.  Every other regular state-root member is
+# included in the preflight fingerprint, not merely the importer subset.
+_MAINTENANCE_VOLATILE_SOURCE_NAMES = frozenset(
+    {
+        "domain-legacy-source-seal.json",
+        "domain_telemetry.sqlite3",
+        "domain_telemetry.sqlite3-wal",
+        "domain_telemetry.sqlite3-shm",
+        "domain_telemetry.sqlite3-journal",
+        "domain_telemetry_anchor.json",
+        "domain_telemetry_delivery_failure.json",
+    }
 )
 
 
@@ -99,11 +118,55 @@ def _now() -> str:
 class DomainMaintenanceService:
     """Coordinate a persistent, cross-process migration maintenance epoch."""
 
-    def __init__(self, state_root: Path) -> None:
+    def __init__(
+        self,
+        state_root: Path,
+        *,
+        workspace_root: Path | None = None,
+        tenant_root: Path | None = None,
+    ) -> None:
         self._state_root = state_root
+        # Workspace and tenant data live outside ``state_root`` in the normal
+        # deployment.  They are deliberately opt-in: a maintenance preflight
+        # must prove exactly the roots the operator selected for the backup /
+        # cutover, never discover host directories by convention or scan
+        # unrelated tenant data.
+        self._workspace_root = workspace_root
+        self._tenant_root = tenant_root
         self._runtime_root = state_root / "runtime"
         self._db_path = self._runtime_root / "agentic_researcher.sqlite3"
         self._initialized = False
+
+    def has_configured_source_root(self, source_kind: str) -> bool:
+        """Return whether an optional backup source root was explicitly selected."""
+
+        if source_kind == "workspace":
+            return self._workspace_root is not None
+        if source_kind == "tenant":
+            return self._tenant_root is not None
+        raise ValueError(f"unknown maintenance source kind: {source_kind}")
+
+    def source_root_config_digest(self) -> str:
+        """Return a stable, non-disclosing binding for configured source roots.
+
+        Prepare and commit are separate CLI invocations.  Binding this digest
+        into the prepared cutover evidence prevents a later invocation from
+        silently omitting or substituting an external Workspace/tenant tree.
+        The digest is persisted, not the tenant-private absolute paths.
+        """
+
+        payload = [
+            {
+                "kind": kind,
+                "path": str(root.expanduser().resolve(strict=False)),
+            }
+            for kind, root in self._configured_source_roots()
+        ]
+        return hashlib.sha256(
+            json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode(
+                "utf-8"
+            )
+        ).hexdigest()
 
     def initialize(self) -> None:
         if self._initialized:
@@ -113,9 +176,86 @@ class DomainMaintenanceService:
             run_pending(conn, "agentic_researcher")
         self._initialized = True
 
+    def adopt_existing_maintenance_schema(self) -> None:
+        """Use a verified existing control plane without running migrations.
+
+        An API that starts after maintenance has begun must remain able to
+        register itself as a drained participant, but it must not attempt a
+        best-effort schema repair merely because it is handling a health probe.
+        This method proves the narrow maintenance schema is already present via
+        a read-only connection, then lets explicit participant/control-plane
+        operations use the existing database.  An incomplete schema fails
+        closed and requires an operator to recover it before restarting.
+        """
+
+        if self._initialized:
+            return
+        try:
+            with closing(self._read_connection()) as conn:
+                state = conn.execute(
+                    """
+                    SELECT maintenance_epoch, is_active, actor_id, reason, entered_at, exited_at
+                    FROM domain_maintenance_state WHERE singleton = 1
+                    """
+                ).fetchone()
+                # Validate every relation touched by the maintenance lifecycle
+                # before declaring the service initialized.  ``LIMIT 0`` is
+                # intentional: legacy repair must never infer valid columns
+                # from the absence of rows.
+                conn.execute(
+                    """
+                    SELECT mutation_id, maintenance_epoch, started_at, source, participant_id
+                    FROM domain_maintenance_mutations LIMIT 0
+                    """
+                )
+                conn.execute(
+                    """
+                    SELECT participant_id, participant_type, process_id, observed_epoch, status,
+                           in_flight_mutations, unflushed_output_count, details_json,
+                           registered_at, heartbeat_at, drained_at, stopped_at
+                    FROM domain_write_participants LIMIT 0
+                    """
+                )
+        except sqlite3.Error as exc:
+            raise RuntimeError(
+                "persisted domain maintenance schema is incomplete; refusing maintenance startup"
+            ) from exc
+        if state is None:
+            raise RuntimeError(
+                "persisted domain maintenance state is malformed; refusing maintenance startup"
+            )
+        self._initialized = True
+
+    def _read_connection(self) -> sqlite3.Connection:
+        """Open the maintenance control plane without WAL or PRAGMA writes.
+
+        ``ainrf.db.connect`` intentionally enables WAL for normal writers.
+        That is the wrong primitive for status, preflight, and lease checks:
+        each is part of the cutover stability proof and must not itself mutate
+        the file it is measuring.  Keep this local instead of adding a second
+        general connection factory with subtly weaker write defaults.
+        """
+
+        try:
+            # SQLite's immutable mode avoids creating a ``-shm`` sidecar, but
+            # it deliberately ignores an existing WAL.  Use it only when the
+            # main database is already a complete immutable view; otherwise a
+            # normal read-only connection is required to observe the current
+            # maintenance epoch.  ``-shm`` is SQLite's non-authoritative lock
+            # cache and is excluded from the source proof below.
+            has_wal_state = self._db_path.with_name(f"{self._db_path.name}-wal").exists()
+            suffix = "?mode=ro" if has_wal_state else "?mode=ro&immutable=1"
+            database_uri = f"{self._db_path.resolve().as_uri()}{suffix}"
+            conn = sqlite3.connect(database_uri, uri=True, isolation_level=None)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA query_only = ON")
+            return conn
+        except sqlite3.Error as exc:
+            raise RuntimeError("cannot open domain maintenance state read-only") from exc
+
     def status(self) -> MaintenanceStatus:
         self.initialize()
-        with closing(connect(self._db_path)) as conn:
+        with closing(self._read_connection()) as conn:
             row = conn.execute(
                 """
                 SELECT maintenance_epoch, is_active, actor_id, reason, entered_at, exited_at
@@ -138,7 +278,7 @@ class DomainMaintenanceService:
     def participants(self) -> tuple[ParticipantStatus, ...]:
         """Return all known writers, including stopped instances for audit."""
         self.initialize()
-        with closing(connect(self._db_path)) as conn:
+        with closing(self._read_connection()) as conn:
             rows = conn.execute(
                 """
                 SELECT participant_id, participant_type, process_id, observed_epoch, status,
@@ -284,6 +424,43 @@ class DomainMaintenanceService:
     ) -> ParticipantStatus:
         """Record writer liveness and observe the current maintenance epoch."""
         self.initialize()
+
+        # Once a writer has drained for the active epoch, its recurring
+        # heartbeat must become a no-op.  Do the proof through the read-only
+        # connection before opening the normal WAL-configuring writer: merely
+        # opening that writer used to perturb the source fingerprint the
+        # preflight was trying to validate.
+        with closing(self._read_connection()) as read_conn:
+            read_state = read_conn.execute(
+                "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
+            ).fetchone()
+            read_participant = read_conn.execute(
+                "SELECT * FROM domain_write_participants WHERE participant_id = ?",
+                (participant_id,),
+            ).fetchone()
+        if read_state is None or read_participant is None:
+            raise LookupError(f"Unknown domain write participant: {participant_id}")
+        requested_in_flight = (
+            int(read_participant["in_flight_mutations"])
+            if in_flight_mutations is None
+            else max(0, in_flight_mutations)
+        )
+        requested_unflushed = (
+            int(read_participant["unflushed_output_count"])
+            if unflushed_output_count is None
+            else max(0, unflushed_output_count)
+        )
+        if (
+            bool(read_state["is_active"])
+            and int(read_participant["observed_epoch"]) == int(read_state["maintenance_epoch"])
+            and str(read_participant["status"]) == "drained"
+            and int(read_participant["in_flight_mutations"]) == 0
+            and int(read_participant["unflushed_output_count"]) == 0
+            and requested_in_flight == 0
+            and requested_unflushed == 0
+        ):
+            return self._participant_status(read_participant)
+
         now = _now()
         with closing(connect(self._db_path)) as conn:
             state = conn.execute(
@@ -307,21 +484,6 @@ class DomainMaintenanceService:
             )
             maintenance_active = bool(state["is_active"])
             current_epoch = int(state["maintenance_epoch"])
-            if (
-                maintenance_active
-                and int(participant["observed_epoch"]) == current_epoch
-                and str(participant["status"]) == "drained"
-                and int(participant["in_flight_mutations"]) == 0
-                and int(participant["unflushed_output_count"]) == 0
-                and current_in_flight == 0
-                and current_unflushed == 0
-            ):
-                # Drained participants keep their final fresh heartbeat while
-                # the maintenance stability window observes this dual-use
-                # SQLite file as a legacy Task source. Refreshing liveness
-                # here would itself mutate the source and invalidate the
-                # cutover preflight that the participant has already passed.
-                return self._participant_status(participant)
             status = (
                 "drained"
                 if maintenance_active and current_in_flight == 0 and current_unflushed == 0
@@ -496,6 +658,68 @@ class DomainMaintenanceService:
             conn.commit()
         return MaintenanceLease(mutation_id=mutation_id, maintenance_epoch=epoch, source=source)
 
+    def begin_maintenance_operation(
+        self,
+        *,
+        source: str,
+        participant_id: str | None = None,
+        expected_epoch: int | None = None,
+    ) -> MaintenanceLease:
+        """Track one privileged control-plane write while maintenance is active.
+
+        Normal application mutations are rejected as soon as maintenance
+        begins.  Cutover and restore controllers are the narrow exception:
+        they must write their own durable journal and reconciliation evidence
+        *while* writers are drained.  Keeping those operations in the same
+        mutation table means ``exit()`` cannot reopen the system halfway
+        through a control transaction.
+        """
+
+        self.initialize()
+        if not source:
+            raise ValueError("source is required")
+        with closing(connect(self._db_path)) as conn:
+            row = conn.execute(
+                "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
+            ).fetchone()
+            if row is None or not bool(row["is_active"]):
+                raise MaintenanceModeError(
+                    "maintenance control operation requires active maintenance"
+                )
+            epoch = int(row["maintenance_epoch"])
+            if expected_epoch is not None and expected_epoch != epoch:
+                raise MaintenanceModeError(
+                    "maintenance control operation crossed a maintenance epoch"
+                )
+            if participant_id is not None:
+                participant = conn.execute(
+                    "SELECT status FROM domain_write_participants WHERE participant_id = ?",
+                    (participant_id,),
+                ).fetchone()
+                if participant is None or participant["status"] == "stopped":
+                    raise MaintenanceModeError("domain write participant is not active")
+            mutation_id = uuid4().hex
+            conn.execute(
+                """
+                INSERT INTO domain_maintenance_mutations
+                    (mutation_id, maintenance_epoch, started_at, source, participant_id)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (mutation_id, epoch, _now(), source, participant_id),
+            )
+            if participant_id is not None:
+                conn.execute(
+                    """
+                    UPDATE domain_write_participants
+                    SET in_flight_mutations = in_flight_mutations + 1,
+                        status = 'draining', observed_epoch = ?, heartbeat_at = ?, drained_at = NULL
+                    WHERE participant_id = ?
+                    """,
+                    (epoch, _now(), participant_id),
+                )
+            conn.commit()
+        return MaintenanceLease(mutation_id=mutation_id, maintenance_epoch=epoch, source=source)
+
     def finish_mutation(self, lease: MaintenanceLease) -> None:
         self.initialize()
         with closing(connect(self._db_path)) as conn:
@@ -549,7 +773,7 @@ class DomainMaintenanceService:
     def check_lease(self, lease: MaintenanceLease) -> None:
         """Fail a mutation that crossed a maintenance epoch before commit."""
         self.initialize()
-        with closing(connect(self._db_path)) as conn:
+        with closing(self._read_connection()) as conn:
             row = conn.execute(
                 "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
             ).fetchone()
@@ -559,6 +783,21 @@ class DomainMaintenanceService:
             or int(row["maintenance_epoch"]) != lease.maintenance_epoch
         ):
             raise MaintenanceModeError("domain write crossed a maintenance epoch")
+
+    def check_maintenance_operation(self, lease: MaintenanceLease) -> None:
+        """Fail a privileged controller write if its maintenance epoch changed."""
+
+        self.initialize()
+        with closing(self._read_connection()) as conn:
+            row = conn.execute(
+                "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
+            ).fetchone()
+        if (
+            row is None
+            or not bool(row["is_active"])
+            or int(row["maintenance_epoch"]) != lease.maintenance_epoch
+        ):
+            raise MaintenanceModeError("maintenance control operation crossed a maintenance epoch")
 
     def wait_for_drain(self, *, timeout_seconds: float, poll_seconds: float = 0.05) -> bool:
         deadline = time.monotonic() + timeout_seconds
@@ -610,7 +849,7 @@ class DomainMaintenanceService:
             and not stale_ids
             and all(item.status == "drained" for item in active_participants)
         )
-        with closing(connect(self._db_path)) as conn:
+        with closing(self._read_connection()) as conn:
             active_attempt_count = self._count_optional(
                 conn,
                 """
@@ -627,6 +866,34 @@ class DomainMaintenanceService:
                 WHERE status IN ('pending', 'claimed', 'dispatched', 'launch_unknown')
                 """,
             )
+            # Before v2 cutover, the in-process legacy scheduler owns no
+            # Attempt/outbox rows.  Count its queued and active Task records
+            # explicitly so a background runtime cannot become invisible just
+            # because the HTTP request that scheduled it already returned.
+            legacy_active_task_count = self._count_optional(
+                conn,
+                """
+                SELECT COUNT(*) FROM tasks AS task
+                WHERE task.status IN ('starting', 'running', 'paused')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM agent_task_attempts AS attempt
+                      WHERE attempt.task_id = task.task_id
+                  )
+                """,
+            )
+            legacy_queued_task_count = self._count_optional(
+                conn,
+                """
+                SELECT COUNT(*) FROM tasks AS task
+                WHERE task.status = 'queued'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM agent_task_attempts AS attempt
+                      WHERE attempt.task_id = task.task_id
+                  )
+                """,
+            )
+            active_attempt_count += legacy_active_task_count
+            pending_runtime_launch_count += legacy_queued_task_count
         unflushed_output_count = sum(item.unflushed_output_count for item in active_participants)
         source_stable = self._sources_are_stable(stability_window_seconds)
         ready = (
@@ -696,33 +963,125 @@ class DomainMaintenanceService:
             # that a cutover may proceed.
             return False
 
-    def _source_fingerprints(self) -> dict[str, tuple[int, int, int, str]]:
-        """Fingerprint exactly the immutable legacy migration input set.
+    def _configured_source_roots(self) -> tuple[tuple[str, Path], ...]:
+        roots: list[tuple[str, Path]] = [("state", self._state_root)]
+        if self._workspace_root is not None:
+            roots.append(("workspace", self._workspace_root))
+        if self._tenant_root is not None:
+            roots.append(("tenant", self._tenant_root))
+        return tuple(roots)
 
-        ``agentic_researcher.sqlite3`` is both a legacy Task source and the
-        additive v2 control-plane target.  A participant heartbeat therefore
-        changes its physical bytes even while the legacy Task projection is
-        unchanged.  Reusing the importer's source manifest preserves the
-        legacy Task-only hash while retaining the required inode, mtime, and
-        physical source-size checks. SQLite manifest sizes describe immutable
-        backup snapshots, so the physical size must be observed from the
-        live source path rather than copied from the manifest.
+    def _source_fingerprints(self) -> dict[str, tuple[int, int, int, str]]:
+        """Fingerprint every configured authoritative source root fail-closed.
+
+        Import manifests deliberately omit Literature, terminal, skills, and
+        detection state because they are not legacy-domain input.  Cutover
+        safety has a wider obligation: no backed-up control state may change
+        while the maintenance stability window is being observed.  The state
+        root is always authoritative; Workspace and tenant trees are included
+        only when an operator explicitly configured them.  A file is accepted
+        only when its inode, mtime, size, and digest agree across its own read;
+        the caller repeats this complete mapping after the window.
         """
 
-        # Import lazily: the importer depends on this maintenance service,
-        # whereas preflight is invoked only after both modules are available.
-        from ainrf.domain_migration.sources import capture_source_manifest
+        fingerprints: dict[str, tuple[int, int, int, str]] = {}
+        for source_kind, root in self._configured_source_roots():
+            self._fingerprint_source_root(source_kind, root, fingerprints)
+        return fingerprints
 
-        manifest = capture_source_manifest(self._state_root)
-        return {
-            source.relative_path: (
-                source.inode,
-                source.mtime_ns,
-                (self._state_root / source.relative_path).stat().st_size,
-                source.sha256,
+    def _fingerprint_source_root(
+        self,
+        source_kind: str,
+        root: Path,
+        fingerprints: dict[str, tuple[int, int, int, str]],
+    ) -> None:
+        """Add one explicitly selected source tree to *fingerprints*."""
+
+        root_mode = root.lstat().st_mode
+        if stat.S_ISLNK(root_mode) or not stat.S_ISDIR(root_mode):
+            raise RuntimeError(f"maintenance {source_kind} source root is not a safe directory")
+        root_before = root.stat()
+        for path in sorted(
+            root.rglob("*"), key=lambda candidate: candidate.relative_to(root).as_posix()
+        ):
+            relative = path.relative_to(root).as_posix()
+            if source_kind == "state" and self._is_maintenance_volatile_source(relative):
+                continue
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                raise RuntimeError(
+                    f"maintenance {source_kind} source cannot be a symlink: {relative}"
+                )
+            if stat.S_ISDIR(mode):
+                continue
+            if not stat.S_ISREG(mode):
+                raise RuntimeError(
+                    f"maintenance {source_kind} source is not a regular file: {relative}"
+                )
+            before = path.stat()
+            digest = hashlib.sha256()
+            with path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1 << 16), b""):
+                    digest.update(chunk)
+            after = path.stat()
+            if (
+                before.st_ino,
+                before.st_mtime_ns,
+                before.st_size,
+            ) != (
+                after.st_ino,
+                after.st_mtime_ns,
+                after.st_size,
+            ):
+                raise RuntimeError(
+                    f"maintenance {source_kind} source changed while read: {relative}"
+                )
+            fingerprint_key = relative if source_kind == "state" else f"{source_kind}/{relative}"
+            if fingerprint_key in fingerprints:
+                raise RuntimeError("maintenance source root configuration overlaps ambiguously")
+            fingerprints[fingerprint_key] = (
+                before.st_ino,
+                before.st_mtime_ns,
+                before.st_size,
+                digest.hexdigest(),
             )
-            for source in manifest.files
-        }
+        root_after = root.stat()
+        if (
+            root_before.st_ino,
+            root_before.st_mtime_ns,
+            root_before.st_size,
+        ) != (
+            root_after.st_ino,
+            root_after.st_mtime_ns,
+            root_after.st_size,
+        ):
+            raise RuntimeError(f"maintenance {source_kind} source root changed while read")
+        # A tree can otherwise be swapped for a different empty directory
+        # between both observations.  A NUL-prefixed internal key cannot
+        # collide with a real relative filesystem path.
+        root_key = f"\0maintenance-root:{source_kind}"
+        fingerprints[root_key] = (
+            root_before.st_ino,
+            root_before.st_mtime_ns,
+            root_before.st_size,
+            hashlib.sha256(f"maintenance-root:{source_kind}".encode("utf-8")).hexdigest(),
+        )
+
+    @staticmethod
+    def _is_maintenance_volatile_source(relative_path: str) -> bool:
+        parts = Path(relative_path).parts
+        return (
+            len(parts) == 2
+            and parts[0] == "runtime"
+            and (
+                parts[1] in (_MAINTENANCE_VOLATILE_SOURCE_NAMES)
+                # A SQLite shared-memory file is a transient lock/cache
+                # artifact, not an authoritative source.  Read-only SQLite
+                # clients may update its timestamp while observing a WAL, so
+                # including it would make a correct preflight reject itself.
+                or parts[1].endswith(".sqlite3-shm")
+            )
+        )
 
 
 class DomainWriteParticipant:
@@ -754,11 +1113,26 @@ class DomainWriteParticipant:
     def begin_mutation(self, *, source: str) -> MaintenanceLease:
         return self._service.begin_mutation(source=source, participant_id=self.participant_id)
 
+    def begin_maintenance_operation(
+        self,
+        *,
+        source: str,
+        expected_epoch: int | None = None,
+    ) -> MaintenanceLease:
+        return self._service.begin_maintenance_operation(
+            source=source,
+            participant_id=self.participant_id,
+            expected_epoch=expected_epoch,
+        )
+
     def finish_mutation(self, lease: MaintenanceLease) -> None:
         self._service.finish_mutation(lease)
 
     def check_lease(self, lease: MaintenanceLease) -> None:
         self._service.check_lease(lease)
+
+    def check_maintenance_operation(self, lease: MaintenanceLease) -> None:
+        self._service.check_maintenance_operation(lease)
 
     def drain(self) -> ParticipantStatus:
         return self._service.drain_participant(self.participant_id)
