@@ -382,6 +382,29 @@ def test_serve_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     assert captured == {"host": "127.0.0.1", "port": 8000, "state_root": tmp_path}
 
 
+def test_serve_accepts_openscience_api_key_hashes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_server(host: str, port: int, state_root: Path, *, workers: int = 1) -> None:
+        captured["host"] = host
+        captured["port"] = port
+        captured["state_root"] = state_root
+
+    monkeypatch.delenv("AINRF_API_KEY_HASHES", raising=False)
+    monkeypatch.setenv(
+        "OPENSCIENCE_API_KEY_HASHES",
+        "2bb80d537b1da3e38bd30361aa855686bde0baef694f41fbabd9831f0a0ff5ff",
+    )
+    monkeypatch.setattr("ainrf.cli.run_server", fake_run_server)
+
+    result = runner.invoke(app, ["serve", "--state-root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert captured == {"host": "127.0.0.1", "port": 8000, "state_root": tmp_path}
+
+
 def test_serve_daemon_runs_background_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

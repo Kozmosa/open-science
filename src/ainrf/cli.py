@@ -1070,7 +1070,14 @@ def _parse_ssh_command(command: str) -> ParsedSSHCommand:
 
 
 def _ensure_api_key_hashes_configured(state_root: Path) -> None:
-    env_hashes = os.environ.get("AINRF_API_KEY_HASHES", "").strip()
+    # Keep the command preflight aligned with ``ApiConfig.from_env``.  A
+    # deployment using the public OpenScience name must not fall into
+    # interactive onboarding before the server has a chance to read the same
+    # configuration.
+    env_hashes = os.environ.get(
+        "OPENSCIENCE_API_KEY_HASHES",
+        os.environ.get("AINRF_API_KEY_HASHES", ""),
+    ).strip()
     if env_hashes:
         return
     config_path = config_path_for(state_root)

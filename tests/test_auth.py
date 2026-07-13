@@ -94,6 +94,19 @@ class TestAuthService:
 
 
 class TestJwtUtils:
+    def test_openscience_jwt_secret_avoids_runtime_secret_file(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        from ainrf.auth import jwt_utils
+
+        secret_path = tmp_path / "jwt_secret"
+        monkeypatch.delenv("AINRF_JWT_SECRET", raising=False)
+        monkeypatch.setenv("OPENSCIENCE_JWT_SECRET", "openscience-test-secret")
+        monkeypatch.setattr(jwt_utils, "_SECRET_PATH", secret_path)
+
+        assert jwt_utils._ensure_secret() == "openscience-test-secret"
+        assert not secret_path.exists()
+
     def test_create_and_decode_token(self):
         from ainrf.auth.jwt_utils import create_access_token, decode_access_token
 
