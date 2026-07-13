@@ -12,6 +12,7 @@ from typing import cast
 import pytest
 
 from ainrf.auth.service import AuthService
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 from ainrf.domain_migration import DomainImporter, MigrationInterruptedError
 
 pytestmark = [pytest.mark.unit]
@@ -183,3 +184,60 @@ def test_resume_rejects_a_different_artifact_without_losing_persisted_progress(
     assert _field(inspection, "status") == "interrupted"
     assert _field(inspection, "artifact_sha") == _ARTIFACT_SHA
     assert tuple(importer.record_results(run_id)) == persisted_results
+
+
+def test_importer_refuses_to_start_a_write_run_during_maintenance(state_root: Path) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="operator", reason="migration cutover")
+
+    try:
+        with pytest.raises(MaintenanceModeError, match="paused for maintenance"):
+            DomainImporter(state_root).run(mode="apply", artifact_sha=_ARTIFACT_SHA)
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    participants = DomainMaintenanceService(state_root).participants()
+    assert any(
+        participant.participant_type == "admin-cli" and participant.status == "stopped"
+        for participant in participants
+    )
+
+
+def test_importer_stops_at_the_maintenance_epoch_and_resumes_from_its_checkpoint(
+    state_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _legacy_sources(state_root)
+    maintenance = DomainMaintenanceService(state_root)
+    importer = DomainImporter(state_root)
+    original_enter_phase = importer._enter_phase
+    entered = False
+
+    def enter_maintenance_before_first_phase(
+        conn: sqlite3.Connection,
+        run_id: str,
+        phase: str,
+    ) -> None:
+        nonlocal entered
+        if not entered:
+            entered = True
+            maintenance.enter(actor_id="operator", reason="pause importer")
+        original_enter_phase(conn, run_id, phase)
+
+    monkeypatch.setattr(importer, "_enter_phase", enter_maintenance_before_first_phase)
+    with pytest.raises(MaintenanceModeError, match="crossed a maintenance epoch"):
+        importer.run(mode="apply", artifact_sha=_ARTIFACT_SHA)
+
+    with sqlite3.connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+        run = conn.execute(
+            "SELECT run_id, status FROM domain_migration_runs ORDER BY started_at DESC LIMIT 1"
+        ).fetchone()
+        imported_projects = conn.execute("SELECT COUNT(*) FROM projects").fetchone()
+    assert run is not None
+    assert run[1] == "running"
+    assert imported_projects == (0,)
+
+    maintenance.exit(actor_id="operator")
+    resumed = DomainImporter(state_root).resume(str(run[0]), artifact_sha=_ARTIFACT_SHA)
+
+    assert resumed.status == "completed"

@@ -19,6 +19,10 @@ _DOMAIN_PREFIXES = (
     "/tasks",
     "/sessions",
     "/literature",
+    # Terminal session creation/reset/exec mutates durable session bindings
+    # and external runtime state.  It must observe the same maintenance epoch
+    # as the domain APIs rather than remaining an untracked write side door.
+    "/terminal",
 )
 
 

@@ -141,11 +141,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     terminal_attachment_broker = app.state.terminal_attachment_broker
     project_service = app.state.project_service
     is_v2 = app.state.api_config.domain_model_mode is DomainModelMode.V2
+    runtime_reconciliation_enabled = app.state.api_config.runtime_reconciliation_enabled
     resource_monitor_service: ResourceMonitorService = app.state.resource_monitor_service
     # Resource collection is observation-only.  In v2 it receives the
     # persistent facade, so it never reaches the retired process-local
     # Environment registry or triggers detection writes.
-    await resource_monitor_service.start()
+    if runtime_reconciliation_enabled:
+        await resource_monitor_service.start()
+    else:
+        _LOG.info("runtime_reconciliation_disabled", extra={"component": "resource-monitor"})
     api_participant = DomainWriteParticipant(
         app.state.domain_maintenance_service,
         "api",
@@ -153,10 +157,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     api_participant.start()
     app.state.domain_api_participant_id = api_participant.participant_id
+    terminal_reconciler_participant: DomainWriteParticipant | None = None
+    if runtime_reconciliation_enabled:
+        terminal_reconciler_participant = DomainWriteParticipant(
+            app.state.domain_maintenance_service,
+            "terminal-session-reconciler",
+            details={"component": "api-lifespan"},
+        )
+        terminal_reconciler_participant.start()
+        app.state.domain_terminal_reconciler_participant_id = (
+            terminal_reconciler_participant.participant_id
+        )
+    else:
+        app.state.domain_terminal_reconciler_participant_id = None
 
     async def heartbeat_api_participant() -> None:
         while True:
             await _run_sync_in_lifespan(api_participant.heartbeat)
+            if terminal_reconciler_participant is not None:
+                await _run_sync_in_lifespan(terminal_reconciler_participant.heartbeat)
             await asyncio.sleep(5)
 
     heartbeat_task = asyncio.create_task(heartbeat_api_participant())
@@ -165,26 +184,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await _run_sync_in_lifespan(project_service.initialize)
         await _run_sync_in_lifespan(workspace_service.initialize)
         app.state.runtime_readiness = check_runtime_readiness().as_public_payload()
-        if not is_v2:
-            terminal_participant = DomainWriteParticipant(
-                app.state.domain_maintenance_service,
-                "terminal-reconciler",
-                details={"component": "api-lifespan"},
-            )
-            terminal_participant.start()
+        if not is_v2 and terminal_reconciler_participant is not None:
             try:
-                terminal_lease = terminal_participant.begin_mutation(source="terminal-reconcile")
+                terminal_lease = terminal_reconciler_participant.begin_mutation(
+                    source="terminal-reconcile"
+                )
             except MaintenanceModeError:
-                terminal_participant.drain()
+                terminal_reconciler_participant.drain()
                 _LOG.info("terminal_reconcile_skipped_for_domain_maintenance")
             else:
                 try:
                     await _run_sync_in_lifespan(terminal_session_manager.reconcile)
                     app.state.domain_maintenance_service.check_lease(terminal_lease)
                 finally:
-                    terminal_participant.finish_mutation(terminal_lease)
-            finally:
-                terminal_participant.stop()
+                    terminal_reconciler_participant.finish_mutation(terminal_lease)
         session_service = app.state.session_service
         if session_service is not None:
             await _run_sync_in_lifespan(session_service.initialize)
@@ -294,6 +307,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await heartbeat_task
         except asyncio.CancelledError:
             pass
+        if terminal_reconciler_participant is not None:
+            terminal_reconciler_participant.stop()
         api_participant.stop()
         await _run_sync_in_lifespan(terminal_attachment_broker.shutdown)
         if resource_monitor_service is not None:
@@ -350,15 +365,6 @@ def create_app(
     app.state.api_config = api_config
     app.state.domain_cutover_controller = domain_cutover_controller
 
-    def mark_deprecated_route(route_name: str) -> None:
-        """Emit route-level compatibility telemetry without resource labels."""
-
-        from ainrf.api.routes.metrics import inc_counter
-
-        inc_counter("ainrf_deprecated_route_calls_total", {"route": route_name})
-        _LOG.info("domain_deprecated_route", extra={"route": route_name})
-
-    app.state.mark_deprecated_route = mark_deprecated_route
     app.state.domain_maintenance_service = DomainMaintenanceService(api_config.state_root)
     app.state.domain_maintenance_service.initialize()
     artifact_sha = api_config.domain_artifact_sha if is_v2 else None

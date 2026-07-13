@@ -13,6 +13,11 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
+from ainrf.domain_control.service import (
+    DomainMaintenanceService,
+    MaintenanceLease,
+    MaintenanceModeError,
+)
 from ainrf.domain.context import (
     context_version_fingerprint,
     empty_fragment_manifest_json,
@@ -126,15 +131,58 @@ class DomainReconciliationService:
     transaction.
     """
 
-    def __init__(self, state_root: Path) -> None:
+    def __init__(
+        self,
+        state_root: Path,
+        *,
+        maintenance: DomainMaintenanceService | None = None,
+        maintenance_lease: MaintenanceLease | None = None,
+        initialize_schema: bool = True,
+    ) -> None:
+        if (maintenance is None) != (maintenance_lease is None):
+            raise ValueError("maintenance and maintenance_lease must be provided together")
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+        self._maintenance = maintenance
+        self._maintenance_lease = maintenance_lease
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(connect(self._db_path)) as conn:
-            run_pending(conn, "agentic_researcher")
+        if initialize_schema:
+            self._check_maintenance_lease()
+            with closing(connect(self._db_path)) as conn:
+                run_pending(conn, "agentic_researcher")
+            self._check_maintenance_lease()
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
+
+    def _check_maintenance_lease(self, conn: sqlite3.Connection | None = None) -> None:
+        """Reject a reconciliation commit that crossed a maintenance epoch."""
+
+        maintenance = self._maintenance
+        lease = self._maintenance_lease
+        if maintenance is None or lease is None:
+            return
+        if conn is None:
+            maintenance.check_lease(lease)
+            return
+        state = conn.execute(
+            "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+        mutation = conn.execute(
+            "SELECT 1 FROM domain_maintenance_mutations WHERE mutation_id = ?",
+            (lease.mutation_id,),
+        ).fetchone()
+        if (
+            state is None
+            or mutation is None
+            or bool(state["is_active"])
+            or int(state["maintenance_epoch"]) != lease.maintenance_epoch
+        ):
+            raise MaintenanceModeError("domain reconciliation write crossed a maintenance epoch")
+
+    def _commit(self, conn: sqlite3.Connection) -> None:
+        self._check_maintenance_lease(conn)
+        conn.commit()
 
     def list_issues(
         self, run_id: str, *, include_resolved: bool = False
@@ -269,7 +317,7 @@ class DomainReconciliationService:
             updated = conn.execute(
                 "SELECT * FROM domain_migration_issues WHERE issue_id = ?", (issue_id,)
             ).fetchone()
-            conn.commit()
+            self._commit(conn)
         if updated is None:
             raise RuntimeError("Resolved migration issue disappeared")
         return self._issue_from_row(updated)
@@ -279,7 +327,12 @@ class DomainReconciliationService:
 
         from ainrf.domain_migration.importer import DomainImporter, ReconciliationReport
 
-        report = DomainImporter(self._state_root).reconcile(run_id)
+        report = DomainImporter(self._state_root).reconcile(
+            run_id,
+            maintenance=self._maintenance,
+            maintenance_lease=self._maintenance_lease,
+            initialize_schema=self._maintenance is None,
+        )
         with closing(self._connect()) as conn:
             residual = self._resolved_invariant_blockers(conn, report.run_id)
             if residual:
@@ -287,7 +340,7 @@ class DomainReconciliationService:
                     "UPDATE domain_migration_runs SET cutover_allowed = 0 WHERE run_id = ?",
                     (report.run_id,),
                 )
-                conn.commit()
+                self._commit(conn)
         if not residual:
             return report
         return ReconciliationReport(
@@ -396,7 +449,7 @@ class DomainReconciliationService:
                     "restore_evidence_sha256": evidence_sha256,
                 },
             )
-            conn.commit()
+            self._commit(conn)
         return MigrationFinalization(
             run_id=run_id,
             artifact_sha=artifact_sha,

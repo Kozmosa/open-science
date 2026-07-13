@@ -9,6 +9,8 @@ import pytest
 from typer.testing import CliRunner
 
 from ainrf.cli import app
+from ainrf.domain_control import CUTOVER_REQUIRED_PARTICIPANT_TYPES, DomainMaintenanceService
+from ainrf.cli import _admin_cli_participant
 
 pytestmark = [pytest.mark.cli]
 
@@ -45,6 +47,7 @@ def test_domain_cutover_prepare_passes_exact_bound_evidence(
 
     monkeypatch.setattr("ainrf.cli._cutover_controller", lambda _: FakeController())
     archive = tmp_path / "backup.tar.gz"
+    state_root = tmp_path / "state"
     result = runner.invoke(
         app,
         [
@@ -67,7 +70,7 @@ def test_domain_cutover_prepare_passes_exact_bound_evidence(
             "--stability-window-seconds",
             "0",
             "--state-root",
-            str(tmp_path / "state"),
+            str(state_root),
         ],
     )
 
@@ -84,3 +87,81 @@ def test_domain_cutover_prepare_passes_exact_bound_evidence(
         "artifact_schema_max": 18,
         "stability_window_seconds": 0.0,
     }
+    participants = DomainMaintenanceService(state_root).participants()
+    assert any(
+        participant.participant_type == "admin-cli" and participant.status == "stopped"
+        for participant in participants
+    )
+
+
+def test_admin_cli_participant_is_drained_when_maintenance_is_active(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    maintenance = DomainMaintenanceService(state_root)
+    for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES:
+        maintenance.register_participant(f"fixture:{participant_type}", participant_type)
+    maintenance.enter(actor_id="operator", reason="CLI preflight")
+    for participant in maintenance.participants():
+        maintenance.drain_participant(participant.participant_id)
+
+    participant = _admin_cli_participant(state_root, "domain-maintenance.preflight")
+    try:
+        report = maintenance.preflight(stability_window_seconds=0)
+    finally:
+        participant.stop()
+
+    assert report.ready
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [
+            "domain-migration",
+            "resolve",
+            "run-1",
+            "issue-1",
+            "--resolution-type",
+            "assign_project_owner",
+            "--actor-id",
+            "operator",
+            "--payload",
+            "{}",
+        ],
+        [
+            "domain-migration",
+            "finalize",
+            "run-1",
+            "--actor-id",
+            "operator",
+            "--artifact-sha",
+            "a" * 64,
+            "--restore-evidence",
+            "{}",
+        ],
+        ["domain-migration", "reconcile"],
+    ],
+)
+def test_domain_migration_mutation_commands_refuse_maintenance_before_service_construction(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arguments: list[str],
+) -> None:
+    state_root = tmp_path / "state"
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="operator", reason="block CLI reconciliation writes")
+    constructed = False
+
+    class UnexpectedReconciliationService:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            nonlocal constructed
+            constructed = True
+
+    monkeypatch.setattr("ainrf.cli.DomainReconciliationService", UnexpectedReconciliationService)
+    try:
+        result = runner.invoke(app, [*arguments, "--state-root", str(state_root)])
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    assert result.exit_code == 2
+    assert "paused for maintenance" in result.output
+    assert not constructed

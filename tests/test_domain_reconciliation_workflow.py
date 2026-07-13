@@ -15,6 +15,7 @@ import pytest
 from ainrf.db import connect, run_pending
 from ainrf.domain_control import DomainCutoverController, DomainMaintenanceService
 from ainrf.domain_migration import DomainImporter
+from tests.domain_cutover_fixtures import enter_maintenance_with_required_participants
 from ainrf.domain_migration.reconciliation import DomainReconciliationService
 
 pytestmark = [pytest.mark.unit]
@@ -726,7 +727,11 @@ def test_finalization_requires_completed_unblocked_run_and_valid_restore_evidenc
         service.finalize_run("run-blocked", "operator-3", "c" * 64, evidence)
 
     maintenance = DomainMaintenanceService(state_root)
-    maintenance.enter(actor_id="operator-3", reason="finalize Task reference constraints")
+    enter_maintenance_with_required_participants(
+        maintenance,
+        actor_id="operator-3",
+        reason="finalize Task reference constraints",
+    )
     try:
         constraints = DomainCutoverController(state_root).finalize_constraints(
             actor_id="operator-3",

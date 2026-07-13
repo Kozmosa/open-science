@@ -5,8 +5,53 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import TextIO, cast
 
 import structlog
+
+
+class _CurrentStderr:
+    """A stderr handle that follows the active process stream.
+
+    ``CliRunner`` and pytest temporarily replace then close ``sys.stderr``.
+    Structlog caches its logger factory, so passing the stream object directly
+    leaves later domain logging pointed at that closed capture.  The proxy is
+    intentionally tiny: every write resolves the current standard-error
+    stream while still keeping CLI diagnostics off JSON stdout.
+    """
+
+    def write(self, message: str) -> int:
+        return sys.stderr.write(message)
+
+    def flush(self) -> None:
+        sys.stderr.flush()
+
+
+_CURRENT_STDERR: TextIO = cast(TextIO, _CurrentStderr())
+
+
+def configure_cli_logging() -> None:
+    """Send structured CLI diagnostics to stderr without touching state.
+
+    Management commands commonly return a single JSON document on stdout.
+    Keeping diagnostics on stderr makes that transport contract machine
+    readable while still retaining correlation-rich telemetry for operators.
+    Long-lived server processes immediately replace this lightweight setup
+    with :func:`configure_logging`, which also writes their dated log file.
+    """
+
+    timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.add_log_level,
+            timestamper,
+            structlog.processors.JSONRenderer(),
+        ],
+        logger_factory=structlog.PrintLoggerFactory(file=_CURRENT_STDERR),
+        wrapper_class=structlog.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
 
 
 def configure_logging(state_root: Path) -> None:

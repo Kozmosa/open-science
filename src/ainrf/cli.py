@@ -4,6 +4,8 @@ import asyncio
 import json as json_mod
 import os
 import shlex
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Annotated
@@ -25,11 +27,13 @@ from ainrf.runtime import normalize_runtime_config
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
 from ainrf.domain_control import (
+    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
     DomainCutoverController,
     DomainCutoverError,
     DomainMaintenanceService,
     DomainModelMode,
     DomainWriteParticipant,
+    MaintenanceLease,
     MaintenanceModeError,
 )
 from ainrf.domain_migration import (
@@ -38,8 +42,9 @@ from ainrf.domain_migration import (
     capture_source_manifest,
 )
 from ainrf.domain import OverviewSnapshotPlanner, TaskApplicationService, TaskDispatcher
-from ainrf.literature.planner import dispatch_outbox
+from ainrf.literature.planner import run_once as run_literature_planner_once
 from ainrf.literature.tracking import LiteratureTrackingService
+from ainrf.logging import configure_cli_logging
 
 
 app = typer.Typer(
@@ -91,6 +96,7 @@ def main_callback(
         ),
     ] = False,
 ) -> None:
+    configure_cli_logging()
     _ = version
 
 
@@ -148,9 +154,8 @@ def literature_planner(
     """Run the durable literature planner/outbox dispatcher."""
     _require_legacy_literature_planner(state_root)
     service = LiteratureTrackingService(state_root)
-    service.initialize()
     if once:
-        typer.echo(f"Published {dispatch_outbox(service)} literature work item(s).")
+        typer.echo(f"Published {run_literature_planner_once(service)} literature work item(s).")
         return
     from ainrf.literature.planner import run_forever
 
@@ -480,6 +485,53 @@ def _cutover_controller(state_root: Path) -> DomainCutoverController:
     return DomainCutoverController(state_root)
 
 
+def _admin_cli_participant(
+    state_root: Path,
+    command: str,
+    *,
+    maintenance: DomainMaintenanceService | None = None,
+) -> DomainWriteParticipant:
+    """Register the command process before it touches domain control state."""
+
+    maintenance = maintenance or _maintenance_service(state_root)
+    participant = DomainWriteParticipant(
+        maintenance,
+        "admin-cli",
+        details={"command": command},
+    )
+    participant.start()
+    # A preflight/prepare process is itself a registered writer role.  During
+    # maintenance it performs only read-only safety work, so explicitly
+    # acknowledge the current epoch as drained before that same preflight
+    # evaluates the complete participant set.
+    participant.drain()
+    return participant
+
+
+@contextmanager
+def _admin_cli_mutation(
+    state_root: Path,
+    command: str,
+) -> Iterator[tuple[DomainMaintenanceService, MaintenanceLease]]:
+    """Own one maintenance lease for a CLI command's complete write transaction."""
+
+    maintenance = _maintenance_service(state_root)
+    participant = _admin_cli_participant(state_root, command, maintenance=maintenance)
+    lease: MaintenanceLease | None = None
+    try:
+        lease = participant.begin_mutation(source=command)
+        participant.check_lease(lease)
+        yield maintenance, lease
+        participant.check_lease(lease)
+    except MaintenanceModeError:
+        participant.drain()
+        raise
+    finally:
+        if lease is not None:
+            participant.finish_mutation(lease)
+        participant.stop()
+
+
 @domain_cutover_app.command("status")
 def domain_cutover_status(
     state_root: Annotated[
@@ -516,6 +568,7 @@ def domain_cutover_finalize_constraints(
 ) -> None:
     """Install and attest the final Task reference guards during maintenance."""
 
+    participant = _admin_cli_participant(state_root, "domain-cutover.finalize-constraints")
     try:
         result = _cutover_controller(state_root).finalize_constraints(
             actor_id=actor_id,
@@ -525,6 +578,8 @@ def domain_cutover_finalize_constraints(
     except (DomainCutoverError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
+    finally:
+        participant.stop()
     typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
@@ -555,6 +610,7 @@ def domain_cutover_prepare(
 ) -> None:
     """Prepare but do not yet enable the irreversible v2 cutover."""
 
+    participant = _admin_cli_participant(state_root, "domain-cutover.prepare")
     try:
         result = _cutover_controller(state_root).prepare(
             actor_id=actor_id,
@@ -570,6 +626,8 @@ def domain_cutover_prepare(
     except (DomainCutoverError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
+    finally:
+        participant.stop()
     typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
@@ -600,6 +658,7 @@ def domain_cutover_commit(
 ) -> None:
     """Commit the prepared v2 fuse after repeating all safety gates."""
 
+    participant = _admin_cli_participant(state_root, "domain-cutover.commit")
     try:
         result = _cutover_controller(state_root).commit(
             actor_id=actor_id,
@@ -615,6 +674,8 @@ def domain_cutover_commit(
     except (DomainCutoverError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
+    finally:
+        participant.stop()
     typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
@@ -628,11 +689,14 @@ def domain_cutover_abort(
 ) -> None:
     """Abort only a prepared cutover before the first v2 write exists."""
 
+    participant = _admin_cli_participant(state_root, "domain-cutover.abort")
     try:
         result = _cutover_controller(state_root).abort(actor_id=actor_id, reason=reason)
     except (DomainCutoverError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
+    finally:
+        participant.stop()
     typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
@@ -760,11 +824,13 @@ def domain_maintenance_preflight(
 ) -> None:
     """Report the hard migration/cutover safety gates without changing state."""
     service = _maintenance_service(state_root)
-    participant = DomainWriteParticipant(service, "admin-cli", details={"command": "preflight"})
-    participant.start()
+    participant = _admin_cli_participant(state_root, "domain-maintenance.preflight")
     try:
+        required_types = tuple(
+            dict.fromkeys(CUTOVER_REQUIRED_PARTICIPANT_TYPES + tuple(required_participant_type))
+        )
         report = service.preflight(
-            required_participant_types=tuple(required_participant_type),
+            required_participant_types=required_types,
             stability_window_seconds=stability_window_seconds,
             stale_after_seconds=stale_after_seconds,
         )
@@ -797,11 +863,12 @@ def domain_migration_apply(
     ] = None,
 ) -> None:
     """Run the application-level shadow importer; this never performs cutover."""
-    typer.echo(
-        json_mod.dumps(
-            DomainImporter(state_root).run(mode=mode, artifact_sha=artifact_sha).as_dict(), indent=2
-        )
-    )
+    try:
+        result = DomainImporter(state_root).run(mode=mode, artifact_sha=artifact_sha)
+    except (MaintenanceModeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
 @domain_migration_app.command("resume")
@@ -815,12 +882,13 @@ def domain_migration_resume(
         typer.Option(help="Artifact SHA; it must equal the interrupted run's artifact."),
     ] = None,
 ) -> None:
-    """Resume only an interrupted run whose source manifest and artifact still match."""
-    typer.echo(
-        json_mod.dumps(
-            DomainImporter(state_root).resume(run_id, artifact_sha=artifact_sha).as_dict(), indent=2
-        )
-    )
+    """Resume an interrupted or maintenance-paused run with matching source evidence."""
+    try:
+        result = DomainImporter(state_root).resume(run_id, artifact_sha=artifact_sha)
+    except (MaintenanceModeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
 @domain_migration_app.command("inspect")
@@ -911,13 +979,26 @@ def domain_migration_resolve(
     if not isinstance(parsed, dict):
         raise typer.BadParameter("--payload must be a JSON object")
     payload = {str(key): value for key, value in parsed.items()}
-    result = DomainReconciliationService(state_root).resolve_issue(
-        run_id,
-        issue_id,
-        resolution_type,
-        payload,
-        actor_id=actor_id,
-    )
+    try:
+        with _admin_cli_mutation(state_root, "domain-migration.resolve") as (
+            maintenance,
+            lease,
+        ):
+            result = DomainReconciliationService(
+                state_root,
+                maintenance=maintenance,
+                maintenance_lease=lease,
+                initialize_schema=False,
+            ).resolve_issue(
+                run_id,
+                issue_id,
+                resolution_type,
+                payload,
+                actor_id=actor_id,
+            )
+    except (LookupError, MaintenanceModeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
     typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
@@ -947,12 +1028,25 @@ def domain_migration_finalize(
     if not isinstance(parsed, dict):
         raise typer.BadParameter("--restore-evidence must be a JSON object")
     evidence = {str(key): value for key, value in parsed.items()}
-    result = DomainReconciliationService(state_root).finalize_run(
-        run_id,
-        actor_id,
-        artifact_sha,
-        evidence,
-    )
+    try:
+        with _admin_cli_mutation(state_root, "domain-migration.finalize") as (
+            maintenance,
+            lease,
+        ):
+            result = DomainReconciliationService(
+                state_root,
+                maintenance=maintenance,
+                maintenance_lease=lease,
+                initialize_schema=False,
+            ).finalize_run(
+                run_id,
+                actor_id,
+                artifact_sha,
+                evidence,
+            )
+    except (LookupError, MaintenanceModeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
     typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
@@ -964,11 +1058,21 @@ def domain_migration_reconcile(
     run_id: Annotated[str | None, typer.Option(help="Optional migration run ID.")] = None,
 ) -> None:
     """Report migration counts and blocking issues without cutover."""
-    typer.echo(
-        json_mod.dumps(
-            DomainReconciliationService(state_root).reconcile(run_id).as_dict(), indent=2
-        )
-    )
+    try:
+        with _admin_cli_mutation(state_root, "domain-migration.reconcile") as (
+            maintenance,
+            lease,
+        ):
+            result = DomainReconciliationService(
+                state_root,
+                maintenance=maintenance,
+                maintenance_lease=lease,
+                initialize_schema=False,
+            ).reconcile(run_id)
+    except (MaintenanceModeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
 
 
 @overview_snapshot_app.command("refresh")

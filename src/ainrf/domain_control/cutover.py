@@ -24,7 +24,10 @@ from ainrf.domain_control.legacy_source_guard import (
     LegacySourceGuardError,
     LegacySourceInventory,
 )
-from ainrf.domain_control.service import DomainMaintenanceService
+from ainrf.domain_control.service import (
+    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
+    DomainMaintenanceService,
+)
 
 if TYPE_CHECKING:
     from ainrf.domain_migration import ReconciliationReport
@@ -1090,7 +1093,13 @@ class DomainCutoverController:
         return None
 
     def _require_preflight(self, stability_window_seconds: float) -> int:
-        report = self._maintenance.preflight(stability_window_seconds=stability_window_seconds)
+        # Do not rely on the service default here.  A cutover controller is a
+        # hard safety boundary, so its writer inventory remains explicit even
+        # if a future diagnostic caller needs a narrower preflight.
+        report = self._maintenance.preflight(
+            required_participant_types=CUTOVER_REQUIRED_PARTICIPANT_TYPES,
+            stability_window_seconds=stability_window_seconds,
+        )
         if report.ready:
             return self._maintenance.status().maintenance_epoch
         detail = {

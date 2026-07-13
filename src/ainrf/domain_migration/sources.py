@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import stat
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
@@ -84,16 +85,65 @@ def _relative_path(path: Path, state_root: Path) -> str:
     return path.relative_to(state_root).as_posix()
 
 
+def _assert_path_within_state_root(path: Path, state_root: Path, relative_path: str) -> None:
+    """Reject a source path that is linked outside its declared state root."""
+    try:
+        lexical_relative = path.relative_to(state_root)
+    except ValueError as exc:
+        raise SourceStaleError(f"source escaped state root: {relative_path}") from exc
+    if not lexical_relative.parts or ".." in lexical_relative.parts:
+        raise SourceStaleError(f"source escaped state root: {relative_path}")
+
+    try:
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise SourceStaleError(f"source disappeared: {relative_path}") from exc
+    except OSError as exc:
+        raise SourceStaleError(f"cannot inspect source path: {relative_path}") from exc
+    try:
+        resolved.relative_to(state_root)
+    except ValueError as exc:
+        raise SourceStaleError(f"source escaped state root: {relative_path}") from exc
+
+    current = state_root
+    for component in lexical_relative.parts:
+        current = current / component
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError as exc:
+            raise SourceStaleError(f"source disappeared: {relative_path}") from exc
+        except OSError as exc:
+            raise SourceStaleError(f"cannot inspect source path: {relative_path}") from exc
+        if stat.S_ISLNK(mode):
+            raise SourceStaleError(f"source cannot be a symlink: {relative_path}")
+
+
+def _is_safe_regular_source(path: Path, state_root: Path, relative_path: str) -> bool:
+    """Return whether a candidate exists as a non-symlink regular source file."""
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise SourceStaleError(f"cannot inspect source path: {relative_path}") from exc
+    _assert_path_within_state_root(path, state_root, relative_path)
+    if not stat.S_ISREG(mode):
+        raise SourceStaleError(f"source is not a regular file: {relative_path}")
+    return True
+
+
 def _source_stat(path: Path) -> tuple[int, int, int]:
     stat = path.stat()
     return stat.st_ino, stat.st_mtime_ns, stat.st_size
 
 
-def _observe_json(path: Path, relative_path: str) -> tuple[bytes, SourceFile]:
+def _observe_json(path: Path, state_root: Path, relative_path: str) -> tuple[bytes, SourceFile]:
     """Capture one internally stable JSON observation."""
     try:
+        _assert_path_within_state_root(path, state_root, relative_path)
         before_inode, before_mtime_ns, before_size = _source_stat(path)
         payload = path.read_bytes()
+        _assert_path_within_state_root(path, state_root, relative_path)
         after_inode, after_mtime_ns, after_size = _source_stat(path)
     except FileNotFoundError as exc:
         raise SourceStaleError(f"JSON source disappeared: {relative_path}") from exc
@@ -114,17 +164,20 @@ def _observe_json(path: Path, relative_path: str) -> tuple[bytes, SourceFile]:
     )
 
 
-def _stable_json_fingerprint(path: Path, relative_path: str) -> tuple[bytes, SourceFile]:
+def _stable_json_fingerprint(
+    path: Path, state_root: Path, relative_path: str
+) -> tuple[bytes, SourceFile]:
     """Read a JSON source only when its pre/post observations match exactly."""
-    payload, before = _observe_json(path, relative_path)
-    _, after = _observe_json(path, relative_path)
+    payload, before = _observe_json(path, state_root, relative_path)
+    _, after = _observe_json(path, state_root, relative_path)
     if before != after:
         raise SourceStaleError(f"JSON source changed while being read: {relative_path}")
     return payload, before
 
 
-def _snapshot_sqlite(source: Path, target: Path) -> None:
+def _snapshot_sqlite(source: Path, target: Path, state_root: Path, relative_path: str) -> None:
     """Create a consistent SQLite backup without opening the source for writes."""
+    _assert_path_within_state_root(source, state_root, relative_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     source_uri = f"{source.resolve().as_uri()}?mode=ro"
     source_conn = sqlite3.connect(source_uri, uri=True)
@@ -136,8 +189,11 @@ def _snapshot_sqlite(source: Path, target: Path) -> None:
         source_conn.close()
 
 
-def _sqlite_snapshot_fingerprint(source: Path, snapshot: Path, relative_path: str) -> SourceFile:
+def _sqlite_snapshot_fingerprint(
+    source: Path, snapshot: Path, state_root: Path, relative_path: str
+) -> SourceFile:
     """Fingerprint a fixed SQLite backup, retaining observed source metadata."""
+    _assert_path_within_state_root(source, state_root, relative_path)
     digest = hashlib.sha256()
     with snapshot.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1 << 16), b""):
@@ -152,13 +208,16 @@ def _sqlite_snapshot_fingerprint(source: Path, snapshot: Path, relative_path: st
     )
 
 
-def _legacy_agentic_fingerprint(source: Path, snapshot: Path, relative_path: str) -> SourceFile:
+def _legacy_agentic_fingerprint(
+    source: Path, snapshot: Path, state_root: Path, relative_path: str
+) -> SourceFile:
     """Fingerprint legacy Task data without making v2 shadow writes stale.
 
     ``agentic_researcher.sqlite3`` is both the historical Task source and the
     additive v2 target. The importer can safely write new v2 tables while
     preserving a manifest identity for the historical Task columns alone.
     """
+    _assert_path_within_state_root(source, state_root, relative_path)
     columns = (
         "task_id",
         "project_id",
@@ -208,8 +267,28 @@ def _legacy_agentic_fingerprint(source: Path, snapshot: Path, relative_path: str
     )
 
 
+_LEGACY_RUNTIME_JSON_PATHS = (
+    "runtime/projects.json",
+    "runtime/workspaces.json",
+    "runtime/environments.json",
+    "runtime/task_edges.json",
+    "runtime/sessions.json",
+)
+_LEGACY_RUNTIME_SQLITE_PATHS = (
+    "runtime/auth.sqlite3",
+    "runtime/agentic_researcher.sqlite3",
+    "runtime/sessions.sqlite3",
+)
+
+
 def _discover_json_sources(state_root: Path) -> tuple[Path, ...]:
-    """Find legacy registries and checkpoint/state JSON under known roots.
+    """Find only JSON that the domain importer can actually consume.
+
+    This intentionally mirrors the cutover's legacy-source guard.  Runtime
+    configuration such as skill registries remains independently writable and
+    must not make a completed domain migration's immutable source manifest
+    look stale.  Likewise, ``attempt-*`` checkpoints are emitted by v2
+    attempts and are not legacy Session checkpoints.
 
     The cutover seal journal is durable control-plane evidence, not a legacy
     import source.  It is created only after the final source manifest has
@@ -217,30 +296,40 @@ def _discover_json_sources(state_root: Path) -> tuple[Path, ...]:
     generation appear stale.
     """
 
-    source_roots = (state_root / "runtime", state_root / "session-states")
-    excluded_runtime_paths = {state_root / "runtime" / "domain-legacy-source-seal.json"}
-    discovered: list[Path] = []
-    for source_root in source_roots:
-        if not source_root.is_dir():
-            continue
-        discovered.extend(
-            path
-            for path in source_root.rglob("*.json")
-            if path.is_file() and path not in excluded_runtime_paths
-        )
+    discovered = []
+    for relative_path in _LEGACY_RUNTIME_JSON_PATHS:
+        path = state_root / relative_path
+        if _is_safe_regular_source(path, state_root, relative_path):
+            discovered.append(path)
+    session_states_root = state_root / "session-states"
+    session_states_relative = "session-states"
+    if session_states_root.exists() or session_states_root.is_symlink():
+        _assert_path_within_state_root(session_states_root, state_root, session_states_relative)
+    if session_states_root.is_dir():
+        for path in session_states_root.rglob("*.json"):
+            relative_path = _relative_path(path, state_root)
+            if not _is_safe_regular_source(path, state_root, relative_path):
+                continue
+            state_relative_path = path.relative_to(session_states_root)
+            if any(part.startswith("attempt-") for part in state_relative_path.parts[:-1]):
+                continue
+            discovered.append(path)
     return tuple(sorted(discovered, key=lambda path: _relative_path(path, state_root)))
 
 
 def _discover_sqlite_sources(state_root: Path) -> tuple[Path, ...]:
-    """Find every runtime SQLite legacy source, including the literature store."""
-    runtime_root = state_root / "runtime"
-    if not runtime_root.is_dir():
-        return ()
+    """Find only the SQLite databases used by the domain importer.
+
+    The literature store and future runtime databases have their own durable
+    ownership.  They are not imported into the authoritative domain schema,
+    so treating their normal writes as legacy-domain source drift would make
+    cutover correctness depend on unrelated services.
+    """
+
     return tuple(
-        sorted(
-            (path for path in runtime_root.rglob("*.sqlite3") if path.is_file()),
-            key=lambda path: _relative_path(path, state_root),
-        )
+        path
+        for relative_path in _LEGACY_RUNTIME_SQLITE_PATHS
+        if _is_safe_regular_source((path := state_root / relative_path), state_root, relative_path)
     )
 
 
@@ -389,7 +478,7 @@ class SourceSnapshotSet:
         files: list[SourceFile] = []
         for source in _discover_json_sources(self._state_root):
             relative_path = _relative_path(source, self._state_root)
-            payload, fingerprint = _stable_json_fingerprint(source, relative_path)
+            payload, fingerprint = _stable_json_fingerprint(source, self._state_root, relative_path)
             snapshot = snapshot_root / relative_path
             snapshot.parent.mkdir(parents=True, exist_ok=True)
             snapshot.write_bytes(payload)
@@ -398,12 +487,16 @@ class SourceSnapshotSet:
         for source in _discover_sqlite_sources(self._state_root):
             relative_path = _relative_path(source, self._state_root)
             snapshot = snapshot_root / relative_path
-            _snapshot_sqlite(source, snapshot)
+            _snapshot_sqlite(source, snapshot, self._state_root, relative_path)
             self._sqlite_snapshots[relative_path] = snapshot
             if source.name == "agentic_researcher.sqlite3":
-                files.append(_legacy_agentic_fingerprint(source, snapshot, relative_path))
+                files.append(
+                    _legacy_agentic_fingerprint(source, snapshot, self._state_root, relative_path)
+                )
             else:
-                files.append(_sqlite_snapshot_fingerprint(source, snapshot, relative_path))
+                files.append(
+                    _sqlite_snapshot_fingerprint(source, snapshot, self._state_root, relative_path)
+                )
         self._manifest = SourceManifest(
             state_root=self._state_root.name,
             files=tuple(sorted(files, key=lambda item: item.relative_path)),
@@ -417,7 +510,7 @@ class SourceSnapshotSet:
             raise FileNotFoundError(
                 f"JSON source is not part of this snapshot: {relative_path}"
             ) from exc
-        _, current = _stable_json_fingerprint(snapshot.source_path, relative_path)
+        _, current = _stable_json_fingerprint(snapshot.source_path, self._state_root, relative_path)
         if current != snapshot.fingerprint:
             raise SourceStaleError(f"JSON source changed during import: {relative_path}")
 

@@ -11,7 +11,7 @@ from threading import Barrier
 import pytest
 
 from ainrf.db import connect
-from ainrf.domain_control import DomainMaintenanceService
+from ainrf.domain_control import CUTOVER_REQUIRED_PARTICIPANT_TYPES, DomainMaintenanceService
 
 pytestmark = [pytest.mark.unit, pytest.mark.concurrent]
 
@@ -22,6 +22,21 @@ def _participant_service_in_maintenance(state_root: Path) -> DomainMaintenanceSe
     service.enter(actor_id="operator-1", reason="cutover")
     service.drain_participant("api-1")
     return service
+
+
+def _drain_required_cutover_participants(service: DomainMaintenanceService) -> None:
+    existing_types = {participant.participant_type for participant in service.participants()}
+    for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES:
+        if participant_type not in existing_types:
+            service.register_participant(f"required:{participant_type}", participant_type)
+        matching = [
+            participant.participant_id
+            for participant in service.participants()
+            if participant.participant_type == participant_type and participant.status != "stopped"
+        ]
+        assert matching
+        for participant_id in matching:
+            service.drain_participant(participant_id)
 
 
 def _insert_active_attempt_and_claimed_launch(state_root: Path) -> tuple[str, str]:
@@ -157,6 +172,26 @@ def test_preflight_requires_every_required_participant_to_drain_and_remain_fresh
     assert set(stale.stale_participant_ids) == {"dispatcher-1"}
 
 
+def test_default_cutover_preflight_fails_closed_when_writer_types_are_missing(
+    state_root: Path,
+) -> None:
+    service = _participant_service_in_maintenance(state_root)
+
+    missing = service.preflight(stability_window_seconds=0.0)
+
+    assert not missing.ready
+    assert missing.missing_participant_types == tuple(
+        participant_type
+        for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES
+        if participant_type != "api"
+    )
+
+    _drain_required_cutover_participants(service)
+    ready = service.preflight(stability_window_seconds=0.0)
+    assert ready.ready
+    assert ready.missing_participant_types == ()
+
+
 def test_preflight_blocks_active_attempts_pending_launches_and_unflushed_output(
     state_root: Path,
 ) -> None:
@@ -184,6 +219,7 @@ def test_preflight_blocks_active_attempts_pending_launches_and_unflushed_output(
         )
         conn.commit()
     service.heartbeat_participant("api-1", unflushed_output_count=0)
+    _drain_required_cutover_participants(service)
 
     ready = service.preflight(stability_window_seconds=0.0)
     assert ready.ready
@@ -210,6 +246,27 @@ def test_preflight_rejects_a_source_that_changes_during_its_stability_window(
 
     assert not preflight.ready
     assert not preflight.source_stable
+
+
+def test_preflight_ignores_v2_participant_heartbeats_but_keeps_legacy_stability(
+    state_root: Path,
+) -> None:
+    service = _participant_service_in_maintenance(state_root)
+    _drain_required_cutover_participants(service)
+    before = service._source_fingerprints()
+
+    def heartbeat_v2_control_plane() -> None:
+        time.sleep(0.04)
+        service.heartbeat_participant("api-1")
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        heartbeat = pool.submit(heartbeat_v2_control_plane)
+        preflight = service.preflight(stability_window_seconds=0.15)
+        heartbeat.result()
+
+    assert preflight.ready
+    assert preflight.source_stable
+    assert service._source_fingerprints() == before
 
 
 def test_concurrent_heartbeats_cannot_revive_a_drained_participant(state_root: Path) -> None:

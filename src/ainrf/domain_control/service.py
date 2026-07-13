@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sqlite3
@@ -15,6 +14,21 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
+
+
+# A cutover is safe only after every independently deployable domain writer
+# has observed the maintenance epoch.  Keep the identifiers here rather than
+# scattering ad-hoc strings across the CLI, controller, and services: a
+# missing writer must fail the same way everywhere.
+CUTOVER_REQUIRED_PARTICIPANT_TYPES: tuple[str, ...] = (
+    "api",
+    "task-dispatcher",
+    "literature-worker",
+    "literature-planner",
+    "overview-planner",
+    "terminal-session-reconciler",
+    "admin-cli",
+)
 
 
 class DomainModelMode(StrEnum):
@@ -292,6 +306,22 @@ class DomainMaintenanceService:
                 else max(0, unflushed_output_count)
             )
             maintenance_active = bool(state["is_active"])
+            current_epoch = int(state["maintenance_epoch"])
+            if (
+                maintenance_active
+                and int(participant["observed_epoch"]) == current_epoch
+                and str(participant["status"]) == "drained"
+                and int(participant["in_flight_mutations"]) == 0
+                and int(participant["unflushed_output_count"]) == 0
+                and current_in_flight == 0
+                and current_unflushed == 0
+            ):
+                # Drained participants keep their final fresh heartbeat while
+                # the maintenance stability window observes this dual-use
+                # SQLite file as a legacy Task source. Refreshing liveness
+                # here would itself mutate the source and invalidate the
+                # cutover preflight that the participant has already passed.
+                return self._participant_status(participant)
             status = (
                 "drained"
                 if maintenance_active and current_in_flight == 0 and current_unflushed == 0
@@ -308,7 +338,7 @@ class DomainMaintenanceService:
                 WHERE participant_id = ?
                 """,
                 (
-                    int(state["maintenance_epoch"]),
+                    current_epoch,
                     status,
                     current_in_flight,
                     current_unflushed,
@@ -541,7 +571,7 @@ class DomainMaintenanceService:
     def preflight(
         self,
         *,
-        required_participant_types: tuple[str, ...] = (),
+        required_participant_types: tuple[str, ...] = CUTOVER_REQUIRED_PARTICIPANT_TYPES,
         stability_window_seconds: float = 5.0,
         stale_after_seconds: float = 30.0,
     ) -> MaintenancePreflight:
@@ -549,6 +579,10 @@ class DomainMaintenanceService:
 
         The method is deliberately read-only.  A caller must first enter
         maintenance, then use this report to decide whether it may proceed.
+        The production default is intentionally fail-closed: every known
+        domain writer must have a fresh, drained participant row.  A narrowly
+        scoped caller may pass an explicit tuple only for a non-cutover
+        diagnostic or isolated test.
         """
         if stability_window_seconds < 0:
             raise ValueError("stability_window_seconds must be non-negative")
@@ -652,41 +686,43 @@ class DomainMaintenanceService:
         return int(row[0]) if row is not None else 0
 
     def _sources_are_stable(self, stability_window_seconds: float) -> bool:
-        before = self._source_fingerprints()
-        if stability_window_seconds:
-            time.sleep(stability_window_seconds)
-        return before == self._source_fingerprints()
+        try:
+            before = self._source_fingerprints()
+            if stability_window_seconds:
+                time.sleep(stability_window_seconds)
+            return before == self._source_fingerprints()
+        except (OSError, RuntimeError, ValueError):
+            # A source that cannot be snapshotted stably is never evidence
+            # that a cutover may proceed.
+            return False
 
-    def _source_fingerprints(self) -> dict[str, tuple[int, int, str]]:
-        """Fingerprint legacy control-plane sources without mutating them."""
-        candidates: list[Path] = []
-        for root in (self._runtime_root, self._state_root):
-            if not root.exists():
-                continue
-            for path in root.rglob("*"):
-                if not path.is_file() or path.name.endswith(("-wal", "-shm")):
-                    continue
-                try:
-                    relative = path.relative_to(self._state_root).as_posix()
-                except ValueError:
-                    continue
-                if path.suffix in {".json", ".sqlite3"} or relative.startswith(
-                    ("session-states/", "detections/")
-                ):
-                    candidates.append(path)
-        fingerprints: dict[str, tuple[int, int, str]] = {}
-        for path in sorted(set(candidates)):
-            stat = path.stat()
-            digest = hashlib.sha256()
-            with path.open("rb") as handle:
-                for chunk in iter(lambda: handle.read(1 << 16), b""):
-                    digest.update(chunk)
-            fingerprints[path.relative_to(self._state_root).as_posix()] = (
-                stat.st_size,
-                stat.st_mtime_ns,
-                digest.hexdigest(),
+    def _source_fingerprints(self) -> dict[str, tuple[int, int, int, str]]:
+        """Fingerprint exactly the immutable legacy migration input set.
+
+        ``agentic_researcher.sqlite3`` is both a legacy Task source and the
+        additive v2 control-plane target.  A participant heartbeat therefore
+        changes its physical bytes even while the legacy Task projection is
+        unchanged.  Reusing the importer's source manifest preserves the
+        legacy Task-only hash while retaining the required inode, mtime, and
+        physical source-size checks. SQLite manifest sizes describe immutable
+        backup snapshots, so the physical size must be observed from the
+        live source path rather than copied from the manifest.
+        """
+
+        # Import lazily: the importer depends on this maintenance service,
+        # whereas preflight is invoked only after both modules are available.
+        from ainrf.domain_migration.sources import capture_source_manifest
+
+        manifest = capture_source_manifest(self._state_root)
+        return {
+            source.relative_path: (
+                source.inode,
+                source.mtime_ns,
+                (self._state_root / source.relative_path).stat().st_size,
+                source.sha256,
             )
-        return fingerprints
+            for source in manifest.files
+        }
 
 
 class DomainWriteParticipant:
@@ -720,6 +756,9 @@ class DomainWriteParticipant:
 
     def finish_mutation(self, lease: MaintenanceLease) -> None:
         self._service.finish_mutation(lease)
+
+    def check_lease(self, lease: MaintenanceLease) -> None:
+        self._service.check_lease(lease)
 
     def drain(self) -> ParticipantStatus:
         return self._service.drain_participant(self.participant_id)

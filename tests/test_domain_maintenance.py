@@ -63,6 +63,26 @@ async def test_http_domain_mutations_are_rejected_during_maintenance(state_root:
     assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
 
 
+@pytest.mark.anyio
+async def test_http_terminal_mutations_are_rejected_during_maintenance(state_root: Path) -> None:
+    service = DomainMaintenanceService(state_root)
+    app = FastAPI()
+    app.middleware("http")(build_domain_maintenance_middleware(service))
+
+    @app.post("/terminal/session")
+    async def create_terminal_session() -> dict[str, bool]:
+        return {"created": True}
+
+    service.enter(actor_id="operator-1", reason="migration")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.post("/terminal/session")
+
+    assert response.status_code == 503
+    assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
+
+
 def test_preflight_treats_unknown_or_dispatched_runtime_work_as_a_cutover_blocker(
     state_root: Path,
 ) -> None:

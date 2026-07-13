@@ -6,6 +6,7 @@
 # Keeping the barrier exports available first avoids an import-order-dependent
 # partial-module cycle for the CLI and administrative cutover paths.
 from ainrf.domain_control.service import (
+    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
     DomainMaintenanceService,
     DomainModelMode,
     DomainWriteParticipant,
@@ -36,6 +37,7 @@ from ainrf.domain_control.cutover import (
 
 __all__ = [
     "ConstraintFinalization",
+    "CUTOVER_REQUIRED_PARTICIPANT_TYPES",
     "CutoverPreconditionError",
     "CutoverStatus",
     "DomainCutoverController",

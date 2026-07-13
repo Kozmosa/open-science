@@ -8,6 +8,7 @@ from pathlib import Path
 from ainrf.backup import BackupService
 from ainrf.db import connect
 from ainrf.domain_control import (
+    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
     DomainCutoverController,
     DomainMaintenanceService,
     backup_manifest_sha256,
@@ -17,6 +18,30 @@ from ainrf.domain_migration import DomainImporter, DomainReconciliationService
 
 V2_ARTIFACT_SHA = "b" * 64
 _NOW = "2026-07-12T00:00:00+00:00"
+
+
+def enter_maintenance_with_required_participants(
+    maintenance: DomainMaintenanceService,
+    *,
+    actor_id: str,
+    reason: str,
+) -> None:
+    """Model the production writer drain before exercising a real cutover.
+
+    Unit fixtures do not boot every long-running process, so they register one
+    durable instance of each deployment role and require it to observe the
+    maintenance epoch.  This keeps controller tests on the same fail-closed
+    preflight contract as the operational cutover path.
+    """
+
+    participant_ids: list[str] = []
+    for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES:
+        participant_id = f"fixture:{participant_type}"
+        maintenance.register_participant(participant_id, participant_type)
+        participant_ids.append(participant_id)
+    maintenance.enter(actor_id=actor_id, reason=reason)
+    for participant_id in participant_ids:
+        maintenance.drain_participant(participant_id)
 
 
 def prepare_committed_v2_cutover(state_root: Path, tmp_path: Path) -> None:
@@ -44,7 +69,11 @@ def prepare_committed_v2_cutover(state_root: Path, tmp_path: Path) -> None:
         conn.commit()
 
     maintenance = DomainMaintenanceService(state_root)
-    maintenance.enter(actor_id="test-cutover-operator", reason="prepare v2 API fixture")
+    enter_maintenance_with_required_participants(
+        maintenance,
+        actor_id="test-cutover-operator",
+        reason="prepare v2 API fixture",
+    )
     try:
         controller.finalize_constraints(
             actor_id="test-cutover-operator",

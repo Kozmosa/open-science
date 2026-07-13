@@ -16,6 +16,8 @@ from ainrf.domain_control import (
     DomainCutoverController,
     DomainCutoverError,
     DomainMaintenanceService,
+    DomainWriteParticipant,
+    MaintenanceLease,
     MaintenanceModeError,
 )
 from ainrf.literature.tracking import LiteratureTrackingService, WorkItem
@@ -908,3 +910,129 @@ def test_v2_literature_work_retries_when_committed_artifact_is_unavailable(
         "retrying",
         "pending",
     )
+
+
+def test_literature_worker_does_not_initialize_its_store_during_maintenance(
+    state_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    maintenance.enter(actor_id="operator", reason="drain Literature worker")
+    monkeypatch.setenv("AINRF_STATE_ROOT", str(state_root))
+
+    try:
+        process_durable_work_item("missing-work-item")
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    assert not (state_root / "runtime" / "literature.sqlite3").exists()
+
+
+def test_literature_worker_keeps_claimed_work_unfinished_after_maintenance_starts(
+    state_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracking = LiteratureTrackingService(state_root)
+    tracking.initialize()
+    topic = tracking.create_topic(
+        user_id="owner",
+        label="Maintenance fixture",
+        include_terms=[],
+        exclude_terms=[],
+        categories=["cs.AI"],
+    )
+    tracking.create_check(user_id="owner", topic_ids=[str(topic["topic_id"])])
+    work_item_id = tracking.pending_outbox_work_ids()[0]
+    maintenance = DomainMaintenanceService(state_root)
+
+    async def enter_maintenance_during_work(
+        _service: LiteratureTrackingService,
+        _item: WorkItem,
+        *,
+        artifact_sha: str | None = None,
+    ) -> None:
+        _ = artifact_sha
+        maintenance.enter(actor_id="operator", reason="drain Literature worker")
+
+    monkeypatch.setenv("AINRF_STATE_ROOT", str(state_root))
+    monkeypatch.setattr("ainrf.literature.work.execute_work_item", enter_maintenance_during_work)
+    try:
+        process_durable_work_item(work_item_id)
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    with connect(state_root / "runtime" / "literature.sqlite3") as conn:
+        work = conn.execute(
+            "SELECT status, attempt_count, lease_owner FROM literature_work_items WHERE work_item_id = ?",
+            (work_item_id,),
+        ).fetchone()
+    assert work is not None
+    assert (work["status"], work["attempt_count"]) == ("running", 1)
+    assert work["lease_owner"] is not None
+    participant = next(
+        item for item in maintenance.participants() if item.participant_type == "literature-worker"
+    )
+    assert participant.status == "drained"
+    assert participant.in_flight_mutations == 0
+
+
+def test_literature_worker_checks_the_completion_boundary_after_execution(
+    state_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracking = LiteratureTrackingService(state_root)
+    tracking.initialize()
+    topic = tracking.create_topic(
+        user_id="owner",
+        label="Completion boundary fixture",
+        include_terms=[],
+        exclude_terms=[],
+        categories=["cs.AI"],
+    )
+    tracking.create_check(user_id="owner", topic_ids=[str(topic["topic_id"])])
+    work_item_id = tracking.pending_outbox_work_ids()[0]
+    maintenance = DomainMaintenanceService(state_root)
+    original_check_lease = DomainWriteParticipant.check_lease
+    worker_check_count = 0
+    completion_boundary_checked = False
+
+    async def completed_work(
+        _service: LiteratureTrackingService,
+        _item: WorkItem,
+        *,
+        artifact_sha: str | None = None,
+    ) -> None:
+        _ = artifact_sha
+
+    def enter_after_pre_completion_check(
+        participant: DomainWriteParticipant,
+        lease: MaintenanceLease,
+    ) -> None:
+        nonlocal completion_boundary_checked, worker_check_count
+        try:
+            original_check_lease(participant, lease)
+        except MaintenanceModeError:
+            if participant.participant_type == "literature-worker" and worker_check_count == 4:
+                completion_boundary_checked = True
+            raise
+        if participant.participant_type != "literature-worker":
+            return
+        worker_check_count += 1
+        if worker_check_count == 4:
+            maintenance.enter(actor_id="operator", reason="race before Literature completion")
+
+    monkeypatch.setenv("AINRF_STATE_ROOT", str(state_root))
+    monkeypatch.setattr("ainrf.literature.work.execute_work_item", completed_work)
+    monkeypatch.setattr(DomainWriteParticipant, "check_lease", enter_after_pre_completion_check)
+    try:
+        process_durable_work_item(work_item_id)
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    with connect(state_root / "runtime" / "literature.sqlite3") as conn:
+        work = conn.execute(
+            "SELECT status FROM literature_work_items WHERE work_item_id = ?", (work_item_id,)
+        ).fetchone()
+    assert work is not None
+    assert work["status"] == "running"
+    assert completion_boundary_checked

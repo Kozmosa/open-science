@@ -196,6 +196,52 @@ async def test_lifespan_records_startup_runtime_readiness(
 
     async with app.router.lifespan_context(app):
         assert app.state.runtime_readiness["ready"] is True
+        participant_types = {
+            participant.participant_type
+            for participant in app.state.domain_maintenance_service.participants()
+        }
+        assert {"api", "terminal-session-reconciler"} <= participant_types
+
+
+@pytest.mark.anyio
+async def test_lifespan_can_disable_automatic_remote_runtime_reconciliation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A clone can expose local API reads without startup SSH/tmux activity."""
+
+    resource_monitor_started = False
+    terminal_reconciled = False
+
+    async def unexpected_resource_monitor_start(self: object) -> None:
+        nonlocal resource_monitor_started
+        resource_monitor_started = True
+
+    def unexpected_terminal_reconcile(self: object) -> None:
+        nonlocal terminal_reconciled
+        terminal_reconciled = True
+
+    monkeypatch.setattr(
+        "ainrf.api.app.ResourceMonitorService.start", unexpected_resource_monitor_start
+    )
+    monkeypatch.setattr("ainrf.api.app.SessionManager.reconcile", unexpected_terminal_reconcile)
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+            runtime_reconciliation_enabled=False,
+        )
+    )
+
+    async with app.router.lifespan_context(app):
+        assert app.state.runtime_readiness
+        assert resource_monitor_started is False
+        assert terminal_reconciled is False
+        participant_types = {
+            participant.participant_type
+            for participant in app.state.domain_maintenance_service.participants()
+        }
+        assert participant_types == {"api"}
+        assert app.state.domain_terminal_reconciler_participant_id is None
 
 
 @pytest.mark.anyio

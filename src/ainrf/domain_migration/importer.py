@@ -15,6 +15,12 @@ from typing import cast
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
+from ainrf.domain_control.service import (
+    DomainMaintenanceService,
+    DomainWriteParticipant,
+    MaintenanceLease,
+    MaintenanceModeError,
+)
 from ainrf.domain.environment_identity import (
     canonical_connection_json,
     canonical_connection_object,
@@ -193,6 +199,8 @@ class DomainImporter:
         self._interrupt_after_records: int | None = None
         self._processed_records = 0
         self._current_phase = "initial"
+        self._maintenance: DomainMaintenanceService | None = None
+        self._maintenance_lease: MaintenanceLease | None = None
 
     def run(
         self,
@@ -218,17 +226,41 @@ class DomainImporter:
         self._current_phase = "snapshot"
         effective_artifact = artifact_sha or "development"
         run_id: str | None = None
+        participant: DomainWriteParticipant | None = None
+        lease: MaintenanceLease | None = None
         try:
             # Capture source SQLite databases before creating/upgrading the
             # target because agentic_researcher.sqlite3 is both a legacy source
             # and the additive target.
             with SourceSnapshotSet(self._state_root) as sources:
+                # The snapshot intentionally precedes this registration: the
+                # participant registry lives in the target SQLite database,
+                # which can itself still be a legacy source.  Once the fixed
+                # source copies exist, every target write is held by one
+                # persistent administrative-writer lease.
+                maintenance = DomainMaintenanceService(self._state_root)
+                participant = DomainWriteParticipant(
+                    maintenance,
+                    "admin-cli",
+                    details={"component": "domain-migration-importer", "mode": mode},
+                )
+                participant.start()
+                try:
+                    lease = participant.begin_mutation(source="domain-migration.import")
+                except MaintenanceModeError:
+                    participant.drain()
+                    raise
+                self._maintenance = maintenance
+                self._maintenance_lease = lease
+                self._check_maintenance_lease()
                 source_data = self._load_source_data(sources)
                 manifest_json = self._manifest_json(sources, source_data)
                 manifest_digest = hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
                 self._runtime_root.mkdir(parents=True, exist_ok=True)
                 with closing(connect(self._db_path)) as conn:
+                    self._check_maintenance_lease()
                     run_pending(conn, "agentic_researcher")
+                    self._check_maintenance_lease(conn)
                     run_id, existing = self._start_or_resume_run(
                         conn,
                         mode=mode,
@@ -246,7 +278,7 @@ class DomainImporter:
                     sources.verify_unchanged()
                     self._set_run_status(conn, run_id, status="completed", phase="completed")
                     self._refresh_counts(conn, run_id)
-                    conn.commit()
+                    self._commit(conn)
                     return self._report(conn, run_id)
         except SourceStaleError as exc:
             if run_id is None:
@@ -263,9 +295,15 @@ class DomainImporter:
                 )
                 self._set_run_status(conn, run_id, status="stale", phase="stale")
                 self._refresh_counts(conn, run_id)
-                conn.commit()
+                self._commit(conn)
                 return self._report(conn, run_id)
         except MigrationInterruptedError:
+            raise
+        except MaintenanceModeError:
+            # A maintenance epoch may begin after a record checkpoint has
+            # committed.  Do not write an "interrupted" marker across that
+            # epoch; the last checkpoint remains durable and the operator can
+            # resume this run after maintenance exits.
             raise
         except Exception as exc:
             if run_id is not None:
@@ -278,9 +316,15 @@ class DomainImporter:
                         error=str(exc),
                     )
                     self._refresh_counts(conn, run_id)
-                    conn.commit()
+                    self._commit(conn)
             raise
         finally:
+            if participant is not None and lease is not None:
+                participant.finish_mutation(lease)
+            if participant is not None:
+                participant.stop()
+            self._maintenance = None
+            self._maintenance_lease = None
             self._interrupt_after_records = None
 
     def resume(self, run_id: str, *, artifact_sha: str | None = None) -> MigrationReport:
@@ -337,55 +381,119 @@ class DomainImporter:
             for row in rows
         )
 
-    def reconcile(self, run_id: str | None = None) -> ReconciliationReport:
-        with closing(connect(self._db_path)) as conn:
-            run_pending(conn, "agentic_researcher")
-            if run_id is None:
-                row = conn.execute(
-                    "SELECT run_id FROM domain_migration_runs ORDER BY started_at DESC LIMIT 1"
+    def reconcile(
+        self,
+        run_id: str | None = None,
+        *,
+        maintenance: DomainMaintenanceService | None = None,
+        maintenance_lease: MaintenanceLease | None = None,
+        initialize_schema: bool = True,
+    ) -> ReconciliationReport:
+        """Recompute reconciliation state, optionally under a caller lease.
+
+        Administrative CLI remediation shares one short lease across the
+        importer's projection update and the reconciliation service's follow-up
+        invariant check.  Normal library callers retain the historical schema
+        initialization behavior.
+        """
+
+        if (maintenance is None) != (maintenance_lease is None):
+            raise ValueError("maintenance and maintenance_lease must be provided together")
+        previous_maintenance = self._maintenance
+        previous_lease = self._maintenance_lease
+        self._maintenance = maintenance
+        self._maintenance_lease = maintenance_lease
+        try:
+            self._check_maintenance_lease()
+            with closing(connect(self._db_path)) as conn:
+                if initialize_schema:
+                    run_pending(conn, "agentic_researcher")
+                self._check_maintenance_lease(conn)
+                if run_id is None:
+                    row = conn.execute(
+                        "SELECT run_id FROM domain_migration_runs ORDER BY started_at DESC LIMIT 1"
+                    ).fetchone()
+                    if row is None:
+                        raise ValueError("No domain migration run exists")
+                    run_id = str(row["run_id"])
+                run = conn.execute(
+                    "SELECT * FROM domain_migration_runs WHERE run_id = ?", (run_id,)
                 ).fetchone()
-                if row is None:
-                    raise ValueError("No domain migration run exists")
-                run_id = str(row["run_id"])
-            run = conn.execute(
-                "SELECT * FROM domain_migration_runs WHERE run_id = ?", (run_id,)
-            ).fetchone()
-            if run is None:
-                raise ValueError(f"Unknown domain migration run: {run_id}")
-            blockers = self._reconciliation_blockers(conn, run_id, run)
-            counts = self._reconciliation_counts(conn, run_id)
-            state = conn.execute(
-                "SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1"
-            ).fetchone()
-            cutover_allowed = (
-                str(run["status"]) == "completed"
-                and not blockers
-                and state is not None
-                and bool(state["constraints_ready"])
-            )
-            conn.execute(
-                "UPDATE domain_migration_runs SET cutover_allowed = ?, heartbeat_at = ? WHERE run_id = ?",
-                (int(cutover_allowed), _now(), run_id),
-            )
-            conn.commit()
-            non_blocking = tuple(
-                str(row[0])
-                for row in conn.execute(
-                    """
-                    SELECT DISTINCT category FROM domain_migration_issues
-                    WHERE run_id = ? AND severity = 'non_blocking'
-                    ORDER BY category
-                    """,
-                    (run_id,),
+                if run is None:
+                    raise ValueError(f"Unknown domain migration run: {run_id}")
+                blockers = self._reconciliation_blockers(conn, run_id, run)
+                counts = self._reconciliation_counts(conn, run_id)
+                state = conn.execute(
+                    "SELECT constraints_ready FROM domain_cutover_state WHERE singleton = 1"
+                ).fetchone()
+                cutover_allowed = (
+                    str(run["status"]) == "completed"
+                    and not blockers
+                    and state is not None
+                    and bool(state["constraints_ready"])
                 )
-            )
-            return ReconciliationReport(
-                run_id=run_id,
-                counts=counts,
-                blocking_issues=tuple(blockers),
-                non_blocking_issues=non_blocking,
-                cutover_allowed=cutover_allowed,
-            )
+                conn.execute(
+                    "UPDATE domain_migration_runs SET cutover_allowed = ?, heartbeat_at = ? WHERE run_id = ?",
+                    (int(cutover_allowed), _now(), run_id),
+                )
+                self._commit(conn)
+                non_blocking = tuple(
+                    str(row[0])
+                    for row in conn.execute(
+                        """
+                        SELECT DISTINCT category FROM domain_migration_issues
+                        WHERE run_id = ? AND severity = 'non_blocking'
+                        ORDER BY category
+                        """,
+                        (run_id,),
+                    )
+                )
+                return ReconciliationReport(
+                    run_id=run_id,
+                    counts=counts,
+                    blocking_issues=tuple(blockers),
+                    non_blocking_issues=non_blocking,
+                    cutover_allowed=cutover_allowed,
+                )
+        finally:
+            self._maintenance = previous_maintenance
+            self._maintenance_lease = previous_lease
+
+    def _check_maintenance_lease(self, conn: sqlite3.Connection | None = None) -> None:
+        """Reject an importer write that raced a maintenance epoch.
+
+        Most importer commits are short SQLite transactions.  Checking through
+        the same connection immediately before commit means an active writer
+        lock cannot be interleaved with ``maintenance.enter``: either the
+        migration commits before the epoch starts, or its transaction rolls
+        back after observing the new epoch.
+        """
+
+        maintenance = self._maintenance
+        lease = self._maintenance_lease
+        if maintenance is None or lease is None:
+            return
+        if conn is None:
+            maintenance.check_lease(lease)
+            return
+        state = conn.execute(
+            "SELECT maintenance_epoch, is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+        mutation = conn.execute(
+            "SELECT 1 FROM domain_maintenance_mutations WHERE mutation_id = ?",
+            (lease.mutation_id,),
+        ).fetchone()
+        if (
+            state is None
+            or mutation is None
+            or bool(state["is_active"])
+            or int(state["maintenance_epoch"]) != lease.maintenance_epoch
+        ):
+            raise MaintenanceModeError("domain migration write crossed a maintenance epoch")
+
+    def _commit(self, conn: sqlite3.Connection) -> None:
+        self._check_maintenance_lease(conn)
+        conn.commit()
 
     def _start_or_resume_run(
         self,
@@ -403,8 +511,10 @@ class DomainImporter:
             ).fetchone()
             if row is None:
                 raise ValueError(f"Unknown domain migration run: {resume_run_id}")
-            if str(row["status"]) != "interrupted":
-                raise ValueError("Only an interrupted domain migration run can be resumed")
+            if str(row["status"]) not in {"interrupted", "running"}:
+                raise ValueError(
+                    "Only an interrupted or maintenance-paused domain migration run can be resumed"
+                )
             if str(row["source_manifest_sha256"] or "") != manifest_digest:
                 raise ValueError(
                     "Cannot resume: source manifest does not match the interrupted run"
@@ -423,7 +533,7 @@ class DomainImporter:
                     resume_run_id,
                 ),
             )
-            conn.commit()
+            self._commit(conn)
             return resume_run_id, False
 
         completed = conn.execute(
@@ -450,7 +560,7 @@ class DomainImporter:
             """,
             (run_id, mode, manifest_json, manifest_digest, artifact_sha, now, now),
         )
-        conn.commit()
+        self._commit(conn)
         return run_id, False
 
     def _run_pipeline(
@@ -620,7 +730,7 @@ class DomainImporter:
             """,
             (now, now),
         )
-        conn.commit()
+        self._commit(conn)
 
     def _import_environment_registry(
         self,
@@ -1075,7 +1185,7 @@ class DomainImporter:
                 detail="Historical environment has no durable registration",
                 blocking=blocking,
             )
-        conn.commit()
+        self._commit(conn)
 
     def _import_projects(
         self,
@@ -2523,7 +2633,7 @@ class DomainImporter:
             conn.execute(
                 "UPDATE tasks SET latest_attempt_id = ? WHERE task_id = ?", (attempt_id, task_id)
             )
-        conn.commit()
+        self._commit(conn)
 
     @staticmethod
     def _attempt_status(raw_status: str) -> str:
@@ -2738,12 +2848,12 @@ class DomainImporter:
     def _enter_phase(self, conn: sqlite3.Connection, run_id: str, phase: str) -> None:
         self._current_phase = phase
         self._update_checkpoint(conn, run_id, phase)
-        conn.commit()
+        self._commit(conn)
 
     def _complete_phase(self, conn: sqlite3.Connection, run_id: str, phase: str) -> None:
         self._current_phase = phase
         self._update_checkpoint(conn, run_id, f"{phase}:complete")
-        conn.commit()
+        self._commit(conn)
 
     def _update_checkpoint(self, conn: sqlite3.Connection, run_id: str, phase: str) -> None:
         completed = int(
@@ -2836,7 +2946,7 @@ class DomainImporter:
             ),
         )
         self._update_checkpoint(conn, run_id, self._current_phase)
-        conn.commit()
+        self._commit(conn)
         self._processed_records += 1
         if (
             self._interrupt_after_records is not None
@@ -2849,7 +2959,7 @@ class DomainImporter:
                 phase=self._current_phase,
                 error="deterministic interruption after committed source outcome",
             )
-            conn.commit()
+            self._commit(conn)
             raise MigrationInterruptedError(run_id)
 
     @staticmethod

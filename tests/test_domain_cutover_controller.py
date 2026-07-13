@@ -22,6 +22,7 @@ from ainrf.domain_control import (
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_migration import DomainImporter, DomainReconciliationService
 from ainrf.projects import ProjectRegistryService
+from tests.domain_cutover_fixtures import enter_maintenance_with_required_participants
 
 pytestmark = [pytest.mark.unit]
 
@@ -58,7 +59,11 @@ def _ready_cutover(
         conn.commit()
 
     maintenance = DomainMaintenanceService(state_root)
-    maintenance.enter(actor_id="operator-cutover", reason="test cutover")
+    enter_maintenance_with_required_participants(
+        maintenance,
+        actor_id="operator-cutover",
+        reason="test cutover",
+    )
     controller.finalize_constraints(
         actor_id="operator-cutover",
         run_id=run.run_id,
@@ -140,7 +145,22 @@ def test_constraint_finalizer_requires_maintenance_and_installs_task_guard(
         )
 
     maintenance = DomainMaintenanceService(state_root)
-    maintenance.enter(actor_id="operator-cutover", reason="install final Task guard")
+    maintenance.enter(actor_id="operator-cutover", reason="missing writer participants")
+    try:
+        with pytest.raises(CutoverPreconditionError, match="missing_participant_types"):
+            controller.finalize_constraints(
+                actor_id="operator-cutover",
+                run_id=run.run_id,
+                stability_window_seconds=0,
+            )
+    finally:
+        maintenance.exit(actor_id="operator-cutover")
+
+    enter_maintenance_with_required_participants(
+        maintenance,
+        actor_id="operator-cutover",
+        reason="install final Task guard",
+    )
     try:
         finalized = controller.finalize_constraints(
             actor_id="operator-cutover",

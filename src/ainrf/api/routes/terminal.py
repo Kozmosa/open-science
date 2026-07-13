@@ -5,7 +5,8 @@ import errno
 import json
 import logging
 import os
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from typing import Any, Callable, cast
 
 from anyio import create_task_group, to_thread
@@ -31,6 +32,7 @@ from ainrf.api.schemas import (
 from ainrf.environments import EnvironmentNotFoundError
 from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.environments.protocols import EnvironmentRuntimeReader
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.terminal.attachments import (
     TerminalAttachmentAuthorizationError,
@@ -132,6 +134,34 @@ def _get_session_manager(request: Request | WebSocket) -> SessionManager:
     if manager is None:
         raise HTTPException(status_code=500, detail="terminal session manager not initialized")
     return manager
+
+
+def _get_domain_maintenance_service(request: Request | WebSocket) -> DomainMaintenanceService:
+    service = getattr(request.app.state, "domain_maintenance_service", None)
+    if not isinstance(service, DomainMaintenanceService):
+        raise HTTPException(status_code=500, detail="domain maintenance service not initialized")
+    return service
+
+
+@contextmanager
+def _terminal_mutation(
+    websocket: WebSocket,
+    *,
+    source: str,
+) -> Iterator[Callable[[], None]]:
+    """Fence one WebSocket-side terminal mutation with the API participant."""
+
+    maintenance = _get_domain_maintenance_service(websocket)
+    lease = maintenance.begin_mutation(
+        source=source,
+        participant_id=getattr(websocket.app.state, "domain_api_participant_id", None),
+    )
+    try:
+        maintenance.check_lease(lease)
+        yield lambda: maintenance.check_lease(lease)
+        maintenance.check_lease(lease)
+    finally:
+        maintenance.finish_mutation(lease)
 
 
 def _get_attachment_broker(request: Request | WebSocket) -> TerminalAttachmentBroker:
@@ -662,6 +692,11 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
 
     loop.add_reader(master_fd, on_master_ready)
 
+    async def close_for_maintenance() -> None:
+        if websocket.client_state == WebSocketState.CONNECTED:
+            with suppress(Exception):
+                await websocket.close(code=4503)
+
     async def forward_input() -> None:
         try:
             while True:
@@ -677,35 +712,59 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     data = payload.get("data")
                     if not isinstance(data, str):
                         raise ValueError("input payload must include string data")
-                    write_terminal_input(runtime, data)
+                    with _terminal_mutation(
+                        websocket,
+                        source="terminal.websocket.input",
+                    ):
+                        write_terminal_input(runtime, data)
                     continue
                 if message_type == "resize":
                     cols = payload.get("cols")
                     rows = payload.get("rows")
                     if not isinstance(cols, int) or not isinstance(rows, int):
                         raise ValueError("resize payload must include integer cols and rows")
-                    resize_terminal(runtime, cols, rows)
-                    try:
-                        manager = _get_session_manager(websocket)
-                        manager.resize_tmux_window(
-                            session_name=attachment.session_name,
-                            cols=cols,
-                            rows=rows,
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to resize tmux window for session %s: %s",
-                            attachment.session_name,
-                            exc,
-                        )
+                    with _terminal_mutation(
+                        websocket,
+                        source="terminal.websocket.resize",
+                    ) as check_lease:
+                        resize_terminal(runtime, cols, rows)
+                        # The tmux resize is a second external write.  Do not
+                        # let it follow a PTY resize that was overtaken by the
+                        # maintenance epoch.
+                        check_lease()
+                        try:
+                            manager = _get_session_manager(websocket)
+                            manager.resize_tmux_window(
+                                session_name=attachment.session_name,
+                                cols=cols,
+                                rows=rows,
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "Failed to resize tmux window for session %s: %s",
+                                attachment.session_name,
+                                exc,
+                            )
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:
             pass
+        except MaintenanceModeError:
+            await close_for_maintenance()
+            # Let the task group cancel the output/watch loops as well.  A
+            # closed input side alone would otherwise leave an idle PTY
+            # attachment holding the WebSocket task open indefinitely.
+            raise
         except ValueError:
             if websocket.client_state == WebSocketState.CONNECTED:
                 with suppress(Exception):
                     await websocket.close(code=4409)
+        finally:
+            # A client disconnect, maintenance rejection, or invalid input
+            # ends the only inbound control path.  The output and process
+            # watcher otherwise keep an idle attachment task group alive
+            # forever after that close.
+            task_group.cancel_scope.cancel()
 
     async def forward_output() -> None:
         nonlocal buffered_output_bytes, process_return_code

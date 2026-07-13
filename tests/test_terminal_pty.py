@@ -6,6 +6,7 @@ import os
 import signal
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -15,6 +16,8 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.api.routes.terminal import _terminal_mutation
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
 from ainrf.terminal.models import TerminalAttachmentMode, TerminalAttachmentTarget
 from ainrf.terminal.pty import (
     TERMINAL_LOCAL_TARGET_KIND,
@@ -239,6 +242,60 @@ def test_terminal_attachment_websocket_bridge(
 
     os.close(read_fd)
     os.close(write_fd)
+
+
+def _maintenance_websocket(maintenance: DomainMaintenanceService) -> WebSocket:
+    return cast(
+        WebSocket,
+        SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    domain_maintenance_service=maintenance,
+                    domain_api_participant_id=None,
+                )
+            )
+        ),
+    )
+
+
+def test_terminal_websocket_input_lease_rejects_maintenance_before_pty_write(
+    state_root: Path,
+) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    websocket = _maintenance_websocket(maintenance)
+    input_calls: list[str] = []
+
+    maintenance.enter(actor_id="operator", reason="pause terminal input")
+    try:
+        with pytest.raises(MaintenanceModeError):
+            with _terminal_mutation(websocket, source="terminal.websocket.input"):
+                input_calls.append("ls\n")
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    assert input_calls == []
+
+
+def test_terminal_websocket_resize_lease_rejects_maintenance_before_pty_or_tmux_write(
+    state_root: Path,
+) -> None:
+    maintenance = DomainMaintenanceService(state_root)
+    websocket = _maintenance_websocket(maintenance)
+    resize_calls: list[tuple[int, int]] = []
+    tmux_resize_calls: list[tuple[str, int, int]] = []
+
+    maintenance.enter(actor_id="operator", reason="pause terminal resize")
+    try:
+        with pytest.raises(MaintenanceModeError):
+            with _terminal_mutation(websocket, source="terminal.websocket.resize") as check_lease:
+                resize_calls.append((120, 40))
+                check_lease()
+                tmux_resize_calls.append(("p-maintenance-resize", 120, 40))
+    finally:
+        maintenance.exit(actor_id="operator")
+
+    assert resize_calls == []
+    assert tmux_resize_calls == []
 
 
 def test_terminal_attachment_websocket_preserves_split_utf8_output(

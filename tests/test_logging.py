@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import io
 import logging
+import sys
 from collections.abc import Generator
 from pathlib import Path
 
-from ainrf.logging import configure_logging
 import pytest
+import structlog
+
+from ainrf.logging import configure_cli_logging, configure_logging
 
 pytestmark = [pytest.mark.unit]
 
@@ -65,3 +69,24 @@ def test_configure_logging_idempotent(tmp_path: Path) -> None:
 
     configure_logging(tmp_path)
     assert len(logging.getLogger().handlers) == first_count
+
+
+def test_cli_logging_does_not_retain_a_closed_capture_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A CLI invocation must not poison later in-process structured logs."""
+
+    original_config = structlog.get_config()
+    first_stderr = io.StringIO()
+    second_stderr = io.StringIO()
+    try:
+        monkeypatch.setattr(sys, "stderr", first_stderr)
+        configure_cli_logging()
+        first_stderr.close()
+        monkeypatch.setattr(sys, "stderr", second_stderr)
+
+        structlog.get_logger("cli-capture-regression").info("still-writable")
+
+        assert "still-writable" in second_stderr.getvalue()
+    finally:
+        structlog.configure(**original_config)
