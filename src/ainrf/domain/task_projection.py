@@ -19,6 +19,7 @@ from typing import cast
 from ainrf.agentic_researcher.models import TaskOutputEvent
 from ainrf.db import connect, run_pending
 from ainrf.domain.attempt_projection import AttemptProjectionService
+from ainrf.domain.output_redaction import redact_task_output_for_viewer
 from ainrf.domain.service import DomainAuthorizationService, DomainNotFoundError
 
 
@@ -78,7 +79,14 @@ class TaskProjectionService:
                 [str(row["task_id"]) for row in rows],
                 include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
             )
-        return [self._task_dict(row, attempts_by_task[str(row["task_id"])]) for row in rows]
+        return [
+            self._task_dict(
+                row,
+                attempts_by_task[str(row["task_id"])],
+                include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
+            )
+            for row in rows
+        ]
 
     def list_project_tasks(
         self,
@@ -126,7 +134,14 @@ class TaskProjectionService:
             )
         total = int(total_row["count"]) if total_row is not None else 0
         return {
-            "items": [self._task_dict(row, attempts_by_task[str(row["task_id"])]) for row in rows],
+            "items": [
+                self._task_dict(
+                    row,
+                    attempts_by_task[str(row["task_id"])],
+                    include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
+                )
+                for row in rows
+            ],
             "total": total,
         }
 
@@ -141,7 +156,11 @@ class TaskProjectionService:
                 [task_id],
                 include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
             )[task_id]
-        return self._task_dict(row, attempts)
+        return self._task_dict(
+            row,
+            attempts,
+            include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
+        )
 
     def attempts(self, task_id: str, user: Mapping[str, object]) -> list[dict[str, object]]:
         with closing(self._connect()) as conn:
@@ -286,6 +305,7 @@ class TaskProjectionService:
             if task is None:
                 raise DomainNotFoundError(task_id)
             self._require_visible(conn, task_id, user)
+            redact_output = not self._can_view_unredacted_output(task, user)
             rows = conn.execute(
                 """SELECT task_id, seq, kind, content, created_at FROM task_outputs
                    WHERE task_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?""",
@@ -296,7 +316,11 @@ class TaskProjectionService:
                 task_id=str(row["task_id"]),
                 seq=int(row["seq"]),
                 kind=str(row["kind"]),
-                content=str(row["content"]),
+                content=(
+                    redact_task_output_for_viewer(str(row["content"]))
+                    if redact_output
+                    else str(row["content"])
+                ),
                 created_at=datetime.fromisoformat(str(row["created_at"])),
             )
             for row in rows
@@ -317,6 +341,22 @@ class TaskProjectionService:
         """Only a management/troubleshooting administrator sees raw runtime IDs."""
 
         return user.get("role") == "admin"
+
+    @staticmethod
+    def _can_view_unredacted_output(
+        task: sqlite3.Row,
+        user: Mapping[str, object],
+    ) -> bool:
+        """Keep raw output within the Task-owner or admin troubleshooting scope.
+
+        Project membership makes a Task visible, but does not grant the
+        Workspace/tenant authority that may have produced credentials or
+        filesystem locations in an engine event.  This mirrors the existing
+        runtime-diagnostics projection while retaining raw evidence for the
+        Task owner and the administrator-only troubleshooting surface.
+        """
+
+        return user.get("role") == "admin" or user.get("id") == task["owner_user_id"]
 
     @staticmethod
     def _global_visibility_clause(user: Mapping[str, object]) -> tuple[str | None, list[object]]:
@@ -355,6 +395,8 @@ class TaskProjectionService:
     def _task_dict(
         row: sqlite3.Row,
         attempts: Sequence[Mapping[str, object]],
+        *,
+        include_private_task_diagnostics: bool,
     ) -> dict[str, object]:
         # The legacy Task timestamps are compatibility caches and can be stale
         # after an Attempt is recovered or adopted by another dispatcher.  The
@@ -378,7 +420,15 @@ class TaskProjectionService:
             "owner_user_id": str(row["owner_user_id"]),
             "latest_output_seq": int(row["latest_output_seq"] or 0),
             "exit_code": int(row["exit_code"]) if row["exit_code"] is not None else None,
-            "error_summary": TaskProjectionService._optional_str(row["error_summary"]),
+            # Engine error summaries are durable operational diagnostics and
+            # can contain a tenant-private path.  A shared Project viewer can
+            # inspect status plus redacted output, but only the Task owner or
+            # an admin troubleshooting surface gets this raw summary.
+            "error_summary": (
+                TaskProjectionService._optional_str(row["error_summary"])
+                if include_private_task_diagnostics
+                else None
+            ),
             "working_directory": None,
             "command": [],
             "token_usage_json": AttemptProjectionService.usage_json(attempts),

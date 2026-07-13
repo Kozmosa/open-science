@@ -36,6 +36,21 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
     outsider: dict[str, object] = {"id": "outsider", "role": "member"}
     administrator: dict[str, object] = {"id": "administrator", "role": "admin"}
     project_id = "session-projection-project"
+    durable_output = json.dumps(
+        {
+            "role": "assistant",
+            "content": (
+                "Authorization: Bearer viewer-output-token; "
+                "API key: sk-viewer-output-secret; "
+                "cwd=/home/ainrf_tenants/owner/private-workspace"
+            ),
+            "metadata": {
+                "OPENAI_API_KEY": "sk-viewer-output-secret",
+                "cwd": "/home/ainrf_tenants/owner/private-workspace",
+            },
+        },
+        separators=(",", ":"),
+    )
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
         run_pending(conn, "agentic_researcher")
         conn.execute(
@@ -141,8 +156,12 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
         )
         conn.execute(
             """INSERT INTO task_outputs(task_id, seq, kind, content, created_at)
-               VALUES (?, 1, 'message', 'shared durable task output', ?)""",
-            (task.task_id, "2026-07-12T00:00:02+00:00"),
+               VALUES (?, 1, 'message', ?, ?)""",
+            (task.task_id, durable_output, "2026-07-12T00:00:02+00:00"),
+        )
+        conn.execute(
+            "UPDATE tasks SET error_summary = ? WHERE task_id = ?",
+            ("engine failed at /home/ainrf_tenants/owner/private-workspace", task.task_id),
         )
         conn.commit()
 
@@ -177,6 +196,13 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
     # but an unrelated guessed Task remains a 404-shaped absence.
     shared_task = task_projection.task(task.task_id, viewer)
     assert shared_task["task_id"] == task.task_id
+    assert shared_task["error_summary"] is None
+    assert task_projection.task(task.task_id, owner)["error_summary"] == (
+        "engine failed at /home/ainrf_tenants/owner/private-workspace"
+    )
+    assert task_projection.task(task.task_id, administrator)["error_summary"] == (
+        "engine failed at /home/ainrf_tenants/owner/private-workspace"
+    )
     viewer_attempt = task_projection.attempts(task.task_id, viewer)[0]
     assert viewer_attempt["attempt_id"] == attempt_id
     viewer_runtime = _first_runtime(viewer_attempt)
@@ -208,8 +234,21 @@ def test_task_attempts_project_to_session_and_attempts(state_root: Path) -> None
     assert administrator_attempt["authorization_checked_at"] == "2026-07-12T00:00:01+00:00"
     assert administrator_attempt["stop_requested_at"] == "2026-07-12T00:00:02+00:00"
     assert administrator_attempt["stop_requested_reason"] == "/home/tenant/private-stop-request"
-    assert task_projection.outputs(task.task_id, viewer, after_seq=0, limit=20)[0].content == (
-        "shared durable task output"
+    viewer_output = task_projection.outputs(task.task_id, viewer, after_seq=0, limit=20)[0].content
+    assert "viewer-output-token" not in viewer_output
+    assert "sk-viewer-output-secret" not in viewer_output
+    assert "/home/ainrf_tenants/owner/private-workspace" not in viewer_output
+    assert "[REDACTED]" in viewer_output
+    assert "[REDACTED_PATH]" in viewer_output
+    # The data remains raw evidence in SQLite for the Task owner and the
+    # administrator-only troubleshooting surface; the redaction is a read
+    # projection for collaborators, not a destructive mutation.
+    assert task_projection.outputs(task.task_id, owner, after_seq=0, limit=20)[0].content == (
+        durable_output
+    )
+    assert (
+        task_projection.outputs(task.task_id, administrator, after_seq=0, limit=20)[0].content
+        == durable_output
     )
     viewer_session, viewer_attempts = projection.get_session(task.task_id, viewer)
     assert viewer_session["id"] == task.task_id

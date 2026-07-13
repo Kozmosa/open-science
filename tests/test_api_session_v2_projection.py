@@ -18,6 +18,7 @@ from ainrf.auth.service import AuthService
 from ainrf.db import connect
 from ainrf.domain_control import DomainModelMode
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
+from tests.testutil import seed_user
 
 pytestmark = [pytest.mark.api]
 
@@ -47,6 +48,13 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
             domain_artifact_sha=V2_ARTIFACT_SHA,
         )
     )
+
+
+def _headers(app: FastAPI, username: str, user_id: str, role: str) -> dict[str, str]:
+    auth = app.state.auth_service
+    seed_user(auth, username, "session-v2-output-password", role=role, user_id=user_id)
+    token = auth.login(username=username, password="session-v2-output-password")
+    return {"Authorization": f"Bearer {token['access_token']}"}
 
 
 def _prepare_task_scope(app: FastAPI, state_root: Path) -> tuple[str, str, str]:
@@ -336,3 +344,108 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
         assert after_items[0]["stop_requested_reason"] is None
 
     assert not (state_root / "runtime" / "sessions.sqlite3").exists()
+
+
+@pytest.mark.anyio
+async def test_v2_project_viewer_output_routes_and_sse_redact_durable_secrets(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    """A Project viewer sees dialogue, never another tenant's runtime detail."""
+
+    app = _v2_app(state_root, tmp_path)
+    owner_headers = _headers(app, "output-owner", "api-key-user", "member")
+    viewer_headers = _headers(app, "output-viewer", "output-viewer", "member")
+    administrator_headers = _headers(app, "output-admin", "output-admin", "admin")
+    project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    app.state.domain_service.add_member(project_id, "output-viewer", "viewer", False, _USER)
+    durable_output = json.dumps(
+        {
+            "role": "assistant",
+            "content": (
+                "Authorization: Bearer viewer-route-token; "
+                "API key: sk-viewer-route-secret; "
+                "cwd=/home/ainrf_tenants/api-key-user/private-workspace"
+            ),
+            "metadata": {
+                "OPENAI_API_KEY": "sk-viewer-route-secret",
+                "bearerToken": "camel-bearer-token-value",
+                "keyValue": "camel-key-value",
+                "cwd": "/home/ainrf_tenants/api-key-user/private-workspace",
+            },
+        },
+        separators=(",", ":"),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        created = await client.post(
+            "/tasks",
+            headers={**owner_headers, "Idempotency-Key": "viewer-output-route-task"},
+            json={
+                "project_id": project_id,
+                "workspace_id": workspace_id,
+                "environment_id": environment_id,
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "prompt": "Shared output redaction",
+                "skills": [],
+            },
+        )
+        assert created.status_code == 201
+        created_task = cast(dict[str, object], _body(created)["task"])
+        task_id = str(created_task["task_id"])
+
+        # This direct fixture write models pre-existing engine evidence.  The
+        # public API must only transform it on the shared viewer read path.
+        with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+            conn.execute(
+                """INSERT INTO task_outputs(task_id, seq, kind, content, created_at)
+                   VALUES (?, 1, 'message', ?, ?)""",
+                (task_id, durable_output, "2026-07-13T00:00:00+00:00"),
+            )
+            conn.execute(
+                """UPDATE tasks
+                   SET status = 'succeeded', latest_output_seq = 1
+                   WHERE task_id = ?""",
+                (task_id,),
+            )
+            conn.commit()
+
+        viewer_output = await client.get(f"/tasks/{task_id}/output", headers=viewer_headers)
+        viewer_messages = await client.get(f"/tasks/{task_id}/messages", headers=viewer_headers)
+        owner_output = await client.get(f"/tasks/{task_id}/output", headers=owner_headers)
+        administrator_output = await client.get(
+            f"/tasks/{task_id}/output", headers=administrator_headers
+        )
+        async with client.stream(
+            "GET", f"/tasks/{task_id}/stream", headers=viewer_headers
+        ) as viewer_stream:
+            assert viewer_stream.status_code == 200
+            viewer_stream_body = "".join([part async for part in viewer_stream.aiter_text()])
+
+    assert viewer_output.status_code == 200
+    assert viewer_messages.status_code == 200
+    assert owner_output.status_code == 200
+    assert administrator_output.status_code == 200
+    owner_items = cast(list[dict[str, object]], _body(owner_output)["items"])
+    administrator_items = cast(list[dict[str, object]], _body(administrator_output)["items"])
+    assert owner_items[0]["content"] == durable_output
+    assert administrator_items[0]["content"] == durable_output
+
+    viewer_items = cast(list[dict[str, object]], _body(viewer_output)["items"])
+    viewer_content = str(viewer_items[0]["content"])
+    assert '"bearerToken":"[REDACTED]"' in viewer_content
+    assert '"keyValue":"[REDACTED]"' in viewer_content
+
+    viewer_response_text = json.dumps(_body(viewer_output))
+    viewer_messages_text = json.dumps(_body(viewer_messages))
+    for rendered_view in (viewer_response_text, viewer_messages_text, viewer_stream_body):
+        assert "viewer-route-token" not in rendered_view
+        assert "sk-viewer-route-secret" not in rendered_view
+        assert "camel-bearer-token-value" not in rendered_view
+        assert "camel-key-value" not in rendered_view
+        assert "/home/ainrf_tenants/api-key-user/private-workspace" not in rendered_view
+        assert "[REDACTED]" in rendered_view
+        assert "[REDACTED_PATH]" in rendered_view
