@@ -78,7 +78,7 @@ class TestBaselineCreatesTables:
         [
             ("auth", 7),
             ("sessions", 3),
-            ("agentic_researcher", 24),
+            ("agentic_researcher", 25),
             ("literature", 6),
             ("terminal", 1),
         ],
@@ -213,7 +213,7 @@ class TestUpgradeFromV0:
 
         with _connect(db_file) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
-            assert run_pending(conn, "agentic_researcher") == 4
+            assert run_pending(conn, "agentic_researcher") == 5
             columns = {
                 str(row["name"]) for row in conn.execute("PRAGMA table_info(overview_refresh_jobs)")
             }
@@ -277,7 +277,7 @@ class TestUpgradeFromV0:
             conn.commit()
 
         with _connect(db_file) as conn:
-            assert run_pending(conn, "agentic_researcher") == 4
+            assert run_pending(conn, "agentic_researcher") == 5
             version = conn.execute(
                 """SELECT fragment_manifest_json FROM project_context_versions
                    WHERE context_version_id = 'context-version-legacy'"""
@@ -332,7 +332,7 @@ class TestUpgradeFromV0:
             conn.commit()
 
         with _connect(db_file) as conn:
-            assert run_pending(conn, "agentic_researcher") == 1
+            assert run_pending(conn, "agentic_researcher") == 2
             legacy = conn.execute(
                 "SELECT status FROM project_context_candidates WHERE candidate_id = 'candidate-legacy'"
             ).fetchone()
@@ -433,6 +433,91 @@ class TestMigrationRollbackOnFailure:
                 ).fetchall()
             }
             assert "foo" in tables
+
+
+class TestMaintenanceBarrierRepair:
+    """Historical schema markers must not hide missing cutover barrier DDL."""
+
+    @staticmethod
+    def _create_marked_v24_database(db_file: Path) -> None:
+        import ainrf.db.migrations  # noqa: F401
+        from ainrf.db.migration import registry, set_version
+
+        with _connect(db_file) as conn:
+            ensure_schema_table(conn)
+            for migration in registry.get_pending("agentic_researcher", 0)[:24]:
+                migration(conn)
+            set_version(conn, "agentic_researcher", 24)
+            conn.commit()
+
+    def test_legacy_schema_marker_recreates_missing_maintenance_barrier(
+        self, state_root: Path
+    ) -> None:
+        from ainrf.domain_control import DomainMaintenanceService
+
+        db_file = state_root / "runtime" / "agentic_researcher.sqlite3"
+        self._create_marked_v24_database(db_file)
+        with _connect(db_file) as conn:
+            conn.execute("DROP TABLE domain_write_participants")
+            conn.execute("DROP TABLE domain_maintenance_mutations")
+            conn.execute("DROP TABLE domain_maintenance_state")
+            conn.commit()
+
+        status = DomainMaintenanceService(state_root).status()
+
+        assert status.maintenance_epoch == 0
+        assert not status.is_active
+        with _connect(db_file) as conn:
+            assert current_version(conn, "agentic_researcher") == 25
+            tables = {
+                str(row["name"])
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+            assert {
+                "domain_maintenance_state",
+                "domain_maintenance_mutations",
+                "domain_write_participants",
+            } <= tables
+
+    def test_repair_refuses_to_recreate_a_prepared_cutover_barrier(self, tmp_path: Path) -> None:
+        db_file = tmp_path / "agentic.sqlite3"
+        with _connect(db_file) as conn:
+            ensure_schema_table(conn)
+            from ainrf.db.migration import set_version
+
+            set_version(conn, "agentic_researcher", 24)
+            conn.execute(
+                """
+                CREATE TABLE domain_cutover_state (
+                    singleton INTEGER PRIMARY KEY,
+                    state TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO domain_cutover_state (singleton, state) VALUES (1, 'prepared')"
+            )
+            conn.commit()
+
+        with _connect(db_file) as conn:
+            with pytest.raises(RuntimeError, match="only before domain cutover"):
+                run_pending(conn, "agentic_researcher")
+            assert current_version(conn, "agentic_researcher") == 24
+
+    def test_rejects_schema_versions_newer_than_this_binary(self, tmp_path: Path) -> None:
+        db_file = tmp_path / "agentic.sqlite3"
+        self._create_marked_v24_database(db_file)
+        with _connect(db_file) as conn:
+            from ainrf.db.migration import set_version
+
+            set_version(conn, "agentic_researcher", 26)
+            conn.commit()
+
+        with _connect(db_file) as conn:
+            with pytest.raises(
+                RuntimeError, match="unsupported agentic_researcher schema version 26"
+            ):
+                run_pending(conn, "agentic_researcher")
 
 
 class TestSchemaVersionTable:

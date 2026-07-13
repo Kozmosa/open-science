@@ -75,6 +75,12 @@ def run_pending(
     r = reg or registry
     ensure_schema_table(conn)
     version = current_version(conn, database_name)
+    migration_count = len(r.get_pending(database_name, 0))
+    if version < 0 or version > migration_count:
+        raise RuntimeError(
+            f"unsupported {database_name} schema version {version}; "
+            f"this binary supports versions 0 through {migration_count}"
+        )
     pending = r.get_pending(database_name, version)
     for i, migration in enumerate(pending):
         migration(conn)

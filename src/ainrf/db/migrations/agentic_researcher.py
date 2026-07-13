@@ -237,6 +237,16 @@ def migration_006_task_profile_overrides(conn: sqlite3.Connection) -> None:
 @registry.register(_DATABASE)
 def migration_007_domain_maintenance_barrier(conn: sqlite3.Connection) -> None:
     """Persist the migration write barrier before v2 domain tables exist."""
+    _ensure_domain_maintenance_barrier_base(conn)
+
+
+def _ensure_domain_maintenance_barrier_base(conn: sqlite3.Connection) -> None:
+    """Create the original maintenance barrier without changing existing state.
+
+    Migration 007 predates the v2 domain tables, so this helper deliberately
+    has no dependency on cutover metadata.  Later migrations call it again to
+    make an interrupted historical 007/008 upgrade idempotent.
+    """
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS domain_maintenance_state (
@@ -250,11 +260,91 @@ def migration_007_domain_maintenance_barrier(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO domain_maintenance_state (singleton)
+        VALUES (1)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS domain_maintenance_mutations (
+            mutation_id TEXT PRIMARY KEY,
+            maintenance_epoch INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            source TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_domain_maintenance_mutations_epoch
+        ON domain_maintenance_mutations(maintenance_epoch)
+        """
+    )
+
+
+def _ensure_domain_write_participant_schema(conn: sqlite3.Connection) -> None:
+    """Install the durable writer registry introduced by migration 011."""
+    try:
+        conn.execute("ALTER TABLE domain_maintenance_mutations ADD COLUMN participant_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS domain_write_participants (
+            participant_id TEXT PRIMARY KEY,
+            participant_type TEXT NOT NULL,
+            process_id INTEGER,
+            observed_epoch INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('active', 'draining', 'drained', 'stopped')),
+            in_flight_mutations INTEGER NOT NULL DEFAULT 0 CHECK (in_flight_mutations >= 0),
+            unflushed_output_count INTEGER NOT NULL DEFAULT 0 CHECK (unflushed_output_count >= 0),
+            details_json TEXT NOT NULL DEFAULT '{}',
+            registered_at TEXT NOT NULL,
+            heartbeat_at TEXT NOT NULL,
+            drained_at TEXT,
+            stopped_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_domain_write_participants_type
+        ON domain_write_participants(participant_type, heartbeat_at);
+        CREATE INDEX IF NOT EXISTS idx_domain_maintenance_mutations_participant
+        ON domain_maintenance_mutations(participant_id);
+        """
+    )
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table_name,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    return {str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table_name})")}
+
+
+def _require_table_columns(
+    conn: sqlite3.Connection,
+    table_name: str,
+    required_columns: frozenset[str],
+) -> None:
+    missing = required_columns - _table_columns(conn, table_name)
+    if missing:
+        missing_names = ", ".join(sorted(missing))
+        raise RuntimeError(f"cannot repair incomplete {table_name} schema: missing {missing_names}")
 
 
 @registry.register(_DATABASE)
 def migration_008_domain_schema_expand(conn: sqlite3.Connection) -> None:
     """Add the v2 control-plane schema without switching any write path."""
+    # Some historical builds recorded migration 007 before its DDL reached
+    # disk.  Retain the original barrier prerequisite here so a 7 -> 8 upgrade
+    # never assumes its predecessor's side effects.
+    _ensure_domain_maintenance_barrier_base(conn)
     for name, definition in (
         ("project_context_version_id", "TEXT"),
         ("archived_at", "TEXT"),
@@ -487,28 +577,6 @@ def migration_008_domain_schema_expand(conn: sqlite3.Connection) -> None:
         BEGIN SELECT RAISE(ABORT, 'primary link must be active'); END;
         """
     )
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO domain_maintenance_state (singleton)
-        VALUES (1)
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS domain_maintenance_mutations (
-            mutation_id TEXT PRIMARY KEY,
-            maintenance_epoch INTEGER NOT NULL,
-            started_at TEXT NOT NULL,
-            source TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_domain_maintenance_mutations_epoch
-        ON domain_maintenance_mutations(maintenance_epoch)
-        """
-    )
 
 
 @registry.register(_DATABASE)
@@ -548,32 +616,8 @@ def migration_010_overview_snapshots(conn: sqlite3.Connection) -> None:
 @registry.register(_DATABASE)
 def migration_011_domain_write_participants(conn: sqlite3.Connection) -> None:
     """Track every process that can originate a domain write during maintenance."""
-    try:
-        conn.execute("ALTER TABLE domain_maintenance_mutations ADD COLUMN participant_id TEXT")
-    except sqlite3.OperationalError:
-        pass
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS domain_write_participants (
-            participant_id TEXT PRIMARY KEY,
-            participant_type TEXT NOT NULL,
-            process_id INTEGER,
-            observed_epoch INTEGER NOT NULL,
-            status TEXT NOT NULL CHECK (status IN ('active', 'draining', 'drained', 'stopped')),
-            in_flight_mutations INTEGER NOT NULL DEFAULT 0 CHECK (in_flight_mutations >= 0),
-            unflushed_output_count INTEGER NOT NULL DEFAULT 0 CHECK (unflushed_output_count >= 0),
-            details_json TEXT NOT NULL DEFAULT '{}',
-            registered_at TEXT NOT NULL,
-            heartbeat_at TEXT NOT NULL,
-            drained_at TEXT,
-            stopped_at TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_domain_write_participants_type
-        ON domain_write_participants(participant_type, heartbeat_at);
-        CREATE INDEX IF NOT EXISTS idx_domain_maintenance_mutations_participant
-        ON domain_maintenance_mutations(participant_id);
-        """
-    )
+    _ensure_domain_maintenance_barrier_base(conn)
+    _ensure_domain_write_participant_schema(conn)
 
 
 @registry.register(_DATABASE)
@@ -2232,3 +2276,111 @@ def migration_024_context_candidate_source_guard(conn: sqlite3.Connection) -> No
         BEGIN SELECT RAISE(ABORT, 'context candidate source range is not persisted'); END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_025_repair_legacy_maintenance_barrier(conn: sqlite3.Connection) -> None:
+    """Repair a legacy control plane whose version marker outran barrier DDL.
+
+    A historical 007/008 split could persist an ordinal schema version while
+    leaving one or more maintenance tables absent.  Treat that as a narrowly
+    defined *legacy-only* repair: a prepared or committed cutover is evidence
+    that the control plane has already crossed a point where recreating a
+    write fence would be unsafe.  Likewise, never repair through active
+    mutations or live writer participants.  The DDL is additive and preserves
+    an existing maintenance epoch and all stopped participant audit records.
+    """
+
+    state_table = "domain_maintenance_state"
+    mutation_table = "domain_maintenance_mutations"
+    participant_table = "domain_write_participants"
+    state_exists = _table_exists(conn, state_table)
+    mutations_exist = _table_exists(conn, mutation_table)
+    participants_exist = _table_exists(conn, participant_table)
+
+    if state_exists:
+        _require_table_columns(
+            conn,
+            state_table,
+            frozenset(
+                {
+                    "singleton",
+                    "maintenance_epoch",
+                    "is_active",
+                    "actor_id",
+                    "reason",
+                    "entered_at",
+                    "exited_at",
+                }
+            ),
+        )
+        state_row = conn.execute(
+            "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+    else:
+        state_row = None
+
+    if mutations_exist:
+        _require_table_columns(
+            conn,
+            mutation_table,
+            frozenset({"mutation_id", "maintenance_epoch", "started_at", "source"}),
+        )
+        mutation_columns = _table_columns(conn, mutation_table)
+    else:
+        mutation_columns = set()
+
+    if participants_exist:
+        _require_table_columns(
+            conn,
+            participant_table,
+            frozenset(
+                {
+                    "participant_id",
+                    "participant_type",
+                    "process_id",
+                    "observed_epoch",
+                    "status",
+                    "in_flight_mutations",
+                    "unflushed_output_count",
+                    "details_json",
+                    "registered_at",
+                    "heartbeat_at",
+                    "drained_at",
+                    "stopped_at",
+                }
+            ),
+        )
+
+    repair_needed = (
+        not state_exists
+        or state_row is None
+        or not mutations_exist
+        or "participant_id" not in mutation_columns
+        or not participants_exist
+    )
+    if not repair_needed:
+        return
+
+    if not _table_exists(conn, "domain_cutover_state"):
+        raise RuntimeError("cannot repair maintenance barrier without domain cutover state")
+    cutover = conn.execute("SELECT state FROM domain_cutover_state WHERE singleton = 1").fetchone()
+    if cutover is None or str(cutover["state"]) != "legacy":
+        raise RuntimeError("maintenance barrier repair is allowed only before domain cutover")
+    if state_row is not None and bool(state_row["is_active"]):
+        raise RuntimeError("cannot repair maintenance barrier while maintenance is active")
+    if mutations_exist:
+        active_mutations = conn.execute(
+            "SELECT COUNT(*) FROM domain_maintenance_mutations"
+        ).fetchone()
+        if active_mutations is None or int(active_mutations[0]) != 0:
+            raise RuntimeError("cannot repair maintenance barrier with in-flight mutations")
+    if participants_exist:
+        active_participants = conn.execute(
+            "SELECT COUNT(*) FROM domain_write_participants WHERE status != 'stopped'"
+        ).fetchone()
+        if active_participants is None or int(active_participants[0]) != 0:
+            raise RuntimeError("cannot repair maintenance barrier with live writer participants")
+
+    _ensure_domain_maintenance_barrier_base(conn)
+    _ensure_domain_write_participant_schema(conn)
