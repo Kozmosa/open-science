@@ -94,21 +94,91 @@ def _sha256_stream(stream: IO[bytes]) -> str:
 
 
 def _dump_sqlite_safe(source: Path, dest: Path) -> None:
-    """Consistent, source-read-only snapshot via the SQLite backup API."""
+    """Create a consistent snapshot without writing to the source volume.
+
+    A SQLite database in WAL mode may need to create or update its ``-shm``
+    sidecar even when callers ask for ``mode=ro``.  That makes a direct backup
+    from a Docker read-only volume fail despite the database being healthy.
+    Copy the main file and all SQLite sidecars into a private writable staging
+    directory first, then use SQLite's backup API there.  Hashing the complete
+    source member set before and after the copy rejects a concurrently changing
+    source instead of quietly emitting an incoherent archive.
+    """
+
     dest.parent.mkdir(parents=True, exist_ok=True)
-    source_uri = f"{source.resolve().as_uri()}?mode=ro"
-    src = sqlite3.connect(source_uri, uri=True)
-    dst = sqlite3.connect(str(dest))
+    source_members = _sqlite_source_members(source)
+    before = _sqlite_source_fingerprint(source_members)
+    snapshot_root = dest.parent / f".{dest.name}.source-{uuid4().hex}"
+    src: sqlite3.Connection | None = None
+    dst: sqlite3.Connection | None = None
     try:
+        snapshot_root.mkdir()
+        for member in source_members:
+            shutil.copyfile(member, snapshot_root / member.name)
+        if before != _sqlite_source_fingerprint(_sqlite_source_members(source)):
+            raise ValueError(f"SQLite source changed while being copied: {source.name}")
+
+        # The staged copy can safely perform WAL recovery/checkpoint work.  It
+        # is still query-only at the SQL layer, and the original source mount
+        # remains untouched throughout this operation.
+        src = sqlite3.connect(str(snapshot_root / source.name))
+        src.execute("PRAGMA query_only = ON")
+        dst = sqlite3.connect(str(dest))
         src.backup(dst)
+    except (OSError, sqlite3.Error) as exc:
+        # A runtime filename alone is safe operator context; avoid leaking an
+        # absolute state-root path while making an invalid ``*.sqlite3``
+        # member actionable.  A complete v3 backup must not silently omit it.
+        raise ValueError(
+            f"Cannot create a read-only SQLite snapshot for {source.name}: {type(exc).__name__}"
+        ) from exc
     finally:
-        dst.close()
-        src.close()
+        if dst is not None:
+            dst.close()
+        if src is not None:
+            src.close()
+        shutil.rmtree(snapshot_root, ignore_errors=True)
     # A point-in-time SQLite backup is a single main database file.  Some
     # connection configurations leave transient sidecars beside the staged
     # destination; they must never become independent archive members.
     for suffix in ("-wal", "-shm", "-journal"):
         dest.with_name(f"{dest.name}{suffix}").unlink(missing_ok=True)
+
+
+def _sqlite_source_members(source: Path) -> tuple[Path, ...]:
+    """Return the source database and every current SQLite sidecar."""
+
+    members = tuple(
+        path
+        for path in (
+            source,
+            *(
+                source.with_name(f"{source.name}{suffix}")
+                for suffix in ("-wal", "-shm", "-journal")
+            ),
+        )
+        if path.is_file()
+    )
+    if not members or members[0] != source:
+        raise ValueError(f"SQLite source is missing: {source.name}")
+    return members
+
+
+def _sqlite_source_fingerprint(
+    members: tuple[Path, ...],
+) -> tuple[tuple[str, int, int, int, str], ...]:
+    """Fingerprint every raw SQLite member before/after a read-only copy."""
+
+    return tuple(
+        (
+            member.name,
+            member.stat().st_ino,
+            member.stat().st_mtime_ns,
+            member.stat().st_size,
+            _sha256_of(member),
+        )
+        for member in members
+    )
 
 
 def _ts() -> str:

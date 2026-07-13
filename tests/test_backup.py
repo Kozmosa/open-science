@@ -54,7 +54,45 @@ def _seed_state(state_root: Path) -> None:
 
 
 def test_sqlite_backup_can_snapshot_a_read_only_source(tmp_path: Path) -> None:
-    """Source snapshots must work when production data is mounted read-only."""
+    """Source snapshots must work from a read-only source directory in WAL mode."""
+
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    source = source_root / "source.sqlite3"
+    destination = tmp_path / "snapshot.sqlite3"
+    connection = sqlite3.connect(source)
+    try:
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA wal_autocheckpoint = 0")
+        connection.execute("CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        connection.execute("INSERT INTO records (value) VALUES ('source')")
+        connection.commit()
+        source_root.chmod(0o555)
+        _dump_sqlite_safe(source, destination)
+    finally:
+        source_root.chmod(0o755)
+        connection.close()
+
+    with sqlite3.connect(destination) as conn:
+        assert conn.execute("SELECT value FROM records").fetchall() == [("source",)]
+
+
+def test_backup_preserves_an_empty_discovered_sqlite_member(tmp_path: Path) -> None:
+    """A complete v3 inventory includes an inert zero-byte SQLite placeholder."""
+
+    state_root = tmp_path / "state"
+    _seed_state(state_root)
+    invalid_source = state_root / "runtime" / "ainrf.sqlite3"
+    invalid_source.touch()
+
+    archive = BackupService(state_root).create_backup(tmp_path / "backup.tar.gz")
+    manifest = BackupService(state_root).verify_backup(archive)
+
+    assert "ainrf.sqlite3" in manifest.databases
+
+
+def test_sqlite_backup_can_snapshot_a_read_only_file_source(tmp_path: Path) -> None:
+    """A non-WAL source remains readable when only its file is read-only."""
 
     source = tmp_path / "source.sqlite3"
     destination = tmp_path / "snapshot.sqlite3"
