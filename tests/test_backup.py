@@ -11,7 +11,12 @@ from pathlib import Path
 
 import pytest
 
+import ainrf.backup.service as backup_service
+from ainrf.auth.service import AuthService
 from ainrf.backup.service import BackupManifest, BackupService
+from ainrf.domain_control import DomainCutoverController
+from ainrf.domain_migration import DomainImporter, DomainReconciliationService, ReconciliationReport
+from tests.domain_cutover_fixtures import prepare_committed_v2_cutover
 
 pytestmark = [pytest.mark.unit]
 
@@ -98,6 +103,43 @@ class _RejectingRestoreValidator:
         assert (candidate_root / "runtime" / "auth.sqlite3").exists()
         assert manifest.version == 3
         raise ValueError("reconciliation rejected staged restore")
+
+
+def _rewrite_v3_member_metadata(
+    archive: Path,
+    destination: Path,
+    *,
+    member_name: str,
+    uid: int,
+    gid: int,
+    mode: int,
+    update_manifest: bool,
+) -> Path:
+    """Rewrite one v3 member's POSIX metadata, optionally keeping its manifest aligned."""
+
+    with tarfile.open(archive, "r:gz") as source, tarfile.open(destination, "w:gz") as target:
+        for member in source.getmembers():
+            data = source.extractfile(member)
+            if member.name == member_name:
+                member.uid = uid
+                member.gid = gid
+                member.mode = mode
+                target.addfile(member, data)
+                continue
+            if member.name == "manifest.json" and update_manifest:
+                assert data is not None
+                payload = json.loads(data.read().decode("utf-8"))
+                metadata = payload["files"][member_name]
+                metadata["uid"] = uid
+                metadata["gid"] = gid
+                metadata["mode"] = mode
+                replacement = json.dumps(payload).encode("utf-8")
+                manifest_info = tarfile.TarInfo("manifest.json")
+                manifest_info.size = len(replacement)
+                target.addfile(manifest_info, BytesIO(replacement))
+                continue
+            target.addfile(member, data)
+    return destination
 
 
 # ── tests ─────────────────────────────────────────────────────────
@@ -316,6 +358,245 @@ def test_manifest_v3_inventories_every_nested_state_member(tmp_path: Path) -> No
     } <= set(manifest.files)
     assert manifest.files["workspaces/project/nested/note.txt"].mode is not None
     assert manifest.files["workspaces/project/nested/note.txt"].uid is not None
+
+
+def test_manifest_v3_binds_posix_metadata_to_archive_and_restored_files(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    source_config = source_root / "config.json"
+    source_checkpoint = source_root / "session-states" / "task-abc" / "checkpoint.json"
+    source_config.chmod(0o640)
+    source_checkpoint.chmod(0o600)
+    workspace_root = tmp_path / "source-workspaces"
+    workspace_file = workspace_root / "project" / "README.md"
+    workspace_file.parent.mkdir(parents=True)
+    workspace_file.write_text("workspace", encoding="utf-8")
+    workspace_file.chmod(0o640)
+
+    archive = BackupService(source_root).create_backup(
+        tmp_path / "archive.tar.gz",
+        include_workspaces=True,
+        workspace_root=workspace_root,
+    )
+    manifest = BackupService(source_root).verify_backup(archive)
+
+    for member_name, source_path in {
+        "config/config.json": source_config,
+        "session-states/task-abc/checkpoint.json": source_checkpoint,
+        "workspaces/project/README.md": workspace_file,
+    }.items():
+        meta = manifest.files[member_name]
+        source_stat = source_path.stat()
+        assert meta.mode == source_stat.st_mode & 0o7777
+        assert meta.uid == source_stat.st_uid
+        assert meta.gid == source_stat.st_gid
+        with tarfile.open(archive, "r:gz") as tar:
+            member = tar.getmember(member_name)
+        assert member.mode & 0o7777 == meta.mode
+        assert member.uid == meta.uid
+        assert member.gid == meta.gid
+
+    target_state = tmp_path / "restored"
+    target_workspace = tmp_path / "restored-workspaces"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=target_state,
+        target_workspace_root=target_workspace,
+        skip_pre_backup=True,
+    )
+
+    for member_name, restored_path in {
+        "config/config.json": target_state / "config.json",
+        "session-states/task-abc/checkpoint.json": (
+            target_state / "session-states" / "task-abc" / "checkpoint.json"
+        ),
+        "workspaces/project/README.md": target_workspace / "project" / "README.md",
+    }.items():
+        meta = manifest.files[member_name]
+        restored_stat = restored_path.stat()
+        assert restored_stat.st_mode & 0o7777 == meta.mode
+        assert restored_stat.st_uid == meta.uid
+        assert restored_stat.st_gid == meta.gid
+
+
+def test_verify_rejects_mode_uid_and_gid_tampering(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    member_name = "config/config.json"
+    with tarfile.open(archive, "r:gz") as tar:
+        original = tar.getmember(member_name)
+    tampered = _rewrite_v3_member_metadata(
+        archive,
+        tmp_path / "metadata-tampered.tar.gz",
+        member_name=member_name,
+        uid=original.uid + 1,
+        gid=original.gid + 1,
+        mode=(original.mode ^ 0o100) & 0o7777,
+        update_manifest=False,
+    )
+
+    with pytest.raises(ValueError) as error:
+        BackupService(source_root).verify_backup(tampered)
+
+    message = str(error.value)
+    assert f"{member_name}: mode mismatch" in message
+    assert f"{member_name}: uid mismatch" in message
+    assert f"{member_name}: gid mismatch" in message
+
+
+def test_restore_rejects_unrestorable_owner_before_promotion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    original_config = (source_root / "config.json").read_bytes()
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    member_name = "config/config.json"
+    with tarfile.open(archive, "r:gz") as tar:
+        original = tar.getmember(member_name)
+    aligned = _rewrite_v3_member_metadata(
+        archive,
+        tmp_path / "owner-aligned.tar.gz",
+        member_name=member_name,
+        uid=original.uid + 100_000,
+        gid=original.gid + 100_000,
+        mode=original.mode,
+        update_manifest=True,
+    )
+
+    def reject_chown(path: Path, uid: int, gid: int) -> None:
+        raise PermissionError(f"cannot chown {path} to {uid}:{gid}")
+
+    monkeypatch.setattr(backup_service.os, "chown", reject_chown)
+    target = tmp_path / "restored"
+    with pytest.raises(ValueError, match="cannot restore ownership"):
+        BackupService(source_root).restore_backup(
+            aligned,
+            target_state_root=target,
+            skip_pre_backup=True,
+        )
+
+    assert not target.exists()
+    assert (source_root / "config.json").read_bytes() == original_config
+    assert not list(target.parent.glob(f".{target.name}.restore-*"))
+
+
+def test_restore_always_runs_default_domain_validator(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    target = tmp_path / "restored"
+    candidates: list[Path] = []
+
+    def reject_default_validator(candidate_root: Path, manifest: BackupManifest) -> None:
+        candidates.append(candidate_root)
+        assert manifest.version == 3
+        raise ValueError("default reconciliation rejected staged restore")
+
+    monkeypatch.setattr(
+        backup_service,
+        "validate_staged_domain_restore",
+        reject_default_validator,
+    )
+    with pytest.raises(ValueError, match="default reconciliation rejected staged restore"):
+        BackupService(source_root).restore_backup(
+            archive,
+            target_state_root=target,
+            skip_pre_backup=True,
+            validators=(),
+        )
+
+    assert candidates
+    assert not target.exists()
+    assert all(not candidate.exists() for candidate in candidates)
+
+
+def test_restore_runs_domain_reconciliation_against_disposable_copy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    auth = AuthService(state_root=source_root)
+    auth.initialize()
+    user = auth.register(
+        username="restore-owner", display_name="Restore owner", password="safe-password"
+    )
+    workspace_path = source_root / "workspace"
+    workspace_path.mkdir()
+    runtime = source_root / "runtime"
+    (runtime / "projects.json").write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "project_id": "restore-project",
+                        "name": "Restore project",
+                        "owner_user_id": user.id,
+                        "is_default": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (runtime / "workspaces.json").write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "workspace_id": "restore-workspace",
+                        "project_id": "restore-project",
+                        "owner_user_id": user.id,
+                        "default_workdir": str(workspace_path),
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    imported = DomainImporter(source_root).run(artifact_sha="a" * 64)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    calls: list[tuple[Path, str | None]] = []
+    original_reconcile = DomainReconciliationService.reconcile
+
+    def record_reconcile(
+        service: DomainReconciliationService, run_id: str | None = None
+    ) -> ReconciliationReport:
+        calls.append((service._state_root, run_id))
+        return original_reconcile(service, run_id)
+
+    monkeypatch.setattr(DomainReconciliationService, "reconcile", record_reconcile)
+    target = tmp_path / "restored"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=target,
+        skip_pre_backup=True,
+    )
+
+    assert len(calls) == 1
+    reconciliation_root, run_id = calls[0]
+    assert run_id == imported.run_id
+    assert reconciliation_root != target
+    assert not reconciliation_root.exists()
+    assert target.exists()
+
+
+def test_restore_reconciles_committed_v2_before_promotion(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    prepare_committed_v2_cutover(source_root, tmp_path)
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    target = tmp_path / "restored"
+
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=target,
+        skip_pre_backup=True,
+    )
+
+    assert DomainCutoverController(target).status().state == "v2"
 
 
 def test_verify_rejects_tampered_nested_state_member(tmp_path: Path) -> None:
