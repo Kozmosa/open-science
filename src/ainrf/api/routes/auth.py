@@ -122,6 +122,9 @@ def _delete_access_cookies(response: Response, *, cookie_names: tuple[str, str])
 
 @router.post("/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest, request: Request) -> Response:
+    api_config: ApiConfig = request.app.state.api_config
+    if not api_config.interactive_auth_enabled:
+        raise HTTPException(status_code=403, detail="Interactive authentication is disabled")
     service = _get_service(request)
     client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     if not client_ip and request.client:
@@ -160,7 +163,6 @@ async def login(payload: LoginRequest, request: Request) -> Response:
     # Set session cookie so nginx auth_request on /grafana, /prometheus, /litefuse can authenticate.
     # HttpOnly for XSS protection; SameSite=Lax for CSRF; Secure in production.
     is_secure = request.url.scheme == "https"
-    api_config: ApiConfig = request.app.state.api_config
     _set_access_cookies(
         response,
         result["access_token"],
@@ -172,6 +174,9 @@ async def login(payload: LoginRequest, request: Request) -> Response:
 
 @router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(payload: RefreshRequest, request: Request) -> Response:
+    api_config: ApiConfig = request.app.state.api_config
+    if not api_config.interactive_auth_enabled:
+        raise HTTPException(status_code=403, detail="Interactive authentication is disabled")
     service = _get_service(request)
     try:
         result = service.refresh(payload.refresh_token)
@@ -184,7 +189,6 @@ async def refresh(payload: RefreshRequest, request: Request) -> Response:
         status_code=200,
     )
     is_secure = request.url.scheme == "https"
-    api_config: ApiConfig = request.app.state.api_config
     _set_access_cookies(
         response,
         result["access_token"],

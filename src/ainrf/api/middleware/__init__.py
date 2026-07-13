@@ -34,6 +34,12 @@ _EXEMPT_PATH_PREFIXES = (
     "/logo",
     # Prometheus metrics endpoint (machine-to-machine, no browser auth)
     "/metrics",
+    # Local model clients probe these Anthropic-compatible discovery/message
+    # paths before they can supply the normal browser API-key credentials.
+    # Keep them exempt in production as well as development; route handlers
+    # still enforce any provider-specific policy they require.
+    "/v1/models",
+    "/v1/messages",
 )
 
 # Known API route prefixes. Paths NOT matching these are SPA routes
@@ -67,8 +73,6 @@ _DEV_EXEMPT_PATH_PREFIXES = (
     "/docs",
     "/openapi.json",
     "/redoc",
-    "/v1/models",
-    "/v1/messages",
 )
 
 

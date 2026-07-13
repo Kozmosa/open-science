@@ -12,14 +12,19 @@ name: openscience-staging
 # the host take effect automatically — no image rebuild needed.
 #
 # Usage:
-#   bash scripts/staging.sh up        # build + start, wait for healthy
-#   bash scripts/staging.sh status    # print URLs
-#   bash scripts/staging.sh logs      # tail backend logs
-#   bash scripts/staging.sh down      # destroy everything (including data)
-#   bash scripts/staging.sh rebuild   # rebuild image, keep data
+#   OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh up
+#                                       # build + start, wait for healthy
+#   OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh status
+#   OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh logs
+#   OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh down
+#                                       # stop containers, preserve isolated data
+#   OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env OPENSCIENCE_STAGING_ALLOW_VOLUME_REMOVAL=1 bash scripts/staging.sh purge
+#                                       # explicitly remove isolated data
+#   OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh rebuild
 #
 # Or directly:
-#   docker compose -f deploy/docker-compose.staging.yml up -d --build
+#   docker compose --env-file /secure/path/staging.env \
+#     -f deploy/docker-compose.staging.yml up -d --build
 #
 # Port mapping (staging ↔ production):
 #   nginx       :7192  (prod :8192)
@@ -44,21 +49,36 @@ services:
     environment:
       OPENSCIENCE_PRODUCTION: "1"
       AINRF_STAGING: "1"
+      # Staging clone smoke must not expose a host-network SSH listener or
+      # accept credentials copied with a source state.  Operators can make a
+      # deliberate, isolated opt-in for a disposable runtime exercise.
+      OPENSCIENCE_NO_SSHD: ${STAGING_OPENSCIENCE_NO_SSHD:-1}
       OPENSCIENCE_AUTH_COOKIE_NAMESPACE: "staging"
       AINRF_HOST: "127.0.0.1"
       AINRF_PORT: "17000"
-      AINRF_STATE_ROOT: "/opt/ainrf/state"
+      # A copied source is restored to a child generation.  The wrapper
+      # accepts only `/opt/ainrf/state` or a validated child path, avoiding a
+      # destructive move into the named-volume root.
+      OPENSCIENCE_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
+      AINRF_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
       # Staging retains an independent legacy default and never inherits a
       # production cutover token through the host environment.
       OPENSCIENCE_DOMAIN_MODEL_MODE: ${STAGING_OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
       OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${STAGING_OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
-      # ── 必填：在 .env 文件中设置（同生产共享）──
-      AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
-      AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
+      # A copied production state is an isolated development fixture.  Do not
+      # automatically SSH/tmux reconcile or poll any copied remote
+      # Environment; an operator must explicitly opt in for runtime testing.
+      OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED: ${STAGING_OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED:-false}
+      # ── 必填：只能使用 staging 独立凭据，绝不继承生产 .env ──
+      OPENSCIENCE_JWT_SECRET: ${STAGING_OPENSCIENCE_JWT_SECRET:?Set STAGING_OPENSCIENCE_JWT_SECRET in the staging env file}
+      OPENSCIENCE_API_KEY_HASHES: ${STAGING_OPENSCIENCE_API_KEY_HASHES:?Set STAGING_OPENSCIENCE_API_KEY_HASHES in the staging env file}
+      AINRF_JWT_SECRET: ${STAGING_OPENSCIENCE_JWT_SECRET:?Set STAGING_OPENSCIENCE_JWT_SECRET in the staging env file}
+      AINRF_API_KEY_HASHES: ${STAGING_OPENSCIENCE_API_KEY_HASHES:?Set STAGING_OPENSCIENCE_API_KEY_HASHES in the staging env file}
       # ── 安全 ────────────────────────────────────────────
-      AINRF_PUBLIC_REGISTRATION_ENABLED: ${STAGING_PUBLIC_REGISTRATION:-true}
-      AINRF_LOGIN_MAX_FAILURES: "100"
-      AINRF_LOGIN_LOCKOUT_HOURS: "1"
+      AINRF_PUBLIC_REGISTRATION_ENABLED: ${STAGING_PUBLIC_REGISTRATION:-false}
+      OPENSCIENCE_INTERACTIVE_AUTH_ENABLED: ${STAGING_OPENSCIENCE_INTERACTIVE_AUTH_ENABLED:-false}
+      AINRF_LOGIN_MAX_FAILURES: ${STAGING_LOGIN_MAX_FAILURES:-10}
+      AINRF_LOGIN_LOCKOUT_HOURS: ${STAGING_LOGIN_LOCKOUT_HOURS:-24}
       AINRF_METRICS_ENABLED: "true"
       # ── SSH / Container (offset port for host-network isolation) ──
       AINRF_SSHD_PORT: "2223"
@@ -67,21 +87,22 @@ services:
       AINRF_CONTAINER_USER: "root"
       AINRF_CONTAINER_SSH_KEY_PATH: "/opt/ainrf/.ssh/ainrf_local"
       # ── Monitoring / observability dashboard links (browser-facing) ──
-      AINRF_MONITORING_GRAFANA_URL: ${AINRF_MONITORING_GRAFANA_URL:-/grafana}
-      AINRF_MONITORING_PROMETHEUS_URL: ${AINRF_MONITORING_PROMETHEUS_URL:-/prometheus}
-      AINRF_MONITORING_LITEFUSE_URL: ${AINRF_MONITORING_LITEFUSE_URL:-/litefuse/}
+      AINRF_MONITORING_GRAFANA_URL: ${STAGING_AINRF_MONITORING_GRAFANA_URL:-/grafana}
+      AINRF_MONITORING_PROMETHEUS_URL: ${STAGING_AINRF_MONITORING_PROMETHEUS_URL:-/prometheus}
+      AINRF_MONITORING_LITEFUSE_URL: ${STAGING_AINRF_MONITORING_LITEFUSE_URL:-/litefuse/}
       # ── LLM Observability (disabled by default) ──
       AINRF_OBSERVABILITY_ENABLED: ${STAGING_AINRF_OBSERVABILITY_ENABLED:-false}
-      AINRF_OBSERVABILITY_BASE_URL: ${STAGING_AINRF_OBSERVABILITY_BASE_URL:-http://localhost:13000}
+      AINRF_OBSERVABILITY_BASE_URL: ${STAGING_AINRF_OBSERVABILITY_BASE_URL:-}
       AINRF_OBSERVABILITY_SECRET_KEY: ${STAGING_AINRF_OBSERVABILITY_SECRET_KEY:-}
       AINRF_OBSERVABILITY_PUBLIC_KEY: ${STAGING_AINRF_OBSERVABILITY_PUBLIC_KEY:-}
       # ── Agent 工具配置（在 .env 中设置）──
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
-      CODEX_API_KEY: ${CODEX_API_KEY:-}
-      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
-      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+      # Never inherit production provider credentials into a staging clone.
+      ANTHROPIC_API_KEY: ${STAGING_ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${STAGING_ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${STAGING_ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${STAGING_CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${STAGING_CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${STAGING_CODEX_MODEL:-gpt-5.5}
     volumes:
       - staging-ainrf-state:/opt/ainrf/state
       - staging-ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
@@ -138,7 +159,8 @@ services:
       HOME: /opt/ainrf
       OPENSCIENCE_PRODUCTION: "1"
       AINRF_STAGING: "1"
-      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
+      AINRF_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
       OPENSCIENCE_DOMAIN_MODEL_MODE: ${STAGING_OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
       OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${STAGING_OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
       OPENSCIENCE_NO_SSHD: "1"
@@ -146,12 +168,15 @@ services:
       AINRF_CONTAINER_PORT: "2223"
       AINRF_CONTAINER_USER: "root"
       AINRF_CONTAINER_SSH_KEY_PATH: "/opt/ainrf/.ssh/ainrf_local"
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
-      CODEX_API_KEY: ${CODEX_API_KEY:-}
-      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
-      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+      # A domain worker may start runtimes; it must never inherit provider
+      # credentials from the production host, even when an operator enables
+      # the explicit domain-v2 profile for a disposable fixture.
+      ANTHROPIC_API_KEY: ${STAGING_ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${STAGING_ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${STAGING_ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${STAGING_CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${STAGING_CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${STAGING_CODEX_MODEL:-gpt-5.5}
     volumes:
       - staging-ainrf-state:/opt/ainrf/state
       - staging-ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
@@ -163,7 +188,7 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    command: ["openscience", "domain-worker", "--state-root", "/opt/ainrf/state"]
+    command: ["openscience", "domain-worker", "--state-root", "${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}"]
     depends_on:
       ainrf-staging:
         condition: service_healthy
@@ -174,6 +199,9 @@ services:
         max-file: "5"
 
   literature-redis-staging:
+    # Background workers are opt-in.  A staging production snapshot must not
+    # consume copied durable work or make external Literature requests.
+    profiles: ["background-workers"]
     image: docker.1ms.run/redis:7-alpine
     restart: unless-stopped
     container_name: openscience-staging-literature-redis
@@ -207,6 +235,7 @@ services:
           memory: 512M
 
   literature-worker-staging:
+    profiles: ["background-workers"]
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -214,15 +243,17 @@ services:
     container_name: openscience-staging-literature-worker
     network_mode: host
     environment:
-      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_NO_SSHD: "1"
+      OPENSCIENCE_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
+      AINRF_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
       OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:17379/0
       OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:staging:literature
       OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS: "3"
       OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET: "24"
       OPENSCIENCE_LITERATURE_DAILY_SEARCH_BUDGET: "8"
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      ANTHROPIC_API_KEY: ${STAGING_ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${STAGING_ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${STAGING_ANTHROPIC_MODEL:-claude-sonnet-4-6}
     volumes:
       - staging-ainrf-state:/opt/ainrf/state
       - ../src/ainrf/:/usr/local/lib/python3.13/site-packages/ainrf/:ro
@@ -234,6 +265,7 @@ services:
         condition: service_healthy
 
   literature-planner-staging:
+    profiles: ["background-workers"]
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -241,7 +273,9 @@ services:
     container_name: openscience-staging-literature-planner
     network_mode: host
     environment:
-      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_NO_SSHD: "1"
+      OPENSCIENCE_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
+      AINRF_STATE_ROOT: ${STAGING_OPENSCIENCE_STATE_ROOT:-/opt/ainrf/state}
       OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set STAGING_OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:17379/0
       OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:staging:literature
     volumes:
@@ -284,7 +318,7 @@ services:
     network_mode: host
     volumes:
       - ./config/prometheus-staging.yml:/etc/prometheus/prometheus.yml:ro
-      - ./examples/prometheus-rules.example.yml:/etc/prometheus/rules/ainrf.yml:ro
+      - ./config/prometheus/rules/ainrf-alerts.yml:/etc/prometheus/rules/ainrf.yml:ro
       - staging-prometheus-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -306,8 +340,11 @@ services:
     container_name: ainrf-staging-grafana
     network_mode: host
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-ainrf-grafana}
+      # Grafana has its own authentication boundary.  Staging must require
+      # separate credentials instead of silently inheriting the host's
+      # production GRAFANA_ADMIN_* variables or a default password.
+      GF_SECURITY_ADMIN_USER: ${STAGING_GRAFANA_ADMIN_USER:?Set STAGING_GRAFANA_ADMIN_USER in the staging env file}
+      GF_SECURITY_ADMIN_PASSWORD: ${STAGING_GRAFANA_ADMIN_PASSWORD:?Set STAGING_GRAFANA_ADMIN_PASSWORD in the staging env file}
       GF_SERVER_HTTP_ADDR: "127.0.0.1"
       GF_SERVER_HTTP_PORT: "2300"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
@@ -330,8 +367,11 @@ services:
 
 volumes:
   staging-ainrf-state:
+    name: ${OPENSCIENCE_STAGING_STATE_VOLUME:-openscience-staging_staging-ainrf-state}
   staging-ainrf-workspaces:
+    name: ${OPENSCIENCE_STAGING_WORKSPACES_VOLUME:-openscience-staging_staging-ainrf-workspaces}
   staging-ainrf-tenants:
+    name: ${OPENSCIENCE_STAGING_TENANTS_VOLUME:-openscience-staging_staging-ainrf-tenants}
   staging-prometheus-data:
   staging-grafana-data:
   staging-literature-redis-data:

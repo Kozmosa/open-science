@@ -262,13 +262,22 @@ def main() -> None:
     _generate_codex_config()
     _sync_aris_skills()
 
+    # A staging clone may use a child generation inside the named state
+    # volume.  Honor the public and compatibility aliases everywhere the
+    # entrypoint creates, owns, or passes state paths; production retains the
+    # established `/opt/ainrf/state` default.
+    state_root = os.environ.get(
+        "OPENSCIENCE_STATE_ROOT",
+        os.environ.get("AINRF_STATE_ROOT", "/opt/ainrf/state"),
+    )
+
     # Drop privileges to ainrf user (UID 1000) before exec-ing the server
     _uid = 1000
     _gid = 1000
     if os.getuid() == 0:
         import subprocess
 
-        for d in ("/opt/ainrf/state", "/opt/ainrf/.ainrf_workspaces", "/opt/ainrf/.claude"):
+        for d in (state_root, "/opt/ainrf/.ainrf_workspaces", "/opt/ainrf/.claude"):
             subprocess.run(
                 ["chown", "-R", f"{_uid}:{_gid}", d],
                 check=False,
@@ -279,7 +288,7 @@ def main() -> None:
         # Ensure tenant group and Linux users exist (container /etc/passwd
         # resets on restart — the auth DB in the named volume persists but
         # the Linux accounts do not).
-        _provision_tenant_users("/opt/ainrf/state")
+        _provision_tenant_users(state_root)
 
         os.setgid(_gid)
         os.setuid(_uid)
@@ -299,7 +308,7 @@ def main() -> None:
             "--port",
             os.environ.get("AINRF_PORT", "8000"),
             "--state-root",
-            "/opt/ainrf/state",
+            state_root,
         ]
 
     print(f"[entrypoint] Exec: {' '.join(cmd)}")

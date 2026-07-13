@@ -35,6 +35,11 @@ while (($# > 0)); do
   esac
 done
 
+if [[ "${TARGET}" == "staging" ]]; then
+  _ainrf_error "Direct staging redeploy is disabled. Use scripts/staging.sh with OPENSCIENCE_STAGING_ENV_FILE."
+  exit 2
+fi
+
 case "$TARGET" in
   production)
     COMPOSE_FILE="docker-compose.cpu.yml"

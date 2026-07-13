@@ -85,6 +85,34 @@ async def test_health_reports_degraded_container_probe(
 
 
 @pytest.mark.anyio
+async def test_health_skips_remote_container_probe_when_runtime_reconciliation_is_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def unexpected_ping(self: object, **kwargs: object) -> ContainerHealth:
+        _ = self, kwargs
+        pytest.fail("clone health must not probe a copied remote runtime")
+
+    monkeypatch.setattr("ainrf.api.routes.health.SSHExecutor.ping", unexpected_ping)
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+            container_config=ContainerConfig(host="production-runtime", user="root"),
+            runtime_reconciliation_enabled=False,
+        )
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["container_health"] is None
+    assert response.json()["detail"] == "Remote runtime probes disabled by configuration"
+
+
+@pytest.mark.anyio
 async def test_settings_codex_defaults_reads_local_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

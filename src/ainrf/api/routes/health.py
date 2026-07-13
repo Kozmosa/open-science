@@ -151,7 +151,7 @@ async def health_check(request: Request) -> HealthResponse:
     uptime_seconds = _time.monotonic() - _START_TIME
 
     container_config = api_config.container_config
-    if container_config is None:
+    if container_config is None or not api_config.runtime_reconciliation_enabled:
         return HealthResponse(
             status=overall,
             state_root=str(public_payload["state_root"]),
@@ -159,6 +159,11 @@ async def health_check(request: Request) -> HealthResponse:
             default_workspace_dir=str(public_payload["default_workspace_dir"]),
             container_configured=bool(public_payload["container_configured"]),
             runtime_readiness=runtime_readiness,
+            detail=(
+                "Remote runtime probes disabled by configuration"
+                if container_config is not None and not api_config.runtime_reconciliation_enabled
+                else None
+            ),
             uptime_seconds=round(uptime_seconds, 1),
             checks=checks,
         )

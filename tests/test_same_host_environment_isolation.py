@@ -57,11 +57,55 @@ def test_staging_uses_separate_cookie_and_observability_configuration() -> None:
     assert limits["cpus"] == "8.0"
     assert environment["OPENSCIENCE_PRODUCTION"] == "1"
     assert environment["OPENSCIENCE_AUTH_COOKIE_NAMESPACE"] == "staging"
+    assert "STAGING_OPENSCIENCE_NO_SSHD" in str(environment["OPENSCIENCE_NO_SSHD"])
+    assert "STAGING_OPENSCIENCE_INTERACTIVE_AUTH_ENABLED" in str(
+        environment["OPENSCIENCE_INTERACTIVE_AUTH_ENABLED"]
+    )
+    assert "STAGING_PUBLIC_REGISTRATION:-false" in str(
+        environment["AINRF_PUBLIC_REGISTRATION_ENABLED"]
+    )
+    assert "STAGING_OPENSCIENCE_STATE_ROOT" in str(environment["OPENSCIENCE_STATE_ROOT"])
+    assert environment["OPENSCIENCE_STATE_ROOT"] == environment["AINRF_STATE_ROOT"]
+    assert "STAGING_OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED" in str(
+        environment["OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED"]
+    )
     assert isinstance(nginx_health_command, list)
     assert "http://127.0.0.1:7192/api/health" in nginx_health_command
     observability_enabled = environment["AINRF_OBSERVABILITY_ENABLED"]
     assert isinstance(observability_enabled, str)
     assert "STAGING_AINRF_OBSERVABILITY_ENABLED" in observability_enabled
+
+
+def test_every_deployment_mounts_the_authoritative_prometheus_alert_rules() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+
+    for compose_name in (
+        "docker-compose.yml",
+        "docker-compose.cpu.yml",
+        "docker-compose.gpu.yml",
+        "docker-compose.staging.yml",
+    ):
+        compose = _load_compose(repo_root, compose_name)
+        services = _mapping(compose["services"])
+        service_name = (
+            "prometheus-staging" if compose_name.endswith("staging.yml") else "prometheus"
+        )
+        prometheus = _mapping(services[service_name])
+        volumes = prometheus["volumes"]
+        assert isinstance(volumes, list)
+        assert (
+            "./config/prometheus/rules/ainrf-alerts.yml:/etc/prometheus/rules/ainrf.yml:ro"
+            in volumes
+        )
+
+
+def test_direct_redeploy_scripts_refuse_to_bypass_staging_isolation() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+
+    for script_name in ("redeploy-backend.sh", "redeploy-frontend.sh"):
+        script = (repo_root / "deploy" / script_name).read_text(encoding="utf-8")
+        assert "Direct staging redeploy is disabled" in script
+        assert "OPENSCIENCE_STAGING_ENV_FILE" in script
 
 
 def test_staging_nginx_exposes_machine_readable_identity() -> None:

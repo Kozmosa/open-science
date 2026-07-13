@@ -153,24 +153,18 @@ class TestProductionMode:
         finally:
             await client.aclose()
 
-    async def test_production_mode_v1_models_requires_auth(self):
-        """In production, /v1/models is not exempt and requires auth."""
-        client, tmp = _make_app(production=True)
-        try:
-            resp = await client.get("/v1/models")
-            assert resp.status_code == 401
-        finally:
-            await client.aclose()
-
-    async def test_dev_mode_v1_models_exempt(self):
-        """In dev mode, /v1/models is exempt from auth."""
-        client, tmp = _make_app(production=False)
-        try:
-            resp = await client.get("/v1/models")
-            # May be 404 (no route handler) but NOT 401.
-            assert resp.status_code != 401
-        finally:
-            await client.aclose()
+    async def test_external_model_probe_paths_are_exempt_in_both_modes(self):
+        """Compatibility probes bypass API-key middleware in every deployment mode."""
+        for production in (False, True):
+            for path in ("/v1/models", "/v1/messages"):
+                client, tmp = _make_app(production=production)
+                try:
+                    resp = await client.get(path)
+                    # A route may intentionally be absent or use another
+                    # method, but middleware must never turn a probe into 401.
+                    assert resp.status_code != 401
+                finally:
+                    await client.aclose()
 
     async def test_health_always_accessible(self):
         """Health endpoint is exempt in both modes."""
