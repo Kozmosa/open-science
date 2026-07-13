@@ -45,6 +45,16 @@ def test_capture_source_manifest_is_source_read_only(state_root: Path) -> None:
     assert manifest.digest
 
 
+def test_source_manifest_excludes_cutover_seal_journal(state_root: Path) -> None:
+    runtime = state_root / "runtime"
+    (runtime / "projects.json").write_text('{"items": []}', encoding="utf-8")
+    (runtime / "domain-legacy-source-seal.json").write_text('{"phase": "sealed"}', encoding="utf-8")
+
+    manifest = capture_source_manifest(state_root)
+
+    assert {item.relative_path for item in manifest.files} == {"runtime/projects.json"}
+
+
 def test_source_snapshot_set_rejects_changed_json_source(state_root: Path) -> None:
     source = state_root / "runtime" / "projects.json"
     source.write_text('{"items": [{"project_id": "before"}]}', encoding="utf-8")

@@ -360,6 +360,72 @@ def test_manifest_v3_inventories_every_nested_state_member(tmp_path: Path) -> No
     assert manifest.files["workspaces/project/nested/note.txt"].uid is not None
 
 
+def test_manifest_v3_roundtrips_all_runtime_json_sqlite_and_future_state_dirs(
+    tmp_path: Path,
+) -> None:
+    """A v3 control-plane backup must not lose newly added legacy sources."""
+
+    source_root = tmp_path / "source"
+    _seed_state(source_root)
+    runtime = source_root / "runtime"
+    runtime_json = {
+        "environments.json": '{"items": [{"id": "env-legacy"}]}\n',
+        "sessions.json": '{"items": [{"session_id": "session-legacy"}]}\n',
+        "skill_registries.json": '{"skills": [{"id": "registry-legacy"}]}\n',
+    }
+    for name, content in runtime_json.items():
+        (runtime / name).write_text(content, encoding="utf-8")
+    nested_runtime_json = runtime / "future" / "registry.json"
+    nested_runtime_json.parent.mkdir()
+    nested_runtime_json.write_text('{"future": true}\n', encoding="utf-8")
+    future_database = runtime / "extensions" / "future.sqlite3"
+    future_database.parent.mkdir()
+    with sqlite3.connect(future_database) as connection:
+        connection.execute("CREATE TABLE retained (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO retained(value) VALUES ('future-state')")
+        connection.commit()
+    future_state = source_root / "future-state" / "nested" / "checkpoint.json"
+    future_state.parent.mkdir(parents=True)
+    future_state.write_text('{"generation": 7}\n', encoding="utf-8")
+
+    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
+    manifest = BackupService(source_root).verify_backup(archive)
+
+    assert {
+        "runtime/environments.json",
+        "runtime/sessions.json",
+        "runtime/skill_registries.json",
+        "runtime/future/registry.json",
+    } <= set(manifest.config_files)
+    assert "extensions/future.sqlite3" in manifest.databases
+    assert {
+        "config/runtime/environments.json",
+        "config/runtime/sessions.json",
+        "config/runtime/skill_registries.json",
+        "config/runtime/future/registry.json",
+        "databases/extensions/future.sqlite3",
+        "future-state/nested/checkpoint.json",
+    } <= set(manifest.files)
+
+    restored_root = tmp_path / "restored"
+    BackupService(source_root).restore_backup(
+        archive,
+        target_state_root=restored_root,
+        skip_pre_backup=True,
+    )
+
+    for name, content in runtime_json.items():
+        assert (restored_root / "runtime" / name).read_text(encoding="utf-8") == content
+    assert (restored_root / "runtime" / "future" / "registry.json").read_text(
+        encoding="utf-8"
+    ) == '{"future": true}\n'
+    assert (restored_root / "future-state" / "nested" / "checkpoint.json").read_text(
+        encoding="utf-8"
+    ) == '{"generation": 7}\n'
+    with sqlite3.connect(restored_root / "runtime" / "extensions" / "future.sqlite3") as connection:
+        assert connection.execute("SELECT value FROM retained").fetchall() == [("future-state",)]
+
+
 def test_manifest_v3_binds_posix_metadata_to_archive_and_restored_files(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     _seed_state(source_root)

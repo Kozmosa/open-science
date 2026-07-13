@@ -209,13 +209,25 @@ def _legacy_agentic_fingerprint(source: Path, snapshot: Path, relative_path: str
 
 
 def _discover_json_sources(state_root: Path) -> tuple[Path, ...]:
-    """Find legacy registries and checkpoint/state JSON under known roots."""
+    """Find legacy registries and checkpoint/state JSON under known roots.
+
+    The cutover seal journal is durable control-plane evidence, not a legacy
+    import source.  It is created only after the final source manifest has
+    been frozen, so including it would make a correctly restored committed-v2
+    generation appear stale.
+    """
+
     source_roots = (state_root / "runtime", state_root / "session-states")
+    excluded_runtime_paths = {state_root / "runtime" / "domain-legacy-source-seal.json"}
     discovered: list[Path] = []
     for source_root in source_roots:
         if not source_root.is_dir():
             continue
-        discovered.extend(path for path in source_root.rglob("*.json") if path.is_file())
+        discovered.extend(
+            path
+            for path in source_root.rglob("*.json")
+            if path.is_file() and path not in excluded_runtime_paths
+        )
     return tuple(sorted(discovered, key=lambda path: _relative_path(path, state_root)))
 
 

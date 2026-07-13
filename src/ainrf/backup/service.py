@@ -31,7 +31,9 @@ _LOG = logging.getLogger(__name__)
 
 _BACKUP_VERSION = 3
 
-# Known SQLite databases relative to <state_root>/runtime/
+# Known SQLite databases relative to <state_root>/runtime/.  These names keep
+# the original manifest layout stable, while v3 also discovers any future
+# ``*.sqlite3`` file below ``runtime/``.
 _SQLITE_DATABASES: tuple[str, ...] = (
     "auth.sqlite3",
     "sessions.sqlite3",
@@ -48,18 +50,25 @@ _TOPLEVEL_CONFIGS: tuple[str, ...] = (
     "admin_initial_password.txt",
 )
 
-# Runtime JSON files relative to <state_root>/runtime/
+# Runtime JSON files relative to <state_root>/runtime/.  Their historical
+# ``config/<name>`` archive paths remain stable; other runtime JSON is stored
+# under ``config/runtime/<relative-path>`` so it can never collide with a
+# top-level config member.
 _RUNTIME_CONFIGS: tuple[str, ...] = (
     "projects.json",
     "task_edges.json",
     "workspaces.json",
 )
 
-# Small state subdirectories relative to <state_root>/
+# The pre-v3 restore fallback.  New v3 archives discover every non-reserved
+# state subdirectory, but version-2 archives did not inventory those members.
 _STATE_DIRS: tuple[str, ...] = (
     "session-states",
     "detections",
 )
+
+_RESERVED_STATE_ROOTS = frozenset({"runtime", "workspaces", "tenants"})
+_ARCHIVE_RESERVED_ROOTS = frozenset({"databases", "config", "workspaces", "tenants"})
 
 
 # ── helpers ───────────────────────────────────────────────────────
@@ -206,6 +215,96 @@ def _is_relative_path(path: str) -> bool:
     return not candidate.is_absolute() and ".." not in candidate.parts
 
 
+def _runtime_sqlite_sources(runtime_root: Path) -> tuple[tuple[str, Path], ...]:
+    """Return every runtime SQLite source under a safe relative member name."""
+
+    if not runtime_root.is_dir():
+        return ()
+    sources = [
+        (path.relative_to(runtime_root).as_posix(), path)
+        for path in runtime_root.rglob("*.sqlite3")
+        if path.is_file()
+    ]
+    return tuple(sorted(sources, key=lambda item: item[0]))
+
+
+def _config_sources(state_root: Path, runtime_root: Path) -> tuple[tuple[str, Path], ...]:
+    """Discover every current JSON control-plane source without collisions.
+
+    Existing member names stay compatible.  Future runtime JSON is represented
+    by its state-relative path (``runtime/...``), while future top-level JSON
+    retains its filename.  A collision is rejected before archiving rather than
+    silently dropping one of two distinct sources.
+    """
+
+    sources: dict[str, Path] = {}
+
+    def add(member_name: str, source: Path) -> None:
+        existing = sources.get(member_name)
+        if existing is not None and existing != source:
+            raise ValueError(f"Backup config member collision: {member_name}")
+        sources[member_name] = source
+
+    for name in _TOPLEVEL_CONFIGS:
+        source = state_root / name
+        if source.is_file():
+            add(name, source)
+    if state_root.is_dir():
+        for source in state_root.glob("*.json"):
+            if source.is_file():
+                add(source.name, source)
+
+    if runtime_root.is_dir():
+        for source in runtime_root.rglob("*.json"):
+            if not source.is_file():
+                continue
+            runtime_relative = source.relative_to(runtime_root).as_posix()
+            member_name = (
+                runtime_relative
+                if runtime_relative in _RUNTIME_CONFIGS
+                else f"runtime/{runtime_relative}"
+            )
+            add(member_name, source)
+
+    return tuple(sorted(sources.items(), key=lambda item: item[0]))
+
+
+def _state_directories(state_root: Path) -> tuple[Path, ...]:
+    """Discover all state subdirectories except explicit high-risk roots."""
+
+    if not state_root.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            (
+                path
+                for path in state_root.iterdir()
+                if path.is_dir() and path.name not in _RESERVED_STATE_ROOTS
+            ),
+            key=lambda path: path.name,
+        )
+    )
+
+
+def _state_directory_names_from_manifest(manifest: BackupManifest) -> tuple[str, ...]:
+    """Return v3 state roots represented by manifest members."""
+
+    roots = {
+        Path(relative_path).parts[0]
+        for relative_path in manifest.files
+        if Path(relative_path).parts and Path(relative_path).parts[0] not in _ARCHIVE_RESERVED_ROOTS
+    }
+    return tuple(sorted(roots))
+
+
+def _config_restore_path(candidate_root: Path, config_name: str) -> Path:
+    """Map a v2/v3 config manifest key to its staged state-root destination."""
+
+    if config_name in _RUNTIME_CONFIGS:
+        return candidate_root / "runtime" / config_name
+    return candidate_root / config_name
+
+
 def _database_schema_version(path: Path, database_name: str) -> int | None:
     """Read the registered schema version when the database has one.
 
@@ -251,7 +350,12 @@ def _validate_database_schema_version(path: Path, meta: FileMeta) -> None:
 
 
 def _is_supported_member_path(relative_path: str) -> bool:
-    """Return whether a v3 manifest member belongs to a restorable root."""
+    """Return whether a v3 manifest member belongs to a restorable root.
+
+    Version 3 treats the manifest as the complete inventory, so future runtime
+    SQLite/JSON and state-directory members must be accepted without reducing
+    the archive-path boundary to an unrestricted file restore.
+    """
 
     if not _is_relative_path(relative_path):
         return False
@@ -260,10 +364,17 @@ def _is_supported_member_path(relative_path: str) -> bool:
         return False
     root = parts[0]
     if root == "databases":
-        return len(parts) == 2 and parts[1] in _SQLITE_DATABASES
+        return Path(*parts[1:]).suffix == ".sqlite3"
     if root == "config":
-        return len(parts) == 2 and parts[1] in (*_TOPLEVEL_CONFIGS, *_RUNTIME_CONFIGS)
-    return root in (*_STATE_DIRS, "workspaces", "tenants")
+        suffix = Path(*parts[1:])
+        if len(parts) == 2 and parts[1] in (*_TOPLEVEL_CONFIGS, *_RUNTIME_CONFIGS):
+            return True
+        if len(parts) == 2 and suffix.suffix == ".json":
+            return True
+        return parts[1] == "runtime" and suffix.suffix == ".json"
+    if root in {"workspaces", "tenants"}:
+        return True
+    return root not in _ARCHIVE_RESERVED_ROOTS
 
 
 def _staged_domain_reconciliation_target(candidate_root: Path) -> tuple[str | None, str | None]:
@@ -361,9 +472,7 @@ def _restored_member_path(
     if root == "databases":
         return candidate_root / "runtime" / suffix
     if root == "config":
-        return (
-            candidate_root / "runtime" if suffix.name in _RUNTIME_CONFIGS else candidate_root
-        ) / suffix
+        return _config_restore_path(candidate_root, suffix.as_posix())
     if root == "workspaces":
         return candidate_workspace_root / suffix if candidate_workspace_root is not None else None
     if root == "tenants":
@@ -482,16 +591,18 @@ class BackupService:
             stage.mkdir()
             source_members: dict[str, Path] = {}
 
-            # 1. SQLite databases
+            # 1. Every runtime SQLite database.  Existing top-level names
+            # retain their archive paths; nested/future databases preserve
+            # their path below ``databases/`` and restore below ``runtime/``.
             db_dir = stage / "databases"
             db_dir.mkdir()
-            for name in _SQLITE_DATABASES:
-                src = self._runtime_root / name
-                if not src.exists():
-                    continue
+            for name, src in _runtime_sqlite_sources(self._runtime_root):
                 dst = db_dir / name
+                dst.parent.mkdir(parents=True, exist_ok=True)
                 _dump_sqlite_safe(src, dst)
-                schema_version = _database_schema_version(dst, _database_name_from_filename(name))
+                schema_version = _database_schema_version(
+                    dst, _database_name_from_filename(Path(name).name)
+                )
                 # The read-only schema probe can itself create transient WAL
                 # bookkeeping files on some SQLite builds.
                 for suffix in ("-wal", "-shm", "-journal"):
@@ -505,34 +616,33 @@ class BackupService:
                 source_members[f"databases/{name}"] = src
                 _LOG.info("backed up database %s (%d bytes)", name, dst.stat().st_size)
 
-            # 2. Top-level config files
+            # 2. Every current JSON control-plane source, plus the legacy
+            # non-JSON top-level config files.  Runtime JSON not present in
+            # the original fixed list is staged under ``config/runtime/...``.
             cfg_dir = stage / "config"
             cfg_dir.mkdir()
-            for name in (*_TOPLEVEL_CONFIGS, *_RUNTIME_CONFIGS):
-                src = (self._runtime_root if name in _RUNTIME_CONFIGS else self._state_root) / name
-                if not src.exists():
-                    continue
+            for name, src in _config_sources(self._state_root, self._runtime_root):
                 dst = cfg_dir / name
+                dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dst)
                 manifest.config_files[name] = _file_meta(
                     dst,
-                    source_path=f"runtime/{name}" if name in _RUNTIME_CONFIGS else name,
+                    source_path=src.relative_to(self._state_root).as_posix(),
                     ownership_source=src,
                 )
                 source_members[f"config/{name}"] = src
                 _LOG.info("backed up config %s", name)
 
-            # 3. State subdirectories
-            for dirname in _STATE_DIRS:
-                src = self._state_root / dirname
-                if src.is_dir():
-                    destination = stage / dirname
-                    shutil.copytree(src, destination)
-                    for item in destination.rglob("*"):
-                        if item.is_file():
-                            relative_path = item.relative_to(stage).as_posix()
-                            source_members[relative_path] = src / item.relative_to(destination)
-                    _LOG.info("backed up state dir %s", dirname)
+            # 3. Every state subdirectory.  Runtime is covered above and
+            # workspace/tenant files remain explicit high-risk opt-ins.
+            for src in _state_directories(self._state_root):
+                destination = stage / src.name
+                shutil.copytree(src, destination)
+                for item in destination.rglob("*"):
+                    if item.is_file():
+                        relative_path = item.relative_to(stage).as_posix()
+                        source_members[relative_path] = src / item.relative_to(destination)
+                _LOG.info("backed up state dir %s", src.name)
 
             # 4. Optional: workspaces
             if include_workspaces and workspace_root and workspace_root.is_dir():
@@ -665,6 +775,20 @@ class BackupService:
                         errors.append(f"{member_name}: unsupported manifest member path")
                 for member_name in sorted(actual_files - expected_files):
                     errors.append(f"{member_name}: not listed in manifest")
+                database_members = {
+                    member_name.removeprefix("databases/"): meta
+                    for member_name, meta in manifest.files.items()
+                    if member_name.startswith("databases/")
+                }
+                if set(database_members) != set(manifest.databases):
+                    errors.append("manifest: database inventory does not match file inventory")
+                config_members = {
+                    member_name.removeprefix("config/"): meta
+                    for member_name, meta in manifest.files.items()
+                    if member_name.startswith("config/")
+                }
+                if set(config_members) != set(manifest.config_files):
+                    errors.append("manifest: config inventory does not match file inventory")
                 for root_name, enabled in (
                     ("workspaces", manifest.includes_workspaces),
                     ("tenants", manifest.includes_tenants),
@@ -847,15 +971,21 @@ class BackupService:
                     actual = _sha256_of(src)
                     if actual != meta.sha256:
                         raise ValueError(f"{cfg_name}: checksum mismatch (archive corrupted)")
-                    dest = (
-                        runtime_root if cfg_name in _RUNTIME_CONFIGS else candidate_root
-                    ) / cfg_name
+                    dest = _config_restore_path(candidate_root, cfg_name)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dest)
                     _LOG.info("restored config %s", cfg_name)
 
-                # 3. State subdirectories
-                for dirname in _STATE_DIRS:
+                # 3. State subdirectories.  v3 archives have an explicit
+                # member inventory, while v2 archives retain the historical
+                # fixed fallback because their manifest did not name every
+                # nested state member.
+                state_directories = (
+                    _state_directory_names_from_manifest(manifest)
+                    if manifest.version >= 3
+                    else _STATE_DIRS
+                )
+                for dirname in state_directories:
                     src = stage / dirname
                     if src.is_dir():
                         shutil.copytree(src, candidate_root / dirname)
