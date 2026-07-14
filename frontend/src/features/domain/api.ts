@@ -5,6 +5,7 @@ import type {
   DomainProjectContext,
   DomainProjectProjection,
   DomainTaskAttempt,
+  DomainTaskContextSnapshot,
   DomainWorkspaceProjection,
   OverviewRefreshJob,
   OverviewSnapshot,
@@ -38,6 +39,10 @@ export function getDomainWorkspace(workspaceId: string): Promise<DomainWorkspace
 
 export function getDomainTaskAttempts(taskId: string): Promise<ItemList<DomainTaskAttempt>> {
   return api.get(`/tasks/${encodeURIComponent(taskId)}/attempts`);
+}
+
+export function getDomainTaskContext(taskId: string): Promise<DomainTaskContextSnapshot> {
+  return api.get(`/domain/tasks/${encodeURIComponent(taskId)}/context`);
 }
 
 export function getDomainProjectContext(projectId: string): Promise<DomainProjectContext> {

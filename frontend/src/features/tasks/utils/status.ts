@@ -9,4 +9,8 @@ export const statusClassName: Record<TaskStatus, string> = {
   failed: semanticToneClasses.danger,
   cancelled: semanticToneClasses.warning,
   paused: semanticToneClasses.info,
+  launch_unknown: semanticToneClasses.warning,
+  stopped_by_project_archive: semanticToneClasses.muted,
+  stopped_permission_revoked: semanticToneClasses.danger,
+  stopped_runtime_unknown: semanticToneClasses.warning,
 };

@@ -8,13 +8,8 @@ interface Props {
   selectedTaskId: string | null;
   tasksError: string | null;
   searchQuery: string;
-  showArchived: boolean;
   onSearchQueryChange: (query: string) => void;
   onSelectTask: (taskId: string) => void;
-  onArchiveTask: (taskId: string) => void;
-  onCancelTask: (taskId: string) => void;
-  onDeleteTask: (taskId: string) => void;
-  onRetryTask: (taskId: string) => void;
 }
 
 function matchesTask(task: TaskSummary, query: string): boolean {
@@ -36,20 +31,11 @@ export default function TaskList({
   selectedTaskId,
   tasksError,
   searchQuery,
-  showArchived,
   onSearchQueryChange,
   onSelectTask,
-  onArchiveTask,
-  onCancelTask,
-  onDeleteTask,
-  onRetryTask,
 }: Props) {
   const t = useT();
   const filteredTasks = tasks.filter((task) => matchesTask(task, searchQuery));
-
-  const canCancel = (status: string) => status === 'queued' || status === 'starting' || status === 'running';
-  const canArchive = (status: string) => status === 'succeeded' || status === 'failed' || status === 'cancelled';
-  const canRetry = (status: string) => status === 'failed' || status === 'cancelled';
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -100,82 +86,6 @@ export default function TaskList({
                     {task.title}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    {canCancel(task.status) ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onCancelTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onCancelTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
-                      >
-                        {t('pages.tasks.actions.cancel')}
-                      </span>
-                    ) : null}
-                    {canRetry(task.status) ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onRetryTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onRetryTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--prism-primary-border)] bg-[var(--prism-primary-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--prism-primary)] opacity-0 transition hover:bg-[var(--prism-primary-soft)]/70 group-hover:opacity-100"
-                      >
-                        {t('pages.tasks.actions.retry')}
-                      </span>
-                    ) : null}
-                    {canArchive(task.status) && !showArchived ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onArchiveTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onArchiveTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
-                      >
-                        {t('pages.tasks.actions.archive')}
-                      </span>
-                    ) : null}
-                    {canArchive(task.status) && showArchived ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDeleteTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onDeleteTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--danger-border)] bg-[var(--danger-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--danger-foreground)] opacity-0 transition hover:opacity-80 group-hover:opacity-100"
-                      >
-                        {t('common.delete')}
-                      </span>
-                    ) : null}
                     <span
                       className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClassName[task.status]}`}
                     >

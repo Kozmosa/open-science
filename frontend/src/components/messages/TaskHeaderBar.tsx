@@ -1,11 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { updateTask } from '@/shared/api';
 import { useT } from '@/shared/i18n';
 import { statusClassName } from '@features/tasks/utils/status';
 import type { TaskRecord } from '@/shared/types';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { createIdempotencyKey } from '@/shared/api/idempotency';
 
 interface TaskHeaderBarProps {
   task: TaskRecord;
@@ -17,6 +19,7 @@ interface TaskHeaderBarProps {
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
   onToggleMetadataSidebar?: () => void;
+  actions?: ReactNode;
 }
 
 export default function TaskHeaderBar({
@@ -29,6 +32,7 @@ export default function TaskHeaderBar({
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
   onToggleMetadataSidebar,
+  actions,
 }: TaskHeaderBarProps) {
   const t = useT();
   const queryClient = useQueryClient();
@@ -37,7 +41,11 @@ export default function TaskHeaderBar({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const renameMutation = useMutation({
-    mutationFn: (title: string) => updateTask(task.task_id, { title }),
+    mutationFn: (title: string) => updateTask(
+      task.task_id,
+      { title },
+      createIdempotencyKey(`task.rename.${task.task_id}`),
+    ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
@@ -103,6 +111,7 @@ export default function TaskHeaderBar({
       </div>
 
       <div className="flex items-center gap-2">
+        {actions}
         {showPause && onPause && (
           <button
             type="button"

@@ -75,7 +75,18 @@ export interface UserSessionPairListResponse {
   items: UserSessionPair[];
 }
 
-export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'paused';
+export type TaskStatus =
+  | 'queued'
+  | 'starting'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'paused'
+  | 'launch_unknown'
+  | 'stopped_by_project_archive'
+  | 'stopped_permission_revoked'
+  | 'stopped_runtime_unknown';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 
 export type ResearcherType = 'vanilla' | 'aris-researcher';
@@ -173,6 +184,9 @@ export interface TaskSummary {
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
+  archived_at?: string | null;
+  archive_reason?: string | null;
+  project_context_version_id?: string | null;
   error_summary: string | null;
   // New agentic-researcher API fields (flat structure)
   researcher_type?: string;

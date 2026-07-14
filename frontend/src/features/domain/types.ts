@@ -160,8 +160,9 @@ export interface DomainTaskProjection {
 
 export interface DomainRuntimeSessionSummary {
   runtime_session_id: string;
-  runtime_kind: string;
+  attempt_id: string;
   status: string;
+  engine_name: string | null;
   started_at: string | null;
   finished_at: string | null;
   [key: string]: unknown;
@@ -178,7 +179,7 @@ export interface DomainTaskAttempt {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
-  duration_seconds: number | null;
+  duration_ms: number | null;
   token_usage_json: string | null;
   cost_usd: number | null;
   failure_reason: string | null;
@@ -222,6 +223,17 @@ export interface DomainProjectContext {
   project_id: string;
   active_version: DomainContextVersion | null;
   draft: DomainContextDraft | null;
+}
+
+export interface DomainTaskContextSnapshot {
+  context_snapshot_id: string | null;
+  context_version_id: string | null;
+  fingerprint: string | null;
+  content: string;
+  source_manifest: unknown[];
+  byte_budget: number | null;
+  truncated: boolean;
+  created_at?: string;
 }
 
 export interface DomainContextDiff {

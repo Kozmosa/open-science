@@ -56,7 +56,11 @@ describe('TaskHeaderBar', () => {
 
     // The mutation should have been called
     await waitFor(() => {
-      expect(updateTask).toHaveBeenCalledWith('task-1', { title: 'Updated title' });
+      expect(updateTask).toHaveBeenCalledWith(
+        'task-1',
+        { title: 'Updated title' },
+        expect.stringMatching(/^task\.rename\.task-1/),
+      );
     });
   });
 

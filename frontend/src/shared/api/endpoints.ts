@@ -319,25 +319,61 @@ export const createTask = (
         headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       });
 
-export const archiveTask = (taskId: string): Promise<TaskSummary> =>
-  USE_MOCK ? Promise.resolve(mockArchiveTask(taskId)) : api.delete<TaskSummary>(`/tasks/${taskId}`);
+export const archiveTask = (taskId: string, idempotencyKey?: string): Promise<TaskSummary> =>
+  USE_MOCK
+    ? Promise.resolve(mockArchiveTask(taskId))
+    : api.post<TaskSummary>(`/tasks/${taskId}/archive`, {}, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      });
+
+export const unarchiveTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
+  api.post<TaskSummary>(`/tasks/${taskId}/unarchive`, {}, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const deleteTask = (taskId: string): Promise<void> =>
   USE_MOCK ? mockDeleteTask(taskId) : api.delete<void>(`/tasks/${taskId}/permanent`);
 
-export const cancelTask = (taskId: string): Promise<TaskSummary> =>
-  USE_MOCK ? Promise.resolve(mockCancelTask(taskId)) : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {});
+export const cancelTask = (taskId: string, idempotencyKey?: string): Promise<TaskSummary> =>
+  USE_MOCK
+    ? Promise.resolve(mockCancelTask(taskId))
+    : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {}, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      });
 
-export const retryTask = (taskId: string): Promise<TaskRetryResponse> =>
-  api.post<TaskRetryResponse>(`/tasks/${taskId}/retry`, {});
+export const retryTask = (taskId: string, idempotencyKey?: string): Promise<TaskRetryResponse> =>
+  api.post<TaskRetryResponse>(`/tasks/${taskId}/retry`, {}, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  });
+
+export const moveTask = (
+  taskId: string,
+  payload: { project_id: string; context_version_id: string },
+  idempotencyKey: string,
+): Promise<TaskSummary> => api.post<TaskSummary>(`/tasks/${taskId}/move`, payload, {
+  headers: { 'Idempotency-Key': idempotencyKey },
+});
+
+export const forkTask = (
+  taskId: string,
+  payload: { workspace_id: string; project_id?: string; prompt?: string; title?: string },
+  idempotencyKey: string,
+): Promise<TaskSummary> => api.post<TaskSummary>(`/tasks/${taskId}/fork`, payload, {
+  headers: { 'Idempotency-Key': idempotencyKey },
+});
 
 export const updateTaskProject = (taskId: string, projectId: string): Promise<TaskSummary> =>
   USE_MOCK
     ? Promise.resolve(mockUpdateTaskProject(taskId, projectId))
     : api.patch<TaskSummary>(`/tasks/${taskId}/project`, { project_id: projectId } satisfies TaskUpdateProjectRequest);
 
-export const updateTask = (taskId: string, data: { title?: string }): Promise<TaskSummary> =>
-  api.patch<TaskSummary>(`/tasks/${taskId}`, data);
+export const updateTask = (
+  taskId: string,
+  data: { title?: string },
+  idempotencyKey?: string,
+): Promise<TaskSummary> => api.patch<TaskSummary>(`/tasks/${taskId}`, data, {
+  headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+});
 
 export const getProjectTasks = (
   projectId: string,

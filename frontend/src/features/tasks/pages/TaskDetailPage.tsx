@@ -3,6 +3,7 @@ import { useTaskActions } from '../hooks/useTaskActions';
 import { useTaskMessages } from '../hooks/useTaskMessages';
 import { groupMessages, ChatInputBar, ChatMessageList } from '@/components/chat';
 import TaskHeaderBar from '@/components/messages/TaskHeaderBar';
+import type { ReactNode } from 'react';
 import type { TaskOutputEvent, TaskRecord } from '@/shared/types';
 
 const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
@@ -20,6 +21,7 @@ interface TaskDetailPageProps {
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
   onToggleMetadataSidebar?: () => void;
+  headerActions?: ReactNode;
 }
 
 export default function TaskDetailPage({
@@ -35,6 +37,7 @@ export default function TaskDetailPage({
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
   onToggleMetadataSidebar,
+  headerActions,
 }: TaskDetailPageProps) {
   const t = useT();
   const { messages, isLoading, error } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
@@ -82,6 +85,7 @@ export default function TaskDetailPage({
         metadataSidebarOpen={metadataSidebarOpen}
         onToggleTaskSidebar={onToggleTaskSidebar}
         onToggleMetadataSidebar={onToggleMetadataSidebar}
+        actions={headerActions}
       />
 
       {outputError && (
