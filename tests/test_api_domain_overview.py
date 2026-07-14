@@ -117,5 +117,25 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
                 and isinstance(card.get("attention_required"), bool)
                 for card in card_payloads
             )
+            display_cards = snapshot["display_cards"]
+            assert isinstance(display_cards, list)
+            display_payloads = [
+                cast(dict[str, object], card) for card in display_cards if isinstance(card, dict)
+            ]
+            assert [card["id"] for card in display_payloads] == [
+                "attention",
+                "progress",
+                "literature",
+                "continue",
+                "resources",
+            ]
+            assert all(
+                isinstance(card.get("data_cutoff_at"), str)
+                and isinstance(card.get("source_status"), str)
+                and isinstance(card.get("attention_required"), bool)
+                and "error_summary" in card
+                for card in display_payloads
+            )
+            assert isinstance(snapshot["next_scheduled_at"], str)
     finally:
         planner.stop()

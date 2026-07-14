@@ -137,6 +137,14 @@ def _json_object(value: object, *, fallback: dict[str, object] | None) -> dict[s
     return cast(dict[str, object], decoded)
 
 
+def _int_value(value: object) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _list_value(value: object) -> list[object]:
+    return list(value) if isinstance(value, list) else []
+
+
 @dataclass(frozen=True, slots=True)
 class OverviewRefreshClaim:
     """A leased refresh job; its lease token guards terminal writes."""
@@ -793,6 +801,93 @@ class OverviewSnapshotService:
                     (owner_user_id,),
                 ).fetchone()[0]
             )
+            recent_tasks = [
+                {
+                    "task_id": str(row["task_id"]),
+                    "project_id": str(row["project_id"]),
+                    "workspace_id": str(row["workspace_id"]),
+                    "title": str(row["title"]),
+                    "status": str(row["status"]),
+                    "updated_at": str(row["updated_at"]),
+                    "error_summary": self._optional_str(row["error_summary"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT task_id, project_id, workspace_id, title, status, updated_at,
+                           error_summary
+                    FROM tasks WHERE owner_user_id = ?
+                    ORDER BY CASE WHEN status IN ('queued', 'starting', 'running', 'paused')
+                                      THEN 0 ELSE 1 END,
+                             updated_at DESC, task_id DESC
+                    LIMIT 5
+                    """,
+                    (owner_user_id,),
+                )
+            ]
+            task_attention = [
+                item
+                for item in recent_tasks
+                if item["status"]
+                in {
+                    "failed",
+                    "launch_unknown",
+                    "stopped_by_project_archive",
+                    "stopped_permission_revoked",
+                    "stopped_runtime_unknown",
+                }
+            ]
+            project_attention = [
+                {
+                    "kind": "project_without_workspace",
+                    "project_id": str(row["project_id"]),
+                    "label": str(row["name"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT project.project_id, project.name
+                    FROM projects AS project
+                    WHERE project.owner_user_id = ? AND project.status = 'active'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM project_workspace_links AS link
+                        WHERE link.project_id = project.project_id AND link.status = 'active'
+                      )
+                    ORDER BY project.updated_at DESC LIMIT 5
+                    """,
+                    (owner_user_id,),
+                )
+            ]
+            recent_projects = [
+                {
+                    "kind": "project",
+                    "id": str(row["project_id"]),
+                    "label": str(row["name"]),
+                    "updated_at": str(row["updated_at"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT project_id, name, updated_at FROM projects
+                    WHERE owner_user_id = ? AND status = 'active'
+                    ORDER BY updated_at DESC, project_id DESC LIMIT 4
+                    """,
+                    (owner_user_id,),
+                )
+            ]
+            recent_workspaces = [
+                {
+                    "kind": "workspace",
+                    "id": str(row["workspace_id"]),
+                    "label": str(row["label"]),
+                    "updated_at": str(row["updated_at"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT workspace_id, label, updated_at FROM workspaces
+                    WHERE owner_user_id = ? AND status = 'active'
+                    ORDER BY updated_at DESC, workspace_id DESC LIMIT 4
+                    """,
+                    (owner_user_id,),
+                )
+            ]
         except sqlite3.Error as exc:
             return _CardResult(
                 card_id="domain",
@@ -809,6 +904,16 @@ class OverviewSnapshotService:
                 "workspaces_active": workspaces_active,
                 "tasks_by_status": task_statuses,
                 "active_attempts": active_attempts,
+                "recent_tasks": recent_tasks,
+                "attention_items": [
+                    *({"kind": "task", **item} for item in task_attention),
+                    *project_attention,
+                ][:10],
+                "recent_entities": sorted(
+                    [*recent_projects, *recent_workspaces],
+                    key=lambda item: str(item["updated_at"]),
+                    reverse=True,
+                )[:4],
             },
             source_status="ok",
             data_cutoff_at=cutoff_at,
@@ -846,6 +951,41 @@ class OverviewSnapshotService:
                     """,
                     (owner_user_id,),
                 ).fetchone()
+                papers = [
+                    {
+                        "paper_id": str(row["paper_id"]),
+                        "title": str(row["title"]),
+                        "primary_category": str(row["primary_category"]),
+                        "updated_at": self._optional_str(row["updated_at"]),
+                        "is_read": bool(row["is_read"]),
+                        "has_new_version": row["latest_seen_version_id"]
+                        != row["current_version_id"],
+                    }
+                    for row in conn.execute(
+                        """
+                        SELECT paper.paper_id, paper.title, paper.primary_category,
+                               paper.updated_at, paper.current_version_id,
+                               state.latest_seen_version_id, state.is_read
+                        FROM literature_catalog_papers AS paper
+                        JOIN literature_user_paper_states AS state
+                          ON state.paper_id = paper.paper_id
+                        WHERE state.user_id = ? AND state.is_ignored = 0
+                        ORDER BY state.last_seen_at DESC, paper.paper_id DESC LIMIT 5
+                        """,
+                        (owner_user_id,),
+                    )
+                ]
+                updated_count = int(
+                    conn.execute(
+                        """
+                        SELECT COUNT(*) FROM literature_user_paper_states AS state
+                        JOIN literature_catalog_papers AS paper ON paper.paper_id = state.paper_id
+                        WHERE state.user_id = ? AND state.is_ignored = 0
+                          AND state.latest_seen_version_id != paper.current_version_id
+                        """,
+                        (owner_user_id,),
+                    ).fetchone()[0]
+                )
         except (OSError, sqlite3.Error) as exc:
             return _CardResult(
                 card_id="literature",
@@ -861,6 +1001,8 @@ class OverviewSnapshotService:
                 "paper_count": int(counts["papers"] or 0) if counts is not None else 0,
                 "unread_count": int(counts["unread"] or 0) if counts is not None else 0,
                 "saved_count": int(counts["saved"] or 0) if counts is not None else 0,
+                "updated_count": updated_count,
+                "papers": papers,
                 "last_successful_check_at": self._optional_str(last["completed_at"])
                 if last is not None
                 else None,
@@ -936,6 +1078,12 @@ class OverviewSnapshotService:
                 "snapshot_count": len(snapshots),
                 "snapshots": snapshots,
                 "missing_snapshot_count": missing + invalid,
+                "intervention_required": [
+                    item
+                    for item in snapshots
+                    if item["status"] not in {"success", "ok"}
+                    or _int_value(item["warning_count"]) > 0
+                ],
             },
             source_status=source_status,
             data_cutoff_at=cutoff_at,
@@ -1300,6 +1448,21 @@ class OverviewSnapshotService:
         domain_data = next(
             (card.data for card in cards if card.card_id == "domain" and card.data is not None), {}
         )
+        display_cards = self._display_cards(cards)
+        cutoff = _parse_iso(data_cutoff_at) or _utc_now()
+        shanghai = cutoff.astimezone(_SHANGHAI)
+        next_slot_date = shanghai.date() + (
+            timedelta(days=1) if (shanghai.hour, shanghai.minute) >= (6, 0) else timedelta()
+        )
+        next_scheduled_at = (
+            datetime.combine(
+                next_slot_date,
+                datetime.min.time().replace(hour=6),
+                tzinfo=_SHANGHAI,
+            )
+            .astimezone(UTC)
+            .isoformat()
+        )
         return {
             "snapshot_id": snapshot_id,
             "owner_user_id": owner_user_id,
@@ -1308,6 +1471,8 @@ class OverviewSnapshotService:
             "source_status": source_status,
             "attention_required": attention_required,
             "cards": card_payloads,
+            "display_cards": display_cards,
+            "next_scheduled_at": next_scheduled_at,
             # Compatibility scalar fields let legacy consumers render the new
             # persisted projection without reconstructing it themselves.
             "source": "control_plane_only",
@@ -1321,6 +1486,84 @@ class OverviewSnapshotService:
             if isinstance(domain_data, dict)
             else 0,
         }
+
+    @staticmethod
+    def _display_cards(cards: list[_CardResult]) -> list[dict[str, object]]:
+        by_id = {card.card_id: card for card in cards}
+        domain = by_id.get("domain")
+        literature = by_id.get("literature")
+        resources = by_id.get("resources")
+
+        def payload(
+            card_id: str,
+            source: _CardResult | None,
+            data: dict[str, object],
+            *,
+            attention_required: bool | None = None,
+        ) -> dict[str, object]:
+            return {
+                "id": card_id,
+                "data": data,
+                "data_cutoff_at": source.data_cutoff_at if source else "",
+                "source_status": source.source_status if source else "failed",
+                "attention_required": (
+                    source.attention_required
+                    if attention_required is None and source is not None
+                    else bool(attention_required)
+                ),
+                "error_summary": source.error_summary if source else "source unavailable",
+            }
+
+        domain_data = domain.data if domain and domain.data is not None else {}
+        literature_data = literature.data if literature and literature.data is not None else {}
+        resource_data = resources.data if resources and resources.data is not None else {}
+        attention_items = _list_value(domain_data.get("attention_items", []))
+        intervention = _list_value(resource_data.get("intervention_required", []))
+        missing_snapshot_count = _int_value(resource_data.get("missing_snapshot_count", 0))
+        if missing_snapshot_count > 0:
+            intervention.append(
+                {
+                    "kind": "missing_resource_snapshot",
+                    "count": missing_snapshot_count,
+                }
+            )
+        attention_items.extend(intervention)
+        return [
+            payload(
+                "attention",
+                domain,
+                {"items": attention_items[:10]},
+                attention_required=bool(attention_items),
+            ),
+            payload(
+                "progress",
+                domain,
+                {"tasks": _list_value(domain_data.get("recent_tasks", []))[:5]},
+            ),
+            payload(
+                "literature",
+                literature,
+                {
+                    "unread_count": _int_value(literature_data.get("unread_count", 0)),
+                    "updated_count": _int_value(literature_data.get("updated_count", 0)),
+                    "papers": _list_value(literature_data.get("papers", []))[:5],
+                },
+            ),
+            payload(
+                "continue",
+                domain,
+                {"items": _list_value(domain_data.get("recent_entities", []))[:4]},
+            ),
+            payload(
+                "resources",
+                resources,
+                {
+                    "environments": intervention[:10],
+                    "environment_count": _int_value(resource_data.get("environment_count", 0)),
+                },
+                attention_required=bool(intervention),
+            ),
+        ]
 
     @staticmethod
     def _read_only_connection(path: Path) -> sqlite3.Connection:
