@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, FormField, Input, Modal, Textarea } from '@design-system/primitives';
+import { Button, FormField, Input, Dialog, Textarea } from '@design-system/primitives';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
 import { useT } from '@/shared/i18n';
 import { PageShell, SplitPane } from '@design-system/layout';
@@ -201,7 +201,7 @@ export default function ProjectsPage() {
       </SplitPane>
       </PageShell>
 
-      <Modal
+      <Dialog
         isOpen={selectedTaskId !== null}
         onClose={() => setSelectedTaskId(null)}
         title={selectedTask?.title ?? null}
@@ -220,9 +220,9 @@ export default function ProjectsPage() {
             isLoadingMore={isLoadingMore}
           />
         ) : null}
-      </Modal>
+      </Dialog>
 
-      <Modal
+      <Dialog
         isOpen={isCreateDialogOpen}
         onClose={closeCreateDialog}
         title={null}
@@ -242,8 +242,8 @@ export default function ProjectsPage() {
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
         />
-      </Modal>
-      <Modal
+      </Dialog>
+      <Dialog
         isOpen={isCreateProjectOpen}
         onClose={() => setCreateProjectOpen(false)}
         title={t('pages.projects.createTitle')}
@@ -287,7 +287,7 @@ export default function ProjectsPage() {
             </Button>
           </div>
         </div>
-      </Modal>
+      </Dialog>
     </>
   );
 }

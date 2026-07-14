@@ -1,5 +1,5 @@
 import { Globe, Package, Terminal, Cpu, HardDrive, Variable, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
-import { Modal, StatusDot, Alert } from '@design-system/primitives';
+import { Dialog, StatusDot, Alert } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { EnvironmentDetection } from '@/shared/types';
 
@@ -103,7 +103,7 @@ export default function EnvironmentDetectionModal({
   const StatusIcon = detection.status === 'success' ? CheckCircle2 : detection.status === 'partial' ? AlertTriangle : XCircle;
 
   return (
-    <Modal
+    <Dialog
       isOpen={isOpen}
       onClose={onClose}
       title={`${environmentName} · ${t('pages.environments.detection')}`}
@@ -224,6 +224,6 @@ export default function EnvironmentDetectionModal({
           </details>
         ) : null}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-import { FormField, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SearchBackendItem } from '@/shared/types';
@@ -40,7 +40,7 @@ export function SearchBackendSection() {
     >
       <div className="space-y-4">
         <FormField label={t('pages.settings.searchBackend.activeBackend')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.searchBackend.activeBackend')}
             value={activeBackend}
             disabled={isLoading || mutation.isPending}
@@ -51,7 +51,7 @@ export function SearchBackendSection() {
                 {b.display_name}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <div>

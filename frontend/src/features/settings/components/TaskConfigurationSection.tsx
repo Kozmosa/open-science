@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, FormField, Input, SectionCard, SectionHeader, Select, SkillToggleGroup, Textarea } from '@design-system/primitives';
+import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect, SkillToggleGroup, Textarea } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { ExecutionEngineId, ResearchAgentProfileSettings, TaskConfigurationSettings } from '@features/settings';
 import { useLlmProviders } from '@features/settings';
@@ -102,7 +102,7 @@ export function TaskConfigurationSection({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FormField label={t('pages.settings.taskConfiguration.executionEngineLabel')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.taskConfiguration.executionEngineLabel')}
             value={taskConfiguration.defaultExecutionEngineId}
             onChange={(event) =>
@@ -115,11 +115,11 @@ export function TaskConfigurationSection({
             <option value="claude-code">{t('pages.settings.engine.claudeCode')}</option>
             <option value="agent-sdk">{t('pages.settings.engine.claudeAgent')}</option>
             <option value="codex-app-server">{t('pages.settings.engine.codexAppServer')}</option>
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <FormField label={t('pages.settings.taskConfiguration.defaultTaskConfigurationLabel')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.taskConfiguration.defaultTaskConfigurationLabel')}
             value={defaultConfigId}
             onChange={(event) => setDefaultConfigId(event.target.value)}
@@ -129,13 +129,13 @@ export function TaskConfigurationSection({
                 {config.label}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
       </div>
 
       <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
         <FormField label={t('pages.settings.taskConfiguration.defaultResearchAgentLabel')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.taskConfiguration.defaultResearchAgentLabel')}
             value={defaultProfileId}
             onChange={(event) => {
@@ -154,7 +154,7 @@ export function TaskConfigurationSection({
                 {profile.label}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <FormField label={t('pages.settings.taskConfiguration.profileLabel')}>
@@ -218,7 +218,7 @@ export function TaskConfigurationSection({
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <FormField label={t('pages.settings.llmProviders.fillFromProvider')}>
-                  <Select
+                  <NativeSelect
                     aria-label={t('pages.settings.llmProviders.fillFromProvider')}
                     value=""
                     onChange={(event) => {
@@ -253,7 +253,7 @@ export function TaskConfigurationSection({
                           {provider.name}
                         </option>
                       ))}
-                  </Select>
+                  </NativeSelect>
                 </FormField>
               </div>
             </div>
@@ -331,7 +331,7 @@ export function TaskConfigurationSection({
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <FormField label={t('pages.settings.llmProviders.fillFromProvider')}>
-                  <Select
+                  <NativeSelect
                     aria-label={t('pages.settings.llmProviders.fillFromProvider')}
                     value=""
                     onChange={(event) => {
@@ -355,7 +355,7 @@ export function TaskConfigurationSection({
                           {provider.name}
                         </option>
                       ))}
-                  </Select>
+                  </NativeSelect>
                 </FormField>
               </div>
             </div>

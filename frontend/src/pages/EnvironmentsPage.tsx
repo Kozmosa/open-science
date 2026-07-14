@@ -6,9 +6,9 @@ import {
   Button,
   FormField,
   Input,
-  Modal,
+  Dialog,
   SectionCard,
-  Select,
+  NativeSelect,
   Textarea,
 } from '@design-system/primitives';
 import { PageShell, SectionStack } from '@design-system/layout';
@@ -31,7 +31,7 @@ import type {
 import { useLocale, useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useEnvironmentSelection } from '../components/environment';
-import { useToast } from '../components/common';
+import { useToast } from '@design-system';
 import { EnvironmentDetectionModal } from '../components/environment';
 import {
   buildEnvironmentRequest,
@@ -196,14 +196,14 @@ function EnvironmentEditor({
           </FormField>
 
           <FormField label={t('components.environmentEditor.authKindLabel')}>
-            <Select
+            <NativeSelect
               value={values.auth_kind}
               onChange={(event) => updateField('auth_kind', event.target.value as EnvironmentAuthKind)}
             >
               <option value="ssh_key">{authKindLabels.ssh_key}</option>
               <option value="password">{authKindLabels.password}</option>
               <option value="agent">{authKindLabels.agent}</option>
-            </Select>
+            </NativeSelect>
           </FormField>
         </div>
 
@@ -737,7 +737,7 @@ function EnvironmentsPage() {
       </SectionStack>
       </div>
 
-      <Modal
+      <Dialog
         isOpen={isEditorModalOpen}
         onClose={() => setIsEditorModalOpen(false)}
         title={editorMode === 'create' ? 'Add Environment' : 'Edit Environment'}
@@ -760,7 +760,7 @@ function EnvironmentsPage() {
             setEditorEnvironmentId(null);
           }}
         />
-      </Modal>
+      </Dialog>
 
       {detectionEnv?.latest_detection ? (
         <EnvironmentDetectionModal

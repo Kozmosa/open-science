@@ -1,7 +1,8 @@
 import { lazy, Profiler, Suspense, useEffect, type ProfilerOnRenderCallback } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { ErrorBoundary, Layout, ToastProvider } from './components/common';
+import { ErrorBoundary, Layout } from './components/common';
+import { ToastProvider } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useGeneralSettings } from '@features/settings';

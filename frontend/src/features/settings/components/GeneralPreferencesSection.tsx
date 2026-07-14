@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, Input, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { DefaultRoute, WebUiSettingsDocument } from '@features/settings';
 import { clampEditorFontSize, clampTerminalFontSize, maxEditorFontSize, maxTerminalFontSize, minEditorFontSize, minTerminalFontSize } from '@features/settings';
@@ -50,7 +50,7 @@ export function GeneralPreferencesSection({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FormField label={t('pages.settings.general.defaultRouteLabel')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.general.defaultRouteLabel')}
             value={draft.defaultRoute}
             onChange={(event) =>
@@ -64,7 +64,7 @@ export function GeneralPreferencesSection({
             <option value="tasks">{t('pages.settings.routes.tasks')}</option>
             <option value="workspaces">{t('pages.settings.routes.workspaces')}</option>
             <option value="environments">{t('pages.settings.routes.environments')}</option>
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <FormField label={t('pages.settings.general.terminalFontSizeLabel')}>

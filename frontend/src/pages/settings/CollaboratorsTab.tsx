@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { getProjects, getCollaborators, addCollaborator, removeCollaborator, getAdminUsers } from '@/shared/api';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
-import { Select } from '@design-system/primitives';
+import { NativeSelect } from '@design-system/primitives';
 import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';
 import { AccessItemRow } from '../../components/settings/AccessItemRow';
 import { queryKeys } from '@/shared/api/queryKeys';
@@ -77,7 +77,7 @@ export function CollaboratorsTab() {
         {t('pages.settings.tabs.collaborators')}
       </h3>
 
-      <Select
+      <NativeSelect
         value={selectedProject ?? ''}
         onChange={(e) => setSelectedProject(e.target.value || null)}
       >
@@ -87,7 +87,7 @@ export function CollaboratorsTab() {
             {p.name}
           </option>
         ))}
-      </Select>
+      </NativeSelect>
 
       {!selectedProject && (
         <p className="text-xs text-[var(--text-secondary)]">

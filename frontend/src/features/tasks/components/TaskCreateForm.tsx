@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, FormField, Input, Select, Textarea } from '@design-system/primitives';
+import { Button, FormField, Input, NativeSelect, Textarea } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { EnvironmentRecord, ProjectRecord, SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine, WorkspaceRecord } from '@/shared/types';
 import type { ResearchAgentProfileSettings } from '@features/settings/types';
@@ -286,7 +286,7 @@ export default function TaskCreateForm({
       )}
       <div className="grid gap-3 md:grid-cols-3">
         <FormField label={t('pages.tasks.projectLabel')}>
-          <Select
+          <NativeSelect
             id={FIELD_IDS.project}
             value={selectedProjectId}
             onChange={(e) => handleProjectChange(e.target.value)}
@@ -297,11 +297,11 @@ export default function TaskCreateForm({
                 {project.name}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <FormField label={t('pages.tasks.workspaceLabel')}>
-          <Select
+          <NativeSelect
             id={FIELD_IDS.workspace}
             value={selectedWorkspaceId}
             onChange={(e) => setSelectedWorkspaceId(e.target.value)}
@@ -312,11 +312,11 @@ export default function TaskCreateForm({
                 {workspace.label}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <FormField label={t('pages.tasks.environmentLabel')}>
-          <Select
+          <NativeSelect
             id={FIELD_IDS.environment}
             value={selectedEnvironmentId}
             onChange={(e) => setSelectedEnvironmentId(e.target.value)}
@@ -327,12 +327,12 @@ export default function TaskCreateForm({
                 {environment.display_name || environment.alias}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
       </div>
 
       <FormField label={t('pages.tasks.create.taskPreset')}>
-        <Select
+        <NativeSelect
           id={FIELD_IDS.taskPreset}
           value={selectedTaskPresetId}
           onChange={(e) => applyTaskPreset(e.target.value as TaskPresetId)}
@@ -342,7 +342,7 @@ export default function TaskCreateForm({
               {t(preset.labelKey)}
             </option>
           ))}
-        </Select>
+        </NativeSelect>
       </FormField>
 
       {showSeedUploader && (
@@ -449,7 +449,7 @@ export default function TaskCreateForm({
       </fieldset>
 
       <FormField label={t('pages.tasks.create.executionEngine')}>
-        <Select
+        <NativeSelect
           id={FIELD_IDS.harnessEngine}
           value={harnessEngine}
           onChange={(e) => setHarnessEngine(e.target.value as HarnessEngine)}
@@ -457,7 +457,7 @@ export default function TaskCreateForm({
           <option value="claude-code">{t('pages.tasks.create.engineClaudeCode')}</option>
           <option value="agent-sdk">{t('pages.tasks.create.engineAgentSdk')}</option>
           <option value="codex-app-server">{t('pages.tasks.create.engineCodexAppServer')}</option>
-        </Select>
+        </NativeSelect>
       </FormField>
 
       {researcherType === 'vanilla' && (

@@ -2,7 +2,7 @@ import { Copy, Check } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useT } from '@/shared/i18n';
 import { copyText } from '@/shared/utils/clipboard';
-import { useToast } from '@/components/common/Toast';
+import { useToast } from '@design-system';
 import type { ChatUserMessage as ChatUserMessageType } from './types';
 
 interface ChatUserMessageProps {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button, FormField, Input, Select } from '@design-system/primitives';
+import { Button, FormField, Input, NativeSelect } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { LlmProvider, LlmProviderFormat } from '@features/settings';
 
@@ -98,7 +98,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
           </FormField>
 
           <FormField label={t('pages.settings.llmProviders.formatLabel')}>
-            <Select
+            <NativeSelect
               aria-label={t('pages.settings.llmProviders.formatLabel')}
               value={format}
               onChange={(e) => setFormat(e.target.value as LlmProviderFormat)}
@@ -106,7 +106,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
               <option value="anthropic">{t('pages.settings.llmProviders.formatAnthropic')}</option>
               <option value="openai-chat">{t('pages.settings.llmProviders.formatOpenAIChat')}</option>
               <option value="openai-responses">{t('pages.settings.llmProviders.formatOpenAIResponses')}</option>
-            </Select>
+            </NativeSelect>
           </FormField>
 
           <FormField label={t('pages.settings.llmProviders.baseUrlLabel')}>

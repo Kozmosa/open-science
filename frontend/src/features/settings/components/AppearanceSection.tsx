@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Button, FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { WebUiSettingsDocument } from '@features/settings/types';
 
@@ -26,7 +26,7 @@ export function AppearanceSection({ savedAppearance, onSave, onReset }: Appearan
     >
       <div className="grid gap-4 lg:grid-cols-2">
         <FormField label={t('pages.settings.appearance.themeLabel')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.appearance.themeLabel')}
             value={draft.theme}
             onChange={(event) =>
@@ -36,7 +36,7 @@ export function AppearanceSection({ savedAppearance, onSave, onReset }: Appearan
             <option value="light">{t('pages.settings.appearance.light')}</option>
             <option value="dark">{t('pages.settings.appearance.dark')}</option>
             <option value="system">{t('pages.settings.appearance.system')}</option>
-          </Select>
+          </NativeSelect>
         </FormField>
       </div>
 

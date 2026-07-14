@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, FormField, PageHeader, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Alert, FormField, PageHeader, SectionCard, SectionHeader, NativeSelect } from '@design-system/primitives';
 import { PageShell, SectionStack } from '@design-system/layout';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '@/components/environment';
 import { getEnvironments, getSkills, getWorkspaces } from '@/shared/api';
@@ -139,7 +139,7 @@ function SettingsPage() {
           >
             <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
               <FormField label={t('pages.settings.defaultWorkspace.label')}>
-                <Select
+                <NativeSelect
                   aria-label={t('pages.settings.defaultWorkspace.label')}
                   value={settings.projectDefaults.default?.defaultWorkspaceId ?? ''}
                   onChange={(event) =>
@@ -153,7 +153,7 @@ function SettingsPage() {
                       {workspace.label}
                     </option>
                   ))}
-                </Select>
+                </NativeSelect>
               </FormField>
             </div>
           </SectionCard>

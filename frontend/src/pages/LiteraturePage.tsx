@@ -12,7 +12,7 @@ import {
   previewLiteratureTopic,
   updateLiteratureTopic,
 } from '@/shared/api';
-import { Alert, Badge, Button, EmptyState, FormField, Input, Modal, SectionCard, SectionHeader, StatusDot } from '@design-system/primitives';
+import { Alert, Badge, Button, EmptyState, FormField, Input, Dialog, SectionCard, SectionHeader, StatusDot } from '@design-system/primitives';
 import { PageShell, SectionStack } from '@design-system/layout';
 import { queryKeys } from '@/shared/api/queryKeys';
 import type { LiteratureCheckStatus, LiteratureInboxView, LiteratureTopic, LiteratureTopicInput } from '@/shared/types';
@@ -93,7 +93,7 @@ function TopicFormModal({ topic, isOpen, onClose }: TopicFormModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={topic ? t('literature.editTopic') : t('literature.newTopic')} size="lg">
+    <Dialog isOpen={isOpen} onClose={onClose} title={topic ? t('literature.editTopic') : t('literature.newTopic')} size="lg">
       <div className="space-y-4">
         <FormField label={t('literature.topicName')}>
           <Input
@@ -159,7 +159,7 @@ function TopicFormModal({ topic, isOpen, onClose }: TopicFormModalProps) {
           </Button>
         </div>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

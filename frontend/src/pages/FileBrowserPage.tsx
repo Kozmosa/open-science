@@ -6,7 +6,7 @@ import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '@/shared
 import { FileTree, FileViewer } from '../components/file-browser';
 import { useEnvironmentSelection } from '../components/environment';
 import { PageShell, SplitPane } from '@design-system/layout';
-import { Select } from '@design-system/primitives';
+import { NativeSelect } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { FileEntry, FileReadResponse } from '@/shared/types';
 import { queryKeys } from '@/shared/api/queryKeys';
@@ -207,7 +207,7 @@ export default function FileBrowserPage() {
                     />
                   </div>
                   <div className="border-t border-[var(--border)] px-3 py-2">
-                    <Select
+                    <NativeSelect
                       value={effectiveWorkspaceId}
                       onChange={(event) => setSelectedWorkspaceId(event.target.value)}
                       disabled={workspaces.length === 0}
@@ -217,7 +217,7 @@ export default function FileBrowserPage() {
                           {workspace.label}
                         </option>
                       ))}
-                    </Select>
+                    </NativeSelect>
                   </div>
                 </>
               )}

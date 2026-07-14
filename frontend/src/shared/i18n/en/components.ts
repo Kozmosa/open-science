@@ -124,6 +124,7 @@ const components = {
       },
       modal: {
         close: 'Close',
+        dialog: 'Dialog',
       },
       skills: {
         ungrouped: 'Ungrouped',

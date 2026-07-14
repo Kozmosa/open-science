@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, Input, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SkillDetail, SkillImportRequest, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';
@@ -164,14 +164,14 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
           </h4>
 
           <FormField label={t('pages.settings.skillRepository.sourceLabel')}>
-            <Select
+            <NativeSelect
               aria-label={t('pages.settings.skillRepository.sourceLabel')}
               value={importSource}
               onChange={(event) => setImportSource(event.target.value as 'git' | 'local')}
             >
               <option value="git">{t('pages.settings.skillRepository.gitSource')}</option>
               <option value="local">{t('pages.settings.skillRepository.localSource')}</option>
-            </Select>
+            </NativeSelect>
           </FormField>
 
           {importSource === 'git' ? (

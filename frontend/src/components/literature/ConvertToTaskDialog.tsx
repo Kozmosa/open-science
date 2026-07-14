@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Button, Select } from '@design-system/primitives';
+import { Button, NativeSelect } from '@design-system/primitives';
 import { useT } from '@/shared/i18n';
 import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '@/shared/types';
 import type { ResearchAgentProfileSettings } from '@features/settings/types';
@@ -166,7 +166,7 @@ export default function ConvertToTaskDialog({
             <span className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.create.taskPreset')}
             </span>
-            <Select
+            <NativeSelect
               id={FIELD_IDS.taskPreset}
               value={selectedTaskPresetId}
               onChange={(e) => applyTaskPreset(e.target.value as TaskPresetId)}
@@ -175,14 +175,14 @@ export default function ConvertToTaskDialog({
               {TASK_PRESET_OPTIONS.map((preset) => (
                 <option key={preset.id} value={preset.id}>{t(preset.labelKey)}</option>
               ))}
-            </Select>
+            </NativeSelect>
           </label>
 
           <div>
             <label htmlFor={FIELD_IDS.workspace} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.workspaceLabel')}
             </label>
-            <Select
+            <NativeSelect
               id={FIELD_IDS.workspace}
               value={effectiveWorkspaceId}
               onChange={(e) => setSelectedWorkspaceId(e.target.value)}
@@ -191,14 +191,14 @@ export default function ConvertToTaskDialog({
               {workspaces.map((w: WorkspaceRecord) => (
                 <option key={w.workspace_id} value={w.workspace_id}>{w.label}</option>
               ))}
-            </Select>
+            </NativeSelect>
           </div>
 
           <div>
             <label htmlFor={FIELD_IDS.environment} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.environmentLabel')}
             </label>
-            <Select
+            <NativeSelect
               id={FIELD_IDS.environment}
               value={effectiveEnvironmentId}
               onChange={(e) => setSelectedEnvironmentId(e.target.value)}
@@ -207,14 +207,14 @@ export default function ConvertToTaskDialog({
               {environments.map((env: EnvironmentRecord) => (
                 <option key={env.id} value={env.id}>{env.alias} · {env.display_name}</option>
               ))}
-            </Select>
+            </NativeSelect>
           </div>
 
           <div>
             <label htmlFor={FIELD_IDS.researcherType} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.create.researcherType')}
             </label>
-            <Select
+            <NativeSelect
               id={FIELD_IDS.researcherType}
               value={researcherType}
               onChange={(e) => setResearcherType(e.target.value as 'vanilla' | 'aris-researcher')}
@@ -222,14 +222,14 @@ export default function ConvertToTaskDialog({
             >
               <option value="vanilla">{t('pages.tasks.create.researcherVanilla')}</option>
               <option value="aris-researcher">{t('pages.tasks.create.researcherAris')}</option>
-            </Select>
+            </NativeSelect>
           </div>
 
           <div>
             <label htmlFor={FIELD_IDS.harnessEngine} className="mb-1 block text-[11px] font-medium text-[var(--text-secondary)]">
               {t('pages.tasks.create.executionEngine')}
             </label>
-            <Select
+            <NativeSelect
               id={FIELD_IDS.harnessEngine}
               value={harnessEngine}
               onChange={(e) => setHarnessEngine(e.target.value as 'claude-code' | 'agent-sdk' | 'codex-app-server')}
@@ -238,7 +238,7 @@ export default function ConvertToTaskDialog({
               <option value="claude-code">{t('pages.tasks.create.engineClaudeCode')}</option>
               <option value="agent-sdk">{t('pages.tasks.create.engineAgentSdk')}</option>
               <option value="codex-app-server">{t('pages.tasks.create.engineCodexAppServer')}</option>
-            </Select>
+            </NativeSelect>
           </div>
         </div>
 

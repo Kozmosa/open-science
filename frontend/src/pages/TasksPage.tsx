@@ -15,8 +15,8 @@ import {
   getWorkspaces,
   retryTask,
 } from '@/shared/api';
-import { Button, Modal, Select } from '@design-system/primitives';
-import { useToast } from '../components/common/Toast';
+import { Button, Dialog, NativeSelect } from '@design-system/primitives';
+import { useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { PageShell, SplitPane } from '@design-system/layout';
 import { extractErrorMessage } from '@/shared/utils/error';
@@ -254,7 +254,7 @@ function TasksPage() {
               {t('pages.tasks.newTask')}
             </span>
           </Button>
-          <Select
+          <NativeSelect
             value={taskSort}
             onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
             className="w-full rounded-lg py-1 text-[11px]"
@@ -262,7 +262,7 @@ function TasksPage() {
             <option value="updated">{t('pages.tasks.sort.updated')}</option>
             <option value="created">{t('pages.tasks.sort.created')}</option>
             <option value="name">{t('pages.tasks.sort.name')}</option>
-          </Select>
+          </NativeSelect>
           <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-tertiary)]">
             <input
               type="checkbox"
@@ -329,7 +329,7 @@ function TasksPage() {
         </SplitPane>
       </PageShell>
 
-      <Modal
+      <Dialog
         isOpen={isCreateDialogOpen}
         onClose={closeCreateDialog}
         title={null}
@@ -347,7 +347,7 @@ function TasksPage() {
           onSubmit={(payload) => createMutation.mutate(payload)}
           onCancel={closeCreateDialog}
         />
-      </Modal>
+      </Dialog>
     </>
   );
 }
