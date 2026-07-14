@@ -38,6 +38,29 @@ export const queryKeys = {
       ['task-token-usage', opts] as const,
   },
 
+  domain: {
+    capabilities: ['domain', 'capabilities'] as const,
+    projects: (includeArchived = false) =>
+      ['domain', 'projects', { includeArchived }] as const,
+    project: (projectId: string | null) =>
+      ['domain', 'projects', projectId] as const,
+    workspaces: (includeUnregistered = false) =>
+      ['domain', 'workspaces', { includeUnregistered }] as const,
+    workspace: (workspaceId: string | null) =>
+      ['domain', 'workspaces', workspaceId] as const,
+    taskAttempts: (taskId: string | null) =>
+      ['domain', 'tasks', taskId, 'attempts'] as const,
+    projectContext: (projectId: string | null) =>
+      ['domain', 'projects', projectId, 'context'] as const,
+    projectContextVersions: (projectId: string | null) =>
+      ['domain', 'projects', projectId, 'context', 'versions'] as const,
+    projectContextCandidates: (projectId: string | null) =>
+      ['domain', 'projects', projectId, 'context', 'candidates'] as const,
+    overview: ['domain', 'overview', 'today'] as const,
+    overviewJob: (jobId: string | null) =>
+      ['domain', 'overview', 'jobs', jobId] as const,
+  },
+
   taskEdges: {
     byProject: (projectId: string | null) =>
       ['task-edges', projectId] as const,

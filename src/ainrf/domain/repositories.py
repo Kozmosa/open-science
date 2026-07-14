@@ -208,13 +208,13 @@ class SqliteDomainRepository:
         return self._conn.execute(
             """
             SELECT relationship.relationship_id, relationship.source_task_id,
-                   relationship.target_task_id, relationship.created_at
+                   relationship.target_task_id, relationship.relationship_type,
+                   relationship.created_at
             FROM task_relationships AS relationship
             JOIN tasks AS source ON source.task_id = relationship.source_task_id
             JOIN tasks AS target ON target.task_id = relationship.target_task_id
             WHERE source.project_id = ?
               AND target.project_id = ?
-              AND relationship.relationship_type = 'related_to'
             ORDER BY relationship.created_at, relationship.relationship_id
             """,
             (project_id, project_id),

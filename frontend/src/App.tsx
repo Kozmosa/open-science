@@ -7,6 +7,7 @@ import { useT } from '@/shared/i18n';
 import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useGeneralSettings } from '@features/settings';
 import { AuthProvider, useAuth } from '@features/auth';
+import { DomainCapabilityProvider } from '@features/domain';
 import { reportWebVitals } from '@/shared/utils/reportWebVitals';
 import { getRoutePath, ROUTE_REGISTRY, type AppRouteId } from '@/app/routeRegistry';
 import './index.css';
@@ -141,7 +142,9 @@ function AppRoutes() {
 
   const content = (
     <SettingsProvider userId={user.id}>
-      <AuthenticatedRoutes />
+      <DomainCapabilityProvider>
+        <AuthenticatedRoutes />
+      </DomainCapabilityProvider>
     </SettingsProvider>
   );
   return PROFILER_ENABLED ? <Profiler id="AppRoutes" onRender={onRender}>{content}</Profiler> : content;

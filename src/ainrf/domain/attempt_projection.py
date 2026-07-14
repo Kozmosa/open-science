@@ -133,9 +133,12 @@ class AttemptProjectionService:
 
         task_placeholders = ", ".join("?" for _ in unique_task_ids)
         attempt_rows = conn.execute(
-            f"""SELECT * FROM agent_task_attempts
-                 WHERE task_id IN ({task_placeholders})
-                 ORDER BY task_id ASC, attempt_seq ASC, created_at ASC""",
+            f"""SELECT attempt.*, snapshot.context_version_id AS context_version_id
+                 FROM agent_task_attempts AS attempt
+                 LEFT JOIN context_snapshots AS snapshot
+                   ON snapshot.context_snapshot_id = attempt.context_snapshot_id
+                 WHERE attempt.task_id IN ({task_placeholders})
+                 ORDER BY attempt.task_id ASC, attempt.attempt_seq ASC, attempt.created_at ASC""",
             unique_task_ids,
         ).fetchall()
         if not attempt_rows:
@@ -494,6 +497,7 @@ class AttemptProjectionService:
             "trigger": str(row["trigger"]),
             "status": str(row["status"]),
             "context_snapshot_id": _optional_str(row["context_snapshot_id"]),
+            "context_version_id": _optional_str(row["context_version_id"]),
             "created_at": str(row["created_at"]),
             "started_at": started_at,
             "finished_at": finished_at,

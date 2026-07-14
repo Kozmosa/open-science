@@ -418,6 +418,11 @@ class TaskProjectionService:
             "started_at": started_at,
             "completed_at": completed_at,
             "owner_user_id": str(row["owner_user_id"]),
+            "archived_at": TaskProjectionService._optional_str(row["archived_at"]),
+            "archive_reason": TaskProjectionService._optional_str(row["archive_reason"]),
+            "project_context_version_id": TaskProjectionService._optional_str(
+                row["project_context_version_id"]
+            ),
             "latest_output_seq": int(row["latest_output_seq"] or 0),
             "exit_code": int(row["exit_code"]) if row["exit_code"] is not None else None,
             # Engine error summaries are durable operational diagnostics and

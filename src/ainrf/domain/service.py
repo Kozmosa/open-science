@@ -1428,7 +1428,7 @@ class DomainService:
     def list_task_relationships(
         self, project_id: str, user: dict[str, object]
     ) -> list[dict[str, object]]:
-        """Expose legacy task edges as typed ``related_to`` relationships."""
+        """Expose every durable Project-scoped Task relationship with its type."""
 
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_viewer(project_id, user)
@@ -1439,6 +1439,7 @@ class DomainService:
                 "project_id": project_id,
                 "source_task_id": str(row["source_task_id"]),
                 "target_task_id": str(row["target_task_id"]),
+                "relationship_type": str(row["relationship_type"]),
                 "created_at": str(row["created_at"]),
             }
             for row in rows
@@ -1504,6 +1505,7 @@ class DomainService:
                 "project_id": project_id,
                 "source_task_id": source_task_id,
                 "target_task_id": target_task_id,
+                "relationship_type": relationship_type,
                 "created_at": str(row["created_at"]),
             }
             if idempotency_key is not None:
