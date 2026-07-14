@@ -124,12 +124,12 @@ function job(status: OverviewRefreshJob['status']): OverviewRefreshJob {
     retry_count: 0,
     next_retry_at: null,
     last_failure_at: null,
-    snapshot_id: status === 'completed' ? 'snapshot-2' : null,
-    source_status: status === 'completed' ? 'ok' : null,
+    snapshot_id: status === 'succeeded' || status === 'partial' ? 'snapshot-2' : null,
+    source_status: status === 'succeeded' ? 'ok' : status === 'partial' ? 'partial' : null,
     error_summary: status === 'failed' ? 'refresh failed' : null,
     created_at: cutoff,
     started_at: cutoff,
-    finished_at: status === 'completed' || status === 'failed' ? cutoff : null,
+    finished_at: status === 'succeeded' || status === 'partial' || status === 'failed' ? cutoff : null,
     heartbeat_at: cutoff,
   };
 }
@@ -206,7 +206,7 @@ describe('TodayPage', () => {
     });
     domainApiMocks.getOverviewRefreshJob.mockImplementation(async () => {
       jobReads += 1;
-      return job(jobReads === 1 ? 'running' : 'completed');
+      return job(jobReads === 1 ? 'running' : 'succeeded');
     });
     renderToday();
     await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Refresh overview' })).toBeInTheDocument());
@@ -217,11 +217,28 @@ describe('TodayPage', () => {
     await vi.waitFor(() => expect(jobReads).toBe(1));
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
     await vi.waitFor(() => expect(jobReads).toBe(2));
-    await vi.waitFor(() => expect(screen.getByText('Refresh job: completed')).toBeInTheDocument());
+    await vi.waitFor(() => expect(screen.getByText('Refresh job: succeeded')).toBeInTheDocument());
 
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     expect(jobReads).toBe(2);
     expect(overviewReads).toBeGreaterThanOrEqual(2);
+  });
+
+  it('reloads the snapshot when a refresh finishes with partial persisted data', async () => {
+    let overviewReads = 0;
+    domainApiMocks.getTodayOverview.mockImplementation(async () => {
+      overviewReads += 1;
+      return snapshot({ source_status: 'partial' });
+    });
+    domainApiMocks.requestTodayOverviewRefresh.mockResolvedValue(job('partial'));
+    renderToday();
+    expect(await screen.findByRole('button', { name: 'Refresh overview' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
+
+    await vi.waitFor(() => expect(screen.getByText('Refresh job: partial')).toBeInTheDocument());
+    await vi.waitFor(() => expect(overviewReads).toBeGreaterThanOrEqual(2));
+    expect(domainApiMocks.getOverviewRefreshJob).not.toHaveBeenCalled();
   });
 
   it('stops automatic refresh polling after 60 seconds', async () => {

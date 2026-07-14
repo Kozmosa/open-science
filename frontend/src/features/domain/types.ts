@@ -306,7 +306,7 @@ export interface OverviewRefreshJob {
   owner_user_id: string;
   trigger: string;
   scheduled_for_date: string | null;
-  status: 'queued' | 'retry_wait' | 'running' | 'completed' | 'failed' | string;
+  status: 'queued' | 'retry_wait' | 'running' | 'succeeded' | 'partial' | 'failed' | string;
   attempt_count: number;
   retry_count: number;
   next_retry_at: string | null;

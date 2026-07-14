@@ -35,6 +35,7 @@ const REORDERABLE_CARD_IDS: OverviewDisplayCardId[] = ['progress', 'literature',
 const REFRESH_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 10_000] as const;
 const MAX_REFRESH_POLL_MS = 60_000;
 const ACTIVE_JOB_STATUSES = new Set(['queued', 'retry_wait', 'running']);
+const SUCCESS_JOB_STATUSES = new Set(['succeeded', 'partial', 'completed']);
 
 type JsonRecord = Record<string, unknown>;
 
@@ -74,7 +75,7 @@ function formatDate(value: string | null | undefined, locale: 'en' | 'zh'): stri
 }
 
 function statusTone(status: string): 'neutral' | 'success' | 'warning' | 'danger' {
-  if (status === 'ok' || status === 'completed') return 'success';
+  if (status === 'ok' || status === 'succeeded' || status === 'completed') return 'success';
   if (status === 'failed') return 'danger';
   if (status === 'stale' || status === 'partial' || status === 'unavailable') return 'warning';
   return 'neutral';
@@ -237,7 +238,7 @@ export default function TodayPage() {
 
   const completeRefresh = useCallback((job: OverviewRefreshJob) => {
     setRefreshJob(job);
-    if (job.status === 'completed') {
+    if (SUCCESS_JOB_STATUSES.has(job.status)) {
       refreshKeyRef.current = createIdempotencyKey('overview.today.refresh');
       void queryClient.invalidateQueries({ queryKey: queryKeys.domain.overview });
     }
