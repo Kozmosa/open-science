@@ -1,4 +1,4 @@
-import { Alert } from '@design-system/primitives';
+import { Alert } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { TaskRecord } from '@/shared/types';
 

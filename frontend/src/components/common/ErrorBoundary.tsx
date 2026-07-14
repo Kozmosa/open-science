@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode, type ContextType } from 'react';
-import { Alert, Button } from '@design-system/primitives';
+import { Alert, Button } from '@design-system';
 import { I18nContext } from '@/shared/i18n';
 import { logError } from '@/shared/utils/logging';
 

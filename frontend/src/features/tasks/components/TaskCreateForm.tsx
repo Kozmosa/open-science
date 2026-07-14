@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, FormField, Input, NativeSelect, Textarea } from '@design-system/primitives';
+import { Button, FormField, Input, NativeSelect, RadioGroup, RadioGroupItem, Textarea } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { EnvironmentRecord, ProjectRecord, SkillItem, TaskCreatePayload, ResearcherType, HarnessEngine, WorkspaceRecord } from '@/shared/types';
 import type { ResearchAgentProfileSettings } from '@features/settings/types';
@@ -422,30 +422,26 @@ export default function TaskCreateForm({
         <legend id="task-create-researcher-type-label" className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
           {t('pages.tasks.create.researcherType')}
         </legend>
-        <div className="flex flex-wrap gap-4 text-sm text-[var(--text-secondary)]">
+        <RadioGroup
+          value={researcherType}
+          onValueChange={(value) => setResearcherType(value as ResearcherType)}
+          className="flex flex-wrap gap-4 text-sm text-[var(--text-secondary)]"
+        >
           <label htmlFor={FIELD_IDS.researcherVanilla} className="flex items-center gap-2">
-            <input
+            <RadioGroupItem
               id={FIELD_IDS.researcherVanilla}
-              type="radio"
-              name="researcher-type"
               value="vanilla"
-              checked={researcherType === 'vanilla'}
-              onChange={(e) => setResearcherType(e.target.value as ResearcherType)}
             />
             <span>{t('pages.tasks.create.researcherVanilla')}</span>
           </label>
           <label htmlFor={FIELD_IDS.researcherAris} className="flex items-center gap-2">
-            <input
+            <RadioGroupItem
               id={FIELD_IDS.researcherAris}
-              type="radio"
-              name="researcher-type"
               value="aris-researcher"
-              checked={researcherType === 'aris-researcher'}
-              onChange={(e) => setResearcherType(e.target.value as ResearcherType)}
             />
             <span>{t('pages.tasks.create.researcherAris')}</span>
           </label>
-        </div>
+        </RadioGroup>
       </fieldset>
 
       <FormField label={t('pages.tasks.create.executionEngine')}>

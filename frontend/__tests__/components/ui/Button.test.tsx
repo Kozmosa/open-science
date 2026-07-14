@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Plus } from 'lucide-react';
-import { Button } from '@design-system/primitives';
+import { Button } from '@design-system';
 
 describe('Button', () => {
   it('renders as an inline-flex container so gap works for icon + label', () => {
@@ -33,9 +33,24 @@ describe('Button', () => {
     render(<Button variant="danger">Delete</Button>);
 
     expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass(
-      'bg-[var(--danger)]',
-      'text-[var(--destructive-foreground)]',
+      'bg-[var(--osci-color-danger)]',
+      'text-[var(--osci-color-on-accent)]',
       'hover:opacity-90'
     );
+  });
+
+  it('keeps loading content in layout while exposing busy state', () => {
+    render(<Button isLoading>Save changes</Button>);
+
+    const button = screen.getByRole('button', { name: /save changes/i });
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(button).toBeDisabled();
+    expect(screen.getByText('Save changes')).toHaveClass('invisible');
+  });
+
+  it('supports an accessible icon-only size', () => {
+    render(<Button size="icon" aria-label="Create task"><Plus aria-hidden="true" /></Button>);
+
+    expect(screen.getByRole('button', { name: 'Create task' })).toHaveClass('h-10', 'w-10', 'p-0');
   });
 });

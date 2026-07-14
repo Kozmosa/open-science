@@ -1,6 +1,5 @@
-import SectionStack from '@design-system/layout/SectionStack';
 import { TokenFlowBar } from '../../components/token/TokenFlowBar';
-import { semanticDotClasses, semanticToneClasses } from '@design-system/tokens/theme';
+import { SectionStack, semanticDotClasses, semanticToneClasses } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { AttemptRecord } from '@/shared/types';
 

@@ -16,7 +16,7 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
-import { Button } from '@design-system/primitives';
+import { Button } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { readMigratedLocalStorage, removeLocalStorage } from '@/shared/utils/storage';
 import { createTaskEdge } from '@/shared/api';

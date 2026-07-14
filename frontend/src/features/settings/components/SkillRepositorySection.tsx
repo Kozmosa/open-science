@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system/primitives';
+import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SkillDetail, SkillImportRequest, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';

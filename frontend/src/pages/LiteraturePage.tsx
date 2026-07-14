@@ -12,8 +12,7 @@ import {
   previewLiteratureTopic,
   updateLiteratureTopic,
 } from '@/shared/api';
-import { Alert, Badge, Button, EmptyState, FormField, Input, Dialog, SectionCard, SectionHeader, StatusDot } from '@design-system/primitives';
-import { PageShell, SectionStack } from '@design-system/layout';
+import { Alert, Badge, Button, Dialog, EmptyState, FormField, Input, PageShell, SectionCard, SectionHeader, SectionStack, StatusDot } from '@design-system';
 import { queryKeys } from '@/shared/api/queryKeys';
 import type { LiteratureCheckStatus, LiteratureInboxView, LiteratureTopic, LiteratureTopicInput } from '@/shared/types';
 import { useLocale, useT } from '@/shared/i18n';

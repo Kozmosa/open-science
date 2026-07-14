@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { getEnvironments, getEnvAccess, grantEnvAccess, revokeEnvAccess, getAdminUsers } from '@/shared/api';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
-import { NativeSelect } from '@design-system/primitives';
+import { NativeSelect } from '@design-system';
 import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';
 import { AccessItemRow } from '../../components/settings/AccessItemRow';
 import LoadingSpinner from '../../components/common/LoadingSpinner';

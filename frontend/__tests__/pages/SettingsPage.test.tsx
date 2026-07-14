@@ -217,6 +217,8 @@ describe('SettingsPage', () => {
     }
     codexProfile.codexConfigToml = 'model = "user-saved"\n';
     codexProfile.codexAuthJson = '{"token":"user-saved"}\n';
+    codexProfile.codexConfigTomlSource = 'custom';
+    codexProfile.codexAuthJsonSource = 'custom';
     settings.taskConfiguration.defaultResearchAgentProfileId = 'codex-app-server-default';
     window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
 

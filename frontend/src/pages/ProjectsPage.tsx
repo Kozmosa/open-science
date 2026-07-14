@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, FormField, Input, Dialog, Textarea } from '@design-system/primitives';
+import { Button, Dialog, FormField, Input, PageShell, SplitPane, Textarea } from '@design-system';
 import { ProjectCanvas, ProjectSidebar } from '../components/project';
 import { useT } from '@/shared/i18n';
-import { PageShell, SplitPane } from '@design-system/layout';
 import {
   createProject,
   createTask,

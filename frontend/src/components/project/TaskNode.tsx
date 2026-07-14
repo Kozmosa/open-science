@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { semanticDotClasses } from '@design-system/tokens/theme';
+import { semanticDotClasses } from '@design-system';
 import { useLocale } from '@/shared/i18n';
 import type { TaskSummary } from '@/shared/types';
 

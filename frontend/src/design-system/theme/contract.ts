@@ -15,6 +15,7 @@ export const OSCI_THEME_TOKEN_NAMES = [
   '--osci-color-primary-hover',
   '--osci-color-primary-soft',
   '--osci-color-primary-border',
+  '--osci-color-on-accent',
   '--osci-color-focus',
   '--osci-color-success',
   '--osci-color-warning',

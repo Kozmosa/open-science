@@ -17,6 +17,18 @@ if (typeof window !== 'undefined') {
   })
 }
 
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub implements ResizeObserver {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: ResizeObserverStub,
+  })
+}
+
 if (typeof HTMLCanvasElement !== 'undefined') {
   const gradientStub = {
     addColorStop: vi.fn(),

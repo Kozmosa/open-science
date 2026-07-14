@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, FormField, PageHeader, SectionCard, SectionHeader, NativeSelect } from '@design-system/primitives';
-import { PageShell, SectionStack } from '@design-system/layout';
+import { Alert, FormField, NativeSelect, PageHeader, PageShell, SectionCard, SectionHeader, SectionStack } from '@design-system';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '@/components/environment';
 import { getEnvironments, getSkills, getWorkspaces } from '@/shared/api';
 import { useSettings } from '@features/settings';

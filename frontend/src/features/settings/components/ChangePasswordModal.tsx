@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Button, Input } from '@design-system/primitives';
+import { Button, Input } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
 import { changePassword } from '@/shared/api';

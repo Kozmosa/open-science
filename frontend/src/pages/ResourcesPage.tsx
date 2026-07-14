@@ -5,7 +5,7 @@ import { SystemResourceCard, OpenScienceProcessCard, TaskUsageCard } from '../co
 import { useT } from '@/shared/i18n';
 import { useCardLayout } from '../hooks/useCardLayout';
 import type { CardKind } from '../hooks/useCardLayout';
-import { CardGrid, PageShell } from '@design-system/layout';
+import { CardGrid, PageShell } from '@design-system';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 

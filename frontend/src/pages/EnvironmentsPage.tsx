@@ -7,11 +7,13 @@ import {
   FormField,
   Input,
   Dialog,
+  PageShell,
   SectionCard,
+  SectionStack,
   NativeSelect,
   Textarea,
-} from '@design-system/primitives';
-import { PageShell, SectionStack } from '@design-system/layout';
+  useToast,
+} from '@design-system';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -31,7 +33,6 @@ import type {
 import { useLocale, useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useEnvironmentSelection } from '../components/environment';
-import { useToast } from '@design-system';
 import { EnvironmentDetectionModal } from '../components/environment';
 import {
   buildEnvironmentRequest,

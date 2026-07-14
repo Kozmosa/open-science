@@ -1,37 +1,23 @@
-import { type HTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import { cn } from '@/shared/utils/cn';
 
-interface CardProps extends HTMLAttributes<HTMLElement> {
-  children: ReactNode;
-}
+export const Card = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>(function Card(
+  { className, ...props },
+  ref,
+) {
+  return <section ref={ref} className={cn('rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)] shadow-[var(--osci-shadow-sm)]', className)} {...props} />;
+});
 
-interface CardSectionProps extends HTMLAttributes<HTMLDivElement> {
-  children: ReactNode;
-}
+export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function CardHeader(
+  { className, ...props },
+  ref,
+) {
+  return <div ref={ref} className={cn('px-6 pt-6', className)} {...props} />;
+});
 
-export function Card({ children, className = '', ...rest }: CardProps) {
-  return (
-    <section
-      className={cn('rounded-xl bg-[var(--surface)] shadow-[var(--shadow-card)]', className)}
-      {...rest}
-    >
-      {children}
-    </section>
-  );
-}
-
-export function CardHeader({ children, className = '', ...rest }: CardSectionProps) {
-  return (
-    <div className={cn('px-6 pt-6', className)} {...rest}>
-      {children}
-    </div>
-  );
-}
-
-export function CardBody({ children, className = '', ...rest }: CardSectionProps) {
-  return (
-    <div className={cn('px-6 pb-6', className)} {...rest}>
-      {children}
-    </div>
-  );
-}
+export const CardBody = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function CardBody(
+  { className, ...props },
+  ref,
+) {
+  return <div ref={ref} className={cn('px-6 pb-6', className)} {...props} />;
+});

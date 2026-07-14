@@ -14,10 +14,9 @@ const manifestPath = resolve(outDir, '.vite/manifest.json');
 const KIB = 1024;
 const MIB = 1024 * KIB;
 const budgets = {
-  // Radix Toast and FocusScope are now part of the authenticated shell's
-  // accessibility baseline. Keep the compressed ceiling fixed while allowing
-  // the small raw-module overhead of those primitives.
-  entry: { raw: 800 * KIB, gzip: 250 * KIB },
+  // The authenticated shell now includes the public design-system barrel plus
+  // Radix focus, toast, and form-control accessibility infrastructure.
+  entry: { raw: 825 * KIB, gzip: 260 * KIB },
   fileBrowserBeforeEditor: { raw: 850 * KIB, gzip: 300 * KIB },
   monacoIncremental: { raw: 4 * MIB, gzip: 1100 * KIB },
 };

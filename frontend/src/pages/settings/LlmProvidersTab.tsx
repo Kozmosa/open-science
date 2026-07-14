@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Button, SectionCard, SectionHeader } from '@design-system/primitives';
-import { SectionStack } from '@design-system/layout';
+import { Button, SectionCard, SectionHeader, SectionStack } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useLlmProviders } from '@features/settings';
 import type { LlmProvider } from '@features/settings';

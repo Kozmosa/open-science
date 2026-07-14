@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect, Textarea } from '@design-system/primitives';
+import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect, Textarea } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { EnvironmentTaskDefaults, TaskConfigurationSettings } from '@features/settings';
 import type { EnvironmentRecord } from '@/shared/types';

@@ -1,4 +1,4 @@
-import { Badge, SectionCard, SectionHeader, NativeSelect, StatusDot } from '@design-system/primitives';
+import { Badge, SectionCard, SectionHeader, NativeSelect, StatusDot } from '@design-system';
 import type { EnvironmentRecord } from '@/shared/types';
 import { useT } from '@/shared/i18n';
 

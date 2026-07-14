@@ -1,4 +1,4 @@
-import { semanticDotClasses } from '@design-system/tokens/theme';
+import { semanticDotClasses } from '../tokens/theme';
 
 interface Props {
   status: 'success' | 'error' | 'warning' | 'idle';
@@ -20,4 +20,3 @@ const sizeClasses: Record<NonNullable<Props['size']>, string> = {
 export function StatusDot({ status, size = 'md' }: Props) {
   return <span className={['inline-block rounded-full', statusColors[status], sizeClasses[size]].join(' ')} />;
 }
-

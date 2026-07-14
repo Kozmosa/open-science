@@ -6,7 +6,7 @@ import {
   useEnvironmentSelection,
 } from '../components/environment';
 import { TerminalBenchCard } from '../components/terminal';
-import { PageHeader, SectionCard, SectionHeader } from '@design-system/primitives';
+import { PageHeader, SectionCard, SectionHeader } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 

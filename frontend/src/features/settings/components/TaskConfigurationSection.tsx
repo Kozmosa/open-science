@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect, SkillToggleGroup, Textarea } from '@design-system/primitives';
+import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect, SkillToggleGroup, Textarea } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { ExecutionEngineId, ResearchAgentProfileSettings, TaskConfigurationSettings } from '@features/settings';
 import { useLlmProviders } from '@features/settings';

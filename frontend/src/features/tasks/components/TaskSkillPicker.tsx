@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { semanticToneClasses } from '@design-system/tokens/theme';
+import { semanticToneClasses } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { SkillItem } from '@/shared/types';
 

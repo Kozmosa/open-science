@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Button, NativeSelect } from '@design-system/primitives';
+import { Button, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { TaskCreatePayload, WorkspaceRecord, EnvironmentRecord } from '@/shared/types';
 import type { ResearchAgentProfileSettings } from '@features/settings/types';

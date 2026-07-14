@@ -5,7 +5,7 @@ import {
   requestLiteratureSummary,
   updateLiteraturePaperState,
 } from '@/shared/api';
-import { Badge, Button } from '@design-system/primitives';
+import { Badge, Button } from '@design-system';
 import { queryKeys } from '@/shared/api/queryKeys';
 import type { LiteraturePaperListItem, LiteratureSummaryStatus } from '@/shared/types';
 import { useLocale, useT } from '@/shared/i18n';

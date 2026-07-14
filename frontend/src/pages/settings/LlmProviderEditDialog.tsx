@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button, FormField, Input, NativeSelect } from '@design-system/primitives';
+import { Button, FormField, Input, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { LlmProvider, LlmProviderFormat } from '@features/settings';
 

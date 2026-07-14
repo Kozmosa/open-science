@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
-import { BrandMark, Button, Input } from '@design-system/primitives';
+import { BrandMark, Button, Input } from '@design-system';
 
 export default function RegisterPage() {
   const t = useT();

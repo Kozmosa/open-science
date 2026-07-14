@@ -1,30 +1,21 @@
 import { cva, type VariantProps } from 'class-variance-authority';
-import type { ReactNode } from 'react';
+import type { HTMLAttributes } from 'react';
 import { cn } from '@/shared/utils/cn';
 
-const alertVariants = cva(
-  'rounded-lg border p-3 text-sm',
-  {
-    variants: {
-      variant: {
-        error: 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--danger-foreground)]',
-        warning: 'border-[var(--warning-border)] bg-[var(--warning-soft)] text-[var(--warning-foreground)]',
-        success: 'border-[var(--success-border)] bg-[var(--success-soft)] text-[var(--success-foreground)]',
-      },
+const alertVariants = cva('rounded-[var(--osci-radius-sm)] border p-3 text-sm', {
+  variants: {
+    variant: {
+      error: 'border-[var(--osci-color-danger-border)] bg-[var(--osci-color-danger-soft)] text-[var(--osci-color-danger-foreground)]',
+      warning: 'border-[var(--osci-color-warning-border)] bg-[var(--osci-color-warning-soft)] text-[var(--osci-color-warning-foreground)]',
+      success: 'border-[var(--osci-color-success-border)] bg-[var(--osci-color-success-soft)] text-[var(--osci-color-success-foreground)]',
+      info: 'border-[var(--osci-color-primary-border)] bg-[var(--osci-color-primary-soft)] text-[var(--osci-color-text)]',
     },
-    defaultVariants: { variant: 'error' },
-  }
-);
+  },
+  defaultVariants: { variant: 'error' },
+});
 
-interface Props extends VariantProps<typeof alertVariants> {
-  children: ReactNode;
-  className?: string;
-}
+export interface AlertProps extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof alertVariants> {}
 
-export function Alert({ children, variant = 'error', className = '' }: Props) {
-  return (
-    <div className={cn(alertVariants({ variant }), className)}>
-      {children}
-    </div>
-  );
+export function Alert({ variant = 'error', className, role, ...props }: AlertProps) {
+  return <div role={role ?? (variant === 'error' ? 'alert' : 'status')} className={cn(alertVariants({ variant }), className)} {...props} />;
 }

@@ -1,5 +1,4 @@
-import SectionStack from '@design-system/layout/SectionStack';
-import { semanticToneClasses } from '@design-system/tokens/theme';
+import { SectionStack, semanticToneClasses } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { TaskRecord } from '@/shared/types';
 

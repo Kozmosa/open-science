@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@features/auth';
 import { changePassword } from '@/shared/api';
 import { useT } from '@/shared/i18n';
-import { Button, Input } from '@design-system/primitives';
+import { Button, Input } from '@design-system';
 
 export default function ChangePasswordPage() {
   const t = useT();

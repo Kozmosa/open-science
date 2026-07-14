@@ -4,8 +4,7 @@ import { createWorkspace, deleteWorkspace, getWorkspaces, updateWorkspace } from
 import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
 import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '@/shared/types';
-import { PageShell, SplitPane } from '@design-system/layout';
-import { Button, FormField, Input, Textarea, Alert } from '@design-system/primitives';
+import { Alert, Button, FormField, Input, PageShell, SplitPane, Textarea } from '@design-system';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 interface WorkspaceDraft {

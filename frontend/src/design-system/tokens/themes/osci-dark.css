@@ -14,6 +14,7 @@
   --osci-color-primary-hover: var(--osci-palette-blue-300);
   --osci-color-primary-soft: rgb(96 165 250 / 0.12);
   --osci-color-primary-border: rgb(96 165 250 / 0.28);
+  --osci-color-on-accent: var(--osci-palette-white);
   --osci-color-focus: var(--osci-palette-blue-400);
   --osci-color-success: var(--osci-palette-green-400);
   --osci-color-success-foreground: #bbf7d0;

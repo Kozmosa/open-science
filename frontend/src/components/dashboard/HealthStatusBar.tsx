@@ -1,4 +1,4 @@
-import { Alert, StatusDot } from '@design-system/primitives';
+import { Alert, StatusDot } from '@design-system';
 import type { SystemHealth } from '@/shared/types';
 import { useT } from '@/shared/i18n';
 

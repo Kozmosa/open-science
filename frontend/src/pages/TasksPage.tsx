@@ -15,10 +15,8 @@ import {
   getWorkspaces,
   retryTask,
 } from '@/shared/api';
-import { Button, Dialog, NativeSelect } from '@design-system/primitives';
-import { useToast } from '@design-system';
+import { Button, Checkbox, Dialog, NativeSelect, PageShell, SplitPane, useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
-import { PageShell, SplitPane } from '@design-system/layout';
 import { extractErrorMessage } from '@/shared/utils/error';
 import { useAuth } from '@features/auth';
 import type { TaskCreatePayload, TaskListResponse } from '@/shared/types';
@@ -263,12 +261,11 @@ function TasksPage() {
             <option value="created">{t('pages.tasks.sort.created')}</option>
             <option value="name">{t('pages.tasks.sort.name')}</option>
           </NativeSelect>
-          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-tertiary)]">
-            <input
-              type="checkbox"
+          <label htmlFor="tasks-show-archived" className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-tertiary)]">
+            <Checkbox
+              id="tasks-show-archived"
               checked={showArchived}
-              onChange={(event) => setShowArchived(event.target.checked)}
-              className="rounded border-[var(--border)] accent-[var(--prism-primary)]"
+              onCheckedChange={(checked) => setShowArchived(checked === true)}
             />
             {t('pages.tasks.actions.showArchived')}
           </label>
