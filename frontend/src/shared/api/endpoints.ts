@@ -258,16 +258,24 @@ export const createWorkspace = (payload: WorkspaceCreateRequest): Promise<Worksp
 
 export const updateWorkspace = (
   workspaceId: string,
-  payload: WorkspaceUpdateRequest
+  payload: WorkspaceUpdateRequest,
+  idempotencyKey?: string,
 ): Promise<WorkspaceRecord> =>
   USE_MOCK
     ? Promise.resolve(mockUpdateWorkspace(workspaceId, payload))
-    : api.patch<WorkspaceRecord>(`/workspaces/${workspaceId}`, payload);
+    : api.patch<WorkspaceRecord>(`/workspaces/${workspaceId}`, payload, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      });
 
 export const deleteWorkspace = (workspaceId: string): Promise<void> =>
   USE_MOCK
     ? Promise.resolve(mockDeleteWorkspace(workspaceId))
     : api.delete<void>(`/workspaces/${workspaceId}`);
+
+export const unregisterWorkspace = (workspaceId: string, idempotencyKey: string): Promise<void> =>
+  api.post<void>(`/workspaces/${workspaceId}/unregister`, {}, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const getTasks = (params: {
   includeArchived?: boolean;

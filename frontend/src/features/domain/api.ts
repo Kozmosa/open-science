@@ -37,6 +37,37 @@ export function getDomainWorkspace(workspaceId: string): Promise<DomainWorkspace
   return api.get(`/domain/workspaces/${encodeURIComponent(workspaceId)}`);
 }
 
+export function createDomainWorkspace(
+  payload: { environment_id: string; canonical_path: string; label: string },
+  idempotencyKey: string,
+): Promise<{ workspace_id: string }> {
+  return domainPost('/domain/workspaces', payload, idempotencyKey);
+}
+
+export function attachDomainWorkspace(
+  projectId: string,
+  workspaceId: string,
+  idempotencyKey: string,
+): Promise<Record<string, unknown>> {
+  return domainPost(
+    `/domain/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}`,
+    {},
+    idempotencyKey,
+  );
+}
+
+export function setDomainPrimaryWorkspace(
+  projectId: string,
+  workspaceId: string,
+  idempotencyKey: string,
+): Promise<Record<string, unknown>> {
+  return api.put(
+    `/domain/projects/${encodeURIComponent(projectId)}/primary-workspace/${encodeURIComponent(workspaceId)}`,
+    {},
+    { headers: idempotencyHeaders(idempotencyKey) },
+  );
+}
+
 export function getDomainTaskAttempts(taskId: string): Promise<ItemList<DomainTaskAttempt>> {
   return api.get(`/tasks/${encodeURIComponent(taskId)}/attempts`);
 }
