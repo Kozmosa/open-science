@@ -6,6 +6,7 @@ import { useAuth } from '@features/auth';
 import type { WorkspaceCreateRequest, WorkspaceRecord, WorkspaceUpdateRequest } from '@/shared/types';
 import { Alert, Button, FormField, Input, PageShell, SplitPane, Textarea } from '@design-system';
 import { queryKeys } from '@/shared/api/queryKeys';
+import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 
 interface WorkspaceDraft {
   label: string;
@@ -53,6 +54,7 @@ function WorkspacesPage() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isTaskCreateOpen, setTaskCreateOpen] = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const workspacesQuery = useQuery({
@@ -116,6 +118,7 @@ function WorkspacesPage() {
   const isBusy = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   return (
+    <>
     <PageShell className="p-3">
       <SplitPane
       sidebarWidth={sidebarWidth}
@@ -251,6 +254,11 @@ function WorkspacesPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-3">
+            {!isCreating && selectedWorkspace ? (
+              <Button type="button" variant="secondary" onClick={() => setTaskCreateOpen(true)}>
+                {t('pages.tasks.newTask')}
+              </Button>
+            ) : null}
             {!isCreating && canDelete ? (
               <Button
                 type="button"
@@ -281,6 +289,13 @@ function WorkspacesPage() {
       </form>
     </SplitPane>
     </PageShell>
+    <TaskCreateFlow
+      isOpen={isTaskCreateOpen}
+      source="workspace"
+      lockedWorkspaceId={selectedWorkspace?.workspace_id ?? null}
+      onClose={() => setTaskCreateOpen(false)}
+    />
+    </>
   );
 }
 

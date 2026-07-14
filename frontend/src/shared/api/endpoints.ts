@@ -309,8 +309,15 @@ export const getTaskTokenUsageSummary = (params: { includeArchived?: boolean } =
     : api.get<TaskTokenUsageSummary>(`/tasks/token-usage?${searchParams.toString()}`);
 };
 
-export const createTask = (payload: TaskCreatePayload): Promise<TaskSummary> =>
-  USE_MOCK ? Promise.resolve(mockCreateTask(payload)) : api.post<TaskSummary>('/tasks', payload);
+export const createTask = (
+  payload: TaskCreatePayload,
+  idempotencyKey?: string,
+): Promise<TaskSummary> =>
+  USE_MOCK
+    ? Promise.resolve(mockCreateTask(payload))
+    : api.post<TaskSummary>('/tasks', payload, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      });
 
 export const archiveTask = (taskId: string): Promise<TaskSummary> =>
   USE_MOCK ? Promise.resolve(mockArchiveTask(taskId)) : api.delete<TaskSummary>(`/tasks/${taskId}`);

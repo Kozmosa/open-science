@@ -351,7 +351,7 @@ export interface TaskCreateRequest {
 export interface TaskCreatePayload {
   project_id: string;
   workspace_id: string;
-  environment_id: string;
+  environment_id?: string;
   researcher_type: ResearcherType;
   harness_engine: HarnessEngine;
   prompt: string;

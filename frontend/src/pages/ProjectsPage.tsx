@@ -5,30 +5,23 @@ import { ProjectCanvas, ProjectSidebar } from '../components/project';
 import { useT } from '@/shared/i18n';
 import {
   createProject,
-  createTask,
-  getEnvironments,
-  getProject,
   getProjects,
-  getSkills,
   getProjectTasks,
   getTask,
   getTaskEdges,
-  getWorkspaces,
   updateTaskProject,
 } from '@/shared/api';
 import { extractErrorMessage } from '@/shared/utils/error';
-import type { ProjectCreateRequest, TaskCreatePayload, TaskRecord } from '@/shared/types';
-import TaskCreateForm from '@features/tasks/components/TaskCreateForm';
+import type { ProjectCreateRequest, TaskRecord } from '@/shared/types';
+import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
 import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
 import { queryKeys } from '@/shared/api/queryKeys';
-import { useTaskConfiguration } from '@features/settings/contexts/TaskConfigurationContext';
 
 
 export default function ProjectsPage() {
   const t = useT();
   const queryClient = useQueryClient();
-  const { taskConfiguration } = useTaskConfiguration();
 
   const projectsQuery = useQuery({ queryKey: queryKeys.projects.all, queryFn: getProjects });
 
@@ -74,40 +67,6 @@ export default function ProjectsPage() {
   const selectedTask: TaskRecord | null = selectedTaskQuery.data ?? null;
   const { outputItems, outputError, hasMore, loadMore, isLoadingMore } = useTaskStream(selectedTaskId);
 
-  // Fetch defaults for task creation
-  const projectDetailQuery = useQuery({
-    queryKey: queryKeys.projects.detail(effectiveProjectId),
-    queryFn: () => getProject(effectiveProjectId ?? ''),
-    enabled: effectiveProjectId !== null,
-  });
-  const workspacesQuery = useQuery({
-    queryKey: queryKeys.workspaces.all,
-    queryFn: getWorkspaces,
-  });
-  const environmentsQuery = useQuery({
-    queryKey: queryKeys.environments.all,
-    queryFn: getEnvironments,
-  });
-  const skillsQuery = useQuery({
-    queryKey: queryKeys.skills.all,
-    queryFn: getSkills,
-  });
-
-
-  const projectDetail = projectDetailQuery.data ?? null;
-  const defaultWorkspaceId =
-    projectDetail?.default_workspace_id ?? workspacesQuery.data?.items[0]?.workspace_id ?? '';
-  const defaultEnvironmentId =
-    projectDetail?.default_environment_id ?? environmentsQuery.data?.items[0]?.id ?? '';
-  const availableProjects = projects;
-  const availableWorkspaces = workspacesQuery.data?.items ?? [];
-
-  const selectedResearchAgentProfile = useMemo(() => {
-    const profileId = taskConfiguration.defaultResearchAgentProfileId;
-    if (!profileId) return null;
-    return taskConfiguration.researchAgentProfiles.find(p => p.profileId === profileId) ?? null;
-  }, [taskConfiguration.defaultResearchAgentProfileId, taskConfiguration.researchAgentProfiles]);
-  const availableEnvironments = environmentsQuery.data?.items ?? [];
   const handleResetLayout = useCallback(() => {
     if (effectiveProjectId) {
       localStorage.removeItem(`ainrf:project-layout:${effectiveProjectId}`);
@@ -143,16 +102,6 @@ export default function ProjectsPage() {
   const closeCreateDialog = useCallback(() => {
     setCreateDialogOpen(false);
   }, []);
-
-  const createMutation = useMutation({
-    mutationFn: (payload: TaskCreatePayload) => createTask(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(effectiveProjectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(effectiveProjectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      closeCreateDialog();
-    },
-  });
 
   const handleMoveTaskToProject = useCallback(
     async (taskId: string, targetProjectId: string) => {
@@ -221,27 +170,20 @@ export default function ProjectsPage() {
         ) : null}
       </Dialog>
 
-      <Dialog
+      <TaskCreateFlow
         isOpen={isCreateDialogOpen}
+        source="project"
+        lockedProjectId={effectiveProjectId}
         onClose={closeCreateDialog}
-        title={null}
-        ariaLabel={t('pages.tasks.createTitle')}
-        size="lg"
-      >
-        <TaskCreateForm
-          projectId={effectiveProjectId ?? ''}
-          workspaceId={defaultWorkspaceId}
-          environmentId={defaultEnvironmentId}
-          availableProjects={availableProjects}
-          availableWorkspaces={availableWorkspaces}
-          availableEnvironments={availableEnvironments}
-          availableSkills={skillsQuery.data?.items ?? []}
-          lockProject
-          researchAgentProfile={selectedResearchAgentProfile}
-          onSubmit={(payload) => createMutation.mutate(payload)}
-          onCancel={closeCreateDialog}
-        />
-      </Dialog>
+        onCreated={() => {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.projectTasks.byProject(effectiveProjectId),
+          });
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.taskEdges.byProject(effectiveProjectId),
+          });
+        }}
+      />
       <Dialog
         isOpen={isCreateProjectOpen}
         onClose={() => setCreateProjectOpen(false)}

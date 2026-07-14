@@ -249,6 +249,106 @@ vi.mock('@/shared/api', () => ({
   getWorkspaces: vi.fn(),
 }));
 
+vi.mock('@features/domain', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@features/domain')>();
+  return {
+    ...actual,
+    getDomainCapabilities: vi.fn(() => Promise.resolve({
+      domain_contract_version: 2,
+      mode: 'v2',
+      standard_task_create: true,
+      project_context: true,
+      workspace_links: true,
+      task_attempts: true,
+      task_dispatcher: {
+        participant_type: 'task-dispatcher',
+        ready: true,
+        maintenance_active: false,
+        maintenance_epoch: null,
+        stale_after_seconds: 30,
+        registered_participant_ids: ['dispatcher'],
+        active_participant_ids: ['dispatcher'],
+        fresh_participant_ids: ['dispatcher'],
+        stale_participant_ids: [],
+      },
+      literature_research_task: true,
+      overview_snapshot: true,
+      overview_snapshot_job_store: true,
+      overview_snapshot_planner: {
+        job_store_ready: true,
+        planner_ready: true,
+        planner_status: 'ready',
+      },
+    })),
+    getDomainProjects: vi.fn(() => Promise.resolve({
+      items: [{
+        project_id: 'default',
+        name: 'Default Project',
+        description: '',
+        status: 'active',
+        is_default: true,
+        owner_user_id: 'user-1',
+        current_user_role: 'owner',
+        created_at: '2026-04-23T08:00:00Z',
+        updated_at: '2026-04-23T08:00:00Z',
+        recent_activity_at: '2026-04-23T08:00:00Z',
+        workspace_count: 1,
+        executable_workspace_count: 1,
+        task_count: 1,
+        active_task_count: 1,
+        running_task_count: 1,
+        primary_workspace: null,
+        attention_required: false,
+        attention_reasons: [],
+        permissions: {
+          can_edit: true,
+          can_publish: true,
+          can_manage_members: true,
+          can_archive: false,
+          can_unarchive: false,
+          can_create_task: true,
+        },
+      }],
+    })),
+    getDomainWorkspaces: vi.fn(() => Promise.resolve({
+      items: [{
+        workspace_id: 'workspace-default',
+        label: 'Repository Default',
+        description: 'Seed workspace',
+        canonical_path: '/workspace/project',
+        workspace_context: null,
+        status: 'active',
+        owner_user_id: 'user-1',
+        created_at: '2026-04-23T08:00:00Z',
+        updated_at: '2026-04-23T08:00:00Z',
+        recent_activity_at: '2026-04-23T08:00:00Z',
+        environment: {
+          environment_id: 'env-1',
+          alias: 'gpu-lab',
+          display_name: 'GPU Lab',
+          status: 'active',
+        },
+        project_links: [{
+          project_id: 'default',
+          project_name: 'Default Project',
+          project_status: 'active',
+          current_user_role: 'owner',
+          link_status: 'active',
+          is_primary: true,
+          can_execute: true,
+          cannot_execute_reason: null,
+        }],
+        task_count: 1,
+        active_task_count: 1,
+        can_execute: true,
+        cannot_execute_reason: null,
+        can_manage_registry: true,
+        git_status: { state: 'not_collected', branch: null, is_dirty: null, observed_at: null },
+      }],
+    })),
+  };
+});
+
 const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
@@ -482,7 +582,6 @@ describe('TasksPage', () => {
       expect(payload).toMatchObject({
         project_id: 'default',
         workspace_id: 'workspace-default',
-        environment_id: 'env-1',
         researcher_type: 'vanilla',
         harness_engine: 'claude-code',
         prompt: 'Implement harness\nMake it stream output.',
@@ -490,6 +589,7 @@ describe('TasksPage', () => {
         mcp_servers: [],
         title: undefined,
       });
+      expect(payload).not.toHaveProperty('environment_id');
     });
     expect(await screen.findByRole('heading', { name: 'Implement harness' })).toBeInTheDocument();
     expect((await screen.findAllByText('/workspace/created')).length).toBeGreaterThan(0);
@@ -528,6 +628,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Use selected skills for this task.' },
     });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
@@ -537,56 +638,32 @@ describe('TasksPage', () => {
     });
   });
 
-  it('creates a task with user-selected project workspace and environment bindings', async () => {
-    const alternateWorkspace: WorkspaceRecord = {
-      ...workspace,
-      workspace_id: 'workspace-alt',
-      label: 'Alternate Workspace',
-      default_workdir: '/workspace/alternate',
-    };
-    const alternateEnvironment: EnvironmentRecord = {
-      ...environment,
-      id: 'env-2',
-      alias: 'cpu-lab',
-      display_name: 'CPU Lab',
-      default_workdir: '/workspace/cpu',
-    };
+  it('derives the environment from the selected executable workspace', async () => {
     mockGetTasks.mockResolvedValueOnce({ items: [] });
-    mockGetProjects.mockResolvedValue({
-      items: [
-        { project_id: 'default', name: 'Default Project', description: '', default_workspace_id: 'workspace-default', default_environment_id: 'env-1', created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z' },
-        { project_id: 'project-alt', name: 'Alternate Project', description: '', default_workspace_id: null, default_environment_id: null, created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z' },
-      ],
-    });
-    mockGetWorkspaces.mockResolvedValue({ items: [workspace, alternateWorkspace] });
-    mockGetEnvironments.mockResolvedValue({ items: [environment, alternateEnvironment] });
     mockCreateTask.mockResolvedValue({
       ...taskSummary,
       task_id: 'task-selected-bindings',
       title: 'Selected bindings',
       status: 'queued',
-      project_id: 'project-alt',
-      workspace_id: 'workspace-alt',
-      environment_id: 'env-2',
     });
 
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
     await waitFor(() => expect(screen.getByLabelText('Project')).toHaveValue('default'));
-    fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'project-alt' } });
-    fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'workspace-alt' } });
-    fireEvent.change(screen.getByLabelText('Environment'), { target: { value: 'env-2' } });
+    expect(screen.getByLabelText('Environment')).toHaveValue('GPU Lab (gpu-lab)');
+    expect(screen.getByLabelText('Environment')).toHaveAttribute('readonly');
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Run with selected bindings.' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
       expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
-        project_id: 'project-alt',
-        workspace_id: 'workspace-alt',
-        environment_id: 'env-2',
+        project_id: 'default',
+        workspace_id: 'workspace-default',
         prompt: 'Run with selected bindings.',
       });
+      expect(mockCreateTask.mock.calls[0]?.[0]).not.toHaveProperty('environment_id');
     });
   });
 
@@ -609,6 +686,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Reproduce the baseline experiment.' },
     });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
@@ -749,6 +827,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Dialog task' } });
     fireEvent.change(screen.getByLabelText('Execution Engine'), { target: { value: 'agent-sdk' } });
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Dialog task body' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
@@ -758,7 +837,8 @@ describe('TasksPage', () => {
           prompt: 'Dialog task body',
           harness_engine: 'agent-sdk',
           researcher_type: 'vanilla',
-        })
+        }),
+        expect.stringMatching(/^task\.create/),
       );
     });
 
@@ -932,6 +1012,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Run the ARIS checklist.' },
     });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() =>
@@ -941,7 +1022,8 @@ describe('TasksPage', () => {
           harness_engine: 'codex-app-server',
           prompt: 'Run the ARIS checklist.',
           skills: [],
-        })
+        }),
+        expect.stringMatching(/^task\.create/),
       )
     );
     expect(screen.queryByLabelText('Skills')).not.toBeInTheDocument();

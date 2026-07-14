@@ -92,7 +92,7 @@ const environmentAlt = {
     })
   })
 
-  it('creates a project task with the current project and user-selected workspace and environment', async () => {
+  it('creates a project task with the current project and an executable Workspace', async () => {
     let createdPayload: Record<string, unknown> | null = null
     server.use(
       http.get('/api/projects', () => HttpResponse.json({ items: [project] })),
@@ -102,6 +102,26 @@ const environmentAlt = {
       http.get('/api/workspaces', () => HttpResponse.json({ items: [workspaceDefault, workspaceAlt] })),
       http.get('/api/environments', () => HttpResponse.json({ items: [environmentDefault, environmentAlt] })),
       http.get('/api/skills', () => HttpResponse.json({ items: [] })),
+      http.get('/api/domain/projects', () => HttpResponse.json({
+        items: [{
+          project_id: 'default', name: 'Default Project', description: '', status: 'active',
+          is_default: true, owner_user_id: 'u1', current_user_role: 'owner',
+          created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+          recent_activity_at: '2026-01-01T00:00:00Z', workspace_count: 2,
+          executable_workspace_count: 2, task_count: 0, active_task_count: 0,
+          running_task_count: 0, primary_workspace: null, attention_required: false,
+          attention_reasons: [], permissions: {
+            can_edit: true, can_publish: true, can_manage_members: true,
+            can_archive: false, can_unarchive: false, can_create_task: true,
+          },
+        }],
+      })),
+      http.get('/api/domain/workspaces', () => HttpResponse.json({
+        items: [
+          domainWorkspace('workspace-default', 'Repository Default', 'env-1', 'gpu-lab', 'GPU Lab', true),
+          domainWorkspace('workspace-alt', 'Alternate Workspace', 'env-2', 'cpu-lab', 'CPU Lab', false),
+        ],
+      })),
       http.post('/api/tasks', async ({ request }) => {
         createdPayload = await request.json() as Record<string, unknown>
         return HttpResponse.json({
@@ -132,7 +152,8 @@ const environmentAlt = {
     await waitFor(() => expect(screen.getByLabelText('Project')).toHaveValue('default'))
     expect(screen.getByLabelText('Project')).toBeDisabled()
     fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'workspace-alt' } })
-    fireEvent.change(screen.getByLabelText('Environment'), { target: { value: 'env-2' } })
+    expect(screen.getByLabelText('Environment')).toHaveValue('CPU Lab (cpu-lab)')
+    expect(screen.getByLabelText('Environment')).toHaveAttribute('readonly')
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Run from project canvas.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
 
@@ -140,9 +161,9 @@ const environmentAlt = {
       expect(createdPayload).toMatchObject({
         project_id: 'default',
         workspace_id: 'workspace-alt',
-        environment_id: 'env-2',
         prompt: 'Run from project canvas.',
       })
+      expect(createdPayload).not.toHaveProperty('environment_id')
     })
   })
 
@@ -179,3 +200,47 @@ const environmentAlt = {
     })
   })
 })
+
+function domainWorkspace(
+  workspaceId: string,
+  label: string,
+  environmentId: string,
+  environmentAlias: string,
+  environmentDisplayName: string,
+  isPrimary: boolean,
+) {
+  return {
+    workspace_id: workspaceId,
+    label,
+    description: null,
+    canonical_path: `/workspace/${workspaceId}`,
+    workspace_context: null,
+    status: 'active',
+    owner_user_id: 'u1',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    recent_activity_at: '2026-01-01T00:00:00Z',
+    environment: {
+      environment_id: environmentId,
+      alias: environmentAlias,
+      display_name: environmentDisplayName,
+      status: 'active',
+    },
+    project_links: [{
+      project_id: 'default',
+      project_name: 'Default Project',
+      project_status: 'active',
+      current_user_role: 'owner',
+      link_status: 'active',
+      is_primary: isPrimary,
+      can_execute: true,
+      cannot_execute_reason: null,
+    }],
+    task_count: 0,
+    active_task_count: 0,
+    can_execute: true,
+    cannot_execute_reason: null,
+    can_manage_registry: true,
+    git_status: { state: 'not_collected', branch: null, is_dirty: null, observed_at: null },
+  }
+}

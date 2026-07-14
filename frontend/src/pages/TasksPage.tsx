@@ -5,22 +5,16 @@ import { useSearchParams } from 'react-router-dom';
 import {
   archiveTask,
   cancelTask,
-  createTask,
   deleteTask,
-  getEnvironments,
-  getProjects,
-  getSkills,
   getTask,
   getTasks,
-  getWorkspaces,
   retryTask,
 } from '@/shared/api';
-import { Button, Checkbox, Dialog, NativeSelect, PageShell, SplitPane, useToast } from '@design-system';
+import { Button, Checkbox, NativeSelect, PageShell, SplitPane, useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
-import { useAuth } from '@features/auth';
-import type { TaskCreatePayload, TaskListResponse } from '@/shared/types';
-import TaskCreateForm from '@features/tasks/components/TaskCreateForm';
+import type { TaskListResponse, TaskSummary } from '@/shared/types';
+import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
 import TaskList from '@features/tasks/pages/TaskList';
 import TaskMetadataDrawer from '../components/messages/TaskMetadataDrawer';
@@ -110,22 +104,6 @@ function TasksPage() {
   const selectedTask = selectedTaskQuery.data ?? null;
   const { outputItems, outputError, hasMore, loadMore, isLoadingMore } = useTaskStream(effectiveSelectedTaskId);
 
-  const createMutation = useMutation({
-    mutationFn: (payload: TaskCreatePayload) => createTask(payload),
-    onSuccess: (task) => {
-      queryClient.setQueryData<TaskListResponse>(queryKeys.tasks.list(showArchived, taskSort), (current) => ({
-        items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
-        total: (current?.total ?? 0) + 1,
-        has_more: current?.has_more ?? false,
-        next_cursor: current?.next_cursor ?? null,
-      }));
-      selectTask(task.task_id);
-      closeCreateDialog();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject('default') });
-    },
-  });
-
   const archiveMutation = useMutation({
     mutationFn: (taskId: string) => archiveTask(taskId),
     onSuccess: () => {
@@ -173,40 +151,6 @@ function TasksPage() {
     },
   });
 
-  // Fetch defaults for task creation
-  const projectsQuery = useQuery({
-    queryKey: queryKeys.projects.all,
-    queryFn: getProjects,
-  });
-  const workspacesQuery = useQuery({
-    queryKey: queryKeys.workspaces.all,
-    queryFn: getWorkspaces,
-  });
-  const environmentsQuery = useQuery({
-    queryKey: queryKeys.environments.all,
-    queryFn: getEnvironments,
-  });
-  const skillsQuery = useQuery({
-    queryKey: queryKeys.skills.all,
-    queryFn: getSkills,
-  });
-
-
-  const { user } = useAuth();
-  const defaultProjectId = useMemo(() => {
-    const items = projectsQuery.data?.items;
-    if (user) {
-      const userDefault = items?.find((p) => p.project_id === `${user.username}_default`);
-      if (userDefault) return userDefault.project_id;
-    }
-    return items?.[0]?.project_id ?? '';
-  }, [user, projectsQuery.data]);
-  const defaultWorkspaceId = workspacesQuery.data?.items?.[0]?.workspace_id ?? '';
-  const defaultEnvironmentId = environmentsQuery.data?.items?.[0]?.id ?? '';
-  const availableProjects = projectsQuery.data?.items ?? [];
-  const availableWorkspaces = workspacesQuery.data?.items ?? [];
-  const availableEnvironments = environmentsQuery.data?.items ?? [];
-
   const tasksError = extractErrorMessage(tasksQuery.error);
   const detailError = extractErrorMessage(selectedTaskQuery.error);
 
@@ -214,6 +158,21 @@ function TasksPage() {
     setCreateDialogOpen(false);
     window.setTimeout(() => createButtonRef.current?.focus(), 0);
   }, []);
+
+  const handleTaskCreated = useCallback((task: TaskSummary) => {
+    queryClient.setQueryData<TaskListResponse>(
+      queryKeys.tasks.list(showArchived, taskSort),
+      (current) => ({
+        items: [task, ...(current?.items ?? []).filter((item) => item.task_id !== task.task_id)],
+        total: (current?.total ?? 0) + 1,
+        has_more: current?.has_more ?? false,
+        next_cursor: current?.next_cursor ?? null,
+      }),
+    );
+    selectTask(task.task_id);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.domain.projects(false) });
+  }, [queryClient, selectTask, showArchived, taskSort]);
 
   const effectiveTaskSidebarWidth = taskSidebarCollapsed
     ? SIDEBAR_COLLAPSED_WIDTH
@@ -326,25 +285,12 @@ function TasksPage() {
         </SplitPane>
       </PageShell>
 
-      <Dialog
+      <TaskCreateFlow
         isOpen={isCreateDialogOpen}
+        source="global"
         onClose={closeCreateDialog}
-        title={null}
-        ariaLabel={t('pages.tasks.createTitle')}
-        size="lg"
-      >
-        <TaskCreateForm
-          projectId={defaultProjectId}
-          workspaceId={defaultWorkspaceId}
-          environmentId={defaultEnvironmentId}
-          availableProjects={availableProjects}
-          availableWorkspaces={availableWorkspaces}
-          availableEnvironments={availableEnvironments}
-          availableSkills={skillsQuery.data?.items ?? []}
-          onSubmit={(payload) => createMutation.mutate(payload)}
-          onCancel={closeCreateDialog}
-        />
-      </Dialog>
+        onCreated={handleTaskCreated}
+      />
     </>
   );
 }
