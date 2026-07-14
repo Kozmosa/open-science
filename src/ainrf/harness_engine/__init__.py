@@ -9,6 +9,8 @@ from ainrf.harness_engine.base import (
     HarnessEngineNotSupportedError,
     HarnessEngineType,
     OutputEvent,
+    RuntimeProbeResult,
+    RuntimeProbeStatus,
 )
 from ainrf.harness_engine.engines import get_engine
 from ainrf.harness_engine.mcp_servers import (
@@ -29,6 +31,8 @@ __all__ = [
     "HarnessEngineNotSupportedError",
     "HarnessEngineType",
     "OutputEvent",
+    "RuntimeProbeResult",
+    "RuntimeProbeStatus",
     "available_mcp_servers",
     "get_active_backend_id",
     "get_engine",

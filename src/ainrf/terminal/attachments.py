@@ -101,7 +101,7 @@ class TerminalAttachmentBroker:
     def open_runtime(
         self, attachment_id: str, token: str
     ) -> tuple[TerminalAttachment, TerminalBridgeRuntime]:
-        attachment = self._validate_attachment(attachment_id, token)
+        attachment = self.validate_attachment(attachment_id, token)
         bridge_kwargs: dict[str, Any] = {}
         if attachment.tenant_user is not None:
             bridge_kwargs["run_as_user"] = attachment.tenant_user
@@ -112,6 +112,11 @@ class TerminalAttachmentBroker:
         )
         self._runtimes[attachment_id] = runtime
         return attachment, runtime
+
+    def validate_attachment(self, attachment_id: str, token: str) -> TerminalAttachment:
+        """Validate an attachment capability without starting its PTY bridge."""
+
+        return self._validate_attachment(attachment_id, token)
 
     def detach_attachment(self, attachment_id: str | None) -> TerminalAttachment | None:
         if attachment_id is None:

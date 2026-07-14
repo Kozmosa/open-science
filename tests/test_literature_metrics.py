@@ -147,7 +147,7 @@ class TestSchedulerFetchSuccess:
             _counter_value(
                 "ainrf_literature_fetch_total",
                 text,
-                label_filter=f'subscription_id="{sub.subscription_id}"',
+                label_filter='scope="all"',
             )
             == 1.0
         )
@@ -155,7 +155,7 @@ class TestSchedulerFetchSuccess:
             _counter_value(
                 "ainrf_literature_papers_fetched_total",
                 text,
-                label_filter=f'subscription_id="{sub.subscription_id}"',
+                label_filter='scope="all"',
             )
             == 1.0
         )
@@ -164,12 +164,13 @@ class TestSchedulerFetchSuccess:
             _counter_value(
                 "ainrf_literature_papers_new_total",
                 text,
-                label_filter=f'subscription_id="{sub.subscription_id}"',
+                label_filter='scope="all"',
             )
             == 1.0
         )
         # Histogram should have at least one observation.
         assert _histogram_count("ainrf_literature_fetch_duration_seconds", text) >= 1.0
+        assert sub.subscription_id not in text
 
     @pytest.mark.anyio
     async def test_last_fetch_timestamp_gauge_set(self, tmp_path: Path) -> None:
@@ -186,7 +187,8 @@ class TestSchedulerFetchSuccess:
             await scheduler._fetch_all()
 
         text = get_metrics_text()
-        assert f'subscription_id="{sub.subscription_id}"' in text
+        assert 'scope="all"' in text
+        assert sub.subscription_id not in text
         assert "ainrf_literature_last_fetch_timestamp_seconds" in text
 
 
@@ -215,13 +217,14 @@ class TestSchedulerFetchFailure:
             _counter_value(
                 "ainrf_literature_fetch_total",
                 text,
-                label_filter=f'subscription_id="{sub.subscription_id}"',
+                label_filter='scope="all"',
             )
             == 1.0
         )
         assert 'status="failed"' in text
         # Histogram should still be recorded for the failed attempt.
         assert _histogram_count("ainrf_literature_fetch_duration_seconds", text) >= 1.0
+        assert sub.subscription_id not in text
 
 
 class TestSchedulerNoSubscriptions:
@@ -451,7 +454,7 @@ class TestFetchForSubscriptionMetrics:
             _counter_value(
                 "ainrf_literature_fetch_total",
                 text,
-                label_filter=f'subscription_id="{sub.subscription_id}"',
+                label_filter='scope="all"',
             )
             == 2.0
         )
@@ -460,7 +463,7 @@ class TestFetchForSubscriptionMetrics:
             _counter_value(
                 "ainrf_literature_papers_fetched_total",
                 text,
-                label_filter=f'subscription_id="{sub.subscription_id}"',
+                label_filter='scope="all"',
             )
             == 2.0
         )
@@ -469,7 +472,8 @@ class TestFetchForSubscriptionMetrics:
             _counter_value(
                 "ainrf_literature_papers_new_total",
                 text,
-                label_filter=f'subscription_id="{sub.subscription_id}"',
+                label_filter='scope="all"',
             )
             == 1.0
         )
+        assert sub.subscription_id not in text

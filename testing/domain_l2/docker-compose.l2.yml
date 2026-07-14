@@ -1,0 +1,178 @@
+# Isolated OpenScience L2 recovery cell.
+#
+# This file is deliberately only a Compose template.  `run_cell.sh` supplies
+# all names, ports, credentials, and immutable image digests from a generated
+# env file outside the repository.  Never add host-path bind mounts, a Docker
+# socket, `container_name`, or a production/staging env file here.
+
+services:
+  fixture-init:
+    image: ${OPENSCIENCE_L2_SCENARIO_IMAGE_DIGEST:?immutable scenario image digest is required}
+    env_file:
+      - ${OPENSCIENCE_L2_RUNTIME_ENV_FILE:?generated runtime env file is required}
+    command: ["/opt/openscience-l2/run-scenario", "seed-fixture"]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    volumes:
+      - l2-state:/var/lib/openscience
+      - l2-tenants:/var/lib/openscience/tenants
+      - l2-workspaces:/var/lib/openscience/workspaces
+    networks: [l2]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+          pids: 128
+
+  api:
+    image: ${OPENSCIENCE_L2_BACKEND_IMAGE_DIGEST:?immutable backend image digest is required}
+    env_file:
+      - ${OPENSCIENCE_L2_RUNTIME_ENV_FILE:?generated runtime env file is required}
+    command:
+      ["openscience", "serve", "--host", "0.0.0.0", "--port", "8000", "--state-root", "/var/lib/openscience"]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=128m
+    volumes:
+      - l2-state:/var/lib/openscience
+      - l2-tenants:/var/lib/openscience/tenants
+      - l2-workspaces:/var/lib/openscience/workspaces
+    ports:
+      - "127.0.0.1:${OPENSCIENCE_L2_API_PORT:?unique API port is required}:8000"
+    depends_on:
+      fixture-init:
+        condition: service_completed_successfully
+    networks: [l2]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+          pids: 256
+
+  domain-worker:
+    image: ${OPENSCIENCE_L2_BACKEND_IMAGE_DIGEST:?immutable backend image digest is required}
+    env_file:
+      - ${OPENSCIENCE_L2_RUNTIME_ENV_FILE:?generated runtime env file is required}
+    command: ["openscience", "domain-worker", "--state-root", "/var/lib/openscience"]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=128m
+    volumes:
+      - l2-state:/var/lib/openscience
+      - l2-tenants:/var/lib/openscience/tenants
+      - l2-workspaces:/var/lib/openscience/workspaces
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [l2]
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+          pids: 256
+
+  prior-frontend:
+    image: ${OPENSCIENCE_L2_PRIOR_FRONTEND_IMAGE_DIGEST:?immutable prior frontend image digest is required}
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=32m
+    networks: [l2]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+          pids: 64
+
+  # The released frontend calls the relative /api path.  Serving it directly
+  # would turn those browser calls into requests to the static image and would
+  # therefore not exercise the candidate backend.  This immutable gateway
+  # supplies the same-origin frontend/API route contract without a host bind
+  # mount or a mutable staging proxy.
+  frontend-gateway:
+    image: ${OPENSCIENCE_L2_SCENARIO_IMAGE_DIGEST:?immutable scenario image digest is required}
+    env_file:
+      - ${OPENSCIENCE_L2_RUNTIME_ENV_FILE:?generated runtime env file is required}
+    command:
+      [
+        "/opt/openscience-l2/run-frontend-gateway",
+        "--listen",
+        "0.0.0.0:8080",
+        "--frontend-upstream",
+        "http://prior-frontend:80",
+        "--api-upstream",
+        "http://api:8000",
+      ]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    ports:
+      - "127.0.0.1:${OPENSCIENCE_L2_FRONTEND_PORT:?unique frontend gateway port is required}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+      prior-frontend:
+        condition: service_started
+    networks: [l2]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+          pids: 96
+
+  scenario-runner:
+    image: ${OPENSCIENCE_L2_SCENARIO_IMAGE_DIGEST:?immutable scenario image digest is required}
+    env_file:
+      - ${OPENSCIENCE_L2_RUNTIME_ENV_FILE:?generated runtime env file is required}
+    command: ["/bin/sh", "-ec", "trap 'exit 0' TERM INT; while :; do sleep 3600; done"]
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=128m
+    volumes:
+      - l2-state:/var/lib/openscience
+      # The runner must inspect the synthetic Workspace/tenant trees when it
+      # validates backup manifests and staged restore behavior.  These are the
+      # same uniquely named cell volumes used by the API, never host paths.
+      - l2-tenants:/var/lib/openscience/tenants
+      - l2-workspaces:/var/lib/openscience/workspaces
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend-gateway:
+        condition: service_healthy
+    networks: [l2]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+          pids: 128
+
+networks:
+  l2:
+    internal: true
+
+volumes:
+  l2-state:
+    name: ${OPENSCIENCE_L2_STATE_VOLUME:?unique state volume is required}
+  l2-tenants:
+    name: ${OPENSCIENCE_L2_TENANT_VOLUME:?unique tenant volume is required}
+  l2-workspaces:
+    name: ${OPENSCIENCE_L2_WORKSPACE_VOLUME:?unique workspace volume is required}

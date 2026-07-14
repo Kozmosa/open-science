@@ -23,7 +23,13 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.environments.service import InMemoryEnvironmentService
-from ainrf.harness_engine import EngineEvent, ExecutionContext, HarnessEngine
+from ainrf.harness_engine import (
+    EngineEvent,
+    ExecutionContext,
+    HarnessEngine,
+    RuntimeProbeResult,
+    RuntimeProbeStatus,
+)
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
 
@@ -131,6 +137,8 @@ class FakeEngine(HarnessEngine):
         self.completion_event: threading.Event | None = None
         self._alive: set[str] = set()
         self._last_event_at: dict[str, float] = {}
+        self._runtime_launches: dict[str, str] = {}
+        self.adopted_runtime_launches: set[str] = set()
 
     @property
     def engine_type(self) -> HarnessEngineType:
@@ -139,6 +147,7 @@ class FakeEngine(HarnessEngine):
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         self.started_count += 1
         self._alive.add(context.task_id)
+        self._remember_runtime_launch(context)
         self._last_event_at[context.task_id] = time.time()
         prompt = self.pending_prompts.pop(0) if self.pending_prompts else context.rendered_prompt
         await emit(
@@ -156,25 +165,78 @@ class FakeEngine(HarnessEngine):
         if self.completion_event is not None:
             self.completion_event.set()
 
-    async def cancel(self, task_id: str) -> None:
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        _ = runtime_launch_key
         self.cancelled_task_ids.add(task_id)
         self._alive.discard(task_id)
+        for launch_key, launched_task_id in tuple(self._runtime_launches.items()):
+            if launched_task_id == task_id:
+                del self._runtime_launches[launch_key]
 
-    async def send_input(self, task_id: str, text: str) -> None:
-        _ = task_id
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
+        _ = task_id, runtime_launch_key
         self.pending_prompts.append(text)
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        _ = runtime_launch_key
         return task_id in self._alive
 
     async def last_event_at(self, task_id: str) -> float | None:
         return self._last_event_at.get(task_id)
+
+    async def probe_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        """Authoritative recovery behavior for this closed-world test fake."""
+
+        launched_task_id = self._runtime_launches.get(launch_key)
+        if launched_task_id is None:
+            return RuntimeProbeResult(status=RuntimeProbeStatus.ABSENT)
+        if launched_task_id != task_id:
+            return RuntimeProbeResult(status=RuntimeProbeStatus.UNKNOWN)
+        if task_id not in self._alive:
+            del self._runtime_launches[launch_key]
+            return RuntimeProbeResult(status=RuntimeProbeStatus.ABSENT)
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus.RUNNING,
+            engine_session_key=f"fake-session-{task_id}",
+        )
+
+    async def adopt_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        outcome = await self.probe_runtime(task_id=task_id, launch_key=launch_key)
+        if outcome.status is not RuntimeProbeStatus.RUNNING:
+            return outcome
+        self.adopted_runtime_launches.add(launch_key)
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus.RUNNING,
+            engine_session_key=outcome.engine_session_key,
+            metadata={"adopted": True},
+        )
+
+    def _remember_runtime_launch(self, context: ExecutionContext) -> None:
+        if context.runtime_launch_key:
+            self._runtime_launches[context.runtime_launch_key] = context.task_id
 
 
 class TokenEngine(FakeEngine):
     """Fake engine that emits token usage events for cost aggregation tests."""
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        self._remember_runtime_launch(context)
         await emit(
             EngineEvent(
                 event_type="token",
@@ -238,14 +300,16 @@ class HangingEngine(FakeEngine):
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
         self.started_count += 1
+        self._alive.add(context.task_id)
+        self._remember_runtime_launch(context)
         self.cancel_event = asyncio.Event()
         try:
             await self.cancel_event.wait()
         except asyncio.CancelledError:
             pass
 
-    async def cancel(self, task_id: str) -> None:
-        await super().cancel(task_id)
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        await super().cancel(task_id, runtime_launch_key=runtime_launch_key)
         if self.cancel_event is not None:
             self.cancel_event.set()
 

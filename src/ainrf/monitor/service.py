@@ -9,13 +9,13 @@ from ainrf.monitor.collectors import LocalCollector, RemoteCollector
 from ainrf.monitor.models import ResourceSnapshot
 
 if TYPE_CHECKING:
-    from ainrf.environments.service import InMemoryEnvironmentService
+    from ainrf.environments.protocols import EnvironmentRuntimeReader
 
 logger = logging.getLogger(__name__)
 
 
 class ResourceMonitorService:
-    def __init__(self, environment_service: InMemoryEnvironmentService) -> None:
+    def __init__(self, environment_service: EnvironmentRuntimeReader) -> None:
         self._environment_service = environment_service
         self._snapshots: dict[str, ResourceSnapshot] = {}
         self._task: asyncio.Task[None] | None = None

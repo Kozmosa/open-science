@@ -16,7 +16,7 @@ from ainrf.files.models import DirectoryListing, FileContent, FileEntry, FileUpl
 
 if TYPE_CHECKING:
     from ainrf.environments.models import EnvironmentRegistryEntry
-    from ainrf.environments.service import InMemoryEnvironmentService
+    from ainrf.environments.protocols import EnvironmentRuntimeReader
     from ainrf.workspaces.service import WorkspaceRegistryService
 
 _MAX_FILE_SIZE_BYTES = 50_000_000
@@ -39,7 +39,7 @@ class FileTooLargeError(FileBrowserError):
 class _EnvironmentResolver:
     def __init__(
         self,
-        environment_service: InMemoryEnvironmentService,
+        environment_service: EnvironmentRuntimeReader,
         workspace_service: WorkspaceRegistryService | None = None,
     ) -> None:
         self._environment_service = environment_service
@@ -88,7 +88,7 @@ def _build_container_config(environment: EnvironmentRegistryEntry) -> ContainerC
 class FileBrowserService:
     def __init__(
         self,
-        environment_service: InMemoryEnvironmentService,
+        environment_service: EnvironmentRuntimeReader,
         workspace_service: WorkspaceRegistryService | None = None,
         cache_ttl_seconds: float = 60.0,
         max_file_size_bytes: int = _MAX_FILE_SIZE_BYTES,

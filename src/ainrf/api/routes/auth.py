@@ -17,6 +17,7 @@ from ainrf.api.schemas import (
     UserInfoResponse,
 )
 from ainrf.auth import AuthService
+from ainrf.domain_control import DomainModelMode
 
 _LOG = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def _get_service(request: Request) -> AuthService:
 
 
 @router.post("/register", status_code=201)
-async def register(payload: RegisterRequest, request: Request) -> dict:
+async def register(payload: RegisterRequest, request: Request) -> dict[str, str]:
     service = _get_service(request)
     api_config: ApiConfig = request.app.state.api_config
     if not api_config.public_registration_enabled:
@@ -48,7 +49,34 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
             raise HTTPException(status_code=409, detail=detail) from exc
         raise HTTPException(status_code=400, detail=detail) from exc
 
-    # Create a tenant-scoped workspace entry for the new user.
+    # A v2 process deliberately has no writable JSON Workspace registry.
+    # Registration records the cross-database default-Project intent in auth
+    # first; this route then performs an idempotent best-effort reconciliation.
+    # If the domain database is temporarily unavailable, the durable intent is
+    # retried during the next v2 lifespan rather than claiming a distributed
+    # transaction succeeded.
+    if api_config.domain_model_mode is DomainModelMode.V2:
+        domain = getattr(request.app.state, "domain_service", None)
+        provision = getattr(domain, "provision_default_project", None)
+        if not callable(provision):  # pragma: no cover - create_app invariant
+            error = RuntimeError("v2 DomainService is unavailable for user provisioning")
+            _LOG.error("v2_registration_domain_service_missing", exc_info=error)
+            service.record_domain_default_project_provisioning_failure(user.id, error)
+            return {
+                "message": "Registration submitted. Default Project provisioning is queued for retry."
+            }
+        try:
+            provision(user_id=user.id, username=payload.username)
+            service.mark_domain_default_project_provisioned(user.id)
+        except Exception as exc:  # pragma: no cover - exercised by lifespan retry integration
+            _LOG.exception("v2_registration_default_project_provisioning_failed")
+            service.record_domain_default_project_provisioning_failure(user.id, exc)
+            return {
+                "message": "Registration submitted. Default Project provisioning is queued for retry."
+            }
+        return {"message": "Registration submitted. Awaiting admin approval."}
+
+    # Create a tenant-scoped workspace entry for the new user in legacy mode.
     workspace_service = getattr(request.app.state, "workspace_service", None)
     if workspace_service is not None:
         from ainrf.workspaces import WorkspaceRegistryService
@@ -94,6 +122,9 @@ def _delete_access_cookies(response: Response, *, cookie_names: tuple[str, str])
 
 @router.post("/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest, request: Request) -> Response:
+    api_config: ApiConfig = request.app.state.api_config
+    if not api_config.interactive_auth_enabled:
+        raise HTTPException(status_code=403, detail="Interactive authentication is disabled")
     service = _get_service(request)
     client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     if not client_ip and request.client:
@@ -132,7 +163,6 @@ async def login(payload: LoginRequest, request: Request) -> Response:
     # Set session cookie so nginx auth_request on /grafana, /prometheus, /litefuse can authenticate.
     # HttpOnly for XSS protection; SameSite=Lax for CSRF; Secure in production.
     is_secure = request.url.scheme == "https"
-    api_config: ApiConfig = request.app.state.api_config
     _set_access_cookies(
         response,
         result["access_token"],
@@ -144,6 +174,9 @@ async def login(payload: LoginRequest, request: Request) -> Response:
 
 @router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(payload: RefreshRequest, request: Request) -> Response:
+    api_config: ApiConfig = request.app.state.api_config
+    if not api_config.interactive_auth_enabled:
+        raise HTTPException(status_code=403, detail="Interactive authentication is disabled")
     service = _get_service(request)
     try:
         result = service.refresh(payload.refresh_token)
@@ -156,7 +189,6 @@ async def refresh(payload: RefreshRequest, request: Request) -> Response:
         status_code=200,
     )
     is_secure = request.url.scheme == "https"
-    api_config: ApiConfig = request.app.state.api_config
     _set_access_cookies(
         response,
         result["access_token"],

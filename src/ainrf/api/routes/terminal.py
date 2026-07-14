@@ -5,13 +5,19 @@ import errno
 import json
 import logging
 import os
-from contextlib import suppress
-from typing import Any, cast
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
+from typing import Any, Callable, cast
 
 from anyio import create_task_group, to_thread
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from ainrf.api.domain_access import (
+    require_v2_active_environment,
+    require_v2_workspace_execution_owner,
+    v2_domain_service,
+)
 from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     TerminalExecRequest,
@@ -23,8 +29,11 @@ from ainrf.api.schemas import (
     UserSessionPairListResponse,
     UserSessionPairResponse,
 )
-from ainrf.environments import EnvironmentNotFoundError, InMemoryEnvironmentService
+from ainrf.environments import EnvironmentNotFoundError
 from ainrf.environments.models import EnvironmentRegistryEntry
+from ainrf.environments.protocols import EnvironmentRuntimeReader
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
+from ainrf.domain.service import DomainNotFoundError
 from ainrf.terminal.attachments import (
     TerminalAttachmentAuthorizationError,
     TerminalAttachmentBroker,
@@ -33,6 +42,7 @@ from ainrf.terminal.attachments import (
     TerminalAttachmentNotFoundError,
 )
 from ainrf.terminal.models import (
+    TerminalAttachment,
     TerminalAttachmentMode,
     TerminalSessionRecord,
     UserEnvironmentBinding,
@@ -44,6 +54,7 @@ from ainrf.terminal.pty import (
     TERMINAL_OUTPUT_QUEUE_MAX_CHUNKS,
     TERMINAL_OUTPUT_READ_CHUNK_BYTES,
     PtyUtf8Decoder,
+    TerminalBridgeRuntime,
     resize_terminal,
     write_terminal_input,
 )
@@ -112,7 +123,7 @@ def _serialize_session_pair(
     }
 
 
-def _get_environment_service(request: Request | WebSocket) -> InMemoryEnvironmentService:
+def _get_environment_service(request: Request | WebSocket) -> EnvironmentRuntimeReader:
     service = getattr(request.app.state, "environment_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="environment service not initialized")
@@ -126,11 +137,96 @@ def _get_session_manager(request: Request | WebSocket) -> SessionManager:
     return manager
 
 
+def _get_domain_maintenance_service(request: Request | WebSocket) -> DomainMaintenanceService:
+    service = getattr(request.app.state, "domain_maintenance_service", None)
+    if not isinstance(service, DomainMaintenanceService):
+        raise HTTPException(status_code=500, detail="domain maintenance service not initialized")
+    return service
+
+
+@contextmanager
+def _terminal_mutation(
+    websocket: WebSocket,
+    *,
+    source: str,
+) -> Iterator[Callable[[], None]]:
+    """Fence one WebSocket-side terminal mutation with the API participant."""
+
+    maintenance = _get_domain_maintenance_service(websocket)
+    lease = maintenance.begin_mutation(
+        source=source,
+        participant_id=getattr(websocket.app.state, "domain_api_participant_id", None),
+    )
+    try:
+        maintenance.check_lease(lease)
+        yield lambda: maintenance.check_lease(lease)
+        maintenance.check_lease(lease)
+    finally:
+        maintenance.finish_mutation(lease)
+
+
+@contextmanager
+def _terminal_http_mutation(
+    request: Request,
+    *,
+    source: str,
+) -> Iterator[Callable[[], None]]:
+    """Fence an HTTP terminal side effect at the point it actually starts.
+
+    The request-wide middleware lease is necessary for inventory, but it may
+    span validation and awaits before a terminal operation reaches tmux, a
+    bridge, or a tenant command.  This nested lease makes the final pre-start
+    and post-completion checks explicit at that external boundary.
+    """
+
+    maintenance = _get_domain_maintenance_service(request)
+    lease = maintenance.begin_mutation(
+        source=source,
+        participant_id=getattr(request.app.state, "domain_api_participant_id", None),
+    )
+    try:
+        maintenance.check_lease(lease)
+        yield lambda: maintenance.check_lease(lease)
+        maintenance.check_lease(lease)
+    finally:
+        maintenance.finish_mutation(lease)
+
+
 def _get_attachment_broker(request: Request | WebSocket) -> TerminalAttachmentBroker:
     broker = getattr(request.app.state, "terminal_attachment_broker", None)
     if broker is None:
         raise HTTPException(status_code=500, detail="terminal attachment broker not initialized")
     return broker
+
+
+def _open_terminal_attachment_runtime(
+    websocket: WebSocket,
+    broker: TerminalAttachmentBroker,
+    attachment_id: str,
+    token: str,
+) -> tuple[TerminalAttachment, TerminalBridgeRuntime]:
+    """Open a terminal bridge only while the maintenance lease is current.
+
+    A WebSocket handshake starts a PTY/tmux attachment before the first input
+    message arrives.  It is therefore a domain-side mutation in its own right,
+    rather than a harmless read that can wait for the input/resize guards.
+    """
+
+    runtime_opened = False
+    try:
+        with _terminal_mutation(websocket, source="terminal.websocket.open") as check_lease:
+            attachment = broker.validate_attachment(attachment_id, token)
+            _require_v2_attachment_environment_access(websocket, attachment)
+            attachment, runtime = broker.open_runtime(attachment_id, token)
+            runtime_opened = True
+            # A cutover may begin while the PTY bridge is spawning.  Tear it
+            # down instead of leaving a newly created external runtime behind.
+            check_lease()
+            return attachment, runtime
+    except Exception:
+        if runtime_opened:
+            broker.close_runtime(attachment_id)
+        raise
 
 
 def _require_app_user_id(request: Request) -> str:
@@ -141,6 +237,8 @@ def _require_app_user_id(request: Request) -> str:
 
 
 def _translate_environment_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
     if isinstance(exc, EnvironmentNotFoundError):
         return HTTPException(status_code=404, detail="Environment not found")
     return HTTPException(status_code=500, detail="Unexpected terminal environment error")
@@ -172,14 +270,41 @@ def _close_code_for_attachment_error(exc: Exception) -> int:
     return 4503
 
 
+def _require_v2_attachment_environment_access(
+    websocket: WebSocket,
+    attachment: TerminalAttachment,
+) -> None:
+    """Revalidate the attachment owner's durable grant before starting a PTY."""
+
+    if v2_domain_service(websocket) is None:
+        return
+    auth_service = getattr(websocket.app.state, "auth_service", None)
+    if auth_service is None:
+        raise HTTPException(status_code=503, detail="authentication service not initialized")
+    try:
+        user_record = auth_service.get_user(attachment.user_id)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Environment not found") from exc
+    if user_record.status.value != "active":
+        raise HTTPException(status_code=404, detail="Environment not found")
+    require_v2_active_environment(
+        websocket,
+        {"id": user_record.id, "role": user_record.role.value},
+        attachment.environment_id,
+    )
+
+
 def _get_environment_context(
-    service: InMemoryEnvironmentService,
+    request: Request,
+    service: EnvironmentRuntimeReader,
     environment_id: str | None,
+    user: dict[str, object],
     state_root: Any,
     project_id: str = "default",
 ) -> tuple[EnvironmentRegistryEntry | None, str | None]:
     if environment_id is None:
         return None, None
+    require_v2_active_environment(request, user, environment_id)
     environment = service.get_environment(environment_id)
     working_directory = service.resolve_effective_workdir(
         project_id,
@@ -205,8 +330,10 @@ async def read_terminal_session(
     manager = _get_session_manager(request)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -232,13 +359,30 @@ async def read_terminal_session_pairs(
     app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
+    domain = v2_domain_service(request)
     if environment_id is not None:
         try:
+            require_v2_active_environment(request, user, environment_id)
             service.get_environment(environment_id)
         except Exception as exc:
             raise _translate_environment_error(exc) from exc
 
-    items = await to_thread.run_sync(manager.list_session_pairs, app_user_id, environment_id)
+    environment_visible: Callable[[str], bool] | None = None
+    if domain is not None:
+
+        def environment_visible(candidate_environment_id: str) -> bool:
+            try:
+                domain.environment(candidate_environment_id, user, include_disabled=False)
+            except DomainNotFoundError:
+                return False
+            return True
+
+    items = await to_thread.run_sync(
+        manager.list_session_pairs,
+        app_user_id,
+        environment_id,
+        environment_visible,
+    )
     return UserSessionPairListResponse(
         items=[
             UserSessionPairResponse.model_validate(
@@ -262,8 +406,10 @@ async def create_terminal_session(
     broker = _get_attachment_broker(request)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             payload.environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -271,19 +417,45 @@ async def create_terminal_session(
         raise _translate_environment_error(exc) from exc
     assert environment is not None
 
+    attachment_id: str | None = None
+    created_session_cleanup: Callable[[], None] | None = None
+
+    def remember_created_session(cleanup: Callable[[], None]) -> None:
+        nonlocal created_session_cleanup
+        created_session_cleanup = cleanup
+
     try:
-        session, target = await to_thread.run_sync(
-            manager.ensure_personal_session,
-            app_user_id,
-            environment,
-            working_directory,
-        )
+        with _terminal_http_mutation(request, source="terminal.session.create") as check_lease:
+            session, target = await to_thread.run_sync(
+                lambda: manager.ensure_personal_session(
+                    app_user_id,
+                    environment,
+                    working_directory,
+                    maintenance_check=check_lease,
+                    on_personal_session_created=remember_created_session,
+                )
+            )
+            check_lease()
+            attachment = broker.create_attachment(str(request.base_url), target)
+            attachment_id = attachment.attachment_id
+            check_lease()
+            await to_thread.run_sync(
+                lambda: manager.record_personal_attach(
+                    target.binding_id,
+                    maintenance_check=check_lease,
+                )
+            )
+            check_lease()
+            attached_session = broker.attach_record(session, attachment, str(request.base_url))
+    except MaintenanceModeError:
+        if attachment_id is not None:
+            broker.detach_attachment(attachment_id)
+        if created_session_cleanup is not None:
+            await to_thread.run_sync(created_session_cleanup)
+        raise
     except Exception as exc:
         raise _translate_terminal_error(exc) from exc
 
-    attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(manager.record_personal_attach, target.binding_id)
-    attached_session = broker.attach_record(session, attachment, str(request.base_url))
     audit_event(
         "terminal.session.created",
         severity="info",
@@ -307,26 +479,33 @@ async def delete_terminal_session(
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
-    detached_attachment = broker.detach_attachment(attachment_id)
-    resolved_environment_id = environment_id or (
-        detached_attachment.environment_id if detached_attachment is not None else None
-    )
-    try:
-        environment, working_directory = _get_environment_context(
-            service,
-            resolved_environment_id,
-            request.app.state.api_config.state_root,
-            project_id=project_id,
+    with _terminal_http_mutation(request, source="terminal.session.delete") as check_lease:
+        detached_attachment = broker.detach_attachment(attachment_id)
+        check_lease()
+        resolved_environment_id = environment_id or (
+            detached_attachment.environment_id if detached_attachment is not None else None
         )
-    except Exception as exc:
-        raise _translate_environment_error(exc) from exc
+        try:
+            environment, working_directory = _get_environment_context(
+                request,
+                service,
+                resolved_environment_id,
+                user,
+                request.app.state.api_config.state_root,
+                project_id=project_id,
+            )
+        except Exception as exc:
+            raise _translate_environment_error(exc) from exc
 
-    session = await to_thread.run_sync(
-        manager.get_session_record,
-        app_user_id,
-        environment,
-        working_directory,
-    )
+        session = await to_thread.run_sync(
+            lambda: manager.get_session_record(
+                app_user_id,
+                environment,
+                working_directory,
+                maintenance_check=check_lease,
+            )
+        )
+        check_lease()
     return TerminalSessionResponse.model_validate(_serialize_session(session))
 
 
@@ -341,11 +520,12 @@ async def reset_terminal_session(
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
-    broker.detach_attachment(payload.attachment_id)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             payload.environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -353,19 +533,47 @@ async def reset_terminal_session(
         raise _translate_environment_error(exc) from exc
     assert environment is not None
 
+    attachment_id: str | None = None
+    created_session_cleanup: Callable[[], None] | None = None
+
+    def remember_created_session(cleanup: Callable[[], None]) -> None:
+        nonlocal created_session_cleanup
+        created_session_cleanup = cleanup
+
     try:
-        session, target = await to_thread.run_sync(
-            manager.reset_personal_session,
-            app_user_id,
-            environment,
-            working_directory,
-        )
+        with _terminal_http_mutation(request, source="terminal.session.reset") as check_lease:
+            broker.detach_attachment(payload.attachment_id)
+            check_lease()
+            session, target = await to_thread.run_sync(
+                lambda: manager.reset_personal_session(
+                    app_user_id,
+                    environment,
+                    working_directory,
+                    maintenance_check=check_lease,
+                    on_personal_session_created=remember_created_session,
+                )
+            )
+            check_lease()
+            attachment = broker.create_attachment(str(request.base_url), target)
+            attachment_id = attachment.attachment_id
+            check_lease()
+            await to_thread.run_sync(
+                lambda: manager.record_personal_attach(
+                    target.binding_id,
+                    maintenance_check=check_lease,
+                )
+            )
+            check_lease()
+            attached_session = broker.attach_record(session, attachment, str(request.base_url))
+    except MaintenanceModeError:
+        if attachment_id is not None:
+            broker.detach_attachment(attachment_id)
+        if created_session_cleanup is not None:
+            await to_thread.run_sync(created_session_cleanup)
+        raise
     except Exception as exc:
         raise _translate_terminal_error(exc) from exc
 
-    attachment = broker.create_attachment(str(request.base_url), target)
-    await to_thread.run_sync(manager.record_personal_attach, target.binding_id)
-    attached_session = broker.attach_record(session, attachment, str(request.base_url))
     audit_event(
         "terminal.session.reset",
         severity="info",
@@ -383,11 +591,14 @@ async def terminal_session_exec(
     request: Request,
     project_id: str = Query(default="default"),
 ) -> TerminalExecResponse:
+    user = get_current_user(request)
     service = _get_environment_service(request)
     try:
         environment, working_directory = _get_environment_context(
+            request,
             service,
             payload.environment_id,
+            user,
             request.app.state.api_config.state_root,
             project_id=project_id,
         )
@@ -396,13 +607,22 @@ async def terminal_session_exec(
     assert environment is not None
 
     if payload.workspace_id is not None:
-        workspace_service = getattr(request.app.state, "workspace_service", None)
-        if workspace_service is not None:
-            try:
-                workspace = workspace_service.get_workspace(payload.workspace_id)
-            except Exception as exc:
-                raise _translate_environment_error(exc) from exc
-            working_directory = workspace.default_workdir or working_directory or "/"
+        v2_workspace = require_v2_workspace_execution_owner(request, user, payload.workspace_id)
+        if v2_workspace is not None:
+            canonical_path = v2_workspace.get("canonical_path")
+            if isinstance(canonical_path, str) and canonical_path:
+                working_directory = canonical_path
+        else:
+            workspace_service = getattr(request.app.state, "workspace_service", None)
+            if workspace_service is None:
+                workspace = None
+            else:
+                try:
+                    workspace = workspace_service.get_workspace(payload.workspace_id)
+                except Exception as exc:
+                    raise _translate_environment_error(exc) from exc
+            if workspace is not None:
+                working_directory = workspace.default_workdir or working_directory or "/"
 
     try:
         # Validate command against allowlist for security
@@ -448,12 +668,17 @@ async def terminal_session_exec(
                 detail=f"Command '{base_cmd}' not in allowed list. Contact administrator to add it.",
             )
 
-        result = await exec_command(
-            environment,
-            payload.command,
-            cwd=working_directory or "/",
-            timeout=payload.timeout,
-        )
+        with _terminal_http_mutation(request, source="terminal.session.exec") as check_lease:
+            check_lease()
+            result = await exec_command(
+                environment,
+                payload.command,
+                cwd=working_directory or "/",
+                timeout=payload.timeout,
+            )
+            check_lease()
+    except MaintenanceModeError:
+        raise
     except HTTPException:
         raise
     except Exception as exc:
@@ -471,7 +696,18 @@ async def terminal_session_exec(
 async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebSocket) -> None:
     broker = _get_attachment_broker(websocket)
     try:
-        attachment, runtime = broker.open_runtime(attachment_id, token)
+        attachment, runtime = _open_terminal_attachment_runtime(
+            websocket,
+            broker,
+            attachment_id,
+            token,
+        )
+    except MaintenanceModeError:
+        await websocket.close(code=4503)
+        return
+    except HTTPException as exc:
+        await websocket.close(code=_close_code_for_http_status(exc.status_code))
+        return
     except Exception as exc:
         logger.warning(
             "terminal WebSocket open failed for %s: %s: %s", attachment_id, type(exc).__name__, exc
@@ -583,6 +819,11 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
 
     loop.add_reader(master_fd, on_master_ready)
 
+    async def close_for_maintenance() -> None:
+        if websocket.client_state == WebSocketState.CONNECTED:
+            with suppress(Exception):
+                await websocket.close(code=4503)
+
     async def forward_input() -> None:
         try:
             while True:
@@ -598,35 +839,59 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
                     data = payload.get("data")
                     if not isinstance(data, str):
                         raise ValueError("input payload must include string data")
-                    write_terminal_input(runtime, data)
+                    with _terminal_mutation(
+                        websocket,
+                        source="terminal.websocket.input",
+                    ):
+                        write_terminal_input(runtime, data)
                     continue
                 if message_type == "resize":
                     cols = payload.get("cols")
                     rows = payload.get("rows")
                     if not isinstance(cols, int) or not isinstance(rows, int):
                         raise ValueError("resize payload must include integer cols and rows")
-                    resize_terminal(runtime, cols, rows)
-                    try:
-                        manager = _get_session_manager(websocket)
-                        manager.resize_tmux_window(
-                            session_name=attachment.session_name,
-                            cols=cols,
-                            rows=rows,
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to resize tmux window for session %s: %s",
-                            attachment.session_name,
-                            exc,
-                        )
+                    with _terminal_mutation(
+                        websocket,
+                        source="terminal.websocket.resize",
+                    ) as check_lease:
+                        resize_terminal(runtime, cols, rows)
+                        # The tmux resize is a second external write.  Do not
+                        # let it follow a PTY resize that was overtaken by the
+                        # maintenance epoch.
+                        check_lease()
+                        try:
+                            manager = _get_session_manager(websocket)
+                            manager.resize_tmux_window(
+                                session_name=attachment.session_name,
+                                cols=cols,
+                                rows=rows,
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "Failed to resize tmux window for session %s: %s",
+                                attachment.session_name,
+                                exc,
+                            )
                     continue
                 raise ValueError(f"Unsupported terminal message type: {message_type!r}")
         except WebSocketDisconnect:
             pass
+        except MaintenanceModeError:
+            await close_for_maintenance()
+            # Let the task group cancel the output/watch loops as well.  A
+            # closed input side alone would otherwise leave an idle PTY
+            # attachment holding the WebSocket task open indefinitely.
+            raise
         except ValueError:
             if websocket.client_state == WebSocketState.CONNECTED:
                 with suppress(Exception):
                     await websocket.close(code=4409)
+        finally:
+            # A client disconnect, maintenance rejection, or invalid input
+            # ends the only inbound control path.  The output and process
+            # watcher otherwise keep an idle attachment task group alive
+            # forever after that close.
+            task_group.cancel_scope.cancel()
 
     async def forward_output() -> None:
         nonlocal buffered_output_bytes, process_return_code

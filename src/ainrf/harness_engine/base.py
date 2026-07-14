@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -19,6 +19,29 @@ class HarnessEngineError(RuntimeError):
 
 class HarnessEngineNotSupportedError(HarnessEngineError):
     """Engine does not support this operation."""
+
+
+class RuntimeProbeStatus(StrEnum):
+    """What an engine can safely prove about one deterministic launch key."""
+
+    RUNNING = "running"
+    ABSENT = "absent"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeProbeResult:
+    """Typed result of checking whether a runtime launch already happened.
+
+    ``UNKNOWN`` is intentionally distinct from ``ABSENT``.  Dispatchers must
+    never launch a replacement runtime after an unknown result: an engine may
+    have started externally while the previous dispatcher crashed before it
+    could persist confirmation.
+    """
+
+    status: RuntimeProbeStatus
+    engine_session_key: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -57,6 +80,23 @@ class ExecutionContext:
     # supposed to be alive.  When exceeded and the engine is not alive, the
     # service watchdog marks the task FAILED.
     engine_inactivity_timeout_seconds: int | None = None
+    # Set by the durable dispatcher before external startup.  Existing callers
+    # can omit it; engines must not infer a launch key from task_id because a
+    # Task may have multiple Attempts.
+    runtime_launch_key: str | None = None
+    # Durable attempt identity paired with ``runtime_launch_key``.  It keeps
+    # checkpoints and engine-local state from colliding across Task retries.
+    attempt_id: str | None = None
+
+    @property
+    def runtime_identity(self) -> str:
+        """Return the attempt-scoped key for engine-local state.
+
+        Legacy callers omit ``runtime_launch_key`` and preserve the historical
+        task-scoped identity.  Durable v2 dispatch always provides it.
+        """
+
+        return self.runtime_launch_key or self.task_id
 
     @property
     def prompt(self) -> str:
@@ -121,30 +161,39 @@ class HarnessEngine(ABC):
         """Start executing the context and emit engine events until completion."""
         ...
 
-    async def pause(self, task_id: str) -> None:
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
         """Pause an active task when supported by the engine."""
+        _ = runtime_launch_key
         raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support pause")
 
     async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
         """Resume a paused task when supported by the engine."""
         raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support resume")
 
-    async def send_input(self, task_id: str, text: str) -> None:
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
         """Send follow-up input to an active task when supported by the engine."""
+        _ = runtime_launch_key
         raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support send_input")
 
     @abstractmethod
-    async def cancel(self, task_id: str) -> None:
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
         """取消执行"""
+        _ = runtime_launch_key
         ...
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
         """Return whether the engine session/process for *task_id* is still alive.
 
         Engines that do not expose a process handle should return a best-effort
         proxy based on whether a session is currently active and not aborted.
         """
-        _ = task_id
+        _ = task_id, runtime_launch_key
         return False
 
     async def last_event_at(self, task_id: str) -> float | None:
@@ -155,3 +204,64 @@ class HarnessEngine(ABC):
         """
         _ = task_id
         return None
+
+    def bind_runtime_context(self, context: ExecutionContext) -> None:
+        """Bind durable local state before probing a recovered launch.
+
+        The dispatcher constructs a fresh engine instance after a process
+        crash.  It therefore supplies the Attempt-scoped checkpoint location
+        before :meth:`probe_runtime`; adapters that persist engine-local launch
+        evidence override this hook.  The base implementation keeps legacy and
+        third-party engines source-compatible.
+        """
+
+        _ = context
+
+    def arm_runtime_launch(self, context: ExecutionContext) -> None:
+        """Persist evidence that an adapter has not yet started its process.
+
+        This hook runs immediately before the dispatcher's durable launch
+        fence.  Adapters may raise when they cannot safely persist the record;
+        in that case the dispatcher must not cross the external launch
+        boundary.  Legacy engines retain a no-op implementation.
+        """
+
+        _ = context
+
+    async def probe_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        """Safely inspect an earlier runtime launch.
+
+        The base contract deliberately returns ``UNKNOWN`` instead of
+        ``ABSENT``.  A generic engine cannot prove that another process did
+        not start the runtime, and treating uncertainty as absence could
+        create a duplicate runtime after dispatcher recovery.
+        """
+
+        _ = task_id, launch_key
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus.UNKNOWN,
+        )
+
+    async def adopt_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        """Try to adopt a runtime identified by ``launch_key``.
+
+        Subclasses that can attach to a surviving process/session should
+        override this method.  The default is deliberately ``UNKNOWN`` even
+        if a subclass only implements :meth:`probe_runtime`: finding a runtime
+        is not proof that this process successfully adopted it.
+        """
+
+        _ = task_id, launch_key
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus.UNKNOWN,
+        )

@@ -76,6 +76,105 @@ def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+def _record_environment_access_event(
+    conn: sqlite3.Connection,
+    *,
+    env_id: str,
+    user_id: str,
+    grant_version: int,
+    event_type: str,
+    actor_user_id: str,
+    max_tasks: int | None,
+    reason: str | None,
+    occurred_at: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO environment_access_audit_events (
+            event_id, environment_id, user_id, grant_version, event_type,
+            actor_user_id, max_concurrent_tasks, reason, occurred_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            uuid.uuid4().hex,
+            env_id,
+            user_id,
+            grant_version,
+            event_type,
+            actor_user_id,
+            max_tasks,
+            reason,
+            occurred_at,
+        ),
+    )
+
+
+def _upsert_environment_grant(
+    conn: sqlite3.Connection,
+    *,
+    env_id: str,
+    user_id: str,
+    max_tasks: int | None,
+    granted_by: str,
+    now: str,
+    reason: str | None,
+    reactivate_only: bool,
+) -> bool:
+    """Create or renew a grant and write exactly one matching audit event.
+
+    Seed provisioning is deliberately idempotent for already-active grants;
+    explicit administrator grants always advance the version so a dispatcher
+    can distinguish a fresh authorization decision from an earlier one.
+    """
+    reactivate_clause = "WHERE environment_access.status = 'revoked'" if reactivate_only else ""
+    cursor = conn.execute(
+        f"""
+        INSERT INTO environment_access (
+            environment_id, user_id, max_concurrent_tasks, granted_by_user_id,
+            granted_at, grant_version, status, updated_at, revoked_at,
+            grant_reason, revoked_by_user_id, revocation_reason
+        ) VALUES (?, ?, ?, ?, ?, 1, 'active', ?, NULL, ?, NULL, NULL)
+        ON CONFLICT(environment_id, user_id) DO UPDATE SET
+            max_concurrent_tasks = excluded.max_concurrent_tasks,
+            granted_by_user_id = excluded.granted_by_user_id,
+            granted_at = excluded.granted_at,
+            grant_version = environment_access.grant_version + 1,
+            status = 'active',
+            updated_at = excluded.updated_at,
+            revoked_at = NULL,
+            grant_reason = excluded.grant_reason,
+            revoked_by_user_id = NULL,
+            revocation_reason = NULL
+        {reactivate_clause}
+        """,
+        (env_id, user_id, max_tasks, granted_by, now, now, reason),
+    )
+    if cursor.rowcount == 0:
+        return False
+    row = conn.execute(
+        """
+        SELECT grant_version, max_concurrent_tasks
+        FROM environment_access
+        WHERE environment_id = ? AND user_id = ?
+        """,
+        (env_id, user_id),
+    ).fetchone()
+    if row is None:
+        raise AuthError("Environment grant disappeared during update")
+    _record_environment_access_event(
+        conn,
+        env_id=env_id,
+        user_id=user_id,
+        grant_version=int(row["grant_version"]),
+        event_type="granted",
+        actor_user_id=granted_by,
+        max_tasks=row["max_concurrent_tasks"],
+        reason=reason,
+        occurred_at=now,
+    )
+    return True
+
+
 class AuthService:
     def __init__(
         self, *, state_root: Path, login_max_failures: int = 10, login_lockout_hours: int = 24
@@ -111,6 +210,7 @@ class AuthService:
         password: str,
         must_change_password: bool = False,
     ) -> User:
+        self.initialize()
         if not _USERNAME_RE.fullmatch(username):
             raise AuthError(
                 "Username must be 2-31 characters, start with a letter or digit, "
@@ -131,10 +231,92 @@ class AuthService:
                 "VALUES (?, ?, ?, ?, 'member', 'pending', ?, ?)",
                 (uid, username, password_hash, display_name, now, int(must_change_password)),
             )
+            # The default Project lives in the separate domain database.  Do
+            # not fake a distributed transaction: persist this intent beside
+            # the newly-created user and let the v2 control plane reconcile it
+            # idempotently after the auth transaction commits.
+            conn.execute(
+                """
+                INSERT INTO domain_default_project_provisioning (
+                    user_id, username, status, attempt_count, created_at, updated_at
+                ) VALUES (?, ?, 'queued', 0, ?, ?)
+                """,
+                (uid, username, now, now),
+            )
             conn.commit()
 
         self._ensure_tenant_user(username)
         return self._load_user(uid)
+
+    def ensure_domain_default_project_provisioning(self, user_id: str, username: str) -> None:
+        """Backfill an idempotent default-Project provisioning intent for one user."""
+
+        self.initialize()
+        now = _now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO domain_default_project_provisioning (
+                    user_id, username, status, attempt_count, created_at, updated_at
+                ) VALUES (?, ?, 'queued', 0, ?, ?)
+                """,
+                (user_id, username, now, now),
+            )
+            conn.commit()
+
+    def pending_domain_default_project_provisioning(self) -> list[tuple[str, str]]:
+        """Return durable provisioning work that has not reached the v2 domain."""
+
+        self.initialize()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT user_id, username FROM domain_default_project_provisioning
+                WHERE status = 'queued'
+                ORDER BY created_at, user_id
+                """
+            ).fetchall()
+        return [(str(row["user_id"]), str(row["username"])) for row in rows]
+
+    def mark_domain_default_project_provisioned(self, user_id: str) -> None:
+        """Acknowledge a successful idempotent v2 default-Project write."""
+
+        self.initialize()
+        now = _now_iso()
+        with self._connect() as conn:
+            updated = conn.execute(
+                """
+                UPDATE domain_default_project_provisioning
+                SET status = 'provisioned', last_error = NULL, provisioned_at = ?, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (now, now, user_id),
+            ).rowcount
+            if updated != 1:
+                raise AuthError("Default Project provisioning intent is missing")
+            conn.commit()
+
+    def record_domain_default_project_provisioning_failure(
+        self, user_id: str, error: Exception
+    ) -> None:
+        """Retain a bounded diagnostic while keeping the provisioning intent retryable."""
+
+        self.initialize()
+        now = _now_iso()
+        detail = str(error).strip() or type(error).__name__
+        with self._connect() as conn:
+            updated = conn.execute(
+                """
+                UPDATE domain_default_project_provisioning
+                SET status = 'queued', attempt_count = attempt_count + 1,
+                    last_error = ?, updated_at = ?
+                WHERE user_id = ? AND status = 'queued'
+                """,
+                (detail[:1024], now, user_id),
+            ).rowcount
+            if updated != 1:
+                raise AuthError("Default Project provisioning intent is missing")
+            conn.commit()
 
     # --- Login ---
 
@@ -309,11 +491,15 @@ class AuthService:
         now = _now_iso()
         with self._connect() as conn:
             for env_id, max_tasks in seed_envs:
-                conn.execute(
-                    "INSERT OR IGNORE INTO environment_access "
-                    "(environment_id, user_id, max_concurrent_tasks, granted_by_user_id, granted_at) "
-                    "VALUES (?, ?, ?, 'system', ?)",
-                    (env_id, user_id, max_tasks, now),
+                _upsert_environment_grant(
+                    conn,
+                    env_id=env_id,
+                    user_id=user_id,
+                    max_tasks=max_tasks,
+                    granted_by="system",
+                    now=now,
+                    reason="seed environment provisioning",
+                    reactivate_only=True,
                 )
             conn.commit()
 
@@ -394,33 +580,83 @@ class AuthService:
     # --- Environment Access ---
 
     def grant_environment(
-        self, *, env_id: str, user_id: str, max_tasks: int | None, granted_by: str
+        self,
+        *,
+        env_id: str,
+        user_id: str,
+        max_tasks: int | None,
+        granted_by: str,
+        reason: str | None = None,
     ) -> None:
         self.initialize()
         now = _now_iso()
         with self._connect() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO environment_access "
-                "(environment_id, user_id, max_concurrent_tasks, granted_by_user_id, granted_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (env_id, user_id, max_tasks, granted_by, now),
+            _upsert_environment_grant(
+                conn,
+                env_id=env_id,
+                user_id=user_id,
+                max_tasks=max_tasks,
+                granted_by=granted_by,
+                now=now,
+                reason=reason,
+                reactivate_only=False,
             )
             conn.commit()
 
-    def revoke_environment(self, env_id: str, user_id: str) -> None:
+    def revoke_environment(
+        self,
+        env_id: str,
+        user_id: str,
+        *,
+        revoked_by: str = "system",
+        reason: str | None = None,
+    ) -> None:
         self.initialize()
+        now = _now_iso()
         with self._connect() as conn:
-            conn.execute(
-                "DELETE FROM environment_access WHERE environment_id = ? AND user_id = ?",
-                (env_id, user_id),
+            cursor = conn.execute(
+                """
+                UPDATE environment_access
+                SET status = 'revoked',
+                    grant_version = grant_version + 1,
+                    updated_at = ?,
+                    revoked_at = ?,
+                    revoked_by_user_id = ?,
+                    revocation_reason = ?
+                WHERE environment_id = ? AND user_id = ? AND status = 'active'
+                """,
+                (now, now, revoked_by, reason, env_id, user_id),
             )
+            if cursor.rowcount:
+                row = conn.execute(
+                    """
+                    SELECT grant_version, max_concurrent_tasks
+                    FROM environment_access
+                    WHERE environment_id = ? AND user_id = ?
+                    """,
+                    (env_id, user_id),
+                ).fetchone()
+                if row is None:
+                    raise AuthError("Environment grant disappeared during revocation")
+                _record_environment_access_event(
+                    conn,
+                    env_id=env_id,
+                    user_id=user_id,
+                    grant_version=int(row["grant_version"]),
+                    event_type="revoked",
+                    actor_user_id=revoked_by,
+                    max_tasks=row["max_concurrent_tasks"],
+                    reason=reason,
+                    occurred_at=now,
+                )
             conn.commit()
 
     def get_user_environment_ids(self, user_id: str) -> list[str]:
         self.initialize()
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT environment_id FROM environment_access WHERE user_id = ?",
+                "SELECT environment_id FROM environment_access "
+                "WHERE user_id = ? AND status = 'active'",
                 (user_id,),
             ).fetchall()
         return [r["environment_id"] for r in rows]

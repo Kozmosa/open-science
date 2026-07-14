@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
+from pathlib import Path
 
 MigrationFn = Callable[[sqlite3.Connection], None]
 
@@ -61,6 +62,83 @@ def set_version(conn: sqlite3.Connection, database_name: str, version: int) -> N
     )
 
 
+def _has_table(conn: sqlite3.Connection, table_name: str) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table_name,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _database_path(conn: sqlite3.Connection) -> Path | None:
+    for row in conn.execute("PRAGMA database_list"):
+        if str(row[1]) != "main" or not isinstance(row[2], str) or not row[2]:
+            continue
+        try:
+            return Path(row[2]).resolve()
+        except (OSError, ValueError):
+            return None
+    return None
+
+
+def _maintenance_is_active(conn: sqlite3.Connection, database_name: str) -> bool:
+    """Read the shared maintenance flag without creating or migrating state.
+
+    Constructors for auth, Literature, session, and control-plane services may
+    all call ``run_pending`` before their process registers as a participant.
+    A persisted maintenance epoch must therefore reject pending migration DDL
+    instead of silently mutating a source snapshot during a restart.
+    """
+
+    if database_name == "agentic_researcher":
+        control = conn
+        close_control = False
+    else:
+        database_path = _database_path(conn)
+        if database_path is None:
+            return False
+        control_path = database_path.parent / "agentic_researcher.sqlite3"
+        if not control_path.is_file():
+            return False
+        # Immutable reads do not replay a live WAL.  When one exists, use a
+        # normal read-only connection to observe the actual maintenance flag;
+        # it cannot write the database or WAL, and its transient shared-memory
+        # cache is not an authoritative source member.  Without a WAL, use
+        # immutable mode so this guard does not create a sidecar at all.
+        uri_suffix = (
+            "?mode=ro"
+            if control_path.with_name(f"{control_path.name}-wal").exists()
+            else "?mode=ro&immutable=1"
+        )
+        try:
+            control = sqlite3.connect(
+                f"{control_path.as_uri()}{uri_suffix}",
+                uri=True,
+                isolation_level=None,
+            )
+        except sqlite3.Error as exc:
+            raise RuntimeError("cannot inspect domain maintenance state before migration") from exc
+        close_control = True
+
+    try:
+        if not _has_table(control, "domain_maintenance_state"):
+            return False
+        row = control.execute(
+            "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+        ).fetchone()
+        return row is not None and bool(row[0])
+    finally:
+        if close_control:
+            control.close()
+
+
+def _current_version_without_creating(conn: sqlite3.Connection, database_name: str) -> int:
+    if not _has_table(conn, "_schema_version"):
+        return 0
+    return current_version(conn, database_name)
+
+
 def run_pending(
     conn: sqlite3.Connection,
     database_name: str,
@@ -73,8 +151,21 @@ def run_pending(
     caller is responsible for rolling back.
     """
     r = reg or registry
+    migration_count = len(r.get_pending(database_name, 0))
+    if _maintenance_is_active(conn, database_name):
+        persisted_version = _current_version_without_creating(conn, database_name)
+        if persisted_version < migration_count:
+            raise RuntimeError(
+                f"domain maintenance is active; refusing {database_name} migration "
+                f"from version {persisted_version} to {migration_count}"
+            )
     ensure_schema_table(conn)
     version = current_version(conn, database_name)
+    if version < 0 or version > migration_count:
+        raise RuntimeError(
+            f"unsupported {database_name} schema version {version}; "
+            f"this binary supports versions 0 through {migration_count}"
+        )
     pending = r.get_pending(database_name, version)
     for i, migration in enumerate(pending):
         migration(conn)

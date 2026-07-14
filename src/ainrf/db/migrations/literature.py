@@ -401,6 +401,29 @@ def migration_004_tracking_redesign(conn: sqlite3.Connection) -> None:
         """
     )
 
+
+@registry.register(_DATABASE)
+def migration_005_task_conversion_saga(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS literature_task_sagas (
+            saga_id TEXT PRIMARY KEY,
+            subscription_id TEXT NOT NULL,
+            paper_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            task_id TEXT,
+            status TEXT NOT NULL CHECK (status IN ('pending', 'task_created', 'completed', 'failed')),
+            idempotency_key TEXT NOT NULL UNIQUE,
+            error_detail TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(subscription_id, paper_id, project_id, workspace_id)
+        )
+        """
+    )
+
     # Migrate old subscriptions without allowing category-less legacy rows to
     # turn into an unsafe all-arXiv query.  Existing IDs remain stable.
     conn.execute(
@@ -448,5 +471,59 @@ def migration_004_tracking_redesign(conn: sqlite3.Connection) -> None:
         FROM literature_subscription_papers sp
         JOIN literature_subscriptions s ON s.subscription_id = sp.subscription_id
         GROUP BY s.user_id, sp.paper_id
+        """
+    )
+
+
+@registry.register(_DATABASE)
+def migration_006_research_task_intents(conn: sqlite3.Connection) -> None:
+    """Persist recoverable v2 Literature-to-Task intents.
+
+    The existing ``literature_research_task_links`` table is an early
+    compatibility record and has a globally unique idempotency key.  It cannot
+    model the formal ``(user_id, paper_id, idempotency_key)`` contract, nor the
+    lease/checkpoint required to resume a cross-database Task creation.  Keep
+    it readable and add an authoritative intent table instead of rewriting
+    history or attempting a cross-SQLite transaction.
+    """
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS literature_research_task_intents (
+            intent_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            paper_id TEXT NOT NULL,
+            subscription_id TEXT,
+            project_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            actor_role TEXT NOT NULL DEFAULT 'member',
+            task_preset TEXT NOT NULL,
+            title TEXT NOT NULL,
+            request_input_json TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            task_idempotency_key TEXT NOT NULL UNIQUE,
+            task_id TEXT,
+            status TEXT NOT NULL CHECK (
+                status IN ('pending', 'creating_task', 'task_created', 'completed', 'retryable_failed')
+            ),
+            work_item_id TEXT NOT NULL UNIQUE REFERENCES literature_work_items(work_item_id) ON DELETE RESTRICT,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            lease_owner TEXT,
+            lease_expires_at TEXT,
+            heartbeat_at TEXT,
+            next_retry_at TEXT,
+            last_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            completed_at TEXT,
+            UNIQUE(user_id, paper_id, idempotency_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_lit_research_task_intents_recovery
+        ON literature_research_task_intents(status, next_retry_at, lease_expires_at, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_lit_research_task_intents_paper
+        ON literature_research_task_intents(user_id, paper_id, created_at DESC);
         """
     )

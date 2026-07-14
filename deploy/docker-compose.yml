@@ -39,6 +39,10 @@ services:
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
+      # Release A stays legacy/validate by default.  A release controller must
+      # explicitly provide both v2 mode and the exact committed artifact SHA.
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?Set AINRF_JWT_SECRET in .env}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
       AINRF_ALLOWED_CIDRS: "0.0.0.0/0"
@@ -93,6 +97,51 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  # No-port durable Task/Overview/Literature-saga worker.  The profile keeps
+  # legacy and validate deployments free of v2 consumers by default.
+  domain-worker:
+    profiles: ["domain-v2"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
+        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    restart: unless-stopped
+    container_name: openscience-domain-worker
+    environment:
+      HOME: /opt/ainrf
+      AINRF_PRODUCTION: "1"
+      AINRF_STATE_ROOT: /opt/ainrf/state
+      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      OPENSCIENCE_NO_SSHD: "1"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.5}
+    volumes:
+      - ainrf-state:/opt/ainrf/state
+      - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
+      - ainrf-tenants:/home/ainrf_tenants
+    cap_add:
+      - SYS_ADMIN
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    command: ["openscience", "domain-worker", "--state-root", "/opt/ainrf/state"]
+    depends_on:
+      ainrf:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
   # ── Nginx Reverse Proxy ───────────────────────────────────────
   nginx:
     image: docker.1ms.run/nginx:1.27-alpine
@@ -125,7 +174,7 @@ services:
     container_name: ainrf-prometheus
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./examples/prometheus-rules.example.yml:/etc/prometheus/rules/ainrf.yml:ro
+      - ./config/prometheus/rules/ainrf-alerts.yml:/etc/prometheus/rules/ainrf.yml:ro
       - prometheus-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"

@@ -35,7 +35,7 @@ printf '%s %s\n' "$(basename "$0")" "$*" >> "${OPENSCIENCE_CI_TEST_LOG}"
         + """
 if [[ " $* " == *" --write-out "* ]]; then
   if [[ "$*" == *"/v1/models"* ]]; then
-    printf '401'
+    printf '200'
   else
     printf '404'
   fi

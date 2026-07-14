@@ -145,14 +145,16 @@ def build_rate_limit_middleware() -> Callable[
             return await call_next(request)
 
         from ainrf.api.routes.sla_metrics import rate_limited
+        from ainrf.api.routes.metrics import route_template_for_request
 
-        rate_limited("user_quota", request.url.path)
+        route = route_template_for_request(request)
+        rate_limited("user_quota", route)
 
         _LOG.warning(
             "rate_limited",
             extra={
-                "client_key": client_key,
-                "path": request.url.path,
+                "client_scope": "authenticated" if user else "anonymous",
+                "route": route,
                 "method": request.method,
             },
         )

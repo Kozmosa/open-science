@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time as _time
+from pathlib import Path
 from typing import cast
 
 from fastapi import APIRouter, Request
@@ -28,20 +29,29 @@ router = APIRouter()
 _START_TIME = _time.monotonic()
 
 
-def _probe_database(state_root: str) -> ComponentHealth:
+def _probe_database(state_root: str, *, read_only: bool = False) -> ComponentHealth:
     """Probe SQLite database connectivity."""
-    import os as _os
 
     start = _time.monotonic()
     try:
-        db_path = _os.path.join(state_root, "runtime", "agentic_researcher.sqlite3")
-        if not _os.path.exists(db_path):
+        db_path = Path(state_root) / "runtime" / "agentic_researcher.sqlite3"
+        if not db_path.exists():
             return ComponentHealth(
                 status="ok",
                 latency_ms=round((_time.monotonic() - start) * 1000, 1),
                 error=None,
             )
-        conn = sqlite3.connect(db_path)
+        if read_only:
+            if db_path.with_name(f"{db_path.name}-wal").exists():
+                return ComponentHealth(
+                    status="degraded",
+                    latency_ms=round((_time.monotonic() - start) * 1000, 1),
+                    error="Database has an active WAL; maintenance probe deferred",
+                )
+            database_uri = f"{db_path.resolve().as_uri()}?mode=ro&immutable=1"
+            conn = sqlite3.connect(database_uri, uri=True, isolation_level=None)
+        else:
+            conn = sqlite3.connect(db_path)
         try:
             conn.execute("SELECT 1")
         finally:
@@ -89,13 +99,22 @@ def _probe_litefuse(request: Request) -> ComponentHealth:
     )
 
 
-def _probe_filesystem(state_root: str) -> ComponentHealth:
+def _probe_filesystem(state_root: str, *, read_only: bool = False) -> ComponentHealth:
     """Probe filesystem writability."""
     import os as _os
     import tempfile
 
     start = _time.monotonic()
     try:
+        if read_only:
+            # A maintenance restart is intentionally quiescent.  In
+            # particular, do not use the old write-test probe, which created
+            # ``health_check`` and a temporary file inside the state tree.
+            Path(state_root).stat()
+            return ComponentHealth(
+                status="ok",
+                latency_ms=round((_time.monotonic() - start) * 1000, 1),
+            )
         test_dir = _os.path.join(state_root, "health_check")
         _os.makedirs(test_dir, exist_ok=True)
         with tempfile.TemporaryFile(dir=test_dir) as f:
@@ -125,10 +144,11 @@ async def health_check(request: Request) -> HealthResponse:
 
     # ── Component probes ──────────────────────────────────────────
     state_root = str(public_payload["state_root"])
+    maintenance_read_only = bool(getattr(request.app.state, "maintenance_startup_read_only", False))
     checks: dict[str, ComponentHealth] = {}
-    checks["database"] = _probe_database(state_root)
+    checks["database"] = _probe_database(state_root, read_only=maintenance_read_only)
     checks["litefuse"] = _probe_litefuse(request)
-    checks["filesystem"] = _probe_filesystem(state_root)
+    checks["filesystem"] = _probe_filesystem(state_root, read_only=maintenance_read_only)
     checks["runtime"] = ComponentHealth(
         status="ok" if runtime_readiness.get("all_ready") else "degraded",
         error=(
@@ -151,7 +171,7 @@ async def health_check(request: Request) -> HealthResponse:
     uptime_seconds = _time.monotonic() - _START_TIME
 
     container_config = api_config.container_config
-    if container_config is None:
+    if container_config is None or not api_config.runtime_reconciliation_enabled:
         return HealthResponse(
             status=overall,
             state_root=str(public_payload["state_root"]),
@@ -159,6 +179,11 @@ async def health_check(request: Request) -> HealthResponse:
             default_workspace_dir=str(public_payload["default_workspace_dir"]),
             container_configured=bool(public_payload["container_configured"]),
             runtime_readiness=runtime_readiness,
+            detail=(
+                "Remote runtime probes disabled by configuration"
+                if container_config is not None and not api_config.runtime_reconciliation_enabled
+                else None
+            ),
             uptime_seconds=round(uptime_seconds, 1),
             checks=checks,
         )

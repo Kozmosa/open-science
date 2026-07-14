@@ -1,0 +1,1 @@
+{"items": [{"workspace_id": "one", "owner_user_id": "user-1", "project_id": "p", "default_workdir": "/synthetic/shared"}, {"workspace_id": "two", "owner_user_id": "user-1", "project_id": "p", "default_workdir": "/synthetic/shared"}]}

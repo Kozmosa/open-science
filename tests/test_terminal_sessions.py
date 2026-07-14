@@ -117,7 +117,7 @@ def test_tmux_adapter_builds_local_commands(
         ),
     )
 
-    adapter.ensure_personal_session(binding, environment, session_name)
+    assert adapter.ensure_personal_session(binding, environment, session_name) is True
 
     assert captured == [
         (
@@ -166,7 +166,7 @@ def test_tmux_adapter_treats_duplicate_new_session_after_recheck_as_success(
 
     monkeypatch.setattr(adapter, "_run_local_command", fake_run_local)
 
-    adapter.ensure_personal_session(binding, environment, session_name)
+    assert adapter.ensure_personal_session(binding, environment, session_name) is False
 
     assert captured == [
         ("tmux", "has-session", "-t", session_target),
@@ -824,13 +824,15 @@ def test_reset_kills_and_recreates_personal_session(
         "kill_session",
         lambda *args, **kwargs: calls.append("kill"),
     )
-    monkeypatch.setattr(
-        adapter,
-        "ensure_personal_session",
-        lambda *args, **kwargs: calls.append("ensure"),
-    )
 
-    adapter.reset_personal_session(binding, environment, "session-1")
+    def ensure(*args: object, **kwargs: object) -> bool:
+        _ = args, kwargs
+        calls.append("ensure")
+        return True
+
+    monkeypatch.setattr(adapter, "ensure_personal_session", ensure)
+
+    assert adapter.reset_personal_session(binding, environment, "session-1") is True
 
     assert calls == ["kill", "ensure"]
 

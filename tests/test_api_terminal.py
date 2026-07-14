@@ -3,18 +3,76 @@ from __future__ import annotations
 from pathlib import Path
 import threading
 import time
+from types import SimpleNamespace
+from typing import cast
 
 import anyio
 import httpx
 import pytest
+from fastapi import Request
 
-from tests.testutil import get_jwt_headers, make_terminal_app
+from ainrf.api.routes.terminal import (
+    create_terminal_session,
+    delete_terminal_session,
+    reset_terminal_session,
+    terminal_session_exec,
+)
+from ainrf.api.schemas import (
+    TerminalExecRequest,
+    TerminalSessionCreateRequest,
+    TerminalSessionResetRequest,
+)
+from ainrf.domain_control import (
+    DomainMaintenanceService,
+    DomainModelMode,
+    MaintenanceModeError,
+)
+from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.tmux import TmuxCommandError
+from tests.testutil import get_jwt_headers, make_terminal_app, make_terminal_manager
 
 pytestmark = [pytest.mark.api, pytest.mark.concurrent]
 
 APP_USER_ID = "browser-user"
 # API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
+
+
+def _maintenance_terminal_request(
+    *,
+    state_root: Path,
+    maintenance: DomainMaintenanceService,
+    manager: object,
+    environment_service: object,
+    broker: TerminalAttachmentBroker,
+) -> Request:
+    """Build the smallest request surface needed by terminal route fences.
+
+    These regression tests call a route directly so the maintenance epoch can
+    cross inside the terminal operation without the HTTP middleware's outer
+    lease being part of the test fixture.  Production requests still receive
+    the same 503 mapping from that middleware.
+    """
+
+    return cast(
+        Request,
+        SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    api_config=SimpleNamespace(
+                        state_root=state_root,
+                        domain_model_mode=DomainModelMode.LEGACY,
+                    ),
+                    domain_api_participant_id=None,
+                    domain_maintenance_service=maintenance,
+                    environment_service=environment_service,
+                    terminal_attachment_broker=broker,
+                    terminal_session_manager=manager,
+                )
+            ),
+            base_url="http://testserver/",
+            state=SimpleNamespace(current_user={"id": APP_USER_ID, "role": "admin"}),
+        ),
+    )
 
 
 @pytest.mark.anyio
@@ -423,6 +481,262 @@ async def test_terminal_session_reset_returns_new_attachment(
     assert reset_calls == ["reset"]
     assert reset.json()["attachment_id"] != created.json()["attachment_id"]
     assert reset.json()["session_name"] == created.json()["session_name"]
+
+
+@pytest.mark.anyio
+async def test_terminal_session_create_cleans_new_tmux_session_when_epoch_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_terminal_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+    maintenance = DomainMaintenanceService(tmp_path)
+    broker = TerminalAttachmentBroker()
+    request = _maintenance_terminal_request(
+        state_root=tmp_path,
+        maintenance=maintenance,
+        manager=manager,
+        environment_service=environment_service,
+        broker=broker,
+    )
+    created_sessions: list[str] = []
+    killed_sessions: list[str] = []
+
+    def create_then_enter_maintenance(*args: object, **kwargs: object) -> bool:
+        _ = kwargs
+        created_sessions.append(str(args[-1]))
+        maintenance.enter(actor_id="operator", reason="race terminal session create")
+        return True
+
+    def record_cleanup(*args: object, **kwargs: object) -> None:
+        _ = kwargs
+        killed_sessions.append(str(args[-1]))
+
+    monkeypatch.setattr(
+        manager.tmux_adapter,
+        "ensure_personal_session",
+        create_then_enter_maintenance,
+    )
+    monkeypatch.setattr(manager.tmux_adapter, "kill_session", record_cleanup)
+    try:
+        with pytest.raises(MaintenanceModeError):
+            await create_terminal_session(
+                TerminalSessionCreateRequest(environment_id=environment.id),
+                request,
+            )
+    finally:
+        if maintenance.status().is_active:
+            maintenance.exit(actor_id="operator")
+
+    binding = manager._load_binding(APP_USER_ID, environment.id)
+    pair = manager._load_pair(binding.binding_id) if binding is not None else None
+    assert created_sessions == killed_sessions
+    assert pair is not None
+    assert pair.personal_status.value == "idle"
+    assert broker._attachments == {}
+
+
+@pytest.mark.anyio
+async def test_terminal_session_create_returns_503_when_epoch_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real HTTP stack must translate a crossed terminal lease to 503."""
+
+    app = make_terminal_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
+    environment = app.state.environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+    maintenance = DomainMaintenanceService(tmp_path)
+    manager = app.state.terminal_session_manager
+    killed_sessions: list[str] = []
+
+    def create_then_enter_maintenance(*args: object, **kwargs: object) -> bool:
+        _ = kwargs
+        maintenance.enter(actor_id="operator", reason="race terminal session create")
+        return True
+
+    def record_cleanup(*args: object, **kwargs: object) -> None:
+        _ = kwargs
+        killed_sessions.append(str(args[-1]))
+
+    monkeypatch.setattr(
+        manager.tmux_adapter,
+        "ensure_personal_session",
+        create_then_enter_maintenance,
+    )
+    monkeypatch.setattr(manager.tmux_adapter, "kill_session", record_cleanup)
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.post(
+                "/terminal/session",
+                headers=jwt_headers,
+                json={"environment_id": environment.id},
+            )
+    finally:
+        if maintenance.status().is_active:
+            maintenance.exit(actor_id="operator")
+
+    assert response.status_code == 503
+    assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
+    assert len(killed_sessions) == 1
+    assert app.state.terminal_attachment_broker._attachments == {}
+
+
+@pytest.mark.anyio
+async def test_terminal_session_reset_cleans_new_tmux_session_when_epoch_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_terminal_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+    maintenance = DomainMaintenanceService(tmp_path)
+    broker = TerminalAttachmentBroker()
+    request = _maintenance_terminal_request(
+        state_root=tmp_path,
+        maintenance=maintenance,
+        manager=manager,
+        environment_service=environment_service,
+        broker=broker,
+    )
+    created_sessions: list[str] = []
+    killed_sessions: list[str] = []
+
+    def reset_then_enter_maintenance(*args: object, **kwargs: object) -> bool:
+        _ = kwargs
+        created_sessions.append(str(args[-1]))
+        maintenance.enter(actor_id="operator", reason="race terminal session reset")
+        return True
+
+    def record_cleanup(*args: object, **kwargs: object) -> None:
+        _ = kwargs
+        killed_sessions.append(str(args[-1]))
+
+    monkeypatch.setattr(
+        manager.tmux_adapter,
+        "reset_personal_session",
+        reset_then_enter_maintenance,
+    )
+    monkeypatch.setattr(manager.tmux_adapter, "kill_session", record_cleanup)
+    try:
+        with pytest.raises(MaintenanceModeError):
+            await reset_terminal_session(
+                TerminalSessionResetRequest(environment_id=environment.id),
+                request,
+            )
+    finally:
+        if maintenance.status().is_active:
+            maintenance.exit(actor_id="operator")
+
+    binding = manager._load_binding(APP_USER_ID, environment.id)
+    pair = manager._load_pair(binding.binding_id) if binding is not None else None
+    assert created_sessions == killed_sessions
+    assert pair is not None
+    assert pair.personal_status.value == "idle"
+    assert broker._attachments == {}
+
+
+@pytest.mark.anyio
+async def test_terminal_session_delete_stops_after_epoch_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_terminal_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+    maintenance = DomainMaintenanceService(tmp_path)
+    broker = TerminalAttachmentBroker()
+    request = _maintenance_terminal_request(
+        state_root=tmp_path,
+        maintenance=maintenance,
+        manager=manager,
+        environment_service=environment_service,
+        broker=broker,
+    )
+    session_record_calls: list[object] = []
+
+    def detach_then_enter_maintenance(*args: object, **kwargs: object) -> None:
+        _ = args, kwargs
+        maintenance.enter(actor_id="operator", reason="race terminal attachment detach")
+
+    def unexpected_session_read(*args: object, **kwargs: object) -> None:
+        _ = args, kwargs
+        session_record_calls.append(object())
+
+    monkeypatch.setattr(broker, "detach_attachment", detach_then_enter_maintenance)
+    monkeypatch.setattr(manager, "get_session_record", unexpected_session_read)
+    try:
+        with pytest.raises(MaintenanceModeError):
+            await delete_terminal_session(
+                request,
+                environment_id=environment.id,
+                attachment_id="attachment-race",
+            )
+    finally:
+        if maintenance.status().is_active:
+            maintenance.exit(actor_id="operator")
+
+    assert session_record_calls == []
+
+
+@pytest.mark.anyio
+async def test_terminal_session_exec_rejects_result_when_epoch_changes_mid_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_terminal_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="gpu-lab",
+        display_name="GPU Lab",
+        host="gpu.example.com",
+    )
+    maintenance = DomainMaintenanceService(tmp_path)
+    broker = TerminalAttachmentBroker()
+    request = _maintenance_terminal_request(
+        state_root=tmp_path,
+        maintenance=maintenance,
+        manager=manager,
+        environment_service=environment_service,
+        broker=broker,
+    )
+    commands: list[tuple[str, ...]] = []
+
+    async def run_then_enter_maintenance(
+        _environment: object,
+        command: list[str],
+        *,
+        cwd: str,
+        timeout: float,
+    ) -> SimpleNamespace:
+        _ = cwd, timeout
+        commands.append(tuple(command))
+        maintenance.enter(actor_id="operator", reason="race tenant command")
+        return SimpleNamespace(stdout="done", stderr="", exit_code=0, command=command)
+
+    monkeypatch.setattr("ainrf.api.routes.terminal.exec_command", run_then_enter_maintenance)
+    try:
+        with pytest.raises(MaintenanceModeError):
+            await terminal_session_exec(
+                TerminalExecRequest(environment_id=environment.id, command=["pwd"]),
+                request,
+            )
+    finally:
+        if maintenance.status().is_active:
+            maintenance.exit(actor_id="operator")
+
+    assert commands == [("pwd",)]
 
 
 @pytest.mark.anyio

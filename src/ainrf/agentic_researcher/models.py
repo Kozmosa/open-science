@@ -20,6 +20,10 @@ class TaskStatus(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     PAUSED = "paused"
+    STOPPED = "stopped"
+    STOPPED_BY_PROJECT_ARCHIVE = "stopped_by_project_archive"
+    LAUNCH_UNKNOWN = "launch_unknown"
+    STOPPED_PERMISSION_REVOKED = "stopped_permission_revoked"
 
 
 @dataclass

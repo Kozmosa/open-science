@@ -31,10 +31,11 @@ class SkillRegistryConfigService:
     ``WorkspaceRegistryService`` and ``ProjectRegistryService``.
     """
 
-    def __init__(self, state_root: Path) -> None:
+    def __init__(self, state_root: Path, *, read_only: bool = False) -> None:
         self._state_root = state_root
         self._runtime_root = state_root / "runtime"
         self._registry_path = self._runtime_root / "skill_registries.json"
+        self._read_only = read_only
         self._lock = Lock()
         self._registries: dict[str, SkillRegistryConfig] = {}
         self._initialized = False
@@ -45,7 +46,8 @@ class SkillRegistryConfigService:
         with self._lock:
             if self._initialized:
                 return
-            self._runtime_root.mkdir(parents=True, exist_ok=True)
+            if not self._read_only:
+                self._runtime_root.mkdir(parents=True, exist_ok=True)
             if self._registry_path.exists():
                 raw = self._registry_path.read_text(encoding="utf-8")
                 try:
@@ -61,7 +63,8 @@ class SkillRegistryConfigService:
             for default in DEFAULT_REGISTRIES:
                 if default.registry_id not in self._registries:
                     self._registries[default.registry_id] = default
-            self._persist()
+            if not self._read_only:
+                self._persist()
             self._initialized = True
 
     def list_registries(self) -> list[SkillRegistryConfig]:
@@ -78,6 +81,7 @@ class SkillRegistryConfigService:
     def add_registry(self, config: SkillRegistryConfig) -> SkillRegistryConfig:
         """Add a new registry configuration. Raises if registry_id already exists."""
         self.initialize()
+        self._require_writable()
         with self._lock:
             if config.registry_id in self._registries:
                 raise ValueError(f"Registry '{config.registry_id}' already exists")
@@ -98,6 +102,7 @@ class SkillRegistryConfigService:
     ) -> SkillRegistryConfig:
         """Update an existing registry. Built-in registries may be edited but not deleted."""
         self.initialize()
+        self._require_writable()
         with self._lock:
             existing = self._registries.get(registry_id)
             if existing is None:
@@ -124,6 +129,7 @@ class SkillRegistryConfigService:
     def delete_registry(self, registry_id: str) -> None:
         """Delete a custom registry. Built-in registries cannot be deleted."""
         self.initialize()
+        self._require_writable()
         with self._lock:
             if registry_id not in self._registries:
                 raise SkillRegistryNotFoundError(registry_id)
@@ -135,9 +141,16 @@ class SkillRegistryConfigService:
     def reset_to_defaults(self) -> None:
         """Restore all default registries and remove any custom registries."""
         self.initialize()
+        self._require_writable()
         with self._lock:
             self._registries = {d.registry_id: d for d in DEFAULT_REGISTRIES}
             self._persist()
+
+    def _require_writable(self) -> None:
+        if self._read_only:
+            raise RuntimeError(
+                "skill registry configuration is read-only during domain maintenance"
+            )
 
     def _persist(self) -> None:
         payload: dict[str, Any] = {

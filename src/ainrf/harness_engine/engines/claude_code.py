@@ -17,7 +17,10 @@ from ainrf.harness_engine.base import (
     HarnessEngine,
     HarnessEngineNotSupportedError,
     HarnessEngineType,
+    RuntimeProbeResult,
+    RuntimeProbeStatus,
 )
+from ainrf.harness_engine.session_state import RuntimeLaunchTracker
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +68,13 @@ class ClaudeCodeEngine(HarnessEngine):
     Session lifecycle::
 
         ┌──────────────────────────────────────────────────────┐
-        │  _pending_messages[task_id]  ←  send_input() enqueues│
-        │  _session_ids[task_id]       ←  stored after success │
+        │  _pending_messages[runtime_identity]  ← input queues │
+        │  _session_ids[runtime_identity]       ← stored success│
         └──────────────────────────────────────────────────────┘
 
     Fresh start (no stored session_id)::
 
-        claude -p --session-id <task_id> "prompt"
+        claude -p --session-id <runtime_identity> "prompt"
 
     Resume (stored session_id + pending message)::
 
@@ -79,14 +82,16 @@ class ClaudeCodeEngine(HarnessEngine):
 
     Resume failure → fall back to fresh session with prior context::
 
-        claude -p --session-id <task_id> "[context] ↵ message"
+        claude -p --session-id <runtime_identity> "[context] ↵ message"
     """
 
     def __init__(self) -> None:
         self._processes: dict[str, asyncio.subprocess.Process] = {}
+        self._runtime_task_ids: dict[str, str] = {}
         self._session_ids: dict[str, str] = {}
         self._pending_messages: dict[str, deque[str]] = {}
         self._last_event_at: dict[str, float] = {}
+        self._runtime_recovery = RuntimeLaunchTracker(HarnessEngineType.CLAUDE_CODE.value)
 
     @property
     def engine_type(self) -> HarnessEngineType:
@@ -95,6 +100,8 @@ class ClaudeCodeEngine(HarnessEngine):
     # ── public API ────────────────────────────────────────────────────
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        self.bind_runtime_context(context)
+        self.arm_runtime_launch(context)
         started_at = time.time()
 
         skill_cleanup_dirs = self._mount_skills(context)
@@ -118,9 +125,12 @@ class ClaudeCodeEngine(HarnessEngine):
         started_at: float,
         mcp_path: str | None,
     ) -> None:
-        # Determine run mode
-        session_id = self._session_ids.get(context.task_id)
-        pending = self._drain_pending(context.task_id)
+        # A durable Task can have more than one Attempt.  The launch key is
+        # therefore the only safe identity for engine-local maps and Claude's
+        # transcript id.  Legacy callers omit it and retain task-scoped maps.
+        runtime_identity = context.runtime_identity
+        session_id = self._session_ids.get(runtime_identity)
+        pending = self._drain_pending(runtime_identity)
 
         if session_id is not None:
             # → Resume path
@@ -138,7 +148,7 @@ class ClaudeCodeEngine(HarnessEngine):
                     started_at=started_at,
                 )
                 # Session still valid after successful resume
-                self._session_ids[context.task_id] = session_id
+                self._session_ids[runtime_identity] = session_id
                 return
             except Exception:
                 logger.warning(
@@ -147,7 +157,7 @@ class ClaudeCodeEngine(HarnessEngine):
                     context.task_id,
                     session_id,
                 )
-                self._session_ids.pop(context.task_id, None)
+                self._session_ids.pop(runtime_identity, None)
 
         # → Fresh path (or resume-failure fallback)
         prompt = self._build_prompt(context, pending)
@@ -164,14 +174,22 @@ class ClaudeCodeEngine(HarnessEngine):
             emit=emit,
             started_at=started_at,
         )
-        self._session_ids[context.task_id] = session_id
+        self._session_ids[runtime_identity] = session_id
 
-    async def send_input(self, task_id: str, text: str) -> None:
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
         """Enqueue a follow-up message for the next :meth:`start` call."""
-        self._pending_messages.setdefault(task_id, deque()).append(text)
+        runtime_identity = runtime_launch_key or task_id
+        self._pending_messages.setdefault(runtime_identity, deque()).append(text)
 
-    async def cancel(self, task_id: str) -> None:
-        process = self._processes.get(task_id)
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
+        process = self._processes.get(runtime_identity)
         if process is None:
             return
         if process.returncode is None:
@@ -182,14 +200,76 @@ class ClaudeCodeEngine(HarnessEngine):
                 process.kill()
                 await process.wait()
 
-    async def is_alive(self, task_id: str) -> bool:
-        process = self._processes.get(task_id)
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        runtime_identity = runtime_launch_key or task_id
+        process = self._processes.get(runtime_identity)
         return process is not None and process.returncode is None
 
-    async def last_event_at(self, task_id: str) -> float | None:
-        return self._last_event_at.get(task_id)
+    def bind_runtime_context(self, context: ExecutionContext) -> None:
+        self._runtime_recovery.bind(context)
 
-    async def pause(self, task_id: str) -> None:
+    def arm_runtime_launch(self, context: ExecutionContext) -> None:
+        self._runtime_recovery.arm(context)
+
+    async def probe_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        process = self._processes.get(launch_key)
+        if process is not None and process.returncode is None:
+            if self._runtime_task_ids.get(launch_key) == task_id:
+                return RuntimeProbeResult(
+                    status=RuntimeProbeStatus.RUNNING,
+                    engine_session_key=self._session_ids.get(launch_key, launch_key),
+                    metadata={"recovery_evidence": "owned-process"},
+                )
+            return RuntimeProbeResult(
+                status=RuntimeProbeStatus.UNKNOWN,
+                metadata={"reason": "Launch key is associated with a different Task"},
+            )
+        inspection = self._runtime_recovery.inspect(task_id=task_id, launch_key=launch_key)
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus(inspection.status),
+            engine_session_key=inspection.engine_session_key,
+            metadata={
+                key: value
+                for key, value in {
+                    "process_id": inspection.process_id,
+                    "reason": inspection.reason,
+                }.items()
+                if value is not None
+            },
+        )
+
+    async def adopt_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        probe = await self.probe_runtime(task_id=task_id, launch_key=launch_key)
+        if probe.status is not RuntimeProbeStatus.RUNNING:
+            return probe
+        # Claude's one-shot CLI owns a private stdin/stdout pipe.  A new
+        # dispatcher can prove that process exists, but cannot reconnect to
+        # its stream or safely resume its control protocol.  Reporting RUNNING
+        # here would make the worker mark a fake adoption as successful.
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus.UNKNOWN,
+            engine_session_key=probe.engine_session_key,
+            metadata={"reason": "Claude Code stdio process is observable but cannot be reattached"},
+        )
+
+    async def last_event_at(
+        self, task_id: str, *, runtime_launch_key: str | None = None
+    ) -> float | None:
+        runtime_identity = runtime_launch_key or task_id
+        return self._last_event_at.get(runtime_identity)
+
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        _ = task_id, runtime_launch_key
         raise HarnessEngineNotSupportedError("Claude Code engine does not support pause")
 
     async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
@@ -199,12 +279,12 @@ class ClaudeCodeEngine(HarnessEngine):
 
     @staticmethod
     def _make_session_id(context: ExecutionContext) -> str:
-        """Derive a deterministic session id from the task id.
+        """Derive a deterministic session id from the runtime identity.
 
         The CLI uses this as a filename component under
         ``~/.claude/projects/<key>/<session_id>.jsonl``.
         """
-        return context.task_id
+        return context.runtime_identity
 
     def _build_command(
         self,
@@ -248,7 +328,7 @@ class ClaudeCodeEngine(HarnessEngine):
         """Spawn the CLI, stream stdout/stderr, and emit lifecycle events."""
 
         async def _emit(event: EngineEvent) -> None:
-            self._last_event_at[context.task_id] = time.time()
+            self._last_event_at[context.runtime_identity] = time.time()
             await emit(event)
 
         env = os.environ.copy()
@@ -266,6 +346,12 @@ class ClaudeCodeEngine(HarnessEngine):
             env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = context.default_haiku_model
         if context.env_overrides:
             env.update(context.env_overrides)
+        engine_session_key = self._session_ids.get(
+            context.runtime_identity,
+            self._make_session_id(context),
+        )
+        self._runtime_recovery.begin(context, engine_session_key=engine_session_key)
+        env.update(self._runtime_recovery.environment(context))
 
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -275,14 +361,20 @@ class ClaudeCodeEngine(HarnessEngine):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        self._processes[context.task_id] = process
+        self._processes[context.runtime_identity] = process
+        self._runtime_task_ids[context.runtime_identity] = context.task_id
+        self._runtime_recovery.mark_running(
+            context,
+            process_id=(process.pid if isinstance(getattr(process, "pid", None), int) else None),
+            engine_session_key=engine_session_key,
+        )
         stdin = process.stdin
         stdout = process.stdout
         stderr = process.stderr
-        if stdin is None or stdout is None or stderr is None:
-            raise RuntimeError("Claude Code engine failed to attach stdio pipes")
 
         try:
+            if stdin is None or stdout is None or stderr is None:
+                raise RuntimeError("Claude Code engine failed to attach stdio pipes")
             if prompt:
                 stdin.write(prompt.encode())
                 await stdin.drain()
@@ -347,7 +439,8 @@ class ClaudeCodeEngine(HarnessEngine):
             if process.returncode != 0:
                 raise RuntimeError(f"claude exited with code {process.returncode}")
         finally:
-            self._processes.pop(context.task_id, None)
+            self._processes.pop(context.runtime_identity, None)
+            self._runtime_task_ids.pop(context.runtime_identity, None)
             if process.returncode is None:
                 process.terminate()
                 try:
@@ -355,12 +448,13 @@ class ClaudeCodeEngine(HarnessEngine):
                 except asyncio.TimeoutError:
                     process.kill()
                     await process.wait()
+            self._runtime_recovery.finish(context)
 
     # ── helpers ────────────────────────────────────────────────────────
 
-    def _drain_pending(self, task_id: str) -> list[str]:
-        """Return and clear all pending messages for *task_id*."""
-        q = self._pending_messages.pop(task_id, None)
+    def _drain_pending(self, runtime_identity: str) -> list[str]:
+        """Return and clear pending messages for one runtime identity."""
+        q = self._pending_messages.pop(runtime_identity, None)
         return list(q) if q else []
 
     def _build_prompt(

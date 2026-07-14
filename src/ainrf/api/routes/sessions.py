@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from pydantic import ValidationError
 
 from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
 from ainrf.api.schemas import (
@@ -18,6 +20,10 @@ from ainrf.api.schemas import (
     SessionUpdateRequest,
 )
 from ainrf.sessions import SessionService
+from ainrf.domain import DomainPermissionError, SessionProjectionService
+from ainrf.domain.service import DomainNotFoundError
+from ainrf.domain_control import DomainModelMode
+from ainrf.domain_telemetry import record_legacy_write_attempt
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +37,21 @@ def _get_service(request: Request) -> SessionService:
     return service
 
 
+def _projection(request: Request) -> SessionProjectionService | None:
+    domain = getattr(request.app.state, "domain_service", None)
+    service = getattr(request.app.state, "session_projection_service", None)
+    if request.app.state.api_config.domain_model_mode is not DomainModelMode.V2:
+        return None
+    if domain is None or service is None or not domain.v2_ready():
+        # A v2 process has no writable SessionService by design.  Never let a
+        # failed fuse masquerade as legacy mode and fall through to an
+        # uninitialized compatibility service.
+        raise HTTPException(status_code=503, detail="Session domain v2 is not ready")
+    if not isinstance(service, SessionProjectionService):
+        raise HTTPException(status_code=500, detail="Session projection service is invalid")
+    return service
+
+
 def _translate_error(exc: Exception) -> HTTPException:
     name = exc.__class__.__name__
     if name == "SessionNotFoundError":
@@ -40,6 +61,45 @@ def _translate_error(exc: Exception) -> HTTPException:
     if isinstance(exc, RuntimeError):
         return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=500, detail="Unexpected session error")
+
+
+def _v2_sessions_read_only(request: Request) -> HTTPException:
+    """Sessions are retained as an API projection, never a v2 write model."""
+
+    record_legacy_write_attempt(
+        source="legacy_session",
+        state_root=request.app.state.api_config.state_root,
+    )
+    return HTTPException(
+        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        detail="Sessions are a read-only Task Attempt projection in v2",
+        headers={"Allow": "GET"},
+    )
+
+
+async def _legacy_request_payload(
+    request: Request, model: type[SessionCreateRequest]
+) -> SessionCreateRequest:
+    """Parse a legacy write payload only after the v2 write fence ran.
+
+    FastAPI validates typed body parameters before calling a route handler.
+    Sessions must instead return the fixed v2 ``405`` for *every* body,
+    including malformed JSON, before a legacy request schema is considered.
+    """
+
+    try:
+        payload = await request.json()
+        return model.model_validate(payload)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid Session request") from exc
+
+
+async def _legacy_update_payload(request: Request) -> SessionUpdateRequest:
+    try:
+        payload = await request.json()
+        return SessionUpdateRequest.model_validate(payload)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid Session request") from exc
 
 
 def _serialize_session(s) -> dict[str, Any]:
@@ -82,6 +142,26 @@ async def list_sessions(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> SessionListResponse:
     user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        try:
+            items, total, has_more, next_cursor = projection.list_sessions(
+                project_id=project_id,
+                user=user,
+                status=status,
+                cursor=cursor,
+                limit=limit,
+            )
+        except DomainNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Session not found") from exc
+        return SessionListResponse.model_validate(
+            {
+                "items": items,
+                "total": total if cursor is None else None,
+                "has_more": has_more,
+                "next_cursor": next_cursor,
+            }
+        )
     service = _get_service(request)
     try:
         if is_admin(user):
@@ -112,7 +192,10 @@ async def list_sessions(
 
 
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(payload: SessionCreateRequest, request: Request) -> SessionResponse:
+async def create_session(request: Request) -> SessionResponse:
+    if _projection(request) is not None:
+        raise _v2_sessions_read_only(request)
+    payload = await _legacy_request_payload(request, SessionCreateRequest)
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -124,9 +207,38 @@ async def create_session(payload: SessionCreateRequest, request: Request) -> Ses
     return SessionResponse.model_validate(_serialize_session(s))
 
 
+@router.get("/batch-detail")
+async def get_sessions_batch_detail(
+    request: Request,
+    ids: str = Query(..., description="Comma-separated session IDs"),
+):
+    session_ids = [sid.strip() for sid in ids.split(",") if sid.strip()]
+    if not session_ids:
+        return {"items": {}}
+    if len(session_ids) > 200:
+        raise HTTPException(status_code=400, detail="Too many IDs (max 200)")
+    user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        return {"items": projection.batch_details(session_ids, user)}
+    service = _get_service(request)
+    if is_admin(user):
+        details = service.get_sessions_batch_detail(session_ids)
+    else:
+        details = service.get_sessions_batch_detail(session_ids, owner_user_id=user["id"])
+    return {"items": details}
+
+
 @router.get("/{session_id}", response_model=SessionDetailResponse)
 async def get_session(session_id: str, request: Request) -> SessionDetailResponse:
     user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        try:
+            session, attempts = projection.get_session(session_id, user)
+        except (DomainPermissionError, LookupError) as exc:
+            raise HTTPException(status_code=404, detail="Session not found") from exc
+        return SessionDetailResponse.model_validate({**session, "attempts": attempts})
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
@@ -143,9 +255,10 @@ async def get_session(session_id: str, request: Request) -> SessionDetailRespons
 
 
 @router.patch("/{session_id}", response_model=SessionResponse)
-async def update_session(
-    session_id: str, payload: SessionUpdateRequest, request: Request
-) -> SessionResponse:
+async def update_session(session_id: str, request: Request) -> SessionResponse:
+    if _projection(request) is not None:
+        raise _v2_sessions_read_only(request)
+    payload = await _legacy_update_payload(request)
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -159,6 +272,8 @@ async def update_session(
 
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(session_id: str, request: Request) -> Response:
+    if _projection(request) is not None:
+        raise _v2_sessions_read_only(request)
     user = get_current_user(request)
     service = _get_service(request)
     try:
@@ -173,6 +288,13 @@ async def delete_session(session_id: str, request: Request) -> Response:
 @router.get("/{session_id}/attempts", response_model=AttemptListResponse)
 async def list_attempts(session_id: str, request: Request) -> AttemptListResponse:
     user = get_current_user(request)
+    projection = _projection(request)
+    if projection is not None:
+        try:
+            _session, attempts = projection.get_session(session_id, user)
+        except (DomainPermissionError, LookupError) as exc:
+            raise HTTPException(status_code=404, detail="Session not found") from exc
+        return AttemptListResponse.model_validate({"items": attempts})
     service = _get_service(request)
     try:
         s = service.get_session(session_id)
@@ -185,22 +307,3 @@ async def list_attempts(session_id: str, request: Request) -> AttemptListRespons
             "items": [_serialize_attempt(a) for a in attempts],
         }
     )
-
-
-@router.get("/batch-detail")
-async def get_sessions_batch_detail(
-    request: Request,
-    ids: str = Query(..., description="Comma-separated session IDs"),
-):
-    session_ids = [sid.strip() for sid in ids.split(",") if sid.strip()]
-    if not session_ids:
-        return {"items": {}}
-    if len(session_ids) > 200:
-        raise HTTPException(status_code=400, detail="Too many IDs (max 200)")
-    user = get_current_user(request)
-    service = _get_service(request)
-    if is_admin(user):
-        details = service.get_sessions_batch_detail(session_ids)
-    else:
-        details = service.get_sessions_batch_detail(session_ids, owner_user_id=user["id"])
-    return {"items": details}

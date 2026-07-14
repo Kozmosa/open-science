@@ -19,8 +19,10 @@ from ainrf.harness_engine.base import (
     ExecutionContext,
     HarnessEngine,
     HarnessEngineType,
+    RuntimeProbeResult,
+    RuntimeProbeStatus,
 )
-from ainrf.harness_engine.session_state import SessionCheckpoint
+from ainrf.harness_engine.session_state import RuntimeLaunchTracker, SessionCheckpoint
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,9 @@ _CLIENT_INFO = {
 @dataclass(slots=True)
 class CodexSession:
     task_id: str
+    # The logical Task id remains available for user-visible events while the
+    # enclosing engine map uses this Attempt/launch-key identity.
+    runtime_identity: str | None = None
     abort_event: asyncio.Event = field(default_factory=asyncio.Event)
     pause_requested: bool = False
     pending_prompts: deque[str] = field(default_factory=deque)
@@ -54,6 +59,7 @@ class CodexSession:
     pending_requests: dict[int, asyncio.Future[dict[str, Any]]] = field(default_factory=dict)
     command: list[str] = field(default_factory=list)
     last_event_at: float = field(default_factory=time.time)
+    runtime_context: ExecutionContext | None = None
 
 
 class CodexAppServerEngine(HarnessEngine):
@@ -62,17 +68,26 @@ class CodexAppServerEngine(HarnessEngine):
     def __init__(self) -> None:
         self._sessions: dict[str, CodexSession] = {}
         self._lock = asyncio.Lock()
+        self._runtime_recovery = RuntimeLaunchTracker(HarnessEngineType.CODEX_APP_SERVER.value)
 
     @property
     def engine_type(self) -> HarnessEngineType:
         return HarnessEngineType.CODEX_APP_SERVER
 
     async def start(self, context: ExecutionContext, emit: EngineEmit) -> None:
+        self.bind_runtime_context(context)
+        self.arm_runtime_launch(context)
+        runtime_identity = context.runtime_identity
         async with self._lock:
-            session = self._sessions.get(context.task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = CodexSession(task_id=context.task_id)
-                self._sessions[context.task_id] = session
+                session = CodexSession(
+                    task_id=context.task_id,
+                    runtime_identity=runtime_identity,
+                )
+                self._sessions[runtime_identity] = session
+            elif session.task_id != context.task_id:
+                raise RuntimeError("Runtime identity is already associated with another Task")
             # Restore from checkpoint whenever we lack a thread_id, not just
             # when the session is brand-new. send_input() pre-creates sessions
             # before start() runs on follow-up / retry, masking the persisted
@@ -83,6 +98,7 @@ class CodexAppServerEngine(HarnessEngine):
             session.abort_event.clear()
             session.turn_done.clear()
             session.turn_status = None
+            session.runtime_context = context
 
         if context.session_state_path and needs_checkpoint:
             self._restore_checkpoint(context, session)
@@ -98,12 +114,13 @@ class CodexAppServerEngine(HarnessEngine):
             await self._interrupt_turn(session)
         await self._await_turn(context, session)
 
-    async def pause(self, task_id: str) -> None:
+    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = CodexSession(task_id=task_id)
-                self._sessions[task_id] = session
+                session = CodexSession(task_id=task_id, runtime_identity=runtime_identity)
+                self._sessions[runtime_identity] = session
             session.pause_requested = True
             should_interrupt = session.thread_id is not None and session.turn_id is not None
         if should_interrupt:
@@ -112,17 +129,25 @@ class CodexAppServerEngine(HarnessEngine):
     async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
         await self.start(context, emit)
 
-    async def send_input(self, task_id: str, text: str) -> None:
+    async def send_input(
+        self,
+        task_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             if session is None:
-                session = CodexSession(task_id=task_id)
-                self._sessions[task_id] = session
+                session = CodexSession(task_id=task_id, runtime_identity=runtime_identity)
+                self._sessions[runtime_identity] = session
             session.pending_prompts.append(text)
 
-    async def cancel(self, task_id: str) -> None:
+    async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.pop(task_id, None)
+            session = self._sessions.pop(runtime_identity, None)
             if session is not None:
                 session.abort_event.set()
         if session is None:
@@ -132,9 +157,10 @@ class CodexAppServerEngine(HarnessEngine):
                 await self._interrupt_turn(session)
         await self._cleanup_session(session)
 
-    async def is_alive(self, task_id: str) -> bool:
+    async def is_alive(self, task_id: str, *, runtime_launch_key: str | None = None) -> bool:
+        runtime_identity = runtime_launch_key or task_id
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(runtime_identity)
             return (
                 session is not None
                 and session.process is not None
@@ -142,9 +168,78 @@ class CodexAppServerEngine(HarnessEngine):
                 and session.initialized
             )
 
-    async def last_event_at(self, task_id: str) -> float | None:
+    def bind_runtime_context(self, context: ExecutionContext) -> None:
+        self._runtime_recovery.bind(context)
+
+    def arm_runtime_launch(self, context: ExecutionContext) -> None:
+        self._runtime_recovery.arm(context)
+
+    async def probe_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
         async with self._lock:
-            session = self._sessions.get(task_id)
+            session = self._sessions.get(launch_key)
+            if (
+                session is not None
+                and session.process is not None
+                and session.process.returncode is None
+                and session.initialized
+            ):
+                if session.task_id != task_id:
+                    return RuntimeProbeResult(
+                        status=RuntimeProbeStatus.UNKNOWN,
+                        metadata={"reason": "Launch key is associated with a different Task"},
+                    )
+                return RuntimeProbeResult(
+                    status=RuntimeProbeStatus.RUNNING,
+                    engine_session_key=session.thread_id,
+                    metadata={"recovery_evidence": "owned-stdio-session"},
+                )
+        inspection = self._runtime_recovery.inspect(task_id=task_id, launch_key=launch_key)
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus(inspection.status),
+            engine_session_key=inspection.engine_session_key,
+            metadata={
+                key: value
+                for key, value in {
+                    "process_id": inspection.process_id,
+                    "reason": inspection.reason,
+                }.items()
+                if value is not None
+            },
+        )
+
+    async def adopt_runtime(
+        self,
+        *,
+        task_id: str,
+        launch_key: str,
+    ) -> RuntimeProbeResult:
+        probe = await self.probe_runtime(task_id=task_id, launch_key=launch_key)
+        if probe.status is not RuntimeProbeStatus.RUNNING:
+            return probe
+        # The app-server protocol is deliberately stdio-only.  A replacement
+        # process can inspect the surviving PID, but no supported protocol
+        # lets it inherit the predecessor's stdin/stdout or outstanding JSON-
+        # RPC requests.  Do not claim an adoption that cannot carry output or
+        # controls for the existing runtime.
+        return RuntimeProbeResult(
+            status=RuntimeProbeStatus.UNKNOWN,
+            engine_session_key=probe.engine_session_key,
+            metadata={
+                "reason": "Codex App Server stdio session is observable but cannot be reattached"
+            },
+        )
+
+    async def last_event_at(
+        self, task_id: str, *, runtime_launch_key: str | None = None
+    ) -> float | None:
+        runtime_identity = runtime_launch_key or task_id
+        async with self._lock:
+            session = self._sessions.get(runtime_identity)
             return session.last_event_at if session is not None else None
 
     def _restore_checkpoint(self, context: ExecutionContext, session: CodexSession) -> None:
@@ -153,6 +248,11 @@ class CodexAppServerEngine(HarnessEngine):
             return
         data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
         checkpoint = SessionCheckpoint(**data)
+        checkpoint.assert_matches_runtime(
+            task_id=context.task_id,
+            attempt_id=context.attempt_id,
+            runtime_launch_key=context.runtime_launch_key,
+        )
         metadata = checkpoint.metadata or {}
         thread_id = metadata.get("thread_id")
         if isinstance(thread_id, str) and thread_id:
@@ -228,6 +328,8 @@ class CodexAppServerEngine(HarnessEngine):
             env["OPENAI_API_KEY"] = context.codex_api_key
         if context.codex_home_path:
             env["CODEX_HOME"] = context.codex_home_path
+        self._runtime_recovery.begin(context, engine_session_key=session.thread_id)
+        env.update(self._runtime_recovery.environment(context))
 
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -237,11 +339,16 @@ class CodexAppServerEngine(HarnessEngine):
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        if process.stdin is None or process.stdout is None or process.stderr is None:
-            raise RuntimeError("Failed to establish Codex App Server stdio pipes")
-
         session.command = command
         session.process = process
+        self._runtime_recovery.mark_running(
+            context,
+            process_id=(process.pid if isinstance(getattr(process, "pid", None), int) else None),
+            engine_session_key=session.thread_id,
+        )
+        if process.stdin is None or process.stdout is None or process.stderr is None:
+            await self._cleanup_session(session)
+            raise RuntimeError("Failed to establish Codex App Server stdio pipes")
         session.initialized = False
         session.reader_task = asyncio.create_task(self._read_loop(session, emit))
         try:
@@ -307,6 +414,10 @@ class CodexAppServerEngine(HarnessEngine):
             stderr_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await stderr_task
+            if session.runtime_context is not None and (
+                session.process is None or session.process.returncode is not None
+            ):
+                self._runtime_recovery.finish(session.runtime_context)
 
     async def _handle_message(
         self,
@@ -534,6 +645,7 @@ class CodexAppServerEngine(HarnessEngine):
             thread_id = thread.get("id")
             if isinstance(thread_id, str):
                 session.thread_id = thread_id
+        self._runtime_recovery.update_session_key(context, session.thread_id)
 
     async def _resume_thread(self, context: ExecutionContext, session: CodexSession) -> None:
         if session.thread_id is None:
@@ -550,6 +662,7 @@ class CodexAppServerEngine(HarnessEngine):
         if model:
             params["model"] = model
         await self._rpc_request(session, "thread/resume", params)
+        self._runtime_recovery.update_session_key(context, session.thread_id)
 
     async def _start_turn(
         self,
@@ -603,6 +716,8 @@ class CodexAppServerEngine(HarnessEngine):
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint = SessionCheckpoint(
             task_id=session.task_id,
+            attempt_id=context.attempt_id,
+            runtime_launch_key=context.runtime_launch_key,
             session_id=session.thread_id,
             cwd=context.working_directory,
             created_at=utc_now().isoformat(),
@@ -668,6 +783,8 @@ class CodexAppServerEngine(HarnessEngine):
                 await session.process.wait()
             session.process = None
         session.initialized = False
+        if session.runtime_context is not None:
+            self._runtime_recovery.finish(session.runtime_context)
 
     @staticmethod
     def _extract_user_text(item: dict[str, Any]) -> str:

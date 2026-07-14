@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 from ainrf import __version__
 from ainrf.api.config import hash_api_key
 from ainrf.cli import _parse_ssh_command, app
+from ainrf.domain import DispatchRunResult
 from ainrf.onboarding import (
     config_path_for,
     ensure_onboarded,
@@ -68,6 +69,17 @@ def test_help_shows_onboard_command() -> None:
     assert "onboard" in result.stdout
 
 
+def test_domain_migration_help_lists_reconciliation_workflow_commands() -> None:
+    result = runner.invoke(app, ["domain-migration", "--help"])
+
+    assert result.exit_code == 0
+    output = _strip_ansi(result.stdout)
+    assert "issues" in output
+    assert "issue" in output
+    assert "resolve" in output
+    assert "finalize" in output
+
+
 def test_openscience_cli_alias_exposes_help() -> None:
     result = subprocess.run(
         ["uv", "run", "openscience", "--help"],
@@ -100,6 +112,240 @@ def test_serve_help_lists_expected_flags() -> None:
     assert "--state-root" in output
 
 
+def test_domain_worker_once_runs_one_dispatch_and_stops(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[str] = []
+    artifact_sha = "a" * 64
+
+    class FakeDispatcher:
+        def __init__(self, state_root: Path, *, artifact_sha: str) -> None:
+            assert state_root == tmp_path
+            assert artifact_sha == "a" * 64
+            calls.append("init")
+
+        async def run_once(self) -> DispatchRunResult:
+            calls.append("once")
+            return DispatchRunResult(outcome="idle")
+
+        async def run_forever(self) -> None:
+            pytest.fail("--once must not start the long-running dispatcher")
+
+        def stop(self) -> None:
+            calls.append("stop")
+
+    monkeypatch.setattr("ainrf.cli.TaskDispatcher", FakeDispatcher)
+    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: artifact_sha)
+
+    result = runner.invoke(app, ["domain-worker", "--once", "--state-root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "attempt_id": None,
+        "detail": None,
+        "dispatch_id": None,
+        "outcome": "idle",
+    }
+    assert calls == ["init", "once", "stop"]
+
+
+def test_domain_worker_rejects_legacy_or_validate_state_before_constructing_dispatcher(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: None)
+    monkeypatch.setattr(
+        "ainrf.cli.TaskDispatcher",
+        lambda *_args, **_kwargs: pytest.fail("legacy state must not start a domain worker"),
+    )
+
+    result = runner.invoke(app, ["domain-worker", "--once", "--state-root", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "until the domain v2 cutover is committed" in result.stderr
+
+
+def test_domain_runtime_resolution_uses_committed_artifact_and_durable_actor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[object] = []
+
+    class FakeAuthService:
+        def __init__(self, *, state_root: Path) -> None:
+            assert state_root == tmp_path
+
+        def initialize(self) -> None:
+            calls.append("auth.initialize")
+
+        def get_user(self, user_id: str) -> SimpleNamespace:
+            assert user_id == "owner"
+            return SimpleNamespace(
+                id="owner",
+                role=SimpleNamespace(value="member"),
+                status=SimpleNamespace(value="active"),
+            )
+
+    class FakeTaskApplicationService:
+        def __init__(self, state_root: Path, *, artifact_sha: str) -> None:
+            assert state_root == tmp_path
+            assert artifact_sha == "c" * 64
+            calls.append("task.init")
+
+        def resolve_launch_unknown(
+            self,
+            task_id: str,
+            attempt_id: str,
+            user: dict[str, str],
+            *,
+            reason: str,
+            idempotency_key: str,
+        ) -> dict[str, str]:
+            calls.append((task_id, attempt_id, user, reason, idempotency_key))
+            return {
+                "task_id": task_id,
+                "attempt_id": attempt_id,
+                "dispatch_id": "dispatch-1",
+                "status": "stopped_runtime_unknown",
+            }
+
+    monkeypatch.setattr("ainrf.cli.AuthService", FakeAuthService)
+    monkeypatch.setattr("ainrf.cli.TaskApplicationService", FakeTaskApplicationService)
+    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _root: "c" * 64)
+
+    result = runner.invoke(
+        app,
+        [
+            "domain-runtime",
+            "resolve-launch-unknown",
+            "task-1",
+            "attempt-1",
+            "--actor-id",
+            "owner",
+            "--reason",
+            "runtime probe confirmed no surviving process",
+            "--state-root",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "task_id": "task-1",
+        "attempt_id": "attempt-1",
+        "dispatch_id": "dispatch-1",
+        "status": "stopped_runtime_unknown",
+    }
+    assert calls == [
+        "auth.initialize",
+        "task.init",
+        (
+            "task-1",
+            "attempt-1",
+            {"id": "owner", "role": "member"},
+            "runtime probe confirmed no surviving process",
+            "launch-unknown-resolution:attempt-1",
+        ),
+    ]
+
+
+def test_domain_runtime_resolution_rejects_legacy_before_constructing_writer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _root: None)
+    monkeypatch.setattr(
+        "ainrf.cli.TaskApplicationService",
+        lambda *_args, **_kwargs: pytest.fail("legacy state must not construct a v2 writer"),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "domain-runtime",
+            "resolve-launch-unknown",
+            "task-1",
+            "attempt-1",
+            "--actor-id",
+            "owner",
+            "--reason",
+            "investigated",
+            "--state-root",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "requires a committed domain v2 artifact" in result.stderr
+
+
+def test_overview_snapshot_refresh_uses_the_planner_participant(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[str] = []
+    artifact_sha = "b" * 64
+
+    class FakePlanner:
+        def __init__(
+            self,
+            state_root: Path,
+            *,
+            artifact_sha: str | None,
+            active_user_ids: object,
+        ) -> None:
+            assert state_root == tmp_path
+            assert artifact_sha == "b" * 64
+            assert callable(active_user_ids)
+            self.service = SimpleNamespace(
+                latest=lambda user_id: {
+                    "owner_user_id": user_id,
+                    "source": "control_plane_only",
+                }
+            )
+            calls.append("init")
+
+        def request_refresh(self, user_id: str) -> dict[str, object]:
+            calls.append(f"request:{user_id}")
+            return {"job_id": "overview-job"}
+
+        def run_job(self, job_id: str) -> SimpleNamespace:
+            calls.append(f"run:{job_id}")
+            return SimpleNamespace(detail=None)
+
+        def stop(self) -> None:
+            calls.append("stop")
+
+    monkeypatch.setattr("ainrf.cli.OverviewSnapshotPlanner", FakePlanner)
+    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: artifact_sha)
+
+    result = runner.invoke(
+        app,
+        ["overview-snapshot", "refresh", "--user-id", "owner", "--state-root", str(tmp_path)],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "owner_user_id": "owner",
+        "source": "control_plane_only",
+    }
+    assert calls == ["init", "request:owner", "run:overview-job", "stop"]
+
+
+def test_overview_snapshot_refresh_rejects_legacy_or_validate_state(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: None)
+    monkeypatch.setattr(
+        "ainrf.cli.OverviewSnapshotPlanner",
+        lambda *_args, **_kwargs: pytest.fail("legacy state must not write an overview job"),
+    )
+
+    result = runner.invoke(
+        app,
+        ["overview-snapshot", "refresh", "--user-id", "owner", "--state-root", str(tmp_path)],
+    )
+
+    assert result.exit_code == 2
+    assert "requires a committed domain v2 artifact" in result.stderr
+
+
 def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
@@ -129,6 +375,29 @@ def test_serve_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         "AINRF_API_KEY_HASHES",
         "2bb80d537b1da3e38bd30361aa855686bde0baef694f41fbabd9831f0a0ff5ff",
     )
+
+    result = runner.invoke(app, ["serve", "--state-root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert captured == {"host": "127.0.0.1", "port": 8000, "state_root": tmp_path}
+
+
+def test_serve_accepts_openscience_api_key_hashes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_server(host: str, port: int, state_root: Path, *, workers: int = 1) -> None:
+        captured["host"] = host
+        captured["port"] = port
+        captured["state_root"] = state_root
+
+    monkeypatch.delenv("AINRF_API_KEY_HASHES", raising=False)
+    monkeypatch.setenv(
+        "OPENSCIENCE_API_KEY_HASHES",
+        "2bb80d537b1da3e38bd30361aa855686bde0baef694f41fbabd9831f0a0ff5ff",
+    )
+    monkeypatch.setattr("ainrf.cli.run_server", fake_run_server)
 
     result = runner.invoke(app, ["serve", "--state-root", str(tmp_path)])
 
