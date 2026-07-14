@@ -42,6 +42,7 @@ import {
   type DomainWorkspaceProjection,
 } from '@features/domain';
 import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
+import { ProjectContextConsole, ProjectSettingsConsole } from '@features/projects';
 
 type ProjectTab = 'overview' | 'tasks' | 'workspaces' | 'context' | 'settings';
 type TaskView = 'list' | 'graph';
@@ -222,8 +223,8 @@ export default function ProjectsPage() {
                   {selectedProject.permissions.can_edit ? <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); attachMutation.mutate(); }}><NativeSelect aria-label="Workspace to attach" value={attachWorkspaceId} onChange={(event) => setAttachWorkspaceId(event.target.value)} className="min-w-64"><option value="">Select a Workspace to attach</option>{attachableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.label}</option>)}</NativeSelect><Button type="submit" disabled={!attachWorkspaceId} isLoading={attachMutation.isPending}>Attach</Button></form> : null}
                   <div className="space-y-2">{linkedWorkspaces.map((workspace) => { const link = workspaceLink(workspace, selectedProject.project_id)!; return <div key={workspace.workspace_id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3"><div><p className="font-medium text-[var(--osci-color-text)]">{workspace.label}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{workspace.environment.display_name} · {workspace.canonical_path}</p><p className="mt-1 text-xs text-[var(--osci-color-text-secondary)]">{link.can_execute ? 'Executable for new Tasks' : `Linked but unavailable: ${link.cannot_execute_reason ?? 'unknown'}`}</p></div><div className="flex gap-2">{link.is_primary ? <Badge>Primary</Badge> : <Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit} onClick={() => primaryMutation.mutate(workspace.workspace_id)}>Set Primary</Button>}<Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit || link.is_primary} title={link.is_primary ? 'Replace the Primary Workspace before detaching it.' : undefined} onClick={() => detachMutation.mutate(workspace.workspace_id)}>Detach</Button></div></div>; })}{linkedWorkspaces.length === 0 ? <EmptyState title="No linked Workspaces" message="Attach a Workspace before creating execution Tasks." /> : null}</div>
                 </CardBody></Card></TabsContent>
-                <TabsContent value="context"><Card><CardBody className="p-5"><EmptyState title="Project Context" message="Draft, versions, candidates and publishing are completed in the next F8 slice." /></CardBody></Card></TabsContent>
-                <TabsContent value="settings"><Card><CardBody className="p-5"><EmptyState title="Project Settings" message="Membership and archive controls are completed in the next F8 slice." /></CardBody></Card></TabsContent>
+                <TabsContent value="context"><ProjectContextConsole key={selectedProject.project_id} project={selectedProject} /></TabsContent>
+                <TabsContent value="settings"><ProjectSettingsConsole key={selectedProject.project_id} project={selectedProject} /></TabsContent>
               </Tabs>
             </div>
           ) : null}
