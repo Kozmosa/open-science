@@ -29,6 +29,13 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   })
 }
 
+if (typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.scrollIntoView !== 'function') {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  })
+}
+
 if (typeof HTMLCanvasElement !== 'undefined') {
   const gradientStub = {
     addColorStop: vi.fn(),

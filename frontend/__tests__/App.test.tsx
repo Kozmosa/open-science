@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
 import { getTasks } from '@/shared/api';
@@ -61,6 +62,10 @@ vi.mock('../src/pages/WorkspacesPage', () => ({
 
 vi.mock('../src/pages/SettingsPage', () => ({
   default: () => <div data-testid="settings-page">settings-page</div>,
+}));
+
+vi.mock('../src/pages/FileBrowserPage', () => ({
+  default: () => <div data-testid="workspace-browser-page">workspace-browser-page</div>,
 }));
 
 const mockGetTasks = vi.mocked(getTasks);
@@ -152,7 +157,7 @@ describe('App routes', () => {
     expect(screen.getByRole('main')).toHaveClass('overflow-hidden');
   });
 
-  it('renders a collapsed sidebar by default and live task status summary', async () => {
+  it('renders a collapsed sidebar without polling the full task list', async () => {
     mockGetTasks.mockResolvedValue({
       items: [
         { ...taskBase, task_id: 'task-running', status: 'running' },
@@ -171,8 +176,38 @@ describe('App routes', () => {
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
     expect(screen.getByLabelText('Expand sidebar')).toBeInTheDocument();
-    expect(
-      await screen.findByText('Task | Total: 5, Running: 2, Pending: 1, Finished: 2')
-    ).toBeInTheDocument();
+    expect(screen.getByText('Task | Status unavailable')).toBeInTheDocument();
+    expect(mockGetTasks).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: 'Browse Files' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).queryByText('Tasks')).not.toBeInTheDocument();
+    expect(document.title).toBe('Tasks - OpenScience');
+  });
+
+  it('stores sidebar preference under the authenticated user id', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Expand sidebar' }));
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('openscience:preference:test-user:sidebar-collapsed')).toBe('false');
+  });
+
+  it('opens the command palette with English keywords and keeps workspace browser as a deep route', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open command palette' }));
+    await user.type(screen.getByPlaceholderText('Search pages and actions…'), 'browse files');
+    await user.click(screen.getByText('Browse Files'));
+    expect(await screen.findByTestId('workspace-browser-page')).toBeInTheDocument();
   });
 });

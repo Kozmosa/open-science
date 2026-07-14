@@ -50,6 +50,12 @@ const navigation = {
       collapseSidebar: '收起侧边栏',
       expandSidebar: '展开侧边栏',
       resizeSidebar: '调整侧边栏宽度',
+      openNavigation: '打开导航',
+      closeNavigation: '关闭导航',
+      openCommandPalette: '打开命令面板',
+      commandPlaceholder: '搜索页面和操作…',
+      commandNoResults: '没有匹配的目标。',
+      accountMenu: '打开账户菜单',
     },
 };
 

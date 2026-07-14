@@ -53,6 +53,12 @@ const navigation = {
       collapseSidebar: 'Collapse sidebar',
       expandSidebar: 'Expand sidebar',
       resizeSidebar: 'Resize sidebar',
+      openNavigation: 'Open navigation',
+      closeNavigation: 'Close navigation',
+      openCommandPalette: 'Open command palette',
+      commandPlaceholder: 'Search pages and actions…',
+      commandNoResults: 'No matching destination.',
+      accountMenu: 'Open account menu',
     },
 };
 

@@ -7,10 +7,12 @@ import { useCardLayout } from '../hooks/useCardLayout';
 import type { CardKind } from '../hooks/useCardLayout';
 import { CardGrid, PageShell } from '@design-system';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { useAuth } from '@features/auth';
 
 
 export default function ResourcesPage() {
   const t = useT();
+  const { user } = useAuth();
   const resourcesQuery = useQuery({
     queryKey: queryKeys.resources.all,
     queryFn: getResources,
@@ -23,7 +25,7 @@ export default function ResourcesPage() {
     refetchInterval: 15000,
     staleTime: 10000,
   });
-  const { layout, setLayout } = useCardLayout();
+  const { layout, setLayout } = useCardLayout(user?.id ?? 'anonymous');
 
   const snapshots = useMemo(() => resourcesQuery.data?.items ?? [], [resourcesQuery.data]);
   const groups = useMemo(
@@ -85,7 +87,6 @@ export default function ResourcesPage() {
           renderCard={renderCard}
           cardOrder={layout.cardOrder}
           onCardOrderChange={(order) => setLayout({ cardOrder: order as CardKind[] })}
-          storageKey="scholar-agent:resources-layout"
           columns={3}
         />
       </div>
