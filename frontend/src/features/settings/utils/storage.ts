@@ -325,7 +325,7 @@ export function readStoredSettings(userId = 'test-user'): SettingsLoadResult {
     return { settings: defaults, recoveryReason: 'invalid_document' };
   }
 
-  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4) {
+  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4 && parsed.version !== 5) {
     return { settings: defaults, recoveryReason: 'unsupported_version' };
   }
 
@@ -401,7 +401,7 @@ export function readStoredSettings(userId = 'test-user'): SettingsLoadResult {
 
   return {
     settings: {
-      version: 4,
+      version: 5,
       general: {
         defaultRoute,
         terminal: {

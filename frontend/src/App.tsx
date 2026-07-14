@@ -7,7 +7,7 @@ import { useT } from '@/shared/i18n';
 import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useGeneralSettings } from '@features/settings';
 import { AuthProvider, useAuth } from '@features/auth';
-import { DomainCapabilityProvider } from '@features/domain';
+import { DomainCapabilityProvider, useDomainCapabilities } from '@features/domain';
 import { reportWebVitals } from '@/shared/utils/reportWebVitals';
 import { getRoutePath, ROUTE_REGISTRY, type AppRouteId } from '@/app/routeRegistry';
 import './index.css';
@@ -26,6 +26,7 @@ const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const LiteraturePage = lazy(() => import('./pages/LiteraturePage'));
+const TodayPage = lazy(() => import('./pages/TodayPage'));
 
 const queryClient = createAppQueryClient();
 
@@ -57,6 +58,7 @@ if (PROFILER_ENABLED && typeof window !== 'undefined') {
 }
 
 const routeComponents: Record<AppRouteId, LazyExoticComponent<ComponentType>> = {
+  today: TodayPage,
   projects: ProjectsPage,
   terminal: TerminalPage,
   tasks: TasksPage,
@@ -72,7 +74,12 @@ const routeComponents: Record<AppRouteId, LazyExoticComponent<ComponentType>> = 
 
 function RootRedirect() {
   const { settings } = useGeneralSettings();
-  return <Navigate replace to={getRoutePath(settings.general.defaultRoute) ?? '/terminal'} />;
+  const { isLoading, availability } = useDomainCapabilities();
+  if (settings.general.defaultRoute === 'today') {
+    if (isLoading) return null;
+    return <Navigate replace to={availability('overview_snapshot').available ? '/today' : '/tasks'} />;
+  }
+  return <Navigate replace to={getRoutePath(settings.general.defaultRoute) ?? '/tasks'} />;
 }
 
 function AuthenticatedRoutes() {

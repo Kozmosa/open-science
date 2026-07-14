@@ -1,6 +1,10 @@
 // navigation messages — 中文
 const navigation = {
     navigation: {
+      today: {
+        label: '今日概览',
+        description: '基于持久化 OpenScience 投影的可行动概览',
+      },
       projects: {
         label: '项目',
         description: '项目画布与任务图可视化',

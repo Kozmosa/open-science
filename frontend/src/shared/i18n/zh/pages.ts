@@ -1,6 +1,39 @@
 // pages messages — 中文
 const pages = {
     pages: {
+      today: {
+        eyebrow: 'TODAY',
+        title: '今日概览',
+        description: '只读呈现已持久化的异常、进度、文献、近期工作和资源状态。',
+        refresh: '刷新概览',
+        nextRefresh: '下次计划刷新：{{time}}',
+        refreshed: '数据截止：{{time}}',
+        loading: '正在读取最近一次持久化概览…',
+        unavailableTitle: '今日概览暂不可用',
+        unavailableDescription: '当前后端暂时无法提供持久化 Overview Snapshot。',
+        emptyTitle: '开始今天的 OpenScience 工作',
+        emptyDescription: '创建项目、关联可执行工作区或检查文献收件箱；产生持久化活动后，今日概览会自动填充。',
+        refreshTimedOut: '自动刷新查询已在 60 秒后停止，后台任务仍可继续运行。',
+        refreshFailed: '概览刷新失败：{{error}}',
+        refreshStatus: '刷新任务：{{status}}',
+        cutoff: '数据截止：{{time}}',
+        errorSummary: '来源错误：{{error}}',
+        cards: {
+          attention: '需要关注',
+          progress: '任务进度',
+          literature: '文献',
+          continue: '继续工作',
+          resources: '资源',
+        },
+        noAttention: '没有需要处理的异常。',
+        noTasks: '没有活动或近期任务。',
+        noLiterature: '没有未读或更新论文。',
+        noRecentWork: '没有近期项目或工作区。',
+        noResources: '没有需要介入的环境状态。',
+        unread: '{{count}} 篇未读',
+        updated: '{{count}} 篇更新',
+        environments: '{{count}} 个环境',
+      },
       projects: {
         eyebrow: 'PROJECTS',
         title: '项目工作台',
@@ -325,6 +358,8 @@ const pages = {
         recoveryNotice:
           '本地设置文档缺字段、已损坏或版本不兼容，应用已回退到默认配置以继续运行。',
         routes: {
+          today: '今日概览',
+          projects: '项目',
           terminal: '终端',
           tasks: '任务',
           workspaces: '工作区',

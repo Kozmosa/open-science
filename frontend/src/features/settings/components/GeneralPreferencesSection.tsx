@@ -60,6 +60,8 @@ export function GeneralPreferencesSection({
               }))
             }
           >
+            <option value="today">{t('pages.settings.routes.today')}</option>
+            <option value="projects">{t('pages.settings.routes.projects')}</option>
             <option value="terminal">{t('pages.settings.routes.terminal')}</option>
             <option value="tasks">{t('pages.settings.routes.tasks')}</option>
             <option value="workspaces">{t('pages.settings.routes.workspaces')}</option>
@@ -157,4 +159,3 @@ export function GeneralPreferencesSection({
     </SectionCard>
   );
 }
-

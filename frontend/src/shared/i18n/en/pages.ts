@@ -1,6 +1,39 @@
 // pages messages — English
 const pages = {
     pages: {
+      today: {
+        eyebrow: 'Today',
+        title: 'Today overview',
+        description: 'A persisted, read-only view of attention, progress, literature, recent work and resource health.',
+        refresh: 'Refresh overview',
+        nextRefresh: 'Next scheduled refresh: {{time}}',
+        refreshed: 'Snapshot cutoff: {{time}}',
+        loading: 'Loading the latest persisted overview…',
+        unavailableTitle: 'Today overview is unavailable',
+        unavailableDescription: 'This backend cannot currently serve the persisted Overview Snapshot.',
+        emptyTitle: 'Start your OpenScience day',
+        emptyDescription: 'Create a Project, attach an executable Workspace, or check the Literature inbox. Today will populate after persisted activity is available.',
+        refreshTimedOut: 'Automatic refresh checks stopped after 60 seconds. The job can continue in the background.',
+        refreshFailed: 'Overview refresh failed: {{error}}',
+        refreshStatus: 'Refresh job: {{status}}',
+        cutoff: 'Data cutoff: {{time}}',
+        errorSummary: 'Source error: {{error}}',
+        cards: {
+          attention: 'Attention',
+          progress: 'Task progress',
+          literature: 'Literature',
+          continue: 'Continue',
+          resources: 'Resources',
+        },
+        noAttention: 'No actionable exceptions.',
+        noTasks: 'No active or recent Tasks.',
+        noLiterature: 'No unread or updated papers.',
+        noRecentWork: 'No recent Projects or Workspaces.',
+        noResources: 'No Environment intervention is required.',
+        unread: '{{count}} unread',
+        updated: '{{count}} updated',
+        environments: '{{count}} Environments',
+      },
       projects: {
         eyebrow: 'Projects',
         title: 'Project workspace',
@@ -331,6 +364,8 @@ const pages = {
         recoveryNotice:
           'The local settings document was missing fields, invalid, or no longer compatible. Defaults were restored so the app can keep running.',
         routes: {
+          today: 'Today',
+          projects: 'Projects',
           terminal: 'Terminal',
           tasks: 'Tasks',
           workspaces: 'Workspaces',

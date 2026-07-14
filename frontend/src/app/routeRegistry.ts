@@ -6,6 +6,7 @@ import {
   FolderKanban,
   FolderOpen,
   History,
+  House,
   LayoutGrid,
   ListChecks,
   Settings,
@@ -15,6 +16,7 @@ import {
 import type { MessageKey } from '@/shared/i18n';
 
 export type AppRouteId =
+  | 'today'
   | 'projects'
   | 'terminal'
   | 'tasks'
@@ -44,6 +46,7 @@ export interface ResolvedAppRoute extends AppRouteDefinition {
 }
 
 export const ROUTE_REGISTRY: readonly AppRouteDefinition[] = [
+  { id: 'today', path: '/today', titleKey: 'navigation.today.label', descriptionKey: 'navigation.today.description', icon: House, navigation: true, keywords: ['today', 'overview', 'attention', 'progress', 'continue'] },
   { id: 'projects', path: '/projects', titleKey: 'navigation.projects.label', descriptionKey: 'navigation.projects.description', icon: LayoutGrid, navigation: true, keywords: ['projects', 'research', 'canvas'] },
   { id: 'terminal', path: '/terminal', titleKey: 'navigation.terminal.label', descriptionKey: 'navigation.terminal.description', icon: SquareTerminal, navigation: true, keywords: ['terminal', 'shell', 'console'] },
   { id: 'tasks', path: '/tasks', titleKey: 'navigation.tasks.label', descriptionKey: 'navigation.tasks.description', icon: ListChecks, navigation: true, keywords: ['tasks', 'attempts', 'agents', 'runs'] },

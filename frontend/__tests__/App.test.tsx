@@ -7,6 +7,8 @@ import { getTasks } from '@/shared/api';
 import { LocaleProvider } from '@/shared/i18n';
 import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
 
+const capabilityState = vi.hoisted(() => ({ overviewAvailable: true }));
+
 vi.mock('../src/index.css', () => ({}));
 
 vi.mock('../src/queryClient', async () => {
@@ -40,6 +42,17 @@ vi.mock('@/features/auth/contexts/AuthContext', () => ({
   }),
 }));
 
+vi.mock('@features/domain', () => ({
+  DomainCapabilityProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useDomainCapabilities: () => ({
+    isLoading: false,
+    availability: () => ({
+      available: capabilityState.overviewAvailable,
+      reason: capabilityState.overviewAvailable ? null : 'Today overview is unavailable on this backend.',
+    }),
+  }),
+}));
+
 vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getTasks: vi.fn(),
 }));
@@ -58,6 +71,10 @@ vi.mock('../src/pages/EnvironmentsPage', () => ({
 
 vi.mock('../src/pages/WorkspacesPage', () => ({
   default: () => <div data-testid="workspaces-page">workspaces-page</div>,
+}));
+
+vi.mock('../src/pages/TodayPage', () => ({
+  default: () => <div data-testid="today-page">today-page</div>,
 }));
 
 vi.mock('../src/pages/SettingsPage', () => ({
@@ -98,6 +115,7 @@ const taskBase = {
 
 describe('App routes', () => {
   beforeEach(() => {
+    capabilityState.overviewAvailable = true;
     window.localStorage.clear();
     window.history.pushState({}, '', '/tasks');
     mockGetTasks.mockReset();
@@ -129,6 +147,34 @@ describe('App routes', () => {
     );
 
     expect(await screen.findByTestId('workspaces-page')).toBeInTheDocument();
+  });
+
+  it('uses Today as the default route for new settings', async () => {
+    window.history.pushState({}, '', '/');
+
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('today-page')).toBeInTheDocument();
+  });
+
+  it('temporarily falls back to Tasks when Today capability is unavailable without rewriting the preference', async () => {
+    capabilityState.overviewAvailable = false;
+    const settings = createDefaultWebUiSettings();
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+    window.history.pushState({}, '', '/');
+
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(settingsStorageKey) ?? '{}').general.defaultRoute).toBe('today');
   });
 
   it('renders non-task routes inside the standard page gutter', async () => {

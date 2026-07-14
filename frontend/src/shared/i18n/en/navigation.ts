@@ -1,6 +1,10 @@
 // navigation messages — English
 const navigation = {
     navigation: {
+      today: {
+        label: 'Today',
+        description: 'Actionable overview from persisted OpenScience projections',
+      },
       projects: {
         label: 'Projects',
         description: 'Project canvas and task graph visualization',

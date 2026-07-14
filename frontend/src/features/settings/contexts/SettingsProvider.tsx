@@ -95,10 +95,10 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
   }
 
   return {
-    version: 4,
+    version: 5,
     general: {
       defaultRoute: isDefaultRoute(settings.general.defaultRoute)
-        ? settings.general.defaultRoute : 'terminal',
+        ? settings.general.defaultRoute : 'today',
       terminal: { fontSize: clampTerminalFontSize(settings.general.terminal.fontSize) },
       editor: { fontSize: editorFontSize, fontFamily: editorFontFamily },
       appearance: { theme: appearanceTheme },

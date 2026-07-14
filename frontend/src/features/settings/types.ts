@@ -1,4 +1,4 @@
-export type DefaultRoute = 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
+export type DefaultRoute = 'today' | 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 export type ExecutionEngineId = 'claude-code' | 'agent-sdk' | 'codex-app-server';
@@ -83,7 +83,7 @@ export interface LlmProvider {
 }
 
 export interface WebUiSettingsDocument {
-  version: 4;
+  version: 5;
   general: {
     defaultRoute: DefaultRoute;
     terminal: {
