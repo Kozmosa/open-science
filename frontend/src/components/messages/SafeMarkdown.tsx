@@ -1,20 +1,32 @@
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { memo, useEffect, useRef, useState } from 'react';
 import { workspaceFileBrowserHref } from '@/shared/utils/workspaceFileLinks';
+
+const UNSAFE_URI_SCHEME_PATTERN = /^\s*(?:javascript|data|vbscript):/i;
+const SAFE_URI_PATTERN = /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^-a-z+.:]|$))/i;
 
 /** Parse markdown into HTML, rewriting workspace file links (absolute paths under
  *  `/.ainrf_workspaces/<slug>/...`) into in-app file-browser routes so assistant /
  *  tool-result links open the workspace browser instead of a raw filesystem path. */
 function renderMarkdown(content: string): string {
-  return marked.parse(content, {
+  const rendered = marked.parse(content, {
     async: false,
     walkTokens(token) {
       if (token.type === 'link' && typeof token.href === 'string') {
+        if (UNSAFE_URI_SCHEME_PATTERN.test(token.href)) {
+          token.type = 'text';
+          return;
+        }
+
         const rewritten = workspaceFileBrowserHref(token.href);
         if (rewritten) token.href = rewritten;
       }
     },
   }) as string;
+
+  // Marked preserves raw HTML, so sanitize after in-app link rewriting.
+  return DOMPurify.sanitize(rendered, { ALLOWED_URI_REGEXP: SAFE_URI_PATTERN });
 }
 
 const PROSE_STYLES =

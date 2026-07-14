@@ -1,4 +1,5 @@
 const WORKSPACE_ROOT_MARKER = '/.ainrf_workspaces/';
+const EXTERNAL_URI_PATTERN = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:|\/\/)/;
 
 export interface WorkspaceFileRoute {
   workspaceId: string;
@@ -11,6 +12,10 @@ function stripLeadingSlash(value: string): string {
 
 export function resolveWorkspaceFileRoute(target: string): WorkspaceFileRoute | null {
   if (target.length === 0) {
+    return null;
+  }
+
+  if (EXTERNAL_URI_PATTERN.test(target)) {
     return null;
   }
 

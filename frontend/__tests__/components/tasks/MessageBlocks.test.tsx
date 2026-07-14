@@ -33,6 +33,43 @@ describe('Chat assistant workspace file links', () => {
       '/workspace-browser?workspace_id=workspace-default&path=docs%2Fliterature%2F2606.04620-overview.md'
     );
   });
+
+  it('preserves external HTTPS markdown links', () => {
+    renderWithProviders(
+      <ChatAssistantMessage
+        message={assistantMessage('[arXiv](https://browse-export.arxiv.org/abs/2605.24117)')}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'arXiv' })).toHaveAttribute(
+      'href',
+      'https://browse-export.arxiv.org/abs/2605.24117'
+    );
+  });
+
+  it('renders unsafe URI links as text', () => {
+    renderWithProviders(
+      <ChatAssistantMessage message={assistantMessage('[unsafe](javascript:alert(document.domain))')} />
+    );
+
+    expect(screen.queryByRole('link', { name: 'unsafe' })).not.toBeInTheDocument();
+    expect(screen.getByText('unsafe')).toBeInTheDocument();
+  });
+
+  it('sanitizes raw HTML and unsupported URI schemes', () => {
+    renderWithProviders(
+      <ChatAssistantMessage
+        message={assistantMessage(
+          '[file link](file:///tmp/research.md) <a href="javascript:alert(document.domain)" onclick="alert(1)">raw unsafe</a><img src="/safe.png" alt="safe image" onerror="alert(1)">'
+        )}
+      />
+    );
+
+    expect(screen.queryByRole('link', { name: 'file link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'raw unsafe' })).not.toBeInTheDocument();
+    expect(screen.getByText('raw unsafe')).not.toHaveAttribute('onclick');
+    expect(screen.getByAltText('safe image')).not.toHaveAttribute('onerror');
+  });
 });
 
 describe('ChatThinkingBlock behavior', () => {
