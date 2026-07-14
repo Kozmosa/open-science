@@ -15,21 +15,25 @@ vi.mock('@/shared/api', () => ({
   })),
   getLiteraturePapers: vi.fn(() => Promise.resolve({ items: [], next_cursor: null, total: 0 })),
   getLiteratureTopics: vi.fn(() => Promise.resolve({ items: [] })),
+  getLiteraturePaper: vi.fn(),
+  getLiteratureSummary: vi.fn(),
+  getLiteratureResearchTask: vi.fn(),
+  getLiteratureResearchTasks: vi.fn(),
+  createLiteratureResearchTask: vi.fn(),
+  requestLiteratureSummary: vi.fn(),
+  updateLiteraturePaperState: vi.fn(),
   previewLiteratureTopic: vi.fn(),
   updateLiteratureTopic: vi.fn(),
 }));
 
-vi.mock('../../src/components/literature/PaperCard', () => ({
-  default: () => <div>Paper card</div>,
-}));
-
 describe('LiteraturePage', () => {
-  it('renders the inbox with the standard page inset and a single source-check action', async () => {
+  it('renders the canvas inbox with a single source-check action and persistent URL filters', async () => {
     const { container } = renderWithProviders(<LiteraturePage />, { route: '/literature' });
 
     expect(await screen.findByRole('heading', { name: "Today's literature inbox" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Check latest literature' })).toBeInTheDocument();
-    expect(container.firstElementChild).toHaveClass('p-3');
+    expect(container.firstElementChild).toHaveAttribute('data-page-shell-variant', 'canvas');
+    expect(screen.getByRole('button', { name: 'Unread' })).toBeInTheDocument();
     expect(screen.queryByText('My Subscriptions')).not.toBeInTheDocument();
   });
 });

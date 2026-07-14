@@ -119,6 +119,7 @@ export const queryKeys = {
     summary: (paperId: string | null) => ['literature', 'papers', paperId, 'summary'] as const,
     checks: ['literature', 'checks'] as const,
     check: (checkId: string | null) => ['literature', 'checks', checkId] as const,
+    researchTasks: (paperId: string | null) => ['literature', 'research-tasks', paperId] as const,
   },
 
   admin: {

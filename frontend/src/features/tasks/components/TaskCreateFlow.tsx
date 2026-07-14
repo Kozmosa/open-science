@@ -40,6 +40,12 @@ interface TaskCreateFlowProps {
   initialTitle?: string;
   initialPrompt?: string;
   onCreated?: (task: TaskSummary) => void;
+  onLiteratureSubmit?: (selection: {
+    project_id: string;
+    workspace_id: string;
+    task_preset: TaskPresetId;
+    title?: string;
+  }) => Promise<void>;
 }
 
 function executableWorkspaces(
@@ -66,6 +72,7 @@ function TaskCreateFlowContent({
   initialTitle = '',
   initialPrompt = '',
   onCreated,
+  onLiteratureSubmit,
 }: Omit<TaskCreateFlowProps, 'isOpen'>) {
   const t = useT();
   const navigate = useNavigate();
@@ -146,12 +153,23 @@ function TaskCreateFlowContent({
   }), [effectiveProjectId, effectiveWorkspaceId, harnessEngine, prompt, researcherType, skills, title]);
   const { idempotencyKey, markSucceeded } = useIdempotencyKey('task.create', payload);
   const mutation = useMutation({
-    mutationFn: () => createTask(payload, idempotencyKey),
+    mutationFn: async (): Promise<TaskSummary | null> => {
+      if (source === 'literature' && onLiteratureSubmit) {
+        await onLiteratureSubmit({
+          project_id: effectiveProjectId,
+          workspace_id: effectiveWorkspaceId,
+          task_preset: presetId,
+          title: title.trim() || undefined,
+        });
+        return null;
+      }
+      return createTask(payload, idempotencyKey);
+    },
     onSuccess: (task) => {
       markSucceeded();
-      if (onCreated) {
+      if (task && onCreated) {
         onCreated(task);
-      } else {
+      } else if (task) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
         void queryClient.invalidateQueries({
           queryKey: queryKeys.projectTasks.byProject(effectiveProjectId),
@@ -167,7 +185,7 @@ function TaskCreateFlowContent({
   const canSubmit = capability.available
     && selectedProject?.permissions.can_create_task === true
     && effectiveWorkspaceId !== ''
-    && prompt.trim() !== ''
+    && (source === 'literature' || prompt.trim() !== '')
     && !mutation.isPending;
 
   const applyPreset = (nextPresetId: TaskPresetId) => {
@@ -270,7 +288,7 @@ function TaskCreateFlowContent({
         </NativeSelect>
       </FormField>
 
-      <FormField label={t('pages.tasks.create.researcherType')}>
+      {source !== 'literature' ? <FormField label={t('pages.tasks.create.researcherType')}>
         <RadioGroup
           aria-label={t('pages.tasks.create.researcherType')}
           value={researcherType}
@@ -286,9 +304,9 @@ function TaskCreateFlowContent({
             {t('pages.tasks.create.researcherAris')}
           </label>
         </RadioGroup>
-      </FormField>
+      </FormField> : null}
 
-      <FormField label={t('pages.tasks.create.executionEngine')}>
+      {source !== 'literature' ? <FormField label={t('pages.tasks.create.executionEngine')}>
         <NativeSelect
           aria-label={t('pages.tasks.create.executionEngine')}
           value={harnessEngine}
@@ -298,7 +316,7 @@ function TaskCreateFlowContent({
           <option value="agent-sdk">Agent SDK</option>
           <option value="codex-app-server">Codex App Server</option>
         </NativeSelect>
-      </FormField>
+      </FormField> : null}
 
       <FormField label={t('pages.tasks.titleLabel')}>
         <Input
@@ -308,7 +326,7 @@ function TaskCreateFlowContent({
           placeholder={t('pages.tasks.create.titlePlaceholder')}
         />
       </FormField>
-      <FormField label={t('pages.tasks.taskInputLabel')}>
+      {source !== 'literature' ? <FormField label={t('pages.tasks.taskInputLabel')}>
         <Textarea
           aria-label="Prompt"
           value={prompt}
@@ -316,8 +334,8 @@ function TaskCreateFlowContent({
           placeholder={t('pages.tasks.create.promptPlaceholder')}
           className="min-h-32"
         />
-      </FormField>
-      {researcherType === 'vanilla' ? (
+      </FormField> : null}
+      {source !== 'literature' && researcherType === 'vanilla' ? (
         <TaskSkillPicker
           skills={(skillsQuery.data?.items ?? []) as SkillItem[]}
           selectedSkillIds={skills}
@@ -357,6 +375,7 @@ export default function TaskCreateFlow(props: TaskCreateFlowProps) {
           initialTitle={props.initialTitle}
           initialPrompt={props.initialPrompt}
           onCreated={props.onCreated}
+          onLiteratureSubmit={props.onLiteratureSubmit}
         />
       ) : null}
     </Dialog>

@@ -1005,6 +1005,26 @@ export interface LiteratureSummary {
   version_id?: string | null;
 }
 
+export interface LiteratureTaskIntent {
+  intent_id: string;
+  paper_id: string;
+  project_id: string;
+  workspace_id: string;
+  task_preset: string;
+  title: string;
+  task_id: string | null;
+  status: 'planned' | 'creating_task' | 'task_created' | 'retry_wait' | 'completed' | 'failed' | string;
+  idempotency_key: string;
+  work_item_id: string;
+  attempt_count: number;
+  last_error: string | null;
+  next_retry_at: string | null;
+  heartbeat_at: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
 // ── Search backend settings ────────────────────────────────────────
 
 export interface SearchBackendItem {

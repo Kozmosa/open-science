@@ -206,4 +206,28 @@ describe('TaskCreateFlow', () => {
       preset_id: 'structured-research-default',
     });
   });
+
+  it('submits the restricted Literature saga selection without a prompt or environment_id', async () => {
+    const onLiteratureSubmit = vi.fn(() => Promise.resolve());
+    renderWithProviders(
+      <TaskCreateFlow
+        isOpen
+        source="literature"
+        initialTitle="Research paper"
+        onLiteratureSubmit={onLiteratureSubmit}
+        onClose={vi.fn()}
+      />,
+      { route: '/literature?paper=paper-1' },
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('Environment')).toHaveValue('Local runtime (local)'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+    await waitFor(() => expect(onLiteratureSubmit).toHaveBeenCalledWith({
+      project_id: 'project-1',
+      workspace_id: 'workspace-1',
+      task_preset: 'raw-prompt',
+      title: 'Research paper',
+    }));
+    expect(mockCreateTask).not.toHaveBeenCalled();
+  });
 });

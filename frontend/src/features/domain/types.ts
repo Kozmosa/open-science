@@ -268,19 +268,6 @@ export interface DomainProjectMember {
   can_publish: boolean;
 }
 
-export interface LiteratureTaskIntent {
-  intent_id: string;
-  paper_id: string;
-  project_id: string;
-  workspace_id: string | null;
-  task_id: string | null;
-  status: 'pending' | 'running' | 'completed' | 'failed' | string;
-  idempotency_key: string;
-  error_summary: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export type OverviewDisplayCardId =
   | 'attention'
   | 'progress'

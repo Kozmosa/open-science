@@ -32,6 +32,7 @@ import type { ChangePasswordRequest,
   LiteratureTopic,
   LiteratureTopicInput,
   LiteratureTopicPreview,
+  LiteratureTaskIntent,
   ProjectCostSummary,
   ProjectCreateRequest,
   ProjectEnvironmentReference,
@@ -805,6 +806,20 @@ export const getLiteratureChecks = (limit = 30): Promise<{ items: LiteratureChec
 
 export const getLiteratureCheck = (checkId: string): Promise<LiteratureCheck> =>
   api.get(`/literature/checks/${checkId}`);
+
+export const createLiteratureResearchTask = (
+  paperId: string,
+  payload: { project_id: string; workspace_id: string; task_preset: string; title?: string },
+  idempotencyKey: string,
+): Promise<LiteratureTaskIntent> => api.post(`/literature/papers/${encodeURIComponent(paperId)}/research-task`, payload, {
+  headers: { 'Idempotency-Key': idempotencyKey },
+});
+
+export const getLiteratureResearchTask = (paperId: string, idempotencyKey: string): Promise<LiteratureTaskIntent> =>
+  api.get(`/literature/papers/${encodeURIComponent(paperId)}/research-task?idempotency_key=${encodeURIComponent(idempotencyKey)}`);
+
+export const getLiteratureResearchTasks = (paperId: string): Promise<{ items: LiteratureTaskIntent[] }> =>
+  api.get(`/literature/papers/${encodeURIComponent(paperId)}/research-tasks`);
 
 export const getSearchSettings = (): Promise<SearchSettingsResponse> =>
   api.get<SearchSettingsResponse>('/settings/search');
