@@ -5,6 +5,7 @@ import {
   rawPromptTaskConfigurationId,
   readStoredSettings,
   settingsStorageKey,
+  settingsStorageKeyForUser,
   structuredResearchTaskConfigurationId,
 } from '@/features/settings';
 
@@ -24,10 +25,32 @@ describe('settings storage v2 task configuration', () => {
     expect(window.localStorage.getItem(settingsStorageKey)).not.toBeNull();
   });
 
+  it('claims an unscoped legacy document only after a stable user is known', () => {
+    const settings = createDefaultWebUiSettings();
+    settings.general.defaultRoute = 'tasks';
+    window.localStorage.setItem('openscience:webui-settings', JSON.stringify(settings));
+
+    expect(readStoredSettings('user-a').settings.general.defaultRoute).toBe('tasks');
+    expect(window.localStorage.getItem('openscience:webui-settings')).toBeNull();
+    expect(window.localStorage.getItem(settingsStorageKeyForUser('user-a'))).not.toBeNull();
+    expect(readStoredSettings('user-b').settings.general.defaultRoute).toBe('terminal');
+  });
+
+  it('does not convert the retired serif preference into a color theme', () => {
+    const legacy = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
+    legacy.version = 3;
+    const general = legacy.general as Record<string, unknown>;
+    general.appearance = { fontFamily: 'serif' };
+    window.localStorage.setItem(settingsStorageKeyForUser('test-user'), JSON.stringify(legacy));
+
+    expect(readStoredSettings().settings.general.appearance.theme).toBe('light');
+  });
+
   it('creates default task configuration catalog', () => {
     const settings = createDefaultWebUiSettings();
 
-    expect(settings.version).toBe(3);
+    expect(settings.version).toBe(4);
+    expect(settings.general.appearance.theme).toBe('light');
     expect(settings.taskConfiguration.defaultExecutionEngineId).toBe('claude-code');
     expect(settings.taskConfiguration.defaultResearchAgentProfileId).toBe(
       defaultResearchAgentProfileId
@@ -76,7 +99,7 @@ describe('settings storage v2 task configuration', () => {
     const result = readStoredSettings();
 
     expect(result.recoveryReason).toBeNull();
-    expect(result.settings.version).toBe(3);
+    expect(result.settings.version).toBe(4);
     expect(result.settings.general.defaultRoute).toBe('tasks');
     expect(result.settings.general.terminal.fontSize).toBe(16);
     expect(result.settings.projectDefaults.default.environmentDefaults['env-1']).toEqual({

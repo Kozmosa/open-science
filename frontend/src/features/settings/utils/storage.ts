@@ -10,7 +10,7 @@ import {
   isDefaultRoute,
   legacySettingsStorageKeys,
   rawPromptTaskConfigurationId,
-  settingsStorageKey,
+  settingsStorageKeyForUser,
 } from '@features/settings/utils/defaults';
 import { readMigratedLocalStorage } from '@/shared/utils/storage';
 import type {
@@ -300,12 +300,12 @@ function normalizeDefaultProjectSettings(
   };
 }
 
-export function readStoredSettings(): SettingsLoadResult {
+export function readStoredSettings(userId = 'test-user'): SettingsLoadResult {
   const defaults = createDefaultWebUiSettings();
   let rawValue: string | null = null;
 
   try {
-    rawValue = readMigratedLocalStorage(settingsStorageKey, legacySettingsStorageKeys);
+    rawValue = readMigratedLocalStorage(settingsStorageKeyForUser(userId), legacySettingsStorageKeys);
   } catch {
     return { settings: defaults, recoveryReason: null };
   }
@@ -325,7 +325,7 @@ export function readStoredSettings(): SettingsLoadResult {
     return { settings: defaults, recoveryReason: 'invalid_document' };
   }
 
-  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) {
+  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4) {
     return { settings: defaults, recoveryReason: 'unsupported_version' };
   }
 
@@ -380,8 +380,10 @@ export function readStoredSettings(): SettingsLoadResult {
       : defaultEditorFontFamily;
 
   const appearanceSettings = isRecord(general.appearance) ? general.appearance : null;
-  const fontFamily =
-    appearanceSettings?.fontFamily === 'serif' ? 'serif' : 'sans-serif';
+  const theme =
+    appearanceSettings?.theme === 'dark' || appearanceSettings?.theme === 'system'
+      ? appearanceSettings.theme
+      : 'light';
 
   const missingDefaultRoute = general.defaultRoute === undefined;
   const invalidDefaultRoute = general.defaultRoute !== undefined && !isDefaultRoute(general.defaultRoute);
@@ -399,7 +401,7 @@ export function readStoredSettings(): SettingsLoadResult {
 
   return {
     settings: {
-      version: 3,
+      version: 4,
       general: {
         defaultRoute,
         terminal: {
@@ -410,7 +412,7 @@ export function readStoredSettings(): SettingsLoadResult {
           fontFamily: editorFontFamily,
         },
         appearance: {
-          fontFamily,
+          theme,
         },
       },
       taskConfiguration,
@@ -431,9 +433,9 @@ export function readStoredSettings(): SettingsLoadResult {
   };
 }
 
-export function writeStoredSettings(settings: WebUiSettingsDocument): void {
+export function writeStoredSettings(settings: WebUiSettingsDocument, userId = 'test-user'): void {
   try {
-    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+    window.localStorage.setItem(settingsStorageKeyForUser(userId), JSON.stringify(settings));
   } catch {
     // Ignore storage failures and keep the settings in memory.
   }

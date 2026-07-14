@@ -133,7 +133,7 @@ function AppRoutes() {
   }
 
   const content = (
-    <SettingsProvider>
+    <SettingsProvider userId={user.id}>
       <AuthenticatedRoutes />
     </SettingsProvider>
   );

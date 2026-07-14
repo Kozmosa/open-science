@@ -483,10 +483,11 @@ const pages = {
         },
         appearance: {
           title: '外观',
-          description: '全局字体偏好设置',
-          fontFamilyLabel: '字体',
-          sansSerif: '非衬线体',
-          serif: '衬线体',
+          description: '选择当前 OpenScience 工作区使用的颜色主题。',
+          themeLabel: '主题',
+          light: '浅色',
+          dark: '深色',
+          system: '跟随系统',
           previewHint: '更改将立即应用到整个界面。',
         },
         users: {

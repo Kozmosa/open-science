@@ -8,8 +8,11 @@ import type {
   WebUiSettingsDocument,
 } from '@features/settings/types';
 
-export const settingsStorageKey = 'openscience:webui-settings';
-export const legacySettingsStorageKeys = ['scholar-agent:webui-settings'];
+export const settingsStorageKey = 'openscience:webui-settings:test-user';
+export const legacySettingsStorageKeys = ['openscience:webui-settings', 'scholar-agent:webui-settings'];
+export function settingsStorageKeyForUser(userId: string): string {
+  return `openscience:webui-settings:${userId}`;
+}
 export const defaultTerminalFontSize = 13;
 export const minTerminalFontSize = 11;
 export const maxTerminalFontSize = 18;
@@ -264,7 +267,7 @@ export function createDefaultProjectSettings(): DefaultProjectSettings {
 
 export function createDefaultWebUiSettings(): WebUiSettingsDocument {
   return {
-    version: 3,
+    version: 4,
     general: {
       defaultRoute: 'terminal',
       terminal: {
@@ -275,7 +278,7 @@ export function createDefaultWebUiSettings(): WebUiSettingsDocument {
         fontFamily: defaultEditorFontFamily,
       },
       appearance: {
-        fontFamily: 'sans-serif',
+        theme: 'light',
       },
     },
     taskConfiguration: createDefaultTaskConfigurationSettings(),

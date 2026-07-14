@@ -12,7 +12,7 @@ export interface AppearanceSectionProps {
 export function AppearanceSection({ savedAppearance, onSave, onReset }: AppearanceSectionProps) {
   const t = useT();
   const [draft, setDraft] = useState(savedAppearance);
-  const hasChanges = draft.fontFamily !== savedAppearance.fontFamily;
+  const hasChanges = draft.theme !== savedAppearance.theme;
 
   return (
     <SectionCard
@@ -25,16 +25,17 @@ export function AppearanceSection({ savedAppearance, onSave, onReset }: Appearan
       }
     >
       <div className="grid gap-4 lg:grid-cols-2">
-        <FormField label={t('pages.settings.appearance.fontFamilyLabel')}>
+        <FormField label={t('pages.settings.appearance.themeLabel')}>
           <Select
-            aria-label={t('pages.settings.appearance.fontFamilyLabel')}
-            value={draft.fontFamily}
+            aria-label={t('pages.settings.appearance.themeLabel')}
+            value={draft.theme}
             onChange={(event) =>
-              setDraft({ fontFamily: event.target.value as 'sans-serif' | 'serif' })
+              setDraft({ theme: event.target.value as 'light' | 'dark' | 'system' })
             }
           >
-            <option value="sans-serif">{t('pages.settings.appearance.sansSerif')}</option>
-            <option value="serif">{t('pages.settings.appearance.serif')}</option>
+            <option value="light">{t('pages.settings.appearance.light')}</option>
+            <option value="dark">{t('pages.settings.appearance.dark')}</option>
+            <option value="system">{t('pages.settings.appearance.system')}</option>
           </Select>
         </FormField>
       </div>

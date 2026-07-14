@@ -493,10 +493,11 @@ const pages = {
         },
         appearance: {
           title: 'Appearance',
-          description: 'Global font family preference',
-          fontFamilyLabel: 'Font family',
-          sansSerif: 'Sans-serif',
-          serif: 'Serif',
+          description: 'Choose the color theme used by your OpenScience workspace.',
+          themeLabel: 'Theme',
+          light: 'Light',
+          dark: 'Dark',
+          system: 'Follow system',
           previewHint: 'Changes apply immediately across the entire interface.',
         },
         users: {

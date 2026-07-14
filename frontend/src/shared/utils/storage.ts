@@ -8,6 +8,7 @@ export function readMigratedLocalStorage(primaryKey: string, legacyKeys: string[
     const legacy = window.localStorage.getItem(legacyKey);
     if (legacy !== null) {
       window.localStorage.setItem(primaryKey, legacy);
+      window.localStorage.removeItem(legacyKey);
       return legacy;
     }
   }

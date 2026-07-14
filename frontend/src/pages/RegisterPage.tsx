@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
-import { Button, Input } from '@design-system/primitives';
+import { BrandMark, Button, Input } from '@design-system/primitives';
 
 export default function RegisterPage() {
   const t = useT();
@@ -48,6 +48,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
       <form onSubmit={handleSubmit} className="bg-[var(--surface)] p-8 rounded-xl shadow-sm border border-[var(--border)] w-full max-w-sm">
+        <BrandMark className="mb-6" />
         <h1 className="text-xl font-semibold mb-6">{t('auth.register')}</h1>
         {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">

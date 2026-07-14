@@ -1,5 +1,6 @@
 export { Alert } from './Alert';
 export { Badge } from './Badge';
+export { BrandMark } from './BrandMark';
 export { Button } from './Button';
 export { Card, CardBody, CardHeader } from './Card';
 export { EmptyState } from './EmptyState';

@@ -14,6 +14,7 @@ export {
   minTerminalFontSize,
   rawPromptTaskConfigurationId,
   settingsStorageKey,
+  settingsStorageKeyForUser,
   structuredResearchTaskConfigurationId,
 } from './utils/defaults';
 export {
@@ -42,7 +43,7 @@ export type {
   TaskConfigurationMode,
   TaskConfigurationPreset,
   TaskConfigurationSettings,
+  ThemePreference,
   WebUiSettingsDocument,
 } from './types';
 export * from './api';
-

@@ -10,6 +10,7 @@ body,
 
 html {
   -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
   -moz-osx-font-smoothing: grayscale;
 }
 
