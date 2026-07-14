@@ -334,7 +334,107 @@ grep -nE "logging\.getLogger|structlog\.get_logger|^\s*log\s*=" path/to/file.py
 
 确认传参风格和 logger 类型一致。
 
-## 13. 建议固定成每次开发的检查清单
+## 13. 可重配置的全局对象不能保留陈旧实例
+
+### 现象
+- 定向测试单独运行通过，完整测试按不同顺序运行却失败
+- 日志、指标、配置或 SDK client 看似已重新配置，但仍输出到旧的 sink 或读取旧值
+- `capture_logs()`、mock 或临时环境变量只对部分调用生效
+
+### 根因
+模块级 logger、client 或 registry 在第一次使用后被缓存。后续全局重配置虽然替换了默认 factory/processor/配置对象，旧实例仍持有旧引用。测试顺序一变，问题便从“偶发”变成稳定失败。
+
+### 硬规则
+1. 任何支持运行期重配置的全局设施都必须定义重建或 reset 策略
+2. 不要缓存会捕获可替换配置的实例；必须缓存时，要在重配置时显式失效
+3. 测试不能只跑单文件：至少覆盖“先配置 A、执行一次、再配置 B”的顺序
+
+### 最小验证
+对日志、指标、配置和 SDK 等全局对象，增加跨配置生命周期回归；完整 L1 必须作为最终判定，不能用单文件通过替代。
+
+## 14. 不可信内容的安全边界在最终渲染处，而不是业务正则处
+
+### 现象
+- 修复了 URL 路由或 Markdown link token，raw HTML、实体编码或图片属性仍可能绕过
+- 业务层已经拒绝若干危险 scheme，但 `dangerouslySetInnerHTML` 仍直接接收生成的 HTML
+
+### 根因
+链接重写、token 过滤和 denylist 只能覆盖已知输入形态；HTML parser、浏览器实体解码和 raw HTML 是另一条输入路径。安全性不能依赖业务层“恰好看到了这个 token”。
+
+### 硬规则
+1. 任何进入 `dangerouslySetInnerHTML` 的内容，必须在最终 HTML 边界经成熟 sanitizer 清洗
+2. URI 使用 allowlist，而不是只维护 `javascript:` 等 denylist
+3. sanitizer 必须是直接依赖并锁定版本，不能隐式依赖某个 transitive package 恰好被 hoist
+
+### 最小验证
+同一组件至少覆盖普通 HTTPS、相对/in-app 路径、raw HTML、事件属性、危险 URI、非允许 scheme 和实体编码等输入。
+
+## 15. 验证结论必须有终态证据，且不同验证层不能互相替代
+
+### 现象
+- 看到进度条大部分为绿点，误以为命令已经通过
+- 手动 E2E 正常，就把 deterministic CI、构建或类型检查视为已完成
+- 测试清理阶段超时或被人工中止，却被表述为“基本通过”
+
+### 根因
+部分日志只说明过程曾推进，不能证明命令以 `exit 0` 结束；单测、L1、staging 和手动验证分别覆盖代码、可重复集成、部署装配和真实交互，证据维度不同。
+
+### 硬规则
+1. 每个验证结论都记录命令、最终 exit code、范围和失败/超时状态
+2. timeout、hang、runner 被中止一律记为未完成，不得折算为通过
+3. 定向测试、L1、staging 和手动 E2E 分别报告，禁止用其中一个替代另一个
+
+### 最小验证
+工具会话分段输出时，保留 session id 并轮询到终态；提交或发布说明只引用已完成的那一层证据。
+
+## 16. 前端命令的工作目录是构建契约
+
+### 现象
+`npm --prefix frontend run test:run -- frontend/__tests__/...` 报“找不到测试”，但文件实际存在。
+
+### 根因
+`--prefix frontend` 会让 npm script 在 `frontend/` 内执行；传给 Vitest、TypeScript、Vite 的相对路径都以这个目录为根，不是仓库根。
+
+### 硬规则
+1. 前端命令统一使用 `npm --prefix frontend ...` 或明确 `cd frontend`
+2. 使用 `--prefix` 时，测试过滤路径写为 `__tests__/...` 或 `src/...`
+3. 命令失败先核对 cwd 与过滤路径，再判断为测试发现或代码问题
+
+## 17. package override、直接依赖和 lockfile 必须一致
+
+### 现象
+新增直接依赖后，`npm install --package-lock-only` 因 `EOVERRIDE` 失败，或本机可 import、CI 的 `npm ci` 却失败。
+
+### 根因
+`package.json` 的直接依赖、`overrides` 和 lockfile 共同定义可安装图。范围版本与精确 override 不一致时，npm 会拒绝解析；本机被 hoist 的 transitive package 又会掩盖这种问题。
+
+### 硬规则
+1. 新增依赖前先检查 `overrides`、lockfile 中的已有版本和许可边界
+2. 被精确 override 的直接依赖使用相同精确版本，除非同时有意调整 override
+3. 依赖变更后必须验证 lockfile 安装，而不是只验证本机 `node_modules`
+
+### 最小验证
+运行 `npm --prefix frontend install --package-lock-only --ignore-scripts`，再运行 lint、测试和 production build。
+
+## 18. Worktree 清理必须同时审计 Git 图、工作区状态和协作状态
+
+### 现象
+- PR 已 squash merge，但 feature commit 不是 `master` 的祖先
+- 分支看似已合并，worktree 中却仍有未提交文件
+- locked worktree 可能仍属于活跃会话，旧基线上的同名 worklog 又会在 rebase 时发生 add/add 冲突
+
+### 根因
+Git 提交图只描述已提交历史；squash merge、未提交改动、worktree lock 和并发工作记录属于不同状态面，单看 `git branch --merged` 会误判。
+
+### 硬规则
+1. 清理前同时检查 PR 状态、`master` 内容、`git worktree list --porcelain`、每个 worktree 的 `git status` 与活跃协作会话
+2. 对已 merge 的 temporary worktree，先确认干净再 unlock/remove；不触碰未知或活跃的 locked worktree
+3. 同名 worklog 冲突时保留主线全部历史并追加分支记录，绝不覆盖或丢弃另一侧日志
+
+### 最小验证
+合并前跑 `git diff --check`、合并后核对 `master...origin/master`；清理后再检查目标 worktree、临时分支和远程引用均已消失。
+
+## 19. 建议固定成每次开发的检查清单
 
 ### 前端改动前后
 - [ ] devtools/browser tool 可用
@@ -342,6 +442,8 @@ grep -nE "logging\.getLogger|structlog\.get_logger|^\s*log\s*=" path/to/file.py
 - [ ] 宿主机 `frontend/dist` 已重建
 - [ ] nginx 已重启
 - [ ] 前后端配套改动时，先发后端再发前端（见 §1）
+- [ ] `npm --prefix frontend` 的测试过滤路径是否以 `frontend/` 为根（见 §16）
+- [ ] Markdown/HTML/富文本是否在最终渲染边界清洗，且 URI 为 allowlist（见 §14）
 
 ### 多租户/权限改动前后
 - [ ] 明确文件/目录是谁创建的
@@ -358,5 +460,11 @@ grep -nE "logging\.getLogger|structlog\.get_logger|^\s*log\s*=" path/to/file.py
 - [ ] 行为从“必然产生 X”变成“条件性产生 X”了吗？是 → 审计 response schema 可选性（见 §11）
 - [ ] 改动涉及日志吗？是 → 确认 logger 是 stdlib 还是 structlog，传参风格匹配（见 §12）
 - [ ] 单测绿之后，是否在 staging 用真实 HTTP 请求跑过会触发条件分支的路径？（见 §11）
+- [ ] 是否改动了可重配置的全局对象？是 → 覆盖重配置顺序与 reset 行为（见 §13）
+- [ ] 每项验证是否已有最终 exit code 和对应验证层的证据？（见 §15）
+
+### 依赖 / Git worktree 改动后
+- [ ] 新依赖是否与 `overrides`、lockfile 一致，并已验证可安装？（见 §17）
+- [ ] 清理前是否同时审计 PR、Git 图、dirty 状态、lock 和活跃会话？（见 §18）
 
 如果未来再踩到类似坑，优先补这份文档，而不是把经验散落在聊天记录里。
