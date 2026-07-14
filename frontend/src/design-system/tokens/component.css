@@ -1,0 +1,15 @@
+:root {
+  --osci-topbar-background: rgb(255 255 255 / 0.92);
+  --osci-topbar-background-translucent: rgb(255 255 255 / 0.72);
+  --osci-topbar-backdrop-filter: saturate(140%) blur(16px);
+  --osci-command-palette-width: 40rem;
+  --osci-sidebar-expanded-width: 15rem;
+  --osci-sidebar-collapsed-width: 3.5rem;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --osci-topbar-background-translucent: var(--osci-topbar-background);
+    --osci-topbar-backdrop-filter: none;
+  }
+}

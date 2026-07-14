@@ -1,17 +1,17 @@
 export const semanticToneClasses = {
-  success: 'border-[var(--success-border)] bg-[var(--success-soft)] text-[var(--success-foreground)]',
-  warning: 'border-[var(--warning-border)] bg-[var(--warning-soft)] text-[var(--warning-foreground)]',
-  danger: 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--danger-foreground)]',
-  info: 'border-[var(--info-border)] bg-[var(--info-soft)] text-[var(--info-foreground)]',
-  muted: 'border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)]',
+  success: 'border-[var(--osci-color-success-border)] bg-[var(--osci-color-success-soft)] text-[var(--osci-color-success-foreground)]',
+  warning: 'border-[var(--osci-color-warning-border)] bg-[var(--osci-color-warning-soft)] text-[var(--osci-color-warning-foreground)]',
+  danger: 'border-[var(--osci-color-danger-border)] bg-[var(--osci-color-danger-soft)] text-[var(--osci-color-danger-foreground)]',
+  info: 'border-[var(--osci-color-info-border)] bg-[var(--osci-color-info-soft)] text-[var(--osci-color-info-foreground)]',
+  muted: 'border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] text-[var(--osci-color-text-secondary)]',
 } as const;
 
 export const semanticDotClasses = {
-  success: 'bg-[var(--success)]',
-  warning: 'bg-[var(--warning)]',
-  danger: 'bg-[var(--danger)]',
-  info: 'bg-[var(--info)]',
-  muted: 'bg-[var(--text-tertiary)]',
+  success: 'bg-[var(--osci-color-success)]',
+  warning: 'bg-[var(--osci-color-warning)]',
+  danger: 'bg-[var(--osci-color-danger)]',
+  info: 'bg-[var(--osci-color-info)]',
+  muted: 'bg-[var(--osci-color-text-muted)]',
 } as const;
 
 export type SemanticTone = keyof typeof semanticToneClasses;
