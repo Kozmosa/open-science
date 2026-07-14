@@ -216,9 +216,11 @@ def build_jwt_auth_middleware(
             record_activity(user["id"])
             return await call_next(request)
 
-        # Fallback: API key in query string (needed for native EventSource/SSE)
-        # API keys are granted restricted non-admin role for security
-        api_key = request.query_params.get("api_key")
+        # Browser development proxies can inject the key as a header, while
+        # native EventSource still needs the query-string form because it
+        # cannot attach arbitrary headers.  Both authenticate the same
+        # restricted non-admin principal.
+        api_key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
         if api_key and api_config.verify_api_key(api_key):
             request.state.current_user = {
                 "id": "api-key-user",

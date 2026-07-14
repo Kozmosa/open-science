@@ -87,6 +87,32 @@ cd frontend && npm run build
 
 构建产物输出至 `frontend/dist/`。
 
+## 隔离的 v2 前端开发环境
+
+领域前端 F5–F10 需要真实的 v2 capability、Project/Workspace 读模型和 domain worker
+heartbeat。使用仓库内的合成 fixture，不要为日常前端开发复用 production、shared staging
+或 L2 资源：
+
+```bash
+npm --prefix frontend ci
+
+# 只准备或核对 synthetic committed-v2 state
+bash scripts/frontend-dev.sh prepare
+
+# 同时启动 API、空闲 domain worker 和 Vite HMR
+bash scripts/frontend-dev.sh run
+```
+
+默认状态目录为 `/tmp/openscience-frontend-dev`，API 为 `127.0.0.1:8000`，Vite 为
+`127.0.0.1:5173`。可通过 `OPENSCIENCE_FRONTEND_DEV_STATE_ROOT`、
+`OPENSCIENCE_FRONTEND_DEV_API_PORT` 和 `OPENSCIENCE_FRONTEND_DEV_PORT` 覆盖。
+fixture 只写合成 Project、Workspace、Environment 和权限状态，并拒绝把状态目录放入任意
+Git worktree。
+
+该入口不是 L2 或浏览器 E2E 门禁。headless 开发阶段运行 Vitest、API contract、lint 和
+build；真实 DOM、焦点、computed style、loaded asset 与窄屏验收在具备 DevTools 的客户端
+环境单独完成。
+
 ## 实验性性能审计
 
 :::caution

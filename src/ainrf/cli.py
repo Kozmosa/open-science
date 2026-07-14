@@ -42,6 +42,11 @@ from ainrf.domain_migration import (
     capture_source_manifest,
 )
 from ainrf.domain import OverviewSnapshotPlanner, TaskApplicationService, TaskDispatcher
+from ainrf.development import (
+    DEFAULT_FRONTEND_DEV_API_KEY,
+    DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
+    prepare_frontend_dev_fixture,
+)
 from ainrf.literature.planner import run_once as run_literature_planner_once
 from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.logging import configure_cli_logging
@@ -73,6 +78,9 @@ app.add_typer(domain_runtime_app, name="domain-runtime")
 
 overview_snapshot_app = typer.Typer(help="Refresh persisted control-plane overview snapshots.")
 app.add_typer(overview_snapshot_app, name="overview-snapshot")
+
+frontend_dev_app = typer.Typer(help="Prepare isolated synthetic state for frontend development.")
+app.add_typer(frontend_dev_app, name="frontend-dev")
 
 _TOKEN_FILE = Path.home() / ".ainrf" / "token"
 
@@ -194,6 +202,35 @@ def domain_worker(
         asyncio.run(dispatcher.run_forever())
     finally:
         dispatcher.stop()
+
+
+@frontend_dev_app.command("prepare")
+def frontend_dev_prepare(
+    state_root: Annotated[
+        Path,
+        typer.Option(help="Isolated state root outside every Git worktree."),
+    ] = Path("/tmp/openscience-frontend-dev"),
+    api_key: Annotated[
+        str,
+        typer.Option(help="Local API key injected by the Vite development proxy."),
+    ] = DEFAULT_FRONTEND_DEV_API_KEY,
+    artifact_sha: Annotated[
+        str,
+        typer.Option(help="Synthetic immutable artifact SHA bound to the v2 fixture."),
+    ] = DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
+) -> None:
+    """Create or reconcile a synthetic committed-v2 frontend fixture."""
+
+    try:
+        fixture = prepare_frontend_dev_fixture(
+            state_root,
+            artifact_sha=artifact_sha,
+            api_key=api_key,
+        )
+    except (DomainCutoverError, OSError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(fixture.as_dict(), indent=2, sort_keys=True))
 
 
 def _configured_domain_mode() -> DomainModelMode:

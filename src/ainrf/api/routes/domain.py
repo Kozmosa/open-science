@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
+from ainrf.api.domain_schemas import (
+    DomainProjectListResponse,
+    DomainProjectSummaryResponse,
+    DomainWorkspaceListResponse,
+    DomainWorkspaceResponse,
+)
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
     ProjectContextCandidateCreateRequest,
@@ -196,6 +202,33 @@ async def create_project(request: Request, payload: dict[str, object]) -> dict[s
         raise _translate(exc) from exc
 
 
+@router.get("/projects", response_model=DomainProjectListResponse)
+async def list_domain_projects(
+    request: Request,
+    include_archived: bool = Query(False),
+) -> DomainProjectListResponse:
+    try:
+        return DomainProjectListResponse.model_validate(
+            {
+                "items": _service(request).project_console_summaries(
+                    get_current_user(request), include_archived=include_archived
+                )
+            }
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/projects/{project_id}", response_model=DomainProjectSummaryResponse)
+async def get_domain_project(project_id: str, request: Request) -> DomainProjectSummaryResponse:
+    try:
+        return DomainProjectSummaryResponse.model_validate(
+            _service(request).project_console_summary(project_id, get_current_user(request))
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
 @router.post("/workspaces")
 async def create_workspace(request: Request, payload: dict[str, object]) -> dict[str, object]:
     try:
@@ -205,6 +238,33 @@ async def create_workspace(request: Request, payload: dict[str, object]) -> dict
             canonical_path=str(payload["canonical_path"]),
             label=str(payload["label"]),
             idempotency_key=require_idempotency_key(request, payload.get("idempotency_key")),
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/workspaces", response_model=DomainWorkspaceListResponse)
+async def list_domain_workspaces(
+    request: Request,
+    include_unregistered: bool = Query(False),
+) -> DomainWorkspaceListResponse:
+    try:
+        return DomainWorkspaceListResponse.model_validate(
+            {
+                "items": _service(request).workspace_console_entries(
+                    get_current_user(request), include_unregistered=include_unregistered
+                )
+            }
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/workspaces/{workspace_id}", response_model=DomainWorkspaceResponse)
+async def get_domain_workspace(workspace_id: str, request: Request) -> DomainWorkspaceResponse:
+    try:
+        return DomainWorkspaceResponse.model_validate(
+            _service(request).workspace_console_entry(workspace_id, get_current_user(request))
         )
     except Exception as exc:
         raise _translate(exc) from exc
