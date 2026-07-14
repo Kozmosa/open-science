@@ -187,10 +187,11 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(
             json={"content": "Draft v2"},
         )
         assert draft_v2.status_code == 200
-        conflict = await client.post(
+        stale_replay = await client.post(
             _api_path(f"/domain/projects/{project_id}/context/publish"), headers=publish_headers
         )
-        assert conflict.status_code == 409
+        assert stale_replay.status_code == 200
+        assert _payload(stale_replay) == active_v1
 
         workspace_id, environment_id = _prepare_attached_workspace(app, state_root, project_id)
         task_response = await client.post(

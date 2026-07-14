@@ -50,7 +50,9 @@ def configure_cli_logging() -> None:
         ],
         logger_factory=structlog.PrintLoggerFactory(file=_CURRENT_STDERR),
         wrapper_class=structlog.BoundLogger,
-        cache_logger_on_first_use=True,
+        # CLI and server startup can reconfigure structlog in one process.
+        # Cached module-level loggers would retain stale processors after that.
+        cache_logger_on_first_use=False,
     )
 
 
@@ -102,7 +104,7 @@ def configure_logging(state_root: Path) -> None:
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
+        cache_logger_on_first_use=False,
     )
 
     # Uvicorn uses its own loggers — route them to the file too.
