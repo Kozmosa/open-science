@@ -26,45 +26,45 @@ export default function TaskUsageCard({ summary, loading }: Props) {
   const t = useT();
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+    <div className="h-full rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] p-5">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold">{t('pages.resources.taskUsage.title')}</h3>
-          <p className="text-xs text-[var(--text-secondary)]">{t('pages.resources.taskUsage.description')}</p>
+          <p className="text-xs text-[var(--osci-color-text-secondary)]">{t('pages.resources.taskUsage.description')}</p>
         </div>
-        <span className="text-xs text-[var(--text-tertiary)]">
+        <span className="text-xs text-[var(--osci-color-text-muted)]">
           {loading ? t('common.loading') : t('pages.resources.taskUsage.taskCount', { count: summary?.task_count ?? 0 })}
         </span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
-          <p className="text-xs text-[var(--text-secondary)]">{t('pages.resources.taskUsage.totalTokens')}</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text)]">{formatTokens(summary?.total_tokens ?? 0)}</p>
+        <div className="rounded-[var(--osci-radius-sm)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] p-3">
+          <p className="text-xs text-[var(--osci-color-text-secondary)]">{t('pages.resources.taskUsage.totalTokens')}</p>
+          <p className="mt-1 text-xl font-semibold text-[var(--osci-color-text)]">{formatTokens(summary?.total_tokens ?? 0)}</p>
         </div>
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
-          <p className="text-xs text-[var(--text-secondary)]">{t('pages.resources.taskUsage.totalDuration')}</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text)]">{formatDuration(summary?.total_duration_ms)}</p>
+        <div className="rounded-[var(--osci-radius-sm)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] p-3">
+          <p className="text-xs text-[var(--osci-color-text-secondary)]">{t('pages.resources.taskUsage.totalDuration')}</p>
+          <p className="mt-1 text-xl font-semibold text-[var(--osci-color-text)]">{formatDuration(summary?.total_duration_ms)}</p>
         </div>
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
-          <p className="text-xs text-[var(--text-secondary)]">{t('pages.resources.taskUsage.medianDuration')}</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--text)]">{formatDuration(summary?.median_duration_ms)}</p>
+        <div className="rounded-[var(--osci-radius-sm)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] p-3">
+          <p className="text-xs text-[var(--osci-color-text-secondary)]">{t('pages.resources.taskUsage.medianDuration')}</p>
+          <p className="mt-1 text-xl font-semibold text-[var(--osci-color-text)]">{formatDuration(summary?.median_duration_ms)}</p>
         </div>
       </div>
 
       <div className="mt-4">
-        <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">{t('pages.resources.taskUsage.topTasks')}</p>
+        <p className="mb-2 text-xs font-medium text-[var(--osci-color-text-secondary)]">{t('pages.resources.taskUsage.topTasks')}</p>
         {summary?.top_tasks.length ? (
           <ol className="space-y-2">
             {summary.top_tasks.map((task) => (
-              <li key={task.task_id} className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
+              <li key={task.task_id} className="rounded-[var(--osci-radius-sm)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm font-medium text-[var(--text)]" title={task.title}>{task.title}</span>
-                  <span className="shrink-0 text-xs text-[var(--text-secondary)]">
+                  <span className="min-w-0 truncate text-sm font-medium text-[var(--osci-color-text)]" title={task.title}>{task.title}</span>
+                  <span className="shrink-0 text-xs text-[var(--osci-color-text-secondary)]">
                     {t('pages.resources.taskUsage.tokens', { count: formatTokens(task.total_tokens) })}
                   </span>
                 </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text-tertiary)]">
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--osci-color-text-muted)]">
                   <span>{task.harness_engine}</span>
                   <span>{formatDuration(task.duration_ms)}</span>
                   <span>${task.cost_usd.toFixed(2)}</span>
@@ -73,7 +73,7 @@ export default function TaskUsageCard({ summary, loading }: Props) {
             ))}
           </ol>
         ) : (
-          <p className="text-xs text-[var(--text-tertiary)]">{t('pages.resources.taskUsage.noTopTasks')}</p>
+          <p className="text-xs text-[var(--osci-color-text-muted)]">{t('pages.resources.taskUsage.noTopTasks')}</p>
         )}
       </div>
     </div>

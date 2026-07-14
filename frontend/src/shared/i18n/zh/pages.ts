@@ -613,6 +613,13 @@ const pages = {
         description: '所有环境的实时系统资源占用情况。',
         loading: '正在加载资源数据...',
         noData: '暂无资源数据。',
+        refresh: '刷新',
+        lastUpdated: '最后成功数据：{{time}}',
+        stale: '资源数据已过期，当前继续显示已有数值。',
+        partial: '部分环境或任务用量数据处于降级状态，其他卡片保持可用。',
+        refreshFailed: '无法加载资源数据。',
+        showingPrevious: '刷新失败，继续显示上次成功的资源数据。',
+        paused: '页面隐藏期间已暂停后台刷新。',
         systemCard: {
           title: '系统资源',
           gpuTitle: 'GPU',

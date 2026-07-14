@@ -20,13 +20,13 @@ export default function MemoryBar({ used_mb, total_mb }: MemoryBarProps) {
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="font-medium">{t('components.resources.memory')}</span>
-        <span className="text-[var(--text-tertiary)]">
+        <span className="text-[var(--osci-color-text-muted)]">
           {formatMB(used_mb)} / {formatMB(total_mb)} ({percent}%)
         </span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--osci-color-surface-subtle)]">
         <div
-          className="h-full rounded-full bg-blue-500 transition-all duration-500"
+          className="h-full rounded-full bg-[var(--osci-color-primary)] transition-all duration-500"
           style={{ width: `${Math.min(percent, 100)}%` }}
         />
       </div>

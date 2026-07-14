@@ -625,6 +625,13 @@ const pages = {
         description: 'Real-time system resource usage across all environments.',
         loading: 'Loading resources...',
         noData: 'No resource data available yet.',
+        refresh: 'Refresh',
+        lastUpdated: 'Last successful data: {{time}}',
+        stale: 'Resource data is stale. Existing values remain visible.',
+        partial: 'Some environment or task usage data is degraded. Other cards remain current.',
+        refreshFailed: 'Resource data could not be loaded.',
+        showingPrevious: 'Refresh failed. Showing the last successful resource data.',
+        paused: 'Background refresh is paused while this page is hidden.',
         systemCard: {
           title: 'System Resources',
           gpuTitle: 'GPU',
