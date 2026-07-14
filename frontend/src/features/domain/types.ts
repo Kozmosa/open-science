@@ -260,6 +260,14 @@ export interface DomainContextCandidate {
   rejection_reason: string | null;
 }
 
+export interface DomainProjectMember {
+  user_id: string;
+  username: string;
+  display_name: string;
+  role: 'viewer' | 'editor';
+  can_publish: boolean;
+}
+
 export interface LiteratureTaskIntent {
   intent_id: string;
   paper_id: string;

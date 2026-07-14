@@ -2,7 +2,11 @@ import { api } from '@/shared/api/client';
 import { idempotencyHeaders } from '@/shared/api/idempotency';
 import type {
   DomainCapabilities,
+  DomainContextCandidate,
+  DomainContextDiff,
+  DomainContextVersion,
   DomainProjectContext,
+  DomainProjectMember,
   DomainProjectProjection,
   DomainTaskAttempt,
   DomainTaskContextSnapshot,
@@ -78,6 +82,86 @@ export function getDomainTaskContext(taskId: string): Promise<DomainTaskContextS
 
 export function getDomainProjectContext(projectId: string): Promise<DomainProjectContext> {
   return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context`);
+}
+
+export function createDomainProject(
+  payload: { name: string; description: string | null },
+  idempotencyKey: string,
+): Promise<{ project_id: string }> {
+  return domainPost('/domain/projects', payload, idempotencyKey);
+}
+
+export function detachDomainWorkspace(
+  projectId: string,
+  workspaceId: string,
+  idempotencyKey: string,
+  allowNoPrimary = false,
+): Promise<void> {
+  return api.delete(
+    `/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}?allow_no_primary=${allowNoPrimary}`,
+    { headers: idempotencyHeaders(idempotencyKey) },
+  );
+}
+
+export function replaceDomainPrimaryWorkspace(
+  projectId: string,
+  previousWorkspaceId: string,
+  workspaceId: string,
+  idempotencyKey: string,
+): Promise<Record<string, unknown>> {
+  return api.put(
+    `/projects/${encodeURIComponent(projectId)}/primary-workspace/${encodeURIComponent(workspaceId)}?previous_workspace_id=${encodeURIComponent(previousWorkspaceId)}`,
+    {},
+    { headers: idempotencyHeaders(idempotencyKey) },
+  );
+}
+
+export function saveDomainProjectContextDraft(projectId: string, content: string, idempotencyKey: string): Promise<DomainProjectContext> {
+  return api.put(`/domain/projects/${encodeURIComponent(projectId)}/context/draft`, { content }, { headers: idempotencyHeaders(idempotencyKey) });
+}
+
+export function publishDomainProjectContext(projectId: string, idempotencyKey: string): Promise<DomainContextVersion> {
+  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/context/publish`, {}, idempotencyKey);
+}
+
+export function getDomainProjectContextVersions(projectId: string): Promise<ItemList<DomainContextVersion>> {
+  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context/versions`);
+}
+
+export function getDomainProjectContextDiff(projectId: string, contextVersionId: string, against: string): Promise<DomainContextDiff> {
+  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context/versions/${encodeURIComponent(contextVersionId)}/diff?against=${encodeURIComponent(against)}`);
+}
+
+export function getDomainProjectContextCandidates(projectId: string): Promise<ItemList<DomainContextCandidate>> {
+  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context/candidates`);
+}
+
+export function acceptDomainContextCandidate(projectId: string, candidateId: string, idempotencyKey: string): Promise<DomainContextCandidate> {
+  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/context/candidates/${encodeURIComponent(candidateId)}/accept`, {}, idempotencyKey);
+}
+
+export function rejectDomainContextCandidate(projectId: string, candidateId: string, reason: string, idempotencyKey: string): Promise<DomainContextCandidate> {
+  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/context/candidates/${encodeURIComponent(candidateId)}/reject`, { reason }, idempotencyKey);
+}
+
+export function getDomainProjectMembers(projectId: string): Promise<ItemList<DomainProjectMember>> {
+  return api.get(`/projects/${encodeURIComponent(projectId)}/members`);
+}
+
+export function upsertDomainProjectMember(projectId: string, userId: string, role: 'viewer' | 'editor', canPublish: boolean, idempotencyKey: string): Promise<DomainProjectMember> {
+  return api.put(`/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, { role, can_publish: canPublish }, { headers: idempotencyHeaders(idempotencyKey) });
+}
+
+export function removeDomainProjectMember(projectId: string, userId: string, idempotencyKey: string): Promise<void> {
+  return api.delete(`/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, { headers: idempotencyHeaders(idempotencyKey) });
+}
+
+export function archiveDomainProject(projectId: string, idempotencyKey: string): Promise<void> {
+  return domainPost(`/projects/${encodeURIComponent(projectId)}/archive`, {}, idempotencyKey);
+}
+
+export function unarchiveDomainProject(projectId: string, idempotencyKey: string): Promise<void> {
+  return domainPost(`/projects/${encodeURIComponent(projectId)}/unarchive`, {}, idempotencyKey);
 }
 
 export function getTodayOverview(): Promise<OverviewSnapshot> {

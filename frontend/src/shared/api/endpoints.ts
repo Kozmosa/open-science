@@ -405,11 +405,14 @@ export const getTaskEdges = (projectId: string): Promise<TaskEdgeListResponse> =
 
 export const createTaskEdge = (
   projectId: string,
-  payload: TaskEdgeCreateRequest
+  payload: TaskEdgeCreateRequest,
+  idempotencyKey?: string,
 ): Promise<TaskEdge> =>
   USE_MOCK
     ? Promise.resolve(mockCreateTaskEdge(projectId, payload))
-    : api.post<TaskEdge>(`/projects/${projectId}/task-edges`, payload);
+    : api.post<TaskEdge>(`/projects/${projectId}/task-edges`, payload, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      });
 
 export const deleteTaskEdge = (edgeId: string): Promise<void> =>
   USE_MOCK
@@ -487,13 +490,17 @@ export const getProjects = (): Promise<ProjectListResponse> =>
 export const getProject = (projectId: string): Promise<ProjectRecord> =>
   USE_MOCK ? Promise.resolve(mockGetProject(projectId)) : api.get<ProjectRecord>(`/projects/${projectId}`);
 
-export const createProject = (payload: ProjectCreateRequest): Promise<ProjectRecord> =>
-  USE_MOCK ? Promise.resolve(mockCreateProject(payload)) : api.post<ProjectRecord>('/projects', payload);
+export const createProject = (payload: ProjectCreateRequest, idempotencyKey?: string): Promise<ProjectRecord> =>
+  USE_MOCK ? Promise.resolve(mockCreateProject(payload)) : api.post<ProjectRecord>('/projects', payload, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  });
 
-export const updateProject = (projectId: string, payload: ProjectUpdateRequest): Promise<ProjectRecord> =>
+export const updateProject = (projectId: string, payload: ProjectUpdateRequest, idempotencyKey?: string): Promise<ProjectRecord> =>
   USE_MOCK
     ? Promise.resolve(mockUpdateProject(projectId, payload))
-    : api.patch<ProjectRecord>(`/projects/${projectId}`, payload);
+    : api.patch<ProjectRecord>(`/projects/${projectId}`, payload, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      });
 
 export const deleteProject = (projectId: string): Promise<void> =>
   USE_MOCK ? Promise.resolve(mockDeleteProject(projectId)) : api.delete<void>(`/projects/${projectId}`);

@@ -2,6 +2,9 @@
 const pages = {
     pages: {
       projects: {
+        eyebrow: 'PROJECTS',
+        title: '项目工作台',
+        description: '在统一的投影控制台中管理任务、工作区、持久上下文与项目权限。',
         sidebarEyebrow: '项目',
         sidebarTitle: '项目画布',
         sidebarCount: '{{count}} 个项目',

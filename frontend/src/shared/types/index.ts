@@ -312,6 +312,7 @@ export interface TaskEdge {
   project_id: string;
   source_task_id: string;
   target_task_id: string;
+  relationship_type: 'derived_from' | 'depends_on' | 'related_to' | string;
   created_at: string;
 }
 

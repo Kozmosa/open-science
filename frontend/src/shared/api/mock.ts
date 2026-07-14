@@ -1110,6 +1110,7 @@ export function mockCreateTaskEdge(
     project_id: projectId,
     source_task_id: payload.source_task_id,
     target_task_id: payload.target_task_id,
+    relationship_type: 'related_to',
     created_at: new Date().toISOString(),
   };
   if (!mockEdges[projectId]) {

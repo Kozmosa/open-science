@@ -82,13 +82,13 @@ const environmentAlt = {
 
   it('shows no projects message when no projects exist', async () => {
     server.use(
-      http.get('/api/projects', () => {
+      http.get('/api/domain/projects', () => {
         return HttpResponse.json({ items: [] })
       }),
     )
     renderWithProviders(<ProjectsPage />, { route: '/projects' })
     await waitFor(() => {
-      expect(screen.getByText(/no projects/i)).toBeInTheDocument()
+      expect(screen.getAllByText(/no projects/i)).toHaveLength(2)
     })
   })
 
@@ -170,16 +170,10 @@ const environmentAlt = {
   it('opens the create-project modal and creates a project on submit', async () => {
     let createdProjectPayload: Record<string, unknown> | null = null
     server.use(
-      http.post('/api/projects', async ({ request }) => {
+      http.post('/api/domain/projects', async ({ request }) => {
         createdProjectPayload = await request.json() as Record<string, unknown>
         return HttpResponse.json({
           project_id: 'proj-new',
-          name: 'My New Project',
-          description: 'A fresh project',
-          default_workspace_id: null,
-          default_environment_id: null,
-          created_at: '2026-01-02T00:00:00Z',
-          updated_at: '2026-01-02T00:00:00Z',
         }, { status: 201 })
       }),
     )

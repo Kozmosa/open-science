@@ -1,234 +1,241 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Dialog, FormField, Input, PageShell, SplitPane, Textarea } from '@design-system';
-import { ProjectCanvas, ProjectSidebar } from '../components/project';
-import { useT } from '@/shared/i18n';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  createProject,
-  getProjects,
-  getProjectTasks,
-  getTask,
-  getTaskEdges,
-  updateTaskProject,
-} from '@/shared/api';
-import { extractErrorMessage } from '@/shared/utils/error';
-import type { ProjectCreateRequest, TaskRecord } from '@/shared/types';
-import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
-import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
-import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  Dialog,
+  EmptyState,
+  FormField,
+  Input,
+  NativeSelect,
+  PageHeader,
+  PageShell,
+  StatusBadge,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+  ViewToolbar,
+} from '@design-system';
+import { ProjectCanvas } from '../components/project';
+import { getProjectTasks, getTaskEdges, moveTask } from '@/shared/api';
+import { createIdempotencyKey, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { useT } from '@/shared/i18n';
+import { extractErrorMessage } from '@/shared/utils/error';
+import type { ProjectRecord } from '@/shared/types';
+import {
+  attachDomainWorkspace,
+  createDomainProject,
+  detachDomainWorkspace,
+  getDomainProjectContext,
+  getDomainProjects,
+  getDomainWorkspaces,
+  replaceDomainPrimaryWorkspace,
+  setDomainPrimaryWorkspace,
+  type DomainProjectProjection,
+  type DomainWorkspaceProjection,
+} from '@features/domain';
+import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 
+type ProjectTab = 'overview' | 'tasks' | 'workspaces' | 'context' | 'settings';
+type TaskView = 'list' | 'graph';
+const PROJECT_TABS = new Set<ProjectTab>(['overview', 'tasks', 'workspaces', 'context', 'settings']);
+
+function asCanvasProject(project: DomainProjectProjection): ProjectRecord {
+  return {
+    project_id: project.project_id,
+    name: project.name,
+    description: project.description,
+    default_workspace_id: project.primary_workspace?.workspace_id ?? null,
+    default_environment_id: project.primary_workspace?.environment_id ?? null,
+    created_at: project.created_at,
+    updated_at: project.updated_at,
+    owner_user_id: project.owner_user_id,
+  };
+}
+
+function workspaceLink(workspace: DomainWorkspaceProjection, projectId: string) {
+  return workspace.project_links.find((link) => link.project_id === projectId && link.link_status === 'active');
+}
 
 export default function ProjectsPage() {
   const t = useT();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const projectsQuery = useQuery({ queryKey: queryKeys.projects.all, queryFn: getProjects });
-
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState(320);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-  const [layoutVersion, setLayoutVersion] = useState(0);
-  const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [taskCreateOpen, setTaskCreateOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
+  const [attachWorkspaceId, setAttachWorkspaceId] = useState('');
+  const [layoutVersion, setLayoutVersion] = useState(0);
 
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.domain.projects(true),
+    queryFn: () => getDomainProjects(true),
+  });
+  const workspacesQuery = useQuery({
+    queryKey: queryKeys.domain.workspaces(false),
+    queryFn: () => getDomainWorkspaces(false),
+  });
   const projects = useMemo(() => projectsQuery.data?.items ?? [], [projectsQuery.data]);
-  const effectiveProjectId = selectedProjectId ?? projects[0]?.project_id ?? null;
+  const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
+  const requestedProjectId = searchParams.get('project');
+  const selectedProject = projects.find((project) => project.project_id === requestedProjectId)
+    ?? projects[0]
+    ?? null;
+  const rawTab = searchParams.get('tab') as ProjectTab | null;
+  const tab: ProjectTab = rawTab && PROJECT_TABS.has(rawTab) ? rawTab : 'overview';
+  const view: TaskView = searchParams.get('view') === 'graph' ? 'graph' : 'list';
 
+  const setRouteState = (updates: Record<string, string>) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      for (const [key, value] of Object.entries(updates)) next.set(key, value);
+      return next;
+    });
+  };
+
+  const projectId = selectedProject?.project_id ?? null;
   const tasksQuery = useQuery({
-    queryKey: queryKeys.projectTasks.byProject(effectiveProjectId),
-    queryFn: () =>
-      effectiveProjectId
-        ? getProjectTasks(effectiveProjectId, { limit: 500 })
-        : Promise.resolve({ items: [], has_more: false, next_cursor: null }),
-    enabled: effectiveProjectId !== null,
+    queryKey: queryKeys.projectTasks.byProject(projectId),
+    queryFn: () => projectId ? getProjectTasks(projectId, { limit: 500 }) : Promise.resolve({ items: [], has_more: false }),
+    enabled: projectId !== null,
   });
-
   const edgesQuery = useQuery({
-    queryKey: queryKeys.taskEdges.byProject(effectiveProjectId),
-    queryFn: () =>
-      effectiveProjectId ? getTaskEdges(effectiveProjectId) : Promise.resolve({ items: [] }),
-    enabled: effectiveProjectId !== null,
+    queryKey: queryKeys.taskEdges.byProject(projectId),
+    queryFn: () => projectId ? getTaskEdges(projectId) : Promise.resolve({ items: [] }),
+    enabled: projectId !== null,
   });
+  const tasks = tasksQuery.data?.items ?? [];
+  const edges = edgesQuery.data?.items ?? [];
+  const linkedWorkspaces = selectedProject
+    ? workspaces.filter((workspace) => workspaceLink(workspace, selectedProject.project_id))
+    : [];
+  const attachableWorkspaces = selectedProject
+    ? workspaces.filter((workspace) => !workspaceLink(workspace, selectedProject.project_id) && workspace.status === 'active')
+    : [];
+  const canCreateTask = Boolean(selectedProject?.permissions.can_create_task && selectedProject.executable_workspace_count > 0 && selectedProject.status === 'active');
 
-  const tasks = useMemo(
-    () => tasksQuery.data?.items ?? [],
-    [tasksQuery.data],
-  );
-  const edges = useMemo(() => edgesQuery.data?.items ?? [], [edgesQuery.data]);
-
-  const selectedTaskQuery = useQuery({
-    queryKey: queryKeys.tasks.detail(selectedTaskId),
-    queryFn: () => getTask(selectedTaskId ?? ''),
-    enabled: selectedTaskId !== null,
-  });
-  const selectedTask: TaskRecord | null = selectedTaskQuery.data ?? null;
-  const { outputItems, outputError, hasMore, loadMore, isLoadingMore } = useTaskStream(selectedTaskId);
-
-  const handleResetLayout = useCallback(() => {
-    if (effectiveProjectId) {
-      localStorage.removeItem(`ainrf:project-layout:${effectiveProjectId}`);
-      setLayoutVersion((v) => v + 1);
-    }
-  }, [effectiveProjectId]);
-
-  const handleCreateProject = useCallback(() => {
-    setProjectName('');
-    setProjectDescription('');
-    setCreateProjectOpen(true);
-  }, []);
-
-  const createProjectMutation = useMutation({
-    mutationFn: (payload: ProjectCreateRequest) => createProject(payload),
-    onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      setSelectedProjectId(created.project_id);
+  const createKey = useIdempotencyKey('project.create', { projectName, projectDescription });
+  const createMutation = useMutation({
+    mutationFn: () => createDomainProject({ name: projectName.trim(), description: projectDescription.trim() || null }, createKey.idempotencyKey),
+    onSuccess: (project) => {
+      createKey.markSucceeded();
       setCreateProjectOpen(false);
+      setProjectName('');
+      setProjectDescription('');
+      setRouteState({ project: project.project_id, tab: 'overview' });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.domain.projects(true) });
     },
   });
 
-  const handleCreateProjectSubmit = useCallback(() => {
-    const name = projectName.trim();
-    if (!name || createProjectMutation.isPending) return;
-    createProjectMutation.mutate({ name, description: projectDescription.trim() || null });
-  }, [projectName, projectDescription, createProjectMutation]);
+  const invalidateWorkspaceState = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.domain.projects(true) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.domain.workspaces(false) });
+  };
 
-  const handleNodeClick = useCallback((taskId: string) => {
-    setSelectedTaskId(taskId);
-  }, []);
-
-  const closeCreateDialog = useCallback(() => {
-    setCreateDialogOpen(false);
-  }, []);
-
-  const handleMoveTaskToProject = useCallback(
-    async (taskId: string, targetProjectId: string) => {
-      await updateTaskProject(taskId, targetProjectId);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(effectiveProjectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(targetProjectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(effectiveProjectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(targetProjectId) });
+  const attachMutation = useMutation({
+    mutationFn: () => {
+      if (!projectId || !attachWorkspaceId) throw new Error('Project and Workspace are required');
+      return attachDomainWorkspace(projectId, attachWorkspaceId, createIdempotencyKey(`project.workspace.attach.${projectId}.${attachWorkspaceId}`));
     },
-    [effectiveProjectId, queryClient]
-  );
+    onSuccess: () => { setAttachWorkspaceId(''); invalidateWorkspaceState(); },
+  });
+
+  const detachMutation = useMutation({
+    mutationFn: (workspaceId: string) => {
+      if (!projectId) throw new Error('Project is required');
+      return detachDomainWorkspace(projectId, workspaceId, createIdempotencyKey(`project.workspace.detach.${projectId}.${workspaceId}`));
+    },
+    onSuccess: invalidateWorkspaceState,
+  });
+
+  const primaryMutation = useMutation({
+    mutationFn: (workspaceId: string) => {
+      if (!selectedProject) throw new Error('Project is required');
+      const key = createIdempotencyKey(`project.workspace.primary.${selectedProject.project_id}.${workspaceId}`);
+      return selectedProject.primary_workspace
+        ? replaceDomainPrimaryWorkspace(selectedProject.project_id, selectedProject.primary_workspace.workspace_id, workspaceId, key)
+        : setDomainPrimaryWorkspace(selectedProject.project_id, workspaceId, key);
+    },
+    onSuccess: invalidateWorkspaceState,
+  });
+
+  const moveTaskToProject = async (taskId: string, targetProjectId: string) => {
+    const targetContext = await getDomainProjectContext(targetProjectId);
+    const contextVersionId = targetContext.active_version?.context_version_id;
+    if (!contextVersionId) throw new Error('Target Project has no active Context Version');
+    await moveTask(taskId, { project_id: targetProjectId, context_version_id: contextVersionId }, createIdempotencyKey(`task.move.${taskId}.${targetProjectId}`));
+    void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(targetProjectId) });
+  };
+
+  const operationError = createMutation.error ?? attachMutation.error ?? detachMutation.error ?? primaryMutation.error;
 
   return (
-    <>
-      <PageShell>
-        <SplitPane
-        sidebar={
-          <ProjectSidebar
-            projects={projects}
-            selectedProjectId={effectiveProjectId}
-            onSelectProject={setSelectedProjectId}
-            onCreateProject={handleCreateProject}
-          />
-        }
-        sidebarWidth={sidebarWidth}
-        onSidebarWidthChange={setSidebarWidth}
-      >
-        {effectiveProjectId ? (
-          <ProjectCanvas
-            key={`${effectiveProjectId}:${layoutVersion}`}
-            projectId={effectiveProjectId}
-            tasks={tasks}
-            edges={edges}
-            projects={projects}
-            onNodeClick={handleNodeClick}
-            onNewTask={() => setCreateDialogOpen(true)}
-            onResetLayout={handleResetLayout}
-            onMoveTaskToProject={handleMoveTaskToProject}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
-            {t('pages.projects.noProjects')}
-          </div>
-        )}
-      </SplitPane>
-      </PageShell>
+    <PageShell variant="canvas">
+      <div className="mx-auto flex w-full max-w-[1550px] flex-col gap-5 p-4 md:p-6">
+        <PageHeader
+          eyebrow={t('pages.projects.eyebrow')}
+          title={t('pages.projects.title')}
+          description={t('pages.projects.description')}
+          actions={<Button onClick={() => setCreateProjectOpen(true)}>{t('pages.projects.newProject')}</Button>}
+        />
+        {operationError ? <Alert variant="error">{extractErrorMessage(operationError)}</Alert> : null}
+        <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <Card><CardBody className="space-y-2 p-3">
+            {projects.map((project) => (
+              <button key={project.project_id} type="button" onClick={() => setRouteState({ project: project.project_id, tab })} className={`w-full rounded-[var(--osci-radius-md)] border p-3 text-left ${selectedProject?.project_id === project.project_id ? 'border-[var(--osci-color-primary-border)] bg-[var(--osci-color-primary-soft)]' : 'border-[var(--osci-color-border-subtle)] hover:bg-[var(--osci-color-surface-subtle)]'}`}>
+                <span className="flex items-center justify-between gap-2"><span className="truncate font-semibold text-[var(--osci-color-text)]">{project.name}</span>{project.attention_required ? <StatusBadge tone="warning">Attention</StatusBadge> : null}</span>
+                <span className="mt-1 block text-xs text-[var(--osci-color-text-muted)]">{project.running_task_count} running · {project.workspace_count} workspaces</span>
+                <span className="mt-1 block text-xs text-[var(--osci-color-text-secondary)]">{new Date(project.recent_activity_at).toLocaleString()}</span>
+              </button>
+            ))}
+            {!projectsQuery.isLoading && projects.length === 0 ? <EmptyState title={t('pages.projects.noProjects')} message={t('pages.projects.noProjects')} /> : null}
+          </CardBody></Card>
 
-      <Dialog
-        isOpen={selectedTaskId !== null}
-        onClose={() => setSelectedTaskId(null)}
-        title={selectedTask?.title ?? null}
-        size="lg"
-      >
-        {selectedTask ? (
-          <TaskDetailPage
-            key={selectedTaskId ?? 'none'}
-            taskId={selectedTaskId}
-            selectedTask={selectedTask}
-            detailError={extractErrorMessage(selectedTaskQuery.error)}
-            outputItems={outputItems}
-            outputError={outputError}
-            hasMore={hasMore}
-            loadMore={loadMore}
-            isLoadingMore={isLoadingMore}
-          />
-        ) : null}
-      </Dialog>
+          {selectedProject ? (
+            <div className="min-w-0 space-y-4">
+              <Card><CardBody className="p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-semibold text-[var(--osci-color-text)]">{selectedProject.name}</h2><Badge variant="outline">{selectedProject.status}</Badge><Badge variant="secondary">{selectedProject.current_user_role}</Badge></div><p className="mt-2 text-sm text-[var(--osci-color-text-secondary)]">{selectedProject.description || 'No description'}</p></div>
+                  <Button disabled={!canCreateTask} title={!canCreateTask ? selectedProject.attention_reasons.join(', ') || 'Link an executable Workspace first' : undefined} onClick={() => setTaskCreateOpen(true)}>{t('pages.tasks.newTask')}</Button>
+                </div>
+                {!canCreateTask ? <Alert variant="warning" className="mt-4">Link at least one executable Workspace before creating an execution Task. {selectedProject.attention_reasons.join(', ')}</Alert> : null}
+              </CardBody></Card>
 
-      <TaskCreateFlow
-        isOpen={isCreateDialogOpen}
-        source="project"
-        lockedProjectId={effectiveProjectId}
-        onClose={closeCreateDialog}
-        onCreated={() => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.projectTasks.byProject(effectiveProjectId),
-          });
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.taskEdges.byProject(effectiveProjectId),
-          });
-        }}
-      />
-      <Dialog
-        isOpen={isCreateProjectOpen}
-        onClose={() => setCreateProjectOpen(false)}
-        title={t('pages.projects.createTitle')}
-        ariaLabel={t('pages.projects.createTitle')}
-        size="md"
-      >
-        <div className="space-y-4">
-          <FormField label={t('pages.projects.createNameLabel')}>
-            <Input
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder={t('pages.projects.createNameLabel')}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateProjectSubmit();
-              }}
-            />
-          </FormField>
-          <FormField label={t('pages.projects.createDescriptionLabel')}>
-            <Textarea
-              value={projectDescription}
-              onChange={(e) => setProjectDescription(e.target.value)}
-              rows={3}
-            />
-          </FormField>
-          {createProjectMutation.isError ? (
-            <p className="text-xs text-[var(--danger)]">
-              {extractErrorMessage(createProjectMutation.error)}
-            </p>
+              <Tabs value={tab} onValueChange={(value) => setRouteState({ tab: value })}>
+                <TabsList className="flex w-full overflow-x-auto"><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="tasks">Tasks</TabsTrigger><TabsTrigger value="workspaces">Workspaces</TabsTrigger><TabsTrigger value="context">Context</TabsTrigger><TabsTrigger value="settings">Settings</TabsTrigger></TabsList>
+                <TabsContent value="overview"><Card><CardBody className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Active Tasks" value={selectedProject.active_task_count} /><Metric label="Running Tasks" value={selectedProject.running_task_count} /><Metric label="Workspaces" value={selectedProject.workspace_count} /><Metric label="Executable" value={selectedProject.executable_workspace_count} /><div className="sm:col-span-2 xl:col-span-4"><p className="text-sm font-medium text-[var(--osci-color-text)]">Attention</p><p className="mt-1 text-sm text-[var(--osci-color-text-secondary)]">{selectedProject.attention_reasons.join(', ') || 'No action required.'}</p></div></CardBody></Card></TabsContent>
+                <TabsContent value="tasks">
+                  <ViewToolbar><div className="flex gap-2"><Button size="sm" variant={view === 'list' ? 'primary' : 'secondary'} onClick={() => setRouteState({ view: 'list' })}>List</Button><Button size="sm" variant={view === 'graph' ? 'primary' : 'secondary'} onClick={() => setRouteState({ view: 'graph' })}>Relationship graph</Button></div></ViewToolbar>
+                  {view === 'graph' ? <div className="mt-3 h-[620px] overflow-hidden rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)]"><ProjectCanvas key={`${projectId}:${layoutVersion}`} projectId={projectId!} tasks={tasks} edges={edges} projects={projects.map(asCanvasProject)} onNodeClick={(taskId) => navigate(`/tasks?task=${encodeURIComponent(taskId)}`)} onNewTask={() => setTaskCreateOpen(true)} onResetLayout={() => { localStorage.removeItem(`openscience:project-layout:${projectId}`); setLayoutVersion((value) => value + 1); }} onMoveTaskToProject={(taskId, targetProjectId) => { void moveTaskToProject(taskId, targetProjectId); }} /></div> : <Card className="mt-3"><CardBody className="divide-y divide-[var(--osci-color-border-subtle)] p-0">{tasks.map((task) => <button key={task.task_id} type="button" onClick={() => navigate(`/tasks?task=${encodeURIComponent(task.task_id)}`)} className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-[var(--osci-color-surface-subtle)]"><div><p className="font-medium text-[var(--osci-color-text)]">{task.title}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{task.task_id}</p></div><StatusBadge tone={task.status === 'running' ? 'success' : task.status === 'failed' ? 'danger' : 'neutral'}>{task.status}</StatusBadge></button>)}{tasks.length === 0 ? <EmptyState message="No Tasks in this Project." /> : null}</CardBody></Card>}
+                </TabsContent>
+                <TabsContent value="workspaces"><Card><CardBody className="space-y-4 p-5">
+                  {selectedProject.permissions.can_edit ? <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); attachMutation.mutate(); }}><NativeSelect aria-label="Workspace to attach" value={attachWorkspaceId} onChange={(event) => setAttachWorkspaceId(event.target.value)} className="min-w-64"><option value="">Select a Workspace to attach</option>{attachableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.label}</option>)}</NativeSelect><Button type="submit" disabled={!attachWorkspaceId} isLoading={attachMutation.isPending}>Attach</Button></form> : null}
+                  <div className="space-y-2">{linkedWorkspaces.map((workspace) => { const link = workspaceLink(workspace, selectedProject.project_id)!; return <div key={workspace.workspace_id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3"><div><p className="font-medium text-[var(--osci-color-text)]">{workspace.label}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{workspace.environment.display_name} · {workspace.canonical_path}</p><p className="mt-1 text-xs text-[var(--osci-color-text-secondary)]">{link.can_execute ? 'Executable for new Tasks' : `Linked but unavailable: ${link.cannot_execute_reason ?? 'unknown'}`}</p></div><div className="flex gap-2">{link.is_primary ? <Badge>Primary</Badge> : <Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit} onClick={() => primaryMutation.mutate(workspace.workspace_id)}>Set Primary</Button>}<Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit || link.is_primary} title={link.is_primary ? 'Replace the Primary Workspace before detaching it.' : undefined} onClick={() => detachMutation.mutate(workspace.workspace_id)}>Detach</Button></div></div>; })}{linkedWorkspaces.length === 0 ? <EmptyState title="No linked Workspaces" message="Attach a Workspace before creating execution Tasks." /> : null}</div>
+                </CardBody></Card></TabsContent>
+                <TabsContent value="context"><Card><CardBody className="p-5"><EmptyState title="Project Context" message="Draft, versions, candidates and publishing are completed in the next F8 slice." /></CardBody></Card></TabsContent>
+                <TabsContent value="settings"><Card><CardBody className="p-5"><EmptyState title="Project Settings" message="Membership and archive controls are completed in the next F8 slice." /></CardBody></Card></TabsContent>
+              </Tabs>
+            </div>
           ) : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setCreateProjectOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={handleCreateProjectSubmit}
-              disabled={!projectName.trim() || createProjectMutation.isPending}
-              isLoading={createProjectMutation.isPending}
-            >
-              {t('pages.projects.createSubmit')}
-            </Button>
-          </div>
         </div>
-      </Dialog>
-    </>
+      </div>
+
+      <TaskCreateFlow isOpen={taskCreateOpen} source="project" lockedProjectId={projectId} onClose={() => setTaskCreateOpen(false)} onCreated={() => void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) })} />
+      <Dialog isOpen={createProjectOpen} onClose={() => setCreateProjectOpen(false)} title={t('pages.projects.createTitle')} size="md"><form className="space-y-4" onSubmit={(event) => { event.preventDefault(); createMutation.mutate(); }}><FormField label={t('pages.projects.createNameLabel')}><Input aria-label={t('pages.projects.createNameLabel')} required value={projectName} onChange={(event) => setProjectName(event.target.value)} /></FormField><FormField label={t('pages.projects.createDescriptionLabel')}><Textarea aria-label={t('pages.projects.createDescriptionLabel')} value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} /></FormField><div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setCreateProjectOpen(false)}>{t('common.cancel')}</Button><Button type="submit" isLoading={createMutation.isPending}>{t('pages.projects.createSubmit')}</Button></div></form></Dialog>
+    </PageShell>
   );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return <div className="rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] p-4"><p className="text-xs font-medium uppercase tracking-wide text-[var(--osci-color-text-muted)]">{label}</p><p className="mt-2 text-2xl font-semibold text-[var(--osci-color-text)]">{value}</p></div>;
 }
