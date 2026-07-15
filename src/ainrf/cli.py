@@ -45,6 +45,7 @@ from ainrf.domain import OverviewSnapshotPlanner, TaskApplicationService, TaskDi
 from ainrf.development import (
     DEFAULT_FRONTEND_DEV_API_KEY,
     DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
+    FrontendDevProfile,
     prepare_frontend_dev_fixture,
 )
 from ainrf.literature.planner import run_once as run_literature_planner_once
@@ -218,6 +219,10 @@ def frontend_dev_prepare(
         str,
         typer.Option(help="Synthetic immutable artifact SHA bound to the v2 fixture."),
     ] = DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
+    profile: Annotated[
+        FrontendDevProfile,
+        typer.Option(help="Deterministic frontend state profile to prepare."),
+    ] = FrontendDevProfile.FULL,
 ) -> None:
     """Create or reconcile a synthetic committed-v2 frontend fixture."""
 
@@ -226,6 +231,7 @@ def frontend_dev_prepare(
             state_root,
             artifact_sha=artifact_sha,
             api_key=api_key,
+            profile=profile,
         )
     except (DomainCutoverError, OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)

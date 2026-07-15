@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import closing
 import subprocess
 from pathlib import Path
 from typing import cast
@@ -12,6 +13,7 @@ from typer.testing import CliRunner
 
 from ainrf.api.config import hash_api_key
 from ainrf.cli import app
+from ainrf.db import connect
 from ainrf.domain import DomainService
 from ainrf.domain_control import DomainCutoverController
 
@@ -40,11 +42,20 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
 
     assert first.exit_code == 0, first.output
     assert second.exit_code == 0, second.output
-    first_payload = cast(dict[str, str], json.loads(first.stdout))
-    second_payload = cast(dict[str, str], json.loads(second.stdout))
+    first_payload = json.loads(first.stdout)
+    second_payload = json.loads(second.stdout)
     assert second_payload == first_payload
     assert first_payload["state_root"] == str(state_root)
     assert first_payload["artifact_sha"] == artifact_sha
+    assert first_payload["profile"] == "full"
+    assert first_payload["fixture_version"] == 2
+    assert first_payload["counts"] == {
+        "attempts": 5,
+        "papers": 8,
+        "projects": 2,
+        "tasks": 5,
+        "workspaces": 2,
+    }
 
     status = DomainCutoverController(state_root).status()
     assert status.state == "v2"
@@ -66,6 +77,145 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
         workspace["cannot_execute_reason"] == "environment_grant_required"
         for workspace in workspaces
     )
+
+
+@pytest.mark.parametrize(
+    ("profile", "expected_counts"),
+    [
+        (
+            "empty",
+            {"attempts": 0, "papers": 0, "projects": 0, "tasks": 0, "workspaces": 0},
+        ),
+        (
+            "permissions",
+            {"attempts": 5, "papers": 8, "projects": 5, "tasks": 5, "workspaces": 2},
+        ),
+        (
+            "failures",
+            {"attempts": 7, "papers": 8, "projects": 2, "tasks": 7, "workspaces": 2},
+        ),
+        (
+            "large",
+            {
+                "attempts": 0,
+                "papers": 250,
+                "projects": 40,
+                "tasks": 500,
+                "workspaces": 120,
+            },
+        ),
+    ],
+)
+def test_frontend_dev_profiles_seed_deterministic_bounded_states(
+    tmp_path: Path,
+    profile: str,
+    expected_counts: dict[str, int],
+) -> None:
+    state_root = tmp_path / profile
+    result = CliRunner().invoke(
+        app,
+        [
+            "frontend-dev",
+            "prepare",
+            "--state-root",
+            str(state_root),
+            "--artifact-sha",
+            "d" * 64,
+            "--profile",
+            profile,
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["profile"] == profile
+    assert payload["counts"] == expected_counts
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM task_dispatch_outbox WHERE status IN ('pending', 'claimed')"
+            ).fetchone()[0]
+            == 0
+        )
+    with closing(connect(state_root / "runtime" / "literature.sqlite3")) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM literature_work_items").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM literature_outbox").fetchone()[0] == 0
+
+
+def test_permissions_and_failures_profiles_expose_expected_projection_states(
+    tmp_path: Path,
+) -> None:
+    runner = CliRunner()
+    permissions_root = tmp_path / "permissions"
+    failures_root = tmp_path / "failures"
+    for state_root, profile in (
+        (permissions_root, "permissions"),
+        (failures_root, "failures"),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "frontend-dev",
+                "prepare",
+                "--state-root",
+                str(state_root),
+                "--artifact-sha",
+                "e" * 64,
+                "--profile",
+                profile,
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+    with closing(connect(permissions_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        members = conn.execute(
+            "SELECT project_id, role, can_publish FROM project_members ORDER BY project_id"
+        ).fetchall()
+        assert [(row["role"], bool(row["can_publish"])) for row in members] == [
+            ("editor", True),
+            ("viewer", False),
+        ]
+        archived = conn.execute(
+            "SELECT status FROM projects WHERE project_id = 'project-permission-archived'"
+        ).fetchone()
+        assert archived["status"] == "archived"
+
+    with closing(connect(failures_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        task_statuses = {
+            str(row["status"]) for row in conn.execute("SELECT status FROM tasks").fetchall()
+        }
+        snapshot = conn.execute(
+            "SELECT source_status, payload_json FROM overview_snapshots"
+        ).fetchone()
+        assert {"launch_unknown", "stopped_permission_revoked"} <= task_statuses
+        assert snapshot["source_status"] == "partial"
+        display_cards = json.loads(snapshot["payload_json"])["display_cards"]
+        assert {card["source_status"] for card in display_cards} >= {"failed", "stale"}
+    with closing(connect(failures_root / "runtime" / "literature.sqlite3")) as conn:
+        assert conn.execute("SELECT status FROM literature_checks").fetchone()["status"] == "failed"
+        assert (
+            conn.execute("SELECT status FROM literature_summaries").fetchone()["status"] == "failed"
+        )
+
+
+def test_frontend_dev_profile_change_requires_managed_reset(tmp_path: Path) -> None:
+    state_root = tmp_path / "profile-change"
+    runner = CliRunner()
+    common = [
+        "frontend-dev",
+        "prepare",
+        "--state-root",
+        str(state_root),
+        "--artifact-sha",
+        "f" * 64,
+    ]
+
+    first = runner.invoke(app, [*common, "--profile", "full"])
+    changed = runner.invoke(app, [*common, "--profile", "empty"])
+
+    assert first.exit_code == 0, first.output
+    assert changed.exit_code == 2
+    assert "different profile" in changed.output
 
 
 def test_frontend_dev_fixture_refuses_repository_state_root(tmp_path: Path) -> None:

@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 STATE_ROOT="${OPENSCIENCE_FRONTEND_DEV_STATE_ROOT:-/tmp/openscience-frontend-dev}"
 API_KEY="${OPENSCIENCE_FRONTEND_DEV_API_KEY:-openscience-frontend-dev}"
 ARTIFACT_SHA="${OPENSCIENCE_FRONTEND_DEV_ARTIFACT_SHA:-100323fd9e36c715f2643fb86ea30cbe16a0f6c6ff707d5ee5c32d352e81b91f}"
+PROFILE="${OPENSCIENCE_FRONTEND_DEV_PROFILE:-full}"
 API_PORT="${OPENSCIENCE_FRONTEND_DEV_API_PORT:-8000}"
 FRONTEND_PORT="${OPENSCIENCE_FRONTEND_DEV_PORT:-5173}"
 BACKEND_TARGET="http://127.0.0.1:${API_PORT}"
@@ -26,13 +27,15 @@ prepare_fixture() {
     uv run openscience frontend-dev prepare \
       --state-root "${STATE_ROOT}" \
       --api-key "${API_KEY}" \
-      --artifact-sha "${ARTIFACT_SHA}"
+      --artifact-sha "${ARTIFACT_SHA}" \
+      --profile "${PROFILE}"
 }
 
 print_env() {
   printf 'export OPENSCIENCE_STATE_ROOT=%q\n' "${STATE_ROOT}"
   printf 'export OPENSCIENCE_DOMAIN_MODEL_MODE=%q\n' "v2"
   printf 'export OPENSCIENCE_DOMAIN_ARTIFACT_SHA=%q\n' "${ARTIFACT_SHA}"
+  printf 'export OPENSCIENCE_FRONTEND_DEV_PROFILE=%q\n' "${PROFILE}"
   printf 'export OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED=%q\n' "false"
   printf 'export OPENSCIENCE_JWT_SECRET=%q\n' "frontend-dev-jwt-secret-not-for-production"
   printf 'export OPENSCIENCE_WEBUI_API_KEY=%q\n' "${API_KEY}"
@@ -130,6 +133,7 @@ Environment overrides:
   OPENSCIENCE_FRONTEND_DEV_STATE_ROOT
   OPENSCIENCE_FRONTEND_DEV_API_KEY
   OPENSCIENCE_FRONTEND_DEV_ARTIFACT_SHA
+  OPENSCIENCE_FRONTEND_DEV_PROFILE
   OPENSCIENCE_FRONTEND_DEV_API_PORT
   OPENSCIENCE_FRONTEND_DEV_PORT
 

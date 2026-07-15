@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from contextlib import closing
 from dataclasses import asdict, dataclass
@@ -11,7 +12,12 @@ from ainrf.auth.service import AuthService
 from ainrf.backup import BackupService
 from ainrf.db import connect
 from ainrf.db.connection import atomic_write_json
-from ainrf.domain import DomainService, ProjectContextService
+from ainrf.development.frontend_profiles import (
+    FRONTEND_DEV_FIXTURE_VERSION,
+    FrontendDevProfile,
+    normalize_frontend_dev_profile,
+    seed_frontend_dev_profile,
+)
 from ainrf.domain_control import (
     CUTOVER_REQUIRED_PARTICIPANT_TYPES,
     DomainCutoverController,
@@ -23,8 +29,7 @@ from ainrf.domain_migration import DomainImporter, DomainReconciliationService
 
 
 _ACTOR_ID = "frontend-dev-fixture"
-_API_USER: dict[str, object] = {"id": "api-key-user", "role": "user"}
-_ADMIN: dict[str, object] = {"id": "frontend-dev-admin", "role": "admin"}
+_PROFILE_MARKER_NAME = "frontend-dev-fixture.json"
 
 DEFAULT_FRONTEND_DEV_API_KEY = "openscience-frontend-dev"
 DEFAULT_FRONTEND_DEV_ARTIFACT_SHA = sha256(b"openscience-frontend-dev-fixture-v1").hexdigest()
@@ -34,13 +39,16 @@ DEFAULT_FRONTEND_DEV_ARTIFACT_SHA = sha256(b"openscience-frontend-dev-fixture-v1
 class FrontendDevFixture:
     state_root: str
     artifact_sha: str
+    profile: str
+    fixture_version: int
     api_user_id: str
-    project_id: str
-    primary_workspace_id: str
-    blocked_workspace_id: str
-    environment_id: str
+    project_id: str | None
+    primary_workspace_id: str | None
+    blocked_workspace_id: str | None
+    environment_id: str | None
+    counts: dict[str, int]
 
-    def as_dict(self) -> dict[str, str]:
+    def as_dict(self) -> dict[str, object]:
         return asdict(self)
 
 
@@ -149,128 +157,81 @@ def _prepare_cutover(state_root: Path, artifact_sha: str) -> None:
         maintenance.exit(actor_id=_ACTOR_ID)
 
 
-def _seed_fixture(state_root: Path, artifact_sha: str, api_key: str) -> FrontendDevFixture:
+def _profile_marker_path(state_root: Path) -> Path:
+    return state_root / "runtime" / _PROFILE_MARKER_NAME
+
+
+def _validate_existing_profile(
+    state_root: Path,
+    *,
+    artifact_sha: str,
+    profile: FrontendDevProfile,
+) -> None:
+    marker_path = _profile_marker_path(state_root)
+    if not marker_path.is_file():
+        raise DomainCutoverError(
+            "existing frontend fixture predates profile versioning; reset the managed fixture"
+        )
+    payload = atomic_read_json(marker_path)
+    if payload.get("fixture_version") != FRONTEND_DEV_FIXTURE_VERSION:
+        raise DomainCutoverError("frontend fixture version changed; reset the managed fixture")
+    if payload.get("profile") != profile.value:
+        raise DomainCutoverError("existing frontend fixture uses a different profile")
+    if payload.get("artifact_sha") != artifact_sha:
+        raise DomainCutoverError(
+            "existing frontend fixture uses a different immutable artifact SHA"
+        )
+
+
+def atomic_read_json(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise DomainCutoverError("frontend fixture profile marker is malformed")
+    return {str(key): value for key, value in payload.items()}
+
+
+def _seed_fixture(
+    state_root: Path,
+    artifact_sha: str,
+    api_key: str,
+    profile: FrontendDevProfile,
+) -> FrontendDevFixture:
     atomic_write_json(state_root / "config.json", {"api_key_hashes": [hash_api_key(api_key)]})
     auth = AuthService(state_root=state_root)
     auth.initialize()
-    domain = DomainService(state_root, artifact_sha=artifact_sha)
-
-    workspace_root = state_root.parent / f"{state_root.name}-workspaces"
-    primary_path = workspace_root / "primary"
-    blocked_path = workspace_root / "blocked"
-    primary_path.mkdir(parents=True, exist_ok=True)
-    blocked_path.mkdir(parents=True, exist_ok=True)
-
-    environment = domain.create_environment(
-        _ADMIN,
-        alias="frontend-dev-local",
-        display_name="Frontend Dev Local",
-        description="Synthetic local Environment for frontend implementation",
-        connection={"host": "127.0.0.1", "default_workdir": str(workspace_root)},
-        idempotency_key="frontend-dev-environment",
+    seeded = seed_frontend_dev_profile(
+        state_root,
+        artifact_sha=artifact_sha,
+        profile=profile,
     )
-    environment_id = str(environment["environment_id"])
-    auth.grant_environment(
-        env_id=environment_id,
-        user_id="api-key-user",
-        max_tasks=None,
-        granted_by=_ACTOR_ID,
-        reason="frontend development fixture",
-    )
-
-    project_id = "project-frontend-dev"
-    primary_workspace = domain.create_workspace(
-        _API_USER,
-        environment_id=environment_id,
-        canonical_path=str(primary_path),
-        label="Primary frontend workspace",
-        description="Executable synthetic Workspace",
-        workspace_prompt="Use this synthetic Workspace for frontend development.",
-        idempotency_key="frontend-dev-primary-workspace",
-    )
-    primary_workspace_id = str(primary_workspace["workspace_id"])
-    domain.attach_workspace(
-        project_id,
-        primary_workspace_id,
-        _API_USER,
-        idempotency_key="frontend-dev-primary-link",
-    )
-    domain.set_primary_workspace(
-        project_id,
-        primary_workspace_id,
-        _API_USER,
-        idempotency_key="frontend-dev-primary-selection",
-    )
-
-    blocked_environment = domain.create_environment(
-        _ADMIN,
-        alias="frontend-dev-blocked",
-        display_name="Frontend Dev Blocked",
-        description="Synthetic Environment used to exercise permission states",
-        connection={"host": "127.0.0.1", "default_workdir": str(blocked_path)},
-        idempotency_key="frontend-dev-blocked-environment",
-    )
-    blocked_environment_id = str(blocked_environment["environment_id"])
-    auth.grant_environment(
-        env_id=blocked_environment_id,
-        user_id="api-key-user",
-        max_tasks=None,
-        granted_by=_ACTOR_ID,
-        reason="create the blocked frontend fixture Workspace",
-    )
-    blocked_workspace = domain.create_workspace(
-        _API_USER,
-        environment_id=blocked_environment_id,
-        canonical_path=str(blocked_path),
-        label="Unavailable frontend workspace",
-        description="Synthetic Workspace with a revoked Environment grant",
-        idempotency_key="frontend-dev-blocked-workspace",
-    )
-    blocked_workspace_id = str(blocked_workspace["workspace_id"])
-    domain.attach_workspace(
-        project_id,
-        blocked_workspace_id,
-        _API_USER,
-        idempotency_key="frontend-dev-blocked-link",
-    )
-    auth.revoke_environment(
-        blocked_environment_id,
-        "api-key-user",
-        revoked_by=_ACTOR_ID,
-        reason="exercise the linked-but-not-executable frontend state",
-    )
-
-    domain.create_project(
-        _API_USER,
-        name="Frontend Needs Workspace",
-        description="Synthetic attention state without a Workspace",
-        idempotency_key="frontend-dev-empty-project",
-    )
-    context = ProjectContextService(state_root, artifact_sha=artifact_sha)
-    context.save_draft(
-        project_id,
-        "Synthetic Project Context for the frontend phase worktree.",
-        _API_USER,
-        idempotency_key="frontend-dev-context-draft",
-    )
-    context.publish(
-        project_id,
-        _API_USER,
-        idempotency_key="frontend-dev-context-publish",
+    atomic_write_json(
+        _profile_marker_path(state_root),
+        {
+            "artifact_sha": artifact_sha,
+            "fixture_version": FRONTEND_DEV_FIXTURE_VERSION,
+            "profile": profile.value,
+        },
     )
     return FrontendDevFixture(
         state_root=str(state_root),
         artifact_sha=artifact_sha,
+        profile=profile.value,
+        fixture_version=FRONTEND_DEV_FIXTURE_VERSION,
         api_user_id="api-key-user",
-        project_id=project_id,
-        primary_workspace_id=primary_workspace_id,
-        blocked_workspace_id=blocked_workspace_id,
-        environment_id=environment_id,
+        project_id=seeded.project_id,
+        primary_workspace_id=seeded.primary_workspace_id,
+        blocked_workspace_id=seeded.blocked_workspace_id,
+        environment_id=seeded.environment_id,
+        counts=seeded.counts,
     )
 
 
 def prepare_frontend_dev_fixture(
-    state_root: Path, *, artifact_sha: str, api_key: str
+    state_root: Path,
+    *,
+    artifact_sha: str,
+    api_key: str,
+    profile: FrontendDevProfile | str = FrontendDevProfile.FULL,
 ) -> FrontendDevFixture:
     """Prepare an isolated, synthetic, committed-v2 state for frontend work."""
 
@@ -278,6 +239,7 @@ def prepare_frontend_dev_fixture(
         raise ValueError("api_key is required")
     resolved_state_root = _assert_safe_state_root(state_root)
     normalized_artifact_sha = _validate_artifact_sha(artifact_sha)
+    normalized_profile = normalize_frontend_dev_profile(profile)
     state_exists = resolved_state_root.exists() and any(resolved_state_root.iterdir())
     resolved_state_root.mkdir(parents=True, exist_ok=True)
     if state_exists:
@@ -290,6 +252,16 @@ def prepare_frontend_dev_fixture(
             raise DomainCutoverError(
                 "existing frontend fixture uses a different immutable artifact SHA"
             )
+        _validate_existing_profile(
+            resolved_state_root,
+            artifact_sha=normalized_artifact_sha,
+            profile=normalized_profile,
+        )
     else:
         _prepare_cutover(resolved_state_root, normalized_artifact_sha)
-    return _seed_fixture(resolved_state_root, normalized_artifact_sha, api_key.strip())
+    return _seed_fixture(
+        resolved_state_root,
+        normalized_artifact_sha,
+        api_key.strip(),
+        normalized_profile,
+    )
