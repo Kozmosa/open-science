@@ -23,7 +23,7 @@ export function CommandPalette({ open, onOpenChange, routes }: CommandPalettePro
   const navigate = useNavigate();
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'p') {
         event.preventDefault();
         onOpenChange(!open);
       }

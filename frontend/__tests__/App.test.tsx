@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
@@ -255,5 +255,20 @@ describe('App routes', () => {
     await user.type(screen.getByPlaceholderText('Search pages and actions…'), 'browse files');
     await user.click(screen.getByText('Browse Files'));
     expect(await screen.findByTestId('workspace-browser-page')).toBeInTheDocument();
+  });
+
+  it('opens the command palette with Ctrl/Cmd+Shift+P instead of Ctrl/Cmd+K', async () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    expect(screen.queryByPlaceholderText('Search pages and actions…')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'P', metaKey: true, shiftKey: true });
+    expect(await screen.findByPlaceholderText('Search pages and actions…')).toBeInTheDocument();
   });
 });

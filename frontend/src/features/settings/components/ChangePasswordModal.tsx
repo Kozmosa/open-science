@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Button, Input } from '@design-system';
+import { Button, Dialog, Input } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
 import { changePassword } from '@/shared/api';
@@ -43,16 +43,9 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
-      <form
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={handleSubmit}
-        className="bg-[var(--surface)] p-6 rounded-2xl border border-[var(--border)] shadow-lg w-full max-w-sm"
-      >
-        <h2 className="text-lg font-semibold mb-4">{t('auth.changePassword')}</h2>
+    <Dialog isOpen={open} onClose={handleClose} title={t('auth.changePassword')} size="sm">
+      <form onSubmit={handleSubmit}>
         {error && <p className="mb-3 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-1">
@@ -88,7 +81,6 @@ export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose:
           </div>
         </div>
       </form>
-    </div>
+    </Dialog>
   );
 }
-
