@@ -59,7 +59,7 @@ describe('TaskHeaderBar', () => {
       expect(updateTask).toHaveBeenCalledWith(
         'task-1',
         { title: 'Updated title' },
-        expect.stringMatching(/^task\.rename\.task-1/),
+        expect.stringMatching(/^task\.rename:/),
       );
     });
   });

@@ -72,7 +72,13 @@ function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen bg-[var(--osci-color-canvas)] text-[var(--osci-color-text)]">
-      <Sidebar routes={navigationRoutes} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
+      <Sidebar
+        routes={navigationRoutes}
+        collapsed={sidebarCollapsed}
+        onCollapsedChange={setSidebarCollapsed}
+        user={user}
+        onLogout={() => setShowLogoutConfirm(true)}
+      />
       <div className="flex h-screen min-w-0 flex-1 flex-col">
         <TopBar
           user={user}

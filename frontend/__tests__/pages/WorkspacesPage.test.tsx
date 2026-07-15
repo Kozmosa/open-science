@@ -182,6 +182,6 @@ describe('WorkspacesPage', () => {
     expect(screen.getByText(/does not delete the directory or any files on disk/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Unregister' }));
 
-    await waitFor(() => expect(mockUnregisterWorkspace).toHaveBeenCalledWith('workspace-1', expect.stringContaining('workspace.unregister.workspace-1')));
+    await waitFor(() => expect(mockUnregisterWorkspace).toHaveBeenCalledWith('workspace-1', expect.stringMatching(/^workspace\.unregister:/)));
   });
 });

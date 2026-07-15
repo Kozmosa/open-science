@@ -19,6 +19,8 @@ interface TaskHeaderBarProps {
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
   onToggleMetadataSidebar?: () => void;
+  canRename?: boolean;
+  mutationDisabledReason?: string | null;
   actions?: ReactNode;
 }
 
@@ -32,6 +34,8 @@ export default function TaskHeaderBar({
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
   onToggleMetadataSidebar,
+  canRename = true,
+  mutationDisabledReason = null,
   actions,
 }: TaskHeaderBarProps) {
   const t = useT();
@@ -54,10 +58,11 @@ export default function TaskHeaderBar({
   });
 
   const startEdit = useCallback(() => {
+    if (!canRename) return;
     setEditTitle(task.title);
     setIsEditing(true);
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [task.title]);
+  }, [canRename, task.title]);
 
   const commitTitle = useCallback(() => {
     setIsEditing(false);
@@ -97,11 +102,11 @@ export default function TaskHeaderBar({
           />
         ) : (
           <h1
-            className="min-w-0 max-w-md cursor-pointer truncate text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--bg-secondary)]"
-            title={task.title}
-            onClick={startEdit}
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') startEdit(); }}
+            className={`min-w-0 max-w-md truncate text-sm font-semibold text-[var(--text)] transition ${canRename ? 'cursor-pointer hover:bg-[var(--bg-secondary)]' : ''}`}
+            title={mutationDisabledReason ?? task.title}
+            onClick={canRename ? startEdit : undefined}
+            tabIndex={canRename ? 0 : undefined}
+            onKeyDown={canRename ? (e) => { if (e.key === 'Enter') startEdit(); } : undefined}
           >
             {task.title}
           </h1>

@@ -260,12 +260,12 @@ export const createWorkspace = (payload: WorkspaceCreateRequest): Promise<Worksp
 export const updateWorkspace = (
   workspaceId: string,
   payload: WorkspaceUpdateRequest,
-  idempotencyKey?: string,
+  idempotencyKey: string,
 ): Promise<WorkspaceRecord> =>
   USE_MOCK
     ? Promise.resolve(mockUpdateWorkspace(workspaceId, payload))
     : api.patch<WorkspaceRecord>(`/workspaces/${workspaceId}`, payload, {
-        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        headers: { 'Idempotency-Key': idempotencyKey },
       });
 
 export const deleteWorkspace = (workspaceId: string): Promise<void> =>
@@ -320,19 +320,19 @@ export const getTaskTokenUsageSummary = (params: { includeArchived?: boolean } =
 
 export const createTask = (
   payload: TaskCreatePayload,
-  idempotencyKey?: string,
+  idempotencyKey: string,
 ): Promise<TaskSummary> =>
   USE_MOCK
     ? Promise.resolve(mockCreateTask(payload))
     : api.post<TaskSummary>('/tasks', payload, {
-        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        headers: { 'Idempotency-Key': idempotencyKey },
       });
 
-export const archiveTask = (taskId: string, idempotencyKey?: string): Promise<TaskSummary> =>
+export const archiveTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
   USE_MOCK
     ? Promise.resolve(mockArchiveTask(taskId))
     : api.post<TaskSummary>(`/tasks/${taskId}/archive`, {}, {
-        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        headers: { 'Idempotency-Key': idempotencyKey },
       });
 
 export const unarchiveTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
@@ -343,16 +343,16 @@ export const unarchiveTask = (taskId: string, idempotencyKey: string): Promise<T
 export const deleteTask = (taskId: string): Promise<void> =>
   USE_MOCK ? mockDeleteTask(taskId) : api.delete<void>(`/tasks/${taskId}/permanent`);
 
-export const cancelTask = (taskId: string, idempotencyKey?: string): Promise<TaskSummary> =>
+export const cancelTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
   USE_MOCK
     ? Promise.resolve(mockCancelTask(taskId))
     : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {}, {
-        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        headers: { 'Idempotency-Key': idempotencyKey },
       });
 
-export const retryTask = (taskId: string, idempotencyKey?: string): Promise<TaskRetryResponse> =>
+export const retryTask = (taskId: string, idempotencyKey: string): Promise<TaskRetryResponse> =>
   api.post<TaskRetryResponse>(`/tasks/${taskId}/retry`, {}, {
-    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    headers: { 'Idempotency-Key': idempotencyKey },
   });
 
 export const moveTask = (
@@ -379,9 +379,9 @@ export const updateTaskProject = (taskId: string, projectId: string): Promise<Ta
 export const updateTask = (
   taskId: string,
   data: { title?: string },
-  idempotencyKey?: string,
+  idempotencyKey: string,
 ): Promise<TaskSummary> => api.patch<TaskSummary>(`/tasks/${taskId}`, data, {
-  headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  headers: { 'Idempotency-Key': idempotencyKey },
 });
 
 export const getProjectTasks = (
@@ -407,12 +407,12 @@ export const getTaskEdges = (projectId: string): Promise<TaskEdgeListResponse> =
 export const createTaskEdge = (
   projectId: string,
   payload: TaskEdgeCreateRequest,
-  idempotencyKey?: string,
+  idempotencyKey: string,
 ): Promise<TaskEdge> =>
   USE_MOCK
     ? Promise.resolve(mockCreateTaskEdge(projectId, payload))
     : api.post<TaskEdge>(`/projects/${projectId}/task-edges`, payload, {
-        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        headers: { 'Idempotency-Key': idempotencyKey },
       });
 
 export const deleteTaskEdge = (edgeId: string): Promise<void> =>
@@ -438,14 +438,20 @@ export const buildTaskStreamUrl = (taskId: string, afterSeq: number = 0): string
   return `${API_BASE}/tasks/${taskId}/stream?${search.toString()}`;
 };
 
-export const pauseTask = (taskId: string): Promise<TaskSummary> =>
-  api.post<TaskSummary>(`/tasks/${taskId}/pause`, {});
+export const pauseTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
+  api.post<TaskSummary>(`/tasks/${taskId}/pause`, {}, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
-export const resumeTask = (taskId: string): Promise<TaskSummary> =>
-  api.post<TaskSummary>(`/tasks/${taskId}/resume`, {});
+export const resumeTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
+  api.post<TaskSummary>(`/tasks/${taskId}/resume`, {}, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
-export const sendTaskPrompt = (taskId: string, prompt: string): Promise<{ task_id: string; sequence: number }> =>
-  api.post<{ task_id: string; sequence: number }>(`/tasks/${taskId}/prompt`, { prompt });
+export const sendTaskPrompt = (taskId: string, prompt: string, idempotencyKey: string): Promise<{ task_id: string; sequence: number }> =>
+  api.post<{ task_id: string; sequence: number }>(`/tasks/${taskId}/continue`, { prompt }, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const getTaskMessages = (taskId: string, afterSeq: number = 0, limit: number = 100): Promise<TaskMessagesResponse> =>
   api.get<TaskMessagesResponse>(`/tasks/${taskId}/messages?after_seq=${afterSeq}&limit=${limit}`);
@@ -496,11 +502,11 @@ export const createProject = (payload: ProjectCreateRequest, idempotencyKey?: st
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
   });
 
-export const updateProject = (projectId: string, payload: ProjectUpdateRequest, idempotencyKey?: string): Promise<ProjectRecord> =>
+export const updateProject = (projectId: string, payload: ProjectUpdateRequest, idempotencyKey: string): Promise<ProjectRecord> =>
   USE_MOCK
     ? Promise.resolve(mockUpdateProject(projectId, payload))
     : api.patch<ProjectRecord>(`/projects/${projectId}`, payload, {
-        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        headers: { 'Idempotency-Key': idempotencyKey },
       });
 
 export const deleteProject = (projectId: string): Promise<void> =>

@@ -24,13 +24,13 @@ export function TopBar({ user, taskStatusSummary, onOpenNavigation, onOpenComman
         <Button variant="secondary" size="sm" onClick={onOpenCommandPalette} aria-label={t('layout.openCommandPalette')} className="gap-2">
           <Search aria-hidden="true" size={15} />
           <span className="hidden sm:inline">{t('layout.commandPlaceholder')}</span>
-          <kbd className="hidden rounded border border-[var(--osci-color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--osci-color-text-muted)] lg:inline">⌘K</kbd>
+          <kbd className="hidden rounded border border-[var(--osci-color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--osci-color-text-muted)] lg:inline">Ctrl/⌘+Shift+P</kbd>
         </Button>
       </div>
       <div className="flex items-center gap-2">
         <p className="hidden max-w-80 truncate text-xs font-medium text-[var(--osci-color-text-secondary)] lg:block">{taskStatusSummary}</p>
         <LocaleSwitcher />
-        <AccountMenu user={user} onLogout={onLogout} />
+        <div className="md:hidden"><AccountMenu user={user} onLogout={onLogout} /></div>
       </div>
     </header>
   );

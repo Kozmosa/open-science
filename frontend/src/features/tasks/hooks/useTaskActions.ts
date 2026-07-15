@@ -1,8 +1,10 @@
+import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { pauseTask, resumeTask, sendTaskPrompt } from '@/shared/api';
 import { useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error) return error.message;
@@ -14,10 +16,17 @@ export function useTaskActions(taskId: string | null) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const t = useT();
+  const pauseKeyManager = useRef(new IdempotencyKeyManager('task.pause')).current;
+  const resumeKeyManager = useRef(new IdempotencyKeyManager('task.resume')).current;
+  const promptKeyManager = useRef(new IdempotencyKeyManager('task.continue')).current;
 
   const pause = useMutation({
-    mutationFn: () => pauseTask(taskId!),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const key = pauseKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await pauseTask(taskId!, key), key };
+    },
+    onSuccess: ({ key }) => {
+      pauseKeyManager.markSucceeded(key);
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });
@@ -28,8 +37,12 @@ export function useTaskActions(taskId: string | null) {
   });
 
   const resume = useMutation({
-    mutationFn: () => resumeTask(taskId!),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const key = resumeKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await resumeTask(taskId!, key), key };
+    },
+    onSuccess: ({ key }) => {
+      resumeKeyManager.markSucceeded(key);
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });
@@ -40,8 +53,12 @@ export function useTaskActions(taskId: string | null) {
   });
 
   const sendPrompt = useMutation({
-    mutationFn: (prompt: string) => sendTaskPrompt(taskId!, prompt),
-    onSuccess: () => {
+    mutationFn: async (prompt: string) => {
+      const key = promptKeyManager.keyFor(semanticMutationValue({ taskId, prompt }));
+      return { result: await sendTaskPrompt(taskId!, prompt, key), key };
+    },
+    onSuccess: ({ key }) => {
+      promptKeyManager.markSucceeded(key);
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });

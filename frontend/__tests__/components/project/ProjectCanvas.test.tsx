@@ -105,6 +105,9 @@ describe('ProjectCanvas', () => {
         onNodeClick={vi.fn()}
         onNewTask={vi.fn()}
         onResetLayout={vi.fn()}
+        canCreateTask={false}
+        canEditRelationships={false}
+        canMoveTask={() => false}
       />
     );
 
@@ -122,6 +125,9 @@ describe('ProjectCanvas', () => {
         onNewTask={vi.fn()}
         onResetLayout={vi.fn()}
         onMoveTaskToProject={vi.fn()}
+        canCreateTask
+        canEditRelationships
+        canMoveTask={() => true}
       />
     );
 
@@ -141,6 +147,9 @@ describe('ProjectCanvas', () => {
         onNewTask={onNewTask}
         onResetLayout={vi.fn()}
         onMoveTaskToProject={vi.fn()}
+        canCreateTask
+        canEditRelationships
+        canMoveTask={() => true}
       />
     );
 
@@ -160,6 +169,9 @@ describe('ProjectCanvas', () => {
         onNewTask={vi.fn()}
         onResetLayout={vi.fn()}
         onMoveTaskToProject={vi.fn()}
+        canCreateTask
+        canEditRelationships
+        canMoveTask={() => true}
       />
     );
 
@@ -187,6 +199,9 @@ describe('ProjectCanvas', () => {
         onNewTask={vi.fn()}
         onResetLayout={vi.fn()}
         onMoveTaskToProject={vi.fn()}
+        canCreateTask
+        canEditRelationships
+        canMoveTask={() => true}
       />
     );
 

@@ -21,6 +21,8 @@ interface TaskDetailPageProps {
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
   onToggleMetadataSidebar?: () => void;
+  canMutate?: boolean;
+  mutationDisabledReason?: string | null;
   headerActions?: ReactNode;
 }
 
@@ -37,6 +39,8 @@ export default function TaskDetailPage({
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
   onToggleMetadataSidebar,
+  canMutate = false,
+  mutationDisabledReason = null,
   headerActions,
 }: TaskDetailPageProps) {
   const t = useT();
@@ -65,13 +69,15 @@ export default function TaskDetailPage({
 
   const engine = selectedTask.harness_engine ?? selectedTask.execution_engine ?? '';
   const showInput =
+    canMutate &&
+    !selectedTask.archived_at &&
     interactiveEngines.has(engine) &&
     (selectedTask.status === 'running' ||
       selectedTask.status === 'succeeded' ||
       selectedTask.status === 'paused' ||
       selectedTask.status === 'failed');
-  const showPause = selectedTask.status === 'running' && interactiveEngines.has(engine);
-  const showResume = selectedTask.status === 'paused' && interactiveEngines.has(engine);
+  const showPause = canMutate && selectedTask.status === 'running' && interactiveEngines.has(engine);
+  const showResume = canMutate && selectedTask.status === 'paused' && interactiveEngines.has(engine);
 
   return (
     <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
@@ -85,6 +91,8 @@ export default function TaskDetailPage({
         metadataSidebarOpen={metadataSidebarOpen}
         onToggleTaskSidebar={onToggleTaskSidebar}
         onToggleMetadataSidebar={onToggleMetadataSidebar}
+        canRename={canMutate}
+        mutationDisabledReason={mutationDisabledReason}
         actions={headerActions}
       />
 
@@ -118,6 +126,11 @@ export default function TaskDetailPage({
           <ChatInputBar onSubmit={actions.sendPrompt} disabled={actions.isPending} />
         </div>
       )}
+      {!canMutate && mutationDisabledReason ? (
+        <p className="shrink-0 border-t border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] px-4 py-2 text-xs text-[var(--osci-color-text-muted)]">
+          {mutationDisabledReason}
+        </p>
+      ) : null}
     </section>
   );
 }

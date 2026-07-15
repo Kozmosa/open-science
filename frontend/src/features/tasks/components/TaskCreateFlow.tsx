@@ -103,7 +103,14 @@ function TaskCreateFlowContent({
     ? workspaces.find((workspace) => workspace.workspace_id === lockedWorkspaceId) ?? null
     : null;
   const initialProjectId = lockedProjectId
-    ?? lockedWorkspace?.project_links.find((link) => link.link_status === 'active')?.project_id
+    ?? lockedWorkspace?.project_links.find((link) =>
+      link.project_status === 'active'
+      && link.link_status === 'active'
+      && link.can_execute
+      && projects.some((project) =>
+        project.project_id === link.project_id && project.permissions.can_create_task,
+      ),
+    )?.project_id
     ?? projects.find((project) => project.permissions.can_create_task)?.project_id
     ?? projects[0]?.project_id
     ?? '';
@@ -133,6 +140,9 @@ function TaskCreateFlowContent({
   const selectedWorkspace = workspaces.find(
     (workspace) => workspace.workspace_id === effectiveWorkspaceId,
   ) ?? null;
+  const selectedWorkspaceIsExecutable = availableWorkspaces.some(
+    (workspace) => workspace.workspace_id === effectiveWorkspaceId,
+  );
   const selectedProject = projects.find(
     (project) => project.project_id === effectiveProjectId,
   ) ?? null;
@@ -184,7 +194,8 @@ function TaskCreateFlowContent({
   const noExecutableWorkspace = effectiveProjectId !== '' && availableWorkspaces.length === 0;
   const canSubmit = capability.available
     && selectedProject?.permissions.can_create_task === true
-    && effectiveWorkspaceId !== ''
+    && selectedWorkspace !== null
+    && selectedWorkspaceIsExecutable
     && (source === 'literature' || prompt.trim() !== '')
     && !mutation.isPending;
 

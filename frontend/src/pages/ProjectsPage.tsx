@@ -43,6 +43,7 @@ import {
 } from '@features/domain';
 import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 import { ProjectContextConsole, ProjectSettingsConsole } from '@features/projects';
+import { useAuth } from '@features/auth';
 
 type ProjectTab = 'overview' | 'tasks' | 'workspaces' | 'context' | 'settings';
 type TaskView = 'list' | 'graph';
@@ -67,6 +68,7 @@ function workspaceLink(workspace: DomainWorkspaceProjection, projectId: string) 
 
 export default function ProjectsPage() {
   const t = useT();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -123,6 +125,18 @@ export default function ProjectsPage() {
     ? workspaces.filter((workspace) => !workspaceLink(workspace, selectedProject.project_id) && workspace.status === 'active')
     : [];
   const canCreateTask = Boolean(selectedProject?.permissions.can_create_task && selectedProject.executable_workspace_count > 0 && selectedProject.status === 'active');
+  const eligibleTargetProjects = projects.filter(
+    (project) => project.status === 'active' && project.permissions.can_create_task,
+  );
+  const canMoveTask = (taskId: string): boolean => {
+    const task = tasks.find((candidate) => candidate.task_id === taskId);
+    return Boolean(
+      task
+      && user
+      && selectedProject?.status === 'active'
+      && (user.role === 'admin' || task.owner_user_id === user.id),
+    );
+  };
 
   const createKey = useIdempotencyKey('project.create', { projectName, projectDescription });
   const attachKey = useIdempotencyKey('project.workspace.attach', { projectId, attachWorkspaceId });
@@ -177,6 +191,10 @@ export default function ProjectsPage() {
   });
 
   const moveTaskToProject = async (taskId: string, targetProjectId: string) => {
+    if (!canMoveTask(taskId)) throw new Error('Only the Task owner or an administrator can move this Task');
+    if (!eligibleTargetProjects.some((project) => project.project_id === targetProjectId)) {
+      throw new Error('The target Project is not available for Task creation');
+    }
     const targetContext = await getDomainProjectContext(targetProjectId);
     const contextVersionId = targetContext.active_version?.context_version_id;
     if (!contextVersionId) throw new Error('Target Project has no active Context Version');
@@ -227,7 +245,7 @@ export default function ProjectsPage() {
                 <TabsContent value="overview"><Card><CardBody className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Active Tasks" value={selectedProject.active_task_count} /><Metric label="Running Tasks" value={selectedProject.running_task_count} /><Metric label="Workspaces" value={selectedProject.workspace_count} /><Metric label="Executable" value={selectedProject.executable_workspace_count} /><div className="sm:col-span-2 xl:col-span-4"><p className="text-sm font-medium text-[var(--osci-color-text)]">Attention</p><p className="mt-1 text-sm text-[var(--osci-color-text-secondary)]">{selectedProject.attention_reasons.join(', ') || 'No action required.'}</p></div></CardBody></Card></TabsContent>
                 <TabsContent value="tasks">
                   <ViewToolbar><div className="flex gap-2"><Button size="sm" variant={view === 'list' ? 'primary' : 'secondary'} onClick={() => setRouteState({ view: 'list' })}>List</Button><Button size="sm" variant={view === 'graph' ? 'primary' : 'secondary'} onClick={() => setRouteState({ view: 'graph' })}>Relationship graph</Button></div></ViewToolbar>
-                  {view === 'graph' ? <div className="mt-3 h-[620px] overflow-hidden rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)]"><ProjectCanvas key={`${projectId}:${layoutVersion}`} projectId={projectId!} tasks={tasks} edges={edges} projects={projects.map(asCanvasProject)} onNodeClick={(taskId) => navigate(`/tasks?task=${encodeURIComponent(taskId)}`)} onNewTask={() => setTaskCreateOpen(true)} onResetLayout={() => { localStorage.removeItem(`openscience:project-layout:${projectId}`); setLayoutVersion((value) => value + 1); }} onMoveTaskToProject={(taskId, targetProjectId) => { void moveTaskToProject(taskId, targetProjectId); }} /></div> : <Card className="mt-3"><CardBody className="divide-y divide-[var(--osci-color-border-subtle)] p-0">{tasks.map((task) => <button key={task.task_id} type="button" onClick={() => navigate(`/tasks?task=${encodeURIComponent(task.task_id)}`)} className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-[var(--osci-color-surface-subtle)]"><div><p className="font-medium text-[var(--osci-color-text)]">{task.title}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{task.task_id}</p></div><StatusBadge tone={task.status === 'running' ? 'success' : task.status === 'failed' ? 'danger' : 'neutral'}>{task.status}</StatusBadge></button>)}{tasks.length === 0 ? <EmptyState message="No Tasks in this Project." /> : null}</CardBody></Card>}
+                  {view === 'graph' ? <div className="mt-3 h-[620px] overflow-hidden rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)]"><ProjectCanvas key={`${projectId}:${layoutVersion}`} projectId={projectId!} tasks={tasks} edges={edges} projects={eligibleTargetProjects.map(asCanvasProject)} onNodeClick={(taskId) => navigate(`/tasks?task=${encodeURIComponent(taskId)}`)} onNewTask={() => setTaskCreateOpen(true)} onResetLayout={() => { localStorage.removeItem(`openscience:project-layout:${projectId}`); setLayoutVersion((value) => value + 1); }} onMoveTaskToProject={(taskId, targetProjectId) => { void moveTaskToProject(taskId, targetProjectId); }} canCreateTask={canCreateTask} canEditRelationships={selectedProject.status === 'active' && selectedProject.permissions.can_edit} canMoveTask={canMoveTask} /></div> : <Card className="mt-3"><CardBody className="divide-y divide-[var(--osci-color-border-subtle)] p-0">{tasks.map((task) => <button key={task.task_id} type="button" onClick={() => navigate(`/tasks?task=${encodeURIComponent(task.task_id)}`)} className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-[var(--osci-color-surface-subtle)]"><div><p className="font-medium text-[var(--osci-color-text)]">{task.title}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{task.task_id}</p></div><StatusBadge tone={task.status === 'running' ? 'success' : task.status === 'failed' ? 'danger' : 'neutral'}>{task.status}</StatusBadge></button>)}{tasks.length === 0 ? <EmptyState message="No Tasks in this Project." /> : null}</CardBody></Card>}
                 </TabsContent>
                 <TabsContent value="workspaces"><Card><CardBody className="space-y-4 p-5">
                   {selectedProject.permissions.can_edit ? <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); attachMutation.mutate(); }}><NativeSelect aria-label="Workspace to attach" value={attachWorkspaceId} onChange={(event) => setAttachWorkspaceId(event.target.value)} className="min-w-64"><option value="">Select a Workspace to attach</option>{attachableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.label}</option>)}</NativeSelect><Button type="submit" disabled={!attachWorkspaceId} isLoading={attachMutation.isPending}>Attach</Button></form> : null}

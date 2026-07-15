@@ -31,7 +31,7 @@ describe('api endpoints', () => {
       environment_id: 'env-localhost',
       task_profile: 'claude-code',
       task_input: 'Implement harness',
-    });
+    }, 'task.create:test');
     const tasks = await getTasks();
     const detail = await getTask(created.task_id);
     const output = await getTaskOutput(created.task_id);
@@ -54,6 +54,31 @@ describe('api endpoints', () => {
     expect(buildTaskStreamUrl('task-1', 7)).toBe(
       '/api/tasks/task-1/stream?after_seq=7&api_key=stream-secret'
     );
+  });
+
+  it('sends stable idempotency keys for Task pause, resume, and continuation', async () => {
+    vi.stubEnv('VITE_USE_MOCK', 'false');
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ task_id: 'task-1', status: 'running', sequence: 1 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { pauseTask, resumeTask, sendTaskPrompt } = await import('../../../src/shared/api/endpoints');
+    await pauseTask('task-1', 'task.pause:test');
+    await resumeTask('task-1', 'task.resume:test');
+    await sendTaskPrompt('task-1', 'Continue the analysis', 'task.continue:test');
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/tasks/task-1/pause',
+      '/api/tasks/task-1/resume',
+      '/api/tasks/task-1/continue',
+    ]);
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.pause:test');
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.resume:test');
+    expect((fetchMock.mock.calls[2]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.continue:test');
   });
 
   it('uses the real api client when VITE_USE_MOCK is false', async () => {
@@ -121,7 +146,7 @@ describe('api endpoints', () => {
       description: 'Updated',
       default_workdir: '/workspace/updated',
       workspace_prompt: 'Updated prompt',
-    });
+    }, 'workspace.update:test');
     await deleteWorkspace('workspace-new');
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -150,6 +175,7 @@ describe('api endpoints', () => {
         }),
       })
     );
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('workspace.update:test');
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       '/api/workspaces/workspace-new',

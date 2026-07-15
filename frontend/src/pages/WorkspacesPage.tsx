@@ -267,7 +267,7 @@ function WorkspacesPage() {
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
-                        onClick={() => navigate(`/files?environment_id=${encodeURIComponent(selectedWorkspace.environment.environment_id)}&workspace_id=${encodeURIComponent(selectedWorkspace.workspace_id)}`)}
+                        onClick={() => navigate(`/workspace-browser?environment_id=${encodeURIComponent(selectedWorkspace.environment.environment_id)}&workspace_id=${encodeURIComponent(selectedWorkspace.workspace_id)}`)}
                       >
                         {t('pages.workspaces.files')}
                       </Button>

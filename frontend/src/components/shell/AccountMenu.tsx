@@ -10,17 +10,31 @@ import {
 } from '@design-system';
 import type { UserInfo } from '@/shared/types';
 import { useT } from '@/shared/i18n';
+import { cn } from '@/shared/utils/cn';
 
-export function AccountMenu({ user, onLogout }: { user: UserInfo; onLogout: () => void }) {
+interface AccountMenuProps {
+  user: UserInfo;
+  onLogout: () => void;
+  showIdentity?: boolean;
+  align?: 'start' | 'center' | 'end';
+}
+
+export function AccountMenu({ user, onLogout, showIdentity = false, align = 'end' }: AccountMenuProps) {
   const t = useT();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="icon-sm" variant="ghost" aria-label={t('layout.accountMenu')}>
-          <UserRound aria-hidden="true" size={17} />
+        <Button
+          size={showIdentity ? 'md' : 'icon-sm'}
+          variant="ghost"
+          aria-label={t('layout.accountMenu')}
+          className={cn(showIdentity && 'w-full justify-start gap-2 px-2.5')}
+        >
+          <UserRound aria-hidden="true" className="shrink-0" size={17} />
+          {showIdentity ? <span className="min-w-0 truncate">{user.display_name}</span> : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align={align} className="w-56">
         <DropdownMenuLabel>
           <span className="block truncate text-sm text-[var(--osci-color-text)]">{user.display_name}</span>
           <span className="block truncate font-normal text-[var(--osci-color-text-muted)]">@{user.username}</span>

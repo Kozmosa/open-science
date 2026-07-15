@@ -265,6 +265,7 @@ describe('App routes', () => {
     );
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl/⌘+Shift+P')).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     expect(screen.queryByPlaceholderText('Search pages and actions…')).not.toBeInTheDocument();
 

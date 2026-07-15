@@ -188,22 +188,48 @@ describe('TaskCreateFlow', () => {
     expect(screen.getByRole('button', { name: /Register or link Workspace/ })).toBeInTheDocument();
   });
 
+  it('refuses a locked Workspace when its Project link is not executable', async () => {
+    mockGetWorkspaces.mockResolvedValue({
+      items: [{
+        ...workspace,
+        can_execute: false,
+        cannot_execute_reason: 'environment_grant_missing',
+        project_links: [{
+          ...workspace.project_links[0],
+          can_execute: false,
+          cannot_execute_reason: 'environment_grant_missing',
+        }],
+      }],
+    });
+    renderWithProviders(
+      <TaskCreateFlow
+        isOpen
+        source="workspace"
+        lockedWorkspaceId="workspace-1"
+        onClose={vi.fn()}
+      />,
+      { route: '/workspaces' },
+    );
+
+    expect(await screen.findByLabelText('Workspace')).toBeDisabled();
+    expect(await screen.findByText(/No attached Workspace is currently executable/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
+  });
+
   it('defines a literature fixture without invoking the saga early', () => {
     expect(buildLiteratureTaskCreateFixture({
       paper_id: 'paper-1',
       project_id: 'project-1',
-      workspace_id: null,
+      workspace_id: 'workspace-1',
       title: 'Research paper',
-      prompt: 'Investigate the paper',
-      preset_id: 'structured-research-default',
+      task_preset: 'structured-research-default',
     })).toEqual({
       source: 'literature',
       paper_id: 'paper-1',
       project_id: 'project-1',
-      workspace_id: null,
+      workspace_id: 'workspace-1',
       title: 'Research paper',
-      prompt: 'Investigate the paper',
-      preset_id: 'structured-research-default',
+      task_preset: 'structured-research-default',
     });
   });
 

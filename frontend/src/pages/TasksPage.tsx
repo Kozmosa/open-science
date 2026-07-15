@@ -286,13 +286,18 @@ function TasksPage() {
   const selectedProject = domainProjectsQuery.data?.items.find(
     (project) => project.project_id === selectedTask?.project_id,
   ) ?? null;
+  const eligibleTargetProjects = (domainProjectsQuery.data?.items ?? []).filter(
+    (project) => project.status === 'active' && project.permissions.can_create_task,
+  );
   const ownsSelectedTask = Boolean(
     selectedTask && user && (user.role === 'admin' || selectedTask.owner_user_id === user.id),
   );
-  const canMutateSelectedTask = ownsSelectedTask && selectedProject?.status !== 'archived';
+  const canMutateSelectedTask = ownsSelectedTask && selectedProject?.status === 'active';
   const mutationDisabledReason = !ownsSelectedTask
     ? 'Only the Task owner or an administrator can change this Task.'
-    : selectedProject?.status === 'archived'
+    : selectedProject === null
+      ? 'Project permissions are unavailable; Task actions remain disabled.'
+      : selectedProject.status === 'archived'
       ? 'This Project is archived; execution actions are disabled.'
       : null;
 
@@ -417,6 +422,8 @@ function TasksPage() {
             metadataSidebarOpen={drawerView !== 'closed'}
             onToggleTaskSidebar={toggleTaskSidebar}
             onToggleMetadataSidebar={toggleMetadataSidebar}
+            canMutate={canMutateSelectedTask}
+            mutationDisabledReason={mutationDisabledReason}
             headerActions={selectedTask ? (
               <TaskActionsMenu
                 task={selectedTask}
@@ -472,8 +479,7 @@ function TasksPage() {
               }}
             >
               <option value="">Select Project</option>
-              {(domainProjectsQuery.data?.items ?? [])
-                .filter((project) => project.status === 'active')
+              {eligibleTargetProjects
                 .map((project) => (
                   <option key={project.project_id} value={project.project_id}>{project.name}</option>
                 ))}
@@ -490,7 +496,10 @@ function TasksPage() {
                   <option value="">Select Workspace</option>
                   {(domainWorkspacesQuery.data?.items ?? [])
                     .filter((workspace) => workspace.can_execute && workspace.project_links.some(
-                      (link) => link.project_id === targetProjectId && link.link_status === 'active',
+                      (link) => link.project_id === targetProjectId
+                        && link.project_status === 'active'
+                        && link.link_status === 'active'
+                        && link.can_execute,
                     ))
                     .map((workspace) => (
                       <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.label}</option>
