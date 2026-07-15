@@ -18,6 +18,7 @@ from ainrf.development import (
     DevelopmentStackMode,
     FrontendDevInstance,
     resolve_frontend_dev_instance,
+    run_development_doctor,
 )
 
 
@@ -55,6 +56,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     logs.add_argument("--follow", action="store_true")
     logs.add_argument("--lines", type=int, default=200)
+    doctor = subparsers.add_parser("doctor")
+    _add_common_options(doctor)
+    doctor.add_argument("--browser", action="store_true")
     return parser
 
 
@@ -166,6 +170,13 @@ def _foreground(stack: DevelopmentStack) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "doctor":
+            result = run_development_doctor(
+                _resolve_instance(args),
+                include_browser=args.browser,
+            )
+            _print_payload(result.as_dict(), as_json=args.json)
+            return 0 if result.ok else 1
         stack = _stack(args)
         if args.command == "prepare":
             _print_payload(stack.prepare(), as_json=args.json)

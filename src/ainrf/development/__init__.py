@@ -1,5 +1,16 @@
 from __future__ import annotations
 
+from ainrf.development.browser import (
+    BrowserCdpProbe,
+    DevelopmentDoctorCheck,
+    DevelopmentDoctorResult,
+    chrome_devtools_config_locations,
+    configured_chrome_devtools_servers,
+    discover_chrome,
+    discover_chrome_devtools_mcp,
+    probe_chrome_cdp,
+    run_development_doctor,
+)
 from ainrf.development.frontend_fixture import (
     DEFAULT_FRONTEND_DEV_API_KEY,
     DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
@@ -38,6 +49,8 @@ __all__ = [
     "INSTANCE_SCHEMA_VERSION",
     "STACK_MANIFEST_SCHEMA_VERSION",
     "DevelopmentProcessRecord",
+    "DevelopmentDoctorCheck",
+    "DevelopmentDoctorResult",
     "DevelopmentStack",
     "DevelopmentStackError",
     "DevelopmentStackMode",
@@ -47,9 +60,16 @@ __all__ = [
     "FrontendDevProfile",
     "FrontendDevPorts",
     "FrontendDevSeedResult",
+    "BrowserCdpProbe",
+    "chrome_devtools_config_locations",
+    "configured_chrome_devtools_servers",
+    "discover_chrome",
+    "discover_chrome_devtools_mcp",
     "ensure_frontend_dev_instance",
     "normalize_frontend_dev_profile",
     "prepare_frontend_dev_fixture",
+    "probe_chrome_cdp",
     "resolve_frontend_dev_instance",
+    "run_development_doctor",
     "seed_frontend_dev_profile",
 ]

@@ -10,6 +10,7 @@ import subprocess
 import time
 from dataclasses import asdict, dataclass
 from enum import StrEnum
+from http.client import HTTPException
 from pathlib import Path
 from typing import Mapping
 from urllib.error import URLError
@@ -559,7 +560,7 @@ def _http_healthy(url: str) -> bool:
     try:
         with urlopen(url, timeout=0.5) as response:
             return 200 <= response.status < 500
-    except (OSError, URLError):
+    except (OSError, URLError, HTTPException):
         return False
 
 
@@ -569,7 +570,7 @@ def _fetch_http_text(url: str) -> str:
             if not 200 <= response.status < 300:
                 raise DevelopmentStackError(f"HTTP smoke failed for {url}: {response.status}")
             return response.read().decode("utf-8")
-    except (OSError, URLError) as exc:
+    except (OSError, URLError, HTTPException) as exc:
         raise DevelopmentStackError(f"HTTP smoke failed for {url}: {exc}") from exc
 
 
