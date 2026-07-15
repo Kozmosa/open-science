@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from contextlib import closing
 import subprocess
 from pathlib import Path
@@ -241,6 +243,14 @@ def test_frontend_dev_fixture_refuses_repository_state_root(tmp_path: Path) -> N
 def test_frontend_dev_script_documents_non_l2_headless_boundary(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script = repo_root / "scripts" / "frontend-dev.sh"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_uv = bin_dir / "uv"
+    fake_uv.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\"\n",
+        encoding="utf-8",
+    )
+    fake_uv.chmod(fake_uv.stat().st_mode | stat.S_IXUSR)
     help_result = subprocess.run(
         ["bash", str(script), "--help"],
         cwd=tmp_path,
@@ -252,7 +262,7 @@ def test_frontend_dev_script_documents_non_l2_headless_boundary(tmp_path: Path) 
         ["bash", str(script), "env"],
         cwd=tmp_path,
         env={
-            "PATH": "/usr/bin:/bin",
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "OPENSCIENCE_FRONTEND_DEV_STATE_ROOT": str(tmp_path / "state"),
         },
         check=False,
@@ -261,7 +271,6 @@ def test_frontend_dev_script_documents_non_l2_headless_boundary(tmp_path: Path) 
     )
 
     assert help_result.returncode == 0
-    assert "not an L2 or browser E2E gate" in help_result.stdout
+    assert "outside\nL2 and browser E2E gates" in help_result.stdout
     assert env_result.returncode == 0
-    assert f"OPENSCIENCE_STATE_ROOT={tmp_path / 'state'}" in env_result.stdout
-    assert "OPENSCIENCE_DOMAIN_MODEL_MODE=v2" in env_result.stdout
+    assert f"env --profile full --state-root {tmp_path / 'state'}" in env_result.stdout

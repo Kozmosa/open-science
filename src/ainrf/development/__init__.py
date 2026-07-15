@@ -21,6 +21,14 @@ from ainrf.development.instance import (
     ensure_frontend_dev_instance,
     resolve_frontend_dev_instance,
 )
+from ainrf.development.stack import (
+    STACK_MANIFEST_SCHEMA_VERSION,
+    DevelopmentProcessRecord,
+    DevelopmentStack,
+    DevelopmentStackError,
+    DevelopmentStackMode,
+    DevelopmentStackStatus,
+)
 
 __all__ = [
     "DEFAULT_FRONTEND_DEV_API_KEY",
@@ -28,6 +36,12 @@ __all__ = [
     "DEFAULT_DEVELOPMENT_ROOT",
     "FRONTEND_DEV_FIXTURE_VERSION",
     "INSTANCE_SCHEMA_VERSION",
+    "STACK_MANIFEST_SCHEMA_VERSION",
+    "DevelopmentProcessRecord",
+    "DevelopmentStack",
+    "DevelopmentStackError",
+    "DevelopmentStackMode",
+    "DevelopmentStackStatus",
     "FrontendDevInstance",
     "FrontendDevFixture",
     "FrontendDevProfile",
