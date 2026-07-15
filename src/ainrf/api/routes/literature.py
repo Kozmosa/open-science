@@ -20,7 +20,10 @@ from ainrf.literature.task_saga import (
     ResearchTaskPresetError,
     ResearchTaskWorkspaceRequiredError,
 )
-from ainrf.literature.tracking import LiteratureTrackingService
+from ainrf.literature.tracking import (
+    LiteratureIdempotencyConflictError,
+    LiteratureTrackingService,
+)
 
 router = APIRouter(prefix="/literature", tags=["literature"])
 
@@ -66,6 +69,8 @@ def _get_user_id(request: Request) -> str:
 def _tracking_error(exc: Exception) -> HTTPException:
     if isinstance(exc, KeyError):
         return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, LiteratureIdempotencyConflictError):
+        return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
     raise exc
@@ -239,7 +244,10 @@ async def create_literature_check(request: Request):
         raise HTTPException(status_code=400, detail="topic_ids must be a list")
     try:
         return _get_tracking_service(request).create_check(
-            user_id=_get_user_id(request), topic_ids=topic_ids, trigger="manual"
+            user_id=_get_user_id(request),
+            topic_ids=topic_ids,
+            trigger="manual",
+            idempotency_key=require_idempotency_key(request),
         )
     except (KeyError, ValueError) as exc:
         raise _tracking_error(exc) from exc
@@ -399,7 +407,10 @@ async def get_literature_paper(paper_id: str, request: Request):
 async def patch_literature_paper_state(paper_id: str, request: Request):
     try:
         return _get_tracking_service(request).update_paper_state(
-            _get_user_id(request), paper_id, await request.json()
+            _get_user_id(request),
+            paper_id,
+            await request.json(),
+            idempotency_key=require_idempotency_key(request),
         )
     except (KeyError, ValueError) as exc:
         raise _tracking_error(exc) from exc
@@ -418,7 +429,10 @@ async def request_literature_summary(paper_id: str, request: Request):
     body = await request.json()
     try:
         return _get_tracking_service(request).request_summary(
-            _get_user_id(request), paper_id, str(body.get("language", "zh"))
+            _get_user_id(request),
+            paper_id,
+            str(body.get("language", "zh")),
+            idempotency_key=require_idempotency_key(request),
         )
     except (KeyError, ValueError) as exc:
         raise _tracking_error(exc) from exc

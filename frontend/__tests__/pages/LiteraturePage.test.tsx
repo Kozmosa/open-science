@@ -1,7 +1,9 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import LiteraturePage from '../../src/pages/LiteraturePage';
 import { renderWithProviders } from '@/shared/test/render';
+import { createLiteratureCheck } from '@/shared/api';
 
 vi.mock('@/shared/api', () => ({
   createLiteratureCheck: vi.fn(() => Promise.resolve({ check_id: 'check-1', status: 'planned' })),
@@ -28,6 +30,7 @@ vi.mock('@/shared/api', () => ({
 
 describe('LiteraturePage', () => {
   it('renders the canvas inbox with a single source-check action and persistent URL filters', async () => {
+    const user = userEvent.setup();
     const { container } = renderWithProviders(<LiteraturePage />, { route: '/literature' });
 
     expect(await screen.findByRole('heading', { name: "Today's literature inbox" })).toBeInTheDocument();
@@ -35,5 +38,9 @@ describe('LiteraturePage', () => {
     expect(container.firstElementChild).toHaveAttribute('data-page-shell-variant', 'canvas');
     expect(screen.getByRole('button', { name: 'Unread' })).toBeInTheDocument();
     expect(screen.queryByText('My Subscriptions')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Check latest literature' }));
+    expect(vi.mocked(createLiteratureCheck)).toHaveBeenCalledWith(
+      expect.stringMatching(/^literature\.check\.create:/),
+    );
   });
 });

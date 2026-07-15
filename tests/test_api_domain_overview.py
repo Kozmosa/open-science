@@ -65,8 +65,15 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
             before_refresh = await client.get(f"/domain/overview/today?api_key={_API_KEY}")
             assert before_refresh.status_code == 404
 
-            first = await client.post(f"/domain/overview/today/refresh?api_key={_API_KEY}")
-            second = await client.post(f"/domain/overview/today/refresh?api_key={_API_KEY}")
+            missing_key = await client.post(f"/domain/overview/today/refresh?api_key={_API_KEY}")
+            assert missing_key.status_code == 409
+            refresh_headers = {"Idempotency-Key": "overview-api-refresh"}
+            first = await client.post(
+                f"/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
+            )
+            second = await client.post(
+                f"/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
+            )
             assert first.status_code == 202
             assert second.status_code == 202
             first_job = _payload(first)
@@ -89,6 +96,16 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
 
             planner_result = planner.run_once()
             assert job_id in planner_result.completed_job_ids
+
+            terminal_replay = await client.post(
+                f"/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
+            )
+            assert _payload(terminal_replay)["job_id"] == job_id
+            next_refresh = await client.post(
+                f"/domain/overview/today/refresh?api_key={_API_KEY}",
+                headers={"Idempotency-Key": "overview-api-refresh-next"},
+            )
+            assert _payload(next_refresh)["job_id"] != job_id
 
             available = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
             assert available.status_code == 200

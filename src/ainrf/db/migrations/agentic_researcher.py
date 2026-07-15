@@ -2397,3 +2397,24 @@ def migration_025_repair_legacy_maintenance_barrier(conn: sqlite3.Connection) ->
 
     _ensure_domain_maintenance_barrier_base(conn)
     _ensure_domain_write_participant_schema(conn)
+
+
+@registry.register(_DATABASE)
+def migration_026_overview_refresh_idempotency(conn: sqlite3.Connection) -> None:
+    """Persist caller keys even when multiple requests share one active job."""
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS overview_refresh_idempotency_requests (
+            owner_user_id TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            job_id TEXT NOT NULL REFERENCES overview_refresh_jobs(job_id) ON DELETE RESTRICT,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (owner_user_id, idempotency_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_overview_refresh_idempotency_job
+        ON overview_refresh_idempotency_requests(job_id);
+        """
+    )

@@ -54,7 +54,8 @@ export class IdempotencyKeyManager {
     return this.key;
   }
 
-  markSucceeded(): void {
+  markSucceeded(succeededKey?: string): void {
+    if (succeededKey !== undefined && succeededKey !== this.key) return;
     this.key = createIdempotencyKey(this.scope);
     this.semanticValue = null;
   }

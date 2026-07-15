@@ -122,7 +122,11 @@ async def request_today_overview_refresh(request: Request) -> dict[str, object]:
     if not isinstance(user_id, str):
         raise HTTPException(status_code=401, detail="Authenticated user ID is required")
     try:
-        return snapshot_service.request_refresh(user_id, trigger="manual")
+        return snapshot_service.request_refresh(
+            user_id,
+            trigger="manual",
+            idempotency_key=require_idempotency_key(request),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

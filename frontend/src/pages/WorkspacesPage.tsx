@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,7 +20,7 @@ import {
   Textarea,
 } from '@design-system';
 import { getEnvironments, unregisterWorkspace, updateWorkspace } from '@/shared/api';
-import { createIdempotencyKey, useIdempotencyKey } from '@/shared/api/idempotency';
+import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
@@ -115,6 +115,7 @@ function WorkspacesPage() {
     workspaceId: selectedWorkspace?.workspace_id,
     ...editState,
   });
+  const unregisterKeyManager = useRef(new IdempotencyKeyManager('workspace.unregister')).current;
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.domain.workspaces(false) });
@@ -189,12 +190,11 @@ function WorkspacesPage() {
   const unregisterMutation = useMutation({
     mutationFn: () => {
       if (!selectedWorkspace) throw new Error('Workspace is required');
-      return unregisterWorkspace(
-        selectedWorkspace.workspace_id,
-        createIdempotencyKey(`workspace.unregister.${selectedWorkspace.workspace_id}`),
-      );
+      const key = unregisterKeyManager.keyFor(semanticMutationValue({ workspaceId: selectedWorkspace.workspace_id }));
+      return unregisterWorkspace(selectedWorkspace.workspace_id, key).then(() => key);
     },
-    onSuccess: () => {
+    onSuccess: (key) => {
+      unregisterKeyManager.markSucceeded(key);
       setSelectedWorkspaceId(null);
       invalidate();
     },

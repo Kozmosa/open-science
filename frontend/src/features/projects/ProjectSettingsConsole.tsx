@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, CardBody, Checkbox, ConfirmDialog, FormField, Input, NativeSelect, Textarea } from '@design-system';
 import { updateProject } from '@/shared/api';
-import { createIdempotencyKey, useIdempotencyKey } from '@/shared/api/idempotency';
+import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { extractErrorMessage } from '@/shared/utils/error';
 import {
@@ -24,14 +24,33 @@ export default function ProjectSettingsConsole({ project }: { project: DomainPro
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const membersQuery = useQuery({ queryKey: ['domain', 'projects', project.project_id, 'members'], queryFn: () => getDomainProjectMembers(project.project_id) });
   const metadataKey = useIdempotencyKey('project.metadata', { projectId: project.project_id, name, description });
+  const memberKey = useIdempotencyKey('project.member.upsert', { projectId: project.project_id, memberUserId, memberRole, memberCanPublish });
+  const removeKeyManager = useRef(new IdempotencyKeyManager('project.member.remove')).current;
+  const lifecycleKeyManager = useRef(new IdempotencyKeyManager('project.lifecycle')).current;
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.domain.projects(true) });
     void queryClient.invalidateQueries({ queryKey: ['domain', 'projects', project.project_id, 'members'] });
   };
   const updateMutation = useMutation({ mutationFn: () => updateProject(project.project_id, { name: name.trim(), description: description.trim() || null }, metadataKey.idempotencyKey), onSuccess: () => { metadataKey.markSucceeded(); invalidate(); } });
-  const memberMutation = useMutation({ mutationFn: () => upsertDomainProjectMember(project.project_id, memberUserId.trim(), memberRole, memberCanPublish, createIdempotencyKey(`project.member.${project.project_id}.${memberUserId}`)), onSuccess: () => { setMemberUserId(''); setMemberRole('viewer'); setMemberCanPublish(false); invalidate(); } });
-  const removeMutation = useMutation({ mutationFn: (userId: string) => removeDomainProjectMember(project.project_id, userId, createIdempotencyKey(`project.member.remove.${project.project_id}.${userId}`)), onSuccess: invalidate });
-  const lifecycleMutation = useMutation({ mutationFn: () => project.status === 'active' ? archiveDomainProject(project.project_id, createIdempotencyKey(`project.archive.${project.project_id}`)) : unarchiveDomainProject(project.project_id, createIdempotencyKey(`project.unarchive.${project.project_id}`)), onSuccess: invalidate });
+  const memberMutation = useMutation({ mutationFn: () => upsertDomainProjectMember(project.project_id, memberUserId.trim(), memberRole, memberCanPublish, memberKey.idempotencyKey), onSuccess: () => { memberKey.markSucceeded(); setMemberUserId(''); setMemberRole('viewer'); setMemberCanPublish(false); invalidate(); } });
+  const removeMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const key = removeKeyManager.keyFor(semanticMutationValue({ projectId: project.project_id, userId }));
+      await removeDomainProjectMember(project.project_id, userId, key);
+      return key;
+    },
+    onSuccess: (key) => { removeKeyManager.markSucceeded(key); invalidate(); },
+  });
+  const lifecycleMutation = useMutation({
+    mutationFn: async () => {
+      const action = project.status === 'active' ? 'archive' : 'unarchive';
+      const key = lifecycleKeyManager.keyFor(semanticMutationValue({ projectId: project.project_id, action }));
+      if (action === 'archive') await archiveDomainProject(project.project_id, key);
+      else await unarchiveDomainProject(project.project_id, key);
+      return key;
+    },
+    onSuccess: (key) => { lifecycleKeyManager.markSucceeded(key); invalidate(); },
+  });
   const error = membersQuery.error ?? updateMutation.error ?? memberMutation.error ?? removeMutation.error ?? lifecycleMutation.error;
 
   return <div className="space-y-4">

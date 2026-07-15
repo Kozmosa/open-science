@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, CardBody, EmptyState, FormField, NativeSelect, Textarea } from '@design-system';
 import {
@@ -12,7 +12,7 @@ import {
   saveDomainProjectContextDraft,
   type DomainProjectProjection,
 } from '@features/domain';
-import { createIdempotencyKey, useIdempotencyKey } from '@/shared/api/idempotency';
+import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { extractErrorMessage } from '@/shared/utils/error';
 
@@ -26,6 +26,8 @@ export default function ProjectContextConsole({ project }: { project: DomainProj
   const candidatesQuery = useQuery({ queryKey: queryKeys.domain.projectContextCandidates(project.project_id), queryFn: () => getDomainProjectContextCandidates(project.project_id) });
   const draftContent = draftOverride ?? contextQuery.data?.draft?.content ?? contextQuery.data?.active_version?.content ?? '';
   const draftKey = useIdempotencyKey('project.context.draft', { projectId: project.project_id, draftContent });
+  const publishKeyManager = useRef(new IdempotencyKeyManager('project.context.publish')).current;
+  const candidateKeyManager = useRef(new IdempotencyKeyManager('project.context.candidate')).current;
   const diffQuery = useQuery({
     queryKey: ['domain', 'projects', project.project_id, 'context', 'diff', beforeVersionId, afterVersionId],
     queryFn: () => getDomainProjectContextDiff(project.project_id, afterVersionId, beforeVersionId),
@@ -43,16 +45,28 @@ export default function ProjectContextConsole({ project }: { project: DomainProj
     onSuccess: () => { draftKey.markSucceeded(); setDraftOverride(null); invalidate(); },
   });
   const publishMutation = useMutation({
-    mutationFn: () => publishDomainProjectContext(project.project_id, createIdempotencyKey(`project.context.publish.${project.project_id}`)),
-    onSuccess: invalidate,
+    mutationFn: async () => {
+      const key = publishKeyManager.keyFor(semanticMutationValue({ projectId: project.project_id }));
+      return { result: await publishDomainProjectContext(project.project_id, key), key };
+    },
+    onSuccess: ({ key }) => { publishKeyManager.markSucceeded(key); invalidate(); },
   });
   const acceptMutation = useMutation({
-    mutationFn: (candidateId: string) => acceptDomainContextCandidate(project.project_id, candidateId, createIdempotencyKey(`project.context.candidate.accept.${candidateId}`)),
-    onSuccess: invalidate,
+    mutationFn: async (candidateId: string) => {
+      const semantic = semanticMutationValue({ projectId: project.project_id, candidateId, action: 'accept' });
+      const key = candidateKeyManager.keyFor(semantic);
+      return { result: await acceptDomainContextCandidate(project.project_id, candidateId, key), key };
+    },
+    onSuccess: ({ key }) => { candidateKeyManager.markSucceeded(key); invalidate(); },
   });
   const rejectMutation = useMutation({
-    mutationFn: (candidateId: string) => rejectDomainContextCandidate(project.project_id, candidateId, 'Rejected from Project Context console', createIdempotencyKey(`project.context.candidate.reject.${candidateId}`)),
-    onSuccess: invalidate,
+    mutationFn: async (candidateId: string) => {
+      const reason = 'Rejected from Project Context console';
+      const semantic = semanticMutationValue({ projectId: project.project_id, candidateId, action: 'reject', reason });
+      const key = candidateKeyManager.keyFor(semantic);
+      return { result: await rejectDomainContextCandidate(project.project_id, candidateId, reason, key), key };
+    },
+    onSuccess: ({ key }) => { candidateKeyManager.markSucceeded(key); invalidate(); },
   });
   const error = contextQuery.error ?? versionsQuery.error ?? candidatesQuery.error ?? saveMutation.error ?? publishMutation.error ?? acceptMutation.error ?? rejectMutation.error;
   const versions = versionsQuery.data?.items ?? [];

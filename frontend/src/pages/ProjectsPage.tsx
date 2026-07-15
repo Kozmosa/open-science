@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -24,7 +24,7 @@ import {
 } from '@design-system';
 import { ProjectCanvas } from '../components/project';
 import { getProjectTasks, getTaskEdges, moveTask } from '@/shared/api';
-import { createIdempotencyKey, useIdempotencyKey } from '@/shared/api/idempotency';
+import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
@@ -125,6 +125,10 @@ export default function ProjectsPage() {
   const canCreateTask = Boolean(selectedProject?.permissions.can_create_task && selectedProject.executable_workspace_count > 0 && selectedProject.status === 'active');
 
   const createKey = useIdempotencyKey('project.create', { projectName, projectDescription });
+  const attachKey = useIdempotencyKey('project.workspace.attach', { projectId, attachWorkspaceId });
+  const detachKeyManager = useRef(new IdempotencyKeyManager('project.workspace.detach')).current;
+  const primaryKeyManager = useRef(new IdempotencyKeyManager('project.workspace.primary')).current;
+  const moveTaskKeyManager = useRef(new IdempotencyKeyManager('task.move.project')).current;
   const createMutation = useMutation({
     mutationFn: () => createDomainProject({ name: projectName.trim(), description: projectDescription.trim() || null }, createKey.idempotencyKey),
     onSuccess: (project) => {
@@ -145,35 +149,41 @@ export default function ProjectsPage() {
   const attachMutation = useMutation({
     mutationFn: () => {
       if (!projectId || !attachWorkspaceId) throw new Error('Project and Workspace are required');
-      return attachDomainWorkspace(projectId, attachWorkspaceId, createIdempotencyKey(`project.workspace.attach.${projectId}.${attachWorkspaceId}`));
+      return attachDomainWorkspace(projectId, attachWorkspaceId, attachKey.idempotencyKey);
     },
-    onSuccess: () => { setAttachWorkspaceId(''); invalidateWorkspaceState(); },
+    onSuccess: () => { attachKey.markSucceeded(); setAttachWorkspaceId(''); invalidateWorkspaceState(); },
   });
 
   const detachMutation = useMutation({
     mutationFn: (workspaceId: string) => {
       if (!projectId) throw new Error('Project is required');
-      return detachDomainWorkspace(projectId, workspaceId, createIdempotencyKey(`project.workspace.detach.${projectId}.${workspaceId}`));
+      const key = detachKeyManager.keyFor(semanticMutationValue({ projectId, workspaceId }));
+      return detachDomainWorkspace(projectId, workspaceId, key).then(() => key);
     },
-    onSuccess: invalidateWorkspaceState,
+    onSuccess: (key) => { detachKeyManager.markSucceeded(key); invalidateWorkspaceState(); },
   });
 
   const primaryMutation = useMutation({
     mutationFn: (workspaceId: string) => {
       if (!selectedProject) throw new Error('Project is required');
-      const key = createIdempotencyKey(`project.workspace.primary.${selectedProject.project_id}.${workspaceId}`);
-      return selectedProject.primary_workspace
+      const semantic = semanticMutationValue({ projectId: selectedProject.project_id, workspaceId, previousPrimaryId: selectedProject.primary_workspace?.workspace_id ?? null });
+      const key = primaryKeyManager.keyFor(semantic);
+      const request = selectedProject.primary_workspace
         ? replaceDomainPrimaryWorkspace(selectedProject.project_id, selectedProject.primary_workspace.workspace_id, workspaceId, key)
         : setDomainPrimaryWorkspace(selectedProject.project_id, workspaceId, key);
+      return request.then(() => key);
     },
-    onSuccess: invalidateWorkspaceState,
+    onSuccess: (key) => { primaryKeyManager.markSucceeded(key); invalidateWorkspaceState(); },
   });
 
   const moveTaskToProject = async (taskId: string, targetProjectId: string) => {
     const targetContext = await getDomainProjectContext(targetProjectId);
     const contextVersionId = targetContext.active_version?.context_version_id;
     if (!contextVersionId) throw new Error('Target Project has no active Context Version');
-    await moveTask(taskId, { project_id: targetProjectId, context_version_id: contextVersionId }, createIdempotencyKey(`task.move.${taskId}.${targetProjectId}`));
+    const payload = { project_id: targetProjectId, context_version_id: contextVersionId };
+    const key = moveTaskKeyManager.keyFor(semanticMutationValue({ taskId, ...payload }));
+    await moveTask(taskId, payload, key);
+    moveTaskKeyManager.markSucceeded(key);
     void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(targetProjectId) });
   };

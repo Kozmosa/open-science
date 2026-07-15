@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -28,7 +28,7 @@ import {
   requestLiteratureSummary,
   updateLiteraturePaperState,
 } from '@/shared/api';
-import { createIdempotencyKey, semanticMutationValue } from '@/shared/api/idempotency';
+import { createIdempotencyKey, IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import type { LiteratureCheckStatus, LiteratureInboxView, LiteratureTaskIntent } from '@/shared/types';
 import { useLocale, useT } from '@/shared/i18n';
@@ -76,6 +76,9 @@ export default function LiteraturePage() {
   const category = searchParams.get('category') ?? undefined;
   const selectedPaperId = searchParams.get('paper');
   const pendingIntent = pendingIntentOverride?.paperId === selectedPaperId ? pendingIntentOverride : readPendingIntent(selectedPaperId);
+  const checkKeyManager = useRef(new IdempotencyKeyManager('literature.check.create')).current;
+  const stateKeyManager = useRef(new IdempotencyKeyManager('literature.paper.state')).current;
+  const summaryKeyManager = useRef(new IdempotencyKeyManager('literature.summary.request')).current;
 
   const updateSearch = (changes: Record<string, string | null>) => setSearchParams((current) => {
     const next = new URLSearchParams(current);
@@ -120,17 +123,45 @@ export default function LiteraturePage() {
   });
 
   const checkMutation = useMutation({
-    mutationFn: () => createLiteratureCheck(),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: queryKeys.literature.overview }); void queryClient.invalidateQueries({ queryKey: queryKeys.literature.checks }); },
+    mutationFn: (idempotencyKey: string) => createLiteratureCheck(idempotencyKey),
+    onSuccess: (_check, idempotencyKey) => {
+      checkKeyManager.markSucceeded(idempotencyKey);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.literature.overview });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.literature.checks });
+    },
   });
   const stateMutation = useMutation({
-    mutationFn: ({ paperId, payload }: { paperId: string; payload: { is_read?: boolean; is_saved?: boolean; is_ignored?: boolean } }) => updateLiteraturePaperState(paperId, payload),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.literature.all }),
+    mutationFn: ({ paperId, payload, idempotencyKey }: { paperId: string; payload: { is_read?: boolean; is_saved?: boolean; is_ignored?: boolean }; idempotencyKey: string }) => updateLiteraturePaperState(paperId, payload, idempotencyKey),
+    onSuccess: (_paper, variables) => {
+      stateKeyManager.markSucceeded(variables.idempotencyKey);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.literature.all });
+    },
   });
   const summaryMutation = useMutation({
-    mutationFn: () => requestLiteratureSummary(selectedPaperId!, locale === 'zh' ? 'zh' : 'en'),
-    onSuccess: (summary) => queryClient.setQueryData(queryKeys.literature.summary(selectedPaperId), summary),
+    mutationFn: ({ paperId, language, idempotencyKey }: { paperId: string; language: string; idempotencyKey: string }) => requestLiteratureSummary(paperId, idempotencyKey, language),
+    onSuccess: (summary, variables) => {
+      summaryKeyManager.markSucceeded(variables.idempotencyKey);
+      queryClient.setQueryData(queryKeys.literature.summary(variables.paperId), summary);
+    },
   });
+  const startCheck = () => {
+    const semantic = semanticMutationValue({ topicIds: null });
+    checkMutation.mutate(checkKeyManager.keyFor(semantic));
+  };
+  const updatePaperState = (paperId: string, payload: { is_read?: boolean; is_saved?: boolean; is_ignored?: boolean }) => {
+    const semantic = semanticMutationValue({ paperId, payload });
+    stateMutation.mutate({ paperId, payload, idempotencyKey: stateKeyManager.keyFor(semantic) });
+  };
+  const generateSummary = () => {
+    if (!selectedPaperId) return;
+    const language = locale === 'zh' ? 'zh' : 'en';
+    const semantic = semanticMutationValue({ paperId: selectedPaperId, language });
+    summaryMutation.mutate({
+      paperId: selectedPaperId,
+      language,
+      idempotencyKey: summaryKeyManager.keyFor(semantic),
+    });
+  };
   const papers = papersQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const overview = overviewQuery.data;
   const activeCheck = overview?.active_check;
@@ -150,7 +181,7 @@ export default function LiteraturePage() {
 
   return <PageShell variant="canvas">
     <div className="mx-auto flex w-full max-w-[1450px] flex-col gap-4 p-4 md:p-6">
-      <PageHeader eyebrow={t('literature.eyebrow')} title={t('literature.inbox')} description={t('literature.inboxDescription')} actions={<Button onClick={() => checkMutation.mutate()} isLoading={checkMutation.isPending || Boolean(activeCheck && ACTIVE_CHECK_STATUSES.has(activeCheck.status))}>{t('literature.checkLatest')}</Button>} />
+      <PageHeader eyebrow={t('literature.eyebrow')} title={t('literature.inbox')} description={t('literature.inboxDescription')} actions={<Button onClick={startCheck} isLoading={checkMutation.isPending || Boolean(activeCheck && ACTIVE_CHECK_STATUSES.has(activeCheck.status))}>{t('literature.checkLatest')}</Button>} />
       <UpdateStrip tone={stripTone}>Last check: {formatDate(overview?.last_successful_check_at ?? null, locale)} · Next check: {formatDate(overview?.next_scheduled_check_at ?? null, locale)}{activeCheck ? ` · ${activeCheck.status}${activeCheck.error ? ` · ${activeCheck.error}` : ''}` : ''}</UpdateStrip>
       <ViewToolbar>
         <Button size="sm" variant={section === 'inbox' ? 'primary' : 'secondary'} onClick={() => updateSearch({ section: null })}>Inbox</Button>
@@ -158,11 +189,11 @@ export default function LiteraturePage() {
         {section === 'inbox' ? <><div className="h-6 w-px bg-[var(--osci-color-border)]" />{VIEWS.map((item) => <Button key={item} size="sm" variant={view === item ? 'primary' : 'ghost'} onClick={() => updateSearch({ view: item === 'today' ? null : item })}>{t(`literature.views.${item}`)}</Button>)}<div className="ml-auto flex gap-2"><NativeSelect aria-label={t('literature.filterTopic')} value={topicId ?? ''} onChange={(event) => updateSearch({ topic: event.target.value || null })}><option value="">{t('literature.allTopics')}</option>{(topicsQuery.data?.items ?? []).map((topic) => <option key={topic.topic_id} value={topic.topic_id}>{topic.label}</option>)}</NativeSelect><NativeSelect aria-label={t('literature.filterCategory')} value={category ?? ''} onChange={(event) => updateSearch({ category: event.target.value || null })}><option value="">{t('literature.allCategories')}</option>{['cs.AI', 'cs.CL', 'cs.CV', 'cs.LG', 'cs.RO', 'stat.ML'].map((item) => <option key={item}>{item}</option>)}</NativeSelect></div></> : null}
       </ViewToolbar>
 
-      {section === 'topics' ? <Card><CardBody className="space-y-3 p-5">{(topicsQuery.data?.items ?? []).map((topic) => <div key={topic.topic_id} className="rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3"><div className="flex items-center gap-2"><h2 className="font-semibold text-[var(--osci-color-text)]">{topic.label}</h2><StatusBadge tone={topic.is_active ? 'success' : 'neutral'}>{topic.is_active ? 'active' : 'paused'}</StatusBadge></div><p className="mt-1 text-sm text-[var(--osci-color-text-secondary)]">{topic.categories.join(' · ')} · {topic.include_terms.join(', ')}</p></div>)}{!topicsQuery.isLoading && (topicsQuery.data?.items.length ?? 0) === 0 ? <EmptyState message={t('literature.noTopics')} /> : null}</CardBody></Card> : <Card><CardBody className="divide-y divide-[var(--osci-color-border-subtle)] p-0">{papers.map((paper) => <article key={paper.paper_id} className="flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between"><button type="button" className="min-w-0 flex-1 text-left" onClick={() => updateSearch({ paper: paper.paper_id })}><div className="flex flex-wrap items-center gap-2"><Badge>{paper.primary_category}</Badge>{!paper.user_state.is_read ? <Badge variant="secondary">{t('literature.newPaper')}</Badge> : null}{paper.user_state.is_saved ? <Badge variant="outline">{t('literature.saved')}</Badge> : null}{paper.matched_topics.map((topic) => <Badge key={topic.topic_id} variant="outline">{topic.label}</Badge>)}</div><h2 className="mt-2 font-semibold text-[var(--osci-color-text)]">{paper.title}</h2><p className="mt-1 text-xs text-[var(--osci-color-text-muted)]">{paper.authors.join(', ')} · {formatDate(paper.updated_at ?? paper.published_at, locale)}</p><p className="mt-2 line-clamp-2 text-sm text-[var(--osci-color-text-secondary)]">{paper.abstract}</p></button><div className="flex shrink-0 gap-2"><Button size="sm" variant="secondary" onClick={() => stateMutation.mutate({ paperId: paper.paper_id, payload: { is_read: !paper.user_state.is_read } })}>{paper.user_state.is_read ? t('literature.markUnread') : t('literature.markRead')}</Button><Button size="sm" variant="secondary" onClick={() => stateMutation.mutate({ paperId: paper.paper_id, payload: { is_saved: !paper.user_state.is_saved } })}>{paper.user_state.is_saved ? t('literature.unsave') : t('literature.savePaper')}</Button><Button size="sm" onClick={() => updateSearch({ paper: paper.paper_id })}>Details</Button></div></article>)}{!papersQuery.isLoading && papers.length === 0 ? <EmptyState message={t('literature.noPapers')} /> : null}{papersQuery.hasNextPage ? <div className="flex justify-center p-4"><Button variant="secondary" onClick={() => papersQuery.fetchNextPage()} isLoading={papersQuery.isFetchingNextPage}>{t('literature.loadMore')}</Button></div> : null}</CardBody></Card>}
+      {section === 'topics' ? <Card><CardBody className="space-y-3 p-5">{(topicsQuery.data?.items ?? []).map((topic) => <div key={topic.topic_id} className="rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3"><div className="flex items-center gap-2"><h2 className="font-semibold text-[var(--osci-color-text)]">{topic.label}</h2><StatusBadge tone={topic.is_active ? 'success' : 'neutral'}>{topic.is_active ? 'active' : 'paused'}</StatusBadge></div><p className="mt-1 text-sm text-[var(--osci-color-text-secondary)]">{topic.categories.join(' · ')} · {topic.include_terms.join(', ')}</p></div>)}{!topicsQuery.isLoading && (topicsQuery.data?.items.length ?? 0) === 0 ? <EmptyState message={t('literature.noTopics')} /> : null}</CardBody></Card> : <Card><CardBody className="divide-y divide-[var(--osci-color-border-subtle)] p-0">{papers.map((paper) => <article key={paper.paper_id} className="flex flex-col gap-3 p-4 md:flex-row md:items-start md:justify-between"><button type="button" className="min-w-0 flex-1 text-left" onClick={() => updateSearch({ paper: paper.paper_id })}><div className="flex flex-wrap items-center gap-2"><Badge>{paper.primary_category}</Badge>{!paper.user_state.is_read ? <Badge variant="secondary">{t('literature.newPaper')}</Badge> : null}{paper.user_state.is_saved ? <Badge variant="outline">{t('literature.saved')}</Badge> : null}{paper.matched_topics.map((topic) => <Badge key={topic.topic_id} variant="outline">{topic.label}</Badge>)}</div><h2 className="mt-2 font-semibold text-[var(--osci-color-text)]">{paper.title}</h2><p className="mt-1 text-xs text-[var(--osci-color-text-muted)]">{paper.authors.join(', ')} · {formatDate(paper.updated_at ?? paper.published_at, locale)}</p><p className="mt-2 line-clamp-2 text-sm text-[var(--osci-color-text-secondary)]">{paper.abstract}</p></button><div className="flex shrink-0 gap-2"><Button size="sm" variant="secondary" onClick={() => updatePaperState(paper.paper_id, { is_read: !paper.user_state.is_read })}>{paper.user_state.is_read ? t('literature.markUnread') : t('literature.markRead')}</Button><Button size="sm" variant="secondary" onClick={() => updatePaperState(paper.paper_id, { is_saved: !paper.user_state.is_saved })}>{paper.user_state.is_saved ? t('literature.unsave') : t('literature.savePaper')}</Button><Button size="sm" onClick={() => updateSearch({ paper: paper.paper_id })}>Details</Button></div></article>)}{!papersQuery.isLoading && papers.length === 0 ? <EmptyState message={t('literature.noPapers')} /> : null}{papersQuery.hasNextPage ? <div className="flex justify-center p-4"><Button variant="secondary" onClick={() => papersQuery.fetchNextPage()} isLoading={papersQuery.isFetchingNextPage}>{t('literature.loadMore')}</Button></div> : null}</CardBody></Card>}
     </div>
 
     <DetailDrawer open={Boolean(selectedPaperId)} onOpenChange={(open) => { if (!open) updateSearch({ paper: null }); }} title={paperQuery.data?.title ?? 'Paper details'}>
-      {paperQuery.data ? <div className="space-y-5"><div className="flex flex-wrap gap-2"><Badge>{paperQuery.data.primary_category}</Badge>{paperQuery.data.matched_topics.map((topic) => <Badge key={topic.topic_id} variant="outline">{topic.label}</Badge>)}</div><p className="text-sm leading-relaxed text-[var(--osci-color-text-secondary)]">{paperQuery.data.abstract}</p><div><h3 className="font-semibold text-[var(--osci-color-text)]">Versions</h3><div className="mt-2 space-y-2">{paperQuery.data.versions.map((version) => <div key={version.version_id} className="flex justify-between text-sm"><span className="font-mono text-[var(--osci-color-text)]">{version.provider_version}</span><span className="text-[var(--osci-color-text-muted)]">{formatDate(version.updated_at ?? version.published_at, locale)}</span></div>)}</div></div><div><h3 className="font-semibold text-[var(--osci-color-text)]">Summary</h3>{summaryQuery.data?.status === 'completed' ? <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--osci-color-text-secondary)]">{summaryQuery.data.text}</p> : <Button className="mt-2" variant="secondary" onClick={() => summaryMutation.mutate()} isLoading={summaryMutation.isPending || ['queued', 'generating'].includes(summaryQuery.data?.status ?? '')}>Generate summary</Button>}</div><div><div className="flex items-center justify-between"><h3 className="font-semibold text-[var(--osci-color-text)]">Research Tasks</h3><Button onClick={() => setTaskFlowOpen(true)}>Convert to research Task</Button></div><div className="mt-2 space-y-2">{researchTasksQuery.data?.items.map((intent: LiteratureTaskIntent) => <div key={intent.intent_id} className="rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] p-3 text-sm"><div className="flex items-center justify-between"><StatusBadge tone={intent.status === 'completed' ? 'success' : intent.status === 'failed' ? 'danger' : 'warning'}>{intent.status}</StatusBadge>{intent.task_id ? <a className="text-[var(--osci-color-primary)]" href={`/tasks?task=${encodeURIComponent(intent.task_id)}`}>{intent.task_id}</a> : null}</div>{intent.last_error ? <p className="mt-2 text-[var(--osci-color-danger-foreground)]">{intent.last_error}</p> : null}</div>)}{recoveredIntentQuery.data && !(researchTasksQuery.data?.items.some((item) => item.intent_id === recoveredIntentQuery.data.intent_id)) ? <StatusBadge tone="warning">Recovered {recoveredIntentQuery.data.status}</StatusBadge> : null}</div></div></div> : null}
+      {paperQuery.data ? <div className="space-y-5"><div className="flex flex-wrap gap-2"><Badge>{paperQuery.data.primary_category}</Badge>{paperQuery.data.matched_topics.map((topic) => <Badge key={topic.topic_id} variant="outline">{topic.label}</Badge>)}</div><p className="text-sm leading-relaxed text-[var(--osci-color-text-secondary)]">{paperQuery.data.abstract}</p><div><h3 className="font-semibold text-[var(--osci-color-text)]">Versions</h3><div className="mt-2 space-y-2">{paperQuery.data.versions.map((version) => <div key={version.version_id} className="flex justify-between text-sm"><span className="font-mono text-[var(--osci-color-text)]">{version.provider_version}</span><span className="text-[var(--osci-color-text-muted)]">{formatDate(version.updated_at ?? version.published_at, locale)}</span></div>)}</div></div><div><h3 className="font-semibold text-[var(--osci-color-text)]">Summary</h3>{summaryQuery.data?.status === 'completed' ? <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--osci-color-text-secondary)]">{summaryQuery.data.text}</p> : <Button className="mt-2" variant="secondary" onClick={generateSummary} isLoading={summaryMutation.isPending || ['queued', 'generating'].includes(summaryQuery.data?.status ?? '')}>Generate summary</Button>}</div><div><div className="flex items-center justify-between"><h3 className="font-semibold text-[var(--osci-color-text)]">Research Tasks</h3><Button onClick={() => setTaskFlowOpen(true)}>Convert to research Task</Button></div><div className="mt-2 space-y-2">{researchTasksQuery.data?.items.map((intent: LiteratureTaskIntent) => <div key={intent.intent_id} className="rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] p-3 text-sm"><div className="flex items-center justify-between"><StatusBadge tone={intent.status === 'completed' ? 'success' : intent.status === 'failed' ? 'danger' : 'warning'}>{intent.status}</StatusBadge>{intent.task_id ? <a className="text-[var(--osci-color-primary)]" href={`/tasks?task=${encodeURIComponent(intent.task_id)}`}>{intent.task_id}</a> : null}</div>{intent.last_error ? <p className="mt-2 text-[var(--osci-color-danger-foreground)]">{intent.last_error}</p> : null}</div>)}{recoveredIntentQuery.data && !(researchTasksQuery.data?.items.some((item) => item.intent_id === recoveredIntentQuery.data.intent_id)) ? <StatusBadge tone="warning">Recovered {recoveredIntentQuery.data.status}</StatusBadge> : null}</div></div></div> : null}
     </DetailDrawer>
     <TaskCreateFlow isOpen={taskFlowOpen} source="literature" initialTitle={paperQuery.data?.title ? `Research: ${paperQuery.data.title}` : ''} onLiteratureSubmit={submitResearchTask} onClose={() => setTaskFlowOpen(false)} />
   </PageShell>;

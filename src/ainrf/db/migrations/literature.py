@@ -527,3 +527,25 @@ def migration_006_research_task_intents(conn: sqlite3.Connection) -> None:
         ON literature_research_task_intents(user_id, paper_id, created_at DESC);
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_007_mutation_idempotency(conn: sqlite3.Connection) -> None:
+    """Bind Literature mutation retries to their original durable response."""
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS literature_idempotency_requests (
+            user_id TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            response_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, scope, idempotency_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_literature_idempotency_created
+        ON literature_idempotency_requests(created_at);
+        """
+    )

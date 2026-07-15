@@ -7,7 +7,7 @@ import { useT } from '@/shared/i18n';
 import { statusClassName } from '@features/tasks/utils/status';
 import type { TaskRecord } from '@/shared/types';
 import { queryKeys } from '@/shared/api/queryKeys';
-import { createIdempotencyKey } from '@/shared/api/idempotency';
+import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 
 interface TaskHeaderBarProps {
   task: TaskRecord;
@@ -39,14 +39,15 @@ export default function TaskHeaderBar({
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const inputRef = useRef<HTMLInputElement>(null);
+  const renameKeyManager = useRef(new IdempotencyKeyManager('task.rename')).current;
 
   const renameMutation = useMutation({
-    mutationFn: (title: string) => updateTask(
-      task.task_id,
-      { title },
-      createIdempotencyKey(`task.rename.${task.task_id}`),
-    ),
-    onSuccess: () => {
+    mutationFn: async (title: string) => {
+      const key = renameKeyManager.keyFor(semanticMutationValue({ taskId: task.task_id, title }));
+      return { result: await updateTask(task.task_id, { title }, key), key };
+    },
+    onSuccess: ({ key }) => {
+      renameKeyManager.markSucceeded(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
     },

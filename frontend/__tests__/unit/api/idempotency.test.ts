@@ -15,7 +15,11 @@ describe('IdempotencyKeyManager', () => {
     expect(replay).toBe(first);
     expect(changed).not.toBe(first);
 
-    manager.markSucceeded();
+    manager.markSucceeded(first);
+    expect(manager.keyFor(semanticMutationValue({ prompt: 'beta', project: 'one' })))
+      .toBe(changed);
+
+    manager.markSucceeded(changed);
     expect(manager.keyFor(semanticMutationValue({ prompt: 'beta', project: 'one' })))
       .not.toBe(changed);
   });

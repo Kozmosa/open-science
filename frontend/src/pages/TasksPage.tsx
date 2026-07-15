@@ -29,7 +29,7 @@ import TaskDetailPage from '@features/tasks/pages/TaskDetailPage';
 import TaskList from '@features/tasks/pages/TaskList';
 import { useTaskStream } from '@features/tasks/hooks/useTaskStream';
 import { queryKeys } from '@/shared/api/queryKeys';
-import { createIdempotencyKey } from '@/shared/api/idempotency';
+import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 
 const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
@@ -74,6 +74,12 @@ function TasksPage() {
   const [targetWorkspaceId, setTargetWorkspaceId] = useState('');
   const [forkPrompt, setForkPrompt] = useState('');
   const createButtonRef = useRef<HTMLButtonElement>(null);
+  const archiveKeyManager = useRef(new IdempotencyKeyManager('task.archive')).current;
+  const cancelKeyManager = useRef(new IdempotencyKeyManager('task.cancel')).current;
+  const unarchiveKeyManager = useRef(new IdempotencyKeyManager('task.unarchive')).current;
+  const retryKeyManager = useRef(new IdempotencyKeyManager('task.retry')).current;
+  const moveKeyManager = useRef(new IdempotencyKeyManager('task.move')).current;
+  const forkKeyManager = useRef(new IdempotencyKeyManager('task.fork')).current;
 
   const requestedTaskId = searchParams.get('task');
   const effectiveSelectedTaskId = useMemo(() => {
@@ -164,46 +170,50 @@ function TasksPage() {
   });
 
   const archiveMutation = useMutation({
-    mutationFn: (taskId: string) => archiveTask(
-      taskId,
-      createIdempotencyKey(`task.archive.${taskId}`),
-    ),
-    onSuccess: () => {
+    mutationFn: async (taskId: string) => {
+      const key = archiveKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await archiveTask(taskId, key), key };
+    },
+    onSuccess: ({ key }) => {
+      archiveKeyManager.markSucceeded(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
     },
   });
 
   const cancelMutation = useMutation({
-    mutationFn: (taskId: string) => cancelTask(
-      taskId,
-      createIdempotencyKey(`task.cancel.${taskId}`),
-    ),
-    onSuccess: () => {
+    mutationFn: async (taskId: string) => {
+      const key = cancelKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await cancelTask(taskId, key), key };
+    },
+    onSuccess: ({ key }) => {
+      cancelKeyManager.markSucceeded(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
     },
   });
 
   const unarchiveMutation = useMutation({
-    mutationFn: (taskId: string) => unarchiveTask(
-      taskId,
-      createIdempotencyKey(`task.unarchive.${taskId}`),
-    ),
-    onSuccess: () => {
+    mutationFn: async (taskId: string) => {
+      const key = unarchiveKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await unarchiveTask(taskId, key), key };
+    },
+    onSuccess: ({ key }) => {
+      unarchiveKeyManager.markSucceeded(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
     },
   });
 
   const retryMutation = useMutation({
-    mutationFn: (taskId: string) => retryTask(
-      taskId,
-      createIdempotencyKey(`task.retry.${taskId}`),
-    ),
-    onSuccess: (data) => {
+    mutationFn: async (taskId: string) => {
+      const key = retryKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await retryTask(taskId, key), key };
+    },
+    onSuccess: ({ result, key }) => {
+      retryKeyManager.markSucceeded(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject('default') });
-      selectTask(data.new_task.task_id);
+      selectTask(result.new_task.task_id);
       showToast(t('pages.tasks.retrySuccess'), 'success');
     },
     onError: () => {
@@ -222,13 +232,20 @@ function TasksPage() {
       if (!selectedTask || !targetProjectId) throw new Error('Target Project is required');
       const contextVersionId = targetContextQuery.data?.active_version?.context_version_id;
       if (!contextVersionId) throw new Error('Target Project has no active Context Version');
-      return moveTask(
+      const input = {
+        taskId: selectedTask.task_id,
+        projectId: targetProjectId,
+        contextVersionId,
+      };
+      const key = moveKeyManager.keyFor(semanticMutationValue(input));
+      return { result: await moveTask(
         selectedTask.task_id,
         { project_id: targetProjectId, context_version_id: contextVersionId },
-        createIdempotencyKey(`task.move.${selectedTask.task_id}`),
-      );
+        key,
+      ), key };
     },
-    onSuccess: () => {
+    onSuccess: ({ key }) => {
+      moveKeyManager.markSucceeded(key);
       setOperationDialog(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.domain.projects(true) });
@@ -243,18 +260,21 @@ function TasksPage() {
       );
       const projectId = targetProjectId
         || workspace?.project_links.find((link) => link.link_status === 'active')?.project_id;
+      const payload = {
+        workspace_id: targetWorkspaceId,
+        project_id: projectId,
+        prompt: forkPrompt.trim() || undefined,
+      };
+      const key = forkKeyManager.keyFor(semanticMutationValue({ taskId: selectedTask.task_id, ...payload }));
       const task = await forkTask(
         selectedTask.task_id,
-        {
-          workspace_id: targetWorkspaceId,
-          project_id: projectId,
-          prompt: forkPrompt.trim() || undefined,
-        },
-        createIdempotencyKey(`task.fork.${selectedTask.task_id}`),
+        payload,
+        key,
       );
-      return task;
+      return { task, key };
     },
-    onSuccess: (task) => {
+    onSuccess: ({ task, key }) => {
+      forkKeyManager.markSucceeded(key);
       setOperationDialog(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       selectTask(task.task_id);

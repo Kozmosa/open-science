@@ -10,6 +10,7 @@ on behalf of a user.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections.abc import Callable, Iterable
@@ -233,6 +234,7 @@ class OverviewSnapshotService:
         *,
         trigger: RefreshTrigger = "manual",
         scheduled_for_date: str | None = None,
+        idempotency_key: str | None = None,
         now: datetime | None = None,
     ) -> dict[str, object]:
         """Create or reuse an active job for one user.
@@ -253,6 +255,16 @@ class OverviewSnapshotService:
             raise ValueError("scheduled overview refreshes require a schedule slot")
         if scheduled_for_date is not None:
             self._validate_date(scheduled_for_date)
+        normalized_key = idempotency_key.strip() if idempotency_key is not None else None
+        if idempotency_key is not None and not normalized_key:
+            raise ValueError("idempotency_key is required when provided")
+        request_hash = hashlib.sha256(
+            json.dumps(
+                {"trigger": trigger, "scheduled_for_date": scheduled_for_date},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
 
         created_at = _iso(_as_utc(now))
         with closing(self._connect()) as conn:
@@ -262,9 +274,41 @@ class OverviewSnapshotService:
             # before any durable Overview mutation.
             conn.execute("BEGIN IMMEDIATE")
             self._assert_maintenance_writable(conn)
+            if normalized_key is not None:
+                replay = conn.execute(
+                    """
+                    SELECT request_hash, job_id
+                    FROM overview_refresh_idempotency_requests
+                    WHERE owner_user_id = ? AND idempotency_key = ?
+                    """,
+                    (owner, normalized_key),
+                ).fetchone()
+                if replay is not None:
+                    if str(replay["request_hash"]) != request_hash:
+                        raise ValueError(
+                            "Idempotency-Key was already used for different Overview input"
+                        )
+                    row = conn.execute(
+                        "SELECT * FROM overview_refresh_jobs WHERE job_id = ?",
+                        (str(replay["job_id"]),),
+                    ).fetchone()
+                    if row is None:
+                        raise RuntimeError("Stored Overview idempotency job is missing")
+                    result = self._job_dict(row)
+                    record_overview_event(
+                        "reused",
+                        trigger=str(result.get("trigger", trigger)),
+                        user_id=owner,
+                        job_id=str(result.get("job_id", "")),
+                    )
+                    return result
             active = self._active_job_for_owner(conn, owner)
             if active is not None:
                 result = self._job_dict(active)
+                self._store_refresh_idempotency(
+                    conn, owner, normalized_key, request_hash, str(result["job_id"]), created_at
+                )
+                conn.commit()
                 record_overview_event(
                     "reused",
                     trigger=str(result.get("trigger", trigger)),
@@ -283,6 +327,15 @@ class OverviewSnapshotService:
                 ).fetchone()
                 if scheduled is not None:
                     result = self._job_dict(scheduled)
+                    self._store_refresh_idempotency(
+                        conn,
+                        owner,
+                        normalized_key,
+                        request_hash,
+                        str(result["job_id"]),
+                        created_at,
+                    )
+                    conn.commit()
                     record_overview_event(
                         "reused",
                         trigger=str(result.get("trigger", trigger)),
@@ -310,6 +363,10 @@ class OverviewSnapshotService:
                 if active is None:
                     raise
                 result = self._job_dict(active)
+                self._store_refresh_idempotency(
+                    conn, owner, normalized_key, request_hash, str(result["job_id"]), created_at
+                )
+                conn.commit()
                 record_overview_event(
                     "reused",
                     trigger=str(result.get("trigger", trigger)),
@@ -320,6 +377,9 @@ class OverviewSnapshotService:
             row = conn.execute(
                 "SELECT * FROM overview_refresh_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
+            self._store_refresh_idempotency(
+                conn, owner, normalized_key, request_hash, job_id, created_at
+            )
             self._assert_maintenance_writable(conn)
             conn.commit()
         if row is None:
@@ -332,6 +392,26 @@ class OverviewSnapshotService:
             job_id=str(result.get("job_id", "")),
         )
         return result
+
+    @staticmethod
+    def _store_refresh_idempotency(
+        conn: sqlite3.Connection,
+        owner_user_id: str,
+        idempotency_key: str | None,
+        request_hash: str,
+        job_id: str,
+        created_at: str,
+    ) -> None:
+        if idempotency_key is None:
+            return
+        conn.execute(
+            """
+            INSERT INTO overview_refresh_idempotency_requests (
+                owner_user_id, idempotency_key, request_hash, job_id, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (owner_user_id, idempotency_key, request_hash, job_id, created_at),
+        )
 
     def schedule_due_refreshes(
         self,
@@ -1746,7 +1826,11 @@ class OverviewSnapshotPlanner:
         return self._require_service()
 
     def request_refresh(
-        self, owner_user_id: str, *, now: datetime | None = None
+        self,
+        owner_user_id: str,
+        *,
+        idempotency_key: str | None = None,
+        now: datetime | None = None,
     ) -> dict[str, object]:
         """Enqueue a manual refresh while registered as a domain writer."""
 
@@ -1767,7 +1851,10 @@ class OverviewSnapshotPlanner:
         try:
             self._maintenance.check_lease(lease)
             job = self._require_service().request_refresh(
-                owner_user_id, trigger="manual", now=current
+                owner_user_id,
+                trigger="manual",
+                idempotency_key=idempotency_key,
+                now=current,
             )
             self._maintenance.check_lease(lease)
             self._set_planner_state(status="running", now=current, last_error=None, lease=lease)

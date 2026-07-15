@@ -129,16 +129,73 @@ async def test_tracking_api_uses_topics_user_states_and_durable_checks(tmp_path:
         assert item["paper_id"] == "arxiv:2401.99999"
         assert item["matched_topics"][0]["topic_id"] == topic_id
 
-        updated = await client.patch(
+        missing_state_key = await client.patch(
             f"/literature/papers/{item['paper_id']}/state", json={"is_saved": True}
+        )
+        assert missing_state_key.status_code == 409
+        updated = await client.patch(
+            f"/literature/papers/{item['paper_id']}/state",
+            json={"is_saved": True},
+            headers={"Idempotency-Key": "paper-state-save"},
         )
         assert updated.status_code == 200
         assert updated.json()["user_state"]["is_saved"] is True
+        replayed = await client.patch(
+            f"/literature/papers/{item['paper_id']}/state",
+            json={"is_saved": True},
+            headers={"Idempotency-Key": "paper-state-save"},
+        )
+        assert replayed.json() == updated.json()
+        state_conflict = await client.patch(
+            f"/literature/papers/{item['paper_id']}/state",
+            json={"is_saved": False},
+            headers={"Idempotency-Key": "paper-state-save"},
+        )
+        assert state_conflict.status_code == 409
 
-        first_check = await client.post("/literature/checks", json={"topic_ids": [topic_id]})
-        second_check = await client.post("/literature/checks", json={"topic_ids": [topic_id]})
+        missing_summary_key = await client.post(
+            f"/literature/papers/{item['paper_id']}/summary", json={"language": "en"}
+        )
+        assert missing_summary_key.status_code == 409
+        summary = await client.post(
+            f"/literature/papers/{item['paper_id']}/summary",
+            json={"language": "en"},
+            headers={"Idempotency-Key": "paper-summary-en"},
+        )
+        assert summary.status_code == 202
+        summary_replay = await client.post(
+            f"/literature/papers/{item['paper_id']}/summary",
+            json={"language": "en"},
+            headers={"Idempotency-Key": "paper-summary-en"},
+        )
+        assert summary_replay.json() == summary.json()
+        summary_conflict = await client.post(
+            f"/literature/papers/{item['paper_id']}/summary",
+            json={"language": "zh"},
+            headers={"Idempotency-Key": "paper-summary-en"},
+        )
+        assert summary_conflict.status_code == 409
+
+        missing_check_key = await client.post("/literature/checks", json={"topic_ids": [topic_id]})
+        assert missing_check_key.status_code == 409
+        first_check = await client.post(
+            "/literature/checks",
+            json={"topic_ids": [topic_id]},
+            headers={"Idempotency-Key": "literature-check"},
+        )
+        second_check = await client.post(
+            "/literature/checks",
+            json={"topic_ids": [topic_id]},
+            headers={"Idempotency-Key": "literature-check"},
+        )
         assert first_check.status_code == 202
-        assert second_check.json()["check_id"] == first_check.json()["check_id"]
+        assert second_check.json() == first_check.json()
+        check_conflict = await client.post(
+            "/literature/checks",
+            json={"topic_ids": []},
+            headers={"Idempotency-Key": "literature-check"},
+        )
+        assert check_conflict.status_code == 409
 
 
 def _v2_literature_app(state_root: Path, tmp_path: Path) -> tuple[FastAPI, str]:

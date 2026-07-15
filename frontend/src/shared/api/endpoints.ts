@@ -783,20 +783,31 @@ export const getLiteraturePaper = (paperId: string): Promise<LiteraturePaperDeta
 export const updateLiteraturePaperState = (
   paperId: string,
   payload: Partial<Pick<LiteraturePaperDetail['user_state'], 'is_read' | 'is_saved' | 'is_ignored'>>,
+  idempotencyKey: string,
 ): Promise<LiteraturePaperDetail> =>
-  api.patch(`/literature/papers/${paperId}/state`, payload);
+  api.patch(`/literature/papers/${paperId}/state`, payload, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const getLiteratureSummary = (paperId: string): Promise<LiteratureSummary> =>
   api.get(`/literature/papers/${paperId}/summary`);
 
 export const requestLiteratureSummary = (
   paperId: string,
+  idempotencyKey: string,
   language = 'zh',
 ): Promise<LiteratureSummary> =>
-  api.post(`/literature/papers/${paperId}/summary`, { language });
+  api.post(`/literature/papers/${paperId}/summary`, { language }, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
-export const createLiteratureCheck = (topicIds?: string[]): Promise<LiteratureCheck> =>
-  api.post('/literature/checks', topicIds ? { topic_ids: topicIds } : {});
+export const createLiteratureCheck = (
+  idempotencyKey: string,
+  topicIds?: string[],
+): Promise<LiteratureCheck> =>
+  api.post('/literature/checks', topicIds ? { topic_ids: topicIds } : {}, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const getCurrentLiteratureCheck = (): Promise<LiteratureCheck | null> =>
   api.get('/literature/checks/current');

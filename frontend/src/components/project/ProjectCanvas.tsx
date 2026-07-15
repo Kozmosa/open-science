@@ -20,7 +20,7 @@ import { Button } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { readMigratedLocalStorage, removeLocalStorage } from '@/shared/utils/storage';
 import { createTaskEdge } from '@/shared/api';
-import { createIdempotencyKey } from '@/shared/api/idempotency';
+import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 import type { ProjectRecord, TaskEdge, TaskSummary } from '@/shared/types';
 import TaskNode from './TaskNode';
 import ProjectDropZone from './ProjectDropZone';
@@ -86,6 +86,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
   });
   const [flowEdges, setFlowEdges] = useState<Edge[]>(initialEdges);
   const manualEdgeIds = useRef<Set<string>>(new Set());
+  const relationshipKeyManager = useRef(new IdempotencyKeyManager('task.relationship')).current;
 
   const runLayout = useCallback(() => {
     const saved = readMigratedLocalStorage(LAYOUT_KEY(projectId), [LEGACY_LAYOUT_KEY(projectId)]);
@@ -155,15 +156,19 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
           current,
         ),
       );
-      createTaskEdge(projectId, {
+      const payload = {
         source_task_id: connection.source,
         target_task_id: connection.target,
-      }, createIdempotencyKey(`task.relationship.${projectId}.${connection.source}.${connection.target}`)).catch(() => {
-        manualEdgeIds.current.delete(edgeId);
-        setFlowEdges((current) => current.filter((e) => e.id !== edgeId));
-      });
+      };
+      const key = relationshipKeyManager.keyFor(semanticMutationValue({ projectId, ...payload }));
+      createTaskEdge(projectId, payload, key)
+        .then(() => relationshipKeyManager.markSucceeded(key))
+        .catch(() => {
+          manualEdgeIds.current.delete(edgeId);
+          setFlowEdges((current) => current.filter((e) => e.id !== edgeId));
+        });
     },
-    [projectId]
+    [projectId, relationshipKeyManager]
   );
 
   const onNodeDrag = useCallback(

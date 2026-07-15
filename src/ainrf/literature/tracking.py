@@ -73,6 +73,10 @@ class WorkItem:
     payload: dict[str, Any]
 
 
+class LiteratureIdempotencyConflictError(ValueError):
+    """Raised when one caller key is reused for different Literature input."""
+
+
 class LiteratureTrackingService:
     """Persistence, matching and durable workflow operations for literature."""
 
@@ -249,35 +253,62 @@ class LiteratureTrackingService:
         }
 
     def create_check(
-        self, *, user_id: str, topic_ids: list[str] | None, trigger: str = "manual"
+        self,
+        *,
+        user_id: str,
+        topic_ids: list[str] | None,
+        trigger: str = "manual",
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        if trigger == "scheduled":
-            with self._connect() as conn:
+        request = {
+            "topic_ids": sorted(topic_ids) if topic_ids is not None else None,
+            "trigger": trigger,
+        }
+        with self._connect() as conn:
+            cached = self._idempotent_result(
+                conn, user_id, "literature.check.create", idempotency_key, request
+            )
+            if cached is not None:
+                return cached
+            if trigger == "scheduled":
                 topic_rows = conn.execute(
                     "SELECT * FROM literature_topics WHERE is_active = 1"
                 ).fetchall()
+            else:
+                topic_rows = conn.execute(
+                    "SELECT * FROM literature_topics WHERE user_id = ? ORDER BY created_at DESC",
+                    (user_id,),
+                ).fetchall()
             topics = [self._topic_dict(row) for row in topic_rows]
-        else:
-            topics = self.list_topics(user_id)
-        if topic_ids is not None:
-            wanted = set(topic_ids)
-            topics = [topic for topic in topics if topic["topic_id"] in wanted]
-            if wanted != {topic["topic_id"] for topic in topics}:
-                raise KeyError("Topic not found")
-        active = [topic for topic in topics if topic["is_active"]]
-        categories = sorted({category for topic in active for category in topic["categories"]})
-        if not categories:
-            raise ValueError("At least one active topic with an arXiv category is required")
-        # An Eastern-date slot avoids a user clicking refresh repeatedly creating
-        # separate requests for the same official daily announcement feed.
-        slot = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
-        fingerprint = _fingerprint({"provider": "arxiv", "categories": categories, "slot": slot})
-        with self._connect() as conn:
+            if topic_ids is not None:
+                wanted = set(topic_ids)
+                topics = [topic for topic in topics if topic["topic_id"] in wanted]
+                if wanted != {topic["topic_id"] for topic in topics}:
+                    raise KeyError("Topic not found")
+            active = [topic for topic in topics if topic["is_active"]]
+            categories = sorted({category for topic in active for category in topic["categories"]})
+            if not categories:
+                raise ValueError("At least one active topic with an arXiv category is required")
+            # An Eastern-date slot avoids a user clicking refresh repeatedly creating
+            # separate requests for the same official daily announcement feed.
+            slot = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+            fingerprint = _fingerprint(
+                {"provider": "arxiv", "categories": categories, "slot": slot}
+            )
             existing = conn.execute(
                 "SELECT * FROM literature_checks WHERE request_fingerprint = ?", (fingerprint,)
             ).fetchone()
             if existing is not None:
-                return self._check_dict(existing)
+                result = self._check_dict(existing)
+                self._store_idempotency(
+                    conn,
+                    user_id,
+                    "literature.check.create",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+                return result
             now = _now()
             check_id = _identifier("check")
             conn.execute(
@@ -306,8 +337,17 @@ class LiteratureTrackingService:
             row = conn.execute(
                 "SELECT * FROM literature_checks WHERE check_id = ?", (check_id,)
             ).fetchone()
-        assert row is not None
-        return self._check_dict(row)
+            assert row is not None
+            result = self._check_dict(row)
+            self._store_idempotency(
+                conn,
+                user_id,
+                "literature.check.create",
+                idempotency_key,
+                request,
+                result,
+            )
+            return result
 
     def plan_daily_check(self) -> dict[str, Any] | None:
         """Plan one shared daily RSS check for all active user topics."""
@@ -437,34 +477,27 @@ class LiteratureTrackingService:
 
     def get_paper(self, user_id: str, paper_id: str) -> dict[str, Any]:
         with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT cp.*, ups.is_read, ups.is_saved, ups.is_ignored, ups.first_seen_at AS user_first_seen_at,
-                       ups.last_seen_at AS user_last_seen_at, ups.latest_seen_version_id
-                FROM literature_catalog_papers cp
-                JOIN literature_user_paper_states ups ON ups.paper_id = cp.paper_id
-                WHERE cp.paper_id = ? AND ups.user_id = ?
-                """,
-                (paper_id, user_id),
-            ).fetchone()
-            versions = conn.execute(
-                "SELECT * FROM literature_paper_versions WHERE paper_id = ? ORDER BY first_seen_at DESC",
-                (paper_id,),
-            ).fetchall()
-        if row is None:
-            raise KeyError("Paper not found")
-        result = self._paper_for_user(conn, user_id, row)
-        result["versions"] = [dict(version) for version in versions]
-        return result
+            return self._get_paper(conn, user_id, paper_id)
 
     def update_paper_state(
-        self, user_id: str, paper_id: str, body: dict[str, Any]
+        self,
+        user_id: str,
+        paper_id: str,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         allowed = {"is_read", "is_saved", "is_ignored"}
         updates = {key: int(bool(value)) for key, value in body.items() if key in allowed}
         if not updates:
             raise ValueError("No supported paper state fields provided")
+        request = {"paper_id": paper_id, "updates": updates}
         with self._connect() as conn:
+            cached = self._idempotent_result(
+                conn, user_id, "literature.paper.state", idempotency_key, request
+            )
+            if cached is not None:
+                return cached
             existing = conn.execute(
                 "SELECT 1 FROM literature_user_paper_states WHERE user_id = ? AND paper_id = ?",
                 (user_id, paper_id),
@@ -476,10 +509,32 @@ class LiteratureTrackingService:
                 f"UPDATE literature_user_paper_states SET {columns}, last_seen_at = ? WHERE user_id = ? AND paper_id = ?",
                 [*updates.values(), _now(), user_id, paper_id],
             )
-        return self.get_paper(user_id, paper_id)
+            result = self._get_paper(conn, user_id, paper_id)
+            self._store_idempotency(
+                conn,
+                user_id,
+                "literature.paper.state",
+                idempotency_key,
+                request,
+                result,
+            )
+            return result
 
-    def request_summary(self, user_id: str, paper_id: str, language: str = "zh") -> dict[str, Any]:
+    def request_summary(
+        self,
+        user_id: str,
+        paper_id: str,
+        language: str = "zh",
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        request = {"paper_id": paper_id, "language": language}
         with self._connect() as conn:
+            cached = self._idempotent_result(
+                conn, user_id, "literature.summary.request", idempotency_key, request
+            )
+            if cached is not None:
+                return cached
             paper = conn.execute(
                 """
                 SELECT cp.* FROM literature_catalog_papers cp
@@ -509,7 +564,16 @@ class LiteratureTrackingService:
                 ),
             ).fetchone()
             if existing is not None:
-                return self._summary_dict(existing)
+                result = self._summary_dict(existing)
+                self._store_idempotency(
+                    conn,
+                    user_id,
+                    "literature.summary.request",
+                    idempotency_key,
+                    request,
+                    result,
+                )
+                return result
             now = _now()
             summary_id = _identifier("summary")
             work_id = self._insert_work_item(
@@ -540,8 +604,17 @@ class LiteratureTrackingService:
             row = conn.execute(
                 "SELECT * FROM literature_summaries WHERE summary_id = ?", (summary_id,)
             ).fetchone()
-        assert row is not None
-        return self._summary_dict(row)
+            assert row is not None
+            result = self._summary_dict(row)
+            self._store_idempotency(
+                conn,
+                user_id,
+                "literature.summary.request",
+                idempotency_key,
+                request,
+                result,
+            )
+            return result
 
     def get_summary(self, user_id: str, paper_id: str) -> dict[str, Any]:
         with self._connect() as conn:
@@ -938,6 +1011,84 @@ class LiteratureTrackingService:
             (_identifier("outbox"), work_item_id, now),
         )
         return work_item_id
+
+    def _get_paper(self, conn: sqlite3.Connection, user_id: str, paper_id: str) -> dict[str, Any]:
+        row = conn.execute(
+            """
+            SELECT cp.*, ups.is_read, ups.is_saved, ups.is_ignored,
+                   ups.first_seen_at AS user_first_seen_at,
+                   ups.last_seen_at AS user_last_seen_at, ups.latest_seen_version_id
+            FROM literature_catalog_papers cp
+            JOIN literature_user_paper_states ups ON ups.paper_id = cp.paper_id
+            WHERE cp.paper_id = ? AND ups.user_id = ?
+            """,
+            (paper_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise KeyError("Paper not found")
+        versions = conn.execute(
+            "SELECT * FROM literature_paper_versions WHERE paper_id = ? ORDER BY first_seen_at DESC",
+            (paper_id,),
+        ).fetchall()
+        result = self._paper_for_user(conn, user_id, row)
+        result["versions"] = [dict(version) for version in versions]
+        return result
+
+    @staticmethod
+    def _idempotent_result(
+        conn: sqlite3.Connection,
+        user_id: str,
+        scope: str,
+        idempotency_key: str | None,
+        request: object,
+    ) -> dict[str, Any] | None:
+        if idempotency_key is None:
+            return None
+        row = conn.execute(
+            """
+            SELECT request_hash, response_json
+            FROM literature_idempotency_requests
+            WHERE user_id = ? AND scope = ? AND idempotency_key = ?
+            """,
+            (user_id, scope, idempotency_key),
+        ).fetchone()
+        if row is None:
+            return None
+        if str(row["request_hash"]) != _fingerprint(request):
+            raise LiteratureIdempotencyConflictError(
+                "Idempotency-Key was already used for different Literature input"
+            )
+        payload = json.loads(str(row["response_json"]))
+        if not isinstance(payload, dict):
+            raise RuntimeError("Stored Literature idempotency response is invalid")
+        return {str(key): value for key, value in payload.items()}
+
+    @staticmethod
+    def _store_idempotency(
+        conn: sqlite3.Connection,
+        user_id: str,
+        scope: str,
+        idempotency_key: str | None,
+        request: object,
+        response: dict[str, Any],
+    ) -> None:
+        if idempotency_key is None:
+            return
+        conn.execute(
+            """
+            INSERT INTO literature_idempotency_requests (
+                user_id, scope, idempotency_key, request_hash, response_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                scope,
+                idempotency_key,
+                _fingerprint(request),
+                json.dumps(response, ensure_ascii=False, sort_keys=True),
+                _now(),
+            ),
+        )
 
     @staticmethod
     def _clean_terms(values: Sequence[object]) -> list[str]:

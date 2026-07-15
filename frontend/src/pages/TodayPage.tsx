@@ -239,7 +239,6 @@ export default function TodayPage() {
   const completeRefresh = useCallback((job: OverviewRefreshJob) => {
     setRefreshJob(job);
     if (SUCCESS_JOB_STATUSES.has(job.status)) {
-      refreshKeyRef.current = createIdempotencyKey('overview.today.refresh');
       void queryClient.invalidateQueries({ queryKey: queryKeys.domain.overview });
     }
   }, [queryClient]);
@@ -247,6 +246,7 @@ export default function TodayPage() {
   const refreshMutation = useMutation({
     mutationFn: () => requestTodayOverviewRefresh(refreshKeyRef.current),
     onSuccess: (job) => {
+      refreshKeyRef.current = createIdempotencyKey('overview.today.refresh');
       setPollError(null);
       setPollTimedOut(false);
       setPollAttempt(0);
