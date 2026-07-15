@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import socket
@@ -153,23 +154,14 @@ class DevelopmentStack:
             self.down()
         self._assert_ports_available()
         self.prepare()
+        if self.mode is DevelopmentStackMode.PREVIEW:
+            self._build_frontend_preview()
         records: list[DevelopmentProcessRecord] = []
         try:
             records.append(
                 self._start_process(
                     "api",
-                    (
-                        "uv",
-                        "run",
-                        "openscience",
-                        "serve",
-                        "--host",
-                        self.frontend_bind_host,
-                        "--port",
-                        str(self.instance.ports.api),
-                        "--state-root",
-                        str(self.state_root),
-                    ),
+                    self._api_command(),
                 )
             )
             self._write_manifest(records)
@@ -207,7 +199,7 @@ class DevelopmentStack:
                         frontend_script,
                         "--",
                         "--host",
-                        self.instance.bind_host,
+                        self.frontend_bind_host,
                         "--port",
                         str(self.instance.ports.frontend),
                         "--strictPort",
@@ -224,6 +216,46 @@ class DevelopmentStack:
             self.manifest_path.unlink(missing_ok=True)
             raise
         return self.status()
+
+    def smoke(self) -> dict[str, object]:
+        status = self.status()
+        if status.state != "healthy":
+            raise DevelopmentStackError("development stack must be healthy before smoke")
+        frontend_base = f"http://{self._frontend_probe_host()}:{self.instance.ports.frontend}"
+        checks: dict[str, object] = {}
+        index = _fetch_http_text(f"{frontend_base}/")
+        if '<div id="root"></div>' not in index:
+            raise DevelopmentStackError("Vite index does not contain the React root")
+        checks["frontend_index"] = True
+        asset_match = re.search(r'<script[^>]+src="([^"]+)"', index)
+        if asset_match is not None:
+            asset_path = asset_match.group(1)
+            _fetch_http_text(f"{frontend_base}{asset_path}")
+            checks["frontend_asset"] = asset_path
+        proxy_health = _fetch_http_json(f"{frontend_base}/api/health")
+        checks["proxy_health"] = proxy_health.get("status") or "ok"
+        capabilities = _fetch_http_json(f"{frontend_base}/api/domain/capabilities")
+        if capabilities.get("domain_contract_version") != 2:
+            raise DevelopmentStackError("development capabilities did not expose contract v2")
+        checks["capabilities"] = {
+            "domain_contract_version": capabilities.get("domain_contract_version"),
+            "mode": capabilities.get("mode"),
+        }
+        projects = _fetch_http_json(f"{frontend_base}/api/domain/projects")
+        workspaces = _fetch_http_json(f"{frontend_base}/api/domain/workspaces")
+        project_items = projects.get("items")
+        workspace_items = workspaces.get("items")
+        if not isinstance(project_items, list) or not isinstance(workspace_items, list):
+            raise DevelopmentStackError("domain projection smoke returned malformed lists")
+        checks["projects"] = len(project_items)
+        checks["workspaces"] = len(workspace_items)
+        return {
+            "instance_id": self.instance.instance_id,
+            "profile": self.instance.profile,
+            "mode": self.mode.value,
+            "frontend_url": frontend_base,
+            "checks": checks,
+        }
 
     def down(self) -> DevelopmentStackStatus:
         records = self._load_records()
@@ -262,9 +294,11 @@ class DevelopmentStack:
             f"http://{self._frontend_probe_host()}:{self.instance.ports.frontend}/"
         )
         alive = all(alive_by_service[name] for name in expected & present)
+        manifest_mode = self._manifest_mode()
+        mode_matches = manifest_mode in {None, self.mode.value}
         if not records:
             state = "stopped"
-        elif present == expected and alive and api_healthy and frontend_healthy:
+        elif present == expected and alive and api_healthy and frontend_healthy and mode_matches:
             state = "healthy"
         else:
             state = "degraded"
@@ -273,7 +307,8 @@ class DevelopmentStack:
             "state": state,
             "instance_id": self.instance.instance_id,
             "profile": "personal" if self.is_personal else self.instance.profile,
-            "mode": self.mode.value,
+            "mode": manifest_mode or self.mode.value,
+            "requested_mode": self.mode.value,
             "source": {
                 "branch": self.instance.branch,
                 "head": self.instance.head,
@@ -326,6 +361,60 @@ class DevelopmentStack:
             log_path=str(log_path),
         )
 
+    def _api_command(self) -> tuple[str, ...]:
+        if self.mode is DevelopmentStackMode.DEV:
+            return (
+                "uv",
+                "run",
+                "uvicorn",
+                "ainrf.server:create_development_app",
+                "--factory",
+                "--host",
+                self.instance.bind_host,
+                "--port",
+                str(self.instance.ports.api),
+                "--reload",
+                "--reload-dir",
+                str(self.instance.repo_root / "src" / "ainrf"),
+                "--ws-ping-interval",
+                "10",
+                "--ws-ping-timeout",
+                "30",
+            )
+        return (
+            "uv",
+            "run",
+            "openscience",
+            "serve",
+            "--host",
+            self.instance.bind_host,
+            "--port",
+            str(self.instance.ports.api),
+            "--state-root",
+            str(self.state_root),
+        )
+
+    def _build_frontend_preview(self) -> None:
+        log_path = self.instance.log_root / "frontend-build.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("wb") as handle:
+            result = subprocess.run(
+                (
+                    "npm",
+                    "--prefix",
+                    str(self.instance.repo_root / "frontend"),
+                    "run",
+                    "build",
+                ),
+                cwd=self.instance.repo_root,
+                env=self.environment(),
+                check=False,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+            )
+        if result.returncode != 0:
+            raise DevelopmentStackError(f"frontend preview build failed; inspect {log_path}")
+
     def _write_manifest(self, records: list[DevelopmentProcessRecord]) -> None:
         payload = {
             "schema_version": STACK_MANIFEST_SCHEMA_VERSION,
@@ -366,6 +455,13 @@ class DevelopmentStack:
                 )
             )
         return records
+
+    def _manifest_mode(self) -> str | None:
+        if not self.manifest_path.is_file():
+            return None
+        payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        mode = payload.get("mode")
+        return str(mode) if mode is not None else None
 
     def _stop_records(self, records: list[DevelopmentProcessRecord]) -> None:
         owned = [record for record in reversed(records) if _record_is_alive(record)]
@@ -465,6 +561,26 @@ def _http_healthy(url: str) -> bool:
             return 200 <= response.status < 500
     except (OSError, URLError):
         return False
+
+
+def _fetch_http_text(url: str) -> str:
+    try:
+        with urlopen(url, timeout=2.0) as response:
+            if not 200 <= response.status < 300:
+                raise DevelopmentStackError(f"HTTP smoke failed for {url}: {response.status}")
+            return response.read().decode("utf-8")
+    except (OSError, URLError) as exc:
+        raise DevelopmentStackError(f"HTTP smoke failed for {url}: {exc}") from exc
+
+
+def _fetch_http_json(url: str) -> dict[str, object]:
+    try:
+        payload = json.loads(_fetch_http_text(url))
+    except json.JSONDecodeError as exc:
+        raise DevelopmentStackError(f"HTTP smoke returned invalid JSON for {url}") from exc
+    if not isinstance(payload, dict):
+        raise DevelopmentStackError(f"HTTP smoke returned a non-object for {url}")
+    return {str(key): value for key, value in payload.items()}
 
 
 def _write_json_atomic(path: Path, payload: Mapping[str, object]) -> None:

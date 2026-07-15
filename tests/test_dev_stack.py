@@ -20,6 +20,8 @@ from ainrf.development.stack import (
     DevelopmentProcessRecord,
     DevelopmentStack,
     DevelopmentStackError,
+    DevelopmentStackMode,
+    DevelopmentStackStatus,
 )
 
 
@@ -200,3 +202,107 @@ def test_stack_refuses_to_take_over_unowned_ports(
 
     with pytest.raises(DevelopmentStackError, match="unowned process"):
         stack.up()
+
+
+def test_stack_uses_reload_for_dev_and_stable_server_for_preview(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = _instance(tmp_path, monkeypatch)
+    development = DevelopmentStack(
+        instance,
+        artifact_sha="2" * 64,
+        api_key="fixture-key",
+        mode=DevelopmentStackMode.DEV,
+    )
+    preview = DevelopmentStack(
+        instance,
+        artifact_sha="2" * 64,
+        api_key="fixture-key",
+        mode=DevelopmentStackMode.PREVIEW,
+    )
+
+    dev_command = development._api_command()
+    preview_command = preview._api_command()
+
+    assert dev_command[:5] == (
+        "uv",
+        "run",
+        "uvicorn",
+        "ainrf.server:create_development_app",
+        "--factory",
+    )
+    assert "--reload" in dev_command
+    assert str(instance.repo_root / "src" / "ainrf") in dev_command
+    assert preview_command[:4] == ("uv", "run", "openscience", "serve")
+    assert "--reload" not in preview_command
+
+
+def test_preview_build_runs_production_frontend_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = _instance(tmp_path, monkeypatch)
+    stack = DevelopmentStack(
+        instance,
+        artifact_sha="3" * 64,
+        api_key="fixture-key",
+        mode=DevelopmentStackMode.PREVIEW,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        captured["command"] = command
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(stack_module.subprocess, "run", fake_run)
+
+    stack._build_frontend_preview()
+
+    assert captured["command"] == (
+        "npm",
+        "--prefix",
+        str(instance.repo_root / "frontend"),
+        "run",
+        "build",
+    )
+    assert (instance.log_root / "frontend-build.log").exists()
+
+
+def test_stack_smoke_reads_v2_projections_through_frontend_proxy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = _instance(tmp_path, monkeypatch)
+    stack = DevelopmentStack(instance, artifact_sha="4" * 64, api_key="fixture-key")
+    monkeypatch.setattr(
+        stack,
+        "status",
+        lambda: DevelopmentStackStatus(state="healthy", payload={"state": "healthy"}),
+    )
+
+    def fake_text(url: str) -> str:
+        if url.endswith("/"):
+            return '<html><div id="root"></div><script src="/src/main.tsx"></script></html>'
+        if url.endswith("/src/main.tsx"):
+            return "export {}"
+        raise AssertionError(url)
+
+    def fake_json(url: str) -> dict[str, object]:
+        if url.endswith("/api/health"):
+            return {"status": "ok"}
+        if url.endswith("/api/domain/capabilities"):
+            return {"domain_contract_version": 2, "mode": "v2"}
+        if url.endswith("/api/domain/projects"):
+            return {"items": [{"project_id": "project-1"}]}
+        if url.endswith("/api/domain/workspaces"):
+            return {"items": [{"workspace_id": "workspace-1"}]}
+        raise AssertionError(url)
+
+    monkeypatch.setattr(stack_module, "_fetch_http_text", fake_text)
+    monkeypatch.setattr(stack_module, "_fetch_http_json", fake_json)
+
+    payload = stack.smoke()
+
+    checks = cast(dict[str, object], payload["checks"])
+    assert checks["frontend_index"] is True
+    assert checks["projects"] == 1
+    assert checks["workspaces"] == 1

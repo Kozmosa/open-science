@@ -10,9 +10,18 @@ from pathlib import Path
 
 import httpx
 import uvicorn
+from fastapi import FastAPI
 
 from ainrf.api import ApiConfig, create_app
 from ainrf.logging import configure_logging
+
+
+def create_development_app() -> FastAPI:
+    """Build an env-configured app for the uvicorn development reloader."""
+
+    config = ApiConfig.from_env()
+    configure_logging(config.state_root)
+    return create_app(config)
 
 
 def run_server(

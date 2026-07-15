@@ -43,7 +43,7 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="OpenScience isolated development stack")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("prepare", "down", "status", "reset", "env"):
+    for command in ("prepare", "down", "status", "reset", "env", "smoke"):
         _add_common_options(subparsers.add_parser(command))
     up = subparsers.add_parser("up")
     _add_common_options(up)
@@ -108,6 +108,8 @@ def _print_payload(payload: dict[str, object], *, as_json: bool) -> None:
         path_values = cast(dict[str, object], paths)
         print(f"state: {path_values.get('state_root')}")
         print(f"logs: {path_values.get('log_root')}")
+    if state is None and not isinstance(urls, dict) and not isinstance(paths, dict):
+        print(json.dumps(payload, indent=2, sort_keys=True))
 
 
 def _print_environment(stack: DevelopmentStack) -> None:
@@ -185,6 +187,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "env":
             _print_environment(stack)
+            return 0
+        if args.command == "smoke":
+            _print_payload(stack.smoke(), as_json=args.json)
             return 0
         if args.command == "logs":
             return _show_logs(stack, args.service, args.lines, args.follow)
