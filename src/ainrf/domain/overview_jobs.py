@@ -37,6 +37,13 @@ _SHANGHAI = ZoneInfo("Asia/Shanghai")
 # local sources was readable.  In particular, a partial resource scan must not
 # replace the last complete Environment snapshot with a smaller subset.
 _SUCCESS_CARD_STATUSES = ("ok",)
+_CARD_STATUS_SEVERITY = {
+    "ok": 0,
+    "partial": 1,
+    "stale": 2,
+    "unavailable": 3,
+    "failed": 4,
+}
 _PLANNER_HEARTBEAT_TTL = timedelta(minutes=2)
 _RETRY_BASE_DELAY_SECONDS = 15
 _RETRY_MAX_DELAY_SECONDS = 15 * 60
@@ -1608,12 +1615,58 @@ class OverviewSnapshotService:
                 }
             )
         attention_items.extend(intervention)
+        attention_sources = [source for source in (domain, resources) if source is not None]
+        attention_status = max(
+            (source.source_status for source in attention_sources),
+            key=lambda value: _CARD_STATUS_SEVERITY.get(value, _CARD_STATUS_SEVERITY["failed"]),
+            default="failed",
+        )
+        cutoff_candidates = [
+            (parsed, source.data_cutoff_at)
+            for source in attention_sources
+            if (parsed := _parse_iso(source.data_cutoff_at)) is not None
+        ]
+        attention_cutoff = (
+            min(cutoff_candidates, key=lambda item: item[0])[1] if cutoff_candidates else ""
+        )
+        error_parts = [
+            f"{source.card_id}: {source.error_summary}"
+            for source in attention_sources
+            if source.error_summary
+        ]
+        if domain is None:
+            error_parts.append("domain: source unavailable")
+        if resources is None:
+            error_parts.append("resources: source unavailable")
+        attention_error = "; ".join(dict.fromkeys(error_parts))[:1000] or None
+        if resources is None or resources.source_status != "ok":
+            attention_items.insert(
+                0,
+                {
+                    "kind": "resource_source_status",
+                    "status": resources.source_status if resources else "failed",
+                    "summary": resources.error_summary
+                    if resources and resources.error_summary
+                    else "Resource source is unavailable",
+                },
+            )
+        attention_source = _CardResult(
+            card_id="attention",
+            data=None,
+            source_status=attention_status,
+            data_cutoff_at=attention_cutoff,
+            attention_required=(
+                bool(attention_items)
+                or any(source.attention_required for source in attention_sources)
+                or attention_status != "ok"
+            ),
+            error_summary=attention_error,
+        )
         return [
             payload(
                 "attention",
-                domain,
+                attention_source,
                 {"items": attention_items[:10]},
-                attention_required=bool(attention_items),
             ),
             payload(
                 "progress",
