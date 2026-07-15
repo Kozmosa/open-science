@@ -89,29 +89,82 @@ cd frontend && npm run build
 
 ## 隔离的 v2 前端开发环境
 
-领域前端 F5–F10 需要真实的 v2 capability、Project/Workspace 读模型和 domain worker
-heartbeat。使用仓库内的合成 fixture，不要为日常前端开发复用 production、shared staging
-或 L2 资源：
+前端开发使用 worktree 隔离的 API、domain worker、Vite 和 synthetic committed-v2 state，
+不要复用 production、shared staging 或 L2 资源：
 
 ```bash
 npm --prefix frontend ci
 
-# 只准备或核对 synthetic committed-v2 state
-bash scripts/frontend-dev.sh prepare
+# 启动 Vite HMR + FastAPI reload + domain worker
+bash scripts/dev.sh up --profile full
 
-# 同时启动 API、空闲 domain worker 和 Vite HMR
-bash scripts/frontend-dev.sh run
+# 查看派生 URL、PID、日志和健康状态
+bash scripts/dev.sh status --profile full
+
+# 经 Vite proxy 验证 health、capabilities 和领域 projection
+bash scripts/dev.sh smoke --profile full
+
+# 查看日志并停止
+bash scripts/dev.sh logs --profile full all --follow
+bash scripts/dev.sh down --profile full
+
+# 删除并重新生成由工具 marker 管理的 synthetic state
+bash scripts/dev.sh reset --profile full
 ```
 
-默认状态目录为 `/tmp/openscience-frontend-dev`，API 为 `127.0.0.1:8000`，Vite 为
-`127.0.0.1:5173`。可通过 `OPENSCIENCE_FRONTEND_DEV_STATE_ROOT`、
-`OPENSCIENCE_FRONTEND_DEV_API_PORT` 和 `OPENSCIENCE_FRONTEND_DEV_PORT` 覆盖。
-fixture 只写合成 Project、Workspace、Environment 和权限状态，并拒绝把状态目录放入任意
-Git worktree。
+可选择以下 deterministic profile：
 
-该入口不是 L2 或浏览器 E2E 门禁。headless 开发阶段运行 Vitest、API contract、lint 和
-build；真实 DOM、焦点、computed style、loaded asset 与窄屏验收在具备 DevTools 的客户端
-环境单独完成。
+| Profile | 用途 |
+| --- | --- |
+| `full` | F1–F10 代表性正常状态，默认值 |
+| `empty` | 新用户和空状态 |
+| `permissions` | owner、viewer、editor、publish 与 archived 权限 |
+| `failures` | failed、partial、stale、launch_unknown 与 stopped 状态 |
+| `large` | 40 Projects、120 Workspaces、500 Tasks、250 Papers 的滚动与列表压力 |
+
+实例 ID、端口和 `/tmp/openscience-dev/<instance-id>/` 路径按 worktree、branch 和 profile
+稳定派生。不同 worktree 不再争用 5173/8000；端口被未知进程占用时命令会失败并提示
+override，不会主动杀进程。凭据只存在 repo 外的权限受限文件和 Vite proxy process 中，
+不会注入浏览器 bundle。
+
+## 三条反馈链
+
+### 快速开发
+
+```bash
+bash scripts/dev.sh up --profile full --mode dev
+```
+
+前端使用 Vite HMR，后端使用 uvicorn reload。fixture 本身不会留下可 claim 的 Task 或
+Literature 工作项，但通过页面主动创建的新 Task 仍会由当前 domain worker 正常处理。
+
+### 本地 production preview
+
+```bash
+bash scripts/dev.sh up --profile full --mode preview
+bash scripts/dev.sh smoke --profile full --mode preview
+```
+
+preview 启动前强制执行 production frontend build，API 不启用 reload。它验证本地装配，
+但仍不是 Docker/L2 或 release evidence。
+
+### Browser / DevTools preflight
+
+```bash
+# 基础工具与依赖
+bash scripts/dev.sh doctor --profile full
+
+# 发现 Chrome/MCP 配置并实际启动一次隔离 CDP
+bash scripts/dev.sh doctor --profile full --browser
+```
+
+系统 snap Chromium 会被拒绝。preflight 不修改用户配置、不自动升级 MCP，也不会自动加
+`--no-sandbox`。Chrome/CDP 成功证明 headless 主机具备真实浏览器能力；是否在当前 agent
+会话暴露 browser tool 仍取决于启动时加载的 MCP 配置，配置变化后必须重启 session。
+
+DevTools 手工检查、HTTP smoke、L0/L1、L2 和 release acceptance 是不同证据层，不能互相
+替代。F1–F10 的 DOM、computed style、Network、focus 和响应式验收继续记录在客户端延期
+验收清单中，不新增 Playwright merge gate。
 
 ## 实验性性能审计
 

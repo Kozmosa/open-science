@@ -10,10 +10,12 @@ tags:
 
 # Frontend 客户端延期验收清单
 
-本清单记录 F1–F10 在 headless 实施环境中无法形成真实浏览器证据的验收项。代码级契约、Vitest、lint、production build、L0/L1 与 synthetic HTTP smoke 仍在当前 worktree 完成；以下项目不以 Playwright、legacy `testing/e2e/`、Docker、shared staging 或 L2 补齐，统一延后到具备 DevTools 的客户端会话逐项确认。
+本清单记录 F1–F10 尚未在 browser-tool 可见会话中形成完整真实浏览器证据的验收项。headless 主机已经可以启动 Chrome for Testing 并通过 CDP 读取真实浏览器状态；但 MCP 配置只在 session 启动时加载，当前代码会话能否调用 browser tool 仍需重启后确认。代码级契约、Vitest、lint、production build、L0/L1、synthetic HTTP smoke 与 browser preflight 已在当前 worktree 完成；以下项目不以 Playwright、legacy `testing/e2e/`、Docker、shared staging 或 L2 补齐，继续延后到 chrome-devtools MCP 实际可用的客户端会话逐项确认。
 
 ## 验收环境记录
 
+- [ ] 先执行 `bash scripts/dev.sh doctor --profile full --browser`，记录 Chrome、Protocol、CDP 和 MCP config 结果。
+- [ ] 若配置存在但当前会话没有 browser tool，重启 Codex/OMP/Claude session 后再开始验收。
 - [ ] 记录客户端版本、操作系统、浏览器与窗口尺寸。
 - [ ] 记录验收 commit SHA，确保浏览器加载的 bundle hash 与该 commit 构建产物一致。
 - [ ] 确认使用独立测试用户，避免覆盖真实用户的 settings、sidebar 与卡片顺序偏好。
@@ -107,4 +109,4 @@ tags:
 
 ## 完成记录
 
-每次客户端验收后在对应条目勾选，并在本节追加日期、commit SHA、浏览器、结论与未解决问题。所有未勾选项继续视为 deferred，不作为 headless F1–F10 提交已具备真实浏览器验收证据的声明。
+每次客户端验收后在对应条目勾选，并在本节追加日期、commit SHA、浏览器、结论与未解决问题。browser preflight、HTTP smoke 或 production preview 不能替代这些交互证据；所有未勾选项继续视为 deferred。

@@ -29,21 +29,26 @@ For frontend deployment pitfalls, see [dev-bitter-lesson.md](../dev-bitter-lesso
 
 ## Browser & DevTools (Working)
 
-Both the OMP built-in browser tool and the chrome-devtools MCP are functional. Use the **chrome-devtools MCP** (via `browser` tool) as the primary tool for frontend inspection; fall back to the OMP browser tool when needed.
+Use the **chrome-devtools MCP** as the primary frontend inspection tool when it is exposed by the current session. A headless host can still run real Chrome, inspect DOM/computed style/Network/focus, and connect through CDP; lack of a browser tool in one agent session is a session-configuration problem, not proof that the host cannot run a browser.
 
-The system snap chromium at `/snap/bin/chromium` is **broken** (snap namespace fails on non-standard HOME `/data/yile.chen`). All browser tools use the Puppeteer-cached Chrome for Testing binary instead:
+Before browser work, run:
 
+```bash
+bash scripts/dev.sh doctor --profile full --browser
 ```
-/data/yile.chen/.cache/puppeteer/chrome/linux-149.0.7827.22/chrome-linux64/chrome
-```
 
-This is configured via:
-- `PUPPETEER_EXECUTABLE_PATH` in `~/.omp/agent/config.yml` `env` section
-- `~/.local/bin/chromium` wrapper (symlinked as `chromium-browser`, `google-chrome`) shadows the snap binary via PATH priority
-- `~/.omp/agent/mcp.json` — chrome-devtools MCP server definition
-- `~/.claude/settings.json` — Claude Code env (`PUPPETEER_EXECUTABLE_PATH`) + `mcpServers`
+The preflight discovers `PUPPETEER_EXECUTABLE_PATH`, PATH wrappers, and Puppeteer-cached Chrome in that order; rejects the broken system snap Chromium; checks Claude/OMP MCP declarations; and launches one isolated headless CDP probe. It never modifies user config, upgrades MCP packages, or adds `--no-sandbox` automatically.
 
-**Note**: OMP config `env` vars only take effect at session start. Mid-session changes require a session restart.
+OMP/Claude MCP configuration is loaded at session start. If preflight succeeds but the current session has no browser tool, restart the session before changing repository code based on guessed DOM or browser state.
+
+## Development Feedback Lanes
+
+- Fast inner loop: `bash scripts/dev.sh up --profile full --mode dev` provides Vite HMR, FastAPI reload, an isolated domain worker, and worktree-derived ports/state.
+- Local production preview: `bash scripts/dev.sh up --profile full --mode preview` builds the production frontend first and then serves it against the same isolated API.
+- Deterministic gates: L0/L1 remain separate from manual DevTools work and local HTTP smoke.
+- Release evidence: L2–L4 remain isolated integration/deep/release layers; local dev/preview must not be cited as those layers.
+
+Use `full`, `empty`, `permissions`, `failures`, or `large` fixture profiles rather than editing persisted state by hand. `reset` is allowed only for marker-owned synthetic instances and is forbidden for the personal `~/.ainrf` launcher.
 
 ## Legacy Agent E2E Testing (Exploratory, Non-Gating)
 
