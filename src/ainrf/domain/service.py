@@ -888,6 +888,70 @@ class DomainService:
             conn.commit()
         return result
 
+    @staticmethod
+    def canonical_workspace_path(canonical_path: str) -> str:
+        """Normalize the path persisted by Workspace registration."""
+
+        return str(Path(canonical_path).expanduser().resolve())
+
+    def workspace_create_replay(
+        self,
+        user: dict[str, object],
+        *,
+        environment_id: str,
+        canonical_path: str,
+        label: str,
+        description: str | None = None,
+        workspace_prompt: str | None = None,
+        idempotency_key: str,
+    ) -> dict[str, object] | None:
+        """Return a completed create before repeating external path preflight."""
+
+        owner_id = self._user_id(user)
+        request: dict[str, object] = {
+            "environment_id": environment_id,
+            "canonical_path": self.canonical_workspace_path(canonical_path),
+            "label": label,
+            "description": description,
+            "workspace_prompt": workspace_prompt,
+        }
+        with closing(self._connect()) as conn:
+            return self._idempotent_result(
+                conn, owner_id, "workspace.create", idempotency_key, request
+            )
+
+    def workspace_create_and_attach_replay(
+        self,
+        *,
+        project_id: str,
+        user: dict[str, object],
+        environment_id: str,
+        canonical_path: str,
+        label: str,
+        description: str | None = None,
+        workspace_prompt: str | None = None,
+        idempotency_key: str,
+    ) -> dict[str, object] | None:
+        """Return a completed compatibility create-and-attach before preflight."""
+
+        owner_id = self._user_id(user)
+        request: dict[str, object] = {
+            "project_id": project_id,
+            "environment_id": environment_id,
+            "canonical_path": self.canonical_workspace_path(canonical_path),
+            "label": label,
+            "description": description,
+            "workspace_prompt": workspace_prompt,
+        }
+        with closing(self._connect()) as conn:
+            return self._idempotent_result(
+                conn,
+                owner_id,
+                "workspace.create_and_attach",
+                idempotency_key,
+                request,
+            )
+
     def create_workspace(
         self,
         user: dict[str, object],
@@ -900,7 +964,7 @@ class DomainService:
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
         owner_id = self._user_id(user)
-        path = str(Path(canonical_path).expanduser().resolve())
+        path = self.canonical_workspace_path(canonical_path)
         context_metadata = (
             {"workspace_prompt": workspace_prompt} if workspace_prompt is not None else {}
         )
@@ -989,7 +1053,7 @@ class DomainService:
         """
 
         owner_id = self._user_id(user)
-        path = str(Path(canonical_path).expanduser().resolve())
+        path = self.canonical_workspace_path(canonical_path)
         context_metadata = (
             {"workspace_prompt": workspace_prompt} if workspace_prompt is not None else {}
         )

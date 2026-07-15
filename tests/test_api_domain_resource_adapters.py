@@ -174,6 +174,65 @@ async def test_v2_workspace_delete_unregisters_without_deleting_directory(
 
 
 @pytest.mark.anyio
+async def test_v2_workspace_registration_rejects_an_unusable_path_without_persisting(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "workspace-preflight-owner", "role": "member"}
+    headers = _headers(app, "workspace-preflight-owner", "workspace-preflight-owner", "member")
+    _, environment_id = _project_with_primary(app, state_root, owner)
+    before = app.state.domain_service.list_workspaces(owner)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        rejected = await client.post(
+            "/domain/workspaces",
+            headers=_write_headers(headers, "workspace-preflight-create"),
+            json={
+                "environment_id": environment_id,
+                "canonical_path": str(state_root / "missing-workspace"),
+                "label": "Missing",
+            },
+        )
+
+    assert rejected.status_code == 409
+    assert "existing directory" in rejected.json()["detail"]
+    assert app.state.domain_service.list_workspaces(owner) == before
+
+
+@pytest.mark.anyio
+async def test_v2_workspace_registration_replays_before_rechecking_the_path(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "workspace-replay-owner", "role": "member"}
+    headers = _headers(app, "workspace-replay-owner", "workspace-replay-owner", "member")
+    _, environment_id = _project_with_primary(app, state_root, owner)
+    workspace_path = state_root / "replay-workspace"
+    workspace_path.mkdir()
+    payload = {
+        "environment_id": environment_id,
+        "canonical_path": str(workspace_path),
+        "label": "Replay",
+    }
+    write_headers = _write_headers(headers, "workspace-preflight-replay")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        created = await client.post("/domain/workspaces", headers=write_headers, json=payload)
+        workspace_path.rmdir()
+        replayed = await client.post("/domain/workspaces", headers=write_headers, json=payload)
+
+    assert created.status_code == 200
+    assert replayed.status_code == 200
+    assert replayed.json() == created.json()
+
+
+@pytest.mark.anyio
 async def test_v2_environment_delete_disables_the_durable_environment(
     state_root: Path,
     tmp_path: Path,

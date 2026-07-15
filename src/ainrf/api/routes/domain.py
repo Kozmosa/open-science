@@ -11,6 +11,7 @@ from ainrf.api.domain_schemas import (
     DomainWorkspaceResponse,
 )
 from ainrf.api.idempotency import require_idempotency_key
+from ainrf.api.workspace_preflight import validate_workspace_registration_path
 from ainrf.api.schemas import (
     ProjectContextCandidateCreateRequest,
     ProjectContextCandidateRejectRequest,
@@ -236,12 +237,36 @@ async def get_domain_project(project_id: str, request: Request) -> DomainProject
 @router.post("/workspaces")
 async def create_workspace(request: Request, payload: dict[str, object]) -> dict[str, object]:
     try:
-        return _service(request).create_workspace(
-            get_current_user(request),
-            environment_id=str(payload["environment_id"]),
-            canonical_path=str(payload["canonical_path"]),
-            label=str(payload["label"]),
-            idempotency_key=require_idempotency_key(request, payload.get("idempotency_key")),
+        service = _service(request)
+        user = get_current_user(request)
+        user_id = user.get("id")
+        if not isinstance(user_id, str):
+            raise ValueError("Authenticated user ID is required")
+        environment_id = str(payload["environment_id"])
+        canonical_path = service.canonical_workspace_path(str(payload["canonical_path"]))
+        label = str(payload["label"])
+        idempotency_key = require_idempotency_key(request, payload.get("idempotency_key"))
+        replay = service.workspace_create_replay(
+            user,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            label=label,
+            idempotency_key=idempotency_key,
+        )
+        if replay is not None:
+            return replay
+        await validate_workspace_registration_path(
+            request,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            user_id=user_id,
+        )
+        return service.create_workspace(
+            user,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            label=label,
+            idempotency_key=idempotency_key,
         )
     except Exception as exc:
         raise _translate(exc) from exc

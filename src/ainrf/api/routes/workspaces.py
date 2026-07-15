@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ainrf.api.deprecation import mark_deprecated
 from ainrf.api.idempotency import require_idempotency_key
+from ainrf.api.workspace_preflight import validate_workspace_registration_path
 from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
 from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
 from ainrf.domain import DomainPermissionError, DomainService
@@ -309,6 +310,29 @@ async def create_workspace(
             canonical_path = payload.default_workdir or _compatibility_workspace_path(
                 domain, environment_id, user
             )
+            canonical_path = domain.canonical_workspace_path(canonical_path)
+            user_id = user.get("id")
+            if not isinstance(user_id, str):
+                raise ValueError("Authenticated user ID is required")
+            idempotency_key = require_idempotency_key(request, payload.idempotency_key)
+            replay = domain.workspace_create_and_attach_replay(
+                project_id=payload.project_id,
+                user=user,
+                environment_id=environment_id,
+                canonical_path=canonical_path,
+                label=payload.label,
+                description=payload.description,
+                workspace_prompt=payload.workspace_prompt,
+                idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                return _serialize_domain_workspace(replay)
+            await validate_workspace_registration_path(
+                request,
+                environment_id=environment_id,
+                canonical_path=canonical_path,
+                user_id=user_id,
+            )
             workspace = domain.create_workspace_and_attach(
                 project_id=payload.project_id,
                 user=user,
@@ -317,7 +341,7 @@ async def create_workspace(
                 label=payload.label,
                 description=payload.description,
                 workspace_prompt=payload.workspace_prompt,
-                idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+                idempotency_key=idempotency_key,
             )
             return _serialize_domain_workspace(workspace)
         except Exception as exc:
