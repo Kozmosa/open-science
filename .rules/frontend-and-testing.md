@@ -43,12 +43,17 @@ OMP/Claude MCP configuration is loaded at session start. If preflight succeeds b
 
 ## Development Feedback Lanes
 
-- Fast inner loop: `bash scripts/dev.sh up --profile full --mode dev` provides Vite HMR, FastAPI reload, an isolated domain worker, and worktree-derived ports/state.
+- Fast inner loop: `bash scripts/dev.sh up --profile full --mode dev` provides Vite HMR, FastAPI reload, a marker-guarded deterministic fixture worker, and worktree-derived ports/state.
 - Local production preview: `bash scripts/dev.sh up --profile full --mode preview` builds the production frontend first and then serves it against the same isolated API.
+- Offline frontend support: `VITE_USE_MOCK=true` enables the lazy MSW browser scenario. It uses the same `/api` client transport and fails unhandled `/api/**` calls, but it is not a substitute for the managed synthetic API.
 - Deterministic gates: L0/L1 remain separate from manual DevTools work and local HTTP smoke.
 - Release evidence: L2–L4 remain isolated integration/deep/release layers; local dev/preview must not be cited as those layers.
 
 Use `full`, `empty`, `permissions`, `failures`, or `large` fixture profiles rather than editing persisted state by hand. `reset` is allowed only for marker-owned synthetic instances and is forbidden for the personal `~/.ainrf` launcher.
+
+The fixture worker is closed-world: Task execution, Literature checks/summaries, and Overview refreshes complete through the real persistence/projection paths without starting a real harness runtime or calling arXiv, an LLM, environment detect, Docker, staging, or production. Login credentials for owner/editor/viewer/admin identities are generated once in a repository-external `0600` JSON file reported by `dev.sh prepare --json`.
+
+Fault profiles are selected with `--fault-profile none|latency|transient|resources|offline`. They require marker-owned synthetic state, never apply in production, and are forbidden for personal state roots. When changing fixture or fault profiles, reset the managed instance and pass the same options to the next `up` command.
 
 ## Legacy Agent E2E Testing (Exploratory, Non-Gating)
 

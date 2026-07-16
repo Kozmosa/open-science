@@ -89,13 +89,13 @@ cd frontend && npm run build
 
 ## 隔离的 v2 前端开发环境
 
-前端开发使用 worktree 隔离的 API、domain worker、Vite 和 synthetic committed-v2 state，
+前端开发使用 worktree 隔离的 API、deterministic fixture worker、Vite 和 synthetic committed-v2 state，
 不要复用 production、shared staging 或 L2 资源：
 
 ```bash
 npm --prefix frontend ci
 
-# 启动 Vite HMR + FastAPI reload + domain worker
+# 启动 Vite HMR + FastAPI reload + deterministic fixture worker
 bash scripts/dev.sh up --profile full
 
 # 查看派生 URL、PID、日志和健康状态
@@ -127,7 +127,16 @@ bash scripts/dev.sh reset --profile full
 override，不会主动杀进程。凭据只存在 repo 外的权限受限文件和 Vite proxy process 中，
 不会注入浏览器 bundle。
 
-## 三条反馈链
+需要用真实登录页面检查 owner/editor/viewer/admin 权限时，先获取凭据文件路径：
+
+```bash
+bash scripts/dev.sh prepare --profile full --json
+```
+
+输出中的 `login_credentials_path` 指向 repo 外的 `0600` JSON。密码不会写入 marker、日志、
+Git 或浏览器 bundle；同一 managed fixture 会稳定复用，执行 `reset` 后重新生成。
+
+## 反馈链与辅助场景
 
 ### 快速开发
 
@@ -136,7 +145,9 @@ bash scripts/dev.sh up --profile full --mode dev
 ```
 
 前端使用 Vite HMR，后端使用 uvicorn reload。fixture 本身不会留下可 claim 的 Task 或
-Literature 工作项，但通过页面主动创建的新 Task 仍会由当前 domain worker 正常处理。
+Literature 工作项；页面主动创建的新 Task、文献检查/摘要和 Today 刷新由 marker-guarded
+fixture worker 通过正式持久化与 projection 路径确定性完成。worker 不启动真实 Harness，
+也不调用 arXiv、LLM、environment detect、Docker、staging 或 production。
 
 ### 本地 production preview
 
@@ -147,6 +158,49 @@ bash scripts/dev.sh smoke --profile full --mode preview
 
 preview 启动前强制执行 production frontend build，API 不启用 reload。它验证本地装配，
 但仍不是 Docker/L2 或 release evidence。
+
+### 故障场景
+
+```bash
+# 切换 profile/fault 时先 reset managed synthetic instance
+bash scripts/dev.sh reset --profile full --fault-profile transient
+bash scripts/dev.sh up --profile full --fault-profile transient
+```
+
+| Fault profile | 行为 |
+| --- | --- |
+| `none` | 默认正常路径 |
+| `latency` | API 响应增加固定延迟，并返回可在 Network 中识别的 fault header |
+| `transient` | 每个 GET/HEAD 路径首次返回 503，后续恢复 |
+| `resources` | Resources 两个数据源返回 503，用于 partial/global failure 检查 |
+| `offline` | 除 health/auth/docs 外的 API 返回 503 |
+
+fault profile 只对 marker-owned synthetic state 生效；production 自动禁用，personal state
+直接拒绝。`status`、`logs`、`down` 应继续使用与启动时相同的 profile/fault 参数，避免把
+“请求参数不一致”误判成服务退化。
+
+### MSW 离线辅助
+
+`VITE_USE_MOCK=true` 只用于后端刻意不可用时的纯前端工作或 Vitest。它在浏览器入口按需
+加载 contract-validated MSW scenario，所有业务函数仍调用统一 `/api` HTTP client；未处理
+的 `/api/**` 会硬失败，字体、JS、CSS 等非 API 资产继续绕过。
+
+```bash
+VITE_USE_MOCK=true npm --prefix frontend run dev -- \
+  --host 127.0.0.1 --port <explicit-unused-port> --strictPort
+```
+
+MSW 可以验证组件、URL、表单和确定性状态迁移，但不能证明 FastAPI、SQLite projection、
+JWT、fixture worker 或 Vite proxy 正常。真实 synthetic API 才是 DevTools 主验证面。
+
+### 证据边界
+
+| Lane | 能证明 | 不能替代 |
+| --- | --- | --- |
+| Vitest + MSW | 前端合同、组件交互、离线状态机 | 真实 API、JWT、worker、浏览器渲染 |
+| `dev.sh --mode dev` | HMR、reload、真实 synthetic API/JWT/worker、DevTools 流程 | production bundle、L1、L2–L4 |
+| `dev.sh --mode preview` | production bundle + isolated API 的本地装配 | Docker、shared staging、release acceptance |
+| `ci.sh l0/l1` | 确定性代码门禁 | 手工 DOM/computed style/Network/focus 验收 |
 
 ### Browser / DevTools preflight
 
