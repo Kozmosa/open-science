@@ -7,8 +7,10 @@
 #
 # Usage:
 #   bash deploy/redeploy-backend.sh                  # production (default)
-#   bash deploy/redeploy-backend.sh --target staging  # staging
 #   bash deploy/redeploy-backend.sh --target gpu      # GPU lab (bridge network)
+#
+# Staging is intentionally managed by scripts/staging.sh so its explicit env
+# file and isolated volume preflight cannot be bypassed.
 #
 set -euo pipefail
 

@@ -99,9 +99,8 @@ bash deploy/redeploy-backend.sh
 # Frontend-only changes — rebuilds the target-specific host bundle, then restarts nginx.
 bash deploy/redeploy-frontend.sh
 
-# Staging targets (same scripts, different target):
-bash deploy/redeploy-backend.sh --target staging
-bash deploy/redeploy-frontend.sh --target staging
+# Staging is managed only through its isolated lifecycle preflight:
+OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh up
 
 # Bare fallback (no commit stamping; backend version shows "Unavailable"):
 # docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
@@ -114,6 +113,12 @@ host). Because the two build at different times, they may differ — the
 Settings page shows both and flags a mismatch.
 
 **Why host build is required**: nginx serves frontend from a **host-mounted** target directory, not from the container's built-in `/opt/ainrf/frontend/dist`. Production uses `frontend/dist/production`, staging uses `frontend/dist/staging`, and GPU deployment uses `frontend/dist/gpu`; rebuilding one environment therefore cannot replace another environment's assets. Verify the `index-*.js` hash in the target directory matches what the browser requests.
+
+Direct staging calls through the production redeploy wrappers are rejected.
+`staging.sh up` rebuilds the current staging bundle and force-recreates its nginx
+container so the bind mount follows any Vite output-directory replacement. A
+default L0/L1 frontend build preserves all three target-specific bundle
+directories while cleaning only the shared `frontend/dist` root artifacts.
 
 Deployment wrappers explicitly clear `VITE_OPENSCIENCE_API_KEY` and
 `VITE_AINRF_API_KEY` while building. Local WebUI credentials belong only to
