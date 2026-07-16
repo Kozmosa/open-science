@@ -29,7 +29,7 @@ const components = {
           'Create an environment in Containers to enable terminal and workspace selection.',
       },
       terminalBench: {
-        eyebrow: '个人终端会话',
+        eyebrow: 'PERSONAL TERMINAL SESSION',
         title: 'Personal terminal session',
         description:
           'Attach, detach, or reset the persistent personal terminal session for the selected environment, then open the interactive browser console.',

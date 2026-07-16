@@ -55,7 +55,7 @@ const pages = {
         createSubmit: 'Create project',
       },
       dashboard: {
-        eyebrow: 'Terminal',
+        eyebrow: 'TERMINAL',
         title: 'OpenScience runtime shell',
         description:
           'The frontend now exposes the cleaned runtime shell: health checks, the keepalive personal terminal bench control surface, the environment control plane, and the managed workspace browser panel. Use this page to confirm API, SSH, workspace readiness, terminal session state, and environment readiness.',
@@ -65,7 +65,7 @@ const pages = {
         detailLabel: 'Detail:',
       },
       terminal: {
-        eyebrow: '终端',
+        eyebrow: 'Terminal',
         title: 'Terminal',
         description:
           'Attach to a persistent tmux session on your selected environment. Local environments connect directly; remote environments tunnel through interactive SSH.',
@@ -298,7 +298,7 @@ const pages = {
         },
       },
       workspaces: {
-        eyebrow: '工作区',
+        eyebrow: 'WORKSPACES',
         title: 'Workspaces',
         description:
           'Manage reusable workspace contexts for task prompts, default workdirs, and research run boundaries.',
@@ -350,7 +350,7 @@ const pages = {
         noDescription: 'No description',
       },
       workspaceBrowser: {
-        eyebrow: '工作区浏览器',
+        eyebrow: 'WORKSPACE BROWSER',
         title: 'Workspace Browser',
         description:
           'Open the managed code-server browser for the environment selected in Settings.',
@@ -358,7 +358,7 @@ const pages = {
         readinessMissingDependency: 'A runtime dependency is missing.',
       },
       settings: {
-        eyebrow: '设置',
+        eyebrow: 'SETTINGS',
         title: 'Settings',
         description:
           'Customize your OpenScience experience: default landing page, terminal font size, project environment, and task draft templates.',
@@ -633,7 +633,7 @@ const pages = {
         badge: 'Placeholder section',
       },
       environments: {
-        eyebrow: '容器',
+        eyebrow: 'CONTAINERS',
         title: 'Containers',
         description:
           'Add and manage SSH-backed compute environments. Run detection to verify connectivity, then mark one as active for terminals and tasks.',

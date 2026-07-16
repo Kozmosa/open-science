@@ -340,7 +340,7 @@ test.describe('Task Retry', () => {
     await page.waitForLoadState('networkidle')
 
     // Switch to Chinese locale
-    const zhButton = page.locator('[data-testid="locale-switcher"]').getByText('中文')
+    const zhButton = page.locator('[data-testid="locale-switcher"]').getByText(/Chinese|中文/)
     await expect(zhButton).toBeVisible({ timeout: 10000 })
     await zhButton.click()
 

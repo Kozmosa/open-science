@@ -22,4 +22,15 @@ describe('i18n message catalog', () => {
 
     expect(zhKeys).toEqual(enKeys);
   });
+
+  it('keeps the English catalog free of CJK copy', () => {
+    const englishValues = collectLeafPaths(messages.en).map((path) => {
+      return path.split('.').reduce<unknown>(
+        (value, segment) => (value as Record<string, unknown>)[segment],
+        messages.en,
+      );
+    });
+
+    expect(englishValues.filter((value) => typeof value === 'string' && /[\u3400-\u9fff]/u.test(value))).toEqual([]);
+  });
 });

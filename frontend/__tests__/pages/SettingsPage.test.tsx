@@ -142,13 +142,13 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
-  it('renders page title in the current language and eyebrow in the alternate language', async () => {
+  it('renders localized settings copy without mixing CJK into English', async () => {
     const { unmount } = renderWithProviders(<SettingsPage />, {
       locale: 'en',
     });
 
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
-    expect(screen.getByText('设置')).toBeInTheDocument();
+    expect(screen.getByText('SETTINGS')).toBeInTheDocument();
 
     unmount();
     renderWithProviders(<SettingsPage />, {

@@ -114,14 +114,14 @@ beforeEach(() => {
 });
 
 describe('TerminalBenchCard', () => {
-  it('renders terminal session heading in the current language and eyebrow in the alternate language', async () => {
+  it('renders localized terminal session copy without mixing CJK into English', async () => {
     mockGetTerminalSession.mockResolvedValue(idleSession);
     const { unmount } = renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />, {
       locale: 'en',
     });
 
     expect(await screen.findByRole('heading', { name: 'Personal terminal session' })).toBeInTheDocument();
-    expect(screen.getByText('个人终端会话')).toBeInTheDocument();
+    expect(screen.getByText('PERSONAL TERMINAL SESSION')).toBeInTheDocument();
     expect(
       screen.getByText(
         'Attach, detach, or reset the persistent personal terminal session for the selected environment, then open the interactive browser console.'
