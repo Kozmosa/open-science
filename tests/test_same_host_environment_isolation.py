@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import shutil
+import subprocess
 from typing import cast
 
 import pytest
@@ -165,6 +168,56 @@ def test_staging_grafana_preserves_optional_image_provisioning_directories() -> 
         "./config/grafana/provisioning-staging/dashboards:/etc/grafana/provisioning/dashboards:ro"
     ) in volumes
     assert "./config/grafana/provisioning-staging:/etc/grafana/provisioning:ro" not in volumes
+
+
+def test_default_frontend_build_preserves_target_specific_bundles(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    source = repo_root / "frontend" / "scripts" / "prepare-build-output.mjs"
+    frontend_root = tmp_path / "frontend"
+    script_target = frontend_root / "scripts" / source.name
+    script_target.parent.mkdir(parents=True)
+    shutil.copy2(source, script_target)
+
+    dist = frontend_root / "dist"
+    for target in ("production", "staging", "gpu"):
+        target_root = dist / target
+        target_root.mkdir(parents=True)
+        (target_root / "build-info.json").write_text(target, encoding="utf-8")
+    (dist / "assets").mkdir()
+    (dist / "assets" / "stale.js").write_text("stale", encoding="utf-8")
+    (dist / "index.html").write_text("stale", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["OPENSCIENCE_FRONTEND_OUT_DIR"] = "dist"
+    result = subprocess.run(
+        ["node", str(script_target)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not (dist / "assets").exists()
+    assert not (dist / "index.html").exists()
+    for target in ("production", "staging", "gpu"):
+        assert (dist / target / "build-info.json").read_text(encoding="utf-8") == target
+
+    package = (repo_root / "frontend" / "package.json").read_text(encoding="utf-8")
+    vite_config = (repo_root / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
+    assert "node scripts/prepare-build-output.mjs" in package
+    assert "emptyOutDir: FRONTEND_OUT_PATH !== SHARED_DIST_ROOT" in vite_config
+
+
+def test_staging_up_rebuilds_and_remounts_the_current_frontend_bundle() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    script = (repo_root / "scripts" / "staging.sh").read_text(encoding="utf-8")
+
+    assert 'OPENSCIENCE_FRONTEND_OUT_DIR="${STAGING_FRONTEND_OUT_DIR}"' in script
+    assert 'if [[ ! -d "${REPO_ROOT}/frontend/${STAGING_FRONTEND_OUT_DIR}" ]]' not in script
+    assert "up -d --no-deps --force-recreate nginx-staging" in script
+    assert '"nginx-staging" 60 2 "${STAGING_ENV_FILE}"' in script
+    assert 'wait_for_url "http://localhost:7192/api/health" 60 2' in script
 
 
 def test_staging_nginx_exposes_machine_readable_identity() -> None:

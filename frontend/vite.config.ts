@@ -8,6 +8,8 @@ import { sharedOpenScienceProxyConfig } from './vite.proxy'
 // https://vite.dev/config/
 const ANALYZE = process.env.VITE_BUNDLE_ANALYZE === 'true'
 const FRONTEND_OUT_DIR = process.env.OPENSCIENCE_FRONTEND_OUT_DIR?.trim() || 'dist'
+const SHARED_DIST_ROOT = resolve(__dirname, 'dist')
+const FRONTEND_OUT_PATH = resolve(__dirname, FRONTEND_OUT_DIR)
 
 const config = defineConfig({
   plugins: [react(), tailwindcss(),
@@ -21,6 +23,10 @@ const config = defineConfig({
   ],
   build: {
     outDir: FRONTEND_OUT_DIR,
+    // The default L0/L1 build shares the dist parent with independently
+    // mounted deployment bundles. prepare-build-output removes only the root
+    // build artifacts; Vite must not erase production/staging/gpu siblings.
+    emptyOutDir: FRONTEND_OUT_PATH !== SHARED_DIST_ROOT,
     manifest: true,
     // Monaco remains a deliberately lazy, full-featured editor. The stricter
     // manifest and asset budgets run after every production build.

@@ -148,14 +148,12 @@ cmd_up() {
   _info "Building and starting staging environment..."
   _assert_no_background_worker_profiles
 
-  # Ensure the staging-only frontend bundle exists. Production mounts a
-  # different directory, so this build cannot replace production assets.
-  if [[ ! -d "${REPO_ROOT}/frontend/${STAGING_FRONTEND_OUT_DIR}" ]]; then
-    _warn "frontend/${STAGING_FRONTEND_OUT_DIR} not found — building staging frontend first..."
-    VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
-      OPENSCIENCE_FRONTEND_OUT_DIR="${STAGING_FRONTEND_OUT_DIR}" \
-      npm --prefix "${REPO_ROOT}/frontend" run build
-  fi
+  # Always stamp the current worktree into the staging-only host bundle.
+  # Vite may replace the output directory inode while cleaning it, so nginx
+  # is force-recreated below to attach the new read-only bind mount.
+  VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
+    OPENSCIENCE_FRONTEND_OUT_DIR="${STAGING_FRONTEND_OUT_DIR}" \
+    npm --prefix "${REPO_ROOT}/frontend" run build
   _publish_staging_bind_mounts
 
   # Stamp git provenance (same as redeploy-backend.sh)
@@ -165,10 +163,13 @@ cmd_up() {
   AINRF_BUILD_COMMITTED_AT="$(git -C "${REPO_ROOT}" show -s --format=%cd --date=format:%Y%m%d-%H%M HEAD 2>/dev/null || echo unknown)"
 
   "${COMPOSE_CMD[@]}" up -d --build
+  "${COMPOSE_CMD[@]}" up -d --no-deps --force-recreate nginx-staging
 
-  _info "Waiting for backend to become healthy..."
+  _info "Waiting for backend and nginx to become healthy..."
   wait_for_compose_service "${COMPOSE_FILE}" "ainrf-staging" 60 2 "${STAGING_ENV_FILE}"
+  wait_for_compose_service "${COMPOSE_FILE}" "nginx-staging" 60 2 "${STAGING_ENV_FILE}"
   wait_for_url "http://localhost:17000/health" 60 2
+  wait_for_url "http://localhost:7192/api/health" 60 2
 
   echo
   _info "${BOLD}Staging environment is ready!${NC}"
