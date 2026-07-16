@@ -261,6 +261,7 @@ def test_synthetic_stack_uses_marker_guarded_fixture_worker(
     monkeypatch.setattr(stack, "status", lambda: DevelopmentStackStatus("stopped", {}))
     monkeypatch.setattr(stack, "_assert_ports_available", lambda: None)
     monkeypatch.setattr(stack, "prepare", lambda: {})
+    monkeypatch.setattr(stack, "_write_frontend_dev_build_info", lambda: None)
     monkeypatch.setattr(stack, "_write_manifest", lambda records: None)
     monkeypatch.setattr(stack, "_wait_http", lambda url, record: None)
     monkeypatch.setattr(stack_module.time, "sleep", lambda seconds: None)
@@ -335,6 +336,35 @@ def test_preview_build_runs_production_frontend_command(
         "build",
     )
     assert (instance.log_root / "frontend-build.log").exists()
+
+
+def test_dev_stack_refreshes_frontend_build_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = _instance(tmp_path, monkeypatch)
+    stack = DevelopmentStack(
+        instance,
+        artifact_sha="5" * 64,
+        api_key="fixture-key",
+        mode=DevelopmentStackMode.DEV,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        captured["command"] = command
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(stack_module.subprocess, "run", fake_run)
+
+    stack._write_frontend_dev_build_info()
+
+    assert captured["command"] == (
+        "node",
+        str(instance.repo_root / "frontend" / "scripts" / "write-build-info.mjs"),
+    )
+    assert captured["cwd"] == instance.repo_root
+    assert (instance.log_root / "frontend-build-info.log").exists()
 
 
 def test_stack_smoke_reads_v2_projections_through_frontend_proxy(

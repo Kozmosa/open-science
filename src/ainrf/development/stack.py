@@ -170,6 +170,8 @@ class DevelopmentStack:
         self.prepare()
         if self.mode is DevelopmentStackMode.PREVIEW:
             self._build_frontend_preview()
+        else:
+            self._write_frontend_dev_build_info()
         records: list[DevelopmentProcessRecord] = []
         try:
             records.append(
@@ -442,6 +444,24 @@ class DevelopmentStack:
             )
         if result.returncode != 0:
             raise DevelopmentStackError(f"frontend preview build failed; inspect {log_path}")
+
+    def _write_frontend_dev_build_info(self) -> None:
+        log_path = self.instance.log_root / "frontend-build-info.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("wb") as handle:
+            result = subprocess.run(
+                (
+                    "node",
+                    str(self.instance.repo_root / "frontend" / "scripts" / "write-build-info.mjs"),
+                ),
+                cwd=self.instance.repo_root,
+                env=self.environment(),
+                check=False,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+            )
+        if result.returncode != 0:
+            raise DevelopmentStackError(f"frontend dev build metadata failed; inspect {log_path}")
 
     def _write_manifest(self, records: list[DevelopmentProcessRecord]) -> None:
         payload = {
