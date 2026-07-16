@@ -1,13 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { applyOsciTheme } from '@design-system';
-import { getCodexDefaults } from '@/shared/api';
-import { getStoredRefreshToken } from '@/shared/api/client';
 import {
-  applyCodexDefaultsToProfile,
   clampEditorFontSize,
   clampTerminalFontSize,
-  createCodexAppServerResearchAgentProfile,
   createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
   createEmptyEnvironmentTaskDefaults,
@@ -145,34 +141,6 @@ interface ProviderProps {
 export function SettingsProvider({ children, userId = 'test-user' }: ProviderProps) {
   const [state, setState] = useState<SettingsState>(() => readStoredSettings(userId));
   const [activeProjectId, setActiveProjectId] = useState<string>('default');
-
-  useEffect(() => {
-    if (!getStoredRefreshToken()) return;
-    void getCodexDefaults().then((defaults) => {
-      setState((current) => {
-        const profileId = 'codex-app-server-default';
-        const profiles = current.settings.taskConfiguration.researchAgentProfiles;
-        const existing = profiles.find((p) => p.profileId === profileId);
-        const nextCodexProfile = applyCodexDefaultsToProfile(
-          existing ?? createCodexAppServerResearchAgentProfile(),
-          { codexConfigToml: defaults.codex_config_toml, codexAuthJson: defaults.codex_auth_json }
-        );
-        const nextProfiles = existing
-          ? profiles.map((p) => (p.profileId === profileId ? nextCodexProfile : p))
-          : [...profiles, nextCodexProfile];
-        return {
-          ...current,
-          settings: {
-            ...current.settings,
-            taskConfiguration: {
-              ...current.settings.taskConfiguration,
-              researchAgentProfiles: nextProfiles,
-            },
-          },
-        };
-      });
-    }).catch(() => { /* optional, retry on next mount */ });
-  }, []);
 
   useLayoutEffect(() => {
     const preference = state.settings.general.appearance.theme;

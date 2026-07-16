@@ -154,6 +154,7 @@ class DevelopmentStack:
         if not self.is_personal:
             environment.update(
                 {
+                    "HOME": str(self.instance.runtime_root / "home"),
                     "OPENSCIENCE_DOMAIN_MODEL_MODE": "v2",
                     "OPENSCIENCE_DOMAIN_ARTIFACT_SHA": self.artifact_sha,
                 }

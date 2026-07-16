@@ -148,3 +148,4 @@ def test_instance_key_is_stable_private_and_absent_from_manifest(
     }
     assert marker["login_credentials_path"] == str(instance.login_credentials_path)
     assert stat.S_IMODE(instance.credential_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE((instance.runtime_root / "home").stat().st_mode) == 0o700

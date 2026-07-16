@@ -60,8 +60,24 @@ def test_stack_environment_keeps_proxy_key_out_of_browser_bundle(
     assert environment["OPENSCIENCE_API_KEY_HASHES"] == hash_api_key("private-dev-key")
     assert environment["OPENSCIENCE_DOMAIN_MODEL_MODE"] == "v2"
     assert environment["OPENSCIENCE_DOMAIN_ARTIFACT_SHA"] == "b" * 64
+    assert environment["HOME"] == str(instance.runtime_root / "home")
     assert "VITE_OPENSCIENCE_API_KEY" not in environment
     assert "VITE_AINRF_API_KEY" not in environment
+
+
+def test_personal_stack_preserves_the_user_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", "/home/frontend-developer")
+    instance = _instance(tmp_path, monkeypatch)
+    stack = DevelopmentStack(
+        instance,
+        artifact_sha="b" * 64,
+        api_key="private-dev-key",
+        personal_state_root=tmp_path / "personal-state",
+    )
+
+    assert stack.environment()["HOME"] == "/home/frontend-developer"
 
 
 def test_stack_prepare_runs_selected_profile_and_parses_json(

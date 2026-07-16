@@ -178,6 +178,9 @@ def resolve_frontend_dev_instance(
 def ensure_frontend_dev_instance(instance: FrontendDevInstance) -> str:
     instance.runtime_root.mkdir(parents=True, exist_ok=True)
     instance.log_root.mkdir(parents=True, exist_ok=True)
+    isolated_home = instance.runtime_root / "home"
+    isolated_home.mkdir(mode=0o700, exist_ok=True)
+    isolated_home.chmod(0o700)
     if instance.credential_path.exists():
         api_key = instance.credential_path.read_text(encoding="utf-8").strip()
         if not api_key:

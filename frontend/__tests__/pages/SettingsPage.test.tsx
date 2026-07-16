@@ -195,7 +195,7 @@ describe('SettingsPage', () => {
     expect(screen.getByTestId('deployment-version-frontend-commit')).toHaveTextContent('feedfa');
   });
 
-  it('hydrates codex profile defaults from local codex settings API', async () => {
+  it('does not request or persist host Codex credentials in browser settings', async () => {
     window.localStorage.setItem(
       settingsStorageKey,
       JSON.stringify(createDefaultWebUiSettings())
@@ -209,12 +209,10 @@ describe('SettingsPage', () => {
       target: { value: 'codex-app-server-default' },
     });
 
-    await waitFor(() =>
-      expect(screen.getByLabelText('Codex config.toml')).toHaveValue(
-        'model = "from-home"\nprovider = "openai"\n'
-      )
-    );
-    expect(screen.getByLabelText('Codex auth.json')).toHaveValue('{"token":"from-home"}\n');
+    expect(screen.getByLabelText('Codex config.toml')).toHaveValue('');
+    expect(screen.getByLabelText('Codex auth.json')).toHaveValue('');
+    expect(mockGetCodexDefaults).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(settingsStorageKey)).not.toContain('from-home');
   });
 
   it('does not overwrite non-empty saved codex profile values with host defaults', async () => {
