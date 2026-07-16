@@ -90,6 +90,7 @@ const pages = {
         sidebarTitle: 'Agent tasks',
         sidebarCount: '{{count}} total · live output replay',
         newTask: 'New task',
+        backToList: 'Back to task list',
         resizeTaskList: 'Resize task list',
         searchLabel: 'Search tasks',
         searchPlaceholder: 'Search tasks',

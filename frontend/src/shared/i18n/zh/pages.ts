@@ -88,6 +88,7 @@ const pages = {
         sidebarTitle: 'Agent 任务',
         sidebarCount: '共 {{count}} 个 · 实时输出回放',
         newTask: '新建任务',
+        backToList: '返回任务列表',
         resizeTaskList: '调整任务列表宽度',
         searchLabel: '搜索任务',
         searchPlaceholder: '搜索任务',

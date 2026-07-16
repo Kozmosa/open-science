@@ -12,7 +12,7 @@ import {
   retryTask,
   unarchiveTask,
 } from '@/shared/api';
-import { Button, Checkbox, Dialog, FormField, NativeSelect, PageHeader, PageShell, SplitPane, Textarea, useToast } from '@design-system';
+import { Button, Checkbox, Dialog, FormField, NativeSelect, PageHeader, PageShell, Sheet, SplitPane, Textarea, useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
 import type { TaskListResponse, TaskSummary } from '@/shared/types';
@@ -35,6 +35,7 @@ const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
 const DEFAULT_METADATA_SIDEBAR_WIDTH = 320;
 const DRAWER_VIEWS = new Set<TaskDrawerView>(['details', 'attempts', 'context', 'closed']);
+const NARROW_TASKS_QUERY = '(max-width: 767px)';
 
 function usePageVisibility(): boolean {
   const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
@@ -46,6 +47,22 @@ function usePageVisibility(): boolean {
   return visible;
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => (
+    typeof window.matchMedia === 'function' && window.matchMedia(query).matches
+  ));
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mediaQuery = window.matchMedia(query);
+    const update = (event: MediaQueryListEvent) => setMatches(event.matches);
+    mediaQuery.addEventListener('change', update);
+    return () => mediaQuery.removeEventListener('change', update);
+  }, [query]);
+
+  return matches;
+}
+
 function TasksPage() {
   const t = useT();
   const { showToast } = useToast();
@@ -55,6 +72,7 @@ function TasksPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
   const pageVisible = usePageVisibility();
+  const isNarrow = useMediaQuery(NARROW_TASKS_QUERY);
   const [streamConnected, setStreamConnected] = useState(false);
   const tasksQuery = useQuery({
     queryKey: queryKeys.tasks.list(showArchived, taskSort),
@@ -86,14 +104,17 @@ function TasksPage() {
     if (requestedTaskId && tasks.some((task) => task.task_id === requestedTaskId)) {
       return requestedTaskId;
     }
+    if (isNarrow) {
+      return null;
+    }
     return tasks[0]?.task_id ?? null;
-  }, [requestedTaskId, tasks]);
+  }, [isNarrow, requestedTaskId, tasks]);
 
   const rawDrawer = searchParams.get('drawer');
   const legacySidebar = searchParams.get('sidebar');
   const drawerView: TaskDrawerView = rawDrawer && DRAWER_VIEWS.has(rawDrawer as TaskDrawerView)
     ? rawDrawer as TaskDrawerView
-    : legacySidebar === 'closed' ? 'closed' : 'details';
+    : legacySidebar === 'closed' || isNarrow ? 'closed' : 'details';
 
   const setDrawerView = useCallback((view: TaskDrawerView) => {
     setSearchParams((current) => {
@@ -119,6 +140,16 @@ function TasksPage() {
     [setSearchParams]
   );
 
+  const returnToTaskList = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('task');
+      next.set('drawer', 'closed');
+      next.delete('sidebar');
+      return next;
+    });
+  }, [setSearchParams]);
+
   const toggleMetadataSidebar = useCallback(() => {
     setDrawerView(drawerView === 'closed' ? 'details' : 'closed');
   }, [drawerView, setDrawerView]);
@@ -128,10 +159,10 @@ function TasksPage() {
   }, []);
 
   useEffect(() => {
-    if (effectiveSelectedTaskId && requestedTaskId !== effectiveSelectedTaskId) {
+    if (!isNarrow && effectiveSelectedTaskId && requestedTaskId !== effectiveSelectedTaskId) {
       selectTask(effectiveSelectedTaskId);
     }
-  }, [effectiveSelectedTaskId, requestedTaskId, selectTask]);
+  }, [effectiveSelectedTaskId, isNarrow, requestedTaskId, selectTask]);
 
   useEffect(() => {
     if (rawDrawer !== drawerView || legacySidebar !== null) {
@@ -389,6 +420,51 @@ function TasksPage() {
           )}
         />
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--osci-color-border)]">
+        {isNarrow ? (
+          effectiveSelectedTaskId ? (
+            <TaskDetailPage
+              key={effectiveSelectedTaskId}
+              taskId={effectiveSelectedTaskId}
+              selectedTask={selectedTask}
+              detailError={detailError}
+              outputItems={outputItems}
+              outputError={outputError}
+              hasMore={hasMore}
+              loadMore={loadMore}
+              isLoadingMore={isLoadingMore}
+              metadataSidebarOpen={drawerView !== 'closed'}
+              onBackToList={returnToTaskList}
+              onToggleMetadataSidebar={toggleMetadataSidebar}
+              canMutate={canMutateSelectedTask}
+              mutationDisabledReason={mutationDisabledReason}
+              headerActions={selectedTask ? (
+                <TaskActionsMenu
+                  task={selectedTask}
+                  canMutate={canMutateSelectedTask}
+                  disabledReason={mutationDisabledReason}
+                  onArchive={() => archiveMutation.mutate(selectedTask.task_id)}
+                  onUnarchive={() => unarchiveMutation.mutate(selectedTask.task_id)}
+                  onCancel={() => cancelMutation.mutate(selectedTask.task_id)}
+                  onRetry={() => retryMutation.mutate(selectedTask.task_id)}
+                  onMove={() => {
+                    setTargetProjectId(selectedTask.project_id);
+                    setOperationDialog('move');
+                  }}
+                  onFork={() => {
+                    setTargetProjectId(selectedTask.project_id);
+                    setTargetWorkspaceId(selectedTask.workspace_id);
+                    setForkPrompt('');
+                    setOperationDialog('fork');
+                  }}
+                />
+              ) : null}
+            />
+          ) : (
+            <div className="flex h-full min-h-0 flex-col p-3" data-testid="task-mobile-list">
+              {taskSidebarContent}
+            </div>
+          )
+        ) : (
         <SplitPane
           sidebar={taskSidebarContent}
           sidebarWidth={effectiveTaskSidebarWidth}
@@ -447,6 +523,7 @@ function TasksPage() {
             ) : null}
           />
         </SplitPane>
+        )}
         </div>
         {connectionState !== 'connected' && effectiveSelectedTaskId ? (
           <p className="text-xs text-[var(--osci-color-text-muted)]">
@@ -461,6 +538,22 @@ function TasksPage() {
         onClose={closeCreateDialog}
         onCreated={handleTaskCreated}
       />
+
+      {isNarrow && selectedTask ? (
+        <Sheet
+          open={drawerView !== 'closed'}
+          onOpenChange={(open) => setDrawerView(open ? 'details' : 'closed')}
+          title="Task inspector"
+        >
+          <div className="h-full p-3">
+            <TaskInspectorPanel
+              task={selectedTask}
+              view={drawerView === 'closed' ? 'details' : drawerView}
+              onViewChange={setDrawerView}
+            />
+          </div>
+        </Sheet>
+      ) : null}
 
       <Dialog
         isOpen={operationDialog !== null}

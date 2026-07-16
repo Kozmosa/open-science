@@ -42,6 +42,19 @@ class MockEventSource {
   }
 }
 
+function stubTaskViewport(narrow: boolean): void {
+  vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+    matches: query === '(max-width: 767px)' ? narrow : false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as unknown as typeof window.matchMedia);
+}
+
 const project = {
   project_id: 'default',
   name: 'Default Project',
@@ -364,9 +377,11 @@ const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
+  stubTaskViewport(false);
   MockEventSource.instances = [];
   vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource);
   window.localStorage.clear();
@@ -499,6 +514,40 @@ describe('task output helpers', () => {
 });
 
 describe('TasksPage', () => {
+  it('uses a list-first task flow on narrow screens and opens the inspector as a sheet', async () => {
+    stubTaskViewport(true);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks' });
+
+    expect(await screen.findByTestId('task-mobile-list')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Train model' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('task-metadata-sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('separator')).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Train model/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Train model' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to task list' })).toBeInTheDocument();
+    expect(screen.queryByTestId('task-mobile-list')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(await screen.findByRole('dialog', { name: 'Task inspector' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Task inspector' })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to task list' }));
+    expect(await screen.findByTestId('task-mobile-list')).toBeInTheDocument();
+  });
+
+  it('opens an explicit task deep link directly on narrow screens', async () => {
+    stubTaskViewport(true);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1&drawer=closed' });
+
+    expect(await screen.findByRole('heading', { name: 'Train model' })).toBeInTheDocument();
+    expect(screen.queryByTestId('task-mobile-list')).not.toBeInTheDocument();
+  });
+
   it('applies the standard page inset around the split layout', async () => {
     const { container } = renderWithProviders(<TasksPage />);
 

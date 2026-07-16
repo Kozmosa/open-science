@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { ArrowLeft, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { updateTask } from '@/shared/api';
 import { useT } from '@/shared/i18n';
 import { statusClassName } from '@features/tasks/utils/status';
@@ -19,6 +19,7 @@ interface TaskHeaderBarProps {
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
   onToggleMetadataSidebar?: () => void;
+  onBackToList?: () => void;
   canRename?: boolean;
   mutationDisabledReason?: string | null;
   actions?: ReactNode;
@@ -34,6 +35,7 @@ export default function TaskHeaderBar({
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
   onToggleMetadataSidebar,
+  onBackToList,
   canRename = true,
   mutationDisabledReason = null,
   actions,
@@ -75,6 +77,17 @@ export default function TaskHeaderBar({
   return (
     <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--prism-glass)]/90 backdrop-blur-lg px-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
+        {onBackToList ? (
+          <button
+            type="button"
+            onClick={onBackToList}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-secondary)] transition hover:bg-[var(--prism-primary-soft)] hover:text-[var(--foreground)]"
+            title={t('pages.tasks.backToList')}
+            aria-label={t('pages.tasks.backToList')}
+          >
+            <ArrowLeft size={16} />
+          </button>
+        ) : null}
         {onToggleTaskSidebar && (
           <button
             type="button"

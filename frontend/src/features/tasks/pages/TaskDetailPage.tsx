@@ -21,6 +21,7 @@ interface TaskDetailPageProps {
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
   onToggleMetadataSidebar?: () => void;
+  onBackToList?: () => void;
   canMutate?: boolean;
   mutationDisabledReason?: string | null;
   headerActions?: ReactNode;
@@ -39,6 +40,7 @@ export default function TaskDetailPage({
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
   onToggleMetadataSidebar,
+  onBackToList,
   canMutate = false,
   mutationDisabledReason = null,
   headerActions,
@@ -91,6 +93,7 @@ export default function TaskDetailPage({
         metadataSidebarOpen={metadataSidebarOpen}
         onToggleTaskSidebar={onToggleTaskSidebar}
         onToggleMetadataSidebar={onToggleMetadataSidebar}
+        onBackToList={onBackToList}
         canRename={canMutate}
         mutationDisabledReason={mutationDisabledReason}
         actions={headerActions}
