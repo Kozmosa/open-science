@@ -1,6 +1,8 @@
 import { Alert } from '@design-system';
-import { useT } from '@/shared/i18n';
+import { useLocale, useT } from '@/shared/i18n';
 import type { TaskRecord } from '@/shared/types';
+import { TechnicalIdentifier } from '@features/tasks/components/TechnicalIdentifier';
+import { formatTaskDateTime, taskMetadataLabels } from '@features/tasks/utils/metadataPresentation';
 
 interface TaskMetadataDrawerProps {
   task: TaskRecord;
@@ -30,6 +32,8 @@ function MetadataRow({
 
 export default function TaskMetadataDrawer({ task }: TaskMetadataDrawerProps) {
   const t = useT();
+  const locale = useLocale();
+  const labels = taskMetadataLabels[locale];
   const fallback = t('pages.tasks.unavailable');
 
   const command = task.command?.length
@@ -76,11 +80,10 @@ export default function TaskMetadataDrawer({ task }: TaskMetadataDrawerProps) {
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
             <MetadataRow label={t('pages.tasks.metadata.command')} value={command} fallback={fallback} />
             <MetadataRow label={t('pages.tasks.metadata.taskInput')} value={task.prompt ?? task.binding?.task_input ?? null} fallback={fallback} />
-            <MetadataRow label={t('pages.tasks.taskId')} value={task.task_id} fallback={fallback} />
-            <MetadataRow label={t('pages.tasks.created')} value={task.created_at} fallback={fallback} />
-            <MetadataRow label={t('pages.tasks.updated')} value={task.updated_at} fallback={fallback} />
-            <MetadataRow label={t('pages.tasks.started')} value={task.started_at} fallback={fallback} />
-            <MetadataRow label={t('pages.tasks.completed')} value={task.completed_at} fallback={fallback} />
+            <MetadataRow label={t('pages.tasks.created')} value={formatTaskDateTime(task.created_at, locale, fallback)} fallback={fallback} />
+            <MetadataRow label={t('pages.tasks.updated')} value={formatTaskDateTime(task.updated_at, locale, fallback)} fallback={fallback} />
+            <MetadataRow label={t('pages.tasks.started')} value={formatTaskDateTime(task.started_at, locale, fallback)} fallback={fallback} />
+            <MetadataRow label={t('pages.tasks.completed')} value={formatTaskDateTime(task.completed_at, locale, fallback)} fallback={fallback} />
           </div>
         </section>
 
@@ -89,9 +92,16 @@ export default function TaskMetadataDrawer({ task }: TaskMetadataDrawerProps) {
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
             <MetadataRow label={t('pages.tasks.exitCode')} value={task.result?.exit_code ?? task.exit_code ?? null} fallback={fallback} />
             <MetadataRow label={t('pages.tasks.failure')} value={task.result?.failure_category ?? null} fallback={fallback} />
-            <MetadataRow label={t('pages.tasks.completed')} value={task.result?.completed_at ?? task.completed_at ?? null} fallback={fallback} />
+            <MetadataRow label={t('pages.tasks.completed')} value={formatTaskDateTime(task.result?.completed_at ?? task.completed_at, locale, fallback)} fallback={fallback} />
           </div>
         </section>
+
+        <details className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-xs">
+          <summary className="cursor-pointer py-3 font-semibold text-[var(--text)]">{labels.technicalDetails}</summary>
+          <dl className="border-t border-[var(--border)] py-1">
+            <TechnicalIdentifier label={t('pages.tasks.taskId')} value={task.task_id} fallback={fallback} />
+          </dl>
+        </details>
       </div>
     </>
   );

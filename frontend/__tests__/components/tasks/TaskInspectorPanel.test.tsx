@@ -4,6 +4,7 @@ import TaskInspectorPanel from '@features/tasks/components/TaskInspectorPanel';
 import { renderWithProviders } from '@/shared/test/render';
 import { getDomainTaskAttempts, getDomainTaskContext } from '@features/domain';
 import type { TaskRecord } from '@/shared/types';
+import { formatTaskDateTime, shortIdentifier } from '@features/tasks/utils/metadataPresentation';
 
 vi.mock('@features/domain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@features/domain')>();
@@ -49,7 +50,7 @@ beforeEach(() => {
       failure_reason: 'fixture failure',
       stop_reason: null,
       runtime_sessions: [{
-        runtime_session_id: 'runtime-1',
+        runtime_session_id: 'runtime-session-1234567890-abcdefghijklmnopqrstuvwxyz',
         attempt_id: 'attempt-1',
         status: 'failed',
         engine_name: 'claude-code',
@@ -80,8 +81,25 @@ describe('TaskInspectorPanel', () => {
     expect(screen.getByText('$0.0123')).toBeInTheDocument();
     expect(screen.getByText('context-1')).toBeInTheDocument();
     expect(screen.getByText(/claude-code:failed/)).toBeInTheDocument();
+    expect(screen.getByText(formatTaskDateTime('2026-01-01T00:00:10Z', 'en'))).toBeInTheDocument();
+    expect(screen.queryByText('2026-01-01T00:00:10Z')).not.toBeInTheDocument();
+    const runtimeId = 'runtime-session-1234567890-abcdefghijklmnopqrstuvwxyz';
+    expect(screen.getByText(shortIdentifier(runtimeId))).toHaveAttribute('title', runtimeId);
+    expect(screen.getByRole('button', { name: 'Copy Runtime Session 1' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Context' }));
     expect(onViewChange).toHaveBeenCalledWith('context');
+  });
+
+  it('keeps Context identifiers in copyable Technical details', async () => {
+    renderWithProviders(
+      <TaskInspectorPanel task={task} view="context" onViewChange={vi.fn()} />,
+    );
+
+    expect(await screen.findByText('Pinned context')).toBeInTheDocument();
+    expect(screen.getByText('Technical details')).toBeInTheDocument();
+    expect(screen.getByText('context-1')).toHaveAttribute('title', 'context-1');
+    expect(screen.getByRole('button', { name: 'Copy Context Version' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Context Snapshot' })).toBeInTheDocument();
   });
 });

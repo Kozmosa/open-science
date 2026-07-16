@@ -1,6 +1,7 @@
 import { SectionStack, semanticToneClasses } from '@design-system';
-import { useT } from '@/shared/i18n';
+import { useLocale, useT } from '@/shared/i18n';
 import { taskStatusLabel } from '@features/tasks/utils/status';
+import { formatTaskDateTime } from '@features/tasks/utils/metadataPresentation';
 import type { TaskRecord } from '@/shared/types';
 
 interface Props {
@@ -19,10 +20,6 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
   cancelled: semanticToneClasses.muted,
 };
 
-function formatDate(value: string | null | undefined): string {
-  return value ? new Date(value).toLocaleString() : '—';
-}
-
 function DetailRow({ label, value }: { label: string; value: string | number | null | undefined }) {
   const text = value == null || value === '' ? '—' : String(value);
   return (
@@ -35,6 +32,7 @@ function DetailRow({ label, value }: { label: string; value: string | number | n
 
 export function SessionDetail({ detail, loading, selectedId }: Props) {
   const t = useT();
+  const locale = useLocale();
 
   if (!selectedId) {
     return (
@@ -84,8 +82,8 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
           <DetailRow label={t('pages.sessions.detail.environment')} value={detail.environment_id} />
           <DetailRow label={t('pages.sessions.detail.workdir')} value={workdir} />
           <DetailRow label={t('pages.sessions.detail.command')} value={command} />
-          <DetailRow label={t('pages.sessions.detail.started')} value={formatDate(detail.started_at)} />
-          <DetailRow label={t('pages.sessions.detail.completed')} value={formatDate(detail.completed_at)} />
+          <DetailRow label={t('pages.sessions.detail.started')} value={formatTaskDateTime(detail.started_at, locale)} />
+          <DetailRow label={t('pages.sessions.detail.completed')} value={formatTaskDateTime(detail.completed_at, locale)} />
           <DetailRow label={t('pages.sessions.detail.outputSeq')} value={detail.latest_output_seq ?? 0} />
           <DetailRow label={t('pages.sessions.detail.exitCode')} value={detail.exit_code} />
         </div>

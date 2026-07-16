@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import TaskMetadataDrawer from '../../../src/components/messages/TaskMetadataDrawer';
 import { renderWithProviders } from '@/shared/test/render';
 import type { TaskRecord } from '@/shared/types';
+import { formatTaskDateTime, shortIdentifier } from '@features/tasks/utils/metadataPresentation';
 
 function makeTask(overrides?: Partial<TaskRecord>): TaskRecord {
   return {
@@ -48,16 +49,21 @@ describe('TaskMetadataDrawer', () => {
     expect(screen.getByText('codex run --task')).toBeInTheDocument();
   });
 
-  it('renders task ID', () => {
-    renderWithProviders(<TaskMetadataDrawer task={makeTask()} />);
-    expect(screen.getByText('task-1')).toBeInTheDocument();
+  it('moves the shortened task ID into copyable Technical details', () => {
+    const taskId = 'task-1234567890-abcdefghijklmnopqrstuvwxyz';
+    renderWithProviders(<TaskMetadataDrawer task={makeTask({ task_id: taskId })} />);
+
+    expect(screen.getByText('Technical details')).toBeInTheDocument();
+    expect(screen.getByText(shortIdentifier(taskId))).toHaveAttribute('title', taskId);
+    expect(screen.getByRole('button', { name: 'Copy Task ID' })).toBeInTheDocument();
   });
 
-  it('renders timestamps', () => {
+  it('renders locale-aware timestamps instead of raw ISO values', () => {
     renderWithProviders(<TaskMetadataDrawer task={makeTask()} />);
 
-    expect(screen.getByText('2026-06-01T08:00:00Z')).toBeInTheDocument(); // created_at
-    expect(screen.getByText('2026-06-01T10:30:00Z')).toBeInTheDocument(); // updated_at
+    expect(screen.getByText(formatTaskDateTime('2026-06-01T08:00:00Z', 'en'))).toBeInTheDocument();
+    expect(screen.getByText(formatTaskDateTime('2026-06-01T10:30:00Z', 'en'))).toBeInTheDocument();
+    expect(screen.queryByText('2026-06-01T08:00:00Z')).not.toBeInTheDocument();
   });
 
   it('renders exit code from result', () => {
