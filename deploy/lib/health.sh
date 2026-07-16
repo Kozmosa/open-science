@@ -8,7 +8,7 @@
 #
 # Provides:
 #   wait_for_url <url> <retries> <delay>
-#   wait_for_compose_service <compose_file> <service> <retries> <delay>
+#   wait_for_compose_service <compose_file> <service> <retries> <delay> [env_file]
 # ─────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -84,18 +84,24 @@ wait_for_url() {
 }
 
 # Poll 'docker compose ps' until a service reaches healthy status.
-# Args: compose_file service retries delay_seconds
+# Args: compose_file service retries delay_seconds [env_file]
 wait_for_compose_service() {
     local compose_file="$1"
     local service="$2"
     local retries="${3:-30}"
     local delay="${4:-2}"
+    local env_file="${5:-}"
+    local -a compose_args=()
+
+    if [[ -n "${env_file}" ]]; then
+        compose_args+=(--env-file "${env_file}")
+    fi
 
     _ainrf_info "Waiting for Docker service '${service}' to be healthy ..."
     while ((retries > 0)); do
         # docker compose ps --format json output varies by version; grep the
         # human-readable status column for 'healthy' to stay portable.
-        if docker compose -f "${compose_file}" ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null \
+        if docker compose "${compose_args[@]}" -f "${compose_file}" ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null \
             | awk -v svc="${service}" '$1 == svc && $0 ~ /\(healthy\)/ {found=1} END {exit !found}'; then
             _ainrf_info "Service '${service}' is healthy"
             return 0

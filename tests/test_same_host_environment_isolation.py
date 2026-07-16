@@ -121,13 +121,32 @@ def test_direct_redeploy_scripts_refuse_to_bypass_staging_isolation() -> None:
         assert "OPENSCIENCE_STAGING_ENV_FILE" in script
 
 
-def test_staging_lifecycle_publishes_only_bind_mounted_source() -> None:
+def test_staging_lifecycle_publishes_only_explicit_read_only_bind_mounts() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     script = (repo_root / "scripts" / "staging.sh").read_text(encoding="utf-8")
 
-    assert 'local source_root="${REPO_ROOT}/src/ainrf"' in script
-    assert 'chmod -R a+rX "${source_root}"' in script
-    assert script.count("_publish_bind_mounted_source") == 3
+    for path in (
+        "src/ainrf",
+        "frontend/${STAGING_FRONTEND_OUT_DIR}",
+        "deploy/config/nginx-staging.conf",
+        "deploy/config/prometheus-staging.yml",
+        "deploy/config/prometheus/rules/ainrf-alerts.yml",
+        "deploy/config/grafana/provisioning-staging",
+        "deploy/config/grafana/dashboards",
+    ):
+        assert f'"${{REPO_ROOT}}/{path}"' in script
+    assert 'chmod -R a+rX "${path}"' in script
+    assert script.count("_publish_staging_bind_mounts") == 3
+
+
+def test_staging_health_poll_uses_the_explicit_env_file() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    staging = (repo_root / "scripts" / "staging.sh").read_text(encoding="utf-8")
+    health = (repo_root / "deploy" / "lib" / "health.sh").read_text(encoding="utf-8")
+
+    assert '60 2 "${STAGING_ENV_FILE}"' in staging
+    assert 'local env_file="${5:-}"' in health
+    assert 'compose_args+=(--env-file "${env_file}")' in health
 
 
 def test_staging_nginx_exposes_machine_readable_identity() -> None:
