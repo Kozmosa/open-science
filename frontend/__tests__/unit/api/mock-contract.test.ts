@@ -236,8 +236,9 @@ describe('frontend mock architecture guard', () => {
 
   it('fails unhandled browser API requests while bypassing non-API assets', () => {
     const source = readFileSync(join(srcRoot, 'shared/api/mockBrowser.ts'), 'utf8');
+    const forbiddenBypass = 'onUnhandledRequest: ' + "'bypass'";
     expect(source).toContain("pathname.startsWith('/api/')");
     expect(source).toContain('print.error()');
-    expect(source).not.toContain("onUnhandledRequest: 'bypass'");
+    expect(source).not.toContain(forbiddenBypass);
   });
 });

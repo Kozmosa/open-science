@@ -4,7 +4,7 @@ import { frontendMockHandlers, resetLegacyMockState } from '@/shared/api/mockHan
 
 const server = setupServer(...frontendMockHandlers);
 
-beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
 
 beforeEach(() => {
