@@ -131,7 +131,8 @@ def test_staging_lifecycle_publishes_only_explicit_read_only_bind_mounts() -> No
         "deploy/config/nginx-staging.conf",
         "deploy/config/prometheus-staging.yml",
         "deploy/config/prometheus/rules/ainrf-alerts.yml",
-        "deploy/config/grafana/provisioning-staging",
+        "deploy/config/grafana/provisioning-staging/datasources",
+        "deploy/config/grafana/provisioning-staging/dashboards",
         "deploy/config/grafana/dashboards",
     ):
         assert f'"${{REPO_ROOT}}/{path}"' in script
@@ -147,6 +148,23 @@ def test_staging_health_poll_uses_the_explicit_env_file() -> None:
     assert '60 2 "${STAGING_ENV_FILE}"' in staging
     assert 'local env_file="${5:-}"' in health
     assert 'compose_args+=(--env-file "${env_file}")' in health
+
+
+def test_staging_grafana_preserves_optional_image_provisioning_directories() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    staging = _load_compose(repo_root, "docker-compose.staging.yml")
+    services = _mapping(staging["services"])
+    grafana = _mapping(services["grafana-staging"])
+    volumes = grafana["volumes"]
+
+    assert isinstance(volumes, list)
+    assert (
+        "./config/grafana/provisioning-staging/datasources:/etc/grafana/provisioning/datasources:ro"
+    ) in volumes
+    assert (
+        "./config/grafana/provisioning-staging/dashboards:/etc/grafana/provisioning/dashboards:ro"
+    ) in volumes
+    assert "./config/grafana/provisioning-staging:/etc/grafana/provisioning:ro" not in volumes
 
 
 def test_staging_nginx_exposes_machine_readable_identity() -> None:

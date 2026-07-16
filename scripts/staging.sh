@@ -88,7 +88,8 @@ _publish_staging_bind_mounts() {
     "${REPO_ROOT}/deploy/config/nginx-staging.conf"
     "${REPO_ROOT}/deploy/config/prometheus-staging.yml"
     "${REPO_ROOT}/deploy/config/prometheus/rules/ainrf-alerts.yml"
-    "${REPO_ROOT}/deploy/config/grafana/provisioning-staging"
+    "${REPO_ROOT}/deploy/config/grafana/provisioning-staging/datasources"
+    "${REPO_ROOT}/deploy/config/grafana/provisioning-staging/dashboards"
     "${REPO_ROOT}/deploy/config/grafana/dashboards"
   )
   # Agent worktrees may be created with a restrictive umask.  The staging
