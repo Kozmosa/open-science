@@ -433,7 +433,7 @@ function TasksPage() {
             </Button>
           )}
         />
-        <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--osci-color-border)]">
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--osci-color-border)]">
         {isNarrow ? (
           effectiveSelectedTaskId ? (
             <TaskDetailPage

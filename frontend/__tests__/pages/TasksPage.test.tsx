@@ -617,7 +617,9 @@ describe('TasksPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Train model/ }));
 
-    expect(await screen.findByRole('heading', { name: 'Train model' })).toBeInTheDocument();
+    const detailHeading = await screen.findByRole('heading', { name: 'Train model' });
+    expect(detailHeading).toBeInTheDocument();
+    expect(detailHeading.closest('section')?.parentElement).toHaveClass('flex');
     expect(screen.getByRole('button', { name: 'Back to task list' })).toBeInTheDocument();
     expect(screen.queryByTestId('task-mobile-list')).not.toBeInTheDocument();
 
