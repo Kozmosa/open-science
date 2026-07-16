@@ -39,7 +39,7 @@ export function CommandPalette({ open, onOpenChange, routes }: CommandPalettePro
       title={t('layout.openCommandPalette')}
       size="lg"
     >
-      <Command>
+      <Command label={t('layout.openCommandPalette')}>
         <CommandInput autoFocus placeholder={t('layout.commandPlaceholder')} />
         <CommandList>
           <CommandEmpty>{t('layout.commandNoResults')}</CommandEmpty>
