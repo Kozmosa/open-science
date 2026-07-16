@@ -141,7 +141,8 @@ describe('WorkspacesPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Paper Experiments' })).toBeInTheDocument();
     expect(screen.getByText('GPU Lab (gpu-lab)')).toBeInTheDocument();
-    expect(screen.getAllByText(/environment_grant_missing/)).toHaveLength(2);
+    expect(screen.getAllByText(/active Environment grant is required/i)).toHaveLength(2);
+    expect(screen.queryByText(/environment_grant_missing/)).not.toBeInTheDocument();
     expect(screen.getByText('feat/paper · dirty')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled();
   });

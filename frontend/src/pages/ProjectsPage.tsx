@@ -26,7 +26,7 @@ import { ProjectCanvas } from '../components/project';
 import { getProjectTasks, getTaskEdges, moveTask } from '@/shared/api';
 import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
-import { useT } from '@/shared/i18n';
+import { useLocale, useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
 import type { ProjectRecord } from '@/shared/types';
 import {
@@ -41,6 +41,7 @@ import {
   type DomainProjectProjection,
   type DomainWorkspaceProjection,
 } from '@features/domain';
+import { projectionReasonLabel, projectionReasonList } from '@features/domain/projectionReasons';
 import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 import { ProjectContextConsole, ProjectSettingsConsole } from '@features/projects';
 import { useAuth } from '@features/auth';
@@ -68,6 +69,7 @@ function workspaceLink(workspace: DomainWorkspaceProjection, projectId: string) 
 
 export default function ProjectsPage() {
   const t = useT();
+  const locale = useLocale();
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -125,6 +127,11 @@ export default function ProjectsPage() {
     ? workspaces.filter((workspace) => !workspaceLink(workspace, selectedProject.project_id) && workspace.status === 'active')
     : [];
   const canCreateTask = Boolean(selectedProject?.permissions.can_create_task && selectedProject.executable_workspace_count > 0 && selectedProject.status === 'active');
+  const attentionReasonLabels = selectedProject
+    ? projectionReasonList(locale, selectedProject.attention_reasons)
+    : [];
+  const createTaskUnavailableReason = attentionReasonLabels.join(' ')
+    || projectionReasonLabel(locale, 'no_executable_workspace');
   const eligibleTargetProjects = projects.filter(
     (project) => project.status === 'active' && project.permissions.can_create_task,
   );
@@ -235,21 +242,21 @@ export default function ProjectsPage() {
               <Card><CardBody className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-semibold text-[var(--osci-color-text)]">{selectedProject.name}</h2><Badge variant="outline">{selectedProject.status}</Badge><Badge variant="secondary">{selectedProject.current_user_role}</Badge></div><p className="mt-2 text-sm text-[var(--osci-color-text-secondary)]">{selectedProject.description || 'No description'}</p></div>
-                  <Button disabled={!canCreateTask} title={!canCreateTask ? selectedProject.attention_reasons.join(', ') || 'Link an executable Workspace first' : undefined} onClick={() => setTaskCreateOpen(true)}>{t('pages.tasks.newTask')}</Button>
+                  <Button disabled={!canCreateTask} title={!canCreateTask ? createTaskUnavailableReason : undefined} onClick={() => setTaskCreateOpen(true)}>{t('pages.tasks.newTask')}</Button>
                 </div>
-                {!canCreateTask ? <Alert variant="warning" className="mt-4">Link at least one executable Workspace before creating an execution Task. {selectedProject.attention_reasons.join(', ')}</Alert> : null}
+                {!canCreateTask ? <Alert variant="warning" className="mt-4">{createTaskUnavailableReason}</Alert> : null}
               </CardBody></Card>
 
               <Tabs value={tab} onValueChange={(value) => setRouteState({ tab: value })}>
                 <TabsList className="flex w-full overflow-x-auto"><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="tasks">Tasks</TabsTrigger><TabsTrigger value="workspaces">Workspaces</TabsTrigger><TabsTrigger value="context">Context</TabsTrigger><TabsTrigger value="settings">Settings</TabsTrigger></TabsList>
-                <TabsContent value="overview"><Card><CardBody className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Active Tasks" value={selectedProject.active_task_count} /><Metric label="Running Tasks" value={selectedProject.running_task_count} /><Metric label="Workspaces" value={selectedProject.workspace_count} /><Metric label="Executable" value={selectedProject.executable_workspace_count} /><div className="sm:col-span-2 xl:col-span-4"><p className="text-sm font-medium text-[var(--osci-color-text)]">Attention</p><p className="mt-1 text-sm text-[var(--osci-color-text-secondary)]">{selectedProject.attention_reasons.join(', ') || 'No action required.'}</p></div></CardBody></Card></TabsContent>
+                <TabsContent value="overview"><Card><CardBody className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Active Tasks" value={selectedProject.active_task_count} /><Metric label="Running Tasks" value={selectedProject.running_task_count} /><Metric label="Workspaces" value={selectedProject.workspace_count} /><Metric label="Executable" value={selectedProject.executable_workspace_count} /><div className="sm:col-span-2 xl:col-span-4"><p className="text-sm font-medium text-[var(--osci-color-text)]">Attention</p><p className="mt-1 text-sm text-[var(--osci-color-text-secondary)]">{attentionReasonLabels.join(' ') || 'No action required.'}</p></div></CardBody></Card></TabsContent>
                 <TabsContent value="tasks">
                   <ViewToolbar><div className="flex gap-2"><Button size="sm" variant={view === 'list' ? 'primary' : 'secondary'} onClick={() => setRouteState({ view: 'list' })}>List</Button><Button size="sm" variant={view === 'graph' ? 'primary' : 'secondary'} onClick={() => setRouteState({ view: 'graph' })}>Relationship graph</Button></div></ViewToolbar>
                   {view === 'graph' ? <div className="mt-3 h-[620px] overflow-hidden rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)]"><ProjectCanvas key={`${projectId}:${layoutVersion}`} projectId={projectId!} tasks={tasks} edges={edges} projects={eligibleTargetProjects.map(asCanvasProject)} onNodeClick={(taskId) => navigate(`/tasks?task=${encodeURIComponent(taskId)}`)} onNewTask={() => setTaskCreateOpen(true)} onResetLayout={() => { localStorage.removeItem(`openscience:project-layout:${projectId}`); setLayoutVersion((value) => value + 1); }} onMoveTaskToProject={(taskId, targetProjectId) => { void moveTaskToProject(taskId, targetProjectId); }} canCreateTask={canCreateTask} canEditRelationships={selectedProject.status === 'active' && selectedProject.permissions.can_edit} canMoveTask={canMoveTask} /></div> : <Card className="mt-3"><CardBody className="divide-y divide-[var(--osci-color-border-subtle)] p-0">{tasks.map((task) => <button key={task.task_id} type="button" onClick={() => navigate(`/tasks?task=${encodeURIComponent(task.task_id)}`)} className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-[var(--osci-color-surface-subtle)]"><div><p className="font-medium text-[var(--osci-color-text)]">{task.title}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{task.task_id}</p></div><StatusBadge tone={task.status === 'running' ? 'success' : task.status === 'failed' ? 'danger' : 'neutral'}>{task.status}</StatusBadge></button>)}{tasks.length === 0 ? <EmptyState message="No Tasks in this Project." /> : null}</CardBody></Card>}
                 </TabsContent>
                 <TabsContent value="workspaces"><Card><CardBody className="space-y-4 p-5">
                   {selectedProject.permissions.can_edit ? <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); attachMutation.mutate(); }}><NativeSelect aria-label="Workspace to attach" value={attachWorkspaceId} onChange={(event) => setAttachWorkspaceId(event.target.value)} className="min-w-64"><option value="">Select a Workspace to attach</option>{attachableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.label}</option>)}</NativeSelect><Button type="submit" disabled={!attachWorkspaceId} isLoading={attachMutation.isPending}>Attach</Button></form> : null}
-                  <div className="space-y-2">{linkedWorkspaces.map((workspace) => { const link = workspaceLink(workspace, selectedProject.project_id)!; return <div key={workspace.workspace_id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3"><div><p className="font-medium text-[var(--osci-color-text)]">{workspace.label}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{workspace.environment.display_name} · {workspace.canonical_path}</p><p className="mt-1 text-xs text-[var(--osci-color-text-secondary)]">{link.can_execute ? 'Executable for new Tasks' : `Linked but unavailable: ${link.cannot_execute_reason ?? 'unknown'}`}</p></div><div className="flex gap-2">{link.is_primary ? <Badge>Primary</Badge> : <Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit} onClick={() => primaryMutation.mutate(workspace.workspace_id)}>Set Primary</Button>}<Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit || link.is_primary} title={link.is_primary ? 'Replace the Primary Workspace before detaching it.' : undefined} onClick={() => detachMutation.mutate(workspace.workspace_id)}>Detach</Button></div></div>; })}{linkedWorkspaces.length === 0 ? <EmptyState title="No linked Workspaces" message="Attach a Workspace before creating execution Tasks." /> : null}</div>
+                  <div className="space-y-2">{linkedWorkspaces.map((workspace) => { const link = workspaceLink(workspace, selectedProject.project_id)!; return <div key={workspace.workspace_id} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3"><div><p className="font-medium text-[var(--osci-color-text)]">{workspace.label}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{workspace.environment.display_name} · {workspace.canonical_path}</p><p className="mt-1 text-xs text-[var(--osci-color-text-secondary)]">{link.can_execute ? 'Executable for new Tasks' : `Linked but unavailable: ${projectionReasonLabel(locale, link.cannot_execute_reason)}`}</p></div><div className="flex gap-2">{link.is_primary ? <Badge>Primary</Badge> : <Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit} onClick={() => primaryMutation.mutate(workspace.workspace_id)}>Set Primary</Button>}<Button size="sm" variant="secondary" disabled={!selectedProject.permissions.can_edit || link.is_primary} title={link.is_primary ? 'Replace the Primary Workspace before detaching it.' : undefined} onClick={() => detachMutation.mutate(workspace.workspace_id)}>Detach</Button></div></div>; })}{linkedWorkspaces.length === 0 ? <EmptyState title="No linked Workspaces" message="Attach a Workspace before creating execution Tasks." /> : null}</div>
                 </CardBody></Card></TabsContent>
                 <TabsContent value="context"><ProjectContextConsole key={selectedProject.project_id} project={selectedProject} /></TabsContent>
                 <TabsContent value="settings"><ProjectSettingsConsole key={selectedProject.project_id} project={selectedProject} /></TabsContent>

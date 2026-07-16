@@ -24,7 +24,8 @@ import {
   type DomainProjectProjection,
   type DomainWorkspaceProjection,
 } from '@features/domain';
-import { useT } from '@/shared/i18n';
+import { projectionReasonList } from '@features/domain/projectionReasons';
+import { useLocale, useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
 import TaskSkillPicker from './TaskSkillPicker';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../utils/taskPresets';
@@ -75,6 +76,7 @@ function TaskCreateFlowContent({
   onLiteratureSubmit,
 }: Omit<TaskCreateFlowProps, 'isOpen'>) {
   const t = useT();
+  const locale = useLocale();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const projectsQuery = useQuery({
@@ -192,6 +194,11 @@ function TaskCreateFlowContent({
     projectsQuery.error ?? workspacesQuery.error ?? capabilitiesQuery.error ?? mutation.error,
   );
   const noExecutableWorkspace = effectiveProjectId !== '' && availableWorkspaces.length === 0;
+  const noExecutableReasons = projectionReasonList(locale, [
+    lockedWorkspace?.cannot_execute_reason,
+    ...(selectedProject?.attention_reasons ?? []),
+    noExecutableWorkspace ? 'no_executable_workspace' : null,
+  ]);
   const canSubmit = capability.available
     && selectedProject?.permissions.can_create_task === true
     && selectedWorkspace !== null
@@ -271,7 +278,7 @@ function TaskCreateFlowContent({
       {noExecutableWorkspace ? (
         <Alert variant="warning">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span>No attached Workspace is currently executable for this Project.</span>
+            <span>{noExecutableReasons.join(' ')}</span>
             <Button
               type="button"
               size="sm"

@@ -22,7 +22,7 @@ import {
 import { getEnvironments, unregisterWorkspace, updateWorkspace } from '@/shared/api';
 import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
-import { useT } from '@/shared/i18n';
+import { useLocale, useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
 import { useAuth } from '@features/auth';
 import {
@@ -33,6 +33,7 @@ import {
   setDomainPrimaryWorkspace,
   type DomainWorkspaceProjection,
 } from '@features/domain';
+import { projectionReasonLabel } from '@features/domain/projectionReasons';
 import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 
 interface RegisterDraft {
@@ -78,6 +79,7 @@ function formatDate(value: string | null | undefined): string {
 
 function WorkspacesPage() {
   const t = useT();
+  const locale = useLocale();
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -109,6 +111,9 @@ function WorkspacesPage() {
     ?? workspaces[0]
     ?? null;
   const isOwner = selectedWorkspace?.owner_user_id === user?.id;
+  const selectedWorkspaceUnavailableReason = selectedWorkspace
+    ? projectionReasonLabel(locale, selectedWorkspace.cannot_execute_reason)
+    : null;
 
   const registerKey = useIdempotencyKey('workspace.register', registerDraft);
   const editKey = useIdempotencyKey('workspace.update', {
@@ -279,7 +284,7 @@ function WorkspacesPage() {
                       </Button>
                       <Button
                         disabled={!selectedWorkspace.can_execute}
-                        title={selectedWorkspace.cannot_execute_reason ?? undefined}
+                        title={selectedWorkspaceUnavailableReason ?? undefined}
                         onClick={() => setTaskCreateOpen(true)}
                       >
                         {t('pages.tasks.newTask')}
@@ -289,7 +294,7 @@ function WorkspacesPage() {
 
                   {!selectedWorkspace.can_execute ? (
                     <Alert variant="warning">
-                      {t('pages.workspaces.cannotExecute')}: {selectedWorkspace.cannot_execute_reason ?? t('pages.workspaces.unknownReason')}
+                      {t('pages.workspaces.cannotExecute')}: {selectedWorkspaceUnavailableReason}
                     </Alert>
                   ) : null}
 
@@ -322,7 +327,7 @@ function WorkspacesPage() {
                     {selectedWorkspace.project_links.filter((link) => link.link_status === 'active').map((link) => (
                       <div key={link.project_id} className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3">
                         <div><p className="font-medium text-[var(--osci-color-text)]">{link.project_name}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{link.current_user_role} · {link.project_status}</p></div>
-                        <div className="flex items-center gap-2">{link.is_primary ? <Badge>{t('pages.workspaces.primary')}</Badge> : null}<StatusBadge tone={link.can_execute ? 'success' : 'warning'}>{link.can_execute ? t('pages.workspaces.executable') : link.cannot_execute_reason ?? t('pages.workspaces.linkedOnly')}</StatusBadge></div>
+                        <div className="flex items-center gap-2">{link.is_primary ? <Badge>{t('pages.workspaces.primary')}</Badge> : null}<StatusBadge tone={link.can_execute ? 'success' : 'warning'}>{link.can_execute ? t('pages.workspaces.executable') : projectionReasonLabel(locale, link.cannot_execute_reason)}</StatusBadge></div>
                       </div>
                     ))}
                     {selectedWorkspace.project_links.filter((link) => link.link_status === 'active').length === 0 ? <p className="text-sm text-[var(--osci-color-text-muted)]">{t('pages.workspaces.noProjectLinks')}</p> : null}

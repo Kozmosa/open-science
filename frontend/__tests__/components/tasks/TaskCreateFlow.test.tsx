@@ -184,7 +184,7 @@ describe('TaskCreateFlow', () => {
     );
 
     expect(await screen.findByLabelText('Project')).toBeDisabled();
-    expect(screen.getByText(/No attached Workspace is currently executable/)).toBeInTheDocument();
+    expect(screen.getByText(/No linked Workspace is currently executable/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Register or link Workspace/ })).toBeInTheDocument();
   });
 
@@ -212,7 +212,8 @@ describe('TaskCreateFlow', () => {
     );
 
     expect(await screen.findByLabelText('Workspace')).toBeDisabled();
-    expect(await screen.findByText(/No attached Workspace is currently executable/)).toBeInTheDocument();
+    expect(await screen.findByText(/active Environment grant is required/)).toBeInTheDocument();
+    expect(screen.queryByText(/environment_grant_missing/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
   });
 
