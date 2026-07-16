@@ -69,7 +69,6 @@ const common = {
       logOut: '登出',
       taskStatusLoading: '任务 | 加载中…',
       taskStatusSummary: '任务 | 共 {{total}} 个，运行中：{{running}}，等待中：{{pending}}，已完成：{{finished}}',
-      taskStatusUnavailable: '任务 | 状态不可用',
       loadingEditor: '加载编辑器...',
       noMessages: '暂无消息',
     },

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CardGrid, PageShell } from '@design-system';
 import { getRouteDefinition, getVisibleRoutes, ROUTE_REGISTRY } from '@/app/routeRegistry';
 import { LocaleProvider } from '@/shared/i18n';
+import { TopBar } from '@/components/shell';
 
 describe('osci shell contracts', () => {
   it('uses one route registry for titles, navigation, commands, and admin filtering', () => {
@@ -42,5 +43,22 @@ describe('osci shell contracts', () => {
     expect(grid).not.toBeNull();
     expect(within(grid as HTMLElement).getAllByRole('article').map((item) => item.textContent)).toEqual(['attention', 'progress']);
     expect(screen.getAllByRole('button', { name: 'Drag to reorder' })).toHaveLength(1);
+  });
+
+  it('hides the Task summary until cached Task data exists', () => {
+    const user = { id: 'user-1', username: 'alice', display_name: 'Alice', role: 'user', status: 'active' } as const;
+    const { rerender } = render(
+      <LocaleProvider initialLocale="en">
+        <TopBar user={user} taskStatusSummary={null} onOpenNavigation={() => undefined} onOpenCommandPalette={() => undefined} onLogout={() => undefined} />
+      </LocaleProvider>,
+    );
+    expect(screen.queryByText(/Task \|/)).not.toBeInTheDocument();
+
+    rerender(
+      <LocaleProvider initialLocale="en">
+        <TopBar user={user} taskStatusSummary="Task | Total: 2" onOpenNavigation={() => undefined} onOpenCommandPalette={() => undefined} onLogout={() => undefined} />
+      </LocaleProvider>,
+    );
+    expect(screen.getByText('Task | Total: 2')).toBeInTheDocument();
   });
 });

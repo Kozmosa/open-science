@@ -7,7 +7,7 @@ import { AccountMenu } from './AccountMenu';
 
 interface TopBarProps {
   user: UserInfo;
-  taskStatusSummary: string;
+  taskStatusSummary: string | null;
   onOpenNavigation: () => void;
   onOpenCommandPalette: () => void;
   onLogout: () => void;
@@ -28,7 +28,7 @@ export function TopBar({ user, taskStatusSummary, onOpenNavigation, onOpenComman
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <p className="hidden max-w-80 truncate text-xs font-medium text-[var(--osci-color-text-secondary)] lg:block">{taskStatusSummary}</p>
+        {taskStatusSummary ? <p className="hidden max-w-80 truncate text-xs font-medium text-[var(--osci-color-text-secondary)] lg:block">{taskStatusSummary}</p> : null}
         <LocaleSwitcher />
         <div className="md:hidden"><AccountMenu user={user} onLogout={onLogout} /></div>
       </div>

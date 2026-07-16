@@ -222,7 +222,7 @@ describe('App routes', () => {
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
     expect(screen.getByLabelText('Expand sidebar')).toBeInTheDocument();
-    expect(screen.getByText('Task | Status unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/Task \|/)).not.toBeInTheDocument();
     expect(mockGetTasks).not.toHaveBeenCalled();
     expect(screen.queryByRole('link', { name: 'Browse Files' })).not.toBeInTheDocument();
     expect(within(screen.getByRole('banner')).queryByText('Tasks')).not.toBeInTheDocument();

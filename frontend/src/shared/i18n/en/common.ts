@@ -69,7 +69,6 @@ const common = {
       logOut: 'Log out',
       taskStatusLoading: 'Task | Loading…',
       taskStatusSummary: 'Task | Total: {{total}}, Running: {{running}}, Pending: {{pending}}, Finished: {{finished}}',
-      taskStatusUnavailable: 'Task | Status unavailable',
       loadingEditor: 'Loading editor...',
       noMessages: 'No messages',
     },
