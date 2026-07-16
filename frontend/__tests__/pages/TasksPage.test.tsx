@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
 import { createTestQueryClient, renderWithProviders } from '@/shared/test/render';
@@ -24,9 +25,12 @@ import {
   getTaskOutput,
   getTasks,
   getWorkspaces,
+  retryTask,
 } from '@/shared/api';
 import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
+import { queryKeys } from '@/shared/api/queryKeys';
+import { getDomainProjects } from '@features/domain';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -260,6 +264,7 @@ vi.mock('@/shared/api', () => ({
   getTaskMessages: vi.fn(),
   getTasks: vi.fn(),
   getWorkspaces: vi.fn(),
+  retryTask: vi.fn(),
 }));
 
 vi.mock('@features/domain', async (importOriginal) => {
@@ -362,6 +367,20 @@ vi.mock('@features/domain', async (importOriginal) => {
   };
 });
 
+vi.mock('@features/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@features/auth')>();
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: { id: 'user-1', username: 'user-1', display_name: 'User One', role: 'member', status: 'active' },
+      loading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+    }),
+  };
+});
+
 const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
@@ -374,6 +393,8 @@ const mockGetTaskMessages = vi.mocked(getTaskMessages);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetTasks = vi.mocked(getTasks);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
+const mockRetryTask = vi.mocked(retryTask);
+const mockGetDomainProjects = vi.mocked(getDomainProjects);
 
 afterEach(() => {
   vi.useRealTimers();
@@ -398,6 +419,7 @@ beforeEach(() => {
   mockGetTasks.mockReset();
   mockGetTaskMessages.mockReset();
   mockGetWorkspaces.mockReset();
+  mockRetryTask.mockReset();
 
   mockBuildTaskStreamUrl.mockImplementation(
     (taskId, afterSeq = 0) => `/api/tasks/${taskId}/stream?after_seq=${afterSeq}`
@@ -423,6 +445,26 @@ beforeEach(() => {
       }),
     ])
   );
+  mockRetryTask.mockResolvedValue({
+    new_task: taskSummary,
+    archived_task_id: null,
+    edge_id: 'retry:task-1:2',
+    task: taskSummary,
+    attempt: {
+      attempt_id: 'attempt-2',
+      task_id: 'task-1',
+      attempt_seq: 2,
+      trigger: 'retry',
+      status: 'queued',
+    },
+    dispatch: {
+      dispatch_id: 'dispatch-2',
+      task_id: 'task-1',
+      attempt_id: 'attempt-2',
+      status: 'pending',
+      launch_state: 'pending',
+    },
+  });
 });
 
 describe('task output helpers', () => {
@@ -514,6 +556,55 @@ describe('task output helpers', () => {
 });
 
 describe('TasksPage', () => {
+  it('refreshes the same Task Attempt and actual Project caches after retry', async () => {
+    const user = userEvent.setup();
+    const failedTask = { ...taskSummary, status: 'failed' as const, project_id: 'project-retry' };
+    const failedRecord = { ...taskRecord, ...failedTask };
+    mockGetTasks.mockResolvedValue({ items: [failedTask] });
+    mockGetTask.mockResolvedValue(failedRecord);
+    mockGetDomainProjects.mockResolvedValueOnce({
+      items: [{
+        project_id: 'project-retry', name: 'Retry Project', description: null, status: 'active',
+        is_default: false, owner_user_id: 'user-1', current_user_role: 'owner',
+        created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z',
+        recent_activity_at: '2026-04-23T08:00:00Z', workspace_count: 1,
+        executable_workspace_count: 1, task_count: 1, active_task_count: 0,
+        running_task_count: 0, primary_workspace: null, attention_required: false,
+        attention_reasons: [], permissions: {
+          can_edit: true, can_publish: true, can_manage_members: true, can_archive: true,
+          can_unarchive: false, can_create_task: true,
+        },
+      }],
+    });
+    mockRetryTask.mockResolvedValue({
+      new_task: failedTask,
+      task: failedTask,
+      archived_task_id: null,
+      edge_id: 'retry:task-1:2',
+      attempt: {
+        attempt_id: 'attempt-2', task_id: 'task-1', attempt_seq: 2, trigger: 'retry', status: 'queued',
+      },
+      dispatch: {
+        dispatch_id: 'dispatch-2', task_id: 'task-1', attempt_id: 'attempt-2', status: 'pending', launch_state: 'pending',
+      },
+    });
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    renderWithProviders(<TasksPage />, { client, route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Retry as new Attempt' }));
+
+    await waitFor(() => expect(mockRetryTask).toHaveBeenCalledWith('task-1', expect.stringMatching(/^task\.retry/)));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.detail('task-1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.domain.taskAttempts('task-1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projectTasks.byProject('project-retry') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.taskEdges.byProject('project-retry') });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: queryKeys.taskEdges.byProject('default') });
+  });
+
   it('uses a list-first task flow on narrow screens and opens the inspector as a sheet', async () => {
     stubTaskViewport(true);
 

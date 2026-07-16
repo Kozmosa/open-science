@@ -94,8 +94,25 @@ export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 
 export interface TaskRetryResponse {
   new_task: TaskSummary;
-  archived_task_id: string;
+  archived_task_id: string | null;
   edge_id: string;
+  task?: TaskSummary | null;
+  attempt?: {
+    attempt_id: string;
+    task_id: string;
+    attempt_seq: number;
+    trigger: string;
+    status: string;
+    [key: string]: unknown;
+  } | null;
+  dispatch?: {
+    dispatch_id: string;
+    task_id: string;
+    attempt_id: string;
+    status: string;
+    launch_state: string;
+    [key: string]: unknown;
+  } | null;
 }
 
 export interface ProjectRecord {

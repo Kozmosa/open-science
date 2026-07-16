@@ -242,9 +242,23 @@ function TasksPage() {
     },
     onSuccess: ({ result, key }) => {
       retryKeyManager.markSucceeded(key);
+      const retriedTask = result.task ?? result.new_task;
+      const affectedProjectIds = new Set([
+        selectedTask?.project_id,
+        result.new_task.project_id,
+        retriedTask.project_id,
+      ].filter((projectId): projectId is string => Boolean(projectId)));
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject('default') });
-      selectTask(result.new_task.task_id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(retriedTask.task_id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.domain.taskAttempts(retriedTask.task_id) });
+      if (result.archived_task_id && result.archived_task_id !== retriedTask.task_id) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(result.archived_task_id) });
+      }
+      for (const projectId of affectedProjectIds) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(projectId) });
+      }
+      selectTask(retriedTask.task_id);
       showToast(t('pages.tasks.retrySuccess'), 'success');
     },
     onError: () => {
