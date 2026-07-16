@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupServer } from 'msw/node';
-import { resetMockEnvironmentState, resetMockTaskState, resetMockTerminalSession } from '@/shared/api/mock';
-import { legacyMockHandlers } from '@/shared/api/mockHandlers';
+import { frontendMockHandlers, resetLegacyMockState } from '@/shared/api/mockHandlers';
 
-const server = setupServer(...legacyMockHandlers);
+const server = setupServer(...frontendMockHandlers);
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterAll(() => server.close());
@@ -12,9 +11,7 @@ beforeEach(() => {
   vi.resetModules();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  resetMockTerminalSession();
-  resetMockEnvironmentState();
-  resetMockTaskState();
+  resetLegacyMockState();
 });
 
 describe('api endpoints', () => {
@@ -32,10 +29,13 @@ describe('api endpoints', () => {
     const session = await getTerminalSession('env-localhost');
     const workspaces = await getWorkspaces();
     const created = await createTask({
-      workspace_id: 'workspace-default',
-      environment_id: 'env-localhost',
-      task_profile: 'claude-code',
-      task_input: 'Implement harness',
+      project_id: 'project-alpha',
+      workspace_id: 'workspace-alpha',
+      researcher_type: 'vanilla',
+      harness_engine: 'claude-code',
+      prompt: 'Implement harness',
+      skills: [],
+      mcp_servers: [],
     }, 'task.create:test');
     const tasks = await getTasks();
     const detail = await getTask(created.task_id);
@@ -46,7 +46,7 @@ describe('api endpoints', () => {
     expect(created.status).toBe('queued');
     expect(tasks.items[0]?.task_id).toBe(created.task_id);
     expect(detail.binding?.resolved_workdir).toBeTruthy();
-    expect(output.items[0]?.kind).toBe('lifecycle');
+    expect(output.items[0]?.kind).toBe('message');
     expect(buildTaskStreamUrl(created.task_id, 3)).toContain(`/api/tasks/${created.task_id}/stream`);
   });
 

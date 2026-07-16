@@ -16,6 +16,7 @@ import type {
   WorkspaceUpdateRequest,
 } from '@/shared/types';
 import { ApiError } from './client';
+import { frontendV2MockHandlers, resetFrontendV2MockState } from './mockScenarioV2';
 import {
   mockArchiveTask,
   mockCancelTask,
@@ -314,4 +315,10 @@ export function resetLegacyMockState(): void {
   resetMockTerminalSession();
   resetMockEnvironmentState();
   resetMockTaskState();
+  resetFrontendV2MockState();
 }
+
+export const frontendMockHandlers = [
+  ...frontendV2MockHandlers,
+  ...legacyMockHandlers,
+];

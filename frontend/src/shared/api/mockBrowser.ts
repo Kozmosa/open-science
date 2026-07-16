@@ -1,12 +1,16 @@
 import { setupWorker } from 'msw/browser';
-import { legacyMockHandlers } from './mockHandlers';
+import { frontendMockHandlers } from './mockHandlers';
 
-const worker = setupWorker(...legacyMockHandlers);
+const worker = setupWorker(...frontendMockHandlers);
 
 export async function startMockBrowser(): Promise<void> {
   await worker.start({
     quiet: true,
     serviceWorker: { url: '/mockServiceWorker.js' },
-    onUnhandledRequest: 'bypass',
+    onUnhandledRequest(request, print) {
+      if (new URL(request.url).pathname.startsWith('/api/')) {
+        print.error();
+      }
+    },
   });
 }
