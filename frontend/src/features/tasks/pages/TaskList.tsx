@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react';
 import { useT } from '@/shared/i18n';
 import type { TaskSummary } from '@/shared/types';
-import { statusClassName } from '../utils/status';
+import { taskStatusClassName, taskStatusLabel } from '../utils/status';
 
 interface Props {
   tasks: TaskSummary[];
@@ -87,9 +87,9 @@ export default function TaskList({
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClassName[task.status]}`}
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${taskStatusClassName(task.status)}`}
                     >
-                      {t(`pages.tasks.status.${task.status}`)}
+                      {taskStatusLabel(t, task.status)}
                     </span>
                   </span>
                 </span>

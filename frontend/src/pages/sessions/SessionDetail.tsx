@@ -1,5 +1,6 @@
 import { SectionStack, semanticToneClasses } from '@design-system';
 import { useT } from '@/shared/i18n';
+import { taskStatusLabel } from '@features/tasks/utils/status';
 import type { TaskRecord } from '@/shared/types';
 
 interface Props {
@@ -71,7 +72,7 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
           <span
             className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE_CLASSES[detail.status] ?? STATUS_BADGE_CLASSES.cancelled}`}
           >
-            {t(`pages.tasks.status.${detail.status}`)}
+            {taskStatusLabel(t, detail.status)}
           </span>
         </div>
 

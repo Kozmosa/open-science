@@ -36,6 +36,15 @@ describe('TaskHeaderBar', () => {
     expect(screen.getByText(/running/i)).toBeInTheDocument();
   });
 
+  it('humanizes an unknown runtime status instead of exposing an i18n key', () => {
+    renderWithProviders(
+      <TaskHeaderBar task={makeTask({ status: 'completed' as TaskRecord['status'] })} />
+    );
+
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.queryByText('pages.tasks.status.completed')).not.toBeInTheDocument();
+  });
+
   it('enters edit mode when title is clicked and commits on Enter', async () => {
     renderWithProviders(<TaskHeaderBar task={makeTask()} />);
 

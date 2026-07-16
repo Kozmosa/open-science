@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { ArrowLeft, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { updateTask } from '@/shared/api';
 import { useT } from '@/shared/i18n';
-import { statusClassName } from '@features/tasks/utils/status';
+import { taskStatusClassName, taskStatusLabel } from '@features/tasks/utils/status';
 import type { TaskRecord } from '@/shared/types';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
@@ -124,8 +124,8 @@ export default function TaskHeaderBar({
             {task.title}
           </h1>
         )}
-        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusClassName[task.status]}`}>
-          {t(`pages.tasks.status.${task.status}`)}
+        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${taskStatusClassName(task.status)}`}>
+          {taskStatusLabel(t, task.status)}
         </span>
       </div>
 
