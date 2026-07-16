@@ -14,6 +14,7 @@ export default function ChangePasswordPage() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const errorId = 'change-password-form-error';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,31 +50,46 @@ export default function ChangePasswordPage() {
         <p className="text-xs text-[var(--text-secondary)] text-center mb-6">
           {t('auth.mustChangePassword')}
         </p>
-        {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
+        {error && <p id={errorId} role="alert" className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1">
+          <label htmlFor="current-password" className="flex flex-col gap-1">
             <span className="text-xs text-[var(--text-secondary)]">{t('auth.currentPassword')}</span>
             <Input
+              id="current-password"
+              name="current_password"
               type="password"
+              autoComplete="current-password"
               value={oldPassword}
               onChange={(e) => setOldPassword(e.target.value)}
+              aria-describedby={error ? errorId : undefined}
+              aria-invalid={error ? true : undefined}
               autoFocus
             />
           </label>
-          <label className="flex flex-col gap-1">
+          <label htmlFor="new-password" className="flex flex-col gap-1">
             <span className="text-xs text-[var(--text-secondary)]">{t('auth.newPassword')}</span>
             <Input
+              id="new-password"
+              name="new_password"
               type="password"
+              autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              aria-describedby={error ? errorId : undefined}
+              aria-invalid={error ? true : undefined}
             />
           </label>
-          <label className="flex flex-col gap-1">
+          <label htmlFor="new-password-confirmation" className="flex flex-col gap-1">
             <span className="text-xs text-[var(--text-secondary)]">{t('auth.confirmPassword')}</span>
             <Input
+              id="new-password-confirmation"
+              name="new_password_confirmation"
               type="password"
+              autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
+              aria-describedby={error ? errorId : undefined}
+              aria-invalid={error ? true : undefined}
             />
           </label>
           <Button

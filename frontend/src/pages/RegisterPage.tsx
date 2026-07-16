@@ -14,6 +14,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const errorId = 'register-form-error';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,16 +51,16 @@ export default function RegisterPage() {
       <form onSubmit={handleSubmit} className="bg-[var(--surface)] p-8 rounded-xl shadow-sm border border-[var(--border)] w-full max-w-sm">
         <BrandMark className="mb-6" />
         <h1 className="text-xl font-semibold mb-6">{t('auth.register')}</h1>
-        {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
+        {error && <p id={errorId} role="alert" className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
-          <label className="text-xs text-[var(--text-secondary)]">{t('auth.username')} <span className="text-[var(--text-tertiary)]">({t('auth.usernameHint')})</span></label>
-          <Input placeholder={t('auth.username')} value={username} onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_-]/g, '').slice(0, 31))} autoFocus />
-          <label className="text-xs text-[var(--text-secondary)]">{t('auth.displayName')}</label>
-          <Input placeholder={t('auth.displayName')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-          <label className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
-          <Input type="password" placeholder={t('auth.password')} value={password} onChange={(e) => setPassword(e.target.value)} />
-          <label className="text-xs text-[var(--text-secondary)]">{t('auth.confirmPassword')}</label>
-          <Input type="password" placeholder={t('auth.confirmPassword')} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <label htmlFor="register-username" className="text-xs text-[var(--text-secondary)]">{t('auth.username')} <span className="text-[var(--text-tertiary)]">({t('auth.usernameHint')})</span></label>
+          <Input id="register-username" name="username" autoComplete="username" placeholder={t('auth.username')} value={username} onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_-]/g, '').slice(0, 31))} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} autoFocus />
+          <label htmlFor="register-display-name" className="text-xs text-[var(--text-secondary)]">{t('auth.displayName')}</label>
+          <Input id="register-display-name" name="display_name" autoComplete="name" placeholder={t('auth.displayName')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} />
+          <label htmlFor="register-password" className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
+          <Input id="register-password" name="password" type="password" autoComplete="new-password" placeholder={t('auth.password')} value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} />
+          <label htmlFor="register-password-confirmation" className="text-xs text-[var(--text-secondary)]">{t('auth.confirmPassword')}</label>
+          <Input id="register-password-confirmation" name="password_confirmation" type="password" autoComplete="new-password" placeholder={t('auth.confirmPassword')} value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} />
           <Button type="submit" disabled={submitting || !username || !displayName || !password || !confirm}>
             {submitting ? t('common.loading') : t('auth.register')}
           </Button>
