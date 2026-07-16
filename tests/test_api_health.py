@@ -166,11 +166,6 @@ async def test_settings_codex_defaults_never_reads_host_credentials(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_home() -> Path:
-        raise AssertionError("host HOME must not be read")
-
-    monkeypatch.setattr("ainrf.api.routes.settings.Path.home", fail_home)
-
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -178,6 +173,11 @@ async def test_settings_codex_defaults_never_reads_host_credentials(
         )
     )
     jwt_headers = get_jwt_headers(app)
+
+    def fail_home() -> Path:
+        raise AssertionError("host HOME must not be read")
+
+    monkeypatch.setattr("ainrf.api.routes.settings.Path.home", fail_home)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
