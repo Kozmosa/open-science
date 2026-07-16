@@ -251,7 +251,7 @@ describe('App routes', () => {
     );
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Open command palette' }));
+    await user.click(screen.getByRole('button', { name: /Open command palette/ }));
     const commandInput = screen.getByRole('combobox', { name: 'Open command palette' });
     await user.type(commandInput, 'browse files');
     await user.click(screen.getByText('Browse Files'));

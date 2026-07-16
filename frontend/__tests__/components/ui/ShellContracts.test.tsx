@@ -60,5 +60,7 @@ describe('osci shell contracts', () => {
       </LocaleProvider>,
     );
     expect(screen.getByText('Task | Total: 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Search pages and actions….*Ctrl\/⌘\+Shift\+P.*Open command palette/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Alice.*Open account menu/ })).toBeInTheDocument();
   });
 });

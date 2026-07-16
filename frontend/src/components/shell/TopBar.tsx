@@ -15,16 +15,23 @@ interface TopBarProps {
 
 export function TopBar({ user, taskStatusSummary, onOpenNavigation, onOpenCommandPalette, onLogout }: TopBarProps) {
   const t = useT();
+  const commandShortcut = 'Ctrl/⌘+Shift+P';
   return (
     <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center justify-between border-b border-[var(--osci-color-border)] bg-[var(--osci-topbar-background-translucent)] px-3 backdrop-blur-[16px] md:px-5 [backdrop-filter:var(--osci-topbar-backdrop-filter)]">
       <div className="flex items-center gap-2">
         <Button size="icon-sm" variant="ghost" aria-label={t('layout.openNavigation')} onClick={onOpenNavigation} className="md:hidden">
           <Menu aria-hidden="true" size={17} />
         </Button>
-        <Button variant="secondary" size="sm" onClick={onOpenCommandPalette} aria-label={t('layout.openCommandPalette')} className="gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onOpenCommandPalette}
+          className="gap-2"
+        >
           <Search aria-hidden="true" size={15} />
           <span className="hidden sm:inline">{t('layout.commandPlaceholder')}</span>
-          <kbd className="hidden rounded border border-[var(--osci-color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--osci-color-text-muted)] lg:inline">Ctrl/⌘+Shift+P</kbd>
+          <kbd className="hidden rounded border border-[var(--osci-color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--osci-color-text-muted)] lg:inline">{commandShortcut}</kbd>
+          <span className="sr-only">{t('layout.openCommandPalette')}</span>
         </Button>
       </div>
       <div className="flex items-center gap-2">

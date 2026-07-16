@@ -27,7 +27,7 @@ export function AccountMenu({ user, onLogout, showIdentity = false, align = 'end
         <Button
           size={showIdentity ? 'md' : 'icon-sm'}
           variant="ghost"
-          aria-label={t('layout.accountMenu')}
+          aria-label={`${user.display_name} — ${t('layout.accountMenu')}`}
           className={cn(showIdentity && 'w-full justify-start gap-2 px-2.5')}
         >
           <UserRound aria-hidden="true" className="shrink-0" size={17} />
