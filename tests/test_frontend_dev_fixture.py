@@ -50,7 +50,7 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     assert first_payload["state_root"] == str(state_root)
     assert first_payload["artifact_sha"] == artifact_sha
     assert first_payload["profile"] == "full"
-    assert first_payload["fixture_version"] == 2
+    assert first_payload["fixture_version"] == 3
     assert first_payload["counts"] == {
         "attempts": 5,
         "papers": 8,
@@ -186,12 +186,41 @@ def test_permissions_and_failures_profiles_expose_expected_projection_states(
         task_statuses = {
             str(row["status"]) for row in conn.execute("SELECT status FROM tasks").fetchall()
         }
+        attempt_statuses = {
+            str(row["status"])
+            for row in conn.execute("SELECT status FROM agent_task_attempts").fetchall()
+        }
+        runtime_statuses = {
+            str(row["status"])
+            for row in conn.execute("SELECT status FROM agent_runtime_sessions").fetchall()
+        }
         snapshot = conn.execute(
             "SELECT source_status, payload_json FROM overview_snapshots"
         ).fetchone()
-        assert {"launch_unknown", "stopped_permission_revoked"} <= task_statuses
+        assert task_statuses == {
+            "succeeded",
+            "failed",
+            "cancelled",
+            "stopped",
+            "launch_unknown",
+            "stopped_by_project_archive",
+            "stopped_permission_revoked",
+        }
+        assert attempt_statuses == task_statuses
+        assert runtime_statuses == {
+            "completed",
+            "failed",
+            "cancelled",
+            "stopped",
+            "launch_unknown",
+        }
         assert snapshot["source_status"] == "partial"
-        display_cards = json.loads(snapshot["payload_json"])["display_cards"]
+        overview_payload = json.loads(snapshot["payload_json"])
+        assert overview_payload["tasks_by_status"] == {"failed": 1, "succeeded": 1}
+        assert overview_payload["display_cards"][1]["data"]["tasks"] == [
+            {"task_id": "task-frontend-succeeded", "title": "Succeeded Task"}
+        ]
+        display_cards = overview_payload["display_cards"]
         assert {card["source_status"] for card in display_cards} >= {"failed", "stale"}
     with closing(connect(failures_root / "runtime" / "literature.sqlite3")) as conn:
         assert conn.execute("SELECT status FROM literature_checks").fetchone()["status"] == "failed"

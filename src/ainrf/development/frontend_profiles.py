@@ -13,7 +13,7 @@ from ainrf.domain import DomainService
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
-FRONTEND_DEV_FIXTURE_VERSION = 2
+FRONTEND_DEV_FIXTURE_VERSION = 3
 _USER_ID = "api-key-user"
 _NOW = "2026-07-14T09:00:00+00:00"
 _LATER = "2026-07-14T10:00:00+00:00"
@@ -267,14 +267,27 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
 
 
 def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> None:
-    statuses = ["completed", "failed", "cancelled", "stopped", "launch_unknown"]
+    lifecycle_states = [
+        ("succeeded", "succeeded", "completed"),
+        ("failed", "failed", "failed"),
+        ("cancelled", "cancelled", "cancelled"),
+        ("stopped", "stopped", "stopped"),
+        ("launch_unknown", "launch_unknown", "launch_unknown"),
+    ]
     if include_failures:
-        statuses.extend(["stopped_by_project_archive", "stopped_permission_revoked"])
+        lifecycle_states.extend(
+            [
+                ("stopped_by_project_archive", "stopped_by_project_archive", "stopped"),
+                ("stopped_permission_revoked", "stopped_permission_revoked", "stopped"),
+            ]
+        )
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(db_path)) as conn:
-        for index, status in enumerate(statuses, start=1):
-            task_id = f"task-frontend-{status}"
-            attempt_id = f"attempt-frontend-{status}"
+        for index, (task_status, attempt_status, runtime_status) in enumerate(
+            lifecycle_states, start=1
+        ):
+            task_id = f"task-frontend-{task_status}"
+            attempt_id = f"attempt-frontend-{task_status}"
             conn.execute(
                 """
                 INSERT OR IGNORE INTO tasks (
@@ -292,15 +305,15 @@ def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> N
                 """,
                 (
                     task_id,
-                    status,
-                    f"Frontend {status.replace('_', ' ').title()} Task",
-                    f"Synthetic {status} Task for frontend state coverage.",
+                    task_status,
+                    f"Frontend {task_status.replace('_', ' ').title()} Task",
+                    f"Synthetic {task_status} Task for frontend state coverage.",
                     _NOW,
                     _LATER,
                     _NOW,
                     _LATER,
                     _USER_ID,
-                    None if status == "completed" else f"Synthetic {status} detail",
+                    None if task_status == "succeeded" else f"Synthetic {task_status} detail",
                     attempt_id,
                     json.dumps({"input_tokens": 100 * index, "output_tokens": 50 * index}),
                 ),
@@ -316,17 +329,19 @@ def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> N
                 (
                     attempt_id,
                     task_id,
-                    status,
+                    attempt_status,
                     sha256(task_id.encode("utf-8")).hexdigest(),
                     _NOW,
                     _NOW,
                     _LATER,
                     json.dumps({"input_tokens": 100 * index, "output_tokens": 50 * index}),
                     round(index * 0.013, 3),
-                    f"Synthetic {status} failure"
-                    if status in {"failed", "launch_unknown"}
+                    f"Synthetic {attempt_status} failure"
+                    if attempt_status in {"failed", "launch_unknown"}
                     else None,
-                    status if status.startswith("stopped") or status == "cancelled" else None,
+                    attempt_status
+                    if attempt_status.startswith("stopped") or attempt_status == "cancelled"
+                    else None,
                 ),
             )
             conn.execute(
@@ -338,17 +353,24 @@ def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> N
                 ) VALUES (?, ?, ?, ?, ?, 'codex-app-server', ?, ?, ?, ?, ?)
                 """,
                 (
-                    f"runtime-frontend-{status}",
+                    f"runtime-frontend-{task_status}",
                     attempt_id,
-                    f"launch-frontend-{status}",
-                    status,
+                    f"launch-frontend-{task_status}",
+                    runtime_status,
                     _NOW,
-                    f"session-frontend-{status}",
-                    json.dumps({"profile": "frontend-dev", "status": status}),
+                    f"session-frontend-{task_status}",
+                    json.dumps(
+                        {
+                            "profile": "frontend-dev",
+                            "task_status": task_status,
+                            "attempt_status": attempt_status,
+                            "runtime_status": runtime_status,
+                        }
+                    ),
                     _NOW,
                     _LATER,
-                    f"Synthetic {status} runtime"
-                    if status in {"failed", "launch_unknown"}
+                    f"Synthetic {runtime_status} runtime"
+                    if runtime_status in {"failed", "launch_unknown"}
                     else None,
                 ),
             )
@@ -358,7 +380,7 @@ def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> N
                 source_task_id, target_task_id, relationship_type, created_at,
                 relationship_id, metadata_json
             ) VALUES (
-                'task-frontend-failed', 'task-frontend-completed', 'derived_from', ?,
+                'task-frontend-failed', 'task-frontend-succeeded', 'derived_from', ?,
                 'relationship-frontend-derived', '{}'
             )
             """,
@@ -569,7 +591,7 @@ def _seed_overview(state_root: Path, *, failed: bool) -> None:
         "next_scheduled_at": "2026-07-14T22:00:00+00:00",
         "source": "synthetic_fixture",
         "projects_active": 2,
-        "tasks_by_status": {"completed": 1, "failed": 1},
+        "tasks_by_status": {"succeeded": 1, "failed": 1},
         "active_attempts": 0,
     }
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
@@ -605,7 +627,7 @@ def _overview_card_data(card_id: str, *, failed: bool) -> dict[str, object]:
     if card_id == "attention":
         return {"items": [{"kind": "fixture_attention", "title": "Review synthetic state"}]}
     if card_id == "progress":
-        return {"tasks": [{"task_id": "task-frontend-completed", "title": "Completed Task"}]}
+        return {"tasks": [{"task_id": "task-frontend-succeeded", "title": "Succeeded Task"}]}
     if card_id == "literature":
         return {
             "unread_count": 6,
@@ -702,7 +724,7 @@ def _seed_large_profile(state_root: Path) -> FrontendDevSeedResult:
                     f"task-large-{task_index + 1:04d}",
                     f"project-large-{project_index + 1:03d}",
                     f"workspace-large-{workspace_ordinal:03d}",
-                    "completed" if task_index % 5 else "failed",
+                    "succeeded" if task_index % 5 else "failed",
                     f"Large Task {task_index + 1:04d}",
                     "Synthetic terminal Task for large-list coverage.",
                     _NOW,
