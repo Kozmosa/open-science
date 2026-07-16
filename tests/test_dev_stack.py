@@ -239,6 +239,61 @@ def test_stack_uses_reload_for_dev_and_stable_server_for_preview(
     assert "--reload" not in preview_command
 
 
+def test_synthetic_stack_uses_marker_guarded_fixture_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = _instance(tmp_path, monkeypatch)
+    stack = DevelopmentStack(instance, artifact_sha="9" * 64, api_key="fixture-key")
+    captured: list[tuple[str, tuple[str, ...]]] = []
+
+    monkeypatch.setattr(stack, "status", lambda: DevelopmentStackStatus("stopped", {}))
+    monkeypatch.setattr(stack, "_assert_ports_available", lambda: None)
+    monkeypatch.setattr(stack, "prepare", lambda: {})
+    monkeypatch.setattr(stack, "_write_manifest", lambda records: None)
+    monkeypatch.setattr(stack, "_wait_http", lambda url, record: None)
+    monkeypatch.setattr(stack_module.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(stack_module, "_record_is_alive", lambda record: True)
+
+    def fake_start(service: str, command: tuple[str, ...]) -> DevelopmentProcessRecord:
+        captured.append((service, command))
+        return DevelopmentProcessRecord(
+            service,
+            100 + len(captured),
+            str(len(captured)),
+            command,
+            str(instance.log_root / f"{service}.log"),
+        )
+
+    monkeypatch.setattr(stack, "_start_process", fake_start)
+    monkeypatch.setattr(
+        stack,
+        "status",
+        lambda: (
+            DevelopmentStackStatus("healthy", {"state": "healthy"})
+            if captured
+            else DevelopmentStackStatus("stopped", {})
+        ),
+    )
+
+    status = stack.up()
+
+    assert status.state == "healthy"
+    worker_commands = [command for service, command in captured if service == "worker"]
+    assert worker_commands == [
+        (
+            "uv",
+            "run",
+            "openscience",
+            "frontend-dev",
+            "worker",
+            "--state-root",
+            str(instance.state_root),
+            "--artifact-sha",
+            "9" * 64,
+        )
+    ]
+
+
 def test_preview_build_runs_production_frontend_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

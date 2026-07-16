@@ -25,6 +25,11 @@ from ainrf.development.frontend_profiles import (
     normalize_frontend_dev_profile,
     seed_frontend_dev_profile,
 )
+from ainrf.development.frontend_worker import (
+    FrontendFixtureEngine,
+    FrontendFixtureWorker,
+    FrontendFixtureWorkerRunResult,
+)
 from ainrf.development.instance import (
     DEFAULT_DEVELOPMENT_ROOT,
     INSTANCE_SCHEMA_VERSION,
@@ -62,6 +67,9 @@ __all__ = [
     "FrontendDevPorts",
     "FrontendDevSeedResult",
     "FrontendDevUsers",
+    "FrontendFixtureEngine",
+    "FrontendFixtureWorker",
+    "FrontendFixtureWorkerRunResult",
     "BrowserCdpProbe",
     "chrome_devtools_config_locations",
     "configured_chrome_devtools_servers",

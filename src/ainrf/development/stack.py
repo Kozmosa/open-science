@@ -180,9 +180,12 @@ class DevelopmentStack:
                             "uv",
                             "run",
                             "openscience",
-                            "domain-worker",
+                            "frontend-dev",
+                            "worker",
                             "--state-root",
                             str(self.state_root),
+                            "--artifact-sha",
+                            self.artifact_sha,
                         ),
                     )
                 )

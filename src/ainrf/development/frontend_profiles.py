@@ -260,6 +260,24 @@ def _seed_core_profile(state_root: Path, *, users: FrontendDevUsers) -> Frontend
         )
         conn.execute(
             """
+            INSERT OR IGNORE INTO project_context_version_provenance (
+                context_version_id, fragment_provenance_status, evidence_json, recorded_at
+            ) VALUES ('context-version-frontend-dev', 'verified', ?, ?)
+            """,
+            (
+                json.dumps(
+                    {
+                        "source": "frontend_fixture",
+                        "fragment_count": 0,
+                        "manifest_fingerprint": sha256(b"[]").hexdigest(),
+                    },
+                    sort_keys=True,
+                ),
+                _NOW,
+            ),
+        )
+        conn.execute(
+            """
             INSERT OR IGNORE INTO context_snapshots (
                 context_snapshot_id, context_version_id, fingerprint, content,
                 created_at, source_manifest_json, byte_budget, truncated

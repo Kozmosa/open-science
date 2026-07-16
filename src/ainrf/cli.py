@@ -45,6 +45,7 @@ from ainrf.domain import OverviewSnapshotPlanner, TaskApplicationService, TaskDi
 from ainrf.development import (
     DEFAULT_FRONTEND_DEV_API_KEY,
     DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
+    FrontendFixtureWorker,
     FrontendDevProfile,
     prepare_frontend_dev_fixture,
 )
@@ -242,6 +243,40 @@ def frontend_dev_prepare(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     typer.echo(json_mod.dumps(fixture.as_dict(), indent=2, sort_keys=True))
+
+
+@frontend_dev_app.command("worker")
+def frontend_dev_worker(
+    state_root: Annotated[
+        Path,
+        typer.Option(help="Managed synthetic frontend fixture state root."),
+    ] = Path("/tmp/openscience-frontend-dev"),
+    artifact_sha: Annotated[
+        str,
+        typer.Option(help="Synthetic immutable artifact SHA bound to the v2 fixture."),
+    ] = DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
+    once: Annotated[
+        bool,
+        typer.Option(help="Process one bounded fixture worker cycle, then exit."),
+    ] = False,
+    poll_seconds: Annotated[
+        float,
+        typer.Option(help="Polling interval for deterministic local work."),
+    ] = 0.25,
+) -> None:
+    """Run the marker-guarded worker without external runtime or provider calls."""
+
+    try:
+        worker = FrontendFixtureWorker(state_root, artifact_sha=artifact_sha)
+        if once:
+            result = asyncio.run(worker.run_once())
+            worker.stop()
+            typer.echo(json_mod.dumps(result.as_dict(), indent=2, sort_keys=True))
+            return
+        asyncio.run(worker.run_forever(poll_seconds=poll_seconds))
+    except (DomainCutoverError, OSError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
 
 
 def _configured_domain_mode() -> DomainModelMode:
