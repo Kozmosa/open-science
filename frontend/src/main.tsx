@@ -5,10 +5,19 @@ import './index.css'
 import App from './App.tsx'
 import { LocaleProvider } from '@/shared/i18n'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <LocaleProvider>
-      <App />
-    </LocaleProvider>
-  </StrictMode>,
-)
+async function bootstrap(): Promise<void> {
+  if (import.meta.env.VITE_USE_MOCK === 'true') {
+    const { startMockBrowser } = await import('@/shared/api/mockBrowser')
+    await startMockBrowser()
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <LocaleProvider>
+        <App />
+      </LocaleProvider>
+    </StrictMode>,
+  )
+}
+
+void bootstrap()

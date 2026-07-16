@@ -77,5 +77,10 @@
   },
   "overrides": {
     "dompurify": "3.4.0"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

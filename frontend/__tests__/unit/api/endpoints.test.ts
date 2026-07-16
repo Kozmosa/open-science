@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setupServer } from 'msw/node';
 import { resetMockEnvironmentState, resetMockTaskState, resetMockTerminalSession } from '@/shared/api/mock';
+import { legacyMockHandlers } from '@/shared/api/mockHandlers';
+
+const server = setupServer(...legacyMockHandlers);
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
+afterAll(() => server.close());
 
 beforeEach(() => {
   vi.resetModules();
@@ -11,9 +18,7 @@ beforeEach(() => {
 });
 
 describe('api endpoints', () => {
-  it('uses the mock transport only when VITE_USE_MOCK is true', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'true');
-
+  it('routes legacy mock scenarios through the same HTTP client transport', async () => {
     const {
       buildTaskStreamUrl,
       createTask,
@@ -46,7 +51,6 @@ describe('api endpoints', () => {
   });
 
   it('uses a query parameter for task stream API keys because EventSource cannot send custom headers', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'false');
     vi.stubEnv('VITE_AINRF_API_KEY', 'stream-secret');
 
     const { buildTaskStreamUrl } = await import('../../../src/shared/api/endpoints');
@@ -57,7 +61,6 @@ describe('api endpoints', () => {
   });
 
   it('sends stable idempotency keys for Task pause, resume, and continuation', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'false');
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
       new Response(JSON.stringify({ task_id: 'task-1', status: 'running', sequence: 1 }), {
         status: 200,
@@ -81,8 +84,7 @@ describe('api endpoints', () => {
     expect((fetchMock.mock.calls[2]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.continue:test');
   });
 
-  it('uses the real api client when VITE_USE_MOCK is false', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'false');
+  it('uses the real api client when no MSW handler intercepts the request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
@@ -99,7 +101,6 @@ describe('api endpoints', () => {
   });
 
   it('sends workspace CRUD requests through the real api client', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'false');
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(

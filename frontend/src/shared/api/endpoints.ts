@@ -84,61 +84,7 @@ import type { ChangePasswordRequest,
   DeploymentVersionResponse,
   MonitoringSettingsResponse,
 } from '@/shared/types';
-import {
-  mockArchiveTask,
-  mockCancelTask,
-  mockUpdateTaskProject,
-  mockDeleteTask,
-  mockCreateEnvironment,
-  mockCreateProject,
-  mockCreateProjectEnvironmentReference,
-  mockCreateSession,
-  mockCreateTask,
-  mockCreateTerminalSession,
-  mockCreateWorkspace,
-  mockDeleteEnvironment,
-  mockDeleteProject,
-  mockDeleteProjectEnvironmentReference,
-  mockDeleteSession,
-  mockDeleteTerminalSession,
-  mockDeleteWorkspace,
-  mockDetectEnvironment,
-  mockGetEnvironment,
-  mockGetEnvironments,
-  mockGetHealth,
-  mockGetProject,
-  mockGetProjectEnvironmentReferences,
-  mockGetProjects,
-  mockGetSession,
-  mockGetSessions,
-  mockGetTask,
-  mockGetTaskOutput,
-  mockGetTasks,
-  mockGetTerminalSession,
-  mockGetWorkspaces,
-  mockGetWorkspace,
-  mockResetTerminalSession,
-  mockGetSessionPairs,
-  mockGetSkillDetail,
-  mockGetSkills,
-  mockImportSkill,
-  mockPreviewSkillSettings,
-  mockListFiles,
-  mockReadFile,
-  mockUpdateEnvironment,
-  mockUpdateProject,
-  mockUpdateProjectEnvironmentReference,
-  mockUpdateSession,
-  mockUpdateWorkspace,
-  mockGetAttempts,
-  mockGetResources,
-  mockGetProjectTasks,
-  mockGetTaskEdges,
-  mockCreateTaskEdge,
-  mockDeleteTaskEdge,
-} from './mock';
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 const DEFAULT_PROJECT_ID = 'default';
 const API_BASE = '/api';
 const API_KEY = import.meta.env.VITE_OPENSCIENCE_API_KEY?.trim() || import.meta.env.VITE_AINRF_API_KEY?.trim() || '';
@@ -170,108 +116,78 @@ function withTerminalDetachQuery(
 }
 
 export const getSkills = (): Promise<SkillListResponse> =>
-  USE_MOCK ? Promise.resolve(mockGetSkills()) : api.get<SkillListResponse>('/skills');
+  api.get<SkillListResponse>('/skills');
 
 export const getSkillDetail = (skillId: string): Promise<SkillDetail> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetSkillDetail(skillId))
-    : api.get<SkillDetail>(`/skills/${skillId}`);
+  api.get<SkillDetail>(`/skills/${skillId}`);
 
 export const previewSkillSettings = (skillId: string): Promise<SkillPreview> =>
-  USE_MOCK
-    ? Promise.resolve(mockPreviewSkillSettings(skillId))
-    : api.get<SkillPreview>(`/skills/${skillId}/preview`);
+  api.get<SkillPreview>(`/skills/${skillId}/preview`);
 
 export const importSkill = (payload: SkillImportRequest): Promise<SkillImportResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockImportSkill(payload))
-    : api.post<SkillImportResponse>('/skills/import', payload);
+  api.post<SkillImportResponse>('/skills/import', payload);
 
-export const getHealth = (): Promise<SystemHealth> =>
-  USE_MOCK ? Promise.resolve(mockGetHealth()) : api.get<SystemHealth>('/health');
+export const getHealth = (): Promise<SystemHealth> => api.get<SystemHealth>('/health');
 
 export const getCodexDefaults = (): Promise<CodexDefaults> =>
-  USE_MOCK
-    ? Promise.resolve({ codex_config_toml: null, codex_auth_json: null })
-    : api.get<CodexDefaults>('/settings/codex-defaults');
+  api.get<CodexDefaults>('/settings/codex-defaults');
 
 export const getDeploymentVersion = (): Promise<DeploymentVersionResponse> =>
-  USE_MOCK
-    ? Promise.resolve({ short_commit: null, committed_at: null })
-    : api.get<DeploymentVersionResponse>('/settings/deployment-version');
+  api.get<DeploymentVersionResponse>('/settings/deployment-version');
 
 // Frontend self-reports its OWN build commit (captured at `npm run build`
 // time, served as a static /build-info.json by nginx). Built separately from
 // the backend, so it may target a different commit than the backend version.
 export const getFrontendBuildVersion = (): Promise<DeploymentVersionResponse> => {
-  if (USE_MOCK) return Promise.resolve({ short_commit: null, committed_at: null });
   return fetch('/build-info.json', { headers: { Accept: 'application/json' } })
     .then((r) => (r.ok ? (r.json() as Promise<DeploymentVersionResponse>) : { short_commit: null, committed_at: null }))
     .catch(() => ({ short_commit: null, committed_at: null }));
 };
 
 export const getTerminalSession = (environmentId?: string): Promise<TerminalSession> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetTerminalSession(environmentId))
-    : api.get<TerminalSession>(withEnvironmentId('/terminal/session', environmentId));
+  api.get<TerminalSession>(withEnvironmentId('/terminal/session', environmentId));
 
 export const getSessionPairs = (environmentId?: string): Promise<UserSessionPairListResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetSessionPairs(environmentId))
-    : api.get<UserSessionPairListResponse>(withEnvironmentId('/terminal/session-pairs', environmentId));
+  api.get<UserSessionPairListResponse>(withEnvironmentId('/terminal/session-pairs', environmentId));
 
 export const createTerminalSession = (environmentId: string): Promise<TerminalSession> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateTerminalSession(environmentId))
-    : api.post<TerminalSession>('/terminal/session', { environment_id: environmentId });
+  api.post<TerminalSession>('/terminal/session', { environment_id: environmentId });
 
 export const deleteTerminalSession = (options: {
   environmentId?: string | null;
   attachmentId?: string | null;
 }): Promise<TerminalSession> =>
-  USE_MOCK
-    ? Promise.resolve(mockDeleteTerminalSession(options.environmentId, options.attachmentId))
-    : api.delete<TerminalSession>(withTerminalDetachQuery('/terminal/session', options));
+  api.delete<TerminalSession>(withTerminalDetachQuery('/terminal/session', options));
 
 export const resetTerminalSession = (
   environmentId: string,
   attachmentId?: string | null
 ): Promise<TerminalSession> =>
-  USE_MOCK
-    ? Promise.resolve(mockResetTerminalSession(environmentId))
-    : api.post<TerminalSession>('/terminal/session/reset', {
-        environment_id: environmentId,
-        attachment_id: attachmentId ?? null,
-      });
+  api.post<TerminalSession>('/terminal/session/reset', {
+    environment_id: environmentId,
+    attachment_id: attachmentId ?? null,
+  });
 
 export const getWorkspaces = (): Promise<WorkspaceListResponse> =>
-  USE_MOCK ? Promise.resolve(mockGetWorkspaces()) : api.get<WorkspaceListResponse>('/workspaces');
+  api.get<WorkspaceListResponse>('/workspaces');
 
 export const getWorkspace = (workspaceId: string): Promise<WorkspaceRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetWorkspace(workspaceId))
-    : api.get<WorkspaceRecord>(`/workspaces/${workspaceId}`);
+  api.get<WorkspaceRecord>(`/workspaces/${workspaceId}`);
 
 export const createWorkspace = (payload: WorkspaceCreateRequest): Promise<WorkspaceRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateWorkspace(payload))
-    : api.post<WorkspaceRecord>('/workspaces', payload);
+  api.post<WorkspaceRecord>('/workspaces', payload);
 
 export const updateWorkspace = (
   workspaceId: string,
   payload: WorkspaceUpdateRequest,
   idempotencyKey: string,
 ): Promise<WorkspaceRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockUpdateWorkspace(workspaceId, payload))
-    : api.patch<WorkspaceRecord>(`/workspaces/${workspaceId}`, payload, {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      });
+  api.patch<WorkspaceRecord>(`/workspaces/${workspaceId}`, payload, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const deleteWorkspace = (workspaceId: string): Promise<void> =>
-  USE_MOCK
-    ? Promise.resolve(mockDeleteWorkspace(workspaceId))
-    : api.delete<void>(`/workspaces/${workspaceId}`);
+  api.delete<void>(`/workspaces/${workspaceId}`);
 
 export const unregisterWorkspace = (workspaceId: string, idempotencyKey: string): Promise<void> =>
   api.post<void>(`/workspaces/${workspaceId}/unregister`, {}, {
@@ -291,49 +207,30 @@ export const getTasks = (params: {
   if (limit) searchParams.set('limit', String(limit));
   if (sort) searchParams.set('sort', sort);
   const qs = searchParams.toString();
-  return USE_MOCK
-    ? Promise.resolve(mockGetTasks())
-    : api.get<TaskListResponse>(`/tasks?${qs}`);
+  return api.get<TaskListResponse>(`/tasks?${qs}`);
 };
 
 export const getTask = (taskId: string): Promise<TaskRecord> =>
-  USE_MOCK ? Promise.resolve(mockGetTask(taskId)) : api.get<TaskRecord>(`/tasks/${taskId}`);
+  api.get<TaskRecord>(`/tasks/${taskId}`);
 
 export const getTaskTokenUsageSummary = (params: { includeArchived?: boolean } = {}): Promise<TaskTokenUsageSummary> => {
   const searchParams = new URLSearchParams();
   searchParams.set('include_archived', String(params.includeArchived ?? true));
-  return USE_MOCK
-    ? Promise.resolve({
-        task_count: 0,
-        tasks_with_usage: 0,
-        total_tokens: 0,
-        total_cost_usd: 0,
-        total_duration_ms: 0,
-        median_duration_ms: null,
-        total: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, cost_usd: 0 },
-        by_model: {},
-        by_engine: {},
-        top_tasks: [],
-      })
-    : api.get<TaskTokenUsageSummary>(`/tasks/token-usage?${searchParams.toString()}`);
+  return api.get<TaskTokenUsageSummary>(`/tasks/token-usage?${searchParams.toString()}`);
 };
 
 export const createTask = (
   payload: TaskCreatePayload,
   idempotencyKey: string,
 ): Promise<TaskSummary> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateTask(payload))
-    : api.post<TaskSummary>('/tasks', payload, {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      });
+  api.post<TaskSummary>('/tasks', payload, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const archiveTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
-  USE_MOCK
-    ? Promise.resolve(mockArchiveTask(taskId))
-    : api.post<TaskSummary>(`/tasks/${taskId}/archive`, {}, {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      });
+  api.post<TaskSummary>(`/tasks/${taskId}/archive`, {}, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const unarchiveTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
   api.post<TaskSummary>(`/tasks/${taskId}/unarchive`, {}, {
@@ -341,14 +238,12 @@ export const unarchiveTask = (taskId: string, idempotencyKey: string): Promise<T
   });
 
 export const deleteTask = (taskId: string): Promise<void> =>
-  USE_MOCK ? mockDeleteTask(taskId) : api.delete<void>(`/tasks/${taskId}/permanent`);
+  api.delete<void>(`/tasks/${taskId}/permanent`);
 
 export const cancelTask = (taskId: string, idempotencyKey: string): Promise<TaskSummary> =>
-  USE_MOCK
-    ? Promise.resolve(mockCancelTask(taskId))
-    : api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {}, {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      });
+  api.post<TaskSummary>(`/tasks/${taskId}/cancel`, {}, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const retryTask = (taskId: string, idempotencyKey: string): Promise<TaskRetryResponse> =>
   api.post<TaskRetryResponse>(`/tasks/${taskId}/retry`, {}, {
@@ -372,9 +267,7 @@ export const forkTask = (
 });
 
 export const updateTaskProject = (taskId: string, projectId: string): Promise<TaskSummary> =>
-  USE_MOCK
-    ? Promise.resolve(mockUpdateTaskProject(taskId, projectId))
-    : api.patch<TaskSummary>(`/tasks/${taskId}/project`, { project_id: projectId } satisfies TaskUpdateProjectRequest);
+  api.patch<TaskSummary>(`/tasks/${taskId}/project`, { project_id: projectId } satisfies TaskUpdateProjectRequest);
 
 export const updateTask = (
   taskId: string,
@@ -394,40 +287,30 @@ export const getProjectTasks = (
   if (cursor) searchParams.set('cursor', cursor);
   if (limit) searchParams.set('limit', String(limit));
   const qs = searchParams.toString();
-  return USE_MOCK
-    ? Promise.resolve(mockGetProjectTasks())
-    : api.get<TaskListResponse>(`/projects/${projectId}/tasks?${qs}`);
+  return api.get<TaskListResponse>(`/projects/${projectId}/tasks?${qs}`);
 };
 
 export const getTaskEdges = (projectId: string): Promise<TaskEdgeListResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetTaskEdges(projectId))
-    : api.get<TaskEdgeListResponse>(`/projects/${projectId}/task-edges`);
+  api.get<TaskEdgeListResponse>(`/projects/${projectId}/task-edges`);
 
 export const createTaskEdge = (
   projectId: string,
   payload: TaskEdgeCreateRequest,
   idempotencyKey: string,
 ): Promise<TaskEdge> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateTaskEdge(projectId, payload))
-    : api.post<TaskEdge>(`/projects/${projectId}/task-edges`, payload, {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      });
+  api.post<TaskEdge>(`/projects/${projectId}/task-edges`, payload, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const deleteTaskEdge = (edgeId: string): Promise<void> =>
-  USE_MOCK
-    ? Promise.resolve(mockDeleteTaskEdge(edgeId))
-    : api.delete<void>(`/task-edges/${edgeId}`);
+  api.delete<void>(`/task-edges/${edgeId}`);
 
 export const getTaskOutput = (
   taskId: string,
   afterSeq: number = 0,
   limit: number = 0
 ): Promise<TaskOutputListResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetTaskOutput(taskId, afterSeq))
-    : api.get<TaskOutputListResponse>(`/tasks/${taskId}/output?after_seq=${afterSeq}${limit > 0 ? `&limit=${limit}` : ''}`);
+  api.get<TaskOutputListResponse>(`/tasks/${taskId}/output?after_seq=${afterSeq}${limit > 0 ? `&limit=${limit}` : ''}`);
 
 export const buildTaskStreamUrl = (taskId: string, afterSeq: number = 0): string => {
   const search = new URLSearchParams({ after_seq: String(afterSeq) });
@@ -458,120 +341,96 @@ export const getTaskMessages = (taskId: string, afterSeq: number = 0, limit: num
 
 
 export const getEnvironments = (): Promise<EnvironmentListResponse> =>
-  USE_MOCK ? Promise.resolve(mockGetEnvironments()) : api.get<EnvironmentListResponse>('/environments');
+  api.get<EnvironmentListResponse>('/environments');
 
 export const getEnvironment = (environmentId: string): Promise<EnvironmentRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetEnvironment(environmentId))
-    : api.get<EnvironmentRecord>(`/environments/${environmentId}`);
+  api.get<EnvironmentRecord>(`/environments/${environmentId}`);
 
 export const createEnvironment = (
   payload: EnvironmentCreateRequest
 ): Promise<EnvironmentRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateEnvironment(payload))
-    : api.post<EnvironmentRecord>('/environments', payload);
+  api.post<EnvironmentRecord>('/environments', payload);
 
 export const updateEnvironment = (
   environmentId: string,
   payload: EnvironmentUpdateRequest
 ): Promise<EnvironmentRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockUpdateEnvironment(environmentId, payload))
-    : api.patch<EnvironmentRecord>(`/environments/${environmentId}`, payload);
+  api.patch<EnvironmentRecord>(`/environments/${environmentId}`, payload);
 
 export const deleteEnvironment = (environmentId: string): Promise<void> =>
-  USE_MOCK
-    ? Promise.resolve(mockDeleteEnvironment(environmentId))
-    : api.delete<void>(`/environments/${environmentId}`);
+  api.delete<void>(`/environments/${environmentId}`);
 
 export const detectEnvironment = (environmentId: string): Promise<EnvironmentRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockDetectEnvironment(environmentId))
-    : api.post<EnvironmentRecord>(`/environments/${environmentId}/detect`, {});
+  api.post<EnvironmentRecord>(`/environments/${environmentId}/detect`, {});
 
 
 export const getProjects = (): Promise<ProjectListResponse> =>
-  USE_MOCK ? Promise.resolve(mockGetProjects()) : api.get<ProjectListResponse>('/projects');
+  api.get<ProjectListResponse>('/projects');
 
 export const getProject = (projectId: string): Promise<ProjectRecord> =>
-  USE_MOCK ? Promise.resolve(mockGetProject(projectId)) : api.get<ProjectRecord>(`/projects/${projectId}`);
+  api.get<ProjectRecord>(`/projects/${projectId}`);
 
 export const createProject = (payload: ProjectCreateRequest, idempotencyKey?: string): Promise<ProjectRecord> =>
-  USE_MOCK ? Promise.resolve(mockCreateProject(payload)) : api.post<ProjectRecord>('/projects', payload, {
+  api.post<ProjectRecord>('/projects', payload, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
   });
 
 export const updateProject = (projectId: string, payload: ProjectUpdateRequest, idempotencyKey: string): Promise<ProjectRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockUpdateProject(projectId, payload))
-    : api.patch<ProjectRecord>(`/projects/${projectId}`, payload, {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      });
+  api.patch<ProjectRecord>(`/projects/${projectId}`, payload, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
 
 export const deleteProject = (projectId: string): Promise<void> =>
-  USE_MOCK ? Promise.resolve(mockDeleteProject(projectId)) : api.delete<void>(`/projects/${projectId}`);
+  api.delete<void>(`/projects/${projectId}`);
 
 export const getProjectEnvironmentReferences = (
   projectId: string = DEFAULT_PROJECT_ID
 ): Promise<ProjectEnvironmentReferenceListResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetProjectEnvironmentReferences(projectId))
-    : api.get<ProjectEnvironmentReferenceListResponse>(`/projects/${projectId}/environment-refs`);
+  api.get<ProjectEnvironmentReferenceListResponse>(`/projects/${projectId}/environment-refs`);
 
 export const createProjectEnvironmentReference = (
   payload: ProjectEnvironmentReferenceCreateRequest,
   projectId: string = DEFAULT_PROJECT_ID
 ): Promise<ProjectEnvironmentReference> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateProjectEnvironmentReference(projectId, payload))
-    : api.post<ProjectEnvironmentReference>(`/projects/${projectId}/environment-refs`, payload);
+  api.post<ProjectEnvironmentReference>(`/projects/${projectId}/environment-refs`, payload);
 
 export const updateProjectEnvironmentReference = (
   environmentId: string,
   payload: ProjectEnvironmentReferenceUpdateRequest,
   projectId: string = DEFAULT_PROJECT_ID
 ): Promise<ProjectEnvironmentReference> =>
-  USE_MOCK
-    ? Promise.resolve(mockUpdateProjectEnvironmentReference(projectId, environmentId, payload))
-    : api.patch<ProjectEnvironmentReference>(
-        `/projects/${projectId}/environment-refs/${environmentId}`,
-        payload
-      );
+  api.patch<ProjectEnvironmentReference>(
+    `/projects/${projectId}/environment-refs/${environmentId}`,
+    payload
+  );
 
 export const deleteProjectEnvironmentReference = (
   environmentId: string,
   projectId: string = DEFAULT_PROJECT_ID
 ): Promise<void> =>
-  USE_MOCK
-    ? Promise.resolve(mockDeleteProjectEnvironmentReference(projectId, environmentId))
-    : api.delete<void>(`/projects/${projectId}/environment-refs/${environmentId}`);
+  api.delete<void>(`/projects/${projectId}/environment-refs/${environmentId}`);
 
 export const listFiles = (
   environmentId: string,
   path: string = '',
   workspaceId?: string
 ): Promise<FileListResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockListFiles(environmentId, path))
-    : api.get<FileListResponse>(
-        `/files/list?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
-          workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
-        }`
-      );
+  api.get<FileListResponse>(
+    `/files/list?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
+      workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    }`
+  );
 
 export const readFile = (
   environmentId: string,
   path: string,
   workspaceId?: string
 ): Promise<FileReadResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockReadFile(environmentId, path))
-    : api.get<FileReadResponse>(
-        `/files/read?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
-          workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
-        }`
-      );
+  api.get<FileReadResponse>(
+    `/files/read?environment_id=${encodeURIComponent(environmentId)}&path=${encodeURIComponent(path)}${
+      workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    }`
+  );
 
 export const buildFileStreamUrl = (
   environmentId: string,
@@ -587,9 +446,6 @@ export const uploadFile = (params: {
   workspaceId?: string;
   file: File;
 }): Promise<FileUploadResponse> => {
-  if (USE_MOCK) {
-    return Promise.resolve({ path: params.path, size: params.file.size });
-  }
   const formData = new FormData();
   formData.append('environment_id', params.environmentId);
   formData.append('path', params.path);
@@ -601,42 +457,24 @@ export const uploadFile = (params: {
 };
 
 export const getResources = (): Promise<ResourcesResponse> =>
-  USE_MOCK ? Promise.resolve(mockGetResources()) : api.get<ResourcesResponse>('/resources');
+  api.get<ResourcesResponse>('/resources');
 
 // --- Skill Registry API ---
 
 export const getSkillRegistries = (): Promise<SkillRegistryListResponse> =>
-  USE_MOCK
-    ? Promise.resolve({ items: [] })
-    : api.get<SkillRegistryListResponse>('/skill-registries');
+  api.get<SkillRegistryListResponse>('/skill-registries');
 
 export const getSkillRegistryStatus = (registryId: string): Promise<SkillRegistryStatus> =>
-  USE_MOCK
-    ? Promise.resolve({
-        registry_id: registryId,
-        installed: false,
-        installed_count: 0,
-        last_sync_at: null,
-        remote_commit: null,
-        local_commit: null,
-        has_update: false,
-        is_dirty: false,
-        sync_in_progress: false,
-      })
-    : api.get<SkillRegistryStatus>(`/skill-registries/${registryId}/status`);
+  api.get<SkillRegistryStatus>(`/skill-registries/${registryId}/status`);
 
 export const installSkillRegistry = (registryId: string): Promise<SkillRegistryInstallResponse> =>
-  USE_MOCK
-    ? Promise.resolve({ registry_id: registryId, installed_count: 0, skills: [] })
-    : api.post<SkillRegistryInstallResponse>(`/skill-registries/${registryId}/install`, {});
+  api.post<SkillRegistryInstallResponse>(`/skill-registries/${registryId}/install`, {});
 
 export const updateSkillRegistry = (
   registryId: string,
   payload: SkillRegistryUpdateRequest
 ): Promise<SkillRegistryUpdateResponse> =>
-  USE_MOCK
-    ? Promise.resolve({ registry_id: registryId, updated_count: 0, added: [], removed: [] })
-    : api.post<SkillRegistryUpdateResponse>(`/skill-registries/${registryId}/update`, payload);
+  api.post<SkillRegistryUpdateResponse>(`/skill-registries/${registryId}/update`, payload);
 
 // ── Session endpoints ───────────────────────────────────
 
@@ -653,9 +491,7 @@ export const getSessions = (params: {
   if (cursor) searchParams.set('cursor', cursor);
   if (limit) searchParams.set('limit', String(limit));
   const qs = searchParams.toString();
-  return USE_MOCK
-    ? Promise.resolve(mockGetSessions({ projectId, status }))
-    : api.get<SessionListResponse>(`/sessions${qs ? `?${qs}` : ''}`);
+  return api.get<SessionListResponse>(`/sessions${qs ? `?${qs}` : ''}`);
 };
 
 export const getSessionsBatchDetail = (
@@ -667,45 +503,27 @@ export const getSessionsBatchDetail = (
 };
 
 export const getSession = (id: string): Promise<SessionDetailRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetSession(id))
-    : api.get<SessionDetailRecord>(`/sessions/${id}`);
+  api.get<SessionDetailRecord>(`/sessions/${id}`);
 
 export const createSession = (
   payload: SessionCreateRequest,
 ): Promise<SessionRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockCreateSession(payload))
-    : api.post<SessionRecord>('/sessions', payload);
+  api.post<SessionRecord>('/sessions', payload);
 
 export const updateSession = (
   id: string,
   payload: SessionUpdateRequest,
 ): Promise<SessionRecord> =>
-  USE_MOCK
-    ? Promise.resolve(mockUpdateSession(id, payload))
-    : api.patch<SessionRecord>(`/sessions/${id}`, payload);
+  api.patch<SessionRecord>(`/sessions/${id}`, payload);
 
 export const deleteSession = (id: string): Promise<void> =>
-  USE_MOCK
-    ? Promise.resolve(mockDeleteSession(id))
-    : api.delete<void>(`/sessions/${id}`);
+  api.delete<void>(`/sessions/${id}`);
 
 export const getAttempts = (sessionId: string): Promise<AttemptListResponse> =>
-  USE_MOCK
-    ? Promise.resolve(mockGetAttempts(sessionId))
-    : api.get<AttemptListResponse>(`/sessions/${sessionId}/attempts`);
+  api.get<AttemptListResponse>(`/sessions/${sessionId}/attempts`);
 
 export const getProjectCostSummary = (projectId: string): Promise<ProjectCostSummary> =>
-  USE_MOCK
-    ? Promise.resolve({
-        project_id: projectId,
-        total_cost_usd: 0,
-        total_tokens: 0,
-        session_count: 0,
-        by_model: {},
-      })
-    : api.get<ProjectCostSummary>(`/projects/${projectId}/cost-summary`);
+  api.get<ProjectCostSummary>(`/projects/${projectId}/cost-summary`);
 
 export const getAdminUsers = (): Promise<AdminUserListResponse> => api.get('/admin/users');
 export const updateAdminUser = (userId: string, payload: AdminUserUpdateRequest): Promise<AdminUserItem> => api.patch(`/admin/users/${userId}`, payload);
@@ -736,52 +554,36 @@ function literatureQuery(params: Record<string, string | number | undefined>): s
 }
 
 export const getLiteratureOverview = (): Promise<LiteratureOverview> =>
-  USE_MOCK
-    ? Promise.resolve({
-        last_successful_check_at: null,
-        next_scheduled_check_at: null,
-        active_check: null,
-        counts: { today: 0, unread: 0, saved: 0, updated: 0 },
-      })
-    : api.get('/literature/overview');
+  api.get('/literature/overview');
 
 export const getLiteratureTopics = (): Promise<{ items: LiteratureTopic[] }> =>
-  USE_MOCK ? Promise.resolve({ items: [] }) : api.get('/literature/topics');
+  api.get('/literature/topics');
 
 export const createLiteratureTopic = (payload: LiteratureTopicInput): Promise<LiteratureTopic> =>
-  USE_MOCK ? Promise.resolve({} as LiteratureTopic) : api.post('/literature/topics', payload);
+  api.post('/literature/topics', payload);
 
 export const updateLiteratureTopic = (
   topicId: string,
   payload: Partial<LiteratureTopicInput & Pick<LiteratureTopic, 'is_active'>>,
 ): Promise<LiteratureTopic> =>
-  USE_MOCK ? Promise.resolve({} as LiteratureTopic) : api.patch(`/literature/topics/${topicId}`, payload);
+  api.patch(`/literature/topics/${topicId}`, payload);
 
 export const deleteLiteratureTopic = (topicId: string): Promise<void> =>
-  USE_MOCK ? Promise.resolve() : api.delete(`/literature/topics/${topicId}`);
+  api.delete(`/literature/topics/${topicId}`);
 
 export const previewLiteratureTopic = (payload: LiteratureTopicInput): Promise<LiteratureTopicPreview> =>
-  USE_MOCK
-    ? Promise.resolve({
-        matched_count: 0,
-        samples: [],
-        local_coverage: { paper_count: 0, complete: false },
-        needs_check: false,
-      })
-    : api.post('/literature/topics/preview', payload);
+  api.post('/literature/topics/preview', payload);
 
 export const getLiteraturePapers = (
   params: LiteraturePaperListParams = {},
 ): Promise<LiteraturePaperListResponse> =>
-  USE_MOCK
-    ? Promise.resolve({ items: [], next_cursor: null, total: 0 })
-    : api.get(`/literature/papers${literatureQuery({
-        view: params.view,
-        topic_id: params.topic_id,
-        category: params.category,
-        cursor: params.cursor,
-        limit: params.limit,
-      })}`);
+  api.get(`/literature/papers${literatureQuery({
+    view: params.view,
+    topic_id: params.topic_id,
+    category: params.category,
+    cursor: params.cursor,
+    limit: params.limit,
+  })}`);
 
 export const getLiteraturePaper = (paperId: string): Promise<LiteraturePaperDetail> =>
   api.get(`/literature/papers/${paperId}`);
@@ -845,12 +647,4 @@ export const updateSearchSettings = (payload: SearchSettingsUpdateRequest): Prom
   api.patch<SearchSettingsResponse>('/settings/search', payload);
 
 export const getMonitoringSettings = (): Promise<MonitoringSettingsResponse> =>
-  USE_MOCK
-    ? Promise.resolve({
-        services: [
-          { id: 'grafana', display_name: 'Grafana', description: 'Metrics dashboards, alerts, and visualization', url: '/grafana', icon: 'grafana' },
-          { id: 'prometheus', display_name: 'Prometheus', description: 'Time-series metrics collection and querying', url: '/prometheus', icon: 'prometheus' },
-          { id: 'litefuse', display_name: 'Litefuse', description: 'LLM observability: traces, generations, and token analytics', url: '/litefuse/', icon: 'litefuse' },
-        ],
-      })
-    : api.get<MonitoringSettingsResponse>('/settings/monitoring');
+  api.get<MonitoringSettingsResponse>('/settings/monitoring');
