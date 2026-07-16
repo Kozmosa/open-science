@@ -55,6 +55,10 @@ function SettingsPage() {
     resetAppearanceSettings,
   } = useSettings();
   const environmentSelection = useEnvironmentSelection();
+  const defaultProjectId = environmentSelection.projectId;
+  const defaultProjectSettings = defaultProjectId
+    ? settings.projectDefaults[defaultProjectId] ?? settings.projectDefaults.default
+    : settings.projectDefaults.default;
 
   const environments = useMemo(
     () => environmentsQuery.data?.items ?? [],
@@ -140,11 +144,13 @@ function SettingsPage() {
               <FormField label={t('pages.settings.defaultWorkspace.label')}>
                 <NativeSelect
                   aria-label={t('pages.settings.defaultWorkspace.label')}
-                  value={settings.projectDefaults.default?.defaultWorkspaceId ?? ''}
-                  onChange={(event) =>
-                    saveProjectDefaultWorkspace('default', event.target.value || null)
-                  }
-                  disabled={workspaces.length === 0}
+                  value={defaultProjectSettings?.defaultWorkspaceId ?? ''}
+                  onChange={(event) => {
+                    if (defaultProjectId) {
+                      saveProjectDefaultWorkspace(defaultProjectId, event.target.value || null);
+                    }
+                  }}
+                  disabled={workspaces.length === 0 || defaultProjectId === null}
                 >
                   <option value="">{t('pages.settings.defaultWorkspace.noDefault')}</option>
                   {workspaces.map((workspace) => (
@@ -171,24 +177,24 @@ function SettingsPage() {
           <SearchBackendSection />
 
           <ProjectDefaultsSection
-            key={`project-default:${settings.projectDefaults.default?.defaultEnvironmentId ?? 'none'}`}
+            key={`project-default:${defaultProjectId ?? 'unresolved'}:${defaultProjectSettings?.defaultEnvironmentId ?? 'none'}`}
             environments={environments}
             taskConfiguration={settings.taskConfiguration}
-            savedDefaultEnvironmentId={settings.projectDefaults.default?.defaultEnvironmentId ?? null}
+            savedDefaultEnvironmentId={defaultProjectSettings?.defaultEnvironmentId ?? null}
             isLoading={environmentsQuery.isLoading}
             loadError={environmentsError}
             getProjectEnvironmentDefaults={(environmentId) =>
-              getProjectEnvironmentDefaults('default', environmentId)
+              getProjectEnvironmentDefaults(defaultProjectId ?? 'default', environmentId)
             }
-            saveProjectDefaultEnvironment={(environmentId) =>
-              saveProjectDefaultEnvironment('default', environmentId)
-            }
-            saveProjectEnvironmentDefaults={(environmentId, defaults) =>
-              saveProjectEnvironmentDefaults('default', environmentId, defaults)
-            }
-            resetProjectEnvironmentDefaults={(environmentId) =>
-              resetProjectEnvironmentDefaults('default', environmentId)
-            }
+            saveProjectDefaultEnvironment={(environmentId) => {
+              if (defaultProjectId) saveProjectDefaultEnvironment(defaultProjectId, environmentId);
+            }}
+            saveProjectEnvironmentDefaults={(environmentId, defaults) => {
+              if (defaultProjectId) saveProjectEnvironmentDefaults(defaultProjectId, environmentId, defaults);
+            }}
+            resetProjectEnvironmentDefaults={(environmentId) => {
+              if (defaultProjectId) resetProjectEnvironmentDefaults(defaultProjectId, environmentId);
+            }}
           />
         </SectionStack>
         )}

@@ -5,6 +5,7 @@ import {
   getDeploymentVersion,
   getEnvironments,
   getFrontendBuildVersion,
+  getProjectEnvironmentReferences,
   getSearchSettings,
   getSkillRegistries,
   getSkills,
@@ -43,6 +44,7 @@ vi.mock('@/shared/api', () => ({
   getDeploymentVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getFrontendBuildVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getEnvironments: vi.fn(),
+  getProjectEnvironmentReferences: vi.fn(() => Promise.resolve({ items: [] })),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
   getSearchSettings: vi.fn(() => Promise.resolve({
@@ -64,11 +66,18 @@ vi.mock('@/shared/api', () => ({
   installSkillRegistry: vi.fn(),
 }));
 
+vi.mock('@features/domain', () => ({
+  getDomainProjects: vi.fn(() => Promise.resolve({
+    items: [{ project_id: 'project-user-default', is_default: true }],
+  })),
+}));
+
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetDeploymentVersion = vi.mocked(getDeploymentVersion);
 const mockGetFrontendBuildVersion = vi.mocked(getFrontendBuildVersion);
+const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
 const mockGetSkillRegistries = vi.mocked(getSkillRegistries);
@@ -109,6 +118,8 @@ beforeEach(() => {
   mockGetDeploymentVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
   mockGetFrontendBuildVersion.mockReset();
   mockGetFrontendBuildVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
+  mockGetProjectEnvironmentReferences.mockReset();
+  mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetSkillRegistries.mockReset();
   mockGetSkillRegistries.mockResolvedValue({ items: [] });
   vi.mocked(getSearchSettings).mockReset();
@@ -306,7 +317,7 @@ describe('SettingsPage', () => {
       const storedSettings = JSON.parse(
         window.localStorage.getItem(settingsStorageKey) ?? '{}'
       ) as ReturnType<typeof createDefaultWebUiSettings>;
-      expect(storedSettings.projectDefaults.default.defaultEnvironmentId).toBe('env-1');
+      expect(storedSettings.projectDefaults['project-user-default'].defaultEnvironmentId).toBe('env-1');
     });
 
     const environmentCard = screen
@@ -334,7 +345,7 @@ describe('SettingsPage', () => {
       const storedSettings = JSON.parse(
         window.localStorage.getItem(settingsStorageKey) ?? '{}'
       ) as ReturnType<typeof createDefaultWebUiSettings>;
-      expect(storedSettings.projectDefaults.default.environmentDefaults['env-1']).toEqual({
+      expect(storedSettings.projectDefaults['project-user-default'].environmentDefaults['env-1']).toEqual({
         titleTemplate: 'GPU daily check',
         taskInputTemplate: 'Check CUDA, torch, and disk status.',
         researchAgentProfileId: defaultResearchAgentProfileId,

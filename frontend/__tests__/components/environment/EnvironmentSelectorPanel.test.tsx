@@ -12,6 +12,12 @@ vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({
   getProjectEnvironmentReferences: vi.fn(),
 }));
 
+vi.mock('@features/domain', () => ({
+  getDomainProjects: vi.fn(() => Promise.resolve({
+    items: [{ project_id: 'project-user-default', is_default: true }],
+  })),
+}));
+
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 
@@ -113,7 +119,7 @@ describe('EnvironmentSelectorPanel', () => {
     const storedSettings = JSON.parse(
       window.localStorage.getItem(settingsStorageKey) ?? '{}'
     ) as ReturnType<typeof createDefaultWebUiSettings>;
-    expect(storedSettings.projectDefaults.default.selection.lastEnvironmentId).toBe('env-2');
+    expect(storedSettings.projectDefaults['project-user-default'].selection.lastEnvironmentId).toBe('env-2');
   });
 
   it('falls back to a live environment after the selected one disappears', async () => {
@@ -141,7 +147,16 @@ describe('EnvironmentSelectorPanel', () => {
       const storedSettings = JSON.parse(
         window.localStorage.getItem(settingsStorageKey) ?? '{}'
       ) as ReturnType<typeof createDefaultWebUiSettings>;
-      expect(storedSettings.projectDefaults.default.selection.lastEnvironmentId).toBe('env-1');
+      expect(storedSettings.projectDefaults['project-user-default'].selection.lastEnvironmentId).toBe('env-1');
     });
+  });
+
+  it('queries environment references with the authenticated default Project id', async () => {
+    mockGetEnvironments.mockResolvedValue({ items: [baseEnvironment] });
+
+    renderWithProviders(<EnvironmentSelectionHarness />);
+
+    await waitFor(() => expect(mockGetProjectEnvironmentReferences).toHaveBeenCalledWith('project-user-default'));
+    expect(mockGetProjectEnvironmentReferences).not.toHaveBeenCalledWith('default');
   });
 });

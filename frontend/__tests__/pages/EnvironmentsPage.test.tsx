@@ -28,6 +28,12 @@ vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({
   updateProjectEnvironmentReference: vi.fn(),
 }));
 
+vi.mock('@features/domain', () => ({
+  getDomainProjects: vi.fn(() => Promise.resolve({
+    items: [{ project_id: 'project-user-default', is_default: true }],
+  })),
+}));
+
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 const mockCreateProjectEnvironmentReference = vi.mocked(createProjectEnvironmentReference);
@@ -139,7 +145,7 @@ describe('EnvironmentsPage', () => {
     const storedSettings = JSON.parse(
       window.localStorage.getItem(settingsStorageKey) ?? '{}'
     ) as ReturnType<typeof createDefaultWebUiSettings>;
-    expect(storedSettings.projectDefaults.default.selection.lastEnvironmentId).toBe('env-1');
+    expect(storedSettings.projectDefaults['project-user-default'].selection.lastEnvironmentId).toBe('env-1');
   });
 
   it('creates a new environment through the form', async () => {
@@ -193,7 +199,7 @@ describe('EnvironmentsPage', () => {
           environment_id: 'env-1',
           is_default: true,
         }),
-        'default'
+        'project-user-default'
       )
     );
     expect(await screen.findAllByText('Project default')).not.toHaveLength(0);
@@ -256,7 +262,7 @@ describe('EnvironmentsPage', () => {
       expect(mockUpdateProjectEnvironmentReference).toHaveBeenCalledWith(
         'env-1',
         { is_default: true },
-        'default'
+        'project-user-default'
       )
     );
     expect(await screen.findAllByText('Project default')).not.toHaveLength(0);

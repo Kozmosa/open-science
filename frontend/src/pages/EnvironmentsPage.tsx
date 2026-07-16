@@ -37,7 +37,6 @@ import { EnvironmentDetectionModal } from '../components/environment';
 import {
   buildEnvironmentRequest,
   buildProjectReferenceCreateRequest,
-  defaultProjectId,
   EMPTY_ENVIRONMENTS,
   EMPTY_PROJECT_REFS,
   emptyFormValues,
@@ -323,6 +322,7 @@ function EnvironmentsPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const environmentSelection = useEnvironmentSelection();
+  const defaultProjectId = environmentSelection.projectId;
   const [editorMode, setEditorMode] = useState<EnvironmentEditorMode>('create');
   const [editorEnvironmentId, setEditorEnvironmentId] = useState<string | null>(null);
   const [editorFormKey, setEditorFormKey] = useState(0);
@@ -359,7 +359,9 @@ function EnvironmentsPage() {
     queryClient.setQueryData(queryKeys.environments.all, next);
   };
   const syncProjectReferenceList = (next: ProjectEnvironmentReferenceListResponse) => {
-    queryClient.setQueryData(queryKeys.projectEnvironmentRefs.byProject('default'), next);
+    if (defaultProjectId) {
+      queryClient.setQueryData(queryKeys.projectEnvironmentRefs.byProject(defaultProjectId), next);
+    }
   };
 
   const saveMutation = useMutation({
@@ -444,6 +446,9 @@ function EnvironmentsPage() {
       if (selectedEnvironment === null) {
         throw new Error(t('pages.environments.projectReferenceNoSelection'));
       }
+      if (defaultProjectId === null) {
+        throw new Error('The authenticated default Project is unavailable.');
+      }
 
       if (selectedProjectReference) {
         return updateProjectEnvironmentReference(selectedEnvironment.id, payload, defaultProjectId);
@@ -456,7 +461,7 @@ function EnvironmentsPage() {
     },
     onSuccess: (reference) => {
       const current = queryClient.getQueryData<ProjectEnvironmentReferenceListResponse>(
-        queryKeys.projectEnvironmentRefs.byProject('default')
+        queryKeys.projectEnvironmentRefs.byProject(defaultProjectId ?? 'unresolved')
       );
       syncProjectReferenceList(mergeProjectReferenceList(current, reference));
     },
@@ -467,6 +472,9 @@ function EnvironmentsPage() {
       if (selectedEnvironment === null || selectedProjectReference === null) {
         throw new Error(t('pages.environments.projectReferenceNoSelection'));
       }
+      if (defaultProjectId === null) {
+        throw new Error('The authenticated default Project is unavailable.');
+      }
       return deleteProjectEnvironmentReference(selectedEnvironment.id, defaultProjectId);
     },
     onSuccess: () => {
@@ -474,7 +482,7 @@ function EnvironmentsPage() {
         return;
       }
       const current = queryClient.getQueryData<ProjectEnvironmentReferenceListResponse>(
-        queryKeys.projectEnvironmentRefs.byProject('default')
+        queryKeys.projectEnvironmentRefs.byProject(defaultProjectId ?? 'unresolved')
       );
       syncProjectReferenceList(removeProjectReferenceFromList(current, selectedEnvironment.id));
     },
