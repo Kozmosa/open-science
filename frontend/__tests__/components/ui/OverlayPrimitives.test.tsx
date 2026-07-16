@@ -8,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Sheet,
   ToastProvider,
   useToast,
 } from '@design-system';
@@ -57,6 +58,33 @@ describe('osci overlay primitives', () => {
     );
 
     expect(screen.getByRole('dialog', { name: 'Archive task confirmation' })).toBeInTheDocument();
+  });
+
+  it('closes Sheet with Escape and restores focus to the opener', async () => {
+    const user = userEvent.setup();
+
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>Open navigation</button>
+          <Sheet open={open} onOpenChange={setOpen} title="OpenScience Console" side="left">
+            <a href="/today">Today</a>
+          </Sheet>
+        </>
+      );
+    }
+
+    renderLocalized(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Open navigation' });
+    await user.click(opener);
+
+    expect(screen.getByRole('dialog', { name: 'OpenScience Console' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
   });
 
   it('supports keyboard selection in DropdownMenu', async () => {

@@ -1,6 +1,6 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/shared/utils/cn';
 
 interface SheetProps {
@@ -13,11 +13,28 @@ interface SheetProps {
 }
 
 export function Sheet({ open, onOpenChange, title, children, side = 'right', className }: SheetProps) {
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (open && !wasOpenRef.current) {
+      restoreFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    }
+    wasOpenRef.current = open;
+  }, [open]);
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[var(--osci-color-overlay)]" />
         <DialogPrimitive.Content
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            restoreFocusRef.current?.focus();
+            restoreFocusRef.current = null;
+          }}
           className={cn(
             'fixed inset-y-0 z-50 flex w-[min(24rem,calc(100%-1.5rem))] flex-col border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] shadow-[var(--osci-shadow-overlay)] outline-none',
             side === 'left' ? 'left-0 border-r' : 'right-0 border-l',
