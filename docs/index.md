@@ -34,6 +34,7 @@ source_path: /home/xuyang/code/scholar-agent
 
 ## 参考材料入口
 
+- 当前专项调研：[[projects/breakwater-agent-runtime|Breakwater Agent Runtime、Codex App Server 与可观测性]]
 - 历史框架与 RFC：`docs/archive/framework/`
 - 外部项目调研：`docs/archive/projects/`
 - 综述与矩阵：`docs/archive/summary/`
