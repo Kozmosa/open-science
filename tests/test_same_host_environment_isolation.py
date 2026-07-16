@@ -121,6 +121,15 @@ def test_direct_redeploy_scripts_refuse_to_bypass_staging_isolation() -> None:
         assert "OPENSCIENCE_STAGING_ENV_FILE" in script
 
 
+def test_staging_lifecycle_publishes_only_bind_mounted_source() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    script = (repo_root / "scripts" / "staging.sh").read_text(encoding="utf-8")
+
+    assert 'local source_root="${REPO_ROOT}/src/ainrf"' in script
+    assert 'chmod -R a+rX "${source_root}"' in script
+    assert script.count("_publish_bind_mounted_source") == 3
+
+
 def test_staging_nginx_exposes_machine_readable_identity() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     nginx_config = (repo_root / "deploy" / "config" / "nginx-staging.conf").read_text(

@@ -80,6 +80,19 @@ _assert_no_background_worker_profiles() {
   done <<< "${running_services}"
 }
 
+_publish_bind_mounted_source() {
+  local source_root="${REPO_ROOT}/src/ainrf"
+  if [[ ! -d "${source_root}" ]]; then
+    _error "Staging source tree not found: ${source_root}"
+    return 1
+  fi
+  # Agent worktrees may be created with a restrictive umask.  The staging
+  # runtime drops to uid 1000 before uvicorn reads this bind mount, so publish
+  # only the repository source tree as read/traverseable.  State, env files,
+  # runtime credentials, and other worktree content remain untouched.
+  chmod -R a+rX "${source_root}"
+}
+
 # Do not let Compose silently load the repository's default .env.  On this
 # host that file may contain production-only values.  A staging lifecycle
 # caller must deliberately provide an independent file outside the repository.
@@ -122,6 +135,7 @@ fi
 cmd_up() {
   _info "Building and starting staging environment..."
   _assert_no_background_worker_profiles
+  _publish_bind_mounted_source
 
   # Ensure the staging-only frontend bundle exists. Production mounts a
   # different directory, so this build cannot replace production assets.
@@ -203,6 +217,7 @@ cmd_logs() {
 cmd_rebuild() {
   _info "Rebuilding staging backend image (preserving data)..."
   _assert_no_background_worker_profiles
+  _publish_bind_mounted_source
 
   export AINRF_BUILD_COMMIT
   export AINRF_BUILD_COMMITTED_AT
