@@ -356,6 +356,7 @@ describe('SettingsPage', () => {
     renderWithProviders(<SettingsPage />);
 
     await screen.findByRole('heading', { name: 'Settings' });
+    expect(screen.getByText('Save changes to apply this theme across the entire interface.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'LLM Providers' }));
 

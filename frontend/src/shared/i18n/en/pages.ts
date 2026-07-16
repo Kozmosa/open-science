@@ -574,7 +574,7 @@ const pages = {
           light: 'Light',
           dark: 'Dark',
           system: 'Follow system',
-          previewHint: 'Changes apply immediately across the entire interface.',
+          previewHint: 'Save changes to apply this theme across the entire interface.',
         },
         users: {
           title: 'User Management',

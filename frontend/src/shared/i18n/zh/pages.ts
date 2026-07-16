@@ -564,7 +564,7 @@ const pages = {
           light: '浅色',
           dark: '深色',
           system: '跟随系统',
-          previewHint: '更改将立即应用到整个界面。',
+          previewHint: '保存更改后，此主题将应用到整个界面。',
         },
         users: {
           title: '用户管理',
