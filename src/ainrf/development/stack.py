@@ -21,6 +21,10 @@ from ainrf.development.instance import (
     FrontendDevInstance,
     ensure_frontend_dev_instance,
 )
+from ainrf.development.frontend_faults import (
+    FrontendDevFaultProfile,
+    normalize_frontend_dev_fault_profile,
+)
 
 
 STACK_MANIFEST_SCHEMA_VERSION = 1
@@ -60,6 +64,7 @@ class DevelopmentStack:
         api_key: str | None = None,
         personal_state_root: Path | None = None,
         frontend_bind_host: str | None = None,
+        fault_profile: FrontendDevFaultProfile | str = FrontendDevFaultProfile.NONE,
     ) -> None:
         self.instance = instance
         self.artifact_sha = artifact_sha
@@ -68,6 +73,9 @@ class DevelopmentStack:
             personal_state_root.expanduser().resolve() if personal_state_root is not None else None
         )
         self.frontend_bind_host = frontend_bind_host or instance.bind_host
+        self.fault_profile = normalize_frontend_dev_fault_profile(fault_profile)
+        if self.is_personal and self.fault_profile is not FrontendDevFaultProfile.NONE:
+            raise ValueError("frontend fault profiles are forbidden for personal state roots")
         self.api_key = api_key or ensure_frontend_dev_instance(instance)
         self.manifest_path = instance.runtime_root / "stack.json"
 
@@ -104,6 +112,8 @@ class DevelopmentStack:
             self.artifact_sha,
             "--profile",
             self.instance.profile,
+            "--fault-profile",
+            self.fault_profile.value,
         ]
         result = subprocess.run(
             command,
@@ -135,6 +145,7 @@ class DevelopmentStack:
                     f"http://{self._api_probe_host()}:{self.instance.ports.api}"
                 ),
                 "OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED": "false",
+                "OPENSCIENCE_FRONTEND_DEV_FAULT_PROFILE": self.fault_profile.value,
                 "UV_CACHE_DIR": environment.get("UV_CACHE_DIR", "/tmp/uv-cache"),
             }
         )
@@ -302,9 +313,18 @@ class DevelopmentStack:
         alive = all(alive_by_service[name] for name in expected & present)
         manifest_mode = self._manifest_mode()
         mode_matches = manifest_mode in {None, self.mode.value}
+        manifest_fault_profile = self._manifest_fault_profile()
+        fault_profile_matches = manifest_fault_profile in {None, self.fault_profile.value}
         if not records:
             state = "stopped"
-        elif present == expected and alive and api_healthy and frontend_healthy and mode_matches:
+        elif (
+            present == expected
+            and alive
+            and api_healthy
+            and frontend_healthy
+            and mode_matches
+            and fault_profile_matches
+        ):
             state = "healthy"
         else:
             state = "degraded"
@@ -315,6 +335,8 @@ class DevelopmentStack:
             "profile": "personal" if self.is_personal else self.instance.profile,
             "mode": manifest_mode or self.mode.value,
             "requested_mode": self.mode.value,
+            "fault_profile": manifest_fault_profile or self.fault_profile.value,
+            "requested_fault_profile": self.fault_profile.value,
             "source": {
                 "branch": self.instance.branch,
                 "head": self.instance.head,
@@ -427,6 +449,7 @@ class DevelopmentStack:
             "instance_id": self.instance.instance_id,
             "profile": "personal" if self.is_personal else self.instance.profile,
             "mode": self.mode.value,
+            "fault_profile": self.fault_profile.value,
             "processes": [asdict(record) for record in records],
         }
         _write_json_atomic(self.manifest_path, payload)
@@ -468,6 +491,13 @@ class DevelopmentStack:
         payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
         mode = payload.get("mode")
         return str(mode) if mode is not None else None
+
+    def _manifest_fault_profile(self) -> str | None:
+        if not self.manifest_path.is_file():
+            return None
+        payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        value = payload.get("fault_profile")
+        return str(value) if value is not None else None
 
     def _stop_records(self, records: list[DevelopmentProcessRecord]) -> None:
         owned = [record for record in reversed(records) if _record_is_alive(record)]

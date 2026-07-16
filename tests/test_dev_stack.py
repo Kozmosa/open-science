@@ -112,6 +112,8 @@ def test_stack_prepare_runs_selected_profile_and_parses_json(
         "c" * 64,
         "--profile",
         "full",
+        "--fault-profile",
+        "none",
     ]
 
 
@@ -138,6 +140,7 @@ def test_stack_status_manifest_is_machine_readable_and_secret_free(
 
     assert status.state == "healthy"
     assert status.payload["schema_version"] == 1
+    assert status.payload["fault_profile"] == "none"
     services = cast(dict[str, object], status.payload["services"])
     assert set(services) == {"api", "worker", "frontend"}
     assert "never-in-manifest" not in manifest_text
@@ -192,6 +195,15 @@ def test_stack_reset_refuses_personal_or_unmarked_state(
         personal.reset()
     with pytest.raises(DevelopmentStackError, match="managed instance marker"):
         managed.reset()
+
+    with pytest.raises(ValueError, match="forbidden for personal"):
+        DevelopmentStack(
+            instance,
+            artifact_sha="f" * 64,
+            api_key="fixture-key",
+            personal_state_root=tmp_path / "personal-fault",
+            fault_profile="offline",
+        )
 
 
 def test_stack_refuses_to_take_over_unowned_ports(

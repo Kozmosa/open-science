@@ -13,7 +13,7 @@ from ainrf.domain import DomainService
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
-FRONTEND_DEV_FIXTURE_VERSION = 3
+FRONTEND_DEV_FIXTURE_VERSION = 4
 _NOW = "2026-07-14T09:00:00+00:00"
 _LATER = "2026-07-14T10:00:00+00:00"
 

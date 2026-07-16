@@ -46,6 +46,7 @@ from ainrf.development import (
     DEFAULT_FRONTEND_DEV_API_KEY,
     DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
     FrontendFixtureWorker,
+    FrontendDevFaultProfile,
     FrontendDevProfile,
     prepare_frontend_dev_fixture,
 )
@@ -228,6 +229,10 @@ def frontend_dev_prepare(
         FrontendDevProfile,
         typer.Option(help="Deterministic frontend state profile to prepare."),
     ] = FrontendDevProfile.FULL,
+    fault_profile: Annotated[
+        FrontendDevFaultProfile,
+        typer.Option(help="Deterministic API fault profile for the managed fixture."),
+    ] = FrontendDevFaultProfile.NONE,
 ) -> None:
     """Create or reconcile a synthetic committed-v2 frontend fixture."""
 
@@ -238,6 +243,7 @@ def frontend_dev_prepare(
             api_key=api_key,
             profile=profile,
             credentials_path=credentials_path,
+            fault_profile=fault_profile,
         )
     except (DomainCutoverError, OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)

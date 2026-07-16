@@ -51,7 +51,8 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     assert first_payload["state_root"] == str(state_root)
     assert first_payload["artifact_sha"] == artifact_sha
     assert first_payload["profile"] == "full"
-    assert first_payload["fixture_version"] == 3
+    assert first_payload["fixture_version"] == 4
+    assert first_payload["fault_profile"] == "none"
     assert first_payload["owner_user_id"] == "frontend-owner-user"
     assert set(first_payload["login_users"]) == {"owner", "editor", "viewer", "admin"}
     credentials_path = Path(first_payload["login_credentials_path"])

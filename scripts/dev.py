@@ -17,6 +17,7 @@ from ainrf.development import (
     DevelopmentStackError,
     DevelopmentStackMode,
     FrontendDevInstance,
+    FrontendDevFaultProfile,
     resolve_frontend_dev_instance,
     run_development_doctor,
 )
@@ -27,6 +28,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--profile", default="full")
+    parser.add_argument(
+        "--fault-profile",
+        choices=[profile.value for profile in FrontendDevFaultProfile],
+        default=FrontendDevFaultProfile.NONE.value,
+    )
     parser.add_argument(
         "--mode", choices=[mode.value for mode in DevelopmentStackMode], default="dev"
     )
@@ -93,6 +99,7 @@ def _stack(args: argparse.Namespace) -> DevelopmentStack:
         api_key=args.api_key,
         personal_state_root=args.personal_state_root,
         frontend_bind_host=args.frontend_host,
+        fault_profile=args.fault_profile,
     )
 
 
@@ -127,6 +134,7 @@ def _print_environment(stack: DevelopmentStack) -> None:
         "OPENSCIENCE_WEBUI_API_KEY",
         "OPENSCIENCE_WEBUI_BACKEND_TARGET",
         "OPENSCIENCE_AUTH_COOKIE_NAMESPACE",
+        "OPENSCIENCE_FRONTEND_DEV_FAULT_PROFILE",
     )
     for name in names:
         value = environment.get(name)

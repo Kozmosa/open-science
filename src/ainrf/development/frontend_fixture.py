@@ -23,6 +23,10 @@ from ainrf.development.frontend_profiles import (
     normalize_frontend_dev_profile,
     seed_frontend_dev_profile,
 )
+from ainrf.development.frontend_faults import (
+    FrontendDevFaultProfile,
+    normalize_frontend_dev_fault_profile,
+)
 from ainrf.domain_control import (
     CUTOVER_REQUIRED_PARTICIPANT_TYPES,
     DomainCutoverController,
@@ -76,6 +80,7 @@ class FrontendDevFixture:
     state_root: str
     artifact_sha: str
     profile: str
+    fault_profile: str
     fixture_version: int
     api_user_id: str
     owner_user_id: str
@@ -370,6 +375,7 @@ def _seed_fixture(
     api_key: str,
     profile: FrontendDevProfile,
     credentials_path: Path,
+    fault_profile: FrontendDevFaultProfile,
 ) -> FrontendDevFixture:
     atomic_write_json(state_root / "config.json", {"api_key_hashes": [hash_api_key(api_key)]})
     auth = AuthService(state_root=state_root)
@@ -386,12 +392,14 @@ def _seed_fixture(
             "artifact_sha": artifact_sha,
             "fixture_version": FRONTEND_DEV_FIXTURE_VERSION,
             "profile": profile.value,
+            "fault_profile": fault_profile.value,
         },
     )
     return FrontendDevFixture(
         state_root=str(state_root),
         artifact_sha=artifact_sha,
         profile=profile.value,
+        fault_profile=fault_profile.value,
         fixture_version=FRONTEND_DEV_FIXTURE_VERSION,
         api_user_id="api-key-user",
         owner_user_id=users.owner_user_id,
@@ -412,6 +420,7 @@ def prepare_frontend_dev_fixture(
     api_key: str,
     profile: FrontendDevProfile | str = FrontendDevProfile.FULL,
     credentials_path: Path | None = None,
+    fault_profile: FrontendDevFaultProfile | str = FrontendDevFaultProfile.NONE,
 ) -> FrontendDevFixture:
     """Prepare an isolated, synthetic, committed-v2 state for frontend work."""
 
@@ -425,6 +434,7 @@ def prepare_frontend_dev_fixture(
     )
     normalized_artifact_sha = _validate_artifact_sha(artifact_sha)
     normalized_profile = normalize_frontend_dev_profile(profile)
+    normalized_fault_profile = normalize_frontend_dev_fault_profile(fault_profile)
     state_exists = resolved_state_root.exists() and any(resolved_state_root.iterdir())
     resolved_state_root.mkdir(parents=True, exist_ok=True)
     if state_exists:
@@ -450,4 +460,5 @@ def prepare_frontend_dev_fixture(
         api_key.strip(),
         normalized_profile,
         resolved_credentials_path,
+        normalized_fault_profile,
     )

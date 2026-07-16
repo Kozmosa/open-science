@@ -17,6 +17,12 @@ from ainrf.development.frontend_fixture import (
     FrontendDevFixture,
     prepare_frontend_dev_fixture,
 )
+from ainrf.development.frontend_faults import (
+    FrontendDevFaultProfile,
+    build_frontend_dev_fault_middleware,
+    configured_frontend_dev_fault_profile,
+    normalize_frontend_dev_fault_profile,
+)
 from ainrf.development.frontend_profiles import (
     FRONTEND_DEV_FIXTURE_VERSION,
     FrontendDevProfile,
@@ -63,6 +69,7 @@ __all__ = [
     "DevelopmentStackStatus",
     "FrontendDevInstance",
     "FrontendDevFixture",
+    "FrontendDevFaultProfile",
     "FrontendDevProfile",
     "FrontendDevPorts",
     "FrontendDevSeedResult",
@@ -76,7 +83,10 @@ __all__ = [
     "discover_chrome",
     "discover_chrome_devtools_mcp",
     "ensure_frontend_dev_instance",
+    "build_frontend_dev_fault_middleware",
+    "configured_frontend_dev_fault_profile",
     "normalize_frontend_dev_profile",
+    "normalize_frontend_dev_fault_profile",
     "prepare_frontend_dev_fixture",
     "probe_chrome_cdp",
     "resolve_frontend_dev_instance",
