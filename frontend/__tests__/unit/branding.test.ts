@@ -12,6 +12,18 @@ describe('OpenScience branding', () => {
     expect(html).toContain('data-osci-theme="light"');
     expect(html).toContain('href="/openscience-mark.svg"');
     expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).toContain('<meta name="description"');
+    expect(html).toContain('name="robots" content="noindex,nofollow,noarchive"');
+    expect(html.match(/name="theme-color"/g)).toHaveLength(2);
+  });
+
+  it('publishes private crawler and LLM guidance with the static frontend', () => {
+    const robots = readFileSync(resolve(process.cwd(), 'public/robots.txt'), 'utf-8');
+    const llms = readFileSync(resolve(process.cwd(), 'public/llms.txt'), 'utf-8');
+
+    expect(robots).toBe('User-agent: *\nDisallow: /\n');
+    expect(llms).toContain('private, authenticated research control plane');
+    expect(llms).toContain('Do not crawl authenticated routes');
   });
 
   it('pins the four offline Noto Sans Latin weights', () => {
