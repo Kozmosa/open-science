@@ -78,7 +78,7 @@ function ResizeHandle({
 
   return (
     <div
-      className="group flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-[var(--surface)] transition-colors hover:bg-[var(--surface-hover)]"
+      className="group flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-[var(--osci-color-surface)] transition-colors hover:bg-[var(--osci-color-surface-subtle)]"
       role="separator"
       aria-orientation="vertical"
       aria-label={ariaLabel}
@@ -89,7 +89,7 @@ function ResizeHandle({
       onPointerDown={handlePointerDown}
       onKeyDown={handleKeyDown}
     >
-      <div className="h-8 w-0.5 rounded-full bg-[var(--border)] transition-colors group-hover:bg-[var(--apple-blue)] group-focus-visible:bg-[var(--apple-blue)]" />
+      <div className="h-8 w-0.5 rounded-full bg-[var(--osci-color-border)] transition-colors group-hover:bg-[var(--osci-color-primary)] group-focus-visible:bg-[var(--osci-color-primary)]" />
     </div>
   );
 }
@@ -116,11 +116,11 @@ export default function SplitPane({
   const leftCollapsed = sidebarWidth <= 0;
   const rightCollapsed = (rightSidebarWidth ?? 0) <= 0;
   const sidebarBackgroundClass = uniformSurface
-    ? 'bg-[var(--surface)]'
-    : 'bg-[var(--sidebar)]';
+    ? 'bg-[var(--osci-color-surface)]'
+    : 'bg-[var(--osci-color-canvas)]';
   const mainBackgroundClass = uniformSurface
-    ? 'bg-[var(--surface)]'
-    : 'bg-[var(--bg)]';
+    ? 'bg-[var(--osci-color-surface)]'
+    : 'bg-[var(--osci-color-canvas)]';
 
   return (
     <div className={`flex min-h-0 w-full flex-1 ${className ?? ''}`}>

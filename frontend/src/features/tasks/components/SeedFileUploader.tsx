@@ -178,10 +178,10 @@ export default function SeedFileUploader({
                 className={[
                     'border-2 border-dashed rounded-lg p-6 text-center transition-colors',
                     disabled
-                        ? 'opacity-50 pointer-events-none border-[var(--border)]'
+                        ? 'opacity-50 pointer-events-none border-[var(--osci-color-border)]'
                         : isDragOver
-                            ? 'border-[var(--accent)] bg-[var(--accent-soft)] cursor-pointer'
-                            : 'border-[var(--border)] cursor-pointer hover:border-[var(--accent)]',
+                            ? 'border-[var(--osci-color-primary)] bg-[var(--osci-color-primary-soft)] cursor-pointer'
+                            : 'border-[var(--osci-color-border)] cursor-pointer hover:border-[var(--osci-color-primary)]',
                 ].join(' ')}
             >
                 <input
@@ -193,13 +193,13 @@ export default function SeedFileUploader({
                     className="hidden"
                     disabled={disabled}
                 />
-                <p className="text-sm text-[var(--text-secondary)]">
+                <p className="text-sm text-[var(--osci-color-text-secondary)]">
                     {t('pages.tasks.create.seedFiles.dropzone')}
                 </p>
             </div>
 
             {errorMessage && (
-                <p className="text-xs text-[var(--danger)]">{errorMessage}</p>
+                <p className="text-xs text-[var(--osci-color-danger)]">{errorMessage}</p>
             )}
 
             {files.length > 0 && (
@@ -207,20 +207,20 @@ export default function SeedFileUploader({
                     {files.map((file, idx) => (
                         <li
                             key={`${file.name}-${idx}`}
-                            className="flex items-center justify-between py-1 px-2 text-sm rounded bg-[var(--surface-2)]"
+                            className="flex items-center justify-between py-1 px-2 text-sm rounded bg-[var(--osci-color-surface-subtle)]"
                         >
                             <span className="truncate mr-2">
                                 {file.name}
-                                <span className="text-[var(--text-secondary)] ml-1">
+                                <span className="text-[var(--osci-color-text-secondary)] ml-1">
                                     ({formatFileSize(file.size)})
                                 </span>
                                 {file.status === 'uploading' && (
-                                    <span className="text-[var(--accent)] ml-2">
+                                    <span className="text-[var(--osci-color-primary)] ml-2">
                                         {t('pages.tasks.create.seedFiles.uploading', { name: '' }).replace('...', '…')}
                                     </span>
                                 )}
                                 {file.status === 'error' && file.error && (
-                                    <span className="text-[var(--danger)] ml-2" title={file.error}>
+                                    <span className="text-[var(--osci-color-danger)] ml-2" title={file.error}>
                                         ✗
                                     </span>
                                 )}
@@ -228,7 +228,7 @@ export default function SeedFileUploader({
                             <button
                                 type="button"
                                 onClick={() => handleRemove(idx)}
-                                className="shrink-0 text-[var(--text-secondary)] hover:text-[var(--danger)] transition-colors"
+                                className="shrink-0 text-[var(--osci-color-text-secondary)] hover:text-[var(--osci-color-danger)] transition-colors"
                                 aria-label={t('pages.tasks.create.seedFiles.removeFile', { name: file.name })}
                             >
                                 ✕

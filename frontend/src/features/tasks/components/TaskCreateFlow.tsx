@@ -215,7 +215,7 @@ function TaskCreateFlowContent({
 
   return (
     <form
-      className="space-y-4 text-[var(--osci-color-text-primary)]"
+      className="space-y-4 text-[var(--osci-color-text)]"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) mutation.mutate();

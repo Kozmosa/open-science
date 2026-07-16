@@ -643,9 +643,9 @@ describe('TasksPage', () => {
     const { container } = renderWithProviders(<TasksPage />);
 
     const sidebar = await screen.findByTestId('task-sidebar');
-    expect(sidebar).toHaveClass('bg-[var(--surface)]');
-    expect(sidebar.parentElement?.querySelector('main')).toHaveClass('bg-[var(--surface)]');
-    expect(await screen.findByTestId('task-metadata-sidebar')).toHaveClass('bg-[var(--surface)]');
+    expect(sidebar).toHaveClass('bg-[var(--osci-color-surface)]');
+    expect(sidebar.parentElement?.querySelector('main')).toHaveClass('bg-[var(--osci-color-surface)]');
+    expect(await screen.findByTestId('task-metadata-sidebar')).toHaveClass('bg-[var(--osci-color-surface)]');
     expect(container.firstElementChild).toHaveClass('p-3');
   });
 

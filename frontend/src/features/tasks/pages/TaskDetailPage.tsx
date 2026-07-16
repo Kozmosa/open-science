@@ -53,7 +53,7 @@ export default function TaskDetailPage({
   if (detailError) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-[var(--danger)]">{detailError}</p>
+        <p className="text-sm text-[var(--osci-color-danger)]">{detailError}</p>
       </section>
     );
   }
@@ -62,8 +62,8 @@ export default function TaskDetailPage({
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <h2 className="text-base font-semibold text-[var(--text)]">{t('pages.tasks.noTaskSelected')}</h2>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">{t('pages.tasks.noTaskSelectedDescription')}</p>
+          <h2 className="text-base font-semibold text-[var(--osci-color-text)]">{t('pages.tasks.noTaskSelected')}</h2>
+          <p className="mt-2 text-sm text-[var(--osci-color-text-secondary)]">{t('pages.tasks.noTaskSelectedDescription')}</p>
         </div>
       </section>
     );
@@ -82,7 +82,7 @@ export default function TaskDetailPage({
   const showResume = canMutate && selectedTask.status === 'paused' && interactiveEngines.has(engine);
 
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
+    <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--osci-color-surface)]">
       <TaskHeaderBar
         task={selectedTask}
         showPause={showPause}
@@ -100,18 +100,18 @@ export default function TaskDetailPage({
       />
 
       {outputError && (
-        <div className="shrink-0 border-b border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-2 text-xs text-[var(--danger-foreground)]">
+        <div className="shrink-0 border-b border-[var(--osci-color-danger-border)] bg-[var(--osci-color-danger-soft)] px-4 py-2 text-xs text-[var(--osci-color-danger-foreground)]">
           {outputError}
         </div>
       )}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {isLoading && messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center p-6 font-mono text-xs text-[var(--text-tertiary)]">
+          <div className="flex h-full items-center justify-center p-6 font-mono text-xs text-[var(--osci-color-text-muted)]">
             loading messages…
           </div>
         ) : error ? (
-          <div className="flex h-full items-center justify-center p-6 font-mono text-xs text-[var(--danger)]">
+          <div className="flex h-full items-center justify-center p-6 font-mono text-xs text-[var(--osci-color-danger)]">
             {error instanceof Error ? error.message : String(error)}
           </div>
         ) : (

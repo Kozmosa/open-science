@@ -88,7 +88,7 @@ function TaskContextPanel({ taskId }: { taskId: string }) {
   return (
     <div className="space-y-3 overflow-y-auto">
       <h3 className="text-sm font-semibold text-[var(--osci-color-text)]">{labels.pinnedContext}</h3>
-      <pre className="whitespace-pre-wrap rounded-xl border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-muted)] p-3 text-xs text-[var(--osci-color-text)]">{context.content}</pre>
+      <pre className="whitespace-pre-wrap rounded-xl border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] p-3 text-xs text-[var(--osci-color-text)]">{context.content}</pre>
       <details className="rounded-xl border border-[var(--osci-color-border)] px-3 text-xs">
         <summary className="cursor-pointer py-3 font-medium text-[var(--osci-color-text)]">{labels.technicalDetails}</summary>
         <dl className="border-t border-[var(--osci-color-border)] py-1">

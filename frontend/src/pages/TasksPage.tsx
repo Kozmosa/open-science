@@ -375,15 +375,15 @@ function TasksPage() {
 
   const taskSidebarContent = taskSidebarCollapsed ? null : (
     <>
-      <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--sidebar-border)] pb-3">
+      <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--osci-color-border-subtle)] pb-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--osci-color-text-muted)]">
             {t('pages.tasks.sidebarEyebrow')}
           </p>
-          <p className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--foreground)]">
+          <p className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--osci-color-text)]">
             {t('pages.tasks.sidebarTitle')}
           </p>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+          <p className="mt-1 text-xs text-[var(--osci-color-text-secondary)]">
             {t('pages.tasks.sidebarCount', { count: tasks.length })}
           </p>
         </div>
@@ -397,7 +397,7 @@ function TasksPage() {
             <option value="created">{t('pages.tasks.sort.created')}</option>
             <option value="name">{t('pages.tasks.sort.name')}</option>
           </NativeSelect>
-          <label htmlFor="tasks-show-archived" className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--text-tertiary)]">
+          <label htmlFor="tasks-show-archived" className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--osci-color-text-muted)]">
             <Checkbox
               id="tasks-show-archived"
               checked={showArchived}
