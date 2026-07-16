@@ -325,6 +325,8 @@ services:
       - "--storage.tsdb.retention.time=7d"
       - "--storage.tsdb.retention.size=1GB"
       - "--web.listen-address=127.0.0.1:9092"
+      - "--web.external-url=/prometheus"
+      - "--web.route-prefix=/prometheus"
     depends_on:
       ainrf-staging:
         condition: service_healthy

@@ -99,6 +99,19 @@ def test_every_deployment_mounts_the_authoritative_prometheus_alert_rules() -> N
         )
 
 
+def test_staging_prometheus_matches_the_nginx_subpath_contract() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    staging = _load_compose(repo_root, "docker-compose.staging.yml")
+    services = _mapping(staging["services"])
+    prometheus = _mapping(services["prometheus-staging"])
+    command = prometheus["command"]
+
+    assert isinstance(command, list)
+    assert "--web.listen-address=127.0.0.1:9092" in command
+    assert "--web.external-url=/prometheus" in command
+    assert "--web.route-prefix=/prometheus" in command
+
+
 def test_direct_redeploy_scripts_refuse_to_bypass_staging_isolation() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
