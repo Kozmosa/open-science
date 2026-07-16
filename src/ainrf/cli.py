@@ -215,6 +215,10 @@ def frontend_dev_prepare(
         str,
         typer.Option(help="Local API key injected by the Vite development proxy."),
     ] = DEFAULT_FRONTEND_DEV_API_KEY,
+    credentials_path: Annotated[
+        Path | None,
+        typer.Option(help="Repo-external JSON file for generated browser login identities."),
+    ] = None,
     artifact_sha: Annotated[
         str,
         typer.Option(help="Synthetic immutable artifact SHA bound to the v2 fixture."),
@@ -232,6 +236,7 @@ def frontend_dev_prepare(
             artifact_sha=artifact_sha,
             api_key=api_key,
             profile=profile,
+            credentials_path=credentials_path,
         )
     except (DomainCutoverError, OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)

@@ -14,7 +14,6 @@ from ainrf.literature.tracking import LiteratureTrackingService
 
 
 FRONTEND_DEV_FIXTURE_VERSION = 3
-_USER_ID = "api-key-user"
 _NOW = "2026-07-14T09:00:00+00:00"
 _LATER = "2026-07-14T10:00:00+00:00"
 
@@ -36,6 +35,14 @@ class FrontendDevSeedResult:
     counts: dict[str, int]
 
 
+@dataclass(frozen=True, slots=True)
+class FrontendDevUsers:
+    owner_user_id: str
+    editor_user_id: str
+    viewer_user_id: str
+    admin_user_id: str
+
+
 def normalize_frontend_dev_profile(value: FrontendDevProfile | str) -> FrontendDevProfile:
     if isinstance(value, FrontendDevProfile):
         return value
@@ -53,6 +60,7 @@ def seed_frontend_dev_profile(
     *,
     artifact_sha: str,
     profile: FrontendDevProfile,
+    users: FrontendDevUsers,
 ) -> FrontendDevSeedResult:
     DomainService(state_root, artifact_sha=artifact_sha)
     LiteratureTrackingService(state_root).initialize()
@@ -62,18 +70,27 @@ def seed_frontend_dev_profile(
         _assert_no_claimable_work(state_root)
         return result
     if profile is FrontendDevProfile.LARGE:
-        result = _seed_large_profile(state_root)
+        result = _seed_large_profile(state_root, users=users)
     else:
-        result = _seed_core_profile(state_root)
+        result = _seed_core_profile(state_root, users=users)
         _seed_representative_tasks(
-            state_root, include_failures=profile is FrontendDevProfile.FAILURES
+            state_root,
+            owner_user_id=users.owner_user_id,
+            include_failures=profile is FrontendDevProfile.FAILURES,
         )
         _seed_literature(
-            state_root, count=8, include_failures=profile is FrontendDevProfile.FAILURES
+            state_root,
+            owner_user_id=users.owner_user_id,
+            count=8,
+            include_failures=profile is FrontendDevProfile.FAILURES,
         )
         if profile is FrontendDevProfile.PERMISSIONS:
-            _seed_permission_matrix(state_root)
-        _seed_overview(state_root, failed=profile is FrontendDevProfile.FAILURES)
+            _seed_permission_matrix(state_root, users=users)
+        _seed_overview(
+            state_root,
+            owner_user_id=users.owner_user_id,
+            failed=profile is FrontendDevProfile.FAILURES,
+        )
         result = FrontendDevSeedResult(
             result.project_id,
             result.primary_workspace_id,
@@ -85,7 +102,7 @@ def seed_frontend_dev_profile(
     return result
 
 
-def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
+def _seed_core_profile(state_root: Path, *, users: FrontendDevUsers) -> FrontendDevSeedResult:
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     workspace_root = state_root.parent / f"{state_root.name}-workspaces"
     primary_path = workspace_root / "primary"
@@ -97,14 +114,21 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
     with closing(connect(db_path)) as conn:
         conn.execute(
             """
-            INSERT OR IGNORE INTO projects (
+            INSERT INTO projects (
                 project_id, owner_user_id, name, description, status, is_default,
                 created_at, updated_at
             ) VALUES (?, ?, ?, ?, 'active', 1, ?, ?)
+            ON CONFLICT(project_id) DO UPDATE SET
+                owner_user_id = excluded.owner_user_id,
+                name = excluded.name,
+                description = excluded.description,
+                status = 'active',
+                is_default = 1,
+                updated_at = excluded.updated_at
             """,
             (
                 "project-frontend-dev",
-                _USER_ID,
+                users.owner_user_id,
                 "Frontend Development",
                 "Synthetic v2 project for frontend implementation",
                 _NOW,
@@ -120,7 +144,7 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
             """,
             (
                 "project-needs-workspace",
-                _USER_ID,
+                users.owner_user_id,
                 "Frontend Needs Workspace",
                 "Synthetic attention state without a Workspace",
                 _NOW,
@@ -180,7 +204,7 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
             [
                 (
                     workspace_id,
-                    _USER_ID,
+                    users.owner_user_id,
                     environment_id,
                     path,
                     label,
@@ -203,13 +227,25 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
                 ("workspace-frontend-blocked", 0, _NOW, _NOW),
             ],
         )
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO project_members (
+                project_id, user_id, role, can_publish, created_at, updated_at
+            ) VALUES ('project-frontend-dev', ?, ?, ?, ?, ?)
+            """,
+            [
+                (users.editor_user_id, "editor", 1, _NOW, _NOW),
+                (users.viewer_user_id, "viewer", 0, _NOW, _NOW),
+                ("api-key-user", "editor", 1, _NOW, _NOW),
+            ],
+        )
         conn.execute(
             """
             INSERT OR IGNORE INTO project_context_drafts (
                 project_id, content, updated_by_user_id, updated_at
             ) VALUES ('project-frontend-dev', ?, ?, ?)
             """,
-            (context_content, _USER_ID, _NOW),
+            (context_content, users.owner_user_id, _NOW),
         )
         conn.execute(
             """
@@ -220,7 +256,7 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
                 'context-version-frontend-dev', 'project-frontend-dev', ?, ?, 1, ?, ?, '[]'
             )
             """,
-            (context_content, context_fingerprint, _USER_ID, _NOW),
+            (context_content, context_fingerprint, users.owner_user_id, _NOW),
         )
         conn.execute(
             """
@@ -237,26 +273,34 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
         conn.commit()
 
     auth = AuthService(state_root=state_root)
-    auth.grant_environment(
-        env_id="environment-frontend-dev",
-        user_id=_USER_ID,
-        max_tasks=None,
-        granted_by="frontend-dev-fixture",
-        reason="frontend development fixture",
+    fixture_user_ids = (
+        users.owner_user_id,
+        users.editor_user_id,
+        users.viewer_user_id,
+        users.admin_user_id,
+        "api-key-user",
     )
-    auth.grant_environment(
-        env_id="environment-frontend-blocked",
-        user_id=_USER_ID,
-        max_tasks=None,
-        granted_by="frontend-dev-fixture",
-        reason="prepare blocked frontend fixture",
-    )
-    auth.revoke_environment(
-        "environment-frontend-blocked",
-        _USER_ID,
-        revoked_by="frontend-dev-fixture",
-        reason="exercise linked-but-not-executable frontend state",
-    )
+    for user_id in fixture_user_ids:
+        auth.grant_environment(
+            env_id="environment-frontend-dev",
+            user_id=user_id,
+            max_tasks=None,
+            granted_by="frontend-dev-fixture",
+            reason="frontend development fixture",
+        )
+        auth.grant_environment(
+            env_id="environment-frontend-blocked",
+            user_id=user_id,
+            max_tasks=None,
+            granted_by="frontend-dev-fixture",
+            reason="prepare blocked frontend fixture",
+        )
+        auth.revoke_environment(
+            "environment-frontend-blocked",
+            user_id,
+            revoked_by="frontend-dev-fixture",
+            reason="exercise linked-but-not-executable frontend state",
+        )
     return FrontendDevSeedResult(
         "project-frontend-dev",
         "workspace-frontend-primary",
@@ -266,7 +310,9 @@ def _seed_core_profile(state_root: Path) -> FrontendDevSeedResult:
     )
 
 
-def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> None:
+def _seed_representative_tasks(
+    state_root: Path, *, owner_user_id: str, include_failures: bool
+) -> None:
     lifecycle_states = [
         ("succeeded", "succeeded", "completed"),
         ("failed", "failed", "failed"),
@@ -312,7 +358,7 @@ def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> N
                     _LATER,
                     _NOW,
                     _LATER,
-                    _USER_ID,
+                    owner_user_id,
                     None if task_status == "succeeded" else f"Synthetic {task_status} detail",
                     attempt_id,
                     json.dumps({"input_tokens": 100 * index, "output_tokens": 50 * index}),
@@ -389,13 +435,18 @@ def _seed_representative_tasks(state_root: Path, *, include_failures: bool) -> N
         conn.commit()
 
 
-def _seed_permission_matrix(state_root: Path) -> None:
+def _seed_permission_matrix(state_root: Path, *, users: FrontendDevUsers) -> None:
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(db_path)) as conn:
         projects = (
             ("project-permission-viewer", "fixture-viewer-owner", "Viewer Project", "active"),
             ("project-permission-editor", "fixture-editor-owner", "Editor Project", "active"),
-            ("project-permission-archived", _USER_ID, "Archived Project", "archived"),
+            (
+                "project-permission-archived",
+                users.owner_user_id,
+                "Archived Project",
+                "archived",
+            ),
         )
         conn.executemany(
             """
@@ -425,14 +476,30 @@ def _seed_permission_matrix(state_root: Path) -> None:
             ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
-                ("project-permission-viewer", _USER_ID, "viewer", 0, _NOW, _NOW),
-                ("project-permission-editor", _USER_ID, "editor", 1, _NOW, _NOW),
+                (
+                    "project-permission-viewer",
+                    users.viewer_user_id,
+                    "viewer",
+                    0,
+                    _NOW,
+                    _NOW,
+                ),
+                (
+                    "project-permission-editor",
+                    users.editor_user_id,
+                    "editor",
+                    1,
+                    _NOW,
+                    _NOW,
+                ),
             ],
         )
         conn.commit()
 
 
-def _seed_literature(state_root: Path, *, count: int, include_failures: bool) -> None:
+def _seed_literature(
+    state_root: Path, *, owner_user_id: str, count: int, include_failures: bool
+) -> None:
     db_path = state_root / "runtime" / "literature.sqlite3"
     with closing(connect(db_path)) as conn:
         for topic_index in range(3):
@@ -445,7 +512,7 @@ def _seed_literature(state_root: Path, *, count: int, include_failures: bool) ->
                 """,
                 (
                     f"topic-frontend-{topic_index + 1}",
-                    _USER_ID,
+                    owner_user_id,
                     f"Frontend Topic {topic_index + 1}",
                     json.dumps([f"topic-{topic_index + 1}"]),
                     _NOW,
@@ -520,7 +587,7 @@ def _seed_literature(state_root: Path, *, count: int, include_failures: bool) ->
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    _USER_ID,
+                    owner_user_id,
                     paper_id,
                     int(index % 4 == 0),
                     int(index % 4 == 1),
@@ -541,7 +608,7 @@ def _seed_literature(state_root: Path, *, count: int, include_failures: bool) ->
                     'failed', ?, ?, ?, 'Synthetic provider failure'
                 )
                 """,
-                (_USER_ID, _NOW, _NOW, _LATER),
+                (owner_user_id, _NOW, _NOW, _LATER),
             )
             conn.execute(
                 """
@@ -559,7 +626,7 @@ def _seed_literature(state_root: Path, *, count: int, include_failures: bool) ->
         conn.commit()
 
 
-def _seed_overview(state_root: Path, *, failed: bool) -> None:
+def _seed_overview(state_root: Path, *, owner_user_id: str, failed: bool) -> None:
     status = "partial" if failed else "ok"
     card_statuses = {
         "attention": "partial" if failed else "ok",
@@ -581,7 +648,7 @@ def _seed_overview(state_root: Path, *, failed: bool) -> None:
     ]
     payload = {
         "snapshot_id": "overview-frontend-dev",
-        "owner_user_id": _USER_ID,
+        "owner_user_id": owner_user_id,
         "snapshot_date": "2026-07-14",
         "data_cutoff_at": _LATER,
         "source_status": status,
@@ -612,7 +679,7 @@ def _seed_overview(state_root: Path, *, failed: bool) -> None:
             """,
             (
                 "overview-frontend-dev",
-                _USER_ID,
+                owner_user_id,
                 "2026-07-14",
                 json.dumps(payload, sort_keys=True),
                 _LATER,
@@ -642,7 +709,7 @@ def _overview_card_data(card_id: str, *, failed: bool) -> dict[str, object]:
     }
 
 
-def _seed_large_profile(state_root: Path) -> FrontendDevSeedResult:
+def _seed_large_profile(state_root: Path, *, users: FrontendDevUsers) -> FrontendDevSeedResult:
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     workspace_root = state_root.parent / f"{state_root.name}-large-workspaces"
     workspace_root.mkdir(parents=True, exist_ok=True)
@@ -671,7 +738,7 @@ def _seed_large_profile(state_root: Path) -> FrontendDevSeedResult:
                 """,
                 (
                     project_id,
-                    _USER_ID,
+                    users.owner_user_id,
                     f"Large Project {project_index + 1:03d}",
                     int(project_index == 0),
                     _NOW,
@@ -693,7 +760,7 @@ def _seed_large_profile(state_root: Path) -> FrontendDevSeedResult:
                     """,
                     (
                         workspace_id,
-                        _USER_ID,
+                        users.owner_user_id,
                         str(path),
                         f"Large Workspace {ordinal:03d}",
                         _NOW,
@@ -730,19 +797,32 @@ def _seed_large_profile(state_root: Path) -> FrontendDevSeedResult:
                     _NOW,
                     _LATER,
                     _LATER,
-                    _USER_ID,
+                    users.owner_user_id,
                 ),
             )
         conn.commit()
-    AuthService(state_root=state_root).grant_environment(
-        env_id="environment-large",
-        user_id=_USER_ID,
-        max_tasks=None,
-        granted_by="frontend-dev-fixture",
-        reason="large frontend development fixture",
+    auth = AuthService(state_root=state_root)
+    for user_id in (
+        users.owner_user_id,
+        users.editor_user_id,
+        users.viewer_user_id,
+        users.admin_user_id,
+        "api-key-user",
+    ):
+        auth.grant_environment(
+            env_id="environment-large",
+            user_id=user_id,
+            max_tasks=None,
+            granted_by="frontend-dev-fixture",
+            reason="large frontend development fixture",
+        )
+    _seed_literature(
+        state_root,
+        owner_user_id=users.owner_user_id,
+        count=250,
+        include_failures=False,
     )
-    _seed_literature(state_root, count=250, include_failures=False)
-    _seed_overview(state_root, failed=False)
+    _seed_overview(state_root, owner_user_id=users.owner_user_id, failed=False)
     return FrontendDevSeedResult(
         "project-large-001",
         "workspace-large-001",

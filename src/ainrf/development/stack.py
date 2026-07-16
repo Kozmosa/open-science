@@ -98,6 +98,8 @@ class DevelopmentStack:
             str(self.state_root),
             "--api-key",
             self.api_key,
+            "--credentials-path",
+            str(self.instance.login_credentials_path),
             "--artifact-sha",
             self.artifact_sha,
             "--profile",

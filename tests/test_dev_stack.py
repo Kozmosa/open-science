@@ -106,6 +106,8 @@ def test_stack_prepare_runs_selected_profile_and_parses_json(
         str(instance.state_root),
         "--api-key",
         "fixture-key",
+        "--credentials-path",
+        str(instance.login_credentials_path),
         "--artifact-sha",
         "c" * 64,
         "--profile",

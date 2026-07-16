@@ -45,6 +45,9 @@ def test_instance_identity_and_ports_are_stable_per_worktree_profile(
     assert first.instance_id.startswith("feat-frontend-phases-full-")
     assert first.instance_root.parent == development_root
     assert first.state_root == first.instance_root / "state"
+    assert first.login_credentials_path == (
+        first.instance_root / "runtime" / "frontend-login-identities.json"
+    )
     assert 41000 <= first.ports.frontend <= 43997
     assert first.ports.api == first.ports.frontend + 1
     assert first.ports.cdp == first.ports.frontend + 2
@@ -143,4 +146,5 @@ def test_instance_key_is_stable_private_and_absent_from_manifest(
         "cdp": instance.ports.cdp,
         "frontend": instance.ports.frontend,
     }
+    assert marker["login_credentials_path"] == str(instance.login_credentials_path)
     assert stat.S_IMODE(instance.credential_path.stat().st_mode) == 0o600

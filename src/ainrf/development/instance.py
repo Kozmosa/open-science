@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Mapping
 
 
-INSTANCE_SCHEMA_VERSION = 1
+INSTANCE_SCHEMA_VERSION = 2
 DEFAULT_DEVELOPMENT_ROOT = Path("/tmp/openscience-dev")
 _PORT_BASE = 41000
 _PORT_SLOT_COUNT = 1000
@@ -41,6 +41,7 @@ class FrontendDevInstance:
     log_root: Path
     marker_path: Path
     credential_path: Path
+    login_credentials_path: Path
 
     def as_public_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -51,6 +52,7 @@ class FrontendDevInstance:
         payload["log_root"] = str(self.log_root)
         payload["marker_path"] = str(self.marker_path)
         payload["credential_path"] = str(self.credential_path)
+        payload["login_credentials_path"] = str(self.login_credentials_path)
         return payload
 
 
@@ -169,6 +171,7 @@ def resolve_frontend_dev_instance(
         log_root=instance_root / "logs",
         marker_path=instance_root / ".openscience-dev-instance.json",
         credential_path=runtime_root / "api-key",
+        login_credentials_path=runtime_root / "frontend-login-identities.json",
     )
 
 

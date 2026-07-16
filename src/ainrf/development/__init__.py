@@ -21,6 +21,7 @@ from ainrf.development.frontend_profiles import (
     FRONTEND_DEV_FIXTURE_VERSION,
     FrontendDevProfile,
     FrontendDevSeedResult,
+    FrontendDevUsers,
     normalize_frontend_dev_profile,
     seed_frontend_dev_profile,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "FrontendDevProfile",
     "FrontendDevPorts",
     "FrontendDevSeedResult",
+    "FrontendDevUsers",
     "BrowserCdpProbe",
     "chrome_devtools_config_locations",
     "configured_chrome_devtools_servers",

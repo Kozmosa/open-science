@@ -14,6 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from ainrf.api.config import hash_api_key
+from ainrf.auth.service import AuthService
 from ainrf.cli import app
 from ainrf.db import connect
 from ainrf.domain import DomainService
@@ -51,6 +52,16 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     assert first_payload["artifact_sha"] == artifact_sha
     assert first_payload["profile"] == "full"
     assert first_payload["fixture_version"] == 3
+    assert first_payload["owner_user_id"] == "frontend-owner-user"
+    assert set(first_payload["login_users"]) == {"owner", "editor", "viewer", "admin"}
+    credentials_path = Path(first_payload["login_credentials_path"])
+    assert credentials_path == state_root / "runtime" / "frontend-login-identities.json"
+    assert stat.S_IMODE(credentials_path.stat().st_mode) == 0o600
+    credentials = json.loads(credentials_path.read_text(encoding="utf-8"))
+    assert credentials["schema_version"] == 1
+    assert set(credentials["users"]) == {"owner", "editor", "viewer", "admin"}
+    assert all(user["password"] for user in credentials["users"].values())
+    assert all(user["password"] not in first.stdout for user in credentials["users"].values())
     assert first_payload["counts"] == {
         "attempts": 5,
         "papers": 8,
@@ -65,8 +76,20 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     config = json.loads((state_root / "config.json").read_text(encoding="utf-8"))
     assert config == {"api_key_hashes": [hash_api_key(api_key)]}
 
+    auth = AuthService(state_root=state_root)
+    for label, expected_role in (
+        ("owner", "member"),
+        ("editor", "member"),
+        ("viewer", "member"),
+        ("admin", "admin"),
+    ):
+        identity = credentials["users"][label]
+        login = auth.login(username=identity["username"], password=identity["password"])
+        assert login["user"]["id"] == identity["user_id"]
+        assert login["user"]["role"] == expected_role
+
     domain = DomainService(state_root, artifact_sha=artifact_sha)
-    user: dict[str, object] = {"id": "api-key-user", "role": "user"}
+    user: dict[str, object] = {"id": "frontend-owner-user", "role": "member"}
     projects = domain.project_console_summaries(user)
     workspaces = domain.workspace_console_entries(user)
     assert any(
@@ -79,6 +102,59 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
         workspace["cannot_execute_reason"] == "environment_grant_required"
         for workspace in workspaces
     )
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        assert (
+            conn.execute(
+                "SELECT owner_user_id FROM projects WHERE project_id = 'project-frontend-dev'"
+            ).fetchone()["owner_user_id"]
+            == "frontend-owner-user"
+        )
+        assert {
+            (str(row["user_id"]), str(row["role"]))
+            for row in conn.execute(
+                "SELECT user_id, role FROM project_members WHERE project_id = 'project-frontend-dev'"
+            ).fetchall()
+        } == {
+            ("api-key-user", "editor"),
+            ("frontend-editor-user", "editor"),
+            ("frontend-viewer-user", "viewer"),
+        }
+        assert {
+            str(row["owner_user_id"])
+            for row in conn.execute("SELECT DISTINCT owner_user_id FROM tasks").fetchall()
+        } == {"frontend-owner-user"}
+        assert (
+            conn.execute("SELECT owner_user_id FROM overview_snapshots").fetchone()["owner_user_id"]
+            == "frontend-owner-user"
+        )
+    with closing(connect(state_root / "runtime" / "literature.sqlite3")) as conn:
+        assert {
+            str(row["user_id"])
+            for row in conn.execute("SELECT DISTINCT user_id FROM literature_topics").fetchall()
+        } == {"frontend-owner-user"}
+        assert {
+            str(row["user_id"])
+            for row in conn.execute(
+                "SELECT DISTINCT user_id FROM literature_user_paper_states"
+            ).fetchall()
+        } == {"frontend-owner-user"}
+    with closing(connect(state_root / "runtime" / "auth.sqlite3")) as conn:
+        active_grants = {
+            str(row["user_id"])
+            for row in conn.execute(
+                """
+                SELECT user_id FROM environment_access
+                WHERE environment_id = 'environment-frontend-dev' AND status = 'active'
+                """
+            ).fetchall()
+        }
+        assert active_grants == {
+            "api-key-user",
+            "frontend-owner-user",
+            "frontend-editor-user",
+            "frontend-viewer-user",
+            "frontend-admin-user",
+        }
 
 
 @pytest.mark.parametrize(
@@ -171,7 +247,11 @@ def test_permissions_and_failures_profiles_expose_expected_projection_states(
 
     with closing(connect(permissions_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
         members = conn.execute(
-            "SELECT project_id, role, can_publish FROM project_members ORDER BY project_id"
+            """
+            SELECT project_id, role, can_publish FROM project_members
+            WHERE project_id LIKE 'project-permission-%'
+            ORDER BY project_id
+            """
         ).fetchall()
         assert [(row["role"], bool(row["can_publish"])) for row in members] == [
             ("editor", True),
