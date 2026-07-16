@@ -133,9 +133,13 @@ docker compose -f docker-compose.cpu.yml logs -f ainrf
 
 | 部署方式 | Grafana 地址 | 默认账号 |
 |---------|-------------|---------|
-| 标准版（nginx） | `https://<host>/monitoring/` | `admin` / `ainrf-grafana` |
-| CPU-only（host 网络） | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
-| GPU 版 | `http://<host>:3000/` | `admin` / `ainrf-grafana` |
+| 标准版（nginx） | `https://<host>/grafana` | OpenScience auth proxy |
+| CPU-only（host 网络） | `http://<host>:8192/grafana` | OpenScience auth proxy |
+| GPU 版 | `http://<host>:8192/grafana` | OpenScience auth proxy |
+
+CPU-only 的后端 `18000`、Prometheus `9091` 和 Grafana `3000` 默认只监听
+`127.0.0.1`；外部浏览器只使用 `8192`。staging 使用不重叠的 loopback 端口
+`7192/17000/9092/2300`，因此可以与 production 同时运行。
 
 ## 相关文档
 

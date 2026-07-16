@@ -32,6 +32,16 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 - Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
 - Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
 
+### Default ports and coexistence
+
+| Environment | Browser/Web entry | Backend | Prometheus | Grafana | Binding contract |
+|-------------|-------------------|---------|------------|---------|------------------|
+| Production CPU | `0.0.0.0:8192` | `127.0.0.1:18000` | `127.0.0.1:9091` | `127.0.0.1:3000` | Only nginx is the routine external entry |
+| Staging | `127.0.0.1:7192` | `127.0.0.1:17000` | `127.0.0.1:9092` | `127.0.0.1:2300` | Loopback-only unless an operator adds a separate authenticated tunnel/proxy |
+| Worktree development | derived `127.0.0.1:41000-43999` | derived adjacent port | n/a | n/a | Three-port slot: frontend, API `+1`, CDP `+2` |
+
+The default ranges do not overlap, so production, staging, and worktree development normally coexist. A rare hash-slot collision between worktrees fails closed and requires an explicit dev-port override; the tool never kills the existing listener. Do not reuse `8192/18000` or `7192/17000` for local development. Direct production monitoring ports are loopback-only; browser access goes through the authenticated `:8192/grafana` and `:8192/prometheus` paths. Production SSH uses `2222`; staging reserves `2223` only when its normally-disabled SSH/runtime path is explicitly enabled. Optional Litefuse overlays use `13000` (production) and `13001` (staging).
+
 ### Monitoring & Alerting (production default)
 
 The CPU-only deployment includes Prometheus + Grafana with pre-configured dashboards and alert rules:

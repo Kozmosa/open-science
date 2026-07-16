@@ -127,6 +127,23 @@ bash scripts/dev.sh reset --profile full
 override，不会主动杀进程。凭据只存在 repo 外的权限受限文件和 Vite proxy process 中，
 不会注入浏览器 bundle。
 
+### 默认端口与共存约定
+
+| 环境 | Web/Frontend | API | CDP/Monitoring | 默认绑定 |
+| --- | --- | --- | --- | --- |
+| Worktree dev | `41000 + slot*3` | frontend `+1` | frontend `+2`（CDP） | `127.0.0.1` |
+| Staging | `7192` | `17000` | Prometheus `9092`、Grafana `2300` | 全部 `127.0.0.1` |
+| Production CPU | `8192` | `18000` | Prometheus `9091`、Grafana `3000` | Web 对外，其余 `127.0.0.1` |
+
+worktree slot 由绝对 worktree 路径、branch 和 profile 稳定派生，范围固定在 `41000-43999`，
+默认不会与 staging/production 冲突。可用 `--frontend-port`、`--api-port` 或
+`OPENSCIENCE_DEV_CDP_PORT` 显式覆盖；端口被占用时先看 `dev.sh status/logs`，不得扫描并终止
+不属于当前 manifest 的进程。
+
+staging 的 `7192` 是 loopback-only，不是 `http://<host>:7192` 公网入口；远程浏览器应通过
+SSH tunnel 或单独的认证 VPN/reverse proxy。production 的正常浏览器入口只有 `:8192`，
+Grafana/Prometheus 分别经 `/grafana`、`/prometheus` 访问，不直接暴露 `3000/9091`。
+
 需要用真实登录页面检查 owner/editor/viewer/admin 权限时，先获取凭据文件路径：
 
 ```bash

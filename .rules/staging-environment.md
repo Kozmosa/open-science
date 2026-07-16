@@ -40,10 +40,14 @@ bash scripts/staging.sh down
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| App | `http://<host>:7192/` | Full OpenScience WebUI |
-| Grafana | `http://<host>:7192/grafana` | Auth-gated via OpenScience session |
-| Backend direct | `http://<host>:17000/health` | Bypasses nginx |
-| Prometheus | `localhost:9092` | Internal only, no nginx proxy |
+| App | `http://127.0.0.1:7192/` | Loopback-only OpenScience WebUI |
+| Grafana | `http://127.0.0.1:7192/grafana` | Auth-gated via OpenScience session |
+| Prometheus UI | `http://127.0.0.1:7192/prometheus` | Auth-gated via OpenScience session |
+| Backend direct | `http://127.0.0.1:17000/health` | Loopback-only; bypasses nginx |
+| Prometheus direct | `http://127.0.0.1:9092/prometheus` | Loopback-only; bypasses OpenScience auth |
+| Grafana direct | `http://127.0.0.1:2300/grafana` | Loopback-only; Grafana auth still applies |
+
+The shipped staging nginx explicitly listens on `127.0.0.1:7192`; `http://<host>:7192` is not a default remote entry. For a remote browser, use an SSH tunnel or a separately managed authenticated VPN/reverse proxy. Do not change staging to `0.0.0.0` merely for convenience when it may contain a production snapshot.
 
 ## Port Mapping (staging ↔ production)
 
@@ -89,7 +93,7 @@ bash scripts/staging.sh down      # stop + remove all containers and volumes
 
 1. **Start staging**: `bash scripts/staging.sh up`
 2. **Iterate on backend code**: edit files under `src/ainrf/` — uvicorn auto-reloads within seconds; watch reload events in `bash scripts/staging.sh logs`
-3. **Test API changes**: `curl http://localhost:7192/api/...` or open `http://<host>:7192/` in browser
+3. **Test API changes**: `curl http://127.0.0.1:7192/api/...` or open `http://127.0.0.1:7192/` locally/through an explicit tunnel
 4. **Check metrics**: `curl http://localhost:7192/metrics` or Grafana at `/grafana`
 5. **Verify identity, health, and production mode**: `OPENSCIENCE_EXPECTED_BUILD_COMMIT=<sha> bash scripts/test.sh staging` — validates staging identity, backend/nginx health JSON, frontend build metadata, production auth behavior, and blocked docs without changing business data or container lifecycle
 6. **Compare with production**: both stacks run simultaneously — test the same API on `:7192` (staging) vs `:8192` (production) to confirm behavior parity

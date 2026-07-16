@@ -55,6 +55,8 @@ The fixture worker is closed-world: Task execution, Literature checks/summaries,
 
 Fault profiles are selected with `--fault-profile none|latency|transient|resources|offline`. They require marker-owned synthetic state, never apply in production, and are forbidden for personal state roots. When changing fixture or fault profiles, reset the managed instance and pass the same options to the next `up` command.
 
+Development ports use `41000 + slot*3` for Vite, `+1` for the API, and `+2` for CDP, where the stable slot is derived from absolute worktree path, branch, and profile. All three bind to `127.0.0.1` by default and remain below `44000`, separate from staging `7192/17000` and production `8192/18000`. Use `OPENSCIENCE_DEV_FRONTEND_PORT`, `OPENSCIENCE_DEV_API_PORT`, and `OPENSCIENCE_DEV_CDP_PORT` only for an explicit collision; `dev.sh` never kills an unknown listener.
+
 ## Legacy Agent E2E Testing (Exploratory, Non-Gating)
 
 `testing/e2e/` is a legacy coding-agent exploration harness. It is not part of L0/L1, is not a merge gate, and must not be treated as reproducible E2E evidence until L2 replaces its fixed project/container names, mutable image tag, shared frontend bundle, direct DB seeding, and natural-language-only result contract.
