@@ -151,12 +151,35 @@ describe('ResourcesPage', () => {
 
   });
 
-  it('shows empty state when no resource data is available', async () => {
+  it('keeps token usage visible when no Environment resource data exists', async () => {
     mockGetResources.mockResolvedValue({ items: [] });
 
     renderWithProviders(<ResourcesPage />);
 
+    expect(await screen.findByText('Task Usage')).toBeInTheDocument();
+    expect(screen.queryByText('No resource data available yet.')).not.toBeInTheDocument();
+  });
+
+  it('keeps Environment cards when token usage fails', async () => {
+    mockGetResources.mockResolvedValue(mockResponse);
+    mockGetTaskTokenUsageSummary.mockRejectedValue(new Error('usage offline'));
+
+    renderWithProviders(<ResourcesPage />);
+
+    expect(await screen.findByText('Localhost')).toBeInTheDocument();
+    expect(screen.queryByText('Task Usage')).not.toBeInTheDocument();
+    expect(screen.getByTestId('resources-update-strip')).toHaveTextContent('Some environment or task usage data is degraded.');
+    expect(screen.queryByText('No resource data available yet.')).not.toBeInTheDocument();
+  });
+
+  it('shows the global empty state only when neither source has data', async () => {
+    mockGetResources.mockResolvedValue({ items: [] });
+    mockGetTaskTokenUsageSummary.mockResolvedValue(null as never);
+
+    renderWithProviders(<ResourcesPage />);
+
     expect(await screen.findByText('No resource data available yet.')).toBeInTheDocument();
+    expect(screen.queryByText('Task Usage')).not.toBeInTheDocument();
   });
 
   it('renders degraded status with yellow indicator', async () => {

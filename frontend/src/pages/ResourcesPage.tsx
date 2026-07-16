@@ -56,8 +56,13 @@ export default function ResourcesPage() {
   }, [pageVisible]);
 
   const snapshots = useMemo(() => resourcesQuery.data?.items ?? [], [resourcesQuery.data]);
+  const hasResourceData = snapshots.length > 0;
+  const hasTokenUsageData = tokenUsageQuery.data != null;
+  const hasAnyData = hasResourceData || hasTokenUsageData;
   const groups = useMemo(() => [
-    { id: 'global', cards: [{ id: 'global:taskUsage', kind: 'taskUsage' }] },
+    ...(tokenUsageQuery.data != null || tokenUsageQuery.isLoading
+      ? [{ id: 'global', cards: [{ id: 'global:taskUsage', kind: 'taskUsage' }] }]
+      : []),
     ...snapshots.map((snapshot) => ({
       id: snapshot.environment_id,
       cards: [
@@ -65,7 +70,7 @@ export default function ResourcesPage() {
         { id: `${snapshot.environment_id}:processes`, kind: 'processes' },
       ],
     })),
-  ], [snapshots]);
+  ], [snapshots, tokenUsageQuery.data, tokenUsageQuery.isLoading]);
 
   const renderCard = useCallback((_cardId: string, kind: string, groupId: string) => {
     if (kind === 'taskUsage') {
@@ -79,14 +84,16 @@ export default function ResourcesPage() {
   }, [snapshots, tokenUsageQuery.data, tokenUsageQuery.isLoading]);
 
   const lastSuccessfulAt = Math.max(resourcesQuery.dataUpdatedAt, tokenUsageQuery.dataUpdatedAt);
-  const hasPreviousData = snapshots.length > 0 || tokenUsageQuery.data !== undefined;
-  const globalFailure = resourcesQuery.isError && snapshots.length === 0;
-  const partialFailure = tokenUsageQuery.isError || snapshots.some((snapshot) => snapshot.status !== 'ok');
-  const stale = lastSuccessfulAt > 0 && (Date.now() - lastSuccessfulAt > RESOURCE_STALE_MS || resourcesQuery.isRefetchError);
-  const stripTone = globalFailure ? 'danger' : partialFailure || stale || resourcesQuery.isRefetchError ? 'warning' : 'success';
+  const anySourceLoading = resourcesQuery.isLoading || tokenUsageQuery.isLoading;
+  const anySourceFailure = resourcesQuery.isError || tokenUsageQuery.isError;
+  const anyRefetchFailure = resourcesQuery.isRefetchError || tokenUsageQuery.isRefetchError;
+  const globalFailure = !hasAnyData && !anySourceLoading && anySourceFailure;
+  const partialFailure = hasAnyData && (anySourceFailure || snapshots.some((snapshot) => snapshot.status !== 'ok'));
+  const stale = lastSuccessfulAt > 0 && (Date.now() - lastSuccessfulAt > RESOURCE_STALE_MS || anyRefetchFailure);
+  const stripTone = globalFailure ? 'danger' : partialFailure || stale || anyRefetchFailure ? 'warning' : 'success';
   const stripMessage = globalFailure
     ? t('pages.resources.refreshFailed')
-    : resourcesQuery.isRefetchError
+    : anyRefetchFailure
       ? t('pages.resources.showingPrevious')
       : partialFailure
         ? t('pages.resources.partial')
@@ -119,22 +126,22 @@ export default function ResourcesPage() {
         <UpdateStrip tone={stripTone} data-testid="resources-update-strip">
           <span>{stripMessage}</span>
           {!pageVisible ? <span className="ml-2">{t('pages.resources.paused')}</span> : null}
-          {hasPreviousData && lastSuccessfulAt > 0 && (globalFailure || partialFailure || stale || resourcesQuery.isRefetchError)
+          {hasAnyData && lastSuccessfulAt > 0 && (globalFailure || partialFailure || stale || anyRefetchFailure)
             ? <span className="ml-2 text-xs">{t('pages.resources.lastUpdated', { time: formatTimestamp(lastSuccessfulAt) })}</span>
             : null}
         </UpdateStrip>
 
-        {resourcesQuery.isLoading && snapshots.length === 0 ? (
+        {anySourceLoading && !hasAnyData ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Skeleton className="h-80" /><Skeleton className="h-80" /><Skeleton className="h-80" />
           </div>
         ) : null}
 
-        {!resourcesQuery.isLoading && snapshots.length === 0 ? (
+        {!anySourceLoading && !hasAnyData ? (
           <EmptyState message={globalFailure ? t('pages.resources.refreshFailed') : t('pages.resources.noData')} />
         ) : null}
 
-        {hasPreviousData ? (
+        {hasAnyData ? (
           <CardGrid
             groups={groups}
             renderCard={renderCard}
