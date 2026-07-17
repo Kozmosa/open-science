@@ -20,6 +20,9 @@ researched_at: 2026-07-16
 > [!abstract]
 > Breakwater 是一个面向 on-call 场景的本地 agent 服务。它最值得研究的不是单一模型调用，而是把外部事件、持久 case、一次性 slot、Codex thread/turn 和最终交付验证拆成不同层次。其强项是上下文连续性、来源幂等、case 级串行化和“执行完成不等于业务交付完成”的验证闭环；主要短板是凭据暴露面较宽、事件与 token 遥测不够持久、共享 WebSocket app-server 缺少运行期监督，以及没有实现完整的 app-server server-request/approval 控制面。
 
+> [!update] 2026-07-17 后续架构决策
+> 本文第 13–15 节对“保留 attempt-scoped Codex runtime”的建议已被后续设计取代。OpenScience 现决定采用 Codex 的 Task/Thread、Turn、Item、steer、interrupt 语义，并使用 tenant/Environment-scoped 长驻 Codex App Server；详见 [[superpowers/specs/2026-07-17-codex-aligned-conversation-domain-design]] 与 [[superpowers/specs/2026-07-17-engine-runtime-and-credential-injection-design]]。本文对 Breakwater 上游实现的事实性调研仍然有效。
+
 ## 1. 调研范围与证据边界
 
 - 上游仓库：`https://github.com/zclllyybb/Breakwater`
