@@ -53,6 +53,12 @@ def test_domain_schema_has_core_control_tables(tmp_path: Path) -> None:
         "task_turns",
         "turn_items",
         "engine_conversation_bindings",
+        "turn_submissions",
+        "runtime_executions",
+        "turn_control_requests",
+        "runtime_approval_requests",
+        "fork_preview_receipts",
+        "fork_transfer_receipts",
     } <= tables
 
 

@@ -2717,3 +2717,442 @@ def migration_027_conversation_domain_core(conn: sqlite3.Connection) -> None:
         END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_028_conversation_execution_persistence(conn: sqlite3.Connection) -> None:
+    """Add admission, execution, control, approval, and Fork receipts."""
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS turn_submissions (
+            submission_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            reserved_turn_id TEXT NOT NULL UNIQUE CHECK (trim(reserved_turn_id) != ''),
+            actor_user_id TEXT NOT NULL CHECK (trim(actor_user_id) != ''),
+            idempotency_key TEXT NOT NULL CHECK (trim(idempotency_key) != ''),
+            request_hash TEXT NOT NULL CHECK (trim(request_hash) != ''),
+            status TEXT NOT NULL CHECK (status IN (
+                'queued', 'claimed', 'delivering', 'delivered', 'cancelled',
+                'delivery_unknown', 'failed_delivery'
+            )),
+            input_json TEXT NOT NULL
+                CHECK (json_valid(input_json) AND json_type(input_json) = 'object'),
+            context_snapshot_ref TEXT,
+            native_turn_kind TEXT,
+            native_turn_ref TEXT,
+            delivery_evidence_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(delivery_evidence_json)
+                    AND json_type(delivery_evidence_json) = 'object'),
+            failure_code TEXT,
+            created_at TEXT NOT NULL,
+            claimed_at TEXT,
+            delivering_at TEXT,
+            accepted_at TEXT,
+            finished_at TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE (actor_user_id, task_id, idempotency_key),
+            UNIQUE (submission_id, task_id),
+            CHECK ((native_turn_kind IS NULL AND native_turn_ref IS NULL)
+                OR (native_turn_kind IS NOT NULL AND trim(native_turn_kind) != ''
+                    AND native_turn_ref IS NOT NULL AND trim(native_turn_ref) != '')),
+            CHECK (
+                (status IN ('queued', 'claimed', 'delivering')
+                    AND finished_at IS NULL AND failure_code IS NULL)
+                OR (status = 'delivered' AND accepted_at IS NOT NULL
+                    AND finished_at IS NOT NULL AND failure_code IS NULL
+                    AND native_turn_ref IS NOT NULL)
+                OR (status = 'delivery_unknown' AND finished_at IS NULL
+                    AND failure_code IS NOT NULL AND trim(failure_code) != '')
+                OR (status IN ('cancelled', 'failed_delivery')
+                    AND finished_at IS NOT NULL AND failure_code IS NOT NULL
+                    AND trim(failure_code) != '')
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_turn_submissions_task_created
+        ON turn_submissions(task_id, created_at, submission_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_turn_submissions_native_identity
+        ON turn_submissions(task_id, native_turn_kind, native_turn_ref)
+        WHERE native_turn_ref IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS runtime_executions (
+            runtime_execution_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            execution_seq INTEGER NOT NULL CHECK (execution_seq > 0),
+            runtime_generation INTEGER NOT NULL CHECK (runtime_generation > 0),
+            binding_id TEXT,
+            status TEXT NOT NULL CHECK (status IN (
+                'starting', 'running', 'reconciling', 'completed',
+                'interrupted', 'failed', 'unknown'
+            )),
+            native_runtime_kind TEXT,
+            native_runtime_ref TEXT,
+            native_turn_kind TEXT,
+            native_turn_ref TEXT,
+            evidence_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(evidence_json) AND json_type(evidence_json) = 'object'),
+            failure_code TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE (turn_id, execution_seq),
+            UNIQUE (turn_id, runtime_generation),
+            UNIQUE (runtime_execution_id, turn_id, runtime_generation),
+            FOREIGN KEY (turn_id, task_id)
+                REFERENCES task_turns(turn_id, task_id) ON DELETE RESTRICT,
+            FOREIGN KEY (binding_id, task_id)
+                REFERENCES engine_conversation_bindings(binding_id, task_id)
+                ON DELETE RESTRICT,
+            CHECK ((native_runtime_kind IS NULL AND native_runtime_ref IS NULL)
+                OR (native_runtime_kind IS NOT NULL AND trim(native_runtime_kind) != ''
+                    AND native_runtime_ref IS NOT NULL AND trim(native_runtime_ref) != '')),
+            CHECK ((native_turn_kind IS NULL AND native_turn_ref IS NULL)
+                OR (native_turn_kind IS NOT NULL AND trim(native_turn_kind) != ''
+                    AND native_turn_ref IS NOT NULL AND trim(native_turn_ref) != '')),
+            CHECK (
+                (status IN ('starting', 'running', 'reconciling')
+                    AND finished_at IS NULL AND failure_code IS NULL)
+                OR (status IN ('completed', 'interrupted')
+                    AND finished_at IS NOT NULL AND failure_code IS NULL)
+                OR (status IN ('failed', 'unknown') AND finished_at IS NOT NULL
+                    AND failure_code IS NOT NULL AND trim(failure_code) != '')
+            )
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_executions_one_active_turn
+        ON runtime_executions(turn_id)
+        WHERE status IN ('starting', 'running', 'reconciling');
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_executions_native_identity
+        ON runtime_executions(native_runtime_kind, native_runtime_ref)
+        WHERE native_runtime_ref IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS turn_control_requests (
+            control_request_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            expected_turn_id TEXT NOT NULL,
+            runtime_execution_id TEXT NOT NULL,
+            runtime_generation INTEGER NOT NULL CHECK (runtime_generation > 0),
+            kind TEXT NOT NULL CHECK (kind IN ('steer', 'interrupt')),
+            status TEXT NOT NULL CHECK (status IN (
+                'requested', 'delivering', 'accepted', 'completed', 'rejected',
+                'delivery_unknown'
+            )),
+            actor_user_id TEXT NOT NULL CHECK (trim(actor_user_id) != ''),
+            idempotency_key TEXT NOT NULL CHECK (trim(idempotency_key) != ''),
+            request_hash TEXT NOT NULL CHECK (trim(request_hash) != ''),
+            payload_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(payload_json) AND json_type(payload_json) = 'object'),
+            evidence_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(evidence_json) AND json_type(evidence_json) = 'object'),
+            failure_code TEXT,
+            created_at TEXT NOT NULL,
+            accepted_at TEXT,
+            completed_at TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE (actor_user_id, kind, idempotency_key),
+            FOREIGN KEY (runtime_execution_id, expected_turn_id, runtime_generation)
+                REFERENCES runtime_executions(
+                    runtime_execution_id, turn_id, runtime_generation
+                ) ON DELETE RESTRICT,
+            FOREIGN KEY (expected_turn_id, task_id)
+                REFERENCES task_turns(turn_id, task_id) ON DELETE RESTRICT,
+            CHECK (
+                (status IN ('requested', 'delivering') AND accepted_at IS NULL
+                    AND completed_at IS NULL AND failure_code IS NULL)
+                OR (status = 'accepted' AND accepted_at IS NOT NULL
+                    AND completed_at IS NULL AND failure_code IS NULL)
+                OR (status = 'completed' AND kind = 'interrupt'
+                    AND accepted_at IS NOT NULL AND completed_at IS NOT NULL
+                    AND failure_code IS NULL)
+                OR (status IN ('rejected', 'delivery_unknown')
+                    AND completed_at IS NOT NULL AND failure_code IS NOT NULL
+                    AND trim(failure_code) != '')
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_turn_controls_turn_created
+        ON turn_control_requests(expected_turn_id, created_at, control_request_id);
+
+        CREATE TABLE IF NOT EXISTS runtime_approval_requests (
+            approval_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            runtime_execution_id TEXT NOT NULL,
+            runtime_generation INTEGER NOT NULL CHECK (runtime_generation > 0),
+            tool_call_ref TEXT NOT NULL CHECK (trim(tool_call_ref) != ''),
+            status TEXT NOT NULL CHECK (status IN (
+                'pending', 'approved', 'denied', 'expired', 'invalidated'
+            )),
+            request_json TEXT NOT NULL
+                CHECK (json_valid(request_json) AND json_type(request_json) = 'object'),
+            decision_json TEXT CHECK (decision_json IS NULL
+                OR (json_valid(decision_json) AND json_type(decision_json) = 'object')),
+            decision_actor_user_id TEXT,
+            decision_idempotency_key TEXT,
+            decision_request_hash TEXT,
+            created_at TEXT NOT NULL,
+            expires_at TEXT,
+            resolved_at TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE (runtime_execution_id, runtime_generation, tool_call_ref),
+            FOREIGN KEY (runtime_execution_id, turn_id, runtime_generation)
+                REFERENCES runtime_executions(
+                    runtime_execution_id, turn_id, runtime_generation
+                ) ON DELETE RESTRICT,
+            FOREIGN KEY (turn_id, task_id)
+                REFERENCES task_turns(turn_id, task_id) ON DELETE RESTRICT,
+            CHECK ((status = 'pending' AND decision_json IS NULL
+                    AND decision_actor_user_id IS NULL
+                    AND decision_idempotency_key IS NULL
+                    AND decision_request_hash IS NULL AND resolved_at IS NULL)
+                OR (status != 'pending' AND decision_json IS NOT NULL
+                    AND resolved_at IS NOT NULL)),
+            CHECK ((decision_actor_user_id IS NULL AND decision_idempotency_key IS NULL
+                    AND decision_request_hash IS NULL)
+                OR (decision_actor_user_id IS NOT NULL
+                    AND trim(decision_actor_user_id) != ''
+                    AND decision_idempotency_key IS NOT NULL
+                    AND trim(decision_idempotency_key) != ''
+                    AND decision_request_hash IS NOT NULL
+                    AND trim(decision_request_hash) != ''))
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_approvals_decision_idempotency
+        ON runtime_approval_requests(decision_actor_user_id, decision_idempotency_key)
+        WHERE decision_idempotency_key IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS fork_preview_receipts (
+            preview_id TEXT PRIMARY KEY,
+            preview_hash TEXT NOT NULL UNIQUE CHECK (trim(preview_hash) != ''),
+            source_task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            source_revision TEXT NOT NULL CHECK (trim(source_revision) != ''),
+            source_engine_family TEXT NOT NULL CHECK (source_engine_family IN ('codex', 'claude')),
+            target_engine_family TEXT NOT NULL CHECK (target_engine_family IN ('codex', 'claude')),
+            transfer_mode TEXT NOT NULL CHECK (transfer_mode IN (
+                'selected_turns', 'recent_turns', 'full_transcript', 'context_only'
+            )),
+            transfer_range_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(transfer_range_json)
+                    AND json_type(transfer_range_json) = 'object'),
+            message_count INTEGER NOT NULL CHECK (message_count >= 0),
+            turn_count INTEGER NOT NULL CHECK (turn_count >= 0),
+            item_count INTEGER NOT NULL CHECK (item_count >= 0),
+            character_count INTEGER NOT NULL CHECK (character_count >= 0),
+            utf8_byte_count INTEGER NOT NULL CHECK (utf8_byte_count >= 0),
+            estimated_token_count INTEGER NOT NULL CHECK (estimated_token_count >= 0),
+            token_estimator TEXT NOT NULL CHECK (trim(token_estimator) != ''),
+            context_window_percent REAL CHECK (context_window_percent IS NULL
+                OR (context_window_percent >= 0 AND context_window_percent <= 100)),
+            tool_result_count INTEGER NOT NULL CHECK (tool_result_count >= 0),
+            reasoning_count INTEGER NOT NULL CHECK (reasoning_count >= 0),
+            binary_count INTEGER NOT NULL CHECK (binary_count >= 0),
+            image_reference_count INTEGER NOT NULL CHECK (image_reference_count >= 0),
+            cost_estimate_json TEXT CHECK (cost_estimate_json IS NULL
+                OR (json_valid(cost_estimate_json)
+                    AND json_type(cost_estimate_json) = 'object')),
+            cost_unknown INTEGER NOT NULL CHECK (cost_unknown IN (0, 1)),
+            truncated INTEGER NOT NULL CHECK (truncated IN (0, 1)),
+            disclosure_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(disclosure_json) AND json_type(disclosure_json) = 'object'),
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            CHECK (source_engine_family != target_engine_family),
+            CHECK ((cost_unknown = 1 AND cost_estimate_json IS NULL)
+                OR (cost_unknown = 0 AND cost_estimate_json IS NOT NULL)),
+            CHECK (expires_at > created_at)
+        );
+
+        CREATE TABLE IF NOT EXISTS fork_transfer_receipts (
+            transfer_id TEXT PRIMARY KEY,
+            preview_id TEXT NOT NULL REFERENCES fork_preview_receipts(preview_id)
+                ON DELETE RESTRICT,
+            preview_hash TEXT NOT NULL,
+            source_task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            source_revision TEXT NOT NULL,
+            transfer_mode TEXT NOT NULL CHECK (transfer_mode IN (
+                'selected_turns', 'recent_turns', 'full_transcript', 'context_only'
+            )),
+            truncation_acknowledged INTEGER NOT NULL
+                CHECK (truncation_acknowledged IN (0, 1)),
+            full_transcript_confirmed INTEGER NOT NULL
+                CHECK (full_transcript_confirmed IN (0, 1)),
+            actor_user_id TEXT NOT NULL CHECK (trim(actor_user_id) != ''),
+            idempotency_key TEXT NOT NULL CHECK (trim(idempotency_key) != ''),
+            request_hash TEXT NOT NULL CHECK (trim(request_hash) != ''),
+            status TEXT NOT NULL CHECK (status IN ('confirmed', 'transferred', 'failed')),
+            target_task_id TEXT REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            evidence_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(evidence_json) AND json_type(evidence_json) = 'object'),
+            failure_code TEXT,
+            confirmed_at TEXT NOT NULL,
+            completed_at TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE (preview_id),
+            UNIQUE (actor_user_id, idempotency_key),
+            CHECK ((transfer_mode = 'full_transcript' AND full_transcript_confirmed = 1)
+                OR (transfer_mode != 'full_transcript' AND full_transcript_confirmed = 0)),
+            CHECK ((status = 'confirmed' AND target_task_id IS NULL
+                    AND completed_at IS NULL AND failure_code IS NULL)
+                OR (status = 'transferred' AND target_task_id IS NOT NULL
+                    AND completed_at IS NOT NULL AND failure_code IS NULL)
+                OR (status = 'failed' AND completed_at IS NOT NULL
+                    AND failure_code IS NOT NULL AND trim(failure_code) != ''))
+        );
+
+        CREATE TRIGGER IF NOT EXISTS turn_submission_identity_immutable
+        BEFORE UPDATE OF submission_id, task_id, reserved_turn_id, actor_user_id,
+                         idempotency_key, request_hash, input_json,
+                         context_snapshot_ref, created_at ON turn_submissions
+        BEGIN SELECT RAISE(ABORT, 'Turn Submission identity is immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_submission_transition_guard
+        BEFORE UPDATE OF status ON turn_submissions
+        WHEN NOT ((OLD.status = 'queued' AND NEW.status IN ('claimed', 'cancelled'))
+            OR (OLD.status = 'claimed' AND NEW.status IN ('delivering', 'cancelled'))
+            OR (OLD.status = 'delivering' AND NEW.status IN ('delivered', 'delivery_unknown'))
+            OR (OLD.status = 'delivery_unknown'
+                AND NEW.status IN ('delivered', 'failed_delivery')))
+        BEGIN SELECT RAISE(ABORT, 'invalid Turn Submission state transition'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_submission_delivered_turn_guard
+        BEFORE UPDATE OF status ON turn_submissions
+        WHEN NEW.status = 'delivered' AND NOT EXISTS (
+            SELECT 1 FROM task_turns AS turn
+            WHERE turn.turn_id = NEW.reserved_turn_id AND turn.task_id = NEW.task_id
+              AND turn.native_turn_kind = NEW.native_turn_kind
+              AND turn.native_turn_ref = NEW.native_turn_ref)
+        BEGIN SELECT RAISE(ABORT, 'delivered submission requires its accepted Turn'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_submission_terminal_immutable
+        BEFORE UPDATE ON turn_submissions
+        WHEN OLD.status IN ('delivered', 'cancelled', 'failed_delivery')
+        BEGIN SELECT RAISE(ABORT, 'terminal Turn Submissions are immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_submission_delete_forbidden
+        BEFORE DELETE ON turn_submissions
+        BEGIN SELECT RAISE(ABORT, 'Turn Submissions are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS runtime_execution_binding_guard_insert
+        BEFORE INSERT ON runtime_executions
+        WHEN NEW.binding_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM task_turns AS turn
+            WHERE turn.turn_id = NEW.turn_id AND turn.task_id = NEW.task_id
+              AND turn.binding_id = NEW.binding_id)
+        BEGIN SELECT RAISE(ABORT, 'Runtime Execution binding must match its Turn'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_execution_identity_immutable
+        BEFORE UPDATE OF runtime_execution_id, task_id, turn_id, execution_seq,
+                         runtime_generation, binding_id, native_runtime_kind,
+                         native_runtime_ref, native_turn_kind, native_turn_ref, created_at
+        ON runtime_executions
+        BEGIN SELECT RAISE(ABORT, 'Runtime Execution identity is immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_execution_transition_guard
+        BEFORE UPDATE OF status ON runtime_executions
+        WHEN NOT ((OLD.status = 'starting'
+                AND NEW.status IN ('running', 'reconciling', 'failed'))
+            OR (OLD.status = 'running'
+                AND NEW.status IN ('reconciling', 'completed', 'interrupted', 'failed'))
+            OR (OLD.status = 'reconciling'
+                AND NEW.status IN ('running', 'completed', 'interrupted', 'failed', 'unknown')))
+        BEGIN SELECT RAISE(ABORT, 'invalid Runtime Execution state transition'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_execution_terminal_immutable
+        BEFORE UPDATE ON runtime_executions
+        WHEN OLD.status IN ('completed', 'interrupted', 'failed', 'unknown')
+        BEGIN SELECT RAISE(ABORT, 'terminal Runtime Executions are immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_execution_delete_forbidden
+        BEFORE DELETE ON runtime_executions
+        BEGIN SELECT RAISE(ABORT, 'Runtime Executions are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS turn_control_active_turn_guard_insert
+        BEFORE INSERT ON turn_control_requests
+        WHEN NOT EXISTS (SELECT 1 FROM task_turns AS turn
+            WHERE turn.turn_id = NEW.expected_turn_id AND turn.task_id = NEW.task_id
+              AND turn.status = 'in_progress')
+        BEGIN SELECT RAISE(ABORT, 'control request expected Turn is stale'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_control_runtime_guard_insert
+        BEFORE INSERT ON turn_control_requests
+        WHEN NOT EXISTS (SELECT 1 FROM runtime_executions AS execution
+            WHERE execution.runtime_execution_id = NEW.runtime_execution_id
+              AND execution.turn_id = NEW.expected_turn_id
+              AND execution.runtime_generation = NEW.runtime_generation
+              AND execution.status IN ('starting', 'running', 'reconciling'))
+        BEGIN SELECT RAISE(ABORT, 'control request runtime scope is stale'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_control_identity_immutable
+        BEFORE UPDATE OF control_request_id, task_id, expected_turn_id,
+                         runtime_execution_id, runtime_generation, kind,
+                         actor_user_id, idempotency_key, request_hash, payload_json, created_at
+        ON turn_control_requests
+        BEGIN SELECT RAISE(ABORT, 'Turn Control Request identity is immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_control_transition_guard
+        BEFORE UPDATE OF status ON turn_control_requests
+        WHEN NOT ((OLD.kind = 'steer' AND OLD.status = 'requested'
+                AND NEW.status IN ('delivering', 'rejected'))
+            OR (OLD.kind = 'steer' AND OLD.status = 'delivering'
+                AND NEW.status IN ('accepted', 'rejected', 'delivery_unknown'))
+            OR (OLD.kind = 'interrupt' AND OLD.status = 'requested'
+                AND NEW.status IN ('accepted', 'rejected', 'delivery_unknown'))
+            OR (OLD.kind = 'interrupt' AND OLD.status = 'accepted'
+                AND NEW.status = 'completed'))
+        BEGIN SELECT RAISE(ABORT, 'invalid Turn Control Request state transition'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_control_delete_forbidden
+        BEFORE DELETE ON turn_control_requests
+        BEGIN SELECT RAISE(ABORT, 'Turn Control Requests are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS runtime_approval_active_scope_guard_insert
+        BEFORE INSERT ON runtime_approval_requests
+        WHEN NOT EXISTS (SELECT 1 FROM task_turns AS turn
+            JOIN runtime_executions AS execution ON execution.turn_id = turn.turn_id
+            WHERE turn.turn_id = NEW.turn_id AND turn.task_id = NEW.task_id
+              AND turn.status = 'in_progress'
+              AND execution.runtime_execution_id = NEW.runtime_execution_id
+              AND execution.runtime_generation = NEW.runtime_generation
+              AND execution.status IN ('starting', 'running', 'reconciling'))
+        BEGIN SELECT RAISE(ABORT, 'approval runtime scope is stale'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_approval_identity_immutable
+        BEFORE UPDATE OF approval_id, task_id, turn_id, runtime_execution_id,
+                         runtime_generation, tool_call_ref, request_json, created_at, expires_at
+        ON runtime_approval_requests
+        BEGIN SELECT RAISE(ABORT, 'Runtime Approval identity is immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_approval_transition_guard
+        BEFORE UPDATE OF status ON runtime_approval_requests
+        WHEN OLD.status != 'pending'
+          OR NEW.status NOT IN ('approved', 'denied', 'expired', 'invalidated')
+        BEGIN SELECT RAISE(ABORT, 'invalid Runtime Approval state transition'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_approval_delete_forbidden
+        BEFORE DELETE ON runtime_approval_requests
+        BEGIN SELECT RAISE(ABORT, 'Runtime Approvals are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS fork_preview_update_forbidden
+        BEFORE UPDATE ON fork_preview_receipts
+        BEGIN SELECT RAISE(ABORT, 'Fork preview receipts are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_preview_delete_forbidden
+        BEFORE DELETE ON fork_preview_receipts
+        BEGIN SELECT RAISE(ABORT, 'Fork preview receipts are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_preview_guard_insert
+        BEFORE INSERT ON fork_transfer_receipts
+        WHEN NOT EXISTS (SELECT 1 FROM fork_preview_receipts AS preview
+            WHERE preview.preview_id = NEW.preview_id
+              AND preview.preview_hash = NEW.preview_hash
+              AND preview.source_task_id = NEW.source_task_id
+              AND preview.source_revision = NEW.source_revision
+              AND preview.transfer_mode = NEW.transfer_mode
+              AND NEW.confirmed_at <= preview.expires_at
+              AND (preview.truncated = 0 OR NEW.truncation_acknowledged = 1))
+        BEGIN SELECT RAISE(ABORT, 'Fork confirmation does not match its preview'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_identity_immutable
+        BEFORE UPDATE OF transfer_id, preview_id, preview_hash, source_task_id,
+                         source_revision, transfer_mode, truncation_acknowledged,
+                         full_transcript_confirmed, actor_user_id, idempotency_key,
+                         request_hash, confirmed_at ON fork_transfer_receipts
+        BEGIN SELECT RAISE(ABORT, 'Fork transfer identity is immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_transition_guard
+        BEFORE UPDATE OF status ON fork_transfer_receipts
+        WHEN OLD.status != 'confirmed' OR NEW.status NOT IN ('transferred', 'failed')
+        BEGIN SELECT RAISE(ABORT, 'invalid Fork transfer state transition'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_terminal_immutable
+        BEFORE UPDATE ON fork_transfer_receipts
+        WHEN OLD.status IN ('transferred', 'failed')
+        BEGIN SELECT RAISE(ABORT, 'terminal Fork transfers are immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_delete_forbidden
+        BEFORE DELETE ON fork_transfer_receipts
+        BEGIN SELECT RAISE(ABORT, 'Fork transfer receipts are append-only'); END;
+        """
+    )
