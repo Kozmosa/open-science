@@ -17,6 +17,15 @@ class SqliteConversationRepository:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
+    def insert_task_authority(self, *, task_id: str, created_at: str) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO conversation_task_authorities (task_id, authority, created_at)
+            VALUES (?, 'conversation_v3', ?)
+            """,
+            (task_id, created_at),
+        )
+
     def next_turn_seq(self, task_id: str) -> int:
         row = self._conn.execute(
             "SELECT COALESCE(MAX(turn_seq), 0) + 1 FROM task_turns WHERE task_id = ?",

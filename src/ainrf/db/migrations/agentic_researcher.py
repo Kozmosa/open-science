@@ -3156,3 +3156,115 @@ def migration_028_conversation_execution_persistence(conn: sqlite3.Connection) -
         BEGIN SELECT RAISE(ABORT, 'Fork transfer receipts are append-only'); END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_029_conversation_persistence_hardening(conn: sqlite3.Connection) -> None:
+    """Fence v3 authority and tighten execution and journal causality."""
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS conversation_task_authorities (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            authority TEXT NOT NULL CHECK (authority = 'conversation_v3'),
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TRIGGER IF NOT EXISTS conversation_task_authority_update_forbidden
+        BEFORE UPDATE ON conversation_task_authorities
+        BEGIN SELECT RAISE(ABORT, 'conversation Task authority is immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS conversation_task_authority_delete_forbidden
+        BEFORE DELETE ON conversation_task_authorities
+        BEGIN SELECT RAISE(ABORT, 'conversation Task authority is immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS engine_binding_v3_authority_guard_insert
+        BEFORE INSERT ON engine_conversation_bindings
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS task_turn_v3_authority_guard_insert
+        BEFORE INSERT ON task_turns
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_item_v3_authority_guard_insert
+        BEFORE INSERT ON turn_items
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_submission_v3_authority_guard_insert
+        BEFORE INSERT ON turn_submissions
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_execution_v3_authority_guard_insert
+        BEFORE INSERT ON runtime_executions
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS turn_control_v3_authority_guard_insert
+        BEFORE INSERT ON turn_control_requests
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS runtime_approval_v3_authority_guard_insert
+        BEFORE INSERT ON runtime_approval_requests
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_preview_v3_authority_guard_insert
+        BEFORE INSERT ON fork_preview_receipts
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.source_task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_v3_authority_guard_insert
+        BEFORE INSERT ON fork_transfer_receipts
+        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.source_task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+
+        CREATE TRIGGER IF NOT EXISTS runtime_execution_active_turn_guard_insert
+        BEFORE INSERT ON runtime_executions
+        WHEN NOT EXISTS (SELECT 1 FROM task_turns AS turn
+            WHERE turn.turn_id = NEW.turn_id AND turn.task_id = NEW.task_id
+              AND turn.status = 'in_progress'
+              AND ((NEW.native_turn_kind IS NULL AND NEW.native_turn_ref IS NULL)
+                OR (turn.native_turn_kind = NEW.native_turn_kind
+                    AND turn.native_turn_ref = NEW.native_turn_ref)))
+        BEGIN SELECT RAISE(ABORT, 'Runtime Execution Turn scope is stale'); END;
+
+        CREATE TRIGGER IF NOT EXISTS runtime_approval_active_scope_guard_resolve
+        BEFORE UPDATE OF status ON runtime_approval_requests
+        WHEN NEW.status IN ('approved', 'denied') AND NOT EXISTS (
+            SELECT 1 FROM task_turns AS turn
+            JOIN runtime_executions AS execution ON execution.turn_id = turn.turn_id
+            WHERE turn.turn_id = OLD.turn_id AND turn.task_id = OLD.task_id
+              AND turn.status = 'in_progress'
+              AND execution.runtime_execution_id = OLD.runtime_execution_id
+              AND execution.runtime_generation = OLD.runtime_generation
+              AND execution.status IN ('starting', 'running', 'reconciling'))
+        BEGIN SELECT RAISE(ABORT, 'approval runtime scope is stale'); END;
+
+        CREATE TRIGGER IF NOT EXISTS turn_item_result_call_required_insert
+        BEFORE INSERT ON turn_items
+        WHEN NEW.item_type = 'tool_result' AND NEW.call_item_id IS NULL
+        BEGIN SELECT RAISE(ABORT, 'tool result requires its tool call'); END;
+
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_confirmation_time_guard_insert
+        BEFORE INSERT ON fork_transfer_receipts
+        WHEN NOT EXISTS (SELECT 1 FROM fork_preview_receipts AS preview
+            WHERE preview.preview_id = NEW.preview_id
+              AND NEW.confirmed_at >= preview.created_at
+              AND NEW.confirmed_at <= preview.expires_at)
+        BEGIN SELECT RAISE(ABORT, 'Fork confirmation timestamp is outside preview validity'); END;
+        """
+    )

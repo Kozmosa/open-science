@@ -50,6 +50,7 @@ def test_domain_schema_has_core_control_tables(tmp_path: Path) -> None:
         "workspaces",
         "project_workspace_links",
         "domain_cutover_state",
+        "conversation_task_authorities",
         "task_turns",
         "turn_items",
         "engine_conversation_bindings",
@@ -60,6 +61,13 @@ def test_domain_schema_has_core_control_tables(tmp_path: Path) -> None:
         "fork_preview_receipts",
         "fork_transfer_receipts",
     } <= tables
+
+
+def test_conversation_authority_is_not_backfilled(tmp_path: Path) -> None:
+    with closing(_domain_db(tmp_path)) as conn:
+        _seed_task(conn)
+        count = conn.execute("SELECT COUNT(*) FROM conversation_task_authorities").fetchone()[0]
+    assert count == 0
 
 
 def test_domain_schema_enforces_one_active_primary(tmp_path: Path) -> None:

@@ -35,6 +35,9 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
             """,
             (task_id, _NOW, _NOW),
         )
+    conversation_repository = SqliteConversationRepository(conn)
+    conversation_repository.insert_task_authority(task_id="task-1", created_at=_NOW)
+    conversation_repository.insert_task_authority(task_id="task-2", created_at=_NOW)
     return conn
 
 
@@ -262,6 +265,38 @@ def test_runtime_lifecycle_generation_and_terminal_immutability(tmp_path: Path) 
             )
 
 
+def test_runtime_rejects_terminal_or_native_mismatched_turn_scope(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        _accepted_turn(conn)
+        repository = SqliteConversationExecutionRepository(conn)
+        with pytest.raises(sqlite3.IntegrityError, match="Turn scope is stale"):
+            repository.insert_runtime_execution(
+                runtime_execution_id="execution-mismatch",
+                task_id="task-1",
+                turn_id="turn-1",
+                execution_seq=1,
+                runtime_generation=1,
+                binding_id="binding-1",
+                native_runtime_kind="process",
+                native_runtime_ref="runtime-mismatch",
+                native_turn_kind="turn",
+                native_turn_ref="wrong-native-turn",
+                evidence_json="{}",
+                created_at=_NOW,
+                started_at=_NOW,
+                updated_at=_NOW,
+            )
+        conversation = SqliteConversationRepository(conn)
+        assert (
+            conversation.finish_turn(
+                turn_id="turn-1", status="completed", finished_at=_LATER, updated_at=_LATER
+            )
+            == 1
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="Turn scope is stale"):
+            _runtime(repository)
+
+
 def test_controls_enforce_expected_turn_and_distinguish_interrupt_evidence(
     tmp_path: Path,
 ) -> None:
@@ -384,6 +419,61 @@ def test_approval_is_bound_to_live_runtime_generation(tmp_path: Path) -> None:
             )
 
 
+@pytest.mark.parametrize("cleanup_status", ["expired", "invalidated"])
+def test_approval_resolution_revalidates_live_runtime_scope(
+    tmp_path: Path, cleanup_status: str
+) -> None:
+    with closing(_database(tmp_path)) as conn:
+        _accepted_turn(conn)
+        repository = SqliteConversationExecutionRepository(conn)
+        _runtime(repository)
+        repository.insert_approval_request(
+            approval_id="approval-stale",
+            task_id="task-1",
+            turn_id="turn-1",
+            runtime_execution_id="execution-1",
+            runtime_generation=1,
+            tool_call_ref="tool-call-stale",
+            request_json="{}",
+            created_at=_NOW,
+            expires_at=_EXPIRY,
+            updated_at=_NOW,
+        )
+        repository.transition_runtime_execution(
+            runtime_execution_id="execution-1",
+            expected_status="starting",
+            status="failed",
+            evidence_json='{"terminal":true}',
+            finished_at=_LATER,
+            failure_code="runtime_lost",
+            updated_at=_LATER,
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="runtime scope is stale"):
+            repository.resolve_approval(
+                approval_id="approval-stale",
+                status="approved",
+                decision_json="{}",
+                decision_actor_user_id="user-1",
+                decision_idempotency_key="decision-stale",
+                decision_request_hash="hash-stale",
+                resolved_at=_LATER,
+                updated_at=_LATER,
+            )
+        assert (
+            repository.resolve_approval(
+                approval_id="approval-stale",
+                status=cleanup_status,
+                decision_json='{"reason":"runtime_lost"}',
+                decision_actor_user_id="system",
+                decision_idempotency_key="invalidate-stale",
+                decision_request_hash="invalidate-hash",
+                resolved_at=_LATER,
+                updated_at=_LATER,
+            )
+            == 1
+        )
+
+
 def _preview(
     repository: SqliteConversationExecutionRepository,
     *,
@@ -438,6 +528,38 @@ def test_fork_confirmation_binds_hash_revision_expiry_and_disclosure(tmp_path: P
                 idempotency_key="fork-bad",
                 request_hash="fork-hash-bad",
                 confirmed_at=_LATER,
+                updated_at=_LATER,
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="outside preview validity"):
+            repository.insert_fork_transfer(
+                transfer_id="transfer-too-early",
+                preview_id="preview-1",
+                preview_hash="preview-hash",
+                source_task_id="task-1",
+                source_revision="revision-1",
+                transfer_mode="selected_turns",
+                truncation_acknowledged=True,
+                full_transcript_confirmed=False,
+                actor_user_id="user-1",
+                idempotency_key="fork-too-early",
+                request_hash="fork-hash-too-early",
+                confirmed_at="2026-07-17T23:59:59+00:00",
+                updated_at=_NOW,
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            repository.insert_fork_transfer(
+                transfer_id="transfer-expired",
+                preview_id="preview-1",
+                preview_hash="preview-hash",
+                source_task_id="task-1",
+                source_revision="revision-1",
+                transfer_mode="selected_turns",
+                truncation_acknowledged=True,
+                full_transcript_confirmed=False,
+                actor_user_id="user-1",
+                idempotency_key="fork-expired",
+                request_hash="fork-hash-expired",
+                confirmed_at="2026-07-18T01:00:01+00:00",
                 updated_at=_LATER,
             )
         repository.insert_fork_transfer(

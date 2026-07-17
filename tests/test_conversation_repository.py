@@ -39,6 +39,9 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
         """,
         (_NOW, _NOW),
     )
+    repository = SqliteConversationRepository(conn)
+    repository.insert_task_authority(task_id="task-1", created_at=_NOW)
+    repository.insert_task_authority(task_id="task-2", created_at=_NOW)
     return conn
 
 
@@ -157,16 +160,17 @@ def test_repository_orders_turns_and_items_without_committing(tmp_path: Path) ->
         assert repository.next_task_item_seq("task-1") == 2
         assert repository.next_turn_item_seq("turn-1") == 2
 
-        assert repository.finish_turn(
-            turn_id="turn-1",
-            status="completed",
-            finished_at=_NOW,
-            updated_at=_NOW,
-        ) == 1
-        with pytest.raises(sqlite3.IntegrityError, match="terminal Task Turns"):
-            conn.execute(
-                "UPDATE task_turns SET updated_at = 'later' WHERE turn_id = 'turn-1'"
+        assert (
+            repository.finish_turn(
+                turn_id="turn-1",
+                status="completed",
+                finished_at=_NOW,
+                updated_at=_NOW,
             )
+            == 1
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="terminal Task Turns"):
+            conn.execute("UPDATE task_turns SET updated_at = 'later' WHERE turn_id = 'turn-1'")
         _insert_turn(
             repository,
             turn_id="turn-2",
@@ -202,10 +206,16 @@ def test_database_rejects_second_active_turn_and_cross_task_retry(tmp_path: Path
         with pytest.raises(sqlite3.IntegrityError):
             _insert_turn(repository, turn_id="turn-duplicate", native_ref="native-turn-2")
 
-        assert repository.finish_turn(
-            turn_id="turn-1", status="failed", finished_at=_NOW, updated_at=_NOW,
-            failure_code="runtime_lost",
-        ) == 1
+        assert (
+            repository.finish_turn(
+                turn_id="turn-1",
+                status="failed",
+                finished_at=_NOW,
+                updated_at=_NOW,
+                failure_code="runtime_lost",
+            )
+            == 1
+        )
         _insert_binding(
             repository,
             binding_id="binding-2",
@@ -234,11 +244,14 @@ def test_binding_lineage_is_append_only_and_superseded_one_way(tmp_path: Path) -
                 native_ref="thread-other",
             )
 
-        assert repository.supersede_binding(
-            binding_id="binding-1",
-            superseded_at=_NOW,
-            validation_evidence_json='{"reason":"native_fork"}',
-        ) == 1
+        assert (
+            repository.supersede_binding(
+                binding_id="binding-1",
+                superseded_at=_NOW,
+                validation_evidence_json='{"reason":"native_fork"}',
+            )
+            == 1
+        )
         _insert_binding(repository, binding_id="binding-2", native_ref="thread-2")
         active = repository.active_binding("task-1")
         assert active is not None and active["binding_id"] == "binding-2"
@@ -260,6 +273,16 @@ def test_turn_items_are_append_only_causal_and_provider_scoped(tmp_path: Path) -
         repository = SqliteConversationRepository(conn)
         _insert_binding(repository)
         _insert_turn(repository)
+        with pytest.raises(sqlite3.IntegrityError, match="requires its tool call"):
+            _insert_item(
+                repository,
+                item_id="orphan-tool-result",
+                turn_id="turn-1",
+                item_type="tool_result",
+                actor="tool",
+                payload='{"result":"orphan"}',
+                native_item_id="native-orphan-result",
+            )
         _insert_item(
             repository,
             item_id="tool-call",
@@ -316,6 +339,24 @@ def test_turn_items_are_append_only_causal_and_provider_scoped(tmp_path: Path) -
                 ingested_at=_NOW,
                 persisted_at=_NOW,
             )
+
+
+def test_legacy_task_rejects_conversation_v3_writes(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationRepository(conn)
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES ('task-legacy', 'project-legacy', 'workspace-legacy',
+                'environment-legacy', 'general', 'codex_app_server', 'queued',
+                'Legacy', 'test', ?, ?, 'user-1')
+            """,
+            (_NOW, _NOW),
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="conversation_v3 authority"):
+            _insert_binding(repository, task_id="task-legacy", binding_id="legacy-binding")
 
 
 def test_legacy_attempt_history_is_not_transformed(tmp_path: Path) -> None:
