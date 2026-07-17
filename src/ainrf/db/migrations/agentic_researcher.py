@@ -3268,3 +3268,39 @@ def migration_029_conversation_persistence_hardening(conn: sqlite3.Connection) -
         BEGIN SELECT RAISE(ABORT, 'Fork confirmation timestamp is outside preview validity'); END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_030_conversation_persistence_scope_sealing(
+    conn: sqlite3.Connection,
+) -> None:
+    """Seal runtime identity, approval resolution, and Fork target scope."""
+
+    conn.executescript(
+        """
+        DROP TRIGGER IF EXISTS runtime_execution_active_turn_guard_insert;
+        CREATE TRIGGER runtime_execution_active_turn_guard_insert
+        BEFORE INSERT ON runtime_executions
+        WHEN NEW.native_turn_kind IS NULL
+          OR NEW.native_turn_ref IS NULL
+          OR NOT EXISTS (SELECT 1 FROM task_turns AS turn
+              WHERE turn.turn_id = NEW.turn_id AND turn.task_id = NEW.task_id
+                AND turn.status = 'in_progress'
+                AND turn.native_turn_kind = NEW.native_turn_kind
+                AND turn.native_turn_ref = NEW.native_turn_ref)
+        BEGIN SELECT RAISE(ABORT, 'Runtime Execution Turn scope is stale'); END;
+
+        CREATE TRIGGER IF NOT EXISTS runtime_approval_resolved_immutable
+        BEFORE UPDATE ON runtime_approval_requests
+        WHEN OLD.status != 'pending'
+        BEGIN SELECT RAISE(ABORT, 'resolved Runtime Approvals are immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS fork_transfer_target_v3_authority_guard
+        BEFORE UPDATE OF status, target_task_id ON fork_transfer_receipts
+        WHEN NEW.status = 'transferred' AND NOT EXISTS (
+            SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.target_task_id
+              AND authority.authority = 'conversation_v3')
+        BEGIN SELECT RAISE(ABORT, 'Fork target requires conversation_v3 authority'); END;
+        """
+    )

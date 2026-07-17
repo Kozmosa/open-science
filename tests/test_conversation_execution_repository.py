@@ -35,6 +35,16 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
             """,
             (task_id, _NOW, _NOW),
         )
+    conn.execute(
+        """
+        INSERT INTO tasks (
+            task_id, project_id, workspace_id, environment_id, researcher_type,
+            harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+        ) VALUES ('task-legacy', 'project-legacy', 'workspace-legacy', 'environment-legacy',
+            'general', 'codex_app_server', 'queued', 'Legacy', 'test', ?, ?, 'user-1')
+        """,
+        (_NOW, _NOW),
+    )
     conversation_repository = SqliteConversationRepository(conn)
     conversation_repository.insert_task_authority(task_id="task-1", created_at=_NOW)
     conversation_repository.insert_task_authority(task_id="task-2", created_at=_NOW)
@@ -271,6 +281,23 @@ def test_runtime_rejects_terminal_or_native_mismatched_turn_scope(tmp_path: Path
         repository = SqliteConversationExecutionRepository(conn)
         with pytest.raises(sqlite3.IntegrityError, match="Turn scope is stale"):
             repository.insert_runtime_execution(
+                runtime_execution_id="execution-missing-native-turn",
+                task_id="task-1",
+                turn_id="turn-1",
+                execution_seq=1,
+                runtime_generation=1,
+                binding_id="binding-1",
+                native_runtime_kind="process",
+                native_runtime_ref="runtime-missing-native-turn",
+                native_turn_kind=None,
+                native_turn_ref=None,
+                evidence_json="{}",
+                created_at=_NOW,
+                started_at=_NOW,
+                updated_at=_NOW,
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="Turn scope is stale"):
+            repository.insert_runtime_execution(
                 runtime_execution_id="execution-mismatch",
                 task_id="task-1",
                 turn_id="turn-1",
@@ -391,6 +418,11 @@ def test_approval_is_bound_to_live_runtime_generation(tmp_path: Path) -> None:
             )
             == 1
         )
+        with pytest.raises(sqlite3.IntegrityError, match="resolved Runtime Approvals"):
+            conn.execute(
+                "UPDATE runtime_approval_requests SET updated_at = 'later' "
+                "WHERE approval_id = 'approval-1'"
+            )
         assert (
             repository.resolve_approval(
                 approval_id="approval-1",
@@ -577,6 +609,16 @@ def test_fork_confirmation_binds_hash_revision_expiry_and_disclosure(tmp_path: P
             confirmed_at=_LATER,
             updated_at=_LATER,
         )
+        with pytest.raises(sqlite3.IntegrityError, match="Fork target requires"):
+            repository.finish_fork_transfer(
+                transfer_id="transfer-1",
+                status="transferred",
+                target_task_id="task-legacy",
+                evidence_json='{"copied":true}',
+                failure_code=None,
+                completed_at=_LATER,
+                updated_at=_LATER,
+            )
         assert (
             repository.finish_fork_transfer(
                 transfer_id="transfer-1",
