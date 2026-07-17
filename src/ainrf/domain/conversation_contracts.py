@@ -216,9 +216,7 @@ class ConversationContractError(ValueError):
 
 
 _TASK_TRANSITIONS: Final = {
-    TaskWorkStatus.OPEN: frozenset(
-        {TaskWorkStatus.COMPLETED, TaskWorkStatus.CANCELLED}
-    ),
+    TaskWorkStatus.OPEN: frozenset({TaskWorkStatus.COMPLETED, TaskWorkStatus.CANCELLED}),
     TaskWorkStatus.COMPLETED: frozenset({TaskWorkStatus.OPEN}),
     TaskWorkStatus.CANCELLED: frozenset({TaskWorkStatus.OPEN}),
 }
@@ -340,9 +338,7 @@ def _require_transition[T: StrEnum](
         )
 
 
-def require_task_work_transition(
-    current: TaskWorkStatus, target: TaskWorkStatus
-) -> None:
+def require_task_work_transition(current: TaskWorkStatus, target: TaskWorkStatus) -> None:
     _require_transition(current, target, _TASK_TRANSITIONS)
 
 
@@ -370,9 +366,7 @@ def require_control_transition(
     _require_transition(current, target, _CONTROL_TRANSITIONS[kind])
 
 
-def require_approval_transition(
-    current: ApprovalStatus, target: ApprovalStatus
-) -> None:
+def require_approval_transition(current: ApprovalStatus, target: ApprovalStatus) -> None:
     _require_transition(current, target, _APPROVAL_TRANSITIONS)
 
 
@@ -551,9 +545,7 @@ _CODEX_ACTIVE_FLAG: Final = {
 }
 
 
-def _translate_provider_value[T: StrEnum](
-    value: str, values: dict[str, T], *, contract: str
-) -> T:
+def _translate_provider_value[T: StrEnum](value: str, values: dict[str, T], *, contract: str) -> T:
     try:
         return values[value]
     except KeyError as error:
@@ -568,12 +560,8 @@ def translate_codex_turn_status(value: str) -> TurnStatus:
 
 
 def translate_codex_runtime_state(value: str) -> RuntimeProjectionState:
-    return _translate_provider_value(
-        value, _CODEX_RUNTIME_STATE, contract="Codex runtime state"
-    )
+    return _translate_provider_value(value, _CODEX_RUNTIME_STATE, contract="Codex runtime state")
 
 
 def translate_codex_active_flag(value: str) -> RuntimeActiveFlag:
-    return _translate_provider_value(
-        value, _CODEX_ACTIVE_FLAG, contract="Codex active flag"
-    )
+    return _translate_provider_value(value, _CODEX_ACTIVE_FLAG, contract="Codex active flag")

@@ -51,9 +51,46 @@ class SqliteConversationExecutionRepository:
             ),
         )
 
+    def insert_submission_intent(
+        self,
+        *,
+        submission_id: str,
+        task_id: str,
+        kind: str,
+        retry_of_turn_id: str | None,
+        created_at: str,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO conversation_submission_intents (
+                submission_id, task_id, kind, retry_of_turn_id, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (submission_id, task_id, kind, retry_of_turn_id, created_at),
+        )
+
+    def submission_intent(self, submission_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT * FROM conversation_submission_intents WHERE submission_id = ?
+            """,
+            (submission_id,),
+        ).fetchone()
+
     def submission_by_id(self, submission_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
             "SELECT * FROM turn_submissions WHERE submission_id = ?", (submission_id,)
+        ).fetchone()
+
+    def submission_by_task_key(
+        self, *, task_id: str, actor_user_id: str, idempotency_key: str
+    ) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT * FROM turn_submissions
+            WHERE task_id = ? AND actor_user_id = ? AND idempotency_key = ?
+            """,
+            (task_id, actor_user_id, idempotency_key),
         ).fetchone()
 
     def transition_submission(
@@ -76,9 +113,14 @@ class SqliteConversationExecutionRepository:
             """
             UPDATE turn_submissions
             SET status = ?, claimed_at = COALESCE(?, claimed_at),
-                delivering_at = COALESCE(?, delivering_at), accepted_at = ?,
-                finished_at = ?, native_turn_kind = ?, native_turn_ref = ?,
-                delivery_evidence_json = ?, failure_code = ?, updated_at = ?
+                delivering_at = COALESCE(?, delivering_at),
+                accepted_at = COALESCE(?, accepted_at),
+                finished_at = COALESCE(?, finished_at),
+                native_turn_kind = COALESCE(?, native_turn_kind),
+                native_turn_ref = COALESCE(?, native_turn_ref),
+                delivery_evidence_json = CASE
+                    WHEN ? = '{}' THEN delivery_evidence_json ELSE ? END,
+                failure_code = COALESCE(?, failure_code), updated_at = ?
             WHERE submission_id = ? AND status = ?
             """,
             (
@@ -89,6 +131,7 @@ class SqliteConversationExecutionRepository:
                 finished_at,
                 native_turn_kind,
                 native_turn_ref,
+                delivery_evidence_json,
                 delivery_evidence_json,
                 failure_code,
                 updated_at,
@@ -164,6 +207,94 @@ class SqliteConversationExecutionRepository:
             "SELECT * FROM runtime_executions WHERE runtime_execution_id = ?",
             (runtime_execution_id,),
         ).fetchone()
+
+    def active_runtime_execution(self, turn_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT * FROM runtime_executions
+            WHERE turn_id = ? AND status IN ('starting', 'running', 'reconciling')
+            """,
+            (turn_id,),
+        ).fetchone()
+
+    def approval_by_id(self, approval_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM runtime_approval_requests WHERE approval_id = ?",
+            (approval_id,),
+        ).fetchone()
+
+    def fork_preview_by_id(self, preview_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM fork_preview_receipts WHERE preview_id = ?", (preview_id,)
+        ).fetchone()
+
+    def insert_next_turn(
+        self,
+        *,
+        submission_id: str,
+        task_id: str,
+        blocking_turn_id: str,
+        created_at: str,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO next_turn_submissions (
+                submission_id, task_id, blocking_turn_id, status, created_at, updated_at
+            ) VALUES (?, ?, ?, 'waiting', ?, ?)
+            """,
+            (submission_id, task_id, blocking_turn_id, created_at, created_at),
+        )
+
+    def pending_next_turn(self, task_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT next_turn.*, submission.reserved_turn_id, submission.input_json,
+                   submission.context_snapshot_ref
+            FROM next_turn_submissions AS next_turn
+            JOIN turn_submissions AS submission
+              ON submission.submission_id = next_turn.submission_id
+            WHERE next_turn.task_id = ? AND next_turn.status IN ('waiting', 'ready')
+              AND submission.status = 'queued'
+            ORDER BY next_turn.created_at, next_turn.submission_id
+            LIMIT 1
+            """,
+            (task_id,),
+        ).fetchone()
+
+    def waiting_next_turn(self, task_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT next_turn.*, submission.reserved_turn_id, submission.input_json,
+                   submission.context_snapshot_ref
+            FROM next_turn_submissions AS next_turn
+            JOIN turn_submissions AS submission
+              ON submission.submission_id = next_turn.submission_id
+            WHERE next_turn.task_id = ? AND next_turn.status = 'waiting'
+            ORDER BY next_turn.created_at, next_turn.submission_id
+            LIMIT 1
+            """,
+            (task_id,),
+        ).fetchone()
+
+    def promote_next_turn(self, *, submission_id: str, promoted_at: str, updated_at: str) -> int:
+        return self._conn.execute(
+            """
+            UPDATE next_turn_submissions
+            SET status = 'ready', promoted_at = ?, updated_at = ?
+            WHERE submission_id = ? AND status = 'waiting'
+            """,
+            (promoted_at, updated_at, submission_id),
+        ).rowcount
+
+    def cancel_next_turn(self, *, submission_id: str, updated_at: str) -> int:
+        return self._conn.execute(
+            """
+            UPDATE next_turn_submissions
+            SET status = 'cancelled', updated_at = ?
+            WHERE submission_id = ? AND status = 'waiting'
+            """,
+            (updated_at, submission_id),
+        ).rowcount
 
     def transition_runtime_execution(
         self,
@@ -250,12 +381,16 @@ class SqliteConversationExecutionRepository:
         return self._conn.execute(
             """
             UPDATE turn_control_requests
-            SET status = ?, evidence_json = ?, accepted_at = ?, completed_at = ?,
-                failure_code = ?, updated_at = ?
+            SET status = ?,
+                evidence_json = CASE WHEN ? = '{}' THEN evidence_json ELSE ? END,
+                accepted_at = COALESCE(?, accepted_at),
+                completed_at = COALESCE(?, completed_at),
+                failure_code = COALESCE(?, failure_code), updated_at = ?
             WHERE control_request_id = ? AND status = ?
             """,
             (
                 status,
+                evidence_json,
                 evidence_json,
                 accepted_at,
                 completed_at,

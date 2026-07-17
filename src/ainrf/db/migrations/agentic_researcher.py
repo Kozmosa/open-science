@@ -3134,7 +3134,7 @@ def migration_028_conversation_execution_persistence(conn: sqlite3.Connection) -
               AND preview.source_task_id = NEW.source_task_id
               AND preview.source_revision = NEW.source_revision
               AND preview.transfer_mode = NEW.transfer_mode
-              AND NEW.confirmed_at <= preview.expires_at
+              AND julianday(NEW.confirmed_at) <= julianday(preview.expires_at)
               AND (preview.truncated = 0 OR NEW.truncation_acknowledged = 1))
         BEGIN SELECT RAISE(ABORT, 'Fork confirmation does not match its preview'); END;
         CREATE TRIGGER IF NOT EXISTS fork_transfer_identity_immutable
@@ -3263,8 +3263,8 @@ def migration_029_conversation_persistence_hardening(conn: sqlite3.Connection) -
         BEFORE INSERT ON fork_transfer_receipts
         WHEN NOT EXISTS (SELECT 1 FROM fork_preview_receipts AS preview
             WHERE preview.preview_id = NEW.preview_id
-              AND NEW.confirmed_at >= preview.created_at
-              AND NEW.confirmed_at <= preview.expires_at)
+              AND julianday(NEW.confirmed_at) >= julianday(preview.created_at)
+              AND julianday(NEW.confirmed_at) <= julianday(preview.expires_at))
         BEGIN SELECT RAISE(ABORT, 'Fork confirmation timestamp is outside preview validity'); END;
         """
     )
@@ -3302,5 +3302,154 @@ def migration_030_conversation_persistence_scope_sealing(
             WHERE authority.task_id = NEW.target_task_id
               AND authority.authority = 'conversation_v3')
         BEGIN SELECT RAISE(ABORT, 'Fork target requires conversation_v3 authority'); END;
+        """
+    )
+
+
+@registry.register(_DATABASE)
+def migration_031_conversation_application_state(conn: sqlite3.Connection) -> None:
+    """Persist v3 Task work status and deferred next-Turn admission state."""
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS conversation_task_states (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            work_status TEXT NOT NULL DEFAULT 'open'
+                CHECK (work_status IN ('open', 'completed', 'cancelled')),
+            revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TRIGGER IF NOT EXISTS conversation_task_state_v3_authority_guard_insert
+        BEFORE INSERT ON conversation_task_states
+        WHEN NOT EXISTS (
+            SELECT 1 FROM conversation_task_authorities AS authority
+            WHERE authority.task_id = NEW.task_id
+              AND authority.authority = 'conversation_v3'
+        )
+        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
+
+        CREATE TRIGGER IF NOT EXISTS conversation_task_state_identity_immutable
+        BEFORE UPDATE OF task_id, created_at ON conversation_task_states
+        BEGIN SELECT RAISE(ABORT, 'conversation Task state identity is immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS conversation_task_state_transition_guard
+        BEFORE UPDATE OF work_status ON conversation_task_states
+        WHEN NOT (
+            (OLD.work_status = 'open' AND NEW.work_status IN ('completed', 'cancelled'))
+            OR (OLD.work_status IN ('completed', 'cancelled') AND NEW.work_status = 'open')
+        )
+        BEGIN SELECT RAISE(ABORT, 'invalid conversation Task work-status transition'); END;
+
+        CREATE TRIGGER IF NOT EXISTS conversation_task_state_revision_guard
+        BEFORE UPDATE ON conversation_task_states
+        WHEN NEW.revision != OLD.revision + 1
+        BEGIN SELECT RAISE(ABORT, 'conversation Task revision must advance exactly once'); END;
+
+        CREATE TRIGGER IF NOT EXISTS conversation_task_state_delete_forbidden
+        BEFORE DELETE ON conversation_task_states
+        BEGIN SELECT RAISE(ABORT, 'conversation Task state cannot be deleted'); END;
+
+        CREATE TABLE IF NOT EXISTS conversation_submission_intents (
+            submission_id TEXT PRIMARY KEY
+                REFERENCES turn_submissions(submission_id) ON DELETE RESTRICT,
+            task_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('create', 'retry', 'next_turn')),
+            retry_of_turn_id TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (submission_id, task_id)
+                REFERENCES turn_submissions(submission_id, task_id) ON DELETE RESTRICT,
+            FOREIGN KEY (retry_of_turn_id, task_id)
+                REFERENCES task_turns(turn_id, task_id) ON DELETE RESTRICT,
+            CHECK (
+                (kind = 'retry' AND retry_of_turn_id IS NOT NULL)
+                OR (kind != 'retry' AND retry_of_turn_id IS NULL)
+            )
+        );
+
+        CREATE TRIGGER IF NOT EXISTS conversation_submission_intent_delete_forbidden
+        BEFORE DELETE ON conversation_submission_intents
+        BEGIN SELECT RAISE(ABORT, 'conversation submission intents are append-only'); END;
+
+        CREATE TRIGGER IF NOT EXISTS conversation_submission_intent_update_forbidden
+        BEFORE UPDATE ON conversation_submission_intents
+        BEGIN SELECT RAISE(ABORT, 'conversation submission intents are immutable'); END;
+
+        CREATE TABLE IF NOT EXISTS next_turn_submissions (
+            submission_id TEXT PRIMARY KEY
+                REFERENCES turn_submissions(submission_id) ON DELETE RESTRICT,
+            task_id TEXT NOT NULL,
+            blocking_turn_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('waiting', 'ready', 'cancelled')),
+            created_at TEXT NOT NULL,
+            promoted_at TEXT,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (submission_id, task_id)
+                REFERENCES turn_submissions(submission_id, task_id) ON DELETE RESTRICT,
+            FOREIGN KEY (blocking_turn_id, task_id)
+                REFERENCES task_turns(turn_id, task_id) ON DELETE RESTRICT,
+            CHECK (
+                (status = 'waiting' AND promoted_at IS NULL)
+                OR (status = 'ready' AND promoted_at IS NOT NULL)
+                OR (status = 'cancelled' AND promoted_at IS NULL)
+            )
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_next_turn_one_pending_task
+        ON next_turn_submissions(task_id)
+        WHERE status IN ('waiting', 'ready');
+
+        CREATE TRIGGER IF NOT EXISTS next_turn_active_blocker_guard_insert
+        BEFORE INSERT ON next_turn_submissions
+        WHEN NOT EXISTS (
+            SELECT 1 FROM task_turns AS turn
+            JOIN turn_submissions AS submission
+              ON submission.submission_id = NEW.submission_id
+             AND submission.task_id = NEW.task_id
+            JOIN conversation_submission_intents AS intent
+              ON intent.submission_id = NEW.submission_id
+             AND intent.task_id = NEW.task_id
+             AND intent.kind = 'next_turn'
+            WHERE turn.turn_id = NEW.blocking_turn_id
+              AND turn.task_id = NEW.task_id
+              AND turn.status = 'in_progress'
+              AND submission.status = 'queued'
+        )
+        BEGIN SELECT RAISE(ABORT, 'next-Turn submission requires its active blocking Turn'); END;
+
+        CREATE TRIGGER IF NOT EXISTS next_turn_transition_guard
+        BEFORE UPDATE OF status ON next_turn_submissions
+        WHEN OLD.status != 'waiting' OR NEW.status NOT IN ('ready', 'cancelled')
+        BEGIN SELECT RAISE(ABORT, 'invalid next-Turn submission transition'); END;
+
+        CREATE TRIGGER IF NOT EXISTS next_turn_ready_blocker_terminal_guard
+        BEFORE UPDATE OF status ON next_turn_submissions
+        WHEN NEW.status = 'ready' AND EXISTS (
+            SELECT 1 FROM task_turns AS turn
+            WHERE turn.turn_id = OLD.blocking_turn_id
+              AND turn.task_id = OLD.task_id
+              AND turn.status = 'in_progress'
+        )
+        BEGIN SELECT RAISE(ABORT, 'next-Turn blocker is still active'); END;
+
+        CREATE TRIGGER IF NOT EXISTS next_turn_waiting_submission_claim_guard
+        BEFORE UPDATE OF status ON turn_submissions
+        WHEN OLD.status = 'queued' AND NEW.status = 'claimed' AND EXISTS (
+            SELECT 1 FROM next_turn_submissions AS next_turn
+            WHERE next_turn.submission_id = OLD.submission_id
+              AND next_turn.task_id = OLD.task_id
+              AND next_turn.status = 'waiting'
+        )
+        BEGIN SELECT RAISE(ABORT, 'waiting next-Turn submission cannot be claimed'); END;
+
+        CREATE TRIGGER IF NOT EXISTS next_turn_identity_immutable
+        BEFORE UPDATE OF submission_id, task_id, blocking_turn_id, created_at
+        ON next_turn_submissions
+        BEGIN SELECT RAISE(ABORT, 'next-Turn submission identity is immutable'); END;
+
+        CREATE TRIGGER IF NOT EXISTS next_turn_delete_forbidden
+        BEFORE DELETE ON next_turn_submissions
+        BEGIN SELECT RAISE(ABORT, 'next-Turn submissions are append-only'); END;
         """
     )

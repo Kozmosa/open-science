@@ -42,6 +42,8 @@ from ainrf.domain.conversation_contracts import (
     translate_codex_turn_status,
 )
 
+pytestmark = [pytest.mark.unit]
+
 
 def test_task_work_status_allows_close_cancel_and_explicit_reopen() -> None:
     require_task_work_transition(TaskWorkStatus.OPEN, TaskWorkStatus.COMPLETED)
@@ -97,9 +99,7 @@ def test_submission_delivery_unknown_requires_explicit_reconciliation() -> None:
 
 
 def test_pre_delivery_submission_cancellation_does_not_create_a_turn_state() -> None:
-    require_submission_transition(
-        TurnSubmissionStatus.QUEUED, TurnSubmissionStatus.CANCELLED
-    )
+    require_submission_transition(TurnSubmissionStatus.QUEUED, TurnSubmissionStatus.CANCELLED)
     assert set(TurnStatus).isdisjoint(set(TurnSubmissionStatus))
 
 
@@ -147,9 +147,7 @@ def test_runtime_loss_can_invalidate_only_pending_approval() -> None:
 
 
 def test_single_active_turn_invariant_is_task_scoped() -> None:
-    require_single_active_turn(
-        (TurnStatus.COMPLETED, TurnStatus.IN_PROGRESS, TurnStatus.FAILED)
-    )
+    require_single_active_turn((TurnStatus.COMPLETED, TurnStatus.IN_PROGRESS, TurnStatus.FAILED))
 
     with pytest.raises(ConversationContractError) as caught:
         require_single_active_turn((TurnStatus.IN_PROGRESS, TurnStatus.IN_PROGRESS))
@@ -211,9 +209,7 @@ def test_receipt_contains_only_opaque_sanitized_native_evidence() -> None:
                 value="native-turn-001",
             ),
         ),
-        metadata=NativeReceiptMetadata(
-            attributes=(("protocol_version", "0.144.5"),)
-        ),
+        metadata=NativeReceiptMetadata(attributes=(("protocol_version", "0.144.5"),)),
     )
 
     assert receipt.native_references[0].reference_type == "turn"
@@ -228,14 +224,8 @@ def test_receipt_contains_only_opaque_sanitized_native_evidence() -> None:
 
 def test_codex_wire_values_translate_to_canonical_values() -> None:
     assert translate_codex_turn_status("inProgress") is TurnStatus.IN_PROGRESS
-    assert (
-        translate_codex_runtime_state("notLoaded")
-        is RuntimeProjectionState.NOT_LOADED
-    )
-    assert (
-        translate_codex_active_flag("waitingOnApproval")
-        is RuntimeActiveFlag.WAITING_ON_APPROVAL
-    )
+    assert translate_codex_runtime_state("notLoaded") is RuntimeProjectionState.NOT_LOADED
+    assert translate_codex_active_flag("waitingOnApproval") is RuntimeActiveFlag.WAITING_ON_APPROVAL
 
     with pytest.raises(ConversationContractError) as caught:
         translate_codex_turn_status("paused")

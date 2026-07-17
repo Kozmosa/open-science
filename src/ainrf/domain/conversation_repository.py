@@ -8,6 +8,8 @@ conversation bindings.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 
 
@@ -25,6 +27,51 @@ class SqliteConversationRepository:
             """,
             (task_id, created_at),
         )
+
+    def task_authority(self, task_id: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT authority FROM conversation_task_authorities WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()
+        return None if row is None else str(row["authority"])
+
+    def insert_task_state(self, *, task_id: str, created_at: str) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO conversation_task_states (
+                task_id, work_status, revision, created_at, updated_at
+            ) VALUES (?, 'open', 1, ?, ?)
+            """,
+            (task_id, created_at, created_at),
+        )
+
+    def task_state(self, task_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM conversation_task_states WHERE task_id = ?", (task_id,)
+        ).fetchone()
+
+    def task_harness_engine(self, task_id: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT harness_engine FROM tasks WHERE task_id = ?", (task_id,)
+        ).fetchone()
+        return None if row is None else str(row["harness_engine"])
+
+    def update_work_status(
+        self,
+        *,
+        task_id: str,
+        expected_status: str,
+        status: str,
+        updated_at: str,
+    ) -> int:
+        return self._conn.execute(
+            """
+            UPDATE conversation_task_states
+            SET work_status = ?, revision = revision + 1, updated_at = ?
+            WHERE task_id = ? AND work_status = ?
+            """,
+            (status, updated_at, task_id, expected_status),
+        ).rowcount
 
     def next_turn_seq(self, task_id: str) -> int:
         row = self._conn.execute(
@@ -214,6 +261,17 @@ class SqliteConversationRepository:
             "SELECT * FROM turn_items WHERE task_id = ? ORDER BY task_item_seq",
             (task_id,),
         ).fetchall()
+
+    def transcript_revision(self, task_id: str) -> str:
+        turns = [dict(row) for row in self.list_turns(task_id)]
+        items = [dict(row) for row in self.list_task_items(task_id)]
+        payload = json.dumps(
+            {"turns": turns, "items": items},
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        return hashlib.sha256(payload.encode()).hexdigest()
 
     def next_binding_seq(self, task_id: str) -> int:
         row = self._conn.execute(

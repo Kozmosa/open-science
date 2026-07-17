@@ -233,6 +233,13 @@ def test_delivery_unknown_converges_without_replay_or_failed_turn(tmp_path: Path
             )
             == 1
         )
+        submission = repository.submission_by_id("submission-1")
+        assert submission is not None
+        assert submission["claimed_at"] == _NOW
+        assert submission["delivering_at"] == _NOW
+        assert submission["finished_at"] == _LATER
+        assert submission["delivery_evidence_json"] == '{"accepted":false}'
+        assert submission["failure_code"] == "proven_not_accepted"
         with pytest.raises(sqlite3.IntegrityError, match="terminal Turn Submissions"):
             conn.execute(
                 "UPDATE turn_submissions SET updated_at = 'later' "
@@ -363,13 +370,18 @@ def test_controls_enforce_expected_turn_and_distinguish_interrupt_evidence(
                 control_request_id="interrupt-1",
                 expected_status="accepted",
                 status="completed",
-                evidence_json='{"terminal_evidence":true}',
-                accepted_at=_NOW,
+                evidence_json="{}",
                 completed_at=_LATER,
                 updated_at=_LATER,
             )
             == 1
         )
+        completed = conn.execute(
+            "SELECT evidence_json, accepted_at, completed_at FROM turn_control_requests "
+            "WHERE control_request_id = 'interrupt-1'"
+        ).fetchone()
+        assert completed is not None
+        assert tuple(completed) == ('{"rpc_ack":true}', _NOW, _LATER)
 
         with pytest.raises(sqlite3.IntegrityError, match="runtime scope is stale"):
             repository.insert_control_request(
@@ -509,12 +521,14 @@ def test_approval_resolution_revalidates_live_runtime_scope(
 def _preview(
     repository: SqliteConversationExecutionRepository,
     *,
+    preview_id: str = "preview-1",
+    preview_hash: str = "preview-hash",
     transfer_mode: str = "selected_turns",
     truncated: bool = True,
 ) -> None:
     repository.insert_fork_preview(
-        preview_id="preview-1",
-        preview_hash="preview-hash",
+        preview_id=preview_id,
+        preview_hash=preview_hash,
         source_task_id="task-1",
         source_revision="revision-1",
         source_engine_family="codex",
@@ -594,6 +608,26 @@ def test_fork_confirmation_binds_hash_revision_expiry_and_disclosure(tmp_path: P
                 confirmed_at="2026-07-18T01:00:01+00:00",
                 updated_at=_LATER,
             )
+        _preview(
+            repository,
+            preview_id="preview-mixed-offset",
+            preview_hash="preview-hash-mixed-offset",
+        )
+        repository.insert_fork_transfer(
+            transfer_id="transfer-mixed-offset",
+            preview_id="preview-mixed-offset",
+            preview_hash="preview-hash-mixed-offset",
+            source_task_id="task-1",
+            source_revision="revision-1",
+            transfer_mode="selected_turns",
+            truncation_acknowledged=True,
+            full_transcript_confirmed=False,
+            actor_user_id="user-1",
+            idempotency_key="fork-mixed-offset",
+            request_hash="fork-hash-mixed-offset",
+            confirmed_at="2026-07-18T01:30:00+01:00",
+            updated_at=_LATER,
+        )
         repository.insert_fork_transfer(
             transfer_id="transfer-1",
             preview_id="preview-1",

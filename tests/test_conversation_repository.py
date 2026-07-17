@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 
 from ainrf.db import connect, run_pending
+from ainrf.domain.conversation_execution_repository import (
+    SqliteConversationExecutionRepository,
+)
 from ainrf.domain.conversation_repository import SqliteConversationRepository
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
@@ -25,7 +28,7 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
             task_id, project_id, workspace_id, environment_id, researcher_type,
             harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
         ) VALUES ('task-1', 'project-legacy', 'workspace-legacy', 'environment-legacy',
-            'general', 'codex_app_server', 'queued', 'Conversation', 'test', ?, ?, 'user-1')
+            'general', 'codex-app-server', 'queued', 'Conversation', 'test', ?, ?, 'user-1')
         """,
         (_NOW, _NOW),
     )
@@ -35,7 +38,7 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
             task_id, project_id, workspace_id, environment_id, researcher_type,
             harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
         ) VALUES ('task-2', 'project-legacy', 'workspace-legacy', 'environment-legacy',
-            'general', 'codex_app_server', 'queued', 'Other', 'test', ?, ?, 'user-1')
+            'general', 'codex-app-server', 'queued', 'Other', 'test', ?, ?, 'user-1')
         """,
         (_NOW, _NOW),
     )
@@ -357,6 +360,209 @@ def test_legacy_task_rejects_conversation_v3_writes(tmp_path: Path) -> None:
         )
         with pytest.raises(sqlite3.IntegrityError, match="conversation_v3 authority"):
             _insert_binding(repository, task_id="task-legacy", binding_id="legacy-binding")
+
+
+def test_task_state_requires_v3_authority_and_guards_transitions(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationRepository(conn)
+        repository.insert_task_state(task_id="task-1", created_at=_NOW)
+        state = repository.task_state("task-1")
+        assert state is not None
+        assert (state["work_status"], state["revision"]) == ("open", 1)
+
+        assert (
+            repository.update_work_status(
+                task_id="task-1",
+                expected_status="open",
+                status="completed",
+                updated_at=_NOW,
+            )
+            == 1
+        )
+        assert (
+            repository.update_work_status(
+                task_id="task-1",
+                expected_status="completed",
+                status="open",
+                updated_at=_NOW,
+            )
+            == 1
+        )
+        state = repository.task_state("task-1")
+        assert state is not None and state["revision"] == 3
+
+        with pytest.raises(sqlite3.IntegrityError, match="invalid conversation Task"):
+            conn.execute(
+                "UPDATE conversation_task_states "
+                "SET work_status = 'open', revision = revision + 1 "
+                "WHERE task_id = 'task-1'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="advance exactly once"):
+            conn.execute(
+                "UPDATE conversation_task_states SET updated_at = 'later' WHERE task_id = 'task-1'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="identity is immutable"):
+            conn.execute(
+                "UPDATE conversation_task_states "
+                "SET created_at = 'later', revision = revision + 1 "
+                "WHERE task_id = 'task-1'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="cannot be deleted"):
+            conn.execute("DELETE FROM conversation_task_states WHERE task_id = 'task-1'")
+
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            ) VALUES ('task-legacy-state', 'project-legacy', 'workspace-legacy',
+                'environment-legacy', 'general', 'codex-app-server', 'queued',
+                'Legacy state', 'test', ?, ?, 'user-1')
+            """,
+            (_NOW, _NOW),
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="conversation_v3 authority"):
+            repository.insert_task_state(task_id="task-legacy-state", created_at=_NOW)
+
+
+def test_submission_intent_and_next_turn_guards_are_durable(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        conversations = SqliteConversationRepository(conn)
+        executions = SqliteConversationExecutionRepository(conn)
+        _insert_binding(conversations)
+        _insert_turn(conversations)
+
+        def insert_submission(submission_id: str, reserved_turn_id: str) -> None:
+            executions.insert_submission(
+                submission_id=submission_id,
+                task_id="task-1",
+                reserved_turn_id=reserved_turn_id,
+                actor_user_id="user-1",
+                idempotency_key=submission_id,
+                request_hash=f"hash-{submission_id}",
+                input_json='{"text":"next"}',
+                context_snapshot_ref=None,
+                created_at=_NOW,
+                updated_at=_NOW,
+            )
+
+        insert_submission("submission-next", "turn-next")
+        executions.insert_submission_intent(
+            submission_id="submission-next",
+            task_id="task-1",
+            kind="next_turn",
+            retry_of_turn_id=None,
+            created_at=_NOW,
+        )
+        executions.insert_next_turn(
+            submission_id="submission-next",
+            task_id="task-1",
+            blocking_turn_id="turn-1",
+            created_at=_NOW,
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="intents are immutable"):
+            conn.execute(
+                "UPDATE conversation_submission_intents SET kind = 'create' "
+                "WHERE submission_id = 'submission-next'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="intents are append-only"):
+            conn.execute(
+                "DELETE FROM conversation_submission_intents "
+                "WHERE submission_id = 'submission-next'"
+            )
+
+        insert_submission("submission-second", "turn-second")
+        executions.insert_submission_intent(
+            submission_id="submission-second",
+            task_id="task-1",
+            kind="create",
+            retry_of_turn_id=None,
+            created_at=_NOW,
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="active blocking Turn"):
+            executions.insert_next_turn(
+                submission_id="submission-second",
+                task_id="task-1",
+                blocking_turn_id="turn-1",
+                created_at=_NOW,
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="cannot be claimed"):
+            executions.transition_submission(
+                submission_id="submission-next",
+                expected_status="queued",
+                status="claimed",
+                claimed_at=_NOW,
+                updated_at=_NOW,
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="blocker is still active"):
+            executions.promote_next_turn(
+                submission_id="submission-next", promoted_at=_NOW, updated_at=_NOW
+            )
+
+        assert (
+            conversations.finish_turn(
+                turn_id="turn-1",
+                status="completed",
+                finished_at=_NOW,
+                updated_at=_NOW,
+            )
+            == 1
+        )
+        assert (
+            executions.promote_next_turn(
+                submission_id="submission-next", promoted_at=_NOW, updated_at=_NOW
+            )
+            == 1
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="invalid next-Turn"):
+            conn.execute(
+                "UPDATE next_turn_submissions SET status = 'waiting', promoted_at = NULL "
+                "WHERE submission_id = 'submission-next'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="identity is immutable"):
+            conn.execute(
+                "UPDATE next_turn_submissions SET blocking_turn_id = 'turn-next' "
+                "WHERE submission_id = 'submission-next'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            conn.execute(
+                "DELETE FROM next_turn_submissions WHERE submission_id = 'submission-next'"
+            )
+
+
+def test_retry_intent_requires_same_task_turn_lineage(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        conversations = SqliteConversationRepository(conn)
+        executions = SqliteConversationExecutionRepository(conn)
+        _insert_binding(conversations)
+        _insert_turn(conversations)
+        executions.insert_submission(
+            submission_id="submission-retry",
+            task_id="task-1",
+            reserved_turn_id="turn-retry",
+            actor_user_id="user-1",
+            idempotency_key="retry",
+            request_hash="retry-hash",
+            input_json='{"text":"retry"}',
+            context_snapshot_ref=None,
+            created_at=_NOW,
+            updated_at=_NOW,
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            executions.insert_submission_intent(
+                submission_id="submission-retry",
+                task_id="task-1",
+                kind="retry",
+                retry_of_turn_id=None,
+                created_at=_NOW,
+            )
+        executions.insert_submission_intent(
+            submission_id="submission-retry",
+            task_id="task-1",
+            kind="retry",
+            retry_of_turn_id="turn-1",
+            created_at=_NOW,
+        )
 
 
 def test_legacy_attempt_history_is_not_transformed(tmp_path: Path) -> None:
