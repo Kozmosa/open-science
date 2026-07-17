@@ -1,0 +1,331 @@
+"""Focused persistence tests for canonical conversation records."""
+
+from __future__ import annotations
+
+import sqlite3
+from contextlib import closing
+from pathlib import Path
+
+import pytest
+
+from ainrf.db import connect, run_pending
+from ainrf.domain.conversation_repository import SqliteConversationRepository
+
+pytestmark = [pytest.mark.unit, pytest.mark.db_race]
+
+_NOW = "2026-07-18T00:00:00+00:00"
+
+
+def _database(tmp_path: Path) -> sqlite3.Connection:
+    conn = connect(tmp_path / "conversation.sqlite3")
+    run_pending(conn, "agentic_researcher")
+    conn.execute(
+        """
+        INSERT INTO tasks (
+            task_id, project_id, workspace_id, environment_id, researcher_type,
+            harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+        ) VALUES ('task-1', 'project-legacy', 'workspace-legacy', 'environment-legacy',
+            'general', 'codex_app_server', 'queued', 'Conversation', 'test', ?, ?, 'user-1')
+        """,
+        (_NOW, _NOW),
+    )
+    conn.execute(
+        """
+        INSERT INTO tasks (
+            task_id, project_id, workspace_id, environment_id, researcher_type,
+            harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+        ) VALUES ('task-2', 'project-legacy', 'workspace-legacy', 'environment-legacy',
+            'general', 'codex_app_server', 'queued', 'Other', 'test', ?, ?, 'user-1')
+        """,
+        (_NOW, _NOW),
+    )
+    return conn
+
+
+def _insert_binding(
+    repository: SqliteConversationRepository,
+    *,
+    binding_id: str = "binding-1",
+    task_id: str = "task-1",
+    native_ref: str = "thread-1",
+) -> None:
+    repository.insert_binding(
+        binding_id=binding_id,
+        task_id=task_id,
+        binding_seq=repository.next_binding_seq(task_id),
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref=native_ref,
+        contract_version=1,
+        provider_profile_ref="profile-1",
+        provider_profile_version="1",
+        provider_profile_fingerprint="fingerprint-1",
+        provenance_json='{"source":"driver_receipt"}',
+        validation_evidence_json='{"confidence":"proven"}',
+        created_at=_NOW,
+        validated_at=_NOW,
+    )
+
+
+def _insert_turn(
+    repository: SqliteConversationRepository,
+    *,
+    turn_id: str = "turn-1",
+    task_id: str = "task-1",
+    binding_id: str = "binding-1",
+    retry_of_turn_id: str | None = None,
+    native_ref: str = "native-turn-1",
+) -> None:
+    repository.insert_turn(
+        turn_id=turn_id,
+        task_id=task_id,
+        turn_seq=repository.next_turn_seq(task_id),
+        status="in_progress",
+        retry_of_turn_id=retry_of_turn_id,
+        context_snapshot_ref=None,
+        binding_id=binding_id,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        contract_version=1,
+        provider_profile_ref="profile-1",
+        provider_profile_version="1",
+        provider_profile_fingerprint="fingerprint-1",
+        model="gpt-5.5",
+        native_turn_kind="turn",
+        native_turn_ref=native_ref,
+        accepted_at=_NOW,
+        started_at=_NOW,
+        updated_at=_NOW,
+    )
+
+
+def _insert_item(
+    repository: SqliteConversationRepository,
+    *,
+    item_id: str,
+    turn_id: str,
+    item_type: str,
+    actor: str,
+    payload: str,
+    native_item_id: str,
+    parent_item_id: str | None = None,
+    call_item_id: str | None = None,
+) -> None:
+    repository.insert_turn_item(
+        item_id=item_id,
+        task_id="task-1",
+        turn_id=turn_id,
+        task_item_seq=repository.next_task_item_seq("task-1"),
+        turn_item_seq=repository.next_turn_item_seq(turn_id),
+        envelope_type="conversation.item",
+        envelope_version=1,
+        item_type=item_type,
+        actor=actor,
+        payload_json=payload,
+        native_provenance_json='{"binding_id":"binding-1"}',
+        native_dedupe_scope="binding-1",
+        native_item_id=native_item_id,
+        parent_item_id=parent_item_id,
+        call_item_id=call_item_id,
+        occurred_at=_NOW,
+        ingested_at=_NOW,
+        persisted_at=_NOW,
+    )
+
+
+def test_repository_orders_turns_and_items_without_committing(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationRepository(conn)
+        _insert_binding(repository)
+        _insert_turn(repository)
+        _insert_item(
+            repository,
+            item_id="item-user",
+            turn_id="turn-1",
+            item_type="user_message",
+            actor="user",
+            payload='{"text":"hello"}',
+            native_item_id="native-item-1",
+        )
+        assert conn.in_transaction
+        binding = repository.active_binding("task-1")
+        turn = repository.active_turn("task-1")
+        assert binding is not None and binding["binding_id"] == "binding-1"
+        assert turn is not None and turn["turn_id"] == "turn-1"
+        assert repository.next_turn_seq("task-1") == 2
+        assert repository.next_task_item_seq("task-1") == 2
+        assert repository.next_turn_item_seq("turn-1") == 2
+
+        assert repository.finish_turn(
+            turn_id="turn-1",
+            status="completed",
+            finished_at=_NOW,
+            updated_at=_NOW,
+        ) == 1
+        with pytest.raises(sqlite3.IntegrityError, match="terminal Task Turns"):
+            conn.execute(
+                "UPDATE task_turns SET updated_at = 'later' WHERE turn_id = 'turn-1'"
+            )
+        _insert_turn(
+            repository,
+            turn_id="turn-2",
+            retry_of_turn_id="turn-1",
+            native_ref="native-turn-2",
+        )
+        _insert_item(
+            repository,
+            item_id="item-retry",
+            turn_id="turn-2",
+            item_type="user_message",
+            actor="user",
+            payload='{"text":"retry"}',
+            native_item_id="native-item-2",
+            parent_item_id="item-user",
+        )
+
+        assert [row["turn_id"] for row in repository.list_turns("task-1")] == [
+            "turn-1",
+            "turn-2",
+        ]
+        assert [row["item_id"] for row in repository.list_task_items("task-1")] == [
+            "item-user",
+            "item-retry",
+        ]
+
+
+def test_database_rejects_second_active_turn_and_cross_task_retry(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationRepository(conn)
+        _insert_binding(repository)
+        _insert_turn(repository)
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_turn(repository, turn_id="turn-duplicate", native_ref="native-turn-2")
+
+        assert repository.finish_turn(
+            turn_id="turn-1", status="failed", finished_at=_NOW, updated_at=_NOW,
+            failure_code="runtime_lost",
+        ) == 1
+        _insert_binding(
+            repository,
+            binding_id="binding-2",
+            task_id="task-2",
+            native_ref="thread-2",
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="same Task"):
+            _insert_turn(
+                repository,
+                turn_id="turn-cross-task",
+                task_id="task-2",
+                binding_id="binding-2",
+                retry_of_turn_id="turn-1",
+                native_ref="native-turn-3",
+            )
+
+
+def test_binding_lineage_is_append_only_and_superseded_one_way(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationRepository(conn)
+        _insert_binding(repository)
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_binding(
+                repository,
+                binding_id="binding-duplicate-active",
+                native_ref="thread-other",
+            )
+
+        assert repository.supersede_binding(
+            binding_id="binding-1",
+            superseded_at=_NOW,
+            validation_evidence_json='{"reason":"native_fork"}',
+        ) == 1
+        _insert_binding(repository, binding_id="binding-2", native_ref="thread-2")
+        active = repository.active_binding("task-1")
+        assert active is not None and active["binding_id"] == "binding-2"
+
+        with pytest.raises(sqlite3.IntegrityError, match="invalid engine"):
+            conn.execute(
+                "UPDATE engine_conversation_bindings SET status = 'active', superseded_at = NULL "
+                "WHERE binding_id = 'binding-1'"
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="identity is immutable"):
+            conn.execute(
+                "UPDATE engine_conversation_bindings SET native_conversation_ref = 'repointed' "
+                "WHERE binding_id = 'binding-2'"
+            )
+
+
+def test_turn_items_are_append_only_causal_and_provider_scoped(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationRepository(conn)
+        _insert_binding(repository)
+        _insert_turn(repository)
+        _insert_item(
+            repository,
+            item_id="tool-call",
+            turn_id="turn-1",
+            item_type="tool_call",
+            actor="agent",
+            payload='{"tool":"search"}',
+            native_item_id="native-call",
+        )
+        _insert_item(
+            repository,
+            item_id="tool-result",
+            turn_id="turn-1",
+            item_type="tool_result",
+            actor="tool",
+            payload='{"result":"ok"}',
+            native_item_id="native-result",
+            call_item_id="tool-call",
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_item(
+                repository,
+                item_id="duplicate-native",
+                turn_id="turn-1",
+                item_type="system_notice",
+                actor="system",
+                payload='{"notice":"duplicate"}',
+                native_item_id="native-result",
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            conn.execute(
+                "UPDATE turn_items SET payload_json = '{\"changed\":true}' "
+                "WHERE item_id = 'tool-result'"
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            repository.insert_turn_item(
+                item_id="bad-payload",
+                task_id="task-1",
+                turn_id="turn-1",
+                task_item_seq=3,
+                turn_item_seq=3,
+                envelope_type="conversation.item",
+                envelope_version=1,
+                item_type="agent_message",
+                actor="agent",
+                payload_json="not-json",
+                native_provenance_json="{}",
+                native_dedupe_scope=None,
+                native_item_id=None,
+                parent_item_id=None,
+                call_item_id=None,
+                occurred_at=None,
+                ingested_at=_NOW,
+                persisted_at=_NOW,
+            )
+
+
+def test_legacy_attempt_history_is_not_transformed(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        counts = {
+            table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("task_turns", "turn_items", "engine_conversation_bindings")
+        }
+    assert counts == {
+        "task_turns": 0,
+        "turn_items": 0,
+        "engine_conversation_bindings": 0,
+    }

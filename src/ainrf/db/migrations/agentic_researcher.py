@@ -2418,3 +2418,302 @@ def migration_026_overview_refresh_idempotency(conn: sqlite3.Connection) -> None
         ON overview_refresh_idempotency_requests(job_id);
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_027_conversation_domain_core(conn: sqlite3.Connection) -> None:
+    """Add canonical Turn, Item, and engine-conversation binding persistence."""
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS engine_conversation_bindings (
+            binding_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            binding_seq INTEGER NOT NULL CHECK (binding_seq > 0),
+            status TEXT NOT NULL CHECK (status IN ('active', 'superseded')),
+            engine_family TEXT NOT NULL CHECK (engine_family IN ('codex', 'claude')),
+            engine_driver TEXT NOT NULL CHECK (engine_driver IN (
+                'codex-app-server', 'claude-code', 'agent-sdk'
+            )),
+            native_conversation_kind TEXT NOT NULL
+                CHECK (trim(native_conversation_kind) != ''),
+            native_conversation_ref TEXT NOT NULL
+                CHECK (trim(native_conversation_ref) != ''),
+            contract_version INTEGER NOT NULL CHECK (contract_version > 0),
+            provider_profile_ref TEXT,
+            provider_profile_version TEXT,
+            provider_profile_fingerprint TEXT,
+            provenance_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (json_valid(provenance_json) AND json_type(provenance_json) = 'object'),
+            validation_evidence_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (
+                    json_valid(validation_evidence_json)
+                    AND json_type(validation_evidence_json) = 'object'
+                ),
+            created_at TEXT NOT NULL,
+            validated_at TEXT,
+            superseded_at TEXT,
+            UNIQUE (task_id, binding_seq),
+            UNIQUE (binding_id, task_id),
+            CHECK (
+                (status = 'active' AND superseded_at IS NULL)
+                OR (status = 'superseded' AND superseded_at IS NOT NULL)
+            ),
+            CHECK (
+                (engine_family = 'codex' AND engine_driver = 'codex-app-server')
+                OR (engine_family = 'claude'
+                    AND engine_driver IN ('claude-code', 'agent-sdk'))
+            )
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_engine_bindings_one_active_task
+        ON engine_conversation_bindings(task_id)
+        WHERE status = 'active';
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_engine_bindings_native_identity
+        ON engine_conversation_bindings(
+            engine_family,
+            engine_driver,
+            native_conversation_kind,
+            native_conversation_ref
+        );
+
+        CREATE TABLE IF NOT EXISTS task_turns (
+            turn_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT,
+            turn_seq INTEGER NOT NULL CHECK (turn_seq > 0),
+            status TEXT NOT NULL CHECK (status IN (
+                'in_progress', 'completed', 'interrupted', 'failed'
+            )),
+            retry_of_turn_id TEXT REFERENCES task_turns(turn_id) ON DELETE RESTRICT,
+            context_snapshot_ref TEXT,
+            binding_id TEXT,
+            engine_family TEXT NOT NULL CHECK (engine_family IN ('codex', 'claude')),
+            engine_driver TEXT NOT NULL CHECK (engine_driver IN (
+                'codex-app-server', 'claude-code', 'agent-sdk'
+            )),
+            contract_version INTEGER NOT NULL CHECK (contract_version > 0),
+            provider_profile_ref TEXT,
+            provider_profile_version TEXT,
+            provider_profile_fingerprint TEXT,
+            model TEXT,
+            native_turn_kind TEXT,
+            native_turn_ref TEXT,
+            accepted_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            updated_at TEXT NOT NULL,
+            failure_code TEXT,
+            failure_metadata_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (
+                    json_valid(failure_metadata_json)
+                    AND json_type(failure_metadata_json) = 'object'
+                ),
+            UNIQUE (task_id, turn_seq),
+            UNIQUE (turn_id, task_id),
+            FOREIGN KEY (binding_id, task_id)
+                REFERENCES engine_conversation_bindings(binding_id, task_id)
+                ON DELETE RESTRICT,
+            CHECK (retry_of_turn_id IS NULL OR retry_of_turn_id != turn_id),
+            CHECK (
+                (native_turn_kind IS NULL AND native_turn_ref IS NULL)
+                OR (native_turn_kind IS NOT NULL AND trim(native_turn_kind) != ''
+                    AND native_turn_ref IS NOT NULL AND trim(native_turn_ref) != '')
+            ),
+            CHECK (
+                (status = 'in_progress' AND finished_at IS NULL AND failure_code IS NULL)
+                OR (status IN ('completed', 'interrupted')
+                    AND finished_at IS NOT NULL AND failure_code IS NULL)
+                OR (status = 'failed' AND finished_at IS NOT NULL
+                    AND failure_code IS NOT NULL AND trim(failure_code) != '')
+            ),
+            CHECK (
+                (engine_family = 'codex' AND engine_driver = 'codex-app-server')
+                OR (engine_family = 'claude'
+                    AND engine_driver IN ('claude-code', 'agent-sdk'))
+            )
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_task_turns_one_active_task
+        ON task_turns(task_id)
+        WHERE status = 'in_progress';
+
+        CREATE INDEX IF NOT EXISTS idx_task_turns_task_order
+        ON task_turns(task_id, turn_seq);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_task_turns_native_identity
+        ON task_turns(binding_id, native_turn_kind, native_turn_ref)
+        WHERE binding_id IS NOT NULL AND native_turn_ref IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS turn_items (
+            item_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            turn_id TEXT NOT NULL,
+            task_item_seq INTEGER NOT NULL CHECK (task_item_seq > 0),
+            turn_item_seq INTEGER NOT NULL CHECK (turn_item_seq > 0),
+            envelope_type TEXT NOT NULL CHECK (trim(envelope_type) != ''),
+            envelope_version INTEGER NOT NULL CHECK (envelope_version > 0),
+            item_type TEXT NOT NULL CHECK (item_type IN (
+                'user_message', 'agent_message', 'reasoning_summary',
+                'command_execution', 'file_change', 'tool_call', 'tool_result',
+                'approval_request', 'approval_result', 'system_notice',
+                'plan_update', 'error'
+            )),
+            actor TEXT NOT NULL CHECK (actor IN ('user', 'agent', 'tool', 'system')),
+            payload_json TEXT NOT NULL
+                CHECK (json_valid(payload_json) AND json_type(payload_json) = 'object'),
+            native_provenance_json TEXT NOT NULL DEFAULT '{}'
+                CHECK (
+                    json_valid(native_provenance_json)
+                    AND json_type(native_provenance_json) = 'object'
+                ),
+            native_dedupe_scope TEXT,
+            native_item_id TEXT,
+            parent_item_id TEXT REFERENCES turn_items(item_id) ON DELETE RESTRICT,
+            call_item_id TEXT REFERENCES turn_items(item_id) ON DELETE RESTRICT,
+            occurred_at TEXT,
+            ingested_at TEXT NOT NULL,
+            persisted_at TEXT NOT NULL,
+            UNIQUE (task_id, task_item_seq),
+            UNIQUE (turn_id, turn_item_seq),
+            UNIQUE (item_id, task_id),
+            FOREIGN KEY (turn_id, task_id)
+                REFERENCES task_turns(turn_id, task_id) ON DELETE RESTRICT,
+            CHECK (parent_item_id IS NULL OR parent_item_id != item_id),
+            CHECK (call_item_id IS NULL OR call_item_id != item_id),
+            CHECK (
+                (native_dedupe_scope IS NULL AND native_item_id IS NULL)
+                OR (native_dedupe_scope IS NOT NULL AND trim(native_dedupe_scope) != ''
+                    AND native_item_id IS NOT NULL AND trim(native_item_id) != '')
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_turn_items_turn_order
+        ON turn_items(turn_id, turn_item_seq);
+
+        CREATE INDEX IF NOT EXISTS idx_turn_items_task_order
+        ON turn_items(task_id, task_item_seq);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_turn_items_native_dedupe
+        ON turn_items(native_dedupe_scope, native_item_id)
+        WHERE native_dedupe_scope IS NOT NULL;
+
+        CREATE TRIGGER IF NOT EXISTS engine_binding_identity_immutable
+        BEFORE UPDATE OF binding_id, task_id, binding_seq, engine_family, engine_driver,
+                         native_conversation_kind, native_conversation_ref, contract_version,
+                         provider_profile_ref, provider_profile_version,
+                         provider_profile_fingerprint, provenance_json, created_at
+        ON engine_conversation_bindings
+        BEGIN
+            SELECT RAISE(ABORT, 'engine conversation binding identity is immutable');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS engine_binding_transition_guard
+        BEFORE UPDATE OF status, validated_at, superseded_at, validation_evidence_json
+        ON engine_conversation_bindings
+        WHEN OLD.status != 'active' OR NEW.status != 'superseded'
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid engine conversation binding transition');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS engine_binding_delete_forbidden
+        BEFORE DELETE ON engine_conversation_bindings
+        BEGIN
+            SELECT RAISE(ABORT, 'engine conversation bindings are append-only');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS task_turn_retry_task_guard_insert
+        BEFORE INSERT ON task_turns
+        WHEN NEW.retry_of_turn_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM task_turns AS prior
+            WHERE prior.turn_id = NEW.retry_of_turn_id
+              AND prior.task_id = NEW.task_id
+              AND prior.turn_seq < NEW.turn_seq
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'retry Turn must reference an earlier Turn in the same Task');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS task_turn_binding_lineage_guard_insert
+        BEFORE INSERT ON task_turns
+        WHEN NEW.binding_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM engine_conversation_bindings AS binding
+            WHERE binding.binding_id = NEW.binding_id
+              AND binding.task_id = NEW.task_id
+              AND binding.engine_family = NEW.engine_family
+              AND binding.engine_driver = NEW.engine_driver
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'Turn binding must match Task and engine lineage');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS task_turn_identity_immutable
+        BEFORE UPDATE OF turn_id, task_id, turn_seq, retry_of_turn_id,
+                         context_snapshot_ref, binding_id, engine_family, engine_driver,
+                         contract_version, provider_profile_ref, provider_profile_version,
+                         provider_profile_fingerprint, model, native_turn_kind,
+                         native_turn_ref, accepted_at
+        ON task_turns
+        BEGIN
+            SELECT RAISE(ABORT, 'Task Turn identity is immutable');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS task_turn_transition_guard
+        BEFORE UPDATE OF status ON task_turns
+        WHEN OLD.status != 'in_progress'
+          OR NEW.status NOT IN ('completed', 'interrupted', 'failed')
+        BEGIN
+            SELECT RAISE(ABORT, 'invalid Task Turn state transition');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS task_turn_terminal_immutable
+        BEFORE UPDATE ON task_turns
+        WHEN OLD.status IN ('completed', 'interrupted', 'failed')
+        BEGIN
+            SELECT RAISE(ABORT, 'terminal Task Turns are immutable');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS task_turn_delete_forbidden
+        BEFORE DELETE ON task_turns
+        BEGIN
+            SELECT RAISE(ABORT, 'Task Turns are append-only');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS turn_item_parent_task_guard_insert
+        BEFORE INSERT ON turn_items
+        WHEN NEW.parent_item_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM turn_items AS parent
+            WHERE parent.item_id = NEW.parent_item_id
+              AND parent.task_id = NEW.task_id
+              AND parent.task_item_seq < NEW.task_item_seq
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'parent Item must be an earlier Item in the same Task');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS turn_item_call_turn_guard_insert
+        BEFORE INSERT ON turn_items
+        WHEN NEW.call_item_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM turn_items AS call_item
+            WHERE call_item.item_id = NEW.call_item_id
+              AND call_item.turn_id = NEW.turn_id
+              AND call_item.turn_item_seq < NEW.turn_item_seq
+              AND call_item.item_type = 'tool_call'
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'result Item must reference an earlier tool call in the same Turn');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS turn_item_update_forbidden
+        BEFORE UPDATE ON turn_items
+        BEGIN
+            SELECT RAISE(ABORT, 'Turn Items are append-only');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS turn_item_delete_forbidden
+        BEFORE DELETE ON turn_items
+        BEGIN
+            SELECT RAISE(ABORT, 'Turn Items are append-only');
+        END;
+        """
+    )

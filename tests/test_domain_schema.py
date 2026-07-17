@@ -50,6 +50,9 @@ def test_domain_schema_has_core_control_tables(tmp_path: Path) -> None:
         "workspaces",
         "project_workspace_links",
         "domain_cutover_state",
+        "task_turns",
+        "turn_items",
+        "engine_conversation_bindings",
     } <= tables
 
 
