@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Input } from '@design-system/primitives';
-import { StatusDot } from '@design-system/primitives';
+import { Input, StatusDot } from '@design-system';
 import { useT } from '@/shared/i18n';
+import { taskStatusLabel } from '@features/tasks/utils/status';
 import type { TaskSummary } from '@/shared/types';
 
 interface Props {
@@ -64,7 +64,7 @@ export function SessionList({ tasks, selectedId, onSelect, loading }: Props) {
                   <span className="truncate font-medium text-[var(--text)]" title={task.title}>{task.title}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]">
-                  <span>{t(`pages.tasks.status.${task.status}`)}</span>
+                  <span>{taskStatusLabel(t, task.status)}</span>
                   <span>{task.harness_engine ?? task.task_profile ?? 'agent'}</span>
                   <span>{t('pages.sessions.outputCount', { count: task.latest_output_seq ?? 0 })}</span>
                 </div>

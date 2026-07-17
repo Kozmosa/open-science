@@ -1,186 +1,188 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import WorkspacesPage from '../../src/pages/WorkspacesPage';
 import { renderWithProviders } from '@/shared/test/render';
+import { getEnvironments, unregisterWorkspace, updateWorkspace } from '@/shared/api';
 import {
-  createWorkspace,
-  deleteWorkspace,
-  getWorkspaces,
-  updateWorkspace,
-} from '@/shared/api';
-import type { WorkspaceListResponse, WorkspaceRecord } from '@/shared/types';
+  attachDomainWorkspace,
+  createDomainWorkspace,
+  getDomainProjects,
+  getDomainWorkspaces,
+  setDomainPrimaryWorkspace,
+  type DomainWorkspaceProjection,
+} from '@features/domain';
 
-vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
-  createWorkspace: vi.fn(),
-  deleteWorkspace: vi.fn(),
-  getWorkspaces: vi.fn(),
-  updateWorkspace: vi.fn(),
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api');
+  return {
+    ...actual,
+    getEnvironments: vi.fn(),
+    unregisterWorkspace: vi.fn(),
+    updateWorkspace: vi.fn(),
+  };
+});
+
+vi.mock('@features/domain', async () => {
+  const actual = await vi.importActual<typeof import('@features/domain')>('@features/domain');
+  return {
+    ...actual,
+    attachDomainWorkspace: vi.fn(),
+    createDomainWorkspace: vi.fn(),
+    getDomainProjects: vi.fn(),
+    getDomainWorkspaces: vi.fn(),
+    setDomainPrimaryWorkspace: vi.fn(),
+  };
+});
+
+vi.mock('@features/auth', async () => {
+  const actual = await vi.importActual<typeof import('@features/auth')>('@features/auth');
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: { id: 'user-1', username: 'alice', display_name: 'Alice', role: 'user', status: 'active' },
+      loading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+    }),
+  };
+});
+
+vi.mock('@features/tasks/components/TaskCreateFlow', () => ({
+  default: () => null,
 }));
 
-vi.mock('../../src/components', () => ({
-  useEnvironmentSelection: () => ({
-    selectedEnvironment: null,
-    selectedEnvironmentId: null,
-    selectedReference: null,
-    isLoading: false,
-    loadError: null,
-    environments: [],
-    onSelectEnvironment: vi.fn(),
-  }),
-}));
-
-const mockGetWorkspaces = vi.mocked(getWorkspaces);
-const mockCreateWorkspace = vi.mocked(createWorkspace);
-const mockUpdateWorkspace = vi.mocked(updateWorkspace);
-const mockDeleteWorkspace = vi.mocked(deleteWorkspace);
-
-const defaultWorkspace: WorkspaceRecord = {
-  workspace_id: 'workspace-default',
-  project_id: 'default',
-  label: 'Repository Default',
-  description: 'Seed workspace bound to the current repository checkout.',
-  default_workdir: '/workspace/project',
-  workspace_prompt: 'Default workspace prompt',
-  created_at: '2026-04-27T00:00:00Z',
-  updated_at: '2026-04-27T00:00:00Z',
-};
-
-const paperWorkspace: WorkspaceRecord = {
-  workspace_id: 'workspace-paper',
-  project_id: 'default',
+const workspace: DomainWorkspaceProjection = {
+  workspace_id: 'workspace-1',
   label: 'Paper Experiments',
-  description: 'Runs for paper figures',
-  default_workdir: '/workspace/paper',
-  workspace_prompt: 'Focus on reproducible paper experiments.',
-  created_at: '2026-04-27T00:01:00Z',
-  updated_at: '2026-04-27T00:01:00Z',
+  description: 'Reproducible figures',
+  canonical_path: '/srv/papers/experiment',
+  workspace_context: 'Keep figure generation deterministic.',
+  status: 'active',
+  owner_user_id: 'user-1',
+  created_at: '2026-07-14T00:00:00Z',
+  updated_at: '2026-07-14T01:00:00Z',
+  recent_activity_at: '2026-07-14T01:00:00Z',
+  environment: {
+    environment_id: 'env-1',
+    alias: 'gpu-lab',
+    display_name: 'GPU Lab',
+    status: 'active',
+  },
+  project_links: [{
+    project_id: 'project-1',
+    project_name: 'Paper Project',
+    project_status: 'active',
+    current_user_role: 'owner',
+    link_status: 'active',
+    is_primary: true,
+    can_execute: false,
+    cannot_execute_reason: 'environment_grant_missing',
+  }],
+  task_count: 8,
+  active_task_count: 2,
+  can_execute: false,
+  cannot_execute_reason: 'environment_grant_missing',
+  can_manage_registry: true,
+  git_status: {
+    state: 'available',
+    branch: 'feat/paper',
+    is_dirty: true,
+    observed_at: '2026-07-14T01:00:00Z',
+  },
 };
 
-function workspaceList(items: WorkspaceRecord[]): WorkspaceListResponse {
-  return { items };
-}
+const mockGetDomainWorkspaces = vi.mocked(getDomainWorkspaces);
+const mockGetDomainProjects = vi.mocked(getDomainProjects);
+const mockGetEnvironments = vi.mocked(getEnvironments);
+const mockCreateDomainWorkspace = vi.mocked(createDomainWorkspace);
+const mockAttachDomainWorkspace = vi.mocked(attachDomainWorkspace);
+const mockSetDomainPrimaryWorkspace = vi.mocked(setDomainPrimaryWorkspace);
+const mockUpdateWorkspace = vi.mocked(updateWorkspace);
+const mockUnregisterWorkspace = vi.mocked(unregisterWorkspace);
 
 beforeEach(() => {
-  mockGetWorkspaces.mockReset();
-  mockCreateWorkspace.mockReset();
-  mockUpdateWorkspace.mockReset();
-  mockDeleteWorkspace.mockReset();
-  mockGetWorkspaces.mockResolvedValue(workspaceList([defaultWorkspace, paperWorkspace]));
+  vi.clearAllMocks();
+  mockGetDomainWorkspaces.mockResolvedValue({ items: [workspace] });
+  mockGetDomainProjects.mockResolvedValue({ items: [{
+    project_id: 'project-1',
+    name: 'Paper Project',
+    description: null,
+    status: 'active',
+    is_default: false,
+    owner_user_id: 'user-1',
+    current_user_role: 'owner',
+    created_at: '2026-07-14T00:00:00Z',
+    updated_at: '2026-07-14T00:00:00Z',
+    recent_activity_at: '2026-07-14T00:00:00Z',
+    workspace_count: 1,
+    executable_workspace_count: 0,
+    task_count: 8,
+    active_task_count: 2,
+    running_task_count: 1,
+    primary_workspace: null,
+    attention_required: true,
+    attention_reasons: ['environment_grant_missing'],
+    permissions: { can_edit: true, can_publish: true, can_manage_members: true, can_archive: true, can_unarchive: false, can_create_task: false },
+  }] });
+  mockGetEnvironments.mockResolvedValue({ items: [{
+    id: 'env-1', alias: 'gpu-lab', display_name: 'GPU Lab', description: null, is_seed: false,
+    tags: [], host: 'gpu.example', port: 22, user: 'alice', auth_kind: 'agent', identity_file: null,
+    proxy_jump: null, proxy_command: null, ssh_options: {}, default_workdir: '/srv', preferred_python: null,
+    preferred_env_manager: null, preferred_runtime_notes: null, task_harness_profile: null,
+    created_at: null, updated_at: null, latest_detection: null,
+  }] });
 });
 
 describe('WorkspacesPage', () => {
-  it('renders the workspace list in the sidebar', async () => {
-    const { container } = renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
-
-    expect(await screen.findByRole('button', { name: 'Repository Default' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Paper Experiments' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New workspace' })).toBeInTheDocument();
-    expect(container.firstElementChild).toHaveClass('p-3');
-    expect(container.firstElementChild?.querySelector('aside')).toHaveClass('bg-[var(--surface)]');
-    expect(container.firstElementChild?.querySelector('main')).toHaveClass('bg-[var(--surface)]');
-  });
-
-  it('creates a workspace from the form', async () => {
-    const createdWorkspace: WorkspaceRecord = {
-      ...paperWorkspace,
-      workspace_id: 'workspace-created',
-      label: 'Created Workspace',
-    };
-    mockCreateWorkspace.mockResolvedValue(createdWorkspace);
-    mockGetWorkspaces
-      .mockResolvedValueOnce(workspaceList([defaultWorkspace]))
-      .mockResolvedValueOnce(workspaceList([defaultWorkspace, createdWorkspace]));
-
+  it('renders the domain projection and distinguishes linked from executable', async () => {
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'New workspace' }));
-    const workdirInput = screen.getByLabelText('Default workdir') as HTMLInputElement;
-    expect(workdirInput.placeholder).toBe(defaultWorkspace.default_workdir);
-    const labelInput = screen.getByLabelText('Workspace name');
-    fireEvent.change(labelInput, {
-      target: { value: 'Created Workspace' },
-    });
-    fireEvent.change(screen.getByLabelText('Description'), {
-      target: { value: 'Created from test' },
-    });
-    fireEvent.change(screen.getByLabelText('Default workdir'), {
-      target: { value: '/workspace/created' },
-    });
-    fireEvent.change(screen.getByLabelText('Workspace prompt'), {
-      target: { value: 'Created prompt' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-
-    await waitFor(() =>
-      expect(mockCreateWorkspace.mock.calls[0]?.[0]).toEqual({
-        label: 'Created Workspace',
-        description: 'Created from test',
-        default_workdir: '/workspace/created',
-        workspace_prompt: 'Created prompt',
-      })
-    );
+    expect(await screen.findByRole('heading', { name: 'Paper Experiments' })).toBeInTheDocument();
+    expect(screen.getByText('GPU Lab (gpu-lab)')).toBeInTheDocument();
+    expect(screen.getAllByText(/active Environment grant is required/i)).toHaveLength(2);
+    expect(screen.queryByText(/environment_grant_missing/)).not.toBeInTheDocument();
+    expect(screen.getByText('feat/paper · dirty')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled();
   });
 
-  it('prevents creating a workspace without default_workdir', async () => {
-    mockGetWorkspaces.mockResolvedValueOnce(workspaceList([defaultWorkspace]));
-
+  it('registers Environment, canonical path, context, Project attachment and Primary in order', async () => {
+    const user = userEvent.setup();
+    mockCreateDomainWorkspace.mockResolvedValue({ workspace_id: 'workspace-new' });
+    mockUpdateWorkspace.mockResolvedValue({} as never);
+    mockAttachDomainWorkspace.mockResolvedValue({});
+    mockSetDomainPrimaryWorkspace.mockResolvedValue({});
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'New workspace' }));
-    fireEvent.change(screen.getByLabelText('Workspace name'), {
-      target: { value: 'No Workdir' },
-    });
-    fireEvent.change(screen.getByLabelText('Workspace prompt'), {
-      target: { value: 'Prompt' },
-    });
+    await user.click(await screen.findByRole('button', { name: 'Register workspace' }));
+    await user.selectOptions(screen.getByLabelText('Environment'), 'env-1');
+    await user.type(screen.getByLabelText('Canonical path'), '/srv/papers/new');
+    await user.type(screen.getByLabelText('Workspace name'), 'New Workspace');
+    await user.type(screen.getByLabelText('Workspace context'), 'Use the locked dataset.');
+    await user.selectOptions(screen.getByLabelText('Optional initial Project'), 'project-1');
+    await user.click(screen.getByLabelText('Make this the Project Primary Workspace'));
+    await user.click(screen.getAllByRole('button', { name: 'Register workspace' }).at(-1)!);
 
-    const workdirInput = screen.getByLabelText('Default workdir') as HTMLInputElement;
-    expect(workdirInput.required).toBe(true);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
-
-    await waitFor(() => {
-      expect(mockCreateWorkspace).not.toHaveBeenCalled();
-    });
+    await waitFor(() => expect(mockCreateDomainWorkspace).toHaveBeenCalledWith({
+      environment_id: 'env-1',
+      canonical_path: '/srv/papers/new',
+      label: 'New Workspace',
+    }, expect.stringContaining('workspace.register')));
+    expect(mockUpdateWorkspace).toHaveBeenCalledWith('workspace-new', { workspace_prompt: 'Use the locked dataset.' }, expect.any(String));
+    expect(mockAttachDomainWorkspace).toHaveBeenCalledWith('project-1', 'workspace-new', expect.any(String));
+    expect(mockSetDomainPrimaryWorkspace).toHaveBeenCalledWith('project-1', 'workspace-new', expect.any(String));
   });
 
-  it('updates the selected workspace', async () => {
-    mockUpdateWorkspace.mockResolvedValue({
-      ...paperWorkspace,
-      label: 'Updated Workspace',
-      description: 'Updated description',
-    });
-
+  it('states that unregister never deletes the disk directory and uses an idempotency key', async () => {
+    const user = userEvent.setup();
+    mockUnregisterWorkspace.mockResolvedValue(undefined);
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Paper Experiments' }));
-    fireEvent.change(screen.getByLabelText('Workspace name'), {
-      target: { value: 'Updated Workspace' },
-    });
-    fireEvent.change(screen.getByLabelText('Description'), {
-      target: { value: 'Updated description' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save workspace' }));
+    await user.click(await screen.findByRole('button', { name: 'Unregister' }));
+    expect(screen.getByText(/does not delete the directory or any files on disk/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Unregister' }));
 
-    await waitFor(() => {
-      expect(mockUpdateWorkspace.mock.calls[0]?.[0]).toBe('workspace-paper');
-      expect(mockUpdateWorkspace.mock.calls[0]?.[1]).toEqual({
-        label: 'Updated Workspace',
-        description: 'Updated description',
-        default_workdir: '/workspace/paper',
-        workspace_prompt: 'Focus on reproducible paper experiments.',
-      });
-    });
-  });
-
-  it('deletes a non-default workspace after confirmation', async () => {
-    mockDeleteWorkspace.mockResolvedValue(undefined);
-    renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Paper Experiments' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete workspace' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
-
-    await waitFor(() => expect(mockDeleteWorkspace.mock.calls[0]?.[0]).toBe('workspace-paper'));
+    await waitFor(() => expect(mockUnregisterWorkspace).toHaveBeenCalledWith('workspace-1', expect.stringMatching(/^workspace\.unregister:/)));
   });
 });

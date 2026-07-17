@@ -122,6 +122,7 @@ const components = {
       },
       modal: {
         close: '关闭',
+        dialog: '对话框',
       },
       skills: {
         ungrouped: '未分组',

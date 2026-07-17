@@ -141,7 +141,11 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         dispatch = cast(dict[str, object], created_payload["dispatch"])
         task_id = str(task["task_id"])
         assert created_payload["task_id"] == task_id
+        assert task["archived_at"] is None
+        assert task["archive_reason"] is None
+        assert isinstance(task["project_context_version_id"], str)
         assert attempt["task_id"] == task_id
+        assert attempt["context_version_id"] == task["project_context_version_id"]
         assert dispatch["attempt_id"] == attempt["attempt_id"]
         assert dispatch["status"] == "pending"
 
@@ -163,6 +167,7 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         assert attempts.status_code == 200
         attempt_items = cast(list[dict[str, object]], _body(attempts)["items"])
         assert [item["attempt_id"] for item in attempt_items] == [attempt["attempt_id"]]
+        assert attempt_items[0]["context_version_id"] == task["project_context_version_id"]
         assert (
             cast(dict[str, object], attempt_items[0]["dispatch"])["dispatch_id"]
             == dispatch["dispatch_id"]
@@ -180,10 +185,43 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         assert cast(dict[str, object], retried_payload["task"])["task_id"] == task_id
         retried_attempt = cast(dict[str, object], retried_payload["attempt"])
         assert retried_attempt["attempt_seq"] == 2
+        assert retried_attempt["context_version_id"] == task["project_context_version_id"]
         assert (
             cast(dict[str, object], retried_payload["dispatch"])["attempt_id"]
             == retried_attempt["attempt_id"]
         )
+
+        forked = await client.post(
+            f"/tasks/{task_id}/fork?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-v2-fork"},
+            json={
+                "workspace_id": workspace_id,
+                "project_id": project_id,
+                "prompt": "Fork the durable Task contract",
+            },
+        )
+        assert forked.status_code == 201
+        forked_task_id = str(_mapping(_body(forked)["task"])["task_id"])
+        assert forked_task_id != task_id
+
+        relationships = await client.get(f"/projects/{project_id}/task-edges?api_key={_API_KEY}")
+        assert relationships.status_code == 200
+        relationship_items = cast(list[dict[str, object]], _body(relationships)["items"])
+        assert any(
+            item["source_task_id"] == forked_task_id
+            and item["target_task_id"] == task_id
+            and item["relationship_type"] == "derived_from"
+            for item in relationship_items
+        )
+
+        archived = await client.post(
+            f"/tasks/{forked_task_id}/archive?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-v2-archive-fork"},
+        )
+        assert archived.status_code == 200
+        archived_task = _body(archived)
+        assert isinstance(archived_task["archived_at"], str)
+        assert archived_task["archive_reason"] == "user_archived"
 
 
 @pytest.mark.anyio

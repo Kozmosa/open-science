@@ -32,6 +32,16 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 - Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
 - Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
 
+### Default ports and coexistence
+
+| Environment | Browser/Web entry | Backend | Prometheus | Grafana | Binding contract |
+|-------------|-------------------|---------|------------|---------|------------------|
+| Production CPU | `0.0.0.0:8192` | `127.0.0.1:18000` | `127.0.0.1:9091` | `127.0.0.1:3000` | Only nginx is the routine external entry |
+| Staging | `127.0.0.1:7192` | `127.0.0.1:17000` | `127.0.0.1:9092` | `127.0.0.1:2300` | Loopback-only unless an operator adds a separate authenticated tunnel/proxy |
+| Worktree development | derived `127.0.0.1:41000-43999` | derived adjacent port | n/a | n/a | Three-port slot: frontend, API `+1`, CDP `+2` |
+
+The default ranges do not overlap, so production, staging, and worktree development normally coexist. A rare hash-slot collision between worktrees fails closed and requires an explicit dev-port override; the tool never kills the existing listener. Do not reuse `8192/18000` or `7192/17000` for local development. Direct production monitoring ports are loopback-only; browser access goes through the authenticated `:8192/grafana` and `:8192/prometheus` paths. Production SSH uses `2222`; staging reserves `2223` only when its normally-disabled SSH/runtime path is explicitly enabled. Optional Litefuse overlays use `13000` (production) and `13001` (staging).
+
 ### Monitoring & Alerting (production default)
 
 The CPU-only deployment includes Prometheus + Grafana with pre-configured dashboards and alert rules:
@@ -89,9 +99,8 @@ bash deploy/redeploy-backend.sh
 # Frontend-only changes — rebuilds the target-specific host bundle, then restarts nginx.
 bash deploy/redeploy-frontend.sh
 
-# Staging targets (same scripts, different target):
-bash deploy/redeploy-backend.sh --target staging
-bash deploy/redeploy-frontend.sh --target staging
+# Staging is managed only through its isolated lifecycle preflight:
+OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh up
 
 # Bare fallback (no commit stamping; backend version shows "Unavailable"):
 # docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
@@ -104,6 +113,12 @@ host). Because the two build at different times, they may differ — the
 Settings page shows both and flags a mismatch.
 
 **Why host build is required**: nginx serves frontend from a **host-mounted** target directory, not from the container's built-in `/opt/ainrf/frontend/dist`. Production uses `frontend/dist/production`, staging uses `frontend/dist/staging`, and GPU deployment uses `frontend/dist/gpu`; rebuilding one environment therefore cannot replace another environment's assets. Verify the `index-*.js` hash in the target directory matches what the browser requests.
+
+Direct staging calls through the production redeploy wrappers are rejected.
+`staging.sh up` rebuilds the current staging bundle and force-recreates its nginx
+container so the bind mount follows any Vite output-directory replacement. A
+default L0/L1 frontend build preserves all three target-specific bundle
+directories while cleaning only the shared `frontend/dist` root artifacts.
 
 Deployment wrappers explicitly clear `VITE_OPENSCIENCE_API_KEY` and
 `VITE_AINRF_API_KEY` while building. Local WebUI credentials belong only to

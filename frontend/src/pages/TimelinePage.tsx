@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects, getTasks } from '@/shared/api';
-import PageShell from '@design-system/layout/PageShell';
-import SectionStack from '@design-system/layout/SectionStack';
+import { PageShell, SectionStack } from '@design-system';
 import { GanttChart } from './timeline/GanttChart';
 import { TimelineControls } from './timeline/TimelineControls';
 import type { TaskSummary } from '@/shared/types';

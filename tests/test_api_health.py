@@ -162,17 +162,10 @@ async def test_health_skips_remote_container_probe_when_runtime_reconciliation_i
 
 
 @pytest.mark.anyio
-async def test_settings_codex_defaults_reads_local_files(
+async def test_settings_codex_defaults_never_reads_host_credentials(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_home = tmp_path / "fake-home"
-    codex_home = fake_home / ".codex"
-    codex_home.mkdir(parents=True, exist_ok=True)
-    (codex_home / "config.toml").write_text('model = "gpt-5-codex"\n', encoding="utf-8")
-    (codex_home / "auth.json").write_text('{"token":"abc"}\n', encoding="utf-8")
-    monkeypatch.setattr("ainrf.api.routes.settings.Path.home", lambda: fake_home)
-
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -180,6 +173,11 @@ async def test_settings_codex_defaults_reads_local_files(
         )
     )
     jwt_headers = get_jwt_headers(app)
+
+    def fail_home() -> Path:
+        raise AssertionError("host HOME must not be read")
+
+    monkeypatch.setattr("ainrf.api.routes.settings.Path.home", fail_home)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -192,8 +190,8 @@ async def test_settings_codex_defaults_reads_local_files(
 
     assert response.status_code == 200
     assert response.json() == {
-        "codex_config_toml": 'model = "gpt-5-codex"\n',
-        "codex_auth_json": '{"token":"abc"}\n',
+        "codex_config_toml": None,
+        "codex_auth_json": None,
     }
 
 

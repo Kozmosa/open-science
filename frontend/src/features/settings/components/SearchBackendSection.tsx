@@ -1,4 +1,4 @@
-import { FormField, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Checkbox, FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SearchBackendItem } from '@/shared/types';
@@ -40,7 +40,7 @@ export function SearchBackendSection() {
     >
       <div className="space-y-4">
         <FormField label={t('pages.settings.searchBackend.activeBackend')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.searchBackend.activeBackend')}
             value={activeBackend}
             disabled={isLoading || mutation.isPending}
@@ -51,7 +51,7 @@ export function SearchBackendSection() {
                 {b.display_name}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <div>
@@ -65,13 +65,12 @@ export function SearchBackendSection() {
             {backends
               .filter((b: SearchBackendItem) => b.requires_mcp)
               .map((b: SearchBackendItem) => (
-                <label key={b.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                <label key={b.id} htmlFor={`search-backend-${b.id}`} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id={`search-backend-${b.id}`}
                     checked={autoStart.includes(b.id)}
                     disabled={mutation.isPending}
-                    onChange={() => toggleAutoStart(b.id)}
-                    className="rounded border-[var(--border)]"
+                    onCheckedChange={() => toggleAutoStart(b.id)}
                   />
                   <span>{b.display_name}</span>
                   <span className="text-[var(--text-secondary)]">— {b.description}</span>
@@ -83,4 +82,3 @@ export function SearchBackendSection() {
     </SectionCard>
   );
 }
-

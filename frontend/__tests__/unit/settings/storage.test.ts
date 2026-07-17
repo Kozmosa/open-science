@@ -5,6 +5,7 @@ import {
   rawPromptTaskConfigurationId,
   readStoredSettings,
   settingsStorageKey,
+  settingsStorageKeyForUser,
   structuredResearchTaskConfigurationId,
 } from '@/features/settings';
 
@@ -24,10 +25,33 @@ describe('settings storage v2 task configuration', () => {
     expect(window.localStorage.getItem(settingsStorageKey)).not.toBeNull();
   });
 
+  it('claims an unscoped legacy document only after a stable user is known', () => {
+    const settings = createDefaultWebUiSettings();
+    settings.general.defaultRoute = 'tasks';
+    window.localStorage.setItem('openscience:webui-settings', JSON.stringify(settings));
+
+    expect(readStoredSettings('user-a').settings.general.defaultRoute).toBe('tasks');
+    expect(window.localStorage.getItem('openscience:webui-settings')).toBeNull();
+    expect(window.localStorage.getItem(settingsStorageKeyForUser('user-a'))).not.toBeNull();
+    expect(readStoredSettings('user-b').settings.general.defaultRoute).toBe('today');
+  });
+
+  it('does not convert the retired serif preference into a color theme', () => {
+    const legacy = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
+    legacy.version = 3;
+    const general = legacy.general as Record<string, unknown>;
+    general.appearance = { fontFamily: 'serif' };
+    window.localStorage.setItem(settingsStorageKeyForUser('test-user'), JSON.stringify(legacy));
+
+    expect(readStoredSettings().settings.general.appearance.theme).toBe('light');
+  });
+
   it('creates default task configuration catalog', () => {
     const settings = createDefaultWebUiSettings();
 
-    expect(settings.version).toBe(3);
+    expect(settings.version).toBe(5);
+    expect(settings.general.defaultRoute).toBe('today');
+    expect(settings.general.appearance.theme).toBe('light');
     expect(settings.taskConfiguration.defaultExecutionEngineId).toBe('claude-code');
     expect(settings.taskConfiguration.defaultResearchAgentProfileId).toBe(
       defaultResearchAgentProfileId
@@ -76,7 +100,7 @@ describe('settings storage v2 task configuration', () => {
     const result = readStoredSettings();
 
     expect(result.recoveryReason).toBeNull();
-    expect(result.settings.version).toBe(3);
+    expect(result.settings.version).toBe(5);
     expect(result.settings.general.defaultRoute).toBe('tasks');
     expect(result.settings.general.terminal.fontSize).toBe(16);
     expect(result.settings.projectDefaults.default.environmentDefaults['env-1']).toEqual({
@@ -243,5 +267,38 @@ describe('settings storage v2 task configuration', () => {
     expect(result.settings.taskConfiguration.researchAgentProfiles[0]?.codexAuthJson).toBe(
       '{"token":"override"}'
     );
+  });
+
+  it.each(['projects', 'terminal', 'tasks', 'workspaces', 'environments'] as const)(
+    'preserves the legal v4 default route %s during the v5 upgrade',
+    (defaultRoute) => {
+      const settings = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
+      settings.version = 4;
+      (settings.general as Record<string, unknown>).defaultRoute = defaultRoute;
+      window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+
+      const result = readStoredSettings();
+
+      expect(result.settings.version).toBe(5);
+      expect(result.settings.general.defaultRoute).toBe(defaultRoute);
+    },
+  );
+
+  it.each([
+    { label: 'missing', value: undefined },
+    { label: 'invalid', value: 'dashboard' },
+  ])('migrates a $label v4 default route to today', ({ value }) => {
+    const settings = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
+    settings.version = 4;
+    const general = settings.general as Record<string, unknown>;
+    if (value === undefined) delete general.defaultRoute;
+    else general.defaultRoute = value;
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+
+    const result = readStoredSettings();
+
+    expect(result.settings.version).toBe(5);
+    expect(result.settings.general.defaultRoute).toBe('today');
+    expect(result.recoveryReason).toBe('invalid_document');
   });
 });

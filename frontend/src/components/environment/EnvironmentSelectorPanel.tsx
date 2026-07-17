@@ -1,4 +1,4 @@
-import { Badge, SectionCard, SectionHeader, Select, StatusDot } from '@design-system/primitives';
+import { Badge, SectionCard, SectionHeader, NativeSelect, StatusDot } from '@design-system';
 import type { EnvironmentRecord } from '@/shared/types';
 import { useT } from '@/shared/i18n';
 
@@ -53,7 +53,7 @@ function EnvironmentSelectorPanel({
           <span className="text-sm font-medium tracking-[-0.224px] text-[var(--text)]">
             {t('components.environmentSelector.activeLabel')}
           </span>
-          <Select
+          <NativeSelect
             value={selectedEnvironmentId ?? ''}
             onChange={(event) => onSelectEnvironment(event.target.value)}
             disabled={!hasEnvironments || isLoading}
@@ -67,7 +67,7 @@ function EnvironmentSelectorPanel({
                 {environment.alias} · {environment.display_name}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </label>
 
         <div className="space-y-3 rounded-lg bg-[var(--bg-secondary)] p-4">

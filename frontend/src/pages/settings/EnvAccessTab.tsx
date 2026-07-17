@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { getEnvironments, getEnvAccess, grantEnvAccess, revokeEnvAccess, getAdminUsers } from '@/shared/api';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
-import { Select } from '@design-system/primitives';
+import { NativeSelect } from '@design-system';
 import { AccessGrantPanel } from '../../components/settings/AccessGrantPanel';
 import { AccessItemRow } from '../../components/settings/AccessItemRow';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -62,14 +62,14 @@ export function EnvAccessTab() {
     <div className="flex flex-col gap-4">
       <h3 className="text-sm font-semibold text-[var(--text)]">{t('pages.settings.tabs.envAccess')}</h3>
 
-      <Select value={selectedEnv ?? ''} onChange={(e) => setSelectedEnv(e.target.value || null)}>
+      <NativeSelect value={selectedEnv ?? ''} onChange={(e) => setSelectedEnv(e.target.value || null)}>
         <option value="">{t('pages.settings.envAccess.selectEnv')}</option>
         {envList.map((e) => (
           <option key={e.id} value={e.id}>
             {e.display_name || e.alias}
           </option>
         ))}
-      </Select>
+      </NativeSelect>
 
       {envsLoading && (
         <LoadingSpinner size="sm" />

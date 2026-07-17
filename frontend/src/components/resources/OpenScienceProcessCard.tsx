@@ -23,18 +23,18 @@ export default function OpenScienceProcessCard({ processes, environment_name }: 
   const t = useT();
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+    <div className="h-full rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] p-5">
       <h3 className="mb-4 text-sm font-semibold">
         {t('pages.resources.processCard.title')} — {environment_name}
       </h3>
 
       {processes.length === 0 ? (
-        <p className="text-sm text-[var(--text-tertiary)]">{t('pages.resources.processCard.empty')}</p>
+        <p className="text-sm text-[var(--osci-color-text-muted)]">{t('pages.resources.processCard.empty')}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[var(--border)] text-[var(--text-tertiary)]">
+              <tr className="border-b border-[var(--osci-color-border)] text-[var(--osci-color-text-muted)]">
                 <th className="pb-2 pr-4 font-medium">{t('pages.resources.processCard.columns.pid')}</th>
                 <th className="pb-2 pr-4 font-medium">{t('pages.resources.processCard.columns.name')}</th>
                 <th className="pb-2 pr-4 font-medium">{t('pages.resources.processCard.columns.cpu')}</th>
@@ -44,7 +44,7 @@ export default function OpenScienceProcessCard({ processes, environment_name }: 
             </thead>
             <tbody>
               {[...processes].sort((a, b) => b.cpu_percent - a.cpu_percent).map((proc) => (
-                <tr key={proc.pid} className="border-b border-[var(--border)]/50 last:border-0">
+                <tr key={proc.pid} className="border-b border-[var(--osci-color-border-subtle)] last:border-0">
                   <td className="py-2 pr-4 font-mono">{proc.pid}</td>
                   <td className="py-2 pr-4">{proc.name}</td>
                   <td className="py-2 pr-4">{proc.cpu_percent.toFixed(1)}%</td>

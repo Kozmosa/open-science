@@ -648,6 +648,14 @@ def create_app(
             build_concurrency_limit_middleware(api_config.max_concurrent_requests)
         )
     app.middleware("http")(build_jwt_auth_middleware(auth_service, api_config))
+    from ainrf.development.frontend_faults import build_frontend_dev_fault_middleware
+
+    app.middleware("http")(
+        build_frontend_dev_fault_middleware(
+            api_config.state_root,
+            production=api_config.production,
+        )
+    )
     app.middleware("http")(
         build_domain_maintenance_middleware(app.state.domain_maintenance_service)
     )

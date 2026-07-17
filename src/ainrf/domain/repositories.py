@@ -164,6 +164,30 @@ class SqliteDomainRepository:
             (project_id,),
         ).fetchall()
 
+    def project_activity_summary(self, project_id: str) -> sqlite3.Row:
+        row = self._conn.execute(
+            """
+            SELECT COUNT(*) AS task_count,
+                   COALESCE(SUM(CASE
+                       WHEN archived_at IS NULL
+                        AND status IN ('queued', 'starting', 'running', 'paused')
+                       THEN 1 ELSE 0 END), 0) AS active_task_count,
+                   COALESCE(SUM(CASE
+                       WHEN archived_at IS NULL AND status IN ('starting', 'running')
+                       THEN 1 ELSE 0 END), 0) AS running_task_count,
+                   COALESCE(SUM(CASE
+                       WHEN archived_at IS NULL AND status = 'failed'
+                       THEN 1 ELSE 0 END), 0) AS failed_task_count,
+                   MAX(updated_at) AS latest_task_activity_at
+            FROM tasks
+            WHERE project_id = ?
+            """,
+            (project_id,),
+        ).fetchone()
+        if row is None:  # pragma: no cover - aggregate queries always return one row
+            raise RuntimeError("Project activity summary query returned no row")
+        return row
+
     def project_tasks_exist(
         self,
         *,
@@ -184,13 +208,13 @@ class SqliteDomainRepository:
         return self._conn.execute(
             """
             SELECT relationship.relationship_id, relationship.source_task_id,
-                   relationship.target_task_id, relationship.created_at
+                   relationship.target_task_id, relationship.relationship_type,
+                   relationship.created_at
             FROM task_relationships AS relationship
             JOIN tasks AS source ON source.task_id = relationship.source_task_id
             JOIN tasks AS target ON target.task_id = relationship.target_task_id
             WHERE source.project_id = ?
               AND target.project_id = ?
-              AND relationship.relationship_type = 'related_to'
             ORDER BY relationship.created_at, relationship.relationship_id
             """,
             (project_id, project_id),
@@ -470,6 +494,24 @@ class SqliteDomainRepository:
         ).fetchone()
         return int(row[0]) if row is not None else 0
 
+    def workspace_activity_summary(self, workspace_id: str) -> sqlite3.Row:
+        row = self._conn.execute(
+            """
+            SELECT COUNT(*) AS task_count,
+                   COALESCE(SUM(CASE
+                       WHEN archived_at IS NULL
+                        AND status IN ('queued', 'starting', 'running', 'paused')
+                       THEN 1 ELSE 0 END), 0) AS active_task_count,
+                   MAX(updated_at) AS latest_task_activity_at
+            FROM tasks
+            WHERE workspace_id = ?
+            """,
+            (workspace_id,),
+        ).fetchone()
+        if row is None:  # pragma: no cover - aggregate queries always return one row
+            raise RuntimeError("Workspace activity summary query returned no row")
+        return row
+
     def project_workspace_link(self, project_id: str, workspace_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
             """
@@ -501,9 +543,11 @@ class SqliteDomainRepository:
         return self._conn.execute(
             """
             SELECT link.project_id, link.workspace_id, link.status, link.is_primary,
-                   workspace.environment_id, workspace.owner_user_id,
+                   workspace.environment_id, workspace.owner_user_id, workspace.label,
+                   workspace.canonical_path,
                    workspace.status AS workspace_status,
-                   environment.status AS environment_status,
+                   environment.status AS environment_status, environment.alias AS environment_alias,
+                   environment.display_name AS environment_display_name,
                    environment.owner_user_id AS environment_owner_user_id
             FROM project_workspace_links AS link
             JOIN workspaces AS workspace ON workspace.workspace_id = link.workspace_id
@@ -517,9 +561,15 @@ class SqliteDomainRepository:
     def list_project_links_for_workspace(self, workspace_id: str) -> list[sqlite3.Row]:
         return self._conn.execute(
             """
-            SELECT * FROM project_workspace_links
-            WHERE workspace_id = ?
-            ORDER BY project_id
+            SELECT link.project_id, link.workspace_id, link.status, link.is_primary,
+                   link.created_at, link.updated_at,
+                   project.name AS project_name, project.status AS project_status,
+                   project.owner_user_id AS project_owner_user_id,
+                   project.is_default AS project_is_default
+            FROM project_workspace_links AS link
+            JOIN projects AS project ON project.project_id = link.project_id
+            WHERE link.workspace_id = ?
+            ORDER BY link.is_primary DESC, project.name, link.project_id
             """,
             (workspace_id,),
         ).fetchall()

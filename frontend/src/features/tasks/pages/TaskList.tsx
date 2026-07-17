@@ -1,20 +1,15 @@
 import { Search } from 'lucide-react';
 import { useT } from '@/shared/i18n';
 import type { TaskSummary } from '@/shared/types';
-import { statusClassName } from '../utils/status';
+import { taskStatusClassName, taskStatusLabel } from '../utils/status';
 
 interface Props {
   tasks: TaskSummary[];
   selectedTaskId: string | null;
   tasksError: string | null;
   searchQuery: string;
-  showArchived: boolean;
   onSearchQueryChange: (query: string) => void;
   onSelectTask: (taskId: string) => void;
-  onArchiveTask: (taskId: string) => void;
-  onCancelTask: (taskId: string) => void;
-  onDeleteTask: (taskId: string) => void;
-  onRetryTask: (taskId: string) => void;
 }
 
 function matchesTask(task: TaskSummary, query: string): boolean {
@@ -36,20 +31,11 @@ export default function TaskList({
   selectedTaskId,
   tasksError,
   searchQuery,
-  showArchived,
   onSearchQueryChange,
   onSelectTask,
-  onArchiveTask,
-  onCancelTask,
-  onDeleteTask,
-  onRetryTask,
 }: Props) {
   const t = useT();
   const filteredTasks = tasks.filter((task) => matchesTask(task, searchQuery));
-
-  const canCancel = (status: string) => status === 'queued' || status === 'starting' || status === 'running';
-  const canArchive = (status: string) => status === 'succeeded' || status === 'failed' || status === 'cancelled';
-  const canRetry = (status: string) => status === 'failed' || status === 'cancelled';
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -57,26 +43,26 @@ export default function TaskList({
         <span className="sr-only">{t('pages.tasks.searchLabel')}</span>
         <Search
           size={15}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--osci-color-text-secondary)]"
         />
         <input
           aria-label={t('pages.tasks.searchLabel')}
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-3 py-2 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--prism-primary)] focus:ring-2 focus:ring-[var(--ring)]"
+          className="w-full rounded-lg border border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] pl-9 pr-3 py-2 text-sm text-[var(--osci-color-text)] outline-none transition placeholder:text-[var(--osci-color-text-muted)] focus:border-[var(--osci-color-primary)] focus:ring-2 focus:ring-[var(--osci-color-focus)]"
           placeholder={t('pages.tasks.searchPlaceholder')}
         />
       </label>
 
-      {tasksError ? <p className="mb-3 text-sm text-[var(--danger)]">{tasksError}</p> : null}
+      {tasksError ? <p className="mb-3 text-sm text-[var(--osci-color-danger)]">{tasksError}</p> : null}
 
       <div className="min-h-0 flex-1 space-y-1 overflow-auto pr-1">
         {tasks.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-4 text-sm text-[var(--text-secondary)]">
+          <div className="rounded-lg border border-dashed border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] p-4 text-sm text-[var(--osci-color-text-secondary)]">
             {t('pages.tasks.empty')}
           </div>
         ) : filteredTasks.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] p-4 text-sm text-[var(--text-secondary)]">
+          <div className="rounded-lg border border-dashed border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] p-4 text-sm text-[var(--osci-color-text-secondary)]">
             {t('pages.tasks.noSearchResults', { query: searchQuery })}
           </div>
         ) : (
@@ -91,102 +77,26 @@ export default function TaskList({
                 className={[
                   'group flex w-full flex-col gap-2 rounded-lg border px-3 py-3 text-left transition',
                   isSelected
-                    ? 'border-[var(--prism-primary-border)] bg-[var(--prism-primary-soft)] shadow-[var(--shadow-sm)]'
-                    : 'border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-secondary)]',
+                    ? 'border-[var(--osci-color-primary-border)] bg-[var(--osci-color-primary-soft)] shadow-[var(--osci-shadow-sm)]'
+                    : 'border-transparent hover:border-[var(--osci-color-border)] hover:bg-[var(--osci-color-surface-subtle)]',
                 ].join(' ')}
               >
                 <span className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 text-sm font-medium leading-snug text-[var(--text)]" title={task.title}>
+                  <span className="min-w-0 text-sm font-medium leading-snug text-[var(--osci-color-text)]" title={task.title}>
                     {task.title}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    {canCancel(task.status) ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onCancelTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onCancelTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
-                      >
-                        {t('pages.tasks.actions.cancel')}
-                      </span>
-                    ) : null}
-                    {canRetry(task.status) ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onRetryTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onRetryTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--prism-primary-border)] bg-[var(--prism-primary-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--prism-primary)] opacity-0 transition hover:bg-[var(--prism-primary-soft)]/70 group-hover:opacity-100"
-                      >
-                        {t('pages.tasks.actions.retry')}
-                      </span>
-                    ) : null}
-                    {canArchive(task.status) && !showArchived ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onArchiveTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onArchiveTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)] opacity-0 transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] group-hover:opacity-100"
-                      >
-                        {t('pages.tasks.actions.archive')}
-                      </span>
-                    ) : null}
-                    {canArchive(task.status) && showArchived ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDeleteTask(task.task_id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.stopPropagation();
-                            onDeleteTask(task.task_id);
-                          }
-                        }}
-                        className="whitespace-nowrap rounded-lg border border-[var(--danger-border)] bg-[var(--danger-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--danger-foreground)] opacity-0 transition hover:opacity-80 group-hover:opacity-100"
-                      >
-                        {t('common.delete')}
-                      </span>
-                    ) : null}
                     <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClassName[task.status]}`}
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${taskStatusClassName(task.status)}`}
                     >
-                      {t(`pages.tasks.status.${task.status}`)}
+                      {taskStatusLabel(t, task.status)}
                     </span>
                   </span>
                 </span>
-                <span className="truncate text-xs text-[var(--text-secondary)]">
+                <span className="truncate text-xs text-[var(--osci-color-text-secondary)]">
                   {task.researcher_type ?? task.task_profile ?? 'researcher'}
                 </span>
-                <span className="truncate text-[11px] text-[var(--text-tertiary)]">
+                <span className="truncate text-[11px] text-[var(--osci-color-text-muted)]">
                   {t('pages.tasks.updatedAt', { time: task.updated_at })}
                 </span>
               </button>

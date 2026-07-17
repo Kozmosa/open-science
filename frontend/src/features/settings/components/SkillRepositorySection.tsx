@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, Input, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Button, Dialog, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SkillDetail, SkillImportRequest, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';
@@ -164,14 +164,14 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
           </h4>
 
           <FormField label={t('pages.settings.skillRepository.sourceLabel')}>
-            <Select
+            <NativeSelect
               aria-label={t('pages.settings.skillRepository.sourceLabel')}
               value={importSource}
               onChange={(event) => setImportSource(event.target.value as 'git' | 'local')}
             >
               <option value="git">{t('pages.settings.skillRepository.gitSource')}</option>
               <option value="local">{t('pages.settings.skillRepository.localSource')}</option>
-            </Select>
+            </NativeSelect>
           </FormField>
 
           {importSource === 'git' ? (
@@ -220,32 +220,40 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
         </div>
       )}
 
-      {showDirtyConfirm && pendingRegistryId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-6 shadow-lg">
-            <h3 className="mb-2 text-lg font-semibold text-[var(--text-primary)]">
-              {t('pages.settings.codex.updateTitle', { name: pendingRegistryId.toUpperCase() })}
-            </h3>
-            <p className="mb-4 text-sm text-[var(--text-secondary)]">
-              {t('pages.settings.codex.updateWarning')}
-            </p>
-            <div className="flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowDirtyConfirm(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                onClick={() => {
-                  if (pendingRegistryId) {
-                    updateRegistryMutation.mutate({ id: pendingRegistryId, force: true });
-                  }
-                }}
-              >
-                {t('pages.settings.codex.forceUpdate')}
-              </Button>
-            </div>
-          </div>
+      <Dialog
+        isOpen={showDirtyConfirm && pendingRegistryId !== null}
+        onClose={() => {
+          setShowDirtyConfirm(false);
+          setPendingRegistryId(null);
+        }}
+        title={t('pages.settings.codex.updateTitle', { name: pendingRegistryId?.toUpperCase() ?? '' })}
+        size="sm"
+      >
+        <p className="text-sm text-[var(--osci-color-text-secondary)]">
+          {t('pages.settings.codex.updateWarning')}
+        </p>
+        <div className="mt-5 flex justify-end gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setShowDirtyConfirm(false);
+              setPendingRegistryId(null);
+            }}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={() => {
+              if (pendingRegistryId) {
+                updateRegistryMutation.mutate({ id: pendingRegistryId, force: true });
+              }
+            }}
+            disabled={updateRegistryMutation.isPending}
+          >
+            {t('pages.settings.codex.forceUpdate')}
+          </Button>
         </div>
-      )}
+      </Dialog>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-2">
@@ -377,4 +385,3 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
     </SectionCard>
   );
 }
-

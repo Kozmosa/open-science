@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'dist-mock', 'public/mockServiceWorker.js']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -18,6 +18,28 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}', '__tests__/**/*.{ts,tsx}'],
+    ignores: ['src/design-system/**/*'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['@design-system/*'],
+            message: 'Import product UI contracts from the public @design-system barrel.',
+          },
+          {
+            group: ['@radix-ui/*'],
+            message: 'Radix is an internal design-system implementation detail.',
+          },
+          {
+            group: ['@/components/ui', '@/components/ui/*', '**/components/ui', '**/components/ui/*'],
+            message: 'Legacy components/ui imports are forbidden; use @design-system.',
+          },
+        ],
+      }],
     },
   },
 ])

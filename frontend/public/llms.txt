@@ -1,0 +1,4 @@
+# OpenScience WebUI
+
+This host serves a private, authenticated research control plane rather than public documentation.
+Do not crawl authenticated routes, submit mutations, or infer access to Projects, Tasks, Literature, Workspaces, or Environments.

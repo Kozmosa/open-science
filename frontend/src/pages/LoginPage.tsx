@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
-import { Button, Input } from '@design-system/primitives';
+import { BrandMark, Button, Input } from '@design-system';
 
 export default function LoginPage() {
   const t = useT();
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const errorId = 'login-form-error';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,22 +35,32 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
       <form onSubmit={handleSubmit} className="bg-[var(--surface)] p-8 rounded-xl shadow-sm border border-[var(--border)] w-full max-w-sm">
-        <h1 className="text-xl font-semibold mb-6">OpenScience</h1>
-        {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
+        <BrandMark className="mb-6" />
+        {error && <p id={errorId} role="alert" className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
-          <label className="text-xs text-[var(--text-secondary)]">{t('auth.username')}</label>
+          <label htmlFor="login-username" className="text-xs text-[var(--text-secondary)]">{t('auth.username')}</label>
           <Input
+            id="login-username"
+            name="username"
+            autoComplete="username"
             placeholder={t('auth.username')}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            aria-describedby={error ? errorId : undefined}
+            aria-invalid={error ? true : undefined}
             autoFocus
           />
-          <label className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
+          <label htmlFor="login-password" className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
           <Input
+            id="login-password"
+            name="password"
             type="password"
+            autoComplete="current-password"
             placeholder={t('auth.password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            aria-describedby={error ? errorId : undefined}
+            aria-invalid={error ? true : undefined}
           />
           <Button
             type="submit"

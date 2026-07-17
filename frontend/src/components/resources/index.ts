@@ -4,4 +4,3 @@ export { default as MemoryBar } from './MemoryBar';
 export { default as SystemResourceCard } from './SystemResourceCard';
 export { default as OpenScienceProcessCard } from './OpenScienceProcessCard';
 export { default as TaskUsageCard } from './TaskUsageCard';
-export { default as DraggableResourceCard } from './DraggableResourceCard';

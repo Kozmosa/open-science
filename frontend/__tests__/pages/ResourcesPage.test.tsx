@@ -1,6 +1,7 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ResourcesPage from '../../src/pages/ResourcesPage';
+import { resourceRefreshInterval } from '@features/resources/refreshPolicy';
 import type { ResourcesResponse } from '@/shared/types';
 import { renderWithProviders } from '@/shared/test/render';
 import { getResources, getTaskTokenUsageSummary } from '@/shared/api';
@@ -91,6 +92,7 @@ describe('ResourcesPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Resource Monitor' })).toBeInTheDocument();
     expect(screen.getByText('RESOURCES')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Resource Monitor' }).closest('[data-page-shell-variant]')).toHaveAttribute('data-page-shell-variant', 'canvas');
 
     unmount();
     mockGetResources.mockResolvedValue({ items: [] });
@@ -115,6 +117,7 @@ describe('ResourcesPage', () => {
     expect(screen.getByText('16.0 GB / 64.0 GB (25%)')).toBeInTheDocument();
     expect(screen.getByText('12345')).toBeInTheDocument();
     expect(screen.getByText('openscience')).toBeInTheDocument();
+    expect(screen.getByTestId('resources-update-strip')).toHaveTextContent('Last successful data:');
   });
 
   it('renders total task token usage and duration summary', async () => {
@@ -148,12 +151,35 @@ describe('ResourcesPage', () => {
 
   });
 
-  it('shows empty state when no resource data is available', async () => {
+  it('keeps token usage visible when no Environment resource data exists', async () => {
     mockGetResources.mockResolvedValue({ items: [] });
 
     renderWithProviders(<ResourcesPage />);
 
+    expect(await screen.findByText('Task Usage')).toBeInTheDocument();
+    expect(screen.queryByText('No resource data available yet.')).not.toBeInTheDocument();
+  });
+
+  it('keeps Environment cards when token usage fails', async () => {
+    mockGetResources.mockResolvedValue(mockResponse);
+    mockGetTaskTokenUsageSummary.mockRejectedValue(new Error('usage offline'));
+
+    renderWithProviders(<ResourcesPage />);
+
+    expect(await screen.findByText('Localhost')).toBeInTheDocument();
+    expect(screen.queryByText('Task Usage')).not.toBeInTheDocument();
+    expect(screen.getByTestId('resources-update-strip')).toHaveTextContent('Some environment or task usage data is degraded.');
+    expect(screen.queryByText('No resource data available yet.')).not.toBeInTheDocument();
+  });
+
+  it('shows the global empty state only when neither source has data', async () => {
+    mockGetResources.mockResolvedValue({ items: [] });
+    mockGetTaskTokenUsageSummary.mockResolvedValue(null as never);
+
+    renderWithProviders(<ResourcesPage />);
+
     expect(await screen.findByText('No resource data available yet.')).toBeInTheDocument();
+    expect(screen.queryByText('Task Usage')).not.toBeInTheDocument();
   });
 
   it('renders degraded status with yellow indicator', async () => {
@@ -170,6 +196,7 @@ describe('ResourcesPage', () => {
     renderWithProviders(<ResourcesPage />);
 
     expect(await screen.findByText('Localhost')).toBeInTheDocument();
+    expect(screen.getByTestId('resources-update-strip')).toHaveTextContent('Some environment or task usage data is degraded.');
   });
 
   it('hides GPU section when no GPUs are present', async () => {
@@ -187,5 +214,36 @@ describe('ResourcesPage', () => {
 
     expect(await screen.findByText('Localhost')).toBeInTheDocument();
     expect(screen.getByText('No GPU detected')).toBeInTheDocument();
+  });
+
+  it('keeps the last successful cards when a global refresh fails', async () => {
+    mockGetResources.mockResolvedValueOnce(mockResponse);
+    renderWithProviders(<ResourcesPage />);
+    expect(await screen.findByText('Localhost')).toBeInTheDocument();
+
+    mockGetResources.mockRejectedValueOnce(new Error('offline'));
+    fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+
+    await waitFor(() => expect(screen.getByTestId('resources-update-strip')).toHaveTextContent('Refresh failed. Showing the last successful resource data.'));
+    expect(screen.getByText('Localhost')).toBeInTheDocument();
+  });
+
+  it('pauses intervals while hidden and refreshes immediately when visible again', async () => {
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    mockGetResources.mockResolvedValue(mockResponse);
+    renderWithProviders(<ResourcesPage />);
+    expect(await screen.findByText('Localhost')).toBeInTheDocument();
+    const initialCalls = mockGetResources.mock.calls.length;
+
+    visibility = 'hidden';
+    fireEvent(document, new Event('visibilitychange'));
+    expect(screen.getByTestId('resources-update-strip')).toHaveTextContent('Background refresh is paused');
+    expect(resourceRefreshInterval(false)).toBe(false);
+
+    visibility = 'visible';
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => expect(mockGetResources.mock.calls.length).toBeGreaterThan(initialCalls));
+    expect(resourceRefreshInterval(true)).toBe(5000);
   });
 });

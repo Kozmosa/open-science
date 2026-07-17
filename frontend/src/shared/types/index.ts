@@ -75,7 +75,18 @@ export interface UserSessionPairListResponse {
   items: UserSessionPair[];
 }
 
-export type TaskStatus = 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'paused';
+export type TaskStatus =
+  | 'queued'
+  | 'starting'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'paused'
+  | 'launch_unknown'
+  | 'stopped_by_project_archive'
+  | 'stopped_permission_revoked'
+  | 'stopped_runtime_unknown';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 
 export type ResearcherType = 'vanilla' | 'aris-researcher';
@@ -83,8 +94,25 @@ export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 
 export interface TaskRetryResponse {
   new_task: TaskSummary;
-  archived_task_id: string;
+  archived_task_id: string | null;
   edge_id: string;
+  task?: TaskSummary | null;
+  attempt?: {
+    attempt_id: string;
+    task_id: string;
+    attempt_seq: number;
+    trigger: string;
+    status: string;
+    [key: string]: unknown;
+  } | null;
+  dispatch?: {
+    dispatch_id: string;
+    task_id: string;
+    attempt_id: string;
+    status: string;
+    launch_state: string;
+    [key: string]: unknown;
+  } | null;
 }
 
 export interface ProjectRecord {
@@ -173,6 +201,9 @@ export interface TaskSummary {
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
+  archived_at?: string | null;
+  archive_reason?: string | null;
+  project_context_version_id?: string | null;
   error_summary: string | null;
   // New agentic-researcher API fields (flat structure)
   researcher_type?: string;
@@ -298,6 +329,7 @@ export interface TaskEdge {
   project_id: string;
   source_task_id: string;
   target_task_id: string;
+  relationship_type: 'derived_from' | 'depends_on' | 'related_to' | string;
   created_at: string;
 }
 
@@ -351,7 +383,7 @@ export interface TaskCreateRequest {
 export interface TaskCreatePayload {
   project_id: string;
   workspace_id: string;
-  environment_id: string;
+  environment_id?: string;
   researcher_type: ResearcherType;
   harness_engine: HarnessEngine;
   prompt: string;
@@ -988,6 +1020,26 @@ export interface LiteratureSummary {
   practice_note?: string | null;
   error?: string | null;
   version_id?: string | null;
+}
+
+export interface LiteratureTaskIntent {
+  intent_id: string;
+  paper_id: string;
+  project_id: string;
+  workspace_id: string;
+  task_preset: string;
+  title: string;
+  task_id: string | null;
+  status: 'planned' | 'creating_task' | 'task_created' | 'retry_wait' | 'completed' | 'failed' | string;
+  idempotency_key: string;
+  work_item_id: string;
+  attempt_count: number;
+  last_error: string | null;
+  next_retry_at: string | null;
+  heartbeat_at: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
 }
 
 // ── Search backend settings ────────────────────────────────────────

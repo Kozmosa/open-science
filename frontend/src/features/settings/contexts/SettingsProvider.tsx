@@ -1,12 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getCodexDefaults } from '@/shared/api';
-import { getStoredRefreshToken } from '@/shared/api/client';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { applyOsciTheme } from '@design-system';
 import {
-  applyCodexDefaultsToProfile,
   clampEditorFontSize,
   clampTerminalFontSize,
-  createCodexAppServerResearchAgentProfile,
   createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
   createEmptyEnvironmentTaskDefaults,
@@ -55,8 +52,10 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
       ? settings.general.editor.fontFamily
       : 'monospace';
 
-  const appearanceFontFamily =
-    settings.general.appearance?.fontFamily === 'serif' ? 'serif' : 'sans-serif';
+  const appearanceTheme =
+    settings.general.appearance?.theme === 'dark' || settings.general.appearance?.theme === 'system'
+      ? settings.general.appearance.theme
+      : 'light';
 
   const sanitizedProjectDefaults: Record<string, DefaultProjectSettings> = {};
   for (const [projectId, projectSettings] of Object.entries(settings.projectDefaults)) {
@@ -92,24 +91,19 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
   }
 
   return {
-    version: 3,
+    version: 5,
     general: {
       defaultRoute: isDefaultRoute(settings.general.defaultRoute)
-        ? settings.general.defaultRoute : 'terminal',
+        ? settings.general.defaultRoute : 'today',
       terminal: { fontSize: clampTerminalFontSize(settings.general.terminal.fontSize) },
       editor: { fontSize: editorFontSize, fontFamily: editorFontFamily },
-      appearance: { fontFamily: appearanceFontFamily },
+      appearance: { theme: appearanceTheme },
     },
     taskConfiguration: settings.taskConfiguration,
     projectDefaults: sanitizedProjectDefaults,
     llmProviders: normalizeLlmProviders(settings.llmProviders),
   };
 }
-
-const sansStack =
-  'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-const serifStack =
-  'Georgia, "Noto Serif", "Times New Roman", "Songti SC", "STSong", serif';
 
 // ── Legacy context (backwards compatible) ─────────────────────────
 
@@ -141,51 +135,28 @@ const LegacySettingsContext = createContext<{
 
 interface ProviderProps {
   children: ReactNode;
+  userId?: string;
 }
 
-export function SettingsProvider({ children }: ProviderProps) {
-  const [state, setState] = useState<SettingsState>(() => readStoredSettings());
+export function SettingsProvider({ children, userId = 'test-user' }: ProviderProps) {
+  const [state, setState] = useState<SettingsState>(() => readStoredSettings(userId));
   const [activeProjectId, setActiveProjectId] = useState<string>('default');
 
-  useEffect(() => {
-    if (!getStoredRefreshToken()) return;
-    void getCodexDefaults().then((defaults) => {
-      setState((current) => {
-        const profileId = 'codex-app-server-default';
-        const profiles = current.settings.taskConfiguration.researchAgentProfiles;
-        const existing = profiles.find((p) => p.profileId === profileId);
-        const nextCodexProfile = applyCodexDefaultsToProfile(
-          existing ?? createCodexAppServerResearchAgentProfile(),
-          { codexConfigToml: defaults.codex_config_toml, codexAuthJson: defaults.codex_auth_json }
-        );
-        const nextProfiles = existing
-          ? profiles.map((p) => (p.profileId === profileId ? nextCodexProfile : p))
-          : [...profiles, nextCodexProfile];
-        return {
-          ...current,
-          settings: {
-            ...current.settings,
-            taskConfiguration: {
-              ...current.settings.taskConfiguration,
-              researchAgentProfiles: nextProfiles,
-            },
-          },
-        };
-      });
-    }).catch(() => { /* optional, retry on next mount */ });
-  }, []);
+  useLayoutEffect(() => {
+    const preference = state.settings.general.appearance.theme;
+    applyOsciTheme(preference);
+    if (preference !== 'system' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => applyOsciTheme('system');
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [state.settings.general.appearance.theme]);
 
-  useEffect(() => {
-    const fontStack = state.settings.general.appearance.fontFamily === 'serif' ? serifStack : sansStack;
-    document.documentElement.style.setProperty('--font-text', fontStack);
-    document.documentElement.style.setProperty('--font-display', fontStack);
-  }, [state.settings.general.appearance.fontFamily]);
-
-  const commitSettings = (nextSettings: WebUiSettingsDocument): void => {
+  const commitSettings = useCallback((nextSettings: WebUiSettingsDocument): void => {
     const sanitized = sanitizeSettings(nextSettings);
-    writeStoredSettings(sanitized);
+    writeStoredSettings(sanitized, userId);
     setState({ settings: sanitized, recoveryReason: null });
-  };
+  }, [userId]);
 
   // ── Domain context values ────────────────────────────────────
 
@@ -214,7 +185,7 @@ export function SettingsProvider({ children }: ProviderProps) {
       const defaults = createDefaultWebUiSettings();
       commitSettings({ ...state.settings, general: { ...state.settings.general, appearance: defaults.general.appearance } });
     },
-  }), [state]);
+  }), [state, commitSettings]);
 
   const appearanceValue = useMemo(() => ({
     appearance: state.settings.general.appearance,
@@ -225,7 +196,7 @@ export function SettingsProvider({ children }: ProviderProps) {
       const defaults = createDefaultWebUiSettings();
       commitSettings({ ...state.settings, general: { ...state.settings.general, appearance: defaults.general.appearance } });
     },
-  }), [state]);
+  }), [state, commitSettings]);
 
   const taskConfigurationValue = useMemo(() => ({
     taskConfiguration: state.settings.taskConfiguration,
@@ -248,7 +219,7 @@ export function SettingsProvider({ children }: ProviderProps) {
         },
       });
     },
-  }), [state]);
+  }), [state, commitSettings]);
 
   const projectDefaultsValue = useMemo(() => ({
     activeProjectId,
@@ -316,7 +287,7 @@ export function SettingsProvider({ children }: ProviderProps) {
     },
     getProjectEnvironmentDefaults: (projectId: string, environmentId: string | null) =>
       resolveProjectEnvironmentDefaults(state.settings, projectId, environmentId),
-  }), [state, activeProjectId]);
+  }), [state, activeProjectId, commitSettings]);
 
   const llmProvidersValue = useMemo(() => ({
     llmProviders: state.settings.llmProviders,
@@ -335,7 +306,7 @@ export function SettingsProvider({ children }: ProviderProps) {
         llmProviders: state.settings.llmProviders.filter((p) => p.id !== providerId),
       });
     },
-  }), [state]);
+  }), [state, commitSettings]);
 
   // ── Legacy value for backwards compatibility ─────────────────
 

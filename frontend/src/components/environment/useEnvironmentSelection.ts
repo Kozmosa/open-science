@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { getEnvironments, getProjectEnvironmentReferences } from '@/shared/api';
 import type { EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
 import { useSettings } from '@features/settings';
+import { getDomainProjects } from '@features/domain';
 import { queryKeys } from '@/shared/api/queryKeys';
 
-const defaultProjectId = 'default';
 const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
 const EMPTY_PROJECT_REFERENCES: ProjectEnvironmentReference[] = [];
 
@@ -49,6 +49,7 @@ function resolveEnvironmentSelection(
 }
 
 export interface EnvironmentSelectionState {
+  projectId: string | null;
   environments: EnvironmentRecord[];
   projectReferences: ProjectEnvironmentReference[];
   projectDefaultEnvironmentId: string | null;
@@ -60,21 +61,32 @@ export interface EnvironmentSelectionState {
   onSelectEnvironment: (environmentId: string) => void;
 }
 
-export function useEnvironmentSelection(): EnvironmentSelectionState {
+export function useEnvironmentSelection(projectId?: string | null): EnvironmentSelectionState {
   const { settings, rememberSelectedEnvironment } = useSettings();
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.domain.projects(false),
+    queryFn: () => getDomainProjects(false),
+    enabled: projectId == null,
+  });
+  const resolvedProjectId = projectId
+    ?? projectsQuery.data?.items.find((project) => project.is_default)?.project_id
+    ?? null;
   const environmentsQuery = useQuery({
     queryKey: queryKeys.environments.all,
     queryFn: getEnvironments,
   });
   const projectReferencesQuery = useQuery({
-    queryKey: queryKeys.projectEnvironmentRefs.byProject(defaultProjectId),
-    queryFn: () => getProjectEnvironmentReferences(defaultProjectId),
+    queryKey: queryKeys.projectEnvironmentRefs.byProject(resolvedProjectId ?? 'unresolved'),
+    queryFn: () => getProjectEnvironmentReferences(resolvedProjectId ?? ''),
+    enabled: resolvedProjectId !== null,
   });
   const [sessionEnvironmentId, setSessionEnvironmentId] = useState<string | null>(null);
   const environments = environmentsQuery.data?.items ?? EMPTY_ENVIRONMENTS;
   const projectReferences = projectReferencesQuery.data?.items ?? EMPTY_PROJECT_REFERENCES;
 
-  const projectSettings = settings.projectDefaults[defaultProjectId];
+  const projectSettings = resolvedProjectId
+    ? settings.projectDefaults[resolvedProjectId] ?? settings.projectDefaults.default
+    : settings.projectDefaults.default;
   const storedEnvironmentId = projectSettings?.selection.lastEnvironmentId ?? null;
   const projectDefaultEnvironmentId = projectSettings?.defaultEnvironmentId ?? null;
 
@@ -106,31 +118,38 @@ export function useEnvironmentSelection(): EnvironmentSelectionState {
       return;
     }
 
-    rememberSelectedEnvironment(defaultProjectId, selectedEnvironmentId);
-  }, [environments, rememberSelectedEnvironment, selectedEnvironmentId, storedEnvironmentId]);
+    if (resolvedProjectId !== null) {
+      rememberSelectedEnvironment(resolvedProjectId, selectedEnvironmentId);
+    }
+  }, [environments, rememberSelectedEnvironment, resolvedProjectId, selectedEnvironmentId, storedEnvironmentId]);
 
   const selectedEnvironment = useMemo(
     () => environments.find((environment) => environment.id === selectedEnvironmentId) ?? null,
     [environments, selectedEnvironmentId]
   );
 
-  const loadError = [environmentsQuery.error, projectReferencesQuery.error]
+  const loadError = [projectsQuery.error, environmentsQuery.error, projectReferencesQuery.error]
     .filter((error): error is Error => error instanceof Error)
     .map((error) => error.message)
     .join(' | ') || null;
 
   const onSelectEnvironment = (environmentId: string): void => {
     setSessionEnvironmentId(environmentId);
-    rememberSelectedEnvironment(defaultProjectId, environmentId);
+    if (resolvedProjectId !== null) {
+      rememberSelectedEnvironment(resolvedProjectId, environmentId);
+    }
   };
 
   return {
+    projectId: resolvedProjectId,
     environments,
     projectReferences,
     projectDefaultEnvironmentId,
     selectedEnvironmentId,
     selectedEnvironment,
-    isLoading: environmentsQuery.isLoading || projectReferencesQuery.isLoading,
+    isLoading: environmentsQuery.isLoading
+      || (projectId == null && projectsQuery.isLoading)
+      || (resolvedProjectId !== null && projectReferencesQuery.isLoading),
     loadError,
     hasEnvironments: environments.length > 0,
     onSelectEnvironment,

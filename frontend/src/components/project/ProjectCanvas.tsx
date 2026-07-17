@@ -16,10 +16,12 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
-import { Button } from '@design-system/primitives';
+import { Button } from '@design-system';
 import { useT } from '@/shared/i18n';
+import { useResolvedOsciTheme } from '@/shared/hooks/useResolvedOsciTheme';
 import { readMigratedLocalStorage, removeLocalStorage } from '@/shared/utils/storage';
 import { createTaskEdge } from '@/shared/api';
+import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 import type { ProjectRecord, TaskEdge, TaskSummary } from '@/shared/types';
 import TaskNode from './TaskNode';
 import ProjectDropZone from './ProjectDropZone';
@@ -36,9 +38,12 @@ interface CanvasInnerProps {
   projects: ProjectRecord[];
   onNodeClick: (taskId: string) => void;
   onMoveTaskToProject: (taskId: string, projectId: string) => void;
+  canEditRelationships: boolean;
+  canMoveTask: (taskId: string) => boolean;
 }
-function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTaskToProject }: CanvasInnerProps) {
+function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTaskToProject, canEditRelationships, canMoveTask }: CanvasInnerProps) {
   const { getNodes, fitView } = useReactFlow();
+  const colorMode = useResolvedOsciTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dropZoneVisible, setDropZoneVisible] = useState(false);
   const draggingNodeId = useRef<string | null>(null);
@@ -63,6 +68,8 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
         target: edge.target_task_id,
         type: 'default',
         markerEnd: { type: 'arrowclosed' as const, width: 12, height: 12 },
+        label: edge.relationship_type,
+        labelStyle: { fill: 'var(--osci-color-text-muted)', fontSize: 10 },
       }));
   }, [edges, tasks]);
 
@@ -83,6 +90,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
   });
   const [flowEdges, setFlowEdges] = useState<Edge[]>(initialEdges);
   const manualEdgeIds = useRef<Set<string>>(new Set());
+  const relationshipKeyManager = useRef(new IdempotencyKeyManager('task.relationship')).current;
 
   const runLayout = useCallback(() => {
     const saved = readMigratedLocalStorage(LAYOUT_KEY(projectId), [LEGACY_LAYOUT_KEY(projectId)]);
@@ -137,7 +145,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      if (!connection.source || !connection.target) return;
+      if (!canEditRelationships || !connection.source || !connection.target) return;
       const edgeId = `edge_${connection.source}_${connection.target}`;
       manualEdgeIds.current.add(edgeId);
       setFlowEdges((current) =>
@@ -147,30 +155,38 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
             id: edgeId,
             type: 'smoothstep',
             animated: true,
-            style: { stroke: 'var(--prism-primary)', strokeWidth: 2 },
+            style: { stroke: 'var(--osci-color-primary)', strokeWidth: 2 },
           },
           current,
         ),
       );
-      createTaskEdge(projectId, {
+      const payload = {
         source_task_id: connection.source,
         target_task_id: connection.target,
-      }).catch(() => {
-        manualEdgeIds.current.delete(edgeId);
-        setFlowEdges((current) => current.filter((e) => e.id !== edgeId));
-      });
+      };
+      const key = relationshipKeyManager.keyFor(semanticMutationValue({ projectId, ...payload }));
+      createTaskEdge(projectId, payload, key)
+        .then(() => relationshipKeyManager.markSucceeded(key))
+        .catch(() => {
+          manualEdgeIds.current.delete(edgeId);
+          setFlowEdges((current) => current.filter((e) => e.id !== edgeId));
+        });
     },
-    [projectId]
+    [canEditRelationships, projectId, relationshipKeyManager]
   );
 
   const onNodeDrag = useCallback(
     (event: React.MouseEvent, node: Node) => {
       draggingNodeId.current = node.id;
+      if (!canMoveTask(node.id)) {
+        setDropZoneVisible(false);
+        return;
+      }
       const rect = containerRef.current?.getBoundingClientRect();
       const relX = rect ? event.clientX - rect.left : event.clientX;
       setDropZoneVisible(relX < 96);
     },
-    []
+    [canMoveTask]
   );
 
   const onNodeDragStop = useCallback(
@@ -182,7 +198,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
           el instanceof HTMLElement && Boolean(el.dataset.projectId)
       );
       const targetProjectId = card?.dataset.projectId;
-      if (targetProjectId && targetProjectId !== projectId) {
+      if (targetProjectId && targetProjectId !== projectId && canMoveTask(node.id)) {
         onMoveTaskToProject(node.id, targetProjectId);
       } else {
         // No project drop — persist node positions as before.
@@ -200,7 +216,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
       draggingNodeId.current = null;
       setDropZoneVisible(false);
     },
-    [getNodes, projectId, onMoveTaskToProject]
+    [canMoveTask, getNodes, projectId, onMoveTaskToProject]
   );
 
   const handleNodeClick = useCallback(
@@ -222,19 +238,20 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
         onNodeDragStop={onNodeDragStop}
         onNodeClick={handleNodeClick}
         onConnect={onConnect}
-        connectionLineStyle={{ stroke: 'var(--prism-primary)', strokeWidth: 2 }}
+        nodesConnectable={canEditRelationships}
+        connectionLineStyle={{ stroke: 'var(--osci-color-primary)', strokeWidth: 2 }}
         defaultEdgeOptions={{
           type: 'smoothstep',
           animated: true,
-          style: { stroke: 'var(--prism-primary)', strokeWidth: 2 },
+          style: { stroke: 'var(--osci-color-primary)', strokeWidth: 2 },
         }}
         attributionPosition="bottom-right"
-        colorMode="system"
+        colorMode={colorMode}
       >
-        <Background gap={16} size={1} color="var(--border)" />
+        <Background gap={16} size={1} color="var(--osci-color-border)" />
         <Controls />
         <MiniMap
-          nodeColor={() => 'var(--prism-primary)'}
+          nodeColor={() => 'var(--osci-color-primary)'}
           maskColor="var(--xy-minimap-mask-background-color, rgba(0,0,0,0.35))"
           className="rounded-lg"
           pannable
@@ -259,6 +276,9 @@ interface Props {
   onNewTask: () => void;
   onResetLayout: () => void;
   onMoveTaskToProject: (taskId: string, projectId: string) => void;
+  canCreateTask: boolean;
+  canEditRelationships: boolean;
+  canMoveTask: (taskId: string) => boolean;
 }
 
 export default function ProjectCanvas({
@@ -270,14 +290,17 @@ export default function ProjectCanvas({
   onNewTask,
   onResetLayout,
   onMoveTaskToProject,
+  canCreateTask,
+  canEditRelationships,
+  canMoveTask,
 }: Props) {
   const t = useT();
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--prism-glass)]/80 backdrop-blur-lg px-4 py-2">
+      <div className="flex items-center justify-between border-b border-[var(--osci-color-border)] bg-[var(--osci-color-surface-elevated)] px-4 py-2">
         <div className="flex gap-2">
-          <Button onClick={onNewTask} className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-[var(--shadow-sm)]">
+          <Button disabled={!canCreateTask} onClick={onNewTask} className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-[var(--shadow-sm)]">
             <Plus size={14} />
             {t('pages.projects.newTask')}
           </Button>
@@ -295,7 +318,7 @@ export default function ProjectCanvas({
       </div>
       <div className="flex-1 min-h-0">
         {tasks.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-[var(--text-secondary)]">
+          <div className="flex h-full items-center justify-center text-sm text-[var(--osci-color-text-secondary)]">
             {t('pages.projects.emptyCanvas')}
           </div>
         ) : (
@@ -307,6 +330,8 @@ export default function ProjectCanvas({
               projects={projects}
               onNodeClick={onNodeClick}
               onMoveTaskToProject={onMoveTaskToProject}
+              canEditRelationships={canEditRelationships}
+              canMoveTask={canMoveTask}
             />
           </ReactFlowProvider>
         )}

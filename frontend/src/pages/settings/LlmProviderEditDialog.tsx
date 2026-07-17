@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button, FormField, Input, Select } from '@design-system/primitives';
+import { useState } from 'react';
+import { Button, Dialog, FormField, Input, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { LlmProvider, LlmProviderFormat } from '@features/settings';
 
@@ -25,7 +25,6 @@ function generateId(): string {
 export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProviderEditDialogProps) {
   const t = useT();
   const isEditing = provider !== null;
-  const overlayRef = useRef<HTMLDivElement>(null);
 
   // Initialise form state from provider; the parent supplies a key so the
   // component unmounts/remounts when switching between providers.
@@ -37,10 +36,6 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
   const [sonnetModel, setSonnetModel] = useState(provider?.sonnetModel ?? '');
   const [haikuModel, setHaikuModel] = useState(provider?.haikuModel ?? '');
   const [defaultModel, setDefaultModel] = useState(provider?.defaultModel ?? '');
-
-  useEffect(() => {
-    overlayRef.current?.focus();
-  }, []);
 
   const handleSave = () => {
     const savedProvider: LlmProvider = {
@@ -63,31 +58,16 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
     onClose();
   };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    },
-    [onClose]
-  );
-
   const canSave = name.trim().length > 0 && baseUrl.trim().length > 0;
 
   return (
-    <div
-      ref={overlayRef}
-      tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 outline-none"
-      onKeyDown={handleKeyDown}
+    <Dialog
+      isOpen
+      onClose={onClose}
+      title={isEditing ? t('pages.settings.llmProviders.editProvider') : t('pages.settings.llmProviders.addProvider')}
+      size="md"
     >
-      <div className="w-full max-w-lg rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-lg">
-        <h2 className="mb-4 text-lg font-semibold">
-          {isEditing ? t('pages.settings.llmProviders.editProvider') : t('pages.settings.llmProviders.addProvider')}
-        </h2>
-
-        <div className="space-y-4">
+      <div className="space-y-4">
           <FormField label={t('pages.settings.llmProviders.nameLabel')}>
             <Input
               aria-label={t('pages.settings.llmProviders.nameLabel')}
@@ -98,7 +78,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
           </FormField>
 
           <FormField label={t('pages.settings.llmProviders.formatLabel')}>
-            <Select
+            <NativeSelect
               aria-label={t('pages.settings.llmProviders.formatLabel')}
               value={format}
               onChange={(e) => setFormat(e.target.value as LlmProviderFormat)}
@@ -106,7 +86,7 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
               <option value="anthropic">{t('pages.settings.llmProviders.formatAnthropic')}</option>
               <option value="openai-chat">{t('pages.settings.llmProviders.formatOpenAIChat')}</option>
               <option value="openai-responses">{t('pages.settings.llmProviders.formatOpenAIResponses')}</option>
-            </Select>
+            </NativeSelect>
           </FormField>
 
           <FormField label={t('pages.settings.llmProviders.baseUrlLabel')}>
@@ -165,17 +145,16 @@ export function LlmProviderEditDialog({ provider, onSave, onClose }: LlmProvider
               />
             </FormField>
           )}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={handleSave} disabled={!canSave}>
-            {t('common.save')}
-          </Button>
-        </div>
       </div>
-    </div>
+
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </Button>
+        <Button onClick={handleSave} disabled={!canSave}>
+          {t('common.save')}
+        </Button>
+      </div>
+    </Dialog>
   );
 }

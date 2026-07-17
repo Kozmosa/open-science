@@ -1,10 +1,13 @@
 import { QueryClient } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
 import { getTasks } from '@/shared/api';
 import { LocaleProvider } from '@/shared/i18n';
 import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
+
+const capabilityState = vi.hoisted(() => ({ overviewAvailable: true }));
 
 vi.mock('../src/index.css', () => ({}));
 
@@ -31,11 +34,22 @@ vi.mock('../src/queryClient', async () => {
 vi.mock('@/features/auth/contexts/AuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useAuth: () => ({
-    user: { user_id: 'user-1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true },
+    user: { id: 'test-user', username: 'admin', display_name: 'Admin', role: 'admin', status: 'active' },
     loading: false,
     login: vi.fn(),
     register: vi.fn(),
     logout: vi.fn(),
+  }),
+}));
+
+vi.mock('@features/domain', () => ({
+  DomainCapabilityProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useDomainCapabilities: () => ({
+    isLoading: false,
+    availability: () => ({
+      available: capabilityState.overviewAvailable,
+      reason: capabilityState.overviewAvailable ? null : 'Today overview is unavailable on this backend.',
+    }),
   }),
 }));
 
@@ -59,8 +73,16 @@ vi.mock('../src/pages/WorkspacesPage', () => ({
   default: () => <div data-testid="workspaces-page">workspaces-page</div>,
 }));
 
+vi.mock('../src/pages/TodayPage', () => ({
+  default: () => <div data-testid="today-page">today-page</div>,
+}));
+
 vi.mock('../src/pages/SettingsPage', () => ({
   default: () => <div data-testid="settings-page">settings-page</div>,
+}));
+
+vi.mock('../src/pages/FileBrowserPage', () => ({
+  default: () => <div data-testid="workspace-browser-page">workspace-browser-page</div>,
 }));
 
 const mockGetTasks = vi.mocked(getTasks);
@@ -93,6 +115,7 @@ const taskBase = {
 
 describe('App routes', () => {
   beforeEach(() => {
+    capabilityState.overviewAvailable = true;
     window.localStorage.clear();
     window.history.pushState({}, '', '/tasks');
     mockGetTasks.mockReset();
@@ -126,6 +149,34 @@ describe('App routes', () => {
     expect(await screen.findByTestId('workspaces-page')).toBeInTheDocument();
   });
 
+  it('uses Today as the default route for new settings', async () => {
+    window.history.pushState({}, '', '/');
+
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('today-page')).toBeInTheDocument();
+  });
+
+  it('temporarily falls back to Tasks when Today capability is unavailable without rewriting the preference', async () => {
+    capabilityState.overviewAvailable = false;
+    const settings = createDefaultWebUiSettings();
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+    window.history.pushState({}, '', '/');
+
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(settingsStorageKey) ?? '{}').general.defaultRoute).toBe('today');
+  });
+
   it('renders non-task routes inside the standard page gutter', async () => {
     window.history.pushState({}, '', '/terminal');
 
@@ -152,7 +203,7 @@ describe('App routes', () => {
     expect(screen.getByRole('main')).toHaveClass('overflow-hidden');
   });
 
-  it('renders a collapsed sidebar by default and live task status summary', async () => {
+  it('renders a collapsed sidebar without polling the full task list', async () => {
     mockGetTasks.mockResolvedValue({
       items: [
         { ...taskBase, task_id: 'task-running', status: 'running' },
@@ -171,8 +222,55 @@ describe('App routes', () => {
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
     expect(screen.getByLabelText('Expand sidebar')).toBeInTheDocument();
-    expect(
-      await screen.findByText('Task | Total: 5, Running: 2, Pending: 1, Finished: 2')
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Task \|/)).not.toBeInTheDocument();
+    expect(mockGetTasks).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: 'Browse Files' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).queryByText('Tasks')).not.toBeInTheDocument();
+    expect(document.title).toBe('Tasks - OpenScience');
+  });
+
+  it('stores sidebar preference under the authenticated user id', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Expand sidebar' }));
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('openscience:preference:test-user:sidebar-collapsed')).toBe('false');
+  });
+
+  it('opens the command palette with English keywords and keeps workspace browser as a deep route', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Open command palette/ }));
+    const commandInput = screen.getByRole('combobox', { name: 'Open command palette' });
+    await user.type(commandInput, 'browse files');
+    await user.click(screen.getByText('Browse Files'));
+    expect(await screen.findByTestId('workspace-browser-page')).toBeInTheDocument();
+  });
+
+  it('opens the command palette with Ctrl/Cmd+Shift+P instead of Ctrl/Cmd+K', async () => {
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl/⌘+Shift+P')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    expect(screen.queryByPlaceholderText('Search pages and actions…')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'P', metaKey: true, shiftKey: true });
+    expect(await screen.findByPlaceholderText('Search pages and actions…')).toBeInTheDocument();
   });
 });

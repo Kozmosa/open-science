@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, BarChart3, Activity, Sparkles, Server } from 'lucide-react';
 import { getMonitoringSettings } from '@/shared/api';
-import { SectionCard, SectionHeader } from '@design-system/primitives';
+import { SectionCard, SectionHeader } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { MonitoringServiceItem } from '@/shared/types';
 import { queryKeys } from '@/shared/api/queryKeys';

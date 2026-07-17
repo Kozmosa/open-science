@@ -17,6 +17,25 @@ if (typeof window !== 'undefined') {
   })
 }
 
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub implements ResizeObserver {
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+  }
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: ResizeObserverStub,
+  })
+}
+
+if (typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.scrollIntoView !== 'function') {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  })
+}
+
 if (typeof HTMLCanvasElement !== 'undefined') {
   const gradientStub = {
     addColorStop: vi.fn(),

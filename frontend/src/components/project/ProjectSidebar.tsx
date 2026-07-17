@@ -1,6 +1,6 @@
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
-import { Button, Input } from '@design-system/primitives';
+import { Button, Input } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { ProjectRecord } from '@/shared/types';
 

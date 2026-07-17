@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Button, FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { WebUiSettingsDocument } from '@features/settings/types';
 
@@ -12,7 +12,7 @@ export interface AppearanceSectionProps {
 export function AppearanceSection({ savedAppearance, onSave, onReset }: AppearanceSectionProps) {
   const t = useT();
   const [draft, setDraft] = useState(savedAppearance);
-  const hasChanges = draft.fontFamily !== savedAppearance.fontFamily;
+  const hasChanges = draft.theme !== savedAppearance.theme;
 
   return (
     <SectionCard
@@ -25,17 +25,18 @@ export function AppearanceSection({ savedAppearance, onSave, onReset }: Appearan
       }
     >
       <div className="grid gap-4 lg:grid-cols-2">
-        <FormField label={t('pages.settings.appearance.fontFamilyLabel')}>
-          <Select
-            aria-label={t('pages.settings.appearance.fontFamilyLabel')}
-            value={draft.fontFamily}
+        <FormField label={t('pages.settings.appearance.themeLabel')}>
+          <NativeSelect
+            aria-label={t('pages.settings.appearance.themeLabel')}
+            value={draft.theme}
             onChange={(event) =>
-              setDraft({ fontFamily: event.target.value as 'sans-serif' | 'serif' })
+              setDraft({ theme: event.target.value as 'light' | 'dark' | 'system' })
             }
           >
-            <option value="sans-serif">{t('pages.settings.appearance.sansSerif')}</option>
-            <option value="serif">{t('pages.settings.appearance.serif')}</option>
-          </Select>
+            <option value="light">{t('pages.settings.appearance.light')}</option>
+            <option value="dark">{t('pages.settings.appearance.dark')}</option>
+            <option value="system">{t('pages.settings.appearance.system')}</option>
+          </NativeSelect>
         </FormField>
       </div>
 

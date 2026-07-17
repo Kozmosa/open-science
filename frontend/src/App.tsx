@@ -1,12 +1,15 @@
-import { lazy, Profiler, Suspense, useEffect, type ProfilerOnRenderCallback } from 'react';
+import { createElement, lazy, Profiler, Suspense, useEffect, type ComponentType, type LazyExoticComponent, type ProfilerOnRenderCallback } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { ErrorBoundary, Layout, ToastProvider } from './components/common';
+import { ErrorBoundary, Layout } from './components/common';
+import { ToastProvider } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { createAppQueryClient } from './queryClient';
 import { SettingsProvider, useGeneralSettings } from '@features/settings';
 import { AuthProvider, useAuth } from '@features/auth';
+import { DomainCapabilityProvider, useDomainCapabilities } from '@features/domain';
 import { reportWebVitals } from '@/shared/utils/reportWebVitals';
+import { getRoutePath, ROUTE_REGISTRY, type AppRouteId } from '@/app/routeRegistry';
 import './index.css';
 
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
@@ -23,6 +26,7 @@ const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const LiteraturePage = lazy(() => import('./pages/LiteraturePage'));
+const TodayPage = lazy(() => import('./pages/TodayPage'));
 
 const queryClient = createAppQueryClient();
 
@@ -53,17 +57,29 @@ if (PROFILER_ENABLED && typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__perfProfilerData = profilerData;
 }
 
-const defaultRoutePathById = {
-  projects: '/projects',
-  terminal: '/terminal',
-  tasks: '/tasks',
-  workspaces: '/workspaces',
-  environments: '/environments',
-} as const;
+const routeComponents: Record<AppRouteId, LazyExoticComponent<ComponentType>> = {
+  today: TodayPage,
+  projects: ProjectsPage,
+  terminal: TerminalPage,
+  tasks: TasksPage,
+  workspaces: WorkspacesPage,
+  'workspace-browser': FileBrowserPage,
+  environments: EnvironmentsPage,
+  resources: ResourcesPage,
+  sessions: SessionsPage,
+  timeline: TimelinePage,
+  literature: LiteraturePage,
+  settings: SettingsPage,
+};
 
 function RootRedirect() {
   const { settings } = useGeneralSettings();
-  return <Navigate replace to={defaultRoutePathById[settings.general.defaultRoute]} />;
+  const { isLoading, availability } = useDomainCapabilities();
+  if (settings.general.defaultRoute === 'today') {
+    if (isLoading) return null;
+    return <Navigate replace to={availability('overview_snapshot').available ? '/today' : '/tasks'} />;
+  }
+  return <Navigate replace to={getRoutePath(settings.general.defaultRoute) ?? '/tasks'} />;
 }
 
 function AuthenticatedRoutes() {
@@ -82,17 +98,16 @@ function AuthenticatedRoutes() {
       >
         <Routes>
           <Route path="/" element={<RootRedirect />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/terminal" element={<TerminalPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/workspaces" element={<WorkspacesPage />} />
-          <Route path="/workspace-browser" element={<FileBrowserPage />} />
-          <Route path="/environments" element={<EnvironmentsPage />} />
-          <Route path="/resources" element={<ResourcesPage />} />
-          <Route path="/sessions" element={isAdmin ? <SessionsPage /> : <Navigate to="/" replace />} />
-          <Route path="/timeline" element={isAdmin ? <TimelinePage /> : <Navigate to="/" replace />} />
-          <Route path="/literature" element={<LiteraturePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          {ROUTE_REGISTRY.map((route) => (
+            <Route
+              key={route.id}
+              path={route.path}
+              element={route.adminOnly && !isAdmin
+                ? <Navigate to="/" replace />
+                : createElement(routeComponents[route.id])}
+            />
+          ))}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </Layout>
@@ -105,7 +120,7 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-gray-400 text-sm">
+      <div className="flex min-h-screen items-center justify-center text-sm text-[var(--osci-color-text-muted)]">
         {t('common.loading')}
       </div>
     );
@@ -133,8 +148,10 @@ function AppRoutes() {
   }
 
   const content = (
-    <SettingsProvider>
-      <AuthenticatedRoutes />
+    <SettingsProvider userId={user.id}>
+      <DomainCapabilityProvider>
+        <AuthenticatedRoutes />
+      </DomainCapabilityProvider>
     </SettingsProvider>
   );
   return PROFILER_ENABLED ? <Profiler id="AppRoutes" onRender={onRender}>{content}</Profiler> : content;

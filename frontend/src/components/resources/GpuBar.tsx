@@ -9,9 +9,9 @@ function formatMB(mb: number): string {
 }
 
 function getBarColor(percent: number): string {
-  if (percent < 50) return 'bg-emerald-500';
-  if (percent < 80) return 'bg-amber-500';
-  return 'bg-red-500';
+  if (percent < 50) return 'var(--osci-color-success)';
+  if (percent < 80) return 'var(--osci-color-warning)';
+  return 'var(--osci-color-danger)';
 }
 
 interface GpuBarProps {
@@ -21,7 +21,7 @@ interface GpuBarProps {
 export default function GpuBar({ gpus }: GpuBarProps) {
   const t = useT();
   if (gpus.length === 0) {
-    return <p className="text-sm text-[var(--text-tertiary)]">{t('components.resources.noGpu')}</p>;
+    return <p className="text-sm text-[var(--osci-color-text-muted)]">{t('components.resources.noGpu')}</p>;
   }
 
   return (
@@ -29,17 +29,17 @@ export default function GpuBar({ gpus }: GpuBarProps) {
       {gpus.map((gpu) => (
         <div key={gpu.index} className="space-y-1">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-[var(--foreground)]">
+            <span className="font-medium text-[var(--osci-color-text)]">
               GPU {gpu.index}: {gpu.name}
             </span>
-            <span className="text-[var(--text-tertiary)]">
+            <span className="text-[var(--osci-color-text-muted)]">
               {gpu.utilization_percent}% | {formatMB(gpu.memory_used_mb)} / {formatMB(gpu.memory_total_mb)}
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--osci-color-surface-subtle)]">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${getBarColor(gpu.utilization_percent)}`}
-              style={{ width: `${Math.min(gpu.utilization_percent, 100)}%` }}
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(gpu.utilization_percent, 100)}%`, backgroundColor: getBarColor(gpu.utilization_percent) }}
             />
           </div>
         </div>

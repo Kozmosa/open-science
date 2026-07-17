@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, SectionCard, SectionHeader, Select } from '@design-system/primitives';
+import { Button, FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { EnvironmentTaskDefaults, TaskConfigurationSettings } from '@features/settings';
 import type { EnvironmentRecord } from '@/shared/types';
@@ -51,7 +51,7 @@ export function ProjectDefaultsSection({
 
       <div className="space-y-4 rounded-lg bg-[var(--bg-secondary)] p-4">
         <FormField label={t('pages.settings.project.defaultEnvironmentLabel')}>
-          <Select
+          <NativeSelect
             aria-label={t('pages.settings.project.defaultEnvironmentLabel')}
             value={defaultEnvironmentDraft}
             onChange={(event) => setDefaultEnvironmentDraft(event.target.value)}
@@ -63,7 +63,7 @@ export function ProjectDefaultsSection({
                 {environment.alias} · {environment.display_name}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </FormField>
 
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -5,6 +5,7 @@ import {
   getDeploymentVersion,
   getEnvironments,
   getFrontendBuildVersion,
+  getProjectEnvironmentReferences,
   getSearchSettings,
   getSkillRegistries,
   getSkills,
@@ -43,6 +44,7 @@ vi.mock('@/shared/api', () => ({
   getDeploymentVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getFrontendBuildVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getEnvironments: vi.fn(),
+  getProjectEnvironmentReferences: vi.fn(() => Promise.resolve({ items: [] })),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
   getSearchSettings: vi.fn(() => Promise.resolve({
@@ -64,11 +66,18 @@ vi.mock('@/shared/api', () => ({
   installSkillRegistry: vi.fn(),
 }));
 
+vi.mock('@features/domain', () => ({
+  getDomainProjects: vi.fn(() => Promise.resolve({
+    items: [{ project_id: 'project-user-default', is_default: true }],
+  })),
+}));
+
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetDeploymentVersion = vi.mocked(getDeploymentVersion);
 const mockGetFrontendBuildVersion = vi.mocked(getFrontendBuildVersion);
+const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
 const mockGetSkillRegistries = vi.mocked(getSkillRegistries);
@@ -109,6 +118,8 @@ beforeEach(() => {
   mockGetDeploymentVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
   mockGetFrontendBuildVersion.mockReset();
   mockGetFrontendBuildVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
+  mockGetProjectEnvironmentReferences.mockReset();
+  mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetSkillRegistries.mockReset();
   mockGetSkillRegistries.mockResolvedValue({ items: [] });
   vi.mocked(getSearchSettings).mockReset();
@@ -131,13 +142,13 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
-  it('renders page title in the current language and eyebrow in the alternate language', async () => {
+  it('renders localized settings copy without mixing CJK into English', async () => {
     const { unmount } = renderWithProviders(<SettingsPage />, {
       locale: 'en',
     });
 
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
-    expect(screen.getByText('设置')).toBeInTheDocument();
+    expect(screen.getByText('SETTINGS')).toBeInTheDocument();
 
     unmount();
     renderWithProviders(<SettingsPage />, {
@@ -184,7 +195,7 @@ describe('SettingsPage', () => {
     expect(screen.getByTestId('deployment-version-frontend-commit')).toHaveTextContent('feedfa');
   });
 
-  it('hydrates codex profile defaults from local codex settings API', async () => {
+  it('does not request or persist host Codex credentials in browser settings', async () => {
     window.localStorage.setItem(
       settingsStorageKey,
       JSON.stringify(createDefaultWebUiSettings())
@@ -198,12 +209,10 @@ describe('SettingsPage', () => {
       target: { value: 'codex-app-server-default' },
     });
 
-    await waitFor(() =>
-      expect(screen.getByLabelText('Codex config.toml')).toHaveValue(
-        'model = "from-home"\nprovider = "openai"\n'
-      )
-    );
-    expect(screen.getByLabelText('Codex auth.json')).toHaveValue('{"token":"from-home"}\n');
+    expect(screen.getByLabelText('Codex config.toml')).toHaveValue('');
+    expect(screen.getByLabelText('Codex auth.json')).toHaveValue('');
+    expect(mockGetCodexDefaults).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(settingsStorageKey)).not.toContain('from-home');
   });
 
   it('does not overwrite non-empty saved codex profile values with host defaults', async () => {
@@ -217,6 +226,8 @@ describe('SettingsPage', () => {
     }
     codexProfile.codexConfigToml = 'model = "user-saved"\n';
     codexProfile.codexAuthJson = '{"token":"user-saved"}\n';
+    codexProfile.codexConfigTomlSource = 'custom';
+    codexProfile.codexAuthJsonSource = 'custom';
     settings.taskConfiguration.defaultResearchAgentProfileId = 'codex-app-server-default';
     window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
 
@@ -304,7 +315,7 @@ describe('SettingsPage', () => {
       const storedSettings = JSON.parse(
         window.localStorage.getItem(settingsStorageKey) ?? '{}'
       ) as ReturnType<typeof createDefaultWebUiSettings>;
-      expect(storedSettings.projectDefaults.default.defaultEnvironmentId).toBe('env-1');
+      expect(storedSettings.projectDefaults['project-user-default'].defaultEnvironmentId).toBe('env-1');
     });
 
     const environmentCard = screen
@@ -332,7 +343,7 @@ describe('SettingsPage', () => {
       const storedSettings = JSON.parse(
         window.localStorage.getItem(settingsStorageKey) ?? '{}'
       ) as ReturnType<typeof createDefaultWebUiSettings>;
-      expect(storedSettings.projectDefaults.default.environmentDefaults['env-1']).toEqual({
+      expect(storedSettings.projectDefaults['project-user-default'].environmentDefaults['env-1']).toEqual({
         titleTemplate: 'GPU daily check',
         taskInputTemplate: 'Check CUDA, torch, and disk status.',
         researchAgentProfileId: defaultResearchAgentProfileId,
@@ -345,6 +356,7 @@ describe('SettingsPage', () => {
     renderWithProviders(<SettingsPage />);
 
     await screen.findByRole('heading', { name: 'Settings' });
+    expect(screen.getByText('Save changes to apply this theme across the entire interface.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'LLM Providers' }));
 

@@ -216,6 +216,7 @@ def _serialize_task_edge(edge: TaskEdgeRecord) -> TaskEdgeResponse:
         project_id=edge.project_id,
         source_task_id=edge.source_task_id,
         target_task_id=edge.target_task_id,
+        relationship_type="related_to",
         created_at=edge.created_at.isoformat(),
     )
 

@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
 import { createTestQueryClient, renderWithProviders } from '@/shared/test/render';
@@ -24,9 +25,12 @@ import {
   getTaskOutput,
   getTasks,
   getWorkspaces,
+  retryTask,
 } from '@/shared/api';
 import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
+import { queryKeys } from '@/shared/api/queryKeys';
+import { getDomainProjects } from '@features/domain';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -40,6 +44,19 @@ class MockEventSource {
     this.url = url;
     MockEventSource.instances.push(this);
   }
+}
+
+function stubTaskViewport(narrow: boolean): void {
+  vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+    matches: query === '(max-width: 767px)' ? narrow : false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as unknown as typeof window.matchMedia);
 }
 
 const project = {
@@ -247,7 +264,122 @@ vi.mock('@/shared/api', () => ({
   getTaskMessages: vi.fn(),
   getTasks: vi.fn(),
   getWorkspaces: vi.fn(),
+  retryTask: vi.fn(),
 }));
+
+vi.mock('@features/domain', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@features/domain')>();
+  return {
+    ...actual,
+    getDomainCapabilities: vi.fn(() => Promise.resolve({
+      domain_contract_version: 2,
+      mode: 'v2',
+      standard_task_create: true,
+      project_context: true,
+      workspace_links: true,
+      task_attempts: true,
+      task_dispatcher: {
+        participant_type: 'task-dispatcher',
+        ready: true,
+        maintenance_active: false,
+        maintenance_epoch: null,
+        stale_after_seconds: 30,
+        registered_participant_ids: ['dispatcher'],
+        active_participant_ids: ['dispatcher'],
+        fresh_participant_ids: ['dispatcher'],
+        stale_participant_ids: [],
+      },
+      literature_research_task: true,
+      overview_snapshot: true,
+      overview_snapshot_job_store: true,
+      overview_snapshot_planner: {
+        job_store_ready: true,
+        planner_ready: true,
+        planner_status: 'ready',
+      },
+    })),
+    getDomainProjects: vi.fn(() => Promise.resolve({
+      items: [{
+        project_id: 'default',
+        name: 'Default Project',
+        description: '',
+        status: 'active',
+        is_default: true,
+        owner_user_id: 'user-1',
+        current_user_role: 'owner',
+        created_at: '2026-04-23T08:00:00Z',
+        updated_at: '2026-04-23T08:00:00Z',
+        recent_activity_at: '2026-04-23T08:00:00Z',
+        workspace_count: 1,
+        executable_workspace_count: 1,
+        task_count: 1,
+        active_task_count: 1,
+        running_task_count: 1,
+        primary_workspace: null,
+        attention_required: false,
+        attention_reasons: [],
+        permissions: {
+          can_edit: true,
+          can_publish: true,
+          can_manage_members: true,
+          can_archive: false,
+          can_unarchive: false,
+          can_create_task: true,
+        },
+      }],
+    })),
+    getDomainWorkspaces: vi.fn(() => Promise.resolve({
+      items: [{
+        workspace_id: 'workspace-default',
+        label: 'Repository Default',
+        description: 'Seed workspace',
+        canonical_path: '/workspace/project',
+        workspace_context: null,
+        status: 'active',
+        owner_user_id: 'user-1',
+        created_at: '2026-04-23T08:00:00Z',
+        updated_at: '2026-04-23T08:00:00Z',
+        recent_activity_at: '2026-04-23T08:00:00Z',
+        environment: {
+          environment_id: 'env-1',
+          alias: 'gpu-lab',
+          display_name: 'GPU Lab',
+          status: 'active',
+        },
+        project_links: [{
+          project_id: 'default',
+          project_name: 'Default Project',
+          project_status: 'active',
+          current_user_role: 'owner',
+          link_status: 'active',
+          is_primary: true,
+          can_execute: true,
+          cannot_execute_reason: null,
+        }],
+        task_count: 1,
+        active_task_count: 1,
+        can_execute: true,
+        cannot_execute_reason: null,
+        can_manage_registry: true,
+        git_status: { state: 'not_collected', branch: null, is_dirty: null, observed_at: null },
+      }],
+    })),
+  };
+});
+
+vi.mock('@features/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@features/auth')>();
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: { id: 'user-1', username: 'user-1', display_name: 'User One', role: 'member', status: 'active' },
+      loading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+    }),
+  };
+});
 
 const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
@@ -261,12 +393,16 @@ const mockGetTaskMessages = vi.mocked(getTaskMessages);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetTasks = vi.mocked(getTasks);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
+const mockRetryTask = vi.mocked(retryTask);
+const mockGetDomainProjects = vi.mocked(getDomainProjects);
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
+  stubTaskViewport(false);
   MockEventSource.instances = [];
   vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource);
   window.localStorage.clear();
@@ -283,6 +419,7 @@ beforeEach(() => {
   mockGetTasks.mockReset();
   mockGetTaskMessages.mockReset();
   mockGetWorkspaces.mockReset();
+  mockRetryTask.mockReset();
 
   mockBuildTaskStreamUrl.mockImplementation(
     (taskId, afterSeq = 0) => `/api/tasks/${taskId}/stream?after_seq=${afterSeq}`
@@ -308,6 +445,26 @@ beforeEach(() => {
       }),
     ])
   );
+  mockRetryTask.mockResolvedValue({
+    new_task: taskSummary,
+    archived_task_id: null,
+    edge_id: 'retry:task-1:2',
+    task: taskSummary,
+    attempt: {
+      attempt_id: 'attempt-2',
+      task_id: 'task-1',
+      attempt_seq: 2,
+      trigger: 'retry',
+      status: 'queued',
+    },
+    dispatch: {
+      dispatch_id: 'dispatch-2',
+      task_id: 'task-1',
+      attempt_id: 'attempt-2',
+      status: 'pending',
+      launch_state: 'pending',
+    },
+  });
 });
 
 describe('task output helpers', () => {
@@ -399,13 +556,98 @@ describe('task output helpers', () => {
 });
 
 describe('TasksPage', () => {
+  it('refreshes the same Task Attempt and actual Project caches after retry', async () => {
+    const user = userEvent.setup();
+    const failedTask = { ...taskSummary, status: 'failed' as const, project_id: 'project-retry' };
+    const failedRecord = { ...taskRecord, ...failedTask };
+    mockGetTasks.mockResolvedValue({ items: [failedTask] });
+    mockGetTask.mockResolvedValue(failedRecord);
+    mockGetDomainProjects.mockResolvedValueOnce({
+      items: [{
+        project_id: 'project-retry', name: 'Retry Project', description: null, status: 'active',
+        is_default: false, owner_user_id: 'user-1', current_user_role: 'owner',
+        created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z',
+        recent_activity_at: '2026-04-23T08:00:00Z', workspace_count: 1,
+        executable_workspace_count: 1, task_count: 1, active_task_count: 0,
+        running_task_count: 0, primary_workspace: null, attention_required: false,
+        attention_reasons: [], permissions: {
+          can_edit: true, can_publish: true, can_manage_members: true, can_archive: true,
+          can_unarchive: false, can_create_task: true,
+        },
+      }],
+    });
+    mockRetryTask.mockResolvedValue({
+      new_task: failedTask,
+      task: failedTask,
+      archived_task_id: null,
+      edge_id: 'retry:task-1:2',
+      attempt: {
+        attempt_id: 'attempt-2', task_id: 'task-1', attempt_seq: 2, trigger: 'retry', status: 'queued',
+      },
+      dispatch: {
+        dispatch_id: 'dispatch-2', task_id: 'task-1', attempt_id: 'attempt-2', status: 'pending', launch_state: 'pending',
+      },
+    });
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    renderWithProviders(<TasksPage />, { client, route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Retry as new Attempt' }));
+
+    await waitFor(() => expect(mockRetryTask).toHaveBeenCalledWith('task-1', expect.stringMatching(/^task\.retry/)));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.detail('task-1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.domain.taskAttempts('task-1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projectTasks.byProject('project-retry') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.taskEdges.byProject('project-retry') });
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: queryKeys.taskEdges.byProject('default') });
+  });
+
+  it('uses a list-first task flow on narrow screens and opens the inspector as a sheet', async () => {
+    stubTaskViewport(true);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks' });
+
+    expect(await screen.findByTestId('task-mobile-list')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Train model' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('task-metadata-sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('separator')).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Train model/ }));
+
+    const detailHeading = await screen.findByRole('heading', { name: 'Train model' });
+    expect(detailHeading).toBeInTheDocument();
+    expect(detailHeading.closest('section')?.parentElement).toHaveClass('flex');
+    expect(screen.getByRole('button', { name: 'Back to task list' })).toBeInTheDocument();
+    expect(screen.queryByTestId('task-mobile-list')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(await screen.findByRole('dialog', { name: 'Task inspector' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Task inspector' })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to task list' }));
+    expect(await screen.findByTestId('task-mobile-list')).toBeInTheDocument();
+  });
+
+  it('opens an explicit task deep link directly on narrow screens', async () => {
+    stubTaskViewport(true);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1&drawer=closed' });
+
+    expect(await screen.findByRole('heading', { name: 'Train model' })).toBeInTheDocument();
+    expect(screen.queryByTestId('task-mobile-list')).not.toBeInTheDocument();
+  });
+
   it('applies the standard page inset around the split layout', async () => {
     const { container } = renderWithProviders(<TasksPage />);
 
     const sidebar = await screen.findByTestId('task-sidebar');
-    expect(sidebar).toHaveClass('bg-[var(--surface)]');
-    expect(sidebar.parentElement?.querySelector('main')).toHaveClass('bg-[var(--surface)]');
-    expect(await screen.findByTestId('task-metadata-sidebar')).toHaveClass('bg-[var(--surface)]');
+    expect(sidebar).toHaveClass('bg-[var(--osci-color-surface)]');
+    expect(sidebar.parentElement?.querySelector('main')).toHaveClass('bg-[var(--osci-color-surface)]');
+    expect(await screen.findByTestId('task-metadata-sidebar')).toHaveClass('bg-[var(--osci-color-surface)]');
     expect(container.firstElementChild).toHaveClass('p-3');
   });
 
@@ -482,7 +724,6 @@ describe('TasksPage', () => {
       expect(payload).toMatchObject({
         project_id: 'default',
         workspace_id: 'workspace-default',
-        environment_id: 'env-1',
         researcher_type: 'vanilla',
         harness_engine: 'claude-code',
         prompt: 'Implement harness\nMake it stream output.',
@@ -490,6 +731,7 @@ describe('TasksPage', () => {
         mcp_servers: [],
         title: undefined,
       });
+      expect(payload).not.toHaveProperty('environment_id');
     });
     expect(await screen.findByRole('heading', { name: 'Implement harness' })).toBeInTheDocument();
     expect((await screen.findAllByText('/workspace/created')).length).toBeGreaterThan(0);
@@ -528,6 +770,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Use selected skills for this task.' },
     });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
@@ -537,56 +780,32 @@ describe('TasksPage', () => {
     });
   });
 
-  it('creates a task with user-selected project workspace and environment bindings', async () => {
-    const alternateWorkspace: WorkspaceRecord = {
-      ...workspace,
-      workspace_id: 'workspace-alt',
-      label: 'Alternate Workspace',
-      default_workdir: '/workspace/alternate',
-    };
-    const alternateEnvironment: EnvironmentRecord = {
-      ...environment,
-      id: 'env-2',
-      alias: 'cpu-lab',
-      display_name: 'CPU Lab',
-      default_workdir: '/workspace/cpu',
-    };
+  it('derives the environment from the selected executable workspace', async () => {
     mockGetTasks.mockResolvedValueOnce({ items: [] });
-    mockGetProjects.mockResolvedValue({
-      items: [
-        { project_id: 'default', name: 'Default Project', description: '', default_workspace_id: 'workspace-default', default_environment_id: 'env-1', created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z' },
-        { project_id: 'project-alt', name: 'Alternate Project', description: '', default_workspace_id: null, default_environment_id: null, created_at: '2026-04-23T08:00:00Z', updated_at: '2026-04-23T08:00:00Z' },
-      ],
-    });
-    mockGetWorkspaces.mockResolvedValue({ items: [workspace, alternateWorkspace] });
-    mockGetEnvironments.mockResolvedValue({ items: [environment, alternateEnvironment] });
     mockCreateTask.mockResolvedValue({
       ...taskSummary,
       task_id: 'task-selected-bindings',
       title: 'Selected bindings',
       status: 'queued',
-      project_id: 'project-alt',
-      workspace_id: 'workspace-alt',
-      environment_id: 'env-2',
     });
 
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
     await waitFor(() => expect(screen.getByLabelText('Project')).toHaveValue('default'));
-    fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'project-alt' } });
-    fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'workspace-alt' } });
-    fireEvent.change(screen.getByLabelText('Environment'), { target: { value: 'env-2' } });
+    expect(screen.getByLabelText('Environment')).toHaveValue('GPU Lab (gpu-lab)');
+    expect(screen.getByLabelText('Environment')).toHaveAttribute('readonly');
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Run with selected bindings.' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
       expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
-        project_id: 'project-alt',
-        workspace_id: 'workspace-alt',
-        environment_id: 'env-2',
+        project_id: 'default',
+        workspace_id: 'workspace-default',
         prompt: 'Run with selected bindings.',
       });
+      expect(mockCreateTask.mock.calls[0]?.[0]).not.toHaveProperty('environment_id');
     });
   });
 
@@ -609,6 +828,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Reproduce the baseline experiment.' },
     });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
@@ -749,6 +969,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Dialog task' } });
     fireEvent.change(screen.getByLabelText('Execution Engine'), { target: { value: 'agent-sdk' } });
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Dialog task body' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
@@ -758,7 +979,8 @@ describe('TasksPage', () => {
           prompt: 'Dialog task body',
           harness_engine: 'agent-sdk',
           researcher_type: 'vanilla',
-        })
+        }),
+        expect.stringMatching(/^task\.create/),
       );
     });
 
@@ -932,6 +1154,7 @@ describe('TasksPage', () => {
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Run the ARIS checklist.' },
     });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() =>
@@ -941,7 +1164,8 @@ describe('TasksPage', () => {
           harness_engine: 'codex-app-server',
           prompt: 'Run the ARIS checklist.',
           skills: [],
-        })
+        }),
+        expect.stringMatching(/^task\.create/),
       )
     );
     expect(screen.queryByLabelText('Skills')).not.toBeInTheDocument();

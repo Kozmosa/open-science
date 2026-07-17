@@ -738,7 +738,11 @@ export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
   };
   const prompt = payload.prompt ?? legacyPayload.task_input ?? '';
   const harnessEngine = payload.harness_engine ?? legacyPayload.task_profile ?? 'claude-code';
-  const environment = findEnvironment(payload.environment_id);
+  const environmentId = payload.environment_id ?? mockEnvironments[0]?.id;
+  if (!environmentId) {
+    throw new Error('No mock environment is available for Task creation');
+  }
+  const environment = findEnvironment(environmentId);
   const workspace = findWorkspace(payload.workspace_id);
   const timestamp = nowIso();
   const taskId = `task-${++mockTaskCounter}`;
@@ -1106,6 +1110,7 @@ export function mockCreateTaskEdge(
     project_id: projectId,
     source_task_id: payload.source_task_id,
     target_task_id: payload.target_task_id,
+    relationship_type: 'related_to',
     created_at: new Date().toISOString(),
   };
   if (!mockEdges[projectId]) {

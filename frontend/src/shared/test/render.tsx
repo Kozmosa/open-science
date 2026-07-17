@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render } from '@testing-library/react';
-import { ToastProvider } from '@/components/common';
+import { ToastProvider } from '@design-system';
 import { AuthProvider } from '@features/auth';
 import { LocaleProvider, type Locale } from '@/shared/i18n';
 import { appQueryClientDefaultOptions } from '@/queryClient';

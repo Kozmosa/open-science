@@ -139,6 +139,7 @@ async def test_project_task_edges_are_persisted_and_idempotent(tmp_path: Path) -
         assert edge["project_id"] == project_id
         assert edge["source_task_id"] == "task-a"
         assert edge["target_task_id"] == "task-b"
+        assert edge["relationship_type"] == "related_to"
 
         duplicate_response = await client.post(
             f"/projects/{project_id}/task-edges",

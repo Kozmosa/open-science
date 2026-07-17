@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import os
 import stat
 import subprocess
@@ -30,30 +29,14 @@ def _make_fake_command_bin(tmp_path: Path) -> Path:
     bin_dir.mkdir()
     fake_uv = """#!/usr/bin/env bash
 set -euo pipefail
-log_path="${AINRF_TEST_LOG_DIR}/backend.log"
+log_path="${AINRF_TEST_LOG_DIR}/launcher.log"
 {
   printf 'PWD=%s\n' "${PWD}"
   printf 'UV_CACHE_DIR=%s\n' "${UV_CACHE_DIR:-}"
-  printf 'AINRF_API_KEY_HASHES=%s\n' "${AINRF_API_KEY_HASHES:-}"
-  printf 'AINRF_WEBUI_API_KEY=%s\n' "${AINRF_WEBUI_API_KEY:-}"
-  printf 'OPENSCIENCE_AUTH_COOKIE_NAMESPACE=%s\n' "${OPENSCIENCE_AUTH_COOKIE_NAMESPACE:-}"
   printf 'ARGS=%s\n' "$*"
 } > "${log_path}"
-sleep 0.1
-"""
-    fake_npm = """#!/usr/bin/env bash
-set -euo pipefail
-log_path="${AINRF_TEST_LOG_DIR}/frontend.log"
-{
-  printf 'PWD=%s\n' "${PWD}"
-  printf 'UV_CACHE_DIR=%s\n' "${UV_CACHE_DIR:-}"
-  printf 'AINRF_WEBUI_API_KEY=%s\n' "${AINRF_WEBUI_API_KEY:-}"
-  printf 'ARGS=%s\n' "$*"
-} > "${log_path}"
-sleep 0.2
 """
     _write_executable(bin_dir / "uv", fake_uv)
-    _write_executable(bin_dir / "npm", fake_npm)
     return bin_dir
 
 
@@ -78,7 +61,7 @@ def _run_webui_script(
     )
 
 
-def test_webui_sh_sets_default_cache_and_generates_session_token(
+def test_webui_sh_maps_default_personal_dev_mode_to_unified_launcher(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     repo_root = Path(__file__).resolve().parent.parent
@@ -87,22 +70,15 @@ def test_webui_sh_sets_default_cache_and_generates_session_token(
     result = _run_webui_script(repo_root, tmp_path, [])
 
     assert result.returncode == 0
-    backend = _load_key_value_lines(tmp_path / "backend.log")
-    frontend = _load_key_value_lines(tmp_path / "frontend.log")
-    expected_hash = hashlib.sha256(frontend["AINRF_WEBUI_API_KEY"].encode("utf-8")).hexdigest()
+    launcher = _load_key_value_lines(tmp_path / "launcher.log")
 
-    assert backend["PWD"] == str(repo_root)
-    assert frontend["PWD"] == str(repo_root / "frontend")
-    assert backend["UV_CACHE_DIR"] == "/tmp/uv-cache"
-    assert frontend["UV_CACHE_DIR"] == "/tmp/uv-cache"
-    assert frontend["AINRF_WEBUI_API_KEY"] != ""
-    assert backend["AINRF_API_KEY_HASHES"] == expected_hash
-    assert backend["OPENSCIENCE_AUTH_COOKIE_NAMESPACE"] == "development"
-    assert (
-        backend["ARGS"]
-        == f"run openscience serve --host 127.0.0.1 --port 8000 --state-root {Path.home()}/.ainrf"
+    assert launcher["PWD"] == str(repo_root)
+    assert launcher["UV_CACHE_DIR"] == "/tmp/uv-cache"
+    assert launcher["ARGS"] == (
+        f"run python {repo_root / 'scripts' / 'dev.py'} up --mode dev "
+        f"--personal-state-root {Path.home() / '.ainrf'} --bind-host 127.0.0.1 "
+        "--frontend-host 0.0.0.0 --api-port 8000 --frontend-port 5173 --foreground"
     )
-    assert frontend["ARGS"] == "run dev -- --host 0.0.0.0 --port 5173"
 
 
 def test_webui_sh_supports_preview_and_backend_public_with_explicit_token(
@@ -120,15 +96,12 @@ def test_webui_sh_supports_preview_and_backend_public_with_explicit_token(
     )
 
     assert result.returncode == 0
-    backend = _load_key_value_lines(tmp_path / "backend.log")
-    frontend = _load_key_value_lines(tmp_path / "frontend.log")
+    launcher = _load_key_value_lines(tmp_path / "launcher.log")
 
-    assert backend["UV_CACHE_DIR"] == "/var/tmp/custom-uv-cache"
-    assert frontend["UV_CACHE_DIR"] == "/var/tmp/custom-uv-cache"
-    assert frontend["AINRF_WEBUI_API_KEY"] == "fixed-test-token"
-    assert backend["AINRF_API_KEY_HASHES"] == hashlib.sha256(b"fixed-test-token").hexdigest()
-    assert (
-        backend["ARGS"]
-        == f"run openscience serve --host 0.0.0.0 --port 8000 --state-root {Path.home()}/.ainrf"
+    assert launcher["UV_CACHE_DIR"] == "/var/tmp/custom-uv-cache"
+    assert launcher["ARGS"] == (
+        f"run python {repo_root / 'scripts' / 'dev.py'} up --mode preview "
+        f"--personal-state-root {Path.home() / '.ainrf'} --bind-host 0.0.0.0 "
+        "--frontend-host 0.0.0.0 --api-port 8000 --frontend-port 4173 --foreground "
+        "--api-key fixed-test-token"
     )
-    assert frontend["ARGS"] == "run preview -- --host 0.0.0.0 --port 4173"

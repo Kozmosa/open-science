@@ -1,6 +1,10 @@
 // navigation messages — English
 const navigation = {
     navigation: {
+      today: {
+        label: 'Today',
+        description: 'Actionable overview from persisted OpenScience projections',
+      },
       projects: {
         label: 'Projects',
         description: 'Project canvas and task graph visualization',
@@ -53,6 +57,12 @@ const navigation = {
       collapseSidebar: 'Collapse sidebar',
       expandSidebar: 'Expand sidebar',
       resizeSidebar: 'Resize sidebar',
+      openNavigation: 'Open navigation',
+      closeNavigation: 'Close navigation',
+      openCommandPalette: 'Open command palette',
+      commandPlaceholder: 'Search pages and actions…',
+      commandNoResults: 'No matching destination.',
+      accountMenu: 'Open account menu',
     },
 };
 

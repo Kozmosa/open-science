@@ -12,7 +12,6 @@ import type {
 
 export const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
 export const EMPTY_PROJECT_REFS: ProjectEnvironmentReference[] = [];
-export const defaultProjectId = 'default';
 
 export type EnvironmentEditorMode = 'create' | 'edit';
 

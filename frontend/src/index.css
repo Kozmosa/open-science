@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "./design-system/tokens/prism-tokens.css";
+@import "./design-system/tokens/index.css";
 
 html,
 body,
@@ -10,25 +10,26 @@ body,
 
 html {
   -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  font-family: var(--font-text);
-  background: var(--background);
-  color: var(--foreground);
+  font-family: var(--osci-font-ui);
+  background: var(--osci-color-canvas);
+  color: var(--osci-color-text);
   font-size: 14px;
   line-height: 1.5;
 }
 
 *:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid var(--osci-color-focus);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  background: color-mix(in srgb, var(--osci-color-primary) 20%, transparent);
 }
 
 code,
@@ -53,30 +54,30 @@ pre {
 
 /* React Flow theme integration */
 .react-flow {
-  --xy-background: var(--background);
-  --xy-edge-stroke: var(--border);
-  --xy-edge-stroke-selected: var(--prism-primary);
-  --xy-handle-background: var(--prism-primary);
-  --xy-handle-border-color: var(--surface);
-  --xy-selection-background: var(--prism-primary-soft);
-  --xy-selection-border: var(--prism-primary-border);
-  --xy-node-background: var(--surface);
-  --xy-node-border: var(--border);
-  --xy-node-color: var(--foreground);
+  --xy-background: var(--osci-color-canvas);
+  --xy-edge-stroke: var(--osci-color-border);
+  --xy-edge-stroke-selected: var(--osci-color-primary);
+  --xy-handle-background: var(--osci-color-primary);
+  --xy-handle-border-color: var(--osci-color-surface);
+  --xy-selection-background: var(--osci-color-primary-soft);
+  --xy-selection-border: var(--osci-color-primary-border);
+  --xy-node-background: var(--osci-color-surface);
+  --xy-node-border: var(--osci-color-border);
+  --xy-node-color: var(--osci-color-text);
 
   /* Controls (fit-view / zoom buttons) */
-  --xy-controls-button-background-color: var(--prism-glass-strong);
-  --xy-controls-button-background-color-hover: var(--surface-hover);
-  --xy-controls-button-color: var(--text-secondary);
-  --xy-controls-button-color-hover: var(--foreground);
-  --xy-controls-button-border-color: var(--border);
-  --xy-controls-box-shadow: var(--shadow-sm);
+  --xy-controls-button-background-color: var(--osci-topbar-background);
+  --xy-controls-button-background-color-hover: var(--osci-color-surface-subtle);
+  --xy-controls-button-color: var(--osci-color-text-secondary);
+  --xy-controls-button-color-hover: var(--osci-color-text);
+  --xy-controls-button-border-color: var(--osci-color-border);
+  --xy-controls-box-shadow: var(--osci-shadow-sm);
 
   /* MiniMap */
-  --xy-minimap-background-color: var(--surface);
+  --xy-minimap-background-color: var(--osci-color-surface);
   --xy-minimap-mask-background-color: rgba(0, 0, 0, 0.35);
-  --xy-minimap-node-background-color: var(--prism-primary);
-  --xy-minimap-node-stroke-color: var(--border);
+  --xy-minimap-node-background-color: var(--osci-color-primary);
+  --xy-minimap-node-stroke-color: var(--osci-color-border);
 }
 
 .react-flow__attribution {

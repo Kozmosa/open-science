@@ -6,9 +6,9 @@ interface CpuRingProps {
 }
 
 function getColor(percent: number): string {
-  if (percent < 50) return '#10b981';
-  if (percent < 80) return '#f59e0b';
-  return '#ef4444';
+  if (percent < 50) return 'var(--osci-color-success)';
+  if (percent < 80) return 'var(--osci-color-warning)';
+  return 'var(--osci-color-danger)';
 }
 
 export default function CpuRing({ percent, core_count }: CpuRingProps) {
@@ -27,7 +27,7 @@ export default function CpuRing({ percent, core_count }: CpuRingProps) {
             cy="40"
             r={radius}
             fill="none"
-            stroke="var(--bg-tertiary)"
+            stroke="var(--osci-color-surface-subtle)"
             strokeWidth="8"
           />
           <circle
@@ -48,7 +48,7 @@ export default function CpuRing({ percent, core_count }: CpuRingProps) {
         </div>
       </div>
       <div>
-        <p className="text-xs text-[var(--text-tertiary)]">{t('components.resources.cpu')}</p>
+        <p className="text-xs text-[var(--osci-color-text-muted)]">{t('components.resources.cpu')}</p>
         <p className="text-sm font-medium">{core_count} {t('components.resources.cores')}</p>
       </div>
     </div>

@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
+from ainrf.api.domain_schemas import (
+    DomainProjectListResponse,
+    DomainProjectSummaryResponse,
+    DomainWorkspaceListResponse,
+    DomainWorkspaceResponse,
+)
 from ainrf.api.idempotency import require_idempotency_key
+from ainrf.api.workspace_preflight import validate_workspace_registration_path
 from ainrf.api.schemas import (
     ProjectContextCandidateCreateRequest,
     ProjectContextCandidateRejectRequest,
@@ -116,7 +123,11 @@ async def request_today_overview_refresh(request: Request) -> dict[str, object]:
     if not isinstance(user_id, str):
         raise HTTPException(status_code=401, detail="Authenticated user ID is required")
     try:
-        return snapshot_service.request_refresh(user_id, trigger="manual")
+        return snapshot_service.request_refresh(
+            user_id,
+            trigger="manual",
+            idempotency_key=require_idempotency_key(request),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -196,15 +207,93 @@ async def create_project(request: Request, payload: dict[str, object]) -> dict[s
         raise _translate(exc) from exc
 
 
+@router.get("/projects", response_model=DomainProjectListResponse)
+async def list_domain_projects(
+    request: Request,
+    include_archived: bool = Query(False),
+) -> DomainProjectListResponse:
+    try:
+        return DomainProjectListResponse.model_validate(
+            {
+                "items": _service(request).project_console_summaries(
+                    get_current_user(request), include_archived=include_archived
+                )
+            }
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/projects/{project_id}", response_model=DomainProjectSummaryResponse)
+async def get_domain_project(project_id: str, request: Request) -> DomainProjectSummaryResponse:
+    try:
+        return DomainProjectSummaryResponse.model_validate(
+            _service(request).project_console_summary(project_id, get_current_user(request))
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
 @router.post("/workspaces")
 async def create_workspace(request: Request, payload: dict[str, object]) -> dict[str, object]:
     try:
-        return _service(request).create_workspace(
-            get_current_user(request),
-            environment_id=str(payload["environment_id"]),
-            canonical_path=str(payload["canonical_path"]),
-            label=str(payload["label"]),
-            idempotency_key=require_idempotency_key(request, payload.get("idempotency_key")),
+        service = _service(request)
+        user = get_current_user(request)
+        user_id = user.get("id")
+        if not isinstance(user_id, str):
+            raise ValueError("Authenticated user ID is required")
+        environment_id = str(payload["environment_id"])
+        canonical_path = service.canonical_workspace_path(str(payload["canonical_path"]))
+        label = str(payload["label"])
+        idempotency_key = require_idempotency_key(request, payload.get("idempotency_key"))
+        replay = service.workspace_create_replay(
+            user,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            label=label,
+            idempotency_key=idempotency_key,
+        )
+        if replay is not None:
+            return replay
+        await validate_workspace_registration_path(
+            request,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            user_id=user_id,
+        )
+        return service.create_workspace(
+            user,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            label=label,
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/workspaces", response_model=DomainWorkspaceListResponse)
+async def list_domain_workspaces(
+    request: Request,
+    include_unregistered: bool = Query(False),
+) -> DomainWorkspaceListResponse:
+    try:
+        return DomainWorkspaceListResponse.model_validate(
+            {
+                "items": _service(request).workspace_console_entries(
+                    get_current_user(request), include_unregistered=include_unregistered
+                )
+            }
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/workspaces/{workspace_id}", response_model=DomainWorkspaceResponse)
+async def get_domain_workspace(workspace_id: str, request: Request) -> DomainWorkspaceResponse:
+    try:
+        return DomainWorkspaceResponse.model_validate(
+            _service(request).workspace_console_entry(workspace_id, get_current_user(request))
         )
     except Exception as exc:
         raise _translate(exc) from exc

@@ -14,7 +14,9 @@ const manifestPath = resolve(outDir, '.vite/manifest.json');
 const KIB = 1024;
 const MIB = 1024 * KIB;
 const budgets = {
-  entry: { raw: 750 * KIB, gzip: 250 * KIB },
+  // The authenticated shell now includes the public design-system barrel plus
+  // Radix focus, toast, and form-control accessibility infrastructure.
+  entry: { raw: 825 * KIB, gzip: 260 * KIB },
   fileBrowserBeforeEditor: { raw: 850 * KIB, gzip: 300 * KIB },
   monacoIncremental: { raw: 4 * MIB, gzip: 1100 * KIB },
 };

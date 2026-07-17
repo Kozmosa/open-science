@@ -2,7 +2,7 @@ import { Check, Copy, RotateCcw } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useT } from '@/shared/i18n';
 import { copyText } from '@/shared/utils/clipboard';
-import { useToast } from '@/components/common/Toast';
+import { useToast } from '@design-system';
 import SafeMarkdown from '../messages/SafeMarkdown';
 import ChatThinkingBlock from './ChatThinkingBlock';
 import ChatToolCallGroup from './ChatToolCallGroup';

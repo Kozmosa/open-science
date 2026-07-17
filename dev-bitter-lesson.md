@@ -111,14 +111,17 @@ subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path], ...)
 
 ### 硬规则
 前端问题优先级：
-1. 先保证 **chrome-devtools MCP / browser tool 可用**
-2. 再看实际 DOM、class、computed style、network loaded assets
-3. 最后才改代码
+1. 先运行 `bash scripts/dev.sh doctor --profile full --browser`，确认 Chrome、MCP 配置和 CDP 链路
+2. 再确认当前 session 实际暴露 **chrome-devtools MCP / browser tool**；若未暴露，重启 session
+3. 再看实际 DOM、class、computed style、network loaded assets
+4. 最后才改代码
 
 ### 在当前环境里的额外注意
 - snap chromium 是坏的，不要继续围绕它排查
 - 当前稳定可用的是 Puppeteer 缓存的 Chrome for Testing
 - OMP / Claude 的配置改完后，很多时候**需要重启 session 才会生效**
+- headless 不等于“没有真实浏览器”：Chrome 可以通过 CDP 提供 DOM、computed style、Network、focus 和截图证据
+- preflight 成功只证明主机工具链可用，不证明当前 agent session 已加载 browser tool
 
 ## 5. 配置改了不等于当前 session 生效了
 
@@ -137,6 +140,8 @@ subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path], ...)
 - 需要重启 **nginx / 浏览器** 吗？
 
 如果这三个问题没答清楚，不要把“改了配置但没生效”误判为代码问题。
+
+开发栈本身使用 `scripts/dev.sh` 管理，不再通过 `lsof`、`pgrep` 或固定 5173/8000 端口清理未知进程。每个 worktree/profile 使用稳定派生端口和 repo 外状态；端口冲突时先看 `dev.sh status` 和 `dev.sh logs`，不要杀掉不属于当前 manifest 的进程。
 
 ## 6. 布局问题先量每一层，不要直接怪最外层容器
 
@@ -438,6 +443,8 @@ Git 提交图只描述已提交历史；squash merge、未提交改动、worktre
 
 ### 前端改动前后
 - [ ] devtools/browser tool 可用
+- [ ] `scripts/dev.sh doctor --browser` 已确认 Chrome/MCP/CDP；配置变化后已重启 session
+- [ ] 当前工作使用 worktree/profile 隔离的 `scripts/dev.sh`，没有复用 production/shared staging
 - [ ] 确认浏览器加载的 bundle hash
 - [ ] 宿主机 `frontend/dist` 已重建
 - [ ] nginx 已重启

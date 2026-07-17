@@ -46,6 +46,9 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
   The legacy `ainrf` CLI remains available during the OpenScience compatibility phase.
 - `bash scripts/ci.sh l0`: run the bounded agent/developer inner loop.
 - `bash scripts/ci.sh l1`: run the complete deterministic backend/frontend/docs gate without Docker or external services.
+- `bash scripts/dev.sh up --profile full`: start the worktree-isolated Vite HMR, reloadable API, deterministic fixture worker, and synthetic v2 state.
+- `bash scripts/dev.sh smoke --profile full`: verify the local frontend proxy, health, capabilities, and domain projections without Docker or browser E2E.
+- `bash scripts/dev.sh doctor --profile full --browser`: verify Chrome, chrome-devtools MCP configuration, and an isolated CDP launch; restart the agent session if browser tools are still absent.
 - `bash scripts/test.sh all`: run the backend suite with a bounded parallel lane and a separate serial race/contention lane. The default worker limit is 8; lower it with `OPENSCIENCE_PYTEST_WORKERS`. Do not use `-n auto` on the shared production/development host.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests scripts`: run lint checks.
 - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests scripts`: verify formatting.
@@ -78,6 +81,7 @@ Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activatio
 - Do **not** use `npx tsc --noEmit`, `npx tsc -p tsconfig.app.json`, or run plain `tsc` / `npx tsc -b` from the repo root — the latter may install an unrelated `tsc` npm package.
 - This frontend uses TypeScript project references; always use `tsc -b` from the `frontend/` directory.
 - When installing dependencies: `npm --prefix frontend install [-D] <pkg>`.
+- The managed synthetic API is the primary DevTools validation surface. `VITE_USE_MOCK=true` starts the contract-validated MSW browser scenario only for offline frontend work; it must not be cited as real API or worker evidence.
 
 ## Worktree Working Guide
 
@@ -266,6 +270,6 @@ Staging mirrors production with offset ports (`:7192` nginx, `:17000` backend). 
 
 ### Browser & DevTools
 
-Use chrome-devtools MCP as primary frontend inspection tool. Snap chromium is broken; Puppeteer-cached Chrome for Testing binary is configured instead. Config changes may require session restart.
+Use chrome-devtools MCP as the primary frontend inspection tool. Run `bash scripts/dev.sh doctor --profile full --browser` before diagnosing DOM, computed-style, Network, focus, or loaded-asset issues. Snap Chromium is broken; the preflight discovers a supported Chrome for Testing binary and performs a real isolated CDP launch. MCP configuration is session-scoped, so restart the session when preflight succeeds but browser tools are not exposed.
 
 > **Full details (binary path, config locations, OMP setup)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)

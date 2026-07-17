@@ -10,6 +10,7 @@ on behalf of a user.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections.abc import Callable, Iterable
@@ -36,6 +37,13 @@ _SHANGHAI = ZoneInfo("Asia/Shanghai")
 # local sources was readable.  In particular, a partial resource scan must not
 # replace the last complete Environment snapshot with a smaller subset.
 _SUCCESS_CARD_STATUSES = ("ok",)
+_CARD_STATUS_SEVERITY = {
+    "ok": 0,
+    "partial": 1,
+    "stale": 2,
+    "unavailable": 3,
+    "failed": 4,
+}
 _PLANNER_HEARTBEAT_TTL = timedelta(minutes=2)
 _RETRY_BASE_DELAY_SECONDS = 15
 _RETRY_MAX_DELAY_SECONDS = 15 * 60
@@ -137,6 +145,14 @@ def _json_object(value: object, *, fallback: dict[str, object] | None) -> dict[s
     return cast(dict[str, object], decoded)
 
 
+def _int_value(value: object) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _list_value(value: object) -> list[object]:
+    return list(value) if isinstance(value, list) else []
+
+
 @dataclass(frozen=True, slots=True)
 class OverviewRefreshClaim:
     """A leased refresh job; its lease token guards terminal writes."""
@@ -225,6 +241,7 @@ class OverviewSnapshotService:
         *,
         trigger: RefreshTrigger = "manual",
         scheduled_for_date: str | None = None,
+        idempotency_key: str | None = None,
         now: datetime | None = None,
     ) -> dict[str, object]:
         """Create or reuse an active job for one user.
@@ -245,6 +262,16 @@ class OverviewSnapshotService:
             raise ValueError("scheduled overview refreshes require a schedule slot")
         if scheduled_for_date is not None:
             self._validate_date(scheduled_for_date)
+        normalized_key = idempotency_key.strip() if idempotency_key is not None else None
+        if idempotency_key is not None and not normalized_key:
+            raise ValueError("idempotency_key is required when provided")
+        request_hash = hashlib.sha256(
+            json.dumps(
+                {"trigger": trigger, "scheduled_for_date": scheduled_for_date},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
 
         created_at = _iso(_as_utc(now))
         with closing(self._connect()) as conn:
@@ -254,9 +281,41 @@ class OverviewSnapshotService:
             # before any durable Overview mutation.
             conn.execute("BEGIN IMMEDIATE")
             self._assert_maintenance_writable(conn)
+            if normalized_key is not None:
+                replay = conn.execute(
+                    """
+                    SELECT request_hash, job_id
+                    FROM overview_refresh_idempotency_requests
+                    WHERE owner_user_id = ? AND idempotency_key = ?
+                    """,
+                    (owner, normalized_key),
+                ).fetchone()
+                if replay is not None:
+                    if str(replay["request_hash"]) != request_hash:
+                        raise ValueError(
+                            "Idempotency-Key was already used for different Overview input"
+                        )
+                    row = conn.execute(
+                        "SELECT * FROM overview_refresh_jobs WHERE job_id = ?",
+                        (str(replay["job_id"]),),
+                    ).fetchone()
+                    if row is None:
+                        raise RuntimeError("Stored Overview idempotency job is missing")
+                    result = self._job_dict(row)
+                    record_overview_event(
+                        "reused",
+                        trigger=str(result.get("trigger", trigger)),
+                        user_id=owner,
+                        job_id=str(result.get("job_id", "")),
+                    )
+                    return result
             active = self._active_job_for_owner(conn, owner)
             if active is not None:
                 result = self._job_dict(active)
+                self._store_refresh_idempotency(
+                    conn, owner, normalized_key, request_hash, str(result["job_id"]), created_at
+                )
+                conn.commit()
                 record_overview_event(
                     "reused",
                     trigger=str(result.get("trigger", trigger)),
@@ -275,6 +334,15 @@ class OverviewSnapshotService:
                 ).fetchone()
                 if scheduled is not None:
                     result = self._job_dict(scheduled)
+                    self._store_refresh_idempotency(
+                        conn,
+                        owner,
+                        normalized_key,
+                        request_hash,
+                        str(result["job_id"]),
+                        created_at,
+                    )
+                    conn.commit()
                     record_overview_event(
                         "reused",
                         trigger=str(result.get("trigger", trigger)),
@@ -302,6 +370,10 @@ class OverviewSnapshotService:
                 if active is None:
                     raise
                 result = self._job_dict(active)
+                self._store_refresh_idempotency(
+                    conn, owner, normalized_key, request_hash, str(result["job_id"]), created_at
+                )
+                conn.commit()
                 record_overview_event(
                     "reused",
                     trigger=str(result.get("trigger", trigger)),
@@ -312,6 +384,9 @@ class OverviewSnapshotService:
             row = conn.execute(
                 "SELECT * FROM overview_refresh_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
+            self._store_refresh_idempotency(
+                conn, owner, normalized_key, request_hash, job_id, created_at
+            )
             self._assert_maintenance_writable(conn)
             conn.commit()
         if row is None:
@@ -324,6 +399,26 @@ class OverviewSnapshotService:
             job_id=str(result.get("job_id", "")),
         )
         return result
+
+    @staticmethod
+    def _store_refresh_idempotency(
+        conn: sqlite3.Connection,
+        owner_user_id: str,
+        idempotency_key: str | None,
+        request_hash: str,
+        job_id: str,
+        created_at: str,
+    ) -> None:
+        if idempotency_key is None:
+            return
+        conn.execute(
+            """
+            INSERT INTO overview_refresh_idempotency_requests (
+                owner_user_id, idempotency_key, request_hash, job_id, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (owner_user_id, idempotency_key, request_hash, job_id, created_at),
+        )
 
     def schedule_due_refreshes(
         self,
@@ -793,6 +888,93 @@ class OverviewSnapshotService:
                     (owner_user_id,),
                 ).fetchone()[0]
             )
+            recent_tasks = [
+                {
+                    "task_id": str(row["task_id"]),
+                    "project_id": str(row["project_id"]),
+                    "workspace_id": str(row["workspace_id"]),
+                    "title": str(row["title"]),
+                    "status": str(row["status"]),
+                    "updated_at": str(row["updated_at"]),
+                    "error_summary": self._optional_str(row["error_summary"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT task_id, project_id, workspace_id, title, status, updated_at,
+                           error_summary
+                    FROM tasks WHERE owner_user_id = ?
+                    ORDER BY CASE WHEN status IN ('queued', 'starting', 'running', 'paused')
+                                      THEN 0 ELSE 1 END,
+                             updated_at DESC, task_id DESC
+                    LIMIT 5
+                    """,
+                    (owner_user_id,),
+                )
+            ]
+            task_attention = [
+                item
+                for item in recent_tasks
+                if item["status"]
+                in {
+                    "failed",
+                    "launch_unknown",
+                    "stopped_by_project_archive",
+                    "stopped_permission_revoked",
+                    "stopped_runtime_unknown",
+                }
+            ]
+            project_attention = [
+                {
+                    "kind": "project_without_workspace",
+                    "project_id": str(row["project_id"]),
+                    "label": str(row["name"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT project.project_id, project.name
+                    FROM projects AS project
+                    WHERE project.owner_user_id = ? AND project.status = 'active'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM project_workspace_links AS link
+                        WHERE link.project_id = project.project_id AND link.status = 'active'
+                      )
+                    ORDER BY project.updated_at DESC LIMIT 5
+                    """,
+                    (owner_user_id,),
+                )
+            ]
+            recent_projects = [
+                {
+                    "kind": "project",
+                    "id": str(row["project_id"]),
+                    "label": str(row["name"]),
+                    "updated_at": str(row["updated_at"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT project_id, name, updated_at FROM projects
+                    WHERE owner_user_id = ? AND status = 'active'
+                    ORDER BY updated_at DESC, project_id DESC LIMIT 4
+                    """,
+                    (owner_user_id,),
+                )
+            ]
+            recent_workspaces = [
+                {
+                    "kind": "workspace",
+                    "id": str(row["workspace_id"]),
+                    "label": str(row["label"]),
+                    "updated_at": str(row["updated_at"]),
+                }
+                for row in conn.execute(
+                    """
+                    SELECT workspace_id, label, updated_at FROM workspaces
+                    WHERE owner_user_id = ? AND status = 'active'
+                    ORDER BY updated_at DESC, workspace_id DESC LIMIT 4
+                    """,
+                    (owner_user_id,),
+                )
+            ]
         except sqlite3.Error as exc:
             return _CardResult(
                 card_id="domain",
@@ -809,6 +991,16 @@ class OverviewSnapshotService:
                 "workspaces_active": workspaces_active,
                 "tasks_by_status": task_statuses,
                 "active_attempts": active_attempts,
+                "recent_tasks": recent_tasks,
+                "attention_items": [
+                    *({"kind": "task", **item} for item in task_attention),
+                    *project_attention,
+                ][:10],
+                "recent_entities": sorted(
+                    [*recent_projects, *recent_workspaces],
+                    key=lambda item: str(item["updated_at"]),
+                    reverse=True,
+                )[:4],
             },
             source_status="ok",
             data_cutoff_at=cutoff_at,
@@ -846,6 +1038,41 @@ class OverviewSnapshotService:
                     """,
                     (owner_user_id,),
                 ).fetchone()
+                papers = [
+                    {
+                        "paper_id": str(row["paper_id"]),
+                        "title": str(row["title"]),
+                        "primary_category": str(row["primary_category"]),
+                        "updated_at": self._optional_str(row["updated_at"]),
+                        "is_read": bool(row["is_read"]),
+                        "has_new_version": row["latest_seen_version_id"]
+                        != row["current_version_id"],
+                    }
+                    for row in conn.execute(
+                        """
+                        SELECT paper.paper_id, paper.title, paper.primary_category,
+                               paper.updated_at, paper.current_version_id,
+                               state.latest_seen_version_id, state.is_read
+                        FROM literature_catalog_papers AS paper
+                        JOIN literature_user_paper_states AS state
+                          ON state.paper_id = paper.paper_id
+                        WHERE state.user_id = ? AND state.is_ignored = 0
+                        ORDER BY state.last_seen_at DESC, paper.paper_id DESC LIMIT 5
+                        """,
+                        (owner_user_id,),
+                    )
+                ]
+                updated_count = int(
+                    conn.execute(
+                        """
+                        SELECT COUNT(*) FROM literature_user_paper_states AS state
+                        JOIN literature_catalog_papers AS paper ON paper.paper_id = state.paper_id
+                        WHERE state.user_id = ? AND state.is_ignored = 0
+                          AND state.latest_seen_version_id != paper.current_version_id
+                        """,
+                        (owner_user_id,),
+                    ).fetchone()[0]
+                )
         except (OSError, sqlite3.Error) as exc:
             return _CardResult(
                 card_id="literature",
@@ -861,6 +1088,8 @@ class OverviewSnapshotService:
                 "paper_count": int(counts["papers"] or 0) if counts is not None else 0,
                 "unread_count": int(counts["unread"] or 0) if counts is not None else 0,
                 "saved_count": int(counts["saved"] or 0) if counts is not None else 0,
+                "updated_count": updated_count,
+                "papers": papers,
                 "last_successful_check_at": self._optional_str(last["completed_at"])
                 if last is not None
                 else None,
@@ -936,6 +1165,12 @@ class OverviewSnapshotService:
                 "snapshot_count": len(snapshots),
                 "snapshots": snapshots,
                 "missing_snapshot_count": missing + invalid,
+                "intervention_required": [
+                    item
+                    for item in snapshots
+                    if item["status"] not in {"success", "ok"}
+                    or _int_value(item["warning_count"]) > 0
+                ],
             },
             source_status=source_status,
             data_cutoff_at=cutoff_at,
@@ -1300,6 +1535,21 @@ class OverviewSnapshotService:
         domain_data = next(
             (card.data for card in cards if card.card_id == "domain" and card.data is not None), {}
         )
+        display_cards = self._display_cards(cards)
+        cutoff = _parse_iso(data_cutoff_at) or _utc_now()
+        shanghai = cutoff.astimezone(_SHANGHAI)
+        next_slot_date = shanghai.date() + (
+            timedelta(days=1) if (shanghai.hour, shanghai.minute) >= (6, 0) else timedelta()
+        )
+        next_scheduled_at = (
+            datetime.combine(
+                next_slot_date,
+                datetime.min.time().replace(hour=6),
+                tzinfo=_SHANGHAI,
+            )
+            .astimezone(UTC)
+            .isoformat()
+        )
         return {
             "snapshot_id": snapshot_id,
             "owner_user_id": owner_user_id,
@@ -1308,6 +1558,8 @@ class OverviewSnapshotService:
             "source_status": source_status,
             "attention_required": attention_required,
             "cards": card_payloads,
+            "display_cards": display_cards,
+            "next_scheduled_at": next_scheduled_at,
             # Compatibility scalar fields let legacy consumers render the new
             # persisted projection without reconstructing it themselves.
             "source": "control_plane_only",
@@ -1321,6 +1573,130 @@ class OverviewSnapshotService:
             if isinstance(domain_data, dict)
             else 0,
         }
+
+    @staticmethod
+    def _display_cards(cards: list[_CardResult]) -> list[dict[str, object]]:
+        by_id = {card.card_id: card for card in cards}
+        domain = by_id.get("domain")
+        literature = by_id.get("literature")
+        resources = by_id.get("resources")
+
+        def payload(
+            card_id: str,
+            source: _CardResult | None,
+            data: dict[str, object],
+            *,
+            attention_required: bool | None = None,
+        ) -> dict[str, object]:
+            return {
+                "id": card_id,
+                "data": data,
+                "data_cutoff_at": source.data_cutoff_at if source else "",
+                "source_status": source.source_status if source else "failed",
+                "attention_required": (
+                    source.attention_required
+                    if attention_required is None and source is not None
+                    else bool(attention_required)
+                ),
+                "error_summary": source.error_summary if source else "source unavailable",
+            }
+
+        domain_data = domain.data if domain and domain.data is not None else {}
+        literature_data = literature.data if literature and literature.data is not None else {}
+        resource_data = resources.data if resources and resources.data is not None else {}
+        attention_items = _list_value(domain_data.get("attention_items", []))
+        intervention = _list_value(resource_data.get("intervention_required", []))
+        missing_snapshot_count = _int_value(resource_data.get("missing_snapshot_count", 0))
+        if missing_snapshot_count > 0:
+            intervention.append(
+                {
+                    "kind": "missing_resource_snapshot",
+                    "count": missing_snapshot_count,
+                }
+            )
+        attention_items.extend(intervention)
+        attention_sources = [source for source in (domain, resources) if source is not None]
+        attention_status = max(
+            (source.source_status for source in attention_sources),
+            key=lambda value: _CARD_STATUS_SEVERITY.get(value, _CARD_STATUS_SEVERITY["failed"]),
+            default="failed",
+        )
+        cutoff_candidates = [
+            (parsed, source.data_cutoff_at)
+            for source in attention_sources
+            if (parsed := _parse_iso(source.data_cutoff_at)) is not None
+        ]
+        attention_cutoff = (
+            min(cutoff_candidates, key=lambda item: item[0])[1] if cutoff_candidates else ""
+        )
+        error_parts = [
+            f"{source.card_id}: {source.error_summary}"
+            for source in attention_sources
+            if source.error_summary
+        ]
+        if domain is None:
+            error_parts.append("domain: source unavailable")
+        if resources is None:
+            error_parts.append("resources: source unavailable")
+        attention_error = "; ".join(dict.fromkeys(error_parts))[:1000] or None
+        if resources is None or resources.source_status != "ok":
+            attention_items.insert(
+                0,
+                {
+                    "kind": "resource_source_status",
+                    "status": resources.source_status if resources else "failed",
+                    "summary": resources.error_summary
+                    if resources and resources.error_summary
+                    else "Resource source is unavailable",
+                },
+            )
+        attention_source = _CardResult(
+            card_id="attention",
+            data=None,
+            source_status=attention_status,
+            data_cutoff_at=attention_cutoff,
+            attention_required=(
+                bool(attention_items)
+                or any(source.attention_required for source in attention_sources)
+                or attention_status != "ok"
+            ),
+            error_summary=attention_error,
+        )
+        return [
+            payload(
+                "attention",
+                attention_source,
+                {"items": attention_items[:10]},
+            ),
+            payload(
+                "progress",
+                domain,
+                {"tasks": _list_value(domain_data.get("recent_tasks", []))[:5]},
+            ),
+            payload(
+                "literature",
+                literature,
+                {
+                    "unread_count": _int_value(literature_data.get("unread_count", 0)),
+                    "updated_count": _int_value(literature_data.get("updated_count", 0)),
+                    "papers": _list_value(literature_data.get("papers", []))[:5],
+                },
+            ),
+            payload(
+                "continue",
+                domain,
+                {"items": _list_value(domain_data.get("recent_entities", []))[:4]},
+            ),
+            payload(
+                "resources",
+                resources,
+                {
+                    "environments": intervention[:10],
+                    "environment_count": _int_value(resource_data.get("environment_count", 0)),
+                },
+                attention_required=bool(intervention),
+            ),
+        ]
 
     @staticmethod
     def _read_only_connection(path: Path) -> sqlite3.Connection:
@@ -1503,7 +1879,11 @@ class OverviewSnapshotPlanner:
         return self._require_service()
 
     def request_refresh(
-        self, owner_user_id: str, *, now: datetime | None = None
+        self,
+        owner_user_id: str,
+        *,
+        idempotency_key: str | None = None,
+        now: datetime | None = None,
     ) -> dict[str, object]:
         """Enqueue a manual refresh while registered as a domain writer."""
 
@@ -1524,7 +1904,10 @@ class OverviewSnapshotPlanner:
         try:
             self._maintenance.check_lease(lease)
             job = self._require_service().request_refresh(
-                owner_user_id, trigger="manual", now=current
+                owner_user_id,
+                trigger="manual",
+                idempotency_key=idempotency_key,
+                now=current,
             )
             self._maintenance.check_lease(lease)
             self._set_planner_state(status="running", now=current, last_error=None, lease=lease)

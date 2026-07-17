@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { semanticToneClasses } from '@design-system/tokens/theme';
+import { semanticToneClasses } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { SkillItem } from '@/shared/types';
 
@@ -83,7 +83,7 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
 
   if (skills.length === 0) {
     return (
-      <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+      <p className="rounded-lg border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] px-3 py-2 text-xs text-[var(--osci-color-text-secondary)]">
         {t('pages.tasks.create.noSkillsAvailable')}
       </p>
     );
@@ -98,7 +98,7 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
         const hasSelection = selectedCount > 0;
 
         return (
-          <section key={groupName} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <section key={groupName} className="rounded-xl border border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] p-3">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -114,7 +114,7 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
                   total: groupSkills.length,
                 })}
               </button>
-              <span className="min-w-0 truncate text-sm font-medium text-[var(--text)]" title={groupName}>{groupName}</span>
+              <span className="min-w-0 truncate text-sm font-medium text-[var(--osci-color-text)]" title={groupName}>{groupName}</span>
               <button
                 type="button"
                 onClick={() => setExpanded((current) => ({ ...current, [groupName]: !isExpanded }))}
@@ -122,7 +122,7 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
                 aria-label={isExpanded
                   ? t('pages.tasks.create.hideSkillGroup', { group: groupName })
                   : t('pages.tasks.create.showSkillGroup', { group: groupName })}
-                className="ml-auto rounded-md px-2 py-1 text-[var(--text-secondary)] transition hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
+                className="ml-auto rounded-md px-2 py-1 text-[var(--osci-color-text-secondary)] transition hover:bg-[var(--osci-color-surface-subtle)] hover:text-[var(--osci-color-text)]"
               >
                 {isExpanded ? '▼' : '▶'}
               </button>
@@ -155,7 +155,7 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
           </section>
         );
       })}
-      <p className="text-xs text-[var(--text-tertiary)]">{t('pages.tasks.skillDependenciesHint')}</p>
+      <p className="text-xs text-[var(--osci-color-text-muted)]">{t('pages.tasks.skillDependenciesHint')}</p>
     </div>
   );
 }

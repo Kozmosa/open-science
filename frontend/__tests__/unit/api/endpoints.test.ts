@@ -1,19 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetMockEnvironmentState, resetMockTaskState, resetMockTerminalSession } from '@/shared/api/mock';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setupServer } from 'msw/node';
+import { frontendMockHandlers, resetLegacyMockState } from '@/shared/api/mockHandlers';
+
+const server = setupServer(...frontendMockHandlers);
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterAll(() => server.close());
 
 beforeEach(() => {
   vi.resetModules();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  resetMockTerminalSession();
-  resetMockEnvironmentState();
-  resetMockTaskState();
+  resetLegacyMockState();
 });
 
 describe('api endpoints', () => {
-  it('uses the mock transport only when VITE_USE_MOCK is true', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'true');
-
+  it('routes legacy mock scenarios through the same HTTP client transport', async () => {
     const {
       buildTaskStreamUrl,
       createTask,
@@ -27,11 +29,14 @@ describe('api endpoints', () => {
     const session = await getTerminalSession('env-localhost');
     const workspaces = await getWorkspaces();
     const created = await createTask({
-      workspace_id: 'workspace-default',
-      environment_id: 'env-localhost',
-      task_profile: 'claude-code',
-      task_input: 'Implement harness',
-    });
+      project_id: 'project-alpha',
+      workspace_id: 'workspace-alpha',
+      researcher_type: 'vanilla',
+      harness_engine: 'claude-code',
+      prompt: 'Implement harness',
+      skills: [],
+      mcp_servers: [],
+    }, 'task.create:test');
     const tasks = await getTasks();
     const detail = await getTask(created.task_id);
     const output = await getTaskOutput(created.task_id);
@@ -41,12 +46,11 @@ describe('api endpoints', () => {
     expect(created.status).toBe('queued');
     expect(tasks.items[0]?.task_id).toBe(created.task_id);
     expect(detail.binding?.resolved_workdir).toBeTruthy();
-    expect(output.items[0]?.kind).toBe('lifecycle');
+    expect(output.items[0]?.kind).toBe('message');
     expect(buildTaskStreamUrl(created.task_id, 3)).toContain(`/api/tasks/${created.task_id}/stream`);
   });
 
   it('uses a query parameter for task stream API keys because EventSource cannot send custom headers', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'false');
     vi.stubEnv('VITE_AINRF_API_KEY', 'stream-secret');
 
     const { buildTaskStreamUrl } = await import('../../../src/shared/api/endpoints');
@@ -56,8 +60,31 @@ describe('api endpoints', () => {
     );
   });
 
-  it('uses the real api client when VITE_USE_MOCK is false', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'false');
+  it('sends stable idempotency keys for Task pause, resume, and continuation', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ task_id: 'task-1', status: 'running', sequence: 1 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { pauseTask, resumeTask, sendTaskPrompt } = await import('../../../src/shared/api/endpoints');
+    await pauseTask('task-1', 'task.pause:test');
+    await resumeTask('task-1', 'task.resume:test');
+    await sendTaskPrompt('task-1', 'Continue the analysis', 'task.continue:test');
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/tasks/task-1/pause',
+      '/api/tasks/task-1/resume',
+      '/api/tasks/task-1/continue',
+    ]);
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.pause:test');
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.resume:test');
+    expect((fetchMock.mock.calls[2]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.continue:test');
+  });
+
+  it('uses the real api client when no MSW handler intercepts the request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
@@ -74,7 +101,6 @@ describe('api endpoints', () => {
   });
 
   it('sends workspace CRUD requests through the real api client', async () => {
-    vi.stubEnv('VITE_USE_MOCK', 'false');
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -121,7 +147,7 @@ describe('api endpoints', () => {
       description: 'Updated',
       default_workdir: '/workspace/updated',
       workspace_prompt: 'Updated prompt',
-    });
+    }, 'workspace.update:test');
     await deleteWorkspace('workspace-new');
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -150,6 +176,7 @@ describe('api endpoints', () => {
         }),
       })
     );
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('workspace.update:test');
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       '/api/workspaces/workspace-new',

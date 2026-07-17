@@ -1,4 +1,4 @@
-import { SectionCard, SectionHeader } from '@design-system/primitives';
+import { SectionCard, SectionHeader } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useQuery } from '@tanstack/react-query';
 import { getDeploymentVersion, getFrontendBuildVersion } from '@/shared/api';

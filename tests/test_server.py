@@ -5,10 +5,28 @@ import signal
 import sys
 
 import pytest
+from fastapi import FastAPI
 
-from ainrf.server import _terminate_process, run_server_daemon
+from ainrf.api import ApiConfig
+from ainrf.server import _terminate_process, create_development_app, run_server_daemon
 
 pytestmark = [pytest.mark.cli]
+
+
+def test_create_development_app_uses_env_config_and_configures_logging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = ApiConfig(api_key_hashes=frozenset({"hash"}), state_root=tmp_path)
+    app = FastAPI()
+    configured: list[Path] = []
+    monkeypatch.setattr("ainrf.server.ApiConfig.from_env", lambda: config)
+    monkeypatch.setattr("ainrf.server.configure_logging", configured.append)
+    monkeypatch.setattr("ainrf.server.create_app", lambda value: app)
+
+    result = create_development_app()
+
+    assert result is app
+    assert configured == [tmp_path]
 
 
 class FakeProcess:

@@ -1,4 +1,5 @@
-export type DefaultRoute = 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
+export type DefaultRoute = 'today' | 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
+export type ThemePreference = 'light' | 'dark' | 'system';
 
 export type ExecutionEngineId = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 export type SkillMode = 'disabled' | 'enabled' | 'auto';
@@ -56,7 +57,7 @@ export interface DefaultProjectSettings {
 }
 
 export interface AppearanceSettings {
-  fontFamily: 'sans-serif' | 'serif';
+  theme: ThemePreference;
 }
 
 export interface TaskConfigurationSettings {
@@ -82,7 +83,7 @@ export interface LlmProvider {
 }
 
 export interface WebUiSettingsDocument {
-  version: 3;
+  version: 5;
   general: {
     defaultRoute: DefaultRoute;
     terminal: {

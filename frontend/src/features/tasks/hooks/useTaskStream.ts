@@ -37,15 +37,25 @@ export interface TaskOutputStreamState {
   hasMore: boolean;
   loadMore: () => void;
   isLoadingMore: boolean;
+  connectionState: 'idle' | 'connecting' | 'connected' | 'disconnected';
 }
 
-export function useTaskStream(taskId: string | null): TaskOutputStreamState {
+export function useTaskStream(
+  taskId: string | null,
+  onConnectionStateChange?: (state: TaskOutputStreamState['connectionState']) => void,
+): TaskOutputStreamState {
   const queryClient = useQueryClient();
   const t = useT();
   const [outputItems, setOutputItems] = useState<TaskOutputEvent[]>([]);
   const [outputError, setOutputError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [connectionState, setConnectionState] = useState<TaskOutputStreamState['connectionState']>('idle');
+
+  const updateConnectionState = useCallback((state: TaskOutputStreamState['connectionState']) => {
+    setConnectionState(state);
+    onConnectionStateChange?.(state);
+  }, [onConnectionStateChange]);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const nextSeqRef = useRef<number>(0);
@@ -100,6 +110,7 @@ export function useTaskStream(taskId: string | null): TaskOutputStreamState {
     setOutputError(null);
     setHasMore(false);
     setIsLoadingMore(false);
+    updateConnectionState(taskId === null ? 'idle' : 'connecting');
     nextSeqRef.current = 0;
     loadMoreSeqRef.current = 0;
 
@@ -135,8 +146,13 @@ export function useTaskStream(taskId: string | null): TaskOutputStreamState {
       const source = new EventSource(buildTaskStreamUrl(taskId, nextSeqRef.current));
       eventSourceRef.current = source;
 
+      source.onopen = () => {
+        if (activeRef.current) updateConnectionState('connected');
+      };
+
       source.onmessage = (event: MessageEvent<string>) => {
         if (!activeRef.current) return;
+        updateConnectionState('connected');
         try {
           const item = JSON.parse(event.data) as TaskOutputEvent;
           if (item.task_id !== taskId) return;
@@ -160,6 +176,7 @@ export function useTaskStream(taskId: string | null): TaskOutputStreamState {
       source.onerror = () => {
         source.close();
         if (!activeRef.current) return;
+        updateConnectionState('disconnected');
         void refillGap().finally(() => {
           if (!activeRef.current) return;
           reconnectTimerRef.current = setTimeout(openStream, RECONNECT_DELAY_MS);
@@ -182,6 +199,7 @@ export function useTaskStream(taskId: string | null): TaskOutputStreamState {
       } catch (error) {
         if (activeRef.current) {
           setOutputError(error instanceof Error ? error.message : t('pages.tasks.output.loadFailed'));
+          updateConnectionState('disconnected');
         }
       }
     })();
@@ -190,7 +208,7 @@ export function useTaskStream(taskId: string | null): TaskOutputStreamState {
       activeRef.current = false;
       closeCurrentStream();
     };
-  }, [queryClient, taskId, t, appendOutput]);
+  }, [queryClient, taskId, t, appendOutput, updateConnectionState]);
 
-  return { outputItems, outputError, hasMore, loadMore, isLoadingMore };
+  return { outputItems, outputError, hasMore, loadMore, isLoadingMore, connectionState };
 }

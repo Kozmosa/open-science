@@ -6,12 +6,14 @@ import {
   Button,
   FormField,
   Input,
-  Modal,
+  Dialog,
+  PageShell,
   SectionCard,
-  Select,
+  SectionStack,
+  NativeSelect,
   Textarea,
-} from '@design-system/primitives';
-import { PageShell, SectionStack } from '@design-system/layout';
+  useToast,
+} from '@design-system';
 import {
   createProjectEnvironmentReference,
   createEnvironment,
@@ -31,12 +33,10 @@ import type {
 import { useLocale, useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useEnvironmentSelection } from '../components/environment';
-import { useToast } from '../components/common';
 import { EnvironmentDetectionModal } from '../components/environment';
 import {
   buildEnvironmentRequest,
   buildProjectReferenceCreateRequest,
-  defaultProjectId,
   EMPTY_ENVIRONMENTS,
   EMPTY_PROJECT_REFS,
   emptyFormValues,
@@ -196,14 +196,14 @@ function EnvironmentEditor({
           </FormField>
 
           <FormField label={t('components.environmentEditor.authKindLabel')}>
-            <Select
+            <NativeSelect
               value={values.auth_kind}
               onChange={(event) => updateField('auth_kind', event.target.value as EnvironmentAuthKind)}
             >
               <option value="ssh_key">{authKindLabels.ssh_key}</option>
               <option value="password">{authKindLabels.password}</option>
               <option value="agent">{authKindLabels.agent}</option>
-            </Select>
+            </NativeSelect>
           </FormField>
         </div>
 
@@ -322,6 +322,7 @@ function EnvironmentsPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const environmentSelection = useEnvironmentSelection();
+  const defaultProjectId = environmentSelection.projectId;
   const [editorMode, setEditorMode] = useState<EnvironmentEditorMode>('create');
   const [editorEnvironmentId, setEditorEnvironmentId] = useState<string | null>(null);
   const [editorFormKey, setEditorFormKey] = useState(0);
@@ -358,7 +359,9 @@ function EnvironmentsPage() {
     queryClient.setQueryData(queryKeys.environments.all, next);
   };
   const syncProjectReferenceList = (next: ProjectEnvironmentReferenceListResponse) => {
-    queryClient.setQueryData(queryKeys.projectEnvironmentRefs.byProject('default'), next);
+    if (defaultProjectId) {
+      queryClient.setQueryData(queryKeys.projectEnvironmentRefs.byProject(defaultProjectId), next);
+    }
   };
 
   const saveMutation = useMutation({
@@ -443,6 +446,9 @@ function EnvironmentsPage() {
       if (selectedEnvironment === null) {
         throw new Error(t('pages.environments.projectReferenceNoSelection'));
       }
+      if (defaultProjectId === null) {
+        throw new Error('The authenticated default Project is unavailable.');
+      }
 
       if (selectedProjectReference) {
         return updateProjectEnvironmentReference(selectedEnvironment.id, payload, defaultProjectId);
@@ -455,7 +461,7 @@ function EnvironmentsPage() {
     },
     onSuccess: (reference) => {
       const current = queryClient.getQueryData<ProjectEnvironmentReferenceListResponse>(
-        queryKeys.projectEnvironmentRefs.byProject('default')
+        queryKeys.projectEnvironmentRefs.byProject(defaultProjectId ?? 'unresolved')
       );
       syncProjectReferenceList(mergeProjectReferenceList(current, reference));
     },
@@ -466,6 +472,9 @@ function EnvironmentsPage() {
       if (selectedEnvironment === null || selectedProjectReference === null) {
         throw new Error(t('pages.environments.projectReferenceNoSelection'));
       }
+      if (defaultProjectId === null) {
+        throw new Error('The authenticated default Project is unavailable.');
+      }
       return deleteProjectEnvironmentReference(selectedEnvironment.id, defaultProjectId);
     },
     onSuccess: () => {
@@ -473,7 +482,7 @@ function EnvironmentsPage() {
         return;
       }
       const current = queryClient.getQueryData<ProjectEnvironmentReferenceListResponse>(
-        queryKeys.projectEnvironmentRefs.byProject('default')
+        queryKeys.projectEnvironmentRefs.byProject(defaultProjectId ?? 'unresolved')
       );
       syncProjectReferenceList(removeProjectReferenceFromList(current, selectedEnvironment.id));
     },
@@ -737,7 +746,7 @@ function EnvironmentsPage() {
       </SectionStack>
       </div>
 
-      <Modal
+      <Dialog
         isOpen={isEditorModalOpen}
         onClose={() => setIsEditorModalOpen(false)}
         title={editorMode === 'create' ? 'Add Environment' : 'Edit Environment'}
@@ -760,7 +769,7 @@ function EnvironmentsPage() {
             setEditorEnvironmentId(null);
           }}
         />
-      </Modal>
+      </Dialog>
 
       {detectionEnv?.latest_detection ? (
         <EnvironmentDetectionModal

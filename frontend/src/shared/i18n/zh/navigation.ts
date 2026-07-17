@@ -1,6 +1,10 @@
 // navigation messages — 中文
 const navigation = {
     navigation: {
+      today: {
+        label: '今日概览',
+        description: '基于持久化 OpenScience 投影的可行动概览',
+      },
       projects: {
         label: '项目',
         description: '项目画布与任务图可视化',
@@ -50,6 +54,12 @@ const navigation = {
       collapseSidebar: '收起侧边栏',
       expandSidebar: '展开侧边栏',
       resizeSidebar: '调整侧边栏宽度',
+      openNavigation: '打开导航',
+      closeNavigation: '关闭导航',
+      openCommandPalette: '打开命令面板',
+      commandPlaceholder: '搜索页面和操作…',
+      commandNoResults: '没有匹配的目标。',
+      accountMenu: '打开账户菜单',
     },
 };
 

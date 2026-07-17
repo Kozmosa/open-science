@@ -41,7 +41,7 @@ describe('LocaleSwitcher', () => {
     expect(screen.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('terminal-label')).toHaveTextContent('Terminal');
 
-    await user.click(screen.getByRole('button', { name: '中文' }));
+    await user.click(screen.getByRole('button', { name: 'Chinese' }));
 
     expect(screen.getByTestId('locale-value')).toHaveTextContent('zh');
     expect(screen.getByTestId('terminal-label')).toHaveTextContent('终端');
@@ -60,7 +60,7 @@ describe('LocaleSwitcher', () => {
       'bg-[var(--card)]',
       'text-[var(--foreground)]'
     );
-    expect(screen.getByRole('button', { name: '中文' })).toHaveClass(
+    expect(screen.getByRole('button', { name: 'Chinese' })).toHaveClass(
       'text-[var(--muted-foreground)]'
     );
   });

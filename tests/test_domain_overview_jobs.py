@@ -159,6 +159,16 @@ def _card(snapshot: dict[str, object], card_id: str) -> dict[str, object]:
     raise AssertionError(f"Card {card_id} was not returned")
 
 
+def _display_card(snapshot: dict[str, object], card_id: str) -> dict[str, object]:
+    cards = cast(list[object], snapshot["display_cards"])
+    for item in cards:
+        if isinstance(item, dict):
+            candidate = cast(dict[str, object], item)
+            if candidate.get("id") == card_id:
+                return candidate
+    raise AssertionError(f"Display card {card_id} was not returned")
+
+
 def _unavailable_literature(_owner: str, cutoff_at: str) -> _CardResult:
     return _CardResult(
         card_id="literature",
@@ -708,6 +718,17 @@ def test_overview_partial_resource_card_preserves_complete_last_success(
     assert stale_resource["source_status"] == "stale"
     assert stale_resource["data"] == first_resource["data"]
     assert stale_resource["data_cutoff_at"] == first_resource["data_cutoff_at"]
+    attention = _display_card(partial_snapshot, "attention")
+    assert attention["source_status"] == "stale"
+    assert attention["data_cutoff_at"] == first_resource["data_cutoff_at"]
+    assert "resources:" in str(attention["error_summary"])
+    attention_data = cast(dict[str, object], attention["data"])
+    attention_items = cast(list[object], attention_data["items"])
+    assert cast(dict[str, object], attention_items[0]) == {
+        "kind": "resource_source_status",
+        "status": "stale",
+        "summary": "some persisted resource snapshots are unavailable",
+    }
 
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
         partial_state = conn.execute(
@@ -721,6 +742,32 @@ def test_overview_partial_resource_card_preserves_complete_last_success(
     assert partial_state is not None
     assert partial_state["last_success_data_json"] == first_state["last_success_data_json"]
     assert partial_state["last_success_cutoff_at"] == first_state["last_success_cutoff_at"]
+
+
+def test_overview_attention_surfaces_a_resource_source_without_fallback(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    service = _service(state_root, committed_v2_state)
+    _seed_domain(state_root, "owner")
+    _seed_literature(state_root, "owner")
+
+    job = service.request_refresh("owner", now=_instant(1))
+    assert (
+        service.run_job(str(job["job_id"]), "overview-test", now=_instant(1)).outcome == "partial"
+    )
+    snapshot = service.latest("owner")
+    assert snapshot is not None
+    attention = _display_card(snapshot, "attention")
+    assert attention["source_status"] == "partial"
+    assert attention["attention_required"] is True
+    assert attention["error_summary"] == (
+        "resources: some persisted resource snapshots are unavailable"
+    )
+    data = cast(dict[str, object], attention["data"])
+    items = cast(list[object], data["items"])
+    first = cast(dict[str, object], items[0])
+    assert first["kind"] == "resource_source_status"
+    assert first["status"] == "partial"
 
 
 def test_overview_builder_does_not_call_external_or_action_services(

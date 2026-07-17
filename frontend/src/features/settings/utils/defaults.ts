@@ -8,8 +8,11 @@ import type {
   WebUiSettingsDocument,
 } from '@features/settings/types';
 
-export const settingsStorageKey = 'openscience:webui-settings';
-export const legacySettingsStorageKeys = ['scholar-agent:webui-settings'];
+export const settingsStorageKey = 'openscience:webui-settings:test-user';
+export const legacySettingsStorageKeys = ['openscience:webui-settings', 'scholar-agent:webui-settings'];
+export function settingsStorageKeyForUser(userId: string): string {
+  return `openscience:webui-settings:${userId}`;
+}
 export const defaultTerminalFontSize = 13;
 export const minTerminalFontSize = 11;
 export const maxTerminalFontSize = 18;
@@ -24,7 +27,7 @@ export const reproduceBaselineTaskConfigurationId = 'reproduce-baseline-default'
 export const discoverIdeasTaskConfigurationId = 'discover-ideas-default';
 export const validateIdeasTaskConfigurationId = 'validate-ideas-default';
 
-const supportedDefaultRoutes: DefaultRoute[] = ['terminal', 'tasks', 'workspaces', 'environments'];
+const supportedDefaultRoutes: DefaultRoute[] = ['today', 'projects', 'terminal', 'tasks', 'workspaces', 'environments'];
 
 export function isDefaultRoute(value: unknown): value is DefaultRoute {
   return typeof value === 'string' && supportedDefaultRoutes.includes(value as DefaultRoute);
@@ -264,9 +267,9 @@ export function createDefaultProjectSettings(): DefaultProjectSettings {
 
 export function createDefaultWebUiSettings(): WebUiSettingsDocument {
   return {
-    version: 3,
+    version: 5,
     general: {
-      defaultRoute: 'terminal',
+      defaultRoute: 'today',
       terminal: {
         fontSize: defaultTerminalFontSize,
       },
@@ -275,7 +278,7 @@ export function createDefaultWebUiSettings(): WebUiSettingsDocument {
         fontFamily: defaultEditorFontFamily,
       },
       appearance: {
-        fontFamily: 'sans-serif',
+        theme: 'light',
       },
     },
     taskConfiguration: createDefaultTaskConfigurationSettings(),

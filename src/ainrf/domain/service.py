@@ -888,6 +888,70 @@ class DomainService:
             conn.commit()
         return result
 
+    @staticmethod
+    def canonical_workspace_path(canonical_path: str) -> str:
+        """Normalize the path persisted by Workspace registration."""
+
+        return str(Path(canonical_path).expanduser().resolve())
+
+    def workspace_create_replay(
+        self,
+        user: dict[str, object],
+        *,
+        environment_id: str,
+        canonical_path: str,
+        label: str,
+        description: str | None = None,
+        workspace_prompt: str | None = None,
+        idempotency_key: str,
+    ) -> dict[str, object] | None:
+        """Return a completed create before repeating external path preflight."""
+
+        owner_id = self._user_id(user)
+        request: dict[str, object] = {
+            "environment_id": environment_id,
+            "canonical_path": self.canonical_workspace_path(canonical_path),
+            "label": label,
+            "description": description,
+            "workspace_prompt": workspace_prompt,
+        }
+        with closing(self._connect()) as conn:
+            return self._idempotent_result(
+                conn, owner_id, "workspace.create", idempotency_key, request
+            )
+
+    def workspace_create_and_attach_replay(
+        self,
+        *,
+        project_id: str,
+        user: dict[str, object],
+        environment_id: str,
+        canonical_path: str,
+        label: str,
+        description: str | None = None,
+        workspace_prompt: str | None = None,
+        idempotency_key: str,
+    ) -> dict[str, object] | None:
+        """Return a completed compatibility create-and-attach before preflight."""
+
+        owner_id = self._user_id(user)
+        request: dict[str, object] = {
+            "project_id": project_id,
+            "environment_id": environment_id,
+            "canonical_path": self.canonical_workspace_path(canonical_path),
+            "label": label,
+            "description": description,
+            "workspace_prompt": workspace_prompt,
+        }
+        with closing(self._connect()) as conn:
+            return self._idempotent_result(
+                conn,
+                owner_id,
+                "workspace.create_and_attach",
+                idempotency_key,
+                request,
+            )
+
     def create_workspace(
         self,
         user: dict[str, object],
@@ -900,7 +964,7 @@ class DomainService:
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
         owner_id = self._user_id(user)
-        path = str(Path(canonical_path).expanduser().resolve())
+        path = self.canonical_workspace_path(canonical_path)
         context_metadata = (
             {"workspace_prompt": workspace_prompt} if workspace_prompt is not None else {}
         )
@@ -989,7 +1053,7 @@ class DomainService:
         """
 
         owner_id = self._user_id(user)
-        path = str(Path(canonical_path).expanduser().resolve())
+        path = self.canonical_workspace_path(canonical_path)
         context_metadata = (
             {"workspace_prompt": workspace_prompt} if workspace_prompt is not None else {}
         )
@@ -1428,7 +1492,7 @@ class DomainService:
     def list_task_relationships(
         self, project_id: str, user: dict[str, object]
     ) -> list[dict[str, object]]:
-        """Expose legacy task edges as typed ``related_to`` relationships."""
+        """Expose every durable Project-scoped Task relationship with its type."""
 
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_project_viewer(project_id, user)
@@ -1439,6 +1503,7 @@ class DomainService:
                 "project_id": project_id,
                 "source_task_id": str(row["source_task_id"]),
                 "target_task_id": str(row["target_task_id"]),
+                "relationship_type": str(row["relationship_type"]),
                 "created_at": str(row["created_at"]),
             }
             for row in rows
@@ -1504,6 +1569,7 @@ class DomainService:
                 "project_id": project_id,
                 "source_task_id": source_task_id,
                 "target_task_id": target_task_id,
+                "relationship_type": relationship_type,
                 "created_at": str(row["created_at"]),
             }
             if idempotency_key is not None:
@@ -1798,6 +1864,124 @@ class DomainService:
             )
         return [dict(row) for row in rows]
 
+    def project_console_summaries(
+        self, user: dict[str, object], *, include_archived: bool = False
+    ) -> list[dict[str, object]]:
+        """Return the canonical Project read model consumed by the Console.
+
+        Compatibility Project responses intentionally preserve deprecated
+        ``default_*`` fields.  This projection instead exposes the current
+        role, Primary Workspace, executable Workspace count, activity, and
+        stable attention reasons so the frontend never infers domain policy
+        from legacy response fields.
+        """
+
+        user_id = self._user_id(user)
+        with closing(self._connect()) as conn:
+            repository = self._repository(conn)
+            authorization = DomainAuthorizationService(conn)
+            projects = repository.list_projects_visible(
+                user_id=user_id,
+                is_admin=user.get("role") == "admin",
+                include_archived=include_archived,
+            )
+            summaries: list[dict[str, object]] = []
+            for project in projects:
+                project_id = str(project["project_id"])
+                role = authorization.project_role(project_id, user)
+                if role is None:  # pragma: no cover - visible query and authorization must agree
+                    continue
+                member = repository.project_member(project_id, user_id)
+                links = repository.list_workspace_links(project_id)
+                active_links = [row for row in links if str(row["status"]) == "active"]
+                projected_links: list[dict[str, object]] = []
+                for link in active_links:
+                    can_execute, reason = self._workspace_link_execution_status(link, user)
+                    projected_links.append(
+                        {
+                            "workspace_id": str(link["workspace_id"]),
+                            "label": str(link["label"]),
+                            "canonical_path": str(link["canonical_path"]),
+                            "environment_id": str(link["environment_id"]),
+                            "environment_alias": str(link["environment_alias"]),
+                            "environment_display_name": str(link["environment_display_name"]),
+                            "is_primary": bool(link["is_primary"]),
+                            "can_execute": can_execute,
+                            "cannot_execute_reason": reason,
+                        }
+                    )
+                primary_workspace = next(
+                    (link for link in projected_links if link["is_primary"] is True), None
+                )
+                executable_workspace_count = sum(
+                    1 for link in projected_links if link["can_execute"] is True
+                )
+                activity = repository.project_activity_summary(project_id)
+                latest_task_activity = activity["latest_task_activity_at"]
+                recent_activity_at = max(
+                    value
+                    for value in (
+                        str(project["updated_at"]),
+                        str(latest_task_activity) if latest_task_activity is not None else None,
+                    )
+                    if value is not None
+                )
+                status = str(project["status"])
+                is_default = bool(project["is_default"])
+                can_edit = role in {"admin", "owner", "editor"}
+                can_manage = role in {"admin", "owner"}
+                can_publish = role == "owner" or (
+                    role == "editor" and member is not None and bool(member["can_publish"])
+                )
+                attention_reasons: list[str] = []
+                if status == "active" and not active_links:
+                    attention_reasons.append("no_workspace")
+                elif status == "active" and executable_workspace_count == 0:
+                    attention_reasons.append("no_executable_workspace")
+                if int(activity["failed_task_count"]) > 0:
+                    attention_reasons.append("failed_tasks")
+                summaries.append(
+                    {
+                        "project_id": project_id,
+                        "name": str(project["name"]),
+                        "description": project["description"],
+                        "status": status,
+                        "is_default": is_default,
+                        "owner_user_id": str(project["owner_user_id"]),
+                        "current_user_role": role,
+                        "created_at": str(project["created_at"]),
+                        "updated_at": str(project["updated_at"]),
+                        "recent_activity_at": recent_activity_at,
+                        "workspace_count": len(active_links),
+                        "executable_workspace_count": executable_workspace_count,
+                        "task_count": int(activity["task_count"]),
+                        "active_task_count": int(activity["active_task_count"]),
+                        "running_task_count": int(activity["running_task_count"]),
+                        "primary_workspace": primary_workspace,
+                        "attention_required": bool(attention_reasons),
+                        "attention_reasons": attention_reasons,
+                        "permissions": {
+                            "can_edit": can_edit,
+                            "can_publish": can_publish,
+                            "can_manage_members": can_manage,
+                            "can_archive": can_manage and status == "active" and not is_default,
+                            "can_unarchive": can_manage and status == "archived",
+                            "can_create_task": (
+                                can_edit and status == "active" and executable_workspace_count > 0
+                            ),
+                        },
+                    }
+                )
+        return summaries
+
+    def project_console_summary(
+        self, project_id: str, user: dict[str, object]
+    ) -> dict[str, object]:
+        for project in self.project_console_summaries(user, include_archived=True):
+            if project["project_id"] == project_id:
+                return project
+        raise DomainNotFoundError(project_id)
+
     def workspace(self, workspace_id: str, user: dict[str, object]) -> dict[str, object]:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_workspace_viewer(workspace_id, user)
@@ -1835,6 +2019,142 @@ class DomainService:
                     include_unregistered=include_unregistered,
                 )
         return [dict(row) for row in rows]
+
+    def workspace_console_entries(
+        self, user: dict[str, object], *, include_unregistered: bool = False
+    ) -> list[dict[str, object]]:
+        """Return the owner-scoped Workspace registry read model for the Console."""
+
+        user_id = self._user_id(user)
+        with closing(self._connect()) as conn:
+            repository = self._repository(conn)
+            authorization = DomainAuthorizationService(conn)
+            workspaces = repository.list_workspaces_owned(
+                user_id=None if user.get("role") == "admin" else user_id,
+                include_unregistered=include_unregistered,
+            )
+            entries: list[dict[str, object]] = []
+            for workspace in workspaces:
+                workspace_id = str(workspace["workspace_id"])
+                environment_id = str(workspace["environment_id"])
+                environment = repository.environment(environment_id)
+                if environment is None:  # pragma: no cover - protected by the Workspace FK
+                    raise DomainNotFoundError(environment_id)
+                can_execute, cannot_execute_reason = self._workspace_execution_status(
+                    workspace_status=str(workspace["status"]),
+                    environment_status=str(environment["status"]),
+                    environment_id=environment_id,
+                    user=user,
+                )
+                links: list[dict[str, object]] = []
+                for link in repository.list_project_links_for_workspace(workspace_id):
+                    role = authorization.project_role(str(link["project_id"]), user)
+                    if role is None:
+                        continue
+                    link_can_execute = (
+                        can_execute
+                        and str(link["status"]) == "active"
+                        and str(link["project_status"]) == "active"
+                    )
+                    link_reason = cannot_execute_reason
+                    if str(link["status"]) != "active":
+                        link_reason = "workspace_link_inactive"
+                    elif str(link["project_status"]) != "active":
+                        link_reason = "project_archived"
+                    links.append(
+                        {
+                            "project_id": str(link["project_id"]),
+                            "project_name": str(link["project_name"]),
+                            "project_status": str(link["project_status"]),
+                            "current_user_role": role,
+                            "link_status": str(link["status"]),
+                            "is_primary": bool(link["is_primary"]),
+                            "can_execute": link_can_execute,
+                            "cannot_execute_reason": None if link_can_execute else link_reason,
+                        }
+                    )
+                activity = repository.workspace_activity_summary(workspace_id)
+                latest_task_activity = activity["latest_task_activity_at"]
+                entries.append(
+                    {
+                        "workspace_id": workspace_id,
+                        "label": str(workspace["label"]),
+                        "description": workspace["description"],
+                        "canonical_path": str(workspace["canonical_path"]),
+                        "workspace_context": workspace["workspace_context"],
+                        "status": str(workspace["status"]),
+                        "owner_user_id": str(workspace["owner_user_id"]),
+                        "created_at": str(workspace["created_at"]),
+                        "updated_at": str(workspace["updated_at"]),
+                        "recent_activity_at": max(
+                            value
+                            for value in (
+                                str(workspace["updated_at"]),
+                                str(latest_task_activity)
+                                if latest_task_activity is not None
+                                else None,
+                            )
+                            if value is not None
+                        ),
+                        "environment": {
+                            "environment_id": environment_id,
+                            "alias": str(environment["alias"]),
+                            "display_name": str(environment["display_name"]),
+                            "status": str(environment["status"]),
+                        },
+                        "project_links": links,
+                        "task_count": int(activity["task_count"]),
+                        "active_task_count": int(activity["active_task_count"]),
+                        "can_execute": can_execute,
+                        "cannot_execute_reason": cannot_execute_reason,
+                        "can_manage_registry": (
+                            user.get("role") == "admin" or workspace["owner_user_id"] == user_id
+                        ),
+                        "git_status": {
+                            "state": "not_collected",
+                            "branch": None,
+                            "is_dirty": None,
+                            "observed_at": None,
+                        },
+                    }
+                )
+        return entries
+
+    def workspace_console_entry(
+        self, workspace_id: str, user: dict[str, object]
+    ) -> dict[str, object]:
+        for workspace in self.workspace_console_entries(user, include_unregistered=True):
+            if workspace["workspace_id"] == workspace_id:
+                return workspace
+        raise DomainNotFoundError(workspace_id)
+
+    def _workspace_link_execution_status(
+        self, link: sqlite3.Row, user: dict[str, object]
+    ) -> tuple[bool, str | None]:
+        if str(link["status"]) != "active":
+            return False, "workspace_link_inactive"
+        return self._workspace_execution_status(
+            workspace_status=str(link["workspace_status"]),
+            environment_status=str(link["environment_status"]),
+            environment_id=str(link["environment_id"]),
+            user=user,
+        )
+
+    def _workspace_execution_status(
+        self,
+        *,
+        workspace_status: str,
+        environment_status: str,
+        environment_id: str,
+        user: dict[str, object],
+    ) -> tuple[bool, str | None]:
+        if workspace_status != "active":
+            return False, "workspace_unregistered"
+        if environment_status != "active":
+            return False, "environment_disabled"
+        if not self._has_environment_execution_access(environment_id=environment_id, user=user):
+            return False, "environment_grant_required"
+        return True, None
 
     def list_environments(
         self, user: dict[str, object], *, include_disabled: bool = False

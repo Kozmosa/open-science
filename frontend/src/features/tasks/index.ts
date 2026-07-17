@@ -1,4 +1,6 @@
-export { default as TaskCreateForm } from './components/TaskCreateForm';
+export { default as TaskCreateFlow } from './components/TaskCreateFlow';
+export * from './components/TaskCreateFlow';
+export * from './taskCreateContract';
 export { default as TaskSkillPicker } from './components/TaskSkillPicker';
 export { default as SeedFileUploader } from './components/SeedFileUploader';
 export type { SeedFileInfo } from './components/SeedFileUploader';
@@ -8,8 +10,7 @@ export { useTaskStream } from './hooks/useTaskStream';
 export { useTaskActions } from './hooks/useTaskActions';
 export { useTaskHistory } from './hooks/useTaskHistory';
 export { mergeMessages } from './hooks/useTaskMessages';
-export { statusClassName } from './utils/status';
+export { statusClassName, taskStatusClassName, taskStatusLabel } from './utils/status';
 export { getTaskPreset, TASK_PRESET_OPTIONS } from './utils/taskPresets';
 export type { TaskPresetId } from './utils/taskPresets';
 export * from './api';
-

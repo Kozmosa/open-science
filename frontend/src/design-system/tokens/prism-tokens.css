@@ -1,233 +1,100 @@
-/* ═══════════════════════════════════════════════════════════════════
-   Prism Console — Design Tokens
-   Reference: docs/LLM-Working/2026-06-14-frontend-redesign-proposal.md §2
-
-   Semantic alias names (--surface, --text, --apple-blue, etc.) are
-   preserved so existing component code continues to work unchanged.
-   Only the underlying colour / spacing / font values are replaced.
-   ═══════════════════════════════════════════════════════════════════ */
-
+/* Compatibility aliases only. New code must consume --osci-* tokens. */
 :root {
-  /* ── Radii ─────────────────────────────────────────────────── */
-  --radius: 0.875rem;
-  --radius-sm: 0.625rem;
-
-  /* ── Backgrounds ───────────────────────────────────────────── */
-  --background: #fafaf9;        /* stone-50  — page canvas      */
-  --foreground: #1c1917;        /* stone-900 — primary text     */
-  --card: #ffffff;
-  --card-foreground: #1c1917;
-  --popover: #ffffff;
-  --popover-foreground: #1c1917;
-  --primary: #1c1917;
-  --primary-foreground: #ffffff;
-  --secondary: #e7e5e4;         /* stone-200 — tertiary bg      */
-  --secondary-foreground: #1c1917;
-  --muted: #f5f5f4;             /* stone-100 — secondary bg     */
-  --muted-foreground: #78716c;  /* stone-500                    */
-
-  /* ── Accent (blue) ────────────────────────────────────────── */
-  --accent: #2563eb;            /* blue-600                                    */
+  --radius: var(--osci-radius-md);
+  --radius-sm: var(--osci-radius-sm);
+  --background: var(--osci-color-canvas);
+  --foreground: var(--osci-color-text);
+  --card: var(--osci-color-surface);
+  --card-foreground: var(--osci-color-text);
+  --popover: var(--osci-color-surface-elevated);
+  --popover-foreground: var(--osci-color-text);
+  --primary: var(--osci-color-text);
+  --primary-foreground: var(--osci-color-surface);
+  --secondary: var(--osci-color-surface-subtle);
+  --secondary-foreground: var(--osci-color-text);
+  --muted: var(--osci-color-surface-subtle);
+  --muted-foreground: var(--osci-color-text-muted);
+  --accent: var(--osci-color-primary);
   --accent-foreground: #ffffff;
-  --prism-primary: #2563eb;
-  --prism-primary-hover: #1d4ed8;       /* blue-700                      */
-  --prism-primary-soft: rgba(37, 99, 235, 0.08);
-  --prism-primary-border: rgba(37, 99, 235, 0.22);
-
-  /* ── Signal colours ─────────────────────────────────────────── */
-  --destructive: #ef4444;              /* coral / red-500        */
+  --prism-primary: var(--osci-color-primary);
+  --prism-primary-hover: var(--osci-color-primary-hover);
+  --prism-primary-soft: var(--osci-color-primary-soft);
+  --prism-primary-border: var(--osci-color-primary-border);
+  --destructive: var(--osci-color-danger);
   --destructive-foreground: #ffffff;
-  --success: #10b981;                  /* emerald-500            */
-  --success-foreground: #065f46;       /* emerald-800            */
-  --success-soft: rgba(16, 185, 129, 0.12);
-  --success-border: rgba(16, 185, 129, 0.26);
-  --warning: #f59e0b;                  /* amber-500              */
-  --warning-foreground: #92400e;       /* amber-800              */
-  --warning-soft: rgba(245, 158, 11, 0.12);
-  --warning-border: rgba(245, 158, 11, 0.26);
-  --danger: var(--destructive);
-  --danger-foreground: #991b1b;
-  --danger-soft: rgba(239, 68, 68, 0.12);
-  --danger-border: rgba(239, 68, 68, 0.26);
-  --info: var(--accent);
-  --info-foreground: #1e40af;          /* blue-800                          */
-  --info-soft: rgba(37, 99, 235, 0.12);
-  --info-border: rgba(37, 99, 235, 0.26);
-
-  /* ── Borders ────────────────────────────────────────────────── */
-  --border: rgba(28, 25, 23, 0.08);
-  --border-strong: rgba(28, 25, 23, 0.14);
-  --input: rgba(28, 25, 23, 0.08);
-  --ring: rgba(37, 99, 235, 0.35);
-
-  /* ── Sidebar ────────────────────────────────────────────────── */
-  --sidebar: #fafaf9;
-  --sidebar-foreground: #1c1917;
-  --sidebar-primary: #f5f5f4;
-  --sidebar-primary-foreground: #1c1917;
-  --sidebar-accent: #2563eb;
+  --success: var(--osci-color-success);
+  --success-foreground: var(--osci-color-success-foreground);
+  --success-soft: var(--osci-color-success-soft);
+  --success-border: var(--osci-color-success-border);
+  --warning: var(--osci-color-warning);
+  --warning-foreground: var(--osci-color-warning-foreground);
+  --warning-soft: var(--osci-color-warning-soft);
+  --warning-border: var(--osci-color-warning-border);
+  --danger: var(--osci-color-danger);
+  --danger-foreground: var(--osci-color-danger-foreground);
+  --danger-soft: var(--osci-color-danger-soft);
+  --danger-border: var(--osci-color-danger-border);
+  --info: var(--osci-color-info);
+  --info-foreground: var(--osci-color-info-foreground);
+  --info-soft: var(--osci-color-info-soft);
+  --info-border: var(--osci-color-info-border);
+  --border: var(--osci-color-border);
+  --border-strong: var(--osci-color-border-strong);
+  --input: var(--osci-color-border);
+  --ring: var(--osci-color-focus);
+  --sidebar: var(--osci-color-canvas);
+  --sidebar-foreground: var(--osci-color-text);
+  --sidebar-primary: var(--osci-color-primary-soft);
+  --sidebar-primary-foreground: var(--osci-color-text);
+  --sidebar-accent: var(--osci-color-primary);
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(28, 25, 23, 0.06);
-
-  /* ── Code ───────────────────────────────────────────────────── */
-  --code-background: #f5f5f4;
-  --code-foreground: #1c1917;
-
-  /* ── Shadows ────────────────────────────────────────────────── */
-  --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.04);
-  --shadow-card: 0 4px 12px rgba(28, 25, 23, 0.06),
-                 0 1px 3px rgba(28, 25, 23, 0.04);
-  --shadow-pane: 0 12px 32px rgba(28, 25, 23, 0.08),
-                 0 4px 8px rgba(28, 25, 23, 0.04);
-  --shadow-input: 0 1px 2px rgba(28, 25, 23, 0.06);
-  --shadow-toolbar: 0 2px 8px rgba(28, 25, 23, 0.08);
-
-  /* ── Glass (for sidebar / header translucency) ─────────────── */
-  --prism-glass: rgba(255, 255, 255, 0.72);
-  --prism-glass-strong: rgba(255, 255, 255, 0.88);
-  --surface-hover: #f5f5f4;
-
-  /* ── Semantic aliases (preserved — component code unchanged) ── */
-  --text: var(--foreground);
-  --text-secondary: #57534e;           /* stone-600              */
-  --text-tertiary: #a8a29e;            /* stone-400              */
-  --bg: var(--background);
-  --bg-secondary: var(--muted);
-  --bg-tertiary: var(--secondary);
-  --surface: var(--card);
-  --surface-elevated: var(--popover);
-  --apple-blue: var(--accent);
-  --apple-blue-hover: var(--prism-primary-hover);
-  --apple-near-black: var(--foreground);
-
-  /* ── Typography ─────────────────────────────────────────────── */
-  --font-display: 'Outfit', 'SF Pro Display', system-ui, -apple-system,
-                  BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-text: 'DM Sans', 'SF Pro Text', system-ui, -apple-system,
-               BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo,
-              Consolas, monospace;
-
-  /* ── Message role accent colours (light theme) ──────────────── */
-  --color-msg-user: #2563eb;
-  --color-msg-user-fade: rgba(37, 99, 235, 0.08);
-  --color-msg-assistant: #0d9488;      /* teal-600               */
-  --color-msg-assistant-fade: rgba(13, 148, 136, 0.08);
+  --sidebar-border: var(--osci-color-border-subtle);
+  --code-background: var(--osci-color-code-surface);
+  --code-foreground: var(--osci-color-code-text);
+  --shadow-sm: var(--osci-shadow-sm);
+  --shadow-card: var(--osci-shadow-sm);
+  --shadow-pane: var(--osci-shadow-md);
+  --shadow-input: var(--osci-shadow-sm);
+  --shadow-toolbar: var(--osci-shadow-sm);
+  --prism-glass: var(--osci-topbar-background-translucent);
+  --prism-glass-strong: var(--osci-topbar-background);
+  --surface-hover: var(--osci-color-surface-subtle);
+  --text: var(--osci-color-text);
+  --text-secondary: var(--osci-color-text-secondary);
+  --text-tertiary: var(--osci-color-text-muted);
+  --bg: var(--osci-color-canvas);
+  --bg-secondary: var(--osci-color-surface-subtle);
+  --bg-tertiary: var(--osci-color-surface-subtle);
+  --surface: var(--osci-color-surface);
+  --surface-elevated: var(--osci-color-surface-elevated);
+  --apple-blue: var(--osci-color-primary);
+  --apple-blue-hover: var(--osci-color-primary-hover);
+  --apple-near-black: var(--osci-color-text);
+  --apple-green: var(--osci-color-success);
+  --font-display: var(--osci-font-display);
+  --font-text: var(--osci-font-ui);
+  --font-mono: var(--osci-font-mono);
+  --color-msg-user: var(--osci-color-primary);
+  --color-msg-user-fade: var(--osci-color-primary-soft);
+  --color-msg-assistant: #0891b2;
+  --color-msg-assistant-fade: rgb(8 145 178 / 0.08);
   --color-msg-thinking: #7c3aed;
-  --color-msg-thinking-fade: rgba(124, 58, 237, 0.08);
-  --color-msg-tool-call: #2563eb;
-  --color-msg-tool-call-fade: rgba(37, 99, 235, 0.08);
-  --color-msg-tool-result: #10b981;
-  --color-msg-tool-result-fade: rgba(16, 185, 129, 0.08);
-  --color-msg-system: #78716c;
-  --color-msg-system-fade: rgba(120, 113, 108, 0.08);
+  --color-msg-thinking-fade: rgb(124 58 237 / 0.08);
+  --color-msg-tool-call: var(--osci-color-primary);
+  --color-msg-tool-call-fade: var(--osci-color-primary-soft);
+  --color-msg-tool-result: var(--osci-color-success);
+  --color-msg-tool-result-fade: var(--osci-color-success-soft);
+  --color-msg-system: var(--osci-color-text-muted);
+  --color-msg-system-fade: var(--osci-color-surface-subtle);
 }
 
-/* ── Dark theme ────────────────────────────────────────────────── */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0c0a09;            /* warm near-black         */
-    --foreground: #fafaf9;
-    --card: #171412;
-    --card-foreground: #fafaf9;
-    --popover: #1c1917;
-    --popover-foreground: #fafaf9;
-    --primary: #f5f5f4;
-    --primary-foreground: #111113;
-    --secondary: #292524;
-    --secondary-foreground: #f5f5f4;
-    --muted: #1c1917;
-    --muted-foreground: #a8a29e;
-
-    --accent: #60a5fa;                /* blue-400                            */
-    --accent-foreground: #0f172a;
-    --prism-primary: #60a5fa;
-    --prism-primary-hover: #93bbfd;
-    --prism-primary-soft: rgba(96, 165, 250, 0.12);
-    --prism-primary-border: rgba(96, 165, 250, 0.28);
-
-    --destructive: #f87171;
-    --success: #4ade80;
-    --success-foreground: #bbf7d0;
-    --success-soft: rgba(74, 222, 128, 0.14);
-    --success-border: rgba(74, 222, 128, 0.32);
-    --warning: #fbbf24;
-    --warning-foreground: #fde68a;
-    --warning-soft: rgba(251, 191, 36, 0.14);
-    --warning-border: rgba(251, 191, 36, 0.32);
-    --danger: var(--destructive);
-    --danger-foreground: #fecaca;
-    --danger-soft: rgba(248, 113, 113, 0.14);
-    --danger-border: rgba(248, 113, 113, 0.32);
-    --info: var(--accent);
-    --info-foreground: #bfdbfe;
-    --info-soft: rgba(96, 165, 250, 0.14);
-    --info-border: rgba(96, 165, 250, 0.32);
-
-    --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.14);
-    --input: rgba(255, 255, 255, 0.08);
-    --ring: rgba(96, 165, 250, 0.4);
-
-    --sidebar: #0c0a09;
-    --sidebar-foreground: #fafaf9;
-    --sidebar-primary: #1c1917;
-    --sidebar-primary-foreground: #fafaf9;
-    --sidebar-accent: #60a5fa;
-    --sidebar-accent-foreground: #0f172a;
-    --sidebar-border: rgba(255, 255, 255, 0.06);
-
-    --code-background: #1c1917;
-    --code-foreground: #fafaf9;
-
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
-    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.40),
-                   0 0 0 1px rgba(255, 255, 255, 0.06);
-    --shadow-pane: 0 8px 28px rgba(0, 0, 0, 0.50);
-    --shadow-input: 0 2px 6px rgba(0, 0, 0, 0.35);
-    --shadow-toolbar: 0 2px 8px rgba(0, 0, 0, 0.40);
-
-    --prism-glass: rgba(12, 10, 9, 0.72);
-    --prism-glass-strong: rgba(12, 10, 9, 0.88);
-    --surface-hover: #1c1917;
-
-    /* ── Semantic aliases (dark) ──────────────────────────── */
-    --text: var(--foreground);
-    --text-secondary: #a8a29e;
-    --text-tertiary: #78716c;
-    --bg: var(--background);
-    --bg-secondary: var(--muted);
-    --bg-tertiary: var(--secondary);
-    --surface: var(--card);
-    --surface-elevated: var(--popover);
-    --apple-blue: var(--accent);
-    --apple-blue-hover: var(--prism-primary-hover);
-    --apple-near-black: var(--foreground);
-
-    /* ── Message role accent colours (dark theme) ─────────── */
-    --color-msg-user: #60a5fa;
-    --color-msg-user-fade: rgba(96, 165, 250, 0.1);
-    --color-msg-assistant: #2dd4bf;
-    --color-msg-assistant-fade: rgba(45, 212, 191, 0.1);
-    --color-msg-thinking: #a78bfa;
-    --color-msg-thinking-fade: rgba(167, 139, 250, 0.1);
-    --color-msg-tool-call: #60a5fa;
-    --color-msg-tool-call-fade: rgba(96, 165, 250, 0.1);
-    --color-msg-tool-result: #4ade80;
-    --color-msg-tool-result-fade: rgba(74, 222, 128, 0.1);
-    --color-msg-system: #a8a29e;
-    --color-msg-system-fade: rgba(168, 162, 158, 0.1);
-  }
-}
-
-/* ── Reduced motion (accessibility) ───────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

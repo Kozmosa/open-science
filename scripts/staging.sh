@@ -80,6 +80,31 @@ _assert_no_background_worker_profiles() {
   done <<< "${running_services}"
 }
 
+_publish_staging_bind_mounts() {
+  local path
+  local -a public_mounts=(
+    "${REPO_ROOT}/src/ainrf"
+    "${REPO_ROOT}/frontend/${STAGING_FRONTEND_OUT_DIR}"
+    "${REPO_ROOT}/deploy/config/nginx-staging.conf"
+    "${REPO_ROOT}/deploy/config/prometheus-staging.yml"
+    "${REPO_ROOT}/deploy/config/prometheus/rules/ainrf-alerts.yml"
+    "${REPO_ROOT}/deploy/config/grafana/provisioning-staging/datasources"
+    "${REPO_ROOT}/deploy/config/grafana/provisioning-staging/dashboards"
+    "${REPO_ROOT}/deploy/config/grafana/dashboards"
+  )
+  # Agent worktrees may be created with a restrictive umask.  The staging
+  # services run under container-specific UIDs, so publish only the explicit
+  # repository-managed, read-only bind mounts.  State, env files, runtime
+  # credentials, and other worktree content remain untouched.
+  for path in "${public_mounts[@]}"; do
+    if [[ ! -e "${path}" ]]; then
+      _error "Staging bind mount not found: ${path}"
+      return 1
+    fi
+    chmod -R a+rX "${path}"
+  done
+}
+
 # Do not let Compose silently load the repository's default .env.  On this
 # host that file may contain production-only values.  A staging lifecycle
 # caller must deliberately provide an independent file outside the repository.
@@ -123,15 +148,13 @@ cmd_up() {
   _info "Building and starting staging environment..."
   _assert_no_background_worker_profiles
 
-  # Ensure the staging-only frontend bundle exists. Production mounts a
-  # different directory, so this build cannot replace production assets.
-  if [[ ! -d "${REPO_ROOT}/frontend/${STAGING_FRONTEND_OUT_DIR}" ]]; then
-    _warn "frontend/${STAGING_FRONTEND_OUT_DIR} not found — building staging frontend first..."
-    VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
-      OPENSCIENCE_FRONTEND_OUT_DIR="${STAGING_FRONTEND_OUT_DIR}" \
-      npm --prefix "${REPO_ROOT}/frontend" run build
-    chmod -R a+rX "${REPO_ROOT}/frontend/${STAGING_FRONTEND_OUT_DIR}"
-  fi
+  # Always stamp the current worktree into the staging-only host bundle.
+  # Vite may replace the output directory inode while cleaning it, so nginx
+  # is force-recreated below to attach the new read-only bind mount.
+  VITE_OPENSCIENCE_API_KEY= VITE_AINRF_API_KEY= \
+    OPENSCIENCE_FRONTEND_OUT_DIR="${STAGING_FRONTEND_OUT_DIR}" \
+    npm --prefix "${REPO_ROOT}/frontend" run build
+  _publish_staging_bind_mounts
 
   # Stamp git provenance (same as redeploy-backend.sh)
   export AINRF_BUILD_COMMIT
@@ -140,10 +163,13 @@ cmd_up() {
   AINRF_BUILD_COMMITTED_AT="$(git -C "${REPO_ROOT}" show -s --format=%cd --date=format:%Y%m%d-%H%M HEAD 2>/dev/null || echo unknown)"
 
   "${COMPOSE_CMD[@]}" up -d --build
+  "${COMPOSE_CMD[@]}" up -d --no-deps --force-recreate nginx-staging
 
-  _info "Waiting for backend to become healthy..."
-  wait_for_compose_service "${COMPOSE_FILE}" "ainrf-staging" 60 2
+  _info "Waiting for backend and nginx to become healthy..."
+  wait_for_compose_service "${COMPOSE_FILE}" "ainrf-staging" 60 2 "${STAGING_ENV_FILE}"
+  wait_for_compose_service "${COMPOSE_FILE}" "nginx-staging" 60 2 "${STAGING_ENV_FILE}"
   wait_for_url "http://localhost:17000/health" 60 2
+  wait_for_url "http://localhost:7192/api/health" 60 2
 
   echo
   _info "${BOLD}Staging environment is ready!${NC}"
@@ -203,6 +229,7 @@ cmd_logs() {
 cmd_rebuild() {
   _info "Rebuilding staging backend image (preserving data)..."
   _assert_no_background_worker_profiles
+  _publish_staging_bind_mounts
 
   export AINRF_BUILD_COMMIT
   export AINRF_BUILD_COMMITTED_AT
